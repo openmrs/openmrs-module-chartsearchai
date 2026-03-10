@@ -19,9 +19,14 @@ import java.util.Map;
 
 import org.openmrs.Encounter;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.EmbeddingService;
 import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
+import org.openmrs.module.chartsearchai.embedding.EmbeddingProvider;
+import org.openmrs.module.chartsearchai.embedding.OnnxEmbeddingProvider;
+import org.openmrs.module.chartsearchai.embedding.TermFrequencyEmbeddingProvider;
 import org.openmrs.module.chartsearchai.model.EmbeddingChunk;
 import org.openmrs.module.chartsearchai.model.TextChunk;
 import org.openmrs.module.chartsearchai.pipeline.ClinicalChunker;
@@ -32,9 +37,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Implementation of the embedding service. Currently uses a simple term-frequency based embedding
- * as a placeholder. In production, this should be replaced with a proper embedding model (e.g.,
- * ONNX Runtime with all-MiniLM-L6-v2 or an external embedding API).
+ * Implementation of the embedding service. Uses ONNX Runtime with the all-MiniLM-L6-v2 model
+ * for semantic embeddings when available, falling back to term-frequency hashing otherwise.
  *
  * <p>For single-patient retrieval (typically &lt;500 chunks), brute-force cosine similarity in Java
  * is fast enough (&lt;10ms), so no vector database is needed.</p>
@@ -51,6 +55,8 @@ public class EmbeddingServiceImpl extends BaseOpenmrsService implements Embeddin
 	@Autowired
 	private ClinicalChunker clinicalChunker;
 
+	private volatile EmbeddingProvider embeddingProvider;
+
 	@Override
 	public void indexPatient(Patient patient) {
 		log.info("Indexing patient {}", patient.getUuid());
@@ -59,6 +65,7 @@ public class EmbeddingServiceImpl extends BaseOpenmrsService implements Embeddin
 
 		List<TextChunk> textChunks = clinicalChunker.chunkPatientData(patient);
 		Date now = new Date();
+		EmbeddingProvider provider = getEmbeddingProvider();
 
 		for (TextChunk textChunk : textChunks) {
 			EmbeddingChunk chunk = new EmbeddingChunk();
@@ -67,7 +74,7 @@ public class EmbeddingServiceImpl extends BaseOpenmrsService implements Embeddin
 			chunk.setSourceUuid(textChunk.getMetadata().getSourceUuid());
 			chunk.setSourceDate(textChunk.getMetadata().getSourceDate());
 			chunk.setChunkText(textChunk.getText());
-			chunk.setEmbeddingVector(computeEmbedding(textChunk.getText()));
+			chunk.setEmbeddingVector(provider.embed(textChunk.getText()));
 			chunk.setDateIndexed(now);
 
 			dao.saveEmbeddingChunk(chunk);
@@ -82,9 +89,24 @@ public class EmbeddingServiceImpl extends BaseOpenmrsService implements Embeddin
 		log.info("Incrementally indexing encounter {} for patient {}",
 				encounter.getUuid(), patient.getUuid());
 
-		// For incremental indexing, we re-index the entire patient.
-		// A more sophisticated implementation could index just the encounter's chunks.
-		indexPatient(patient);
+		List<TextChunk> encounterChunks = clinicalChunker.chunkEncounter(encounter, patient.getUuid());
+		Date now = new Date();
+		EmbeddingProvider provider = getEmbeddingProvider();
+
+		for (TextChunk textChunk : encounterChunks) {
+			EmbeddingChunk chunk = new EmbeddingChunk();
+			chunk.setPatient(patient);
+			chunk.setChunkType(textChunk.getMetadata().getChunkType());
+			chunk.setSourceUuid(textChunk.getMetadata().getSourceUuid());
+			chunk.setSourceDate(textChunk.getMetadata().getSourceDate());
+			chunk.setChunkText(textChunk.getText());
+			chunk.setEmbeddingVector(provider.embed(textChunk.getText()));
+			chunk.setDateIndexed(now);
+
+			dao.saveEmbeddingChunk(chunk);
+		}
+
+		log.info("Indexed {} chunks for encounter {}", encounterChunks.size(), encounter.getUuid());
 	}
 
 	@Override
@@ -95,7 +117,8 @@ public class EmbeddingServiceImpl extends BaseOpenmrsService implements Embeddin
 			return Collections.emptyList();
 		}
 
-		float[] queryEmbedding = computeEmbedding(query);
+		EmbeddingProvider provider = getEmbeddingProvider();
+		float[] queryEmbedding = provider.embed(query);
 
 		// Compute cosine similarity for each chunk and sort by score
 		List<Map.Entry<EmbeddingChunk, Double>> scored = new ArrayList<>();
@@ -126,39 +149,45 @@ public class EmbeddingServiceImpl extends BaseOpenmrsService implements Embeddin
 	}
 
 	/**
-	 * Placeholder embedding function using simple term-frequency hashing. This produces a
-	 * deterministic vector that enables basic keyword-overlap retrieval.
-	 *
-	 * <p>TODO: Replace with a proper embedding model (ONNX Runtime + all-MiniLM-L6-v2 or an
-	 * external embedding API) for semantic similarity.</p>
+	 * Lazily initialize the embedding provider. Attempts to load the ONNX model first; if
+	 * unavailable, falls back to the term-frequency provider with a warning.
 	 */
-	private float[] computeEmbedding(String text) {
-		int dimensions = 384;
-		float[] embedding = new float[dimensions];
+	private EmbeddingProvider getEmbeddingProvider() {
+		if (embeddingProvider == null) {
+			synchronized (this) {
+				if (embeddingProvider == null) {
+					String providerType = null;
+					try {
+						providerType = Context.getAdministrationService()
+								.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_PROVIDER);
+					}
+					catch (Exception e) {
+						log.debug("Could not read embedding provider setting");
+					}
 
-		String[] tokens = text.toLowerCase().split("\\W+");
-		for (String token : tokens) {
-			if (token.isEmpty()) {
-				continue;
+					if ("termfrequency".equals(providerType)) {
+						log.info("Using term-frequency embedding provider (configured)");
+						embeddingProvider = new TermFrequencyEmbeddingProvider();
+					} else {
+						try {
+							embeddingProvider = new OnnxEmbeddingProvider();
+							log.info("Using ONNX embedding provider (all-MiniLM-L6-v2)");
+						}
+						catch (Exception e) {
+							log.warn("Failed to load ONNX embedding model: {}. "
+									+ "Falling back to term-frequency embeddings. "
+									+ "Search quality will be degraded. "
+									+ "To fix this, download the all-MiniLM-L6-v2 ONNX model "
+									+ "and place it in {}/chartsearchai/",
+									e.getMessage(),
+									org.openmrs.util.OpenmrsUtil.getApplicationDataDirectory());
+							embeddingProvider = new TermFrequencyEmbeddingProvider();
+						}
+					}
+				}
 			}
-			// Hash each token to a dimension and increment
-			int index = Math.abs(token.hashCode() % dimensions);
-			embedding[index] += 1.0f;
 		}
-
-		// L2 normalize
-		double norm = 0;
-		for (float v : embedding) {
-			norm += v * v;
-		}
-		norm = Math.sqrt(norm);
-		if (norm > 0) {
-			for (int i = 0; i < embedding.length; i++) {
-				embedding[i] /= (float) norm;
-			}
-		}
-
-		return embedding;
+		return embeddingProvider;
 	}
 
 	private double cosineSimilarity(float[] a, float[] b) {

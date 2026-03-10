@@ -19,7 +19,9 @@ import java.util.Map;
 import org.openmrs.Allergy;
 import org.openmrs.AllergyReaction;
 import org.openmrs.Concept;
+import org.openmrs.ConceptNumeric;
 import org.openmrs.Condition;
+import org.openmrs.Diagnosis;
 import org.openmrs.DrugOrder;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
@@ -37,7 +39,7 @@ import org.springframework.stereotype.Component;
  * self-contained and represents a single clinical event or concept group, making it suitable for
  * vector embedding and retrieval.
  *
- * <p>Chunking strategy: one chunk per clinical event (encounter, medication change) rather than
+ * <p>Chunking strategy: one chunk per clinical event (encounter, condition, diagnosis) rather than
  * fixed-size text splitting, because clinical meaning is tied to events, not character counts.</p>
  */
 @Component("chartsearchai.clinicalChunker")
@@ -70,33 +72,87 @@ public class ClinicalChunker {
 		return chunks;
 	}
 
+	/**
+	 * Generate text chunks for a single encounter. Used for incremental indexing when new
+	 * encounters are created or updated.
+	 *
+	 * @param encounter the encounter to chunk
+	 * @param patientUuid the patient's UUID for metadata
+	 * @return list of text chunks for this encounter
+	 */
+	public List<TextChunk> chunkEncounter(Encounter encounter, String patientUuid) {
+		List<TextChunk> chunks = new ArrayList<>();
+		chunks.add(buildEncounterChunk(encounter, patientUuid));
+		return chunks;
+	}
+
 	private List<TextChunk> chunkEncounters(Patient patient, String patientUuid) {
 		List<TextChunk> chunks = new ArrayList<>();
 		List<Encounter> encounters = extractor.getEncounters(patient);
 
 		for (Encounter encounter : encounters) {
-			StringBuilder text = new StringBuilder();
-			text.append("Encounter on ").append(formatDate(encounter.getEncounterDatetime()));
+			chunks.add(buildEncounterChunk(encounter, patientUuid));
+		}
+		return chunks;
+	}
 
-			if (encounter.getEncounterType() != null) {
-				text.append(" | Type: ").append(encounter.getEncounterType().getName());
+	private TextChunk buildEncounterChunk(Encounter encounter, String patientUuid) {
+		StringBuilder text = new StringBuilder();
+		text.append("Encounter on ").append(formatDate(encounter.getEncounterDatetime()));
+
+		if (encounter.getEncounterType() != null) {
+			text.append(" | Type: ").append(encounter.getEncounterType().getName());
+		}
+		if (encounter.getLocation() != null) {
+			text.append(" | Location: ").append(encounter.getLocation().getName());
+		}
+		text.append("\n");
+
+		// Observations with richer formatting
+		for (Obs obs : encounter.getAllObs()) {
+			if (obs.getObsGroup() != null) {
+				continue; // Skip grouped obs; they're included under their parent
 			}
-			if (encounter.getLocation() != null) {
-				text.append(" | Location: ").append(encounter.getLocation().getName());
+			text.append("  - ").append(getConceptName(obs.getConcept()));
+			text.append(": ").append(formatObsValue(obs));
+
+			if (obs.getInterpretation() != null) {
+				text.append(" (").append(obs.getInterpretation()).append(")");
+			}
+			if (obs.getComment() != null && !obs.getComment().trim().isEmpty()) {
+				text.append(". Note: ").append(obs.getComment().trim());
 			}
 			text.append("\n");
 
-			for (Obs obs : encounter.getAllObs()) {
-				text.append("  - ").append(getConceptName(obs.getConcept()));
-				text.append(": ").append(formatObsValue(obs));
+			// Include group members inline
+			if (obs.hasGroupMembers()) {
+				for (Obs member : obs.getGroupMembers()) {
+					text.append("    - ").append(getConceptName(member.getConcept()));
+					text.append(": ").append(formatObsValue(member));
+					if (member.getInterpretation() != null) {
+						text.append(" (").append(member.getInterpretation()).append(")");
+					}
+					text.append("\n");
+				}
+			}
+		}
+
+		// Diagnoses made during this encounter
+		if (encounter.getDiagnoses() != null && !encounter.getDiagnoses().isEmpty()) {
+			text.append("  Diagnoses:\n");
+			for (Diagnosis diagnosis : encounter.getDiagnoses()) {
+				text.append("    - ").append(getDiagnosisName(diagnosis));
+				if (diagnosis.getCertainty() != null) {
+					text.append(" (").append(diagnosis.getCertainty()).append(")");
+				}
+				text.append(diagnosis.getRank() == 1 ? " [Primary]" : " [Secondary]");
 				text.append("\n");
 			}
-
-			chunks.add(new TextChunk(text.toString(),
-					new ChunkMetadata("encounter", encounter.getUuid(),
-							encounter.getEncounterDatetime(), patientUuid)));
 		}
-		return chunks;
+
+		return new TextChunk(text.toString(),
+				new ChunkMetadata("encounter", encounter.getUuid(),
+						encounter.getEncounterDatetime(), patientUuid));
 	}
 
 	private List<TextChunk> chunkConditions(Patient patient, String patientUuid) {
@@ -107,17 +163,33 @@ public class ClinicalChunker {
 			return chunks;
 		}
 
-		StringBuilder text = new StringBuilder("Active Conditions:\n");
+		// Create individual chunks per condition for better retrieval granularity
 		for (Condition condition : conditions) {
-			text.append("  - ").append(getConceptName(condition.getCondition().getCoded()));
-			if (condition.getOnsetDate() != null) {
-				text.append(" (onset: ").append(formatDate(condition.getOnsetDate())).append(")");
+			StringBuilder text = new StringBuilder();
+			text.append("Condition: ").append(getConditionName(condition));
+			text.append(". Status: ").append(condition.getClinicalStatus());
+
+			if (condition.getVerificationStatus() != null) {
+				text.append(". Verification: ").append(condition.getVerificationStatus());
 			}
-			text.append("\n");
+			if (condition.getOnsetDate() != null) {
+				text.append(". Onset: ").append(formatDate(condition.getOnsetDate()));
+			}
+			if (condition.getAdditionalDetail() != null && !condition.getAdditionalDetail().trim().isEmpty()) {
+				text.append(". Detail: ").append(condition.getAdditionalDetail().trim());
+			}
+			if (condition.getEndDate() != null) {
+				text.append(". Resolved: ").append(formatDate(condition.getEndDate()));
+				if (condition.getEndReason() != null && !condition.getEndReason().trim().isEmpty()) {
+					text.append(" (").append(condition.getEndReason().trim()).append(")");
+				}
+			}
+
+			chunks.add(new TextChunk(text.toString(),
+					new ChunkMetadata("condition", condition.getUuid(),
+							condition.getOnsetDate(), patientUuid)));
 		}
 
-		chunks.add(new TextChunk(text.toString(),
-				new ChunkMetadata("conditions", null, null, patientUuid)));
 		return chunks;
 	}
 
@@ -129,28 +201,41 @@ public class ClinicalChunker {
 			return chunks;
 		}
 
-		StringBuilder text = new StringBuilder("Allergies:\n");
+		// Create individual chunks per allergy for better retrieval
 		for (Allergy allergy : allergies) {
-			text.append("  - ").append(allergy.getAllergen().toString());
+			StringBuilder text = new StringBuilder();
+			text.append("Allergy: ").append(allergy.getAllergen().toString());
+
+			if (allergy.getAllergen().getAllergenType() != null) {
+				text.append(" (").append(allergy.getAllergen().getAllergenType()).append(")");
+			}
 
 			List<AllergyReaction> reactions = allergy.getReactions();
 			if (reactions != null && !reactions.isEmpty()) {
-				text.append(" | Reactions: ");
+				text.append(". Reactions: ");
 				for (int i = 0; i < reactions.size(); i++) {
 					if (i > 0) {
 						text.append(", ");
 					}
-					text.append(reactions.get(i).getReaction().getName().getName());
+					AllergyReaction reaction = reactions.get(i);
+					if (reaction.getReaction() != null && reaction.getReaction().getName() != null) {
+						text.append(reaction.getReaction().getName().getName());
+					} else if (reaction.getReactionNonCoded() != null) {
+						text.append(reaction.getReactionNonCoded());
+					}
 				}
 			}
-			if (allergy.getSeverity() != null) {
-				text.append(" | Severity: ").append(allergy.getSeverity().getName().getName());
+			if (allergy.getSeverity() != null && allergy.getSeverity().getName() != null) {
+				text.append(". Severity: ").append(allergy.getSeverity().getName().getName());
 			}
-			text.append("\n");
+			if (allergy.getComments() != null && !allergy.getComments().trim().isEmpty()) {
+				text.append(". Comments: ").append(allergy.getComments().trim());
+			}
+
+			chunks.add(new TextChunk(text.toString(),
+					new ChunkMetadata("allergy", allergy.getUuid(), null, patientUuid)));
 		}
 
-		chunks.add(new TextChunk(text.toString(),
-				new ChunkMetadata("allergies", null, null, patientUuid)));
 		return chunks;
 	}
 
@@ -158,42 +243,53 @@ public class ClinicalChunker {
 		List<TextChunk> chunks = new ArrayList<>();
 		List<Order> orders = extractor.getOrders(patient);
 
-		List<DrugOrder> activeDrugOrders = new ArrayList<>();
 		for (Order order : orders) {
-			if (order instanceof DrugOrder && order.isActive()) {
-				activeDrugOrders.add((DrugOrder) order);
+			if (!(order instanceof DrugOrder)) {
+				continue;
 			}
-		}
+			DrugOrder drugOrder = (DrugOrder) order;
 
-		if (activeDrugOrders.isEmpty()) {
-			return chunks;
-		}
+			StringBuilder text = new StringBuilder();
+			text.append(drugOrder.isActive() ? "Active Medication: " : "Past Medication: ");
 
-		StringBuilder text = new StringBuilder("Current Medications:\n");
-		for (DrugOrder drugOrder : activeDrugOrders) {
-			text.append("  - ");
 			if (drugOrder.getDrug() != null) {
 				text.append(drugOrder.getDrug().getName());
 			} else {
 				text.append(getConceptName(drugOrder.getConcept()));
 			}
 			if (drugOrder.getDose() != null) {
-				text.append(" | Dose: ").append(drugOrder.getDose());
+				text.append(". Dose: ").append(drugOrder.getDose());
 				if (drugOrder.getDoseUnits() != null) {
 					text.append(" ").append(getConceptName(drugOrder.getDoseUnits()));
 				}
 			}
 			if (drugOrder.getFrequency() != null) {
-				text.append(" | Frequency: ").append(drugOrder.getFrequency().toString());
+				text.append(". Frequency: ").append(drugOrder.getFrequency().toString());
+			}
+			if (drugOrder.getRoute() != null) {
+				text.append(". Route: ").append(getConceptName(drugOrder.getRoute()));
 			}
 			if (drugOrder.getDateActivated() != null) {
-				text.append(" | Since: ").append(formatDate(drugOrder.getDateActivated()));
+				text.append(". Started: ").append(formatDate(drugOrder.getDateActivated()));
 			}
-			text.append("\n");
+			if (drugOrder.getDateStopped() != null) {
+				text.append(". Stopped: ").append(formatDate(drugOrder.getDateStopped()));
+			}
+			if (drugOrder.getOrderReason() != null) {
+				text.append(". Reason: ").append(getConceptName(drugOrder.getOrderReason()));
+			} else if (drugOrder.getOrderReasonNonCoded() != null
+					&& !drugOrder.getOrderReasonNonCoded().trim().isEmpty()) {
+				text.append(". Reason: ").append(drugOrder.getOrderReasonNonCoded().trim());
+			}
+			if (drugOrder.getInstructions() != null && !drugOrder.getInstructions().trim().isEmpty()) {
+				text.append(". Instructions: ").append(drugOrder.getInstructions().trim());
+			}
+
+			chunks.add(new TextChunk(text.toString(),
+					new ChunkMetadata("medication", drugOrder.getUuid(),
+							drugOrder.getDateActivated(), patientUuid)));
 		}
 
-		chunks.add(new TextChunk(text.toString(),
-				new ChunkMetadata("medications", null, null, patientUuid)));
 		return chunks;
 	}
 
@@ -224,8 +320,12 @@ public class ClinicalChunker {
 			for (Obs obs : obsList) {
 				text.append("  ").append(formatDate(obs.getObsDatetime()));
 				text.append(": ").append(obs.getValueNumeric());
-				if (obs.getConcept().getUnits() != null) {
-					text.append(" ").append(obs.getConcept().getUnits());
+				String units = getConceptUnits(obs.getConcept());
+				if (units != null) {
+					text.append(" ").append(units);
+				}
+				if (obs.getInterpretation() != null) {
+					text.append(" (").append(obs.getInterpretation()).append(")");
 				}
 				text.append("\n");
 			}
@@ -248,7 +348,7 @@ public class ClinicalChunker {
 
 	private String formatObsValue(Obs obs) {
 		if (obs.getValueNumeric() != null) {
-			String units = obs.getConcept().getUnits();
+			String units = getConceptUnits(obs.getConcept());
 			return obs.getValueNumeric() + (units != null ? " " + units : "");
 		}
 		if (obs.getValueCoded() != null) {
@@ -260,7 +360,17 @@ public class ClinicalChunker {
 		if (obs.getValueDatetime() != null) {
 			return formatDate(obs.getValueDatetime());
 		}
+		if (obs.getValueDrug() != null) {
+			return obs.getValueDrug().getName();
+		}
 		return obs.getValueAsString(null);
+	}
+
+	private String getConceptUnits(Concept concept) {
+		if (concept instanceof ConceptNumeric) {
+			return ((ConceptNumeric) concept).getUnits();
+		}
+		return null;
 	}
 
 	private String getConceptName(Concept concept) {
@@ -271,5 +381,31 @@ public class ClinicalChunker {
 			return concept.getName().getName();
 		}
 		return "Concept:" + concept.getConceptId();
+	}
+
+	private String getDiagnosisName(Diagnosis diagnosis) {
+		if (diagnosis.getDiagnosis() == null) {
+			return "Unknown";
+		}
+		if (diagnosis.getDiagnosis().getCoded() != null) {
+			return getConceptName(diagnosis.getDiagnosis().getCoded());
+		}
+		if (diagnosis.getDiagnosis().getNonCoded() != null) {
+			return diagnosis.getDiagnosis().getNonCoded();
+		}
+		return "Unknown";
+	}
+
+	private String getConditionName(Condition condition) {
+		if (condition.getCondition() == null) {
+			return "Unknown";
+		}
+		if (condition.getCondition().getCoded() != null) {
+			return getConceptName(condition.getCondition().getCoded());
+		}
+		if (condition.getCondition().getNonCoded() != null) {
+			return condition.getCondition().getNonCoded();
+		}
+		return "Unknown";
 	}
 }

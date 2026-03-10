@@ -9,7 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.model;
 
-import java.io.ByteBuffer;
+import java.nio.ByteBuffer;
 import java.io.Serializable;
 import java.nio.ByteOrder;
 import java.util.Date;

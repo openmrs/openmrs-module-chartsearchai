@@ -25,6 +25,10 @@ public class ChartSearchAiConstants {
 
 	public static final String GP_RETRIEVAL_TOP_K = "chartsearchai.retrieval.topK";
 
+	public static final String GP_EMBEDDING_MODEL_PATH = "chartsearchai.embedding.modelPath";
+
+	public static final String GP_EMBEDDING_PROVIDER = "chartsearchai.embedding.provider";
+
 	public static final String DEFAULT_LLM_PROVIDER = "claude";
 
 	public static final String DEFAULT_LLM_MODEL = "claude-sonnet-4-6";

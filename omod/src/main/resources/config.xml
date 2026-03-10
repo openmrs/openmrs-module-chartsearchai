@@ -57,6 +57,16 @@
 		<defaultValue>20</defaultValue>
 		<description>Number of embedding chunks to retrieve per query</description>
 	</globalProperty>
+	<globalProperty>
+		<property>chartsearchai.embedding.provider</property>
+		<defaultValue>onnx</defaultValue>
+		<description>Embedding provider: onnx (requires model file) or termfrequency (fallback, degraded quality)</description>
+	</globalProperty>
+	<globalProperty>
+		<property>chartsearchai.embedding.modelPath</property>
+		<defaultValue></defaultValue>
+		<description>Path to the ONNX embedding model file. If empty, looks in {appdata}/chartsearchai/all-MiniLM-L6-v2.onnx</description>
+	</globalProperty>
 
 	<!-- Internationalization -->
 	<messages>

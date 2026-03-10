@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai;
 
+import org.openmrs.api.context.Context;
 import org.openmrs.module.BaseModuleActivator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,10 +21,21 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator {
 	@Override
 	public void started() {
 		log.info("Chart Search AI Module started");
+		validateConfiguration();
 	}
 
 	@Override
 	public void stopped() {
 		log.info("Chart Search AI Module stopped");
+	}
+
+	private void validateConfiguration() {
+		String apiKey = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_LLM_API_KEY);
+		if (apiKey == null || apiKey.trim().isEmpty()) {
+			log.warn("Chart Search AI: No LLM API key configured. "
+					+ "Set '{}' in global properties before using the module.",
+					ChartSearchAiConstants.GP_LLM_API_KEY);
+		}
 	}
 }

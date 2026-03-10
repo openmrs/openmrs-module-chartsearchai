@@ -6,8 +6,8 @@
 			http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
 
 	<changeSet id="chartsearchai-001" author="openmrs">
-		<comment>Create chart_embedding table for storing vector embeddings of clinical records</comment>
-		<createTable tableName="chart_embedding">
+		<comment>Create chartsearchai_embedding table for storing vector embeddings of clinical records</comment>
+		<createTable tableName="chartsearchai_embedding">
 			<column name="embedding_id" type="int" autoIncrement="true">
 				<constraints primaryKey="true" nullable="false"/>
 			</column>
@@ -30,14 +30,14 @@
 				<constraints nullable="false"/>
 			</column>
 		</createTable>
-		<addForeignKeyConstraint baseTableName="chart_embedding" baseColumnNames="patient_id"
+		<addForeignKeyConstraint baseTableName="chartsearchai_embedding" baseColumnNames="patient_id"
 				referencedTableName="patient" referencedColumnNames="patient_id"
-				constraintName="fk_chart_embedding_patient"/>
-		<createIndex tableName="chart_embedding" indexName="idx_chart_embedding_patient">
+				constraintName="fk_chartsearchai_embedding_patient"/>
+		<createIndex tableName="chartsearchai_embedding" indexName="idx_chartsearchai_embedding_patient">
 			<column name="patient_id"/>
 		</createIndex>
-		<addUniqueConstraint tableName="chart_embedding" columnNames="resource_type,resource_id"
-				constraintName="uk_chart_embedding_resource"/>
+		<addUniqueConstraint tableName="chartsearchai_embedding" columnNames="resource_type,resource_id"
+				constraintName="uk_chartsearchai_embedding_resource"/>
 	</changeSet>
 
 </databaseChangeLog>

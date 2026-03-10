@@ -4,7 +4,7 @@
 		"http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
 
 <hibernate-mapping package="org.openmrs.module.chartsearchai.model">
-	<class name="ChartEmbedding" table="chart_embedding">
+	<class name="ChartEmbedding" table="chartsearchai_embedding">
 		<id name="embeddingId" type="int" column="embedding_id">
 			<generator class="native"/>
 		</id>

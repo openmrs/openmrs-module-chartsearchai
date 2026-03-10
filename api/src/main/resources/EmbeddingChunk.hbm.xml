@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC
+		"-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+		"http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping package="org.openmrs.module.chartsearchai.model">
+
+	<class name="EmbeddingChunk" table="chartsearchai_embedding_chunk">
+
+		<id name="chunkId" type="int" column="chunk_id">
+			<generator class="native"/>
+		</id>
+
+		<many-to-one name="patient" class="org.openmrs.Patient" column="patient_id" not-null="true"/>
+
+		<property name="chunkType" type="string" column="chunk_type" length="50"/>
+		<property name="sourceUuid" type="string" column="source_uuid" length="38"/>
+		<property name="sourceDate" type="timestamp" column="source_date"/>
+		<property name="chunkText" type="text" column="chunk_text" not-null="true"/>
+		<property name="embedding" type="binary" column="embedding" not-null="true" length="16777215"/>
+		<property name="dateIndexed" type="timestamp" column="date_indexed" not-null="true"/>
+
+	</class>
+
+</hibernate-mapping>

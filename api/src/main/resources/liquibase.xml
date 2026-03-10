@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+		xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+		    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+
+	<changeSet id="chartsearchai-001" author="openmrs">
+		<comment>Create embedding chunk table for vector storage</comment>
+		<createTable tableName="chartsearchai_embedding_chunk">
+			<column name="chunk_id" type="int" autoIncrement="true">
+				<constraints primaryKey="true" nullable="false"/>
+			</column>
+			<column name="patient_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="chunk_type" type="varchar(50)"/>
+			<column name="source_uuid" type="varchar(38)"/>
+			<column name="source_date" type="datetime"/>
+			<column name="chunk_text" type="text">
+				<constraints nullable="false"/>
+			</column>
+			<column name="embedding" type="mediumblob">
+				<constraints nullable="false"/>
+			</column>
+			<column name="date_indexed" type="datetime">
+				<constraints nullable="false"/>
+			</column>
+		</createTable>
+
+		<addForeignKeyConstraint
+				baseTableName="chartsearchai_embedding_chunk"
+				baseColumnNames="patient_id"
+				referencedTableName="patient"
+				referencedColumnNames="patient_id"
+				constraintName="fk_chartsearchai_chunk_patient"/>
+
+		<createIndex tableName="chartsearchai_embedding_chunk" indexName="idx_chartsearchai_chunk_patient">
+			<column name="patient_id"/>
+		</createIndex>
+	</changeSet>
+
+	<changeSet id="chartsearchai-002" author="openmrs">
+		<comment>Create AI query audit log table</comment>
+		<createTable tableName="chartsearchai_query_log">
+			<column name="query_id" type="int" autoIncrement="true">
+				<constraints primaryKey="true" nullable="false"/>
+			</column>
+			<column name="patient_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="user_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="query_text" type="text"/>
+			<column name="response_text" type="text"/>
+			<column name="chunks_used" type="text"/>
+			<column name="model_used" type="varchar(100)"/>
+			<column name="date_queried" type="datetime"/>
+		</createTable>
+
+		<addForeignKeyConstraint
+				baseTableName="chartsearchai_query_log"
+				baseColumnNames="patient_id"
+				referencedTableName="patient"
+				referencedColumnNames="patient_id"
+				constraintName="fk_chartsearchai_log_patient"/>
+
+		<addForeignKeyConstraint
+				baseTableName="chartsearchai_query_log"
+				baseColumnNames="user_id"
+				referencedTableName="users"
+				referencedColumnNames="user_id"
+				constraintName="fk_chartsearchai_log_user"/>
+
+		<createIndex tableName="chartsearchai_query_log" indexName="idx_chartsearchai_log_patient">
+			<column name="patient_id"/>
+		</createIndex>
+
+		<createIndex tableName="chartsearchai_query_log" indexName="idx_chartsearchai_log_date">
+			<column name="date_queried"/>
+		</createIndex>
+	</changeSet>
+
+</databaseChangeLog>

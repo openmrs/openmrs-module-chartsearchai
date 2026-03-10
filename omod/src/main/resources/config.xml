@@ -15,6 +15,49 @@
 	<!-- Module Activator -->
 	<activator>org.openmrs.module.chartsearchai.ChartSearchAiModuleActivator</activator>
 
+	<!-- Hibernate Mappings -->
+	<mappingFiles>
+		EmbeddingChunk.hbm.xml
+		AiQueryLog.hbm.xml
+	</mappingFiles>
+
+	<!-- Privileges -->
+	<privilege>
+		<name>AI Query Patient Data</name>
+		<description>Allows querying patient charts using the AI assistant</description>
+	</privilege>
+	<privilege>
+		<name>View AI Audit Log</name>
+		<description>Allows viewing the audit log of AI queries and responses</description>
+	</privilege>
+
+	<!-- Global Properties -->
+	<globalProperty>
+		<property>chartsearchai.llm.provider</property>
+		<defaultValue>claude</defaultValue>
+		<description>LLM provider to use: claude, ollama</description>
+	</globalProperty>
+	<globalProperty>
+		<property>chartsearchai.llm.apiKey</property>
+		<defaultValue></defaultValue>
+		<description>API key for the LLM provider</description>
+	</globalProperty>
+	<globalProperty>
+		<property>chartsearchai.llm.model</property>
+		<defaultValue>claude-sonnet-4-6</defaultValue>
+		<description>Model identifier for the LLM provider</description>
+	</globalProperty>
+	<globalProperty>
+		<property>chartsearchai.llm.apiUrl</property>
+		<defaultValue>https://api.anthropic.com/v1/messages</defaultValue>
+		<description>API endpoint URL for the LLM provider</description>
+	</globalProperty>
+	<globalProperty>
+		<property>chartsearchai.retrieval.topK</property>
+		<defaultValue>20</defaultValue>
+		<description>Number of embedding chunks to retrieve per query</description>
+	</globalProperty>
+
 	<!-- Internationalization -->
 	<messages>
 		<lang>en</lang>

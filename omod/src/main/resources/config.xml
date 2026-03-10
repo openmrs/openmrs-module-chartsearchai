@@ -15,6 +15,24 @@
 	<!-- Module Activator -->
 	<activator>org.openmrs.module.chartsearchai.ChartSearchAiModuleActivator</activator>
 
+	<!-- Hibernate Mappings -->
+	<mappingFiles>
+		ChartEmbedding.hbm.xml
+	</mappingFiles>
+
+	<!-- Privileges -->
+	<privilege>
+		<name>AI Query Patient Data</name>
+		<description>Allows querying patient charts using the AI-powered chart search</description>
+	</privilege>
+
+	<!-- Global Properties -->
+	<globalProperty>
+		<property>chartsearchai.embedding.modelPath</property>
+		<defaultValue></defaultValue>
+		<description>Path to the ONNX embedding model file. If empty, uses the term-frequency fallback.</description>
+	</globalProperty>
+
 	<!-- Internationalization -->
 	<messages>
 		<lang>en</lang>

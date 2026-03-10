@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+			http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+
+	<changeSet id="chartsearchai-001" author="openmrs">
+		<comment>Create chart_embedding table for storing vector embeddings of clinical records</comment>
+		<createTable tableName="chart_embedding">
+			<column name="embedding_id" type="int" autoIncrement="true">
+				<constraints primaryKey="true" nullable="false"/>
+			</column>
+			<column name="patient_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="resource_type" type="varchar(50)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="resource_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="text_content" type="text">
+				<constraints nullable="false"/>
+			</column>
+			<column name="embedding" type="mediumblob">
+				<constraints nullable="false"/>
+			</column>
+			<column name="date_created" type="datetime">
+				<constraints nullable="false"/>
+			</column>
+		</createTable>
+		<addForeignKeyConstraint baseTableName="chart_embedding" baseColumnNames="patient_id"
+				referencedTableName="patient" referencedColumnNames="patient_id"
+				constraintName="fk_chart_embedding_patient"/>
+		<createIndex tableName="chart_embedding" indexName="idx_chart_embedding_patient">
+			<column name="patient_id"/>
+		</createIndex>
+		<addUniqueConstraint tableName="chart_embedding" columnNames="resource_type,resource_id"
+				constraintName="uk_chart_embedding_resource"/>
+	</changeSet>
+
+</databaseChangeLog>

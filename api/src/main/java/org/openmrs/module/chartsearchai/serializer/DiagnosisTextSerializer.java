@@ -1,0 +1,78 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.serializer;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+import org.openmrs.Concept;
+import org.openmrs.Diagnosis;
+import org.springframework.stereotype.Component;
+
+/**
+ * Serializes a {@link Diagnosis} into embedding-friendly text.
+ *
+ * <p>Example output: {@code "Diagnosis: Malaria. Certainty: CONFIRMED. Rank: Primary.
+ * Date: 2024-01-15"}</p>
+ */
+@Component
+public class DiagnosisTextSerializer implements ClinicalTextSerializer<Diagnosis> {
+
+	private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
+
+	@Override
+	public String toText(Diagnosis diagnosis) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("Diagnosis: ").append(getDiagnosisName(diagnosis));
+
+		if (diagnosis.getCertainty() != null) {
+			sb.append(". Certainty: ").append(diagnosis.getCertainty());
+		}
+		sb.append(". Rank: ").append(diagnosis.getRank() == 1 ? "Primary" : "Secondary");
+
+		if (diagnosis.getEncounter() != null && diagnosis.getEncounter().getEncounterDatetime() != null) {
+			sb.append(". Date: ").append(formatDate(diagnosis.getEncounter().getEncounterDatetime()));
+		}
+
+		return sb.toString();
+	}
+
+	private String getDiagnosisName(Diagnosis diagnosis) {
+		if (diagnosis.getDiagnosis() == null) {
+			return "Unknown";
+		}
+		if (diagnosis.getDiagnosis().getCoded() != null) {
+			return getConceptName(diagnosis.getDiagnosis().getCoded());
+		}
+		if (diagnosis.getDiagnosis().getNonCoded() != null) {
+			return diagnosis.getDiagnosis().getNonCoded();
+		}
+		return "Unknown";
+	}
+
+	private String getConceptName(Concept concept) {
+		if (concept == null) {
+			return "Unknown";
+		}
+		if (concept.getName() != null) {
+			return concept.getName().getName();
+		}
+		return "Concept:" + concept.getConceptId();
+	}
+
+	private String formatDate(Date date) {
+		if (date == null) {
+			return "unknown";
+		}
+		synchronized (DATE_FORMAT) {
+			return DATE_FORMAT.format(date);
+		}
+	}
+}

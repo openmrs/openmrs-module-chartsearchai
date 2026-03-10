@@ -1,4 +1,4 @@
-# Chart Search AI - Design Decisions
+# Chart Search AI - Architectural Decisions
 
 This document captures the architectural decisions made for the Chart Search AI module, including alternatives evaluated and the reasoning behind the chosen approaches.
 

@@ -342,6 +342,14 @@ The alternatives each have a significant limitation for this use case:
 
 All models run via java-llama.cpp with Q4_K_M quantization in GGUF format.
 
+### Licensing
+
+Llama 3.2 3B is free for both research and commercial use under the [Llama 3.2 Community License](https://www.llama.com/llama3_2/license/). No fees or royalties apply. The license permits use, modification, and distribution.
+
+The model is not technically "open source" by the [Open Source Initiative's definition](https://opensource.org/blog/metas-llama-license-is-still-not-open-source) — Meta's license includes restrictions that do not meet OSI criteria. However, for practical purposes the only meaningful restriction is that products with over 700 million monthly active users require a separate license from Meta, which is not a concern for OpenMRS.
+
+The license requires the following attribution to be included in all distributed copies: *"Llama 3.2 is licensed under the Llama 3.2 Community License, Copyright (C) Meta Platforms, Inc. All Rights Reserved."*
+
 ### When to use this approach
 
 This approach is viable when:

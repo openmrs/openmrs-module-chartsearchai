@@ -15,6 +15,8 @@ public class ChartSearchAiConstants {
 
 	public static final String GP_EMBEDDING_MODEL_PATH = "chartsearchai.embedding.modelPath";
 
+	public static final String GP_LLM_MODEL_PATH = "chartsearchai.llm.modelPath";
+
 	public static final int EMBEDDING_DIMENSIONS = 384;
 
 	public static final int DEFAULT_RETRIEVAL_TOP_K = 15;

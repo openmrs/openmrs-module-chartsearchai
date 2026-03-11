@@ -53,8 +53,9 @@ public class DiagnosisTextSerializer implements ClinicalTextSerializer<Diagnosis
 		if (diagnosis.getDiagnosis().getCoded() != null) {
 			return ConceptNameUtil.getName(diagnosis.getDiagnosis().getCoded());
 		}
-		if (diagnosis.getDiagnosis().getNonCoded() != null) {
-			return diagnosis.getDiagnosis().getNonCoded();
+		if (diagnosis.getDiagnosis().getNonCoded() != null
+				&& !diagnosis.getDiagnosis().getNonCoded().trim().isEmpty()) {
+			return diagnosis.getDiagnosis().getNonCoded().trim();
 		}
 		return "";
 	}

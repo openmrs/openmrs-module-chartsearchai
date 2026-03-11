@@ -61,8 +61,9 @@ public class ConditionTextSerializer implements ClinicalTextSerializer<Condition
 		if (condition.getCondition().getCoded() != null) {
 			return ConceptNameUtil.getName(condition.getCondition().getCoded());
 		}
-		if (condition.getCondition().getNonCoded() != null) {
-			return condition.getCondition().getNonCoded();
+		if (condition.getCondition().getNonCoded() != null
+				&& !condition.getCondition().getNonCoded().trim().isEmpty()) {
+			return condition.getCondition().getNonCoded().trim();
 		}
 		return "";
 	}

@@ -16,6 +16,7 @@ import java.util.List;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
 import org.openmrs.module.chartsearchai.embedding.EmbeddingProvider;
 import org.openmrs.module.chartsearchai.model.ChartEmbedding;
@@ -25,18 +26,38 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Searches a patient's chart embeddings by computing cosine similarity between the query
- * embedding and all stored embeddings for that patient. For typical patient charts (&lt;2000
- * records), brute-force in-memory similarity is fast enough (&lt;10ms).
+ * embedding and all stored embeddings for that patient. Returns the top matching records
+ * as the answer text with source references.
+ *
+ * <p>For typical patient charts (&lt;2000 records), brute-force in-memory similarity is
+ * fast enough (&lt;10ms).</p>
  */
-@Service
+@Service("chartSearchAi.embeddingSearchService")
 @Transactional(readOnly = true)
-public class EmbeddingSearchService {
+public class EmbeddingSearchService implements ChartSearchService {
 
 	@Autowired
 	private EmbeddingProvider embeddingProvider;
 
 	@Autowired
 	private ChartSearchAiDAO dao;
+
+	@Override
+	public ChartAnswer ask(Patient patient, String question) {
+		List<ChartEmbedding> results = search(patient, question,
+				ChartSearchAiConstants.DEFAULT_RETRIEVAL_TOP_K);
+
+		List<RecordReference> references = new ArrayList<RecordReference>();
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < results.size(); i++) {
+			ChartEmbedding ce = results.get(i);
+			int index = i + 1;
+			sb.append("[").append(index).append("] ").append(ce.getTextContent()).append("\n");
+			references.add(new RecordReference(index, ce.getResourceType(), ce.getResourceId()));
+		}
+
+		return new ChartAnswer(sb.toString(), references);
+	}
 
 	/**
 	 * Search a patient's embeddings for the most relevant records matching a query.

@@ -18,6 +18,7 @@ import org.openmrs.Obs;
 import org.openmrs.Order;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -123,36 +124,6 @@ public class PatientChartSerializer {
 
 		public List<RecordReference> getReferences() {
 			return references;
-		}
-	}
-
-	/**
-	 * Maps a citation number back to the source record in OpenMRS.
-	 */
-	public static class RecordReference {
-
-		private final int index;
-
-		private final String resourceType;
-
-		private final Integer resourceId;
-
-		public RecordReference(int index, String resourceType, Integer resourceId) {
-			this.index = index;
-			this.resourceType = resourceType;
-			this.resourceId = resourceId;
-		}
-
-		public int getIndex() {
-			return index;
-		}
-
-		public String getResourceType() {
-			return resourceType;
-		}
-
-		public Integer getResourceId() {
-			return resourceId;
 		}
 	}
 }

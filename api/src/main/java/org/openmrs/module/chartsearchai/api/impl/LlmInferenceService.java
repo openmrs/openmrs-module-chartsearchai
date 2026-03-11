@@ -9,8 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
-import java.util.List;
-
 import de.kherud.llama.InferenceParameters;
 import de.kherud.llama.LlamaModel;
 import de.kherud.llama.ModelParameters;
@@ -18,9 +16,9 @@ import de.kherud.llama.ModelParameters;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,8 +32,8 @@ import org.springframework.stereotype.Service;
  * <p>Requires a GGUF model file configured via the {@code chartsearchai.llm.modelPath}
  * global property (e.g., {@code llama-3.2-3b-instruct-q4_k_m.gguf}).</p>
  */
-@Service
-public class LlmInferenceService {
+@Service("chartSearchAi.llmInferenceService")
+public class LlmInferenceService implements ChartSearchService {
 
 	private static final Logger log = LoggerFactory.getLogger(LlmInferenceService.class);
 
@@ -49,13 +47,7 @@ public class LlmInferenceService {
 
 	private LlamaModel model;
 
-	/**
-	 * Ask a question about a patient's chart.
-	 *
-	 * @param patient the patient whose chart to query
-	 * @param question the clinician's natural language question
-	 * @return the LLM's answer with source references for citation linking
-	 */
+	@Override
 	public ChartAnswer ask(Patient patient, String question) {
 		LlamaModel llm = getModel();
 		PatientChart chart = chartSerializer.serialize(patient);
@@ -91,35 +83,5 @@ public class LlmInferenceService {
 			log.info("LLM loaded successfully");
 		}
 		return model;
-	}
-
-	/**
-	 * The LLM's answer along with record references for linking citations to OpenMRS records.
-	 */
-	public static class ChartAnswer {
-
-		private final String answer;
-
-		private final List<RecordReference> references;
-
-		public ChartAnswer(String answer, List<RecordReference> references) {
-			this.answer = answer;
-			this.references = references;
-		}
-
-		/**
-		 * The LLM's response text, containing citation numbers in brackets (e.g. [1], [3]).
-		 */
-		public String getAnswer() {
-			return answer;
-		}
-
-		/**
-		 * The ordered list of record references. Use citation numbers from the answer to
-		 * look up the corresponding resource type and ID for linking to the source record.
-		 */
-		public List<RecordReference> getReferences() {
-			return references;
-		}
 	}
 }

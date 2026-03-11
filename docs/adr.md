@@ -204,6 +204,61 @@ Key design choices:
 - Obs interpretation (`NORMAL`, `ABNORMAL`, `CRITICALLY_ABNORMAL`) and comments are included.
 - Units are extracted from `ConceptNumeric`, not `Concept` (which has no `getUnits()` in OpenMRS 2.6.x).
 
+## Decision 10: Direct LLM inference — simplified architecture without embeddings
+
+### Context
+
+The current architecture (Decisions 3–9) uses a two-model pipeline: an embedding model for semantic search retrieval, plus a generative LLM for query understanding and response synthesis. This requires vector storage, cosine similarity search, and an embedding indexing strategy.
+
+However, if two conditions are met, this complexity can be eliminated entirely:
+
+1. **The full patient chart fits within the LLM's context window.** A patient with 2000 records, each serialized to ~15 tokens by the `ClinicalTextSerializer`, produces ~30K tokens. Models like Mistral 7B (32K context) and Llama 3.2 3B (128K context) can accommodate this.
+2. **A local LLM is available with acceptable latency.** Small quantized models (1.5B–3.8B parameters) can run on CPU via [java-llama.cpp](https://github.com/kherud/java-llama.cpp), which provides Java JNI bindings to llama.cpp and is available on Maven (`de.kherud:llama`). This keeps the module self-contained with no external service dependency.
+
+### Simplified architecture
+
+```
+Patient records → ClinicalTextSerializers → All clinical text → LLM → Answer
+```
+
+No embedding model, no vector storage, no cosine similarity search, no indexing strategy. The LLM receives all serialized patient records and answers the query directly.
+
+### Advantages over the embedding-based approach
+
+- **Simpler architecture**: One model, no vector storage or indexing infrastructure.
+- **More accurate**: The LLM sees the full patient chart and can reason across all records — it can identify trends, contraindications, and connections that cosine similarity on individual record embeddings would miss.
+- **No retrieval errors**: Embedding-based retrieval can miss relevant records if the query and record text are semantically distant. Direct LLM inference eliminates this failure mode.
+- **No index staleness**: No need for batch or incremental indexing. Every query sees the current chart state.
+
+### Candidate models
+
+| Model | Quantized Size | RAM | Context Window |
+|-------|---------------|-----|----------------|
+| Qwen 2.5 1.5B | ~1GB | ~2GB | 32K tokens |
+| Phi-3 Mini 3.8B | ~2GB | ~4GB | 4K tokens (128K variant available) |
+| Llama 3.2 3B | ~2GB | ~4GB | 128K tokens |
+| Mistral 7B | ~4GB | ~8GB | 32K tokens |
+
+Qwen 2.5 1.5B (~1GB) is the minimum viable option for clinical reasoning. Phi-3 Mini 3.8B (~2GB) is the safer choice. Both run on CPU via java-llama.cpp with quantization (Q4_K_M format).
+
+### When to use this approach
+
+This approach is viable when:
+- The deployment has sufficient RAM for the model (~2–4GB above baseline).
+- Latency of a few seconds per query is acceptable (CPU inference on quantized models).
+- The patient chart fits within the model's context window after serialization.
+
+### When to fall back to embedding-based retrieval
+
+The embedding-based architecture (Decisions 3–9) remains necessary when:
+- Patient charts are too large for the LLM's context window (e.g., patients with decades of records at high-volume facilities).
+- The deployment hardware cannot support even the smallest viable LLM.
+- Sub-second response times are required (embedding similarity search completes in <10ms).
+
+### Decision
+
+Document this as an available architectural option. The embedding-based RAG approach (Decisions 3–9) remains the default for v1, as it has lower hardware requirements and provides sub-second retrieval. The direct LLM inference approach can be adopted when deployments meet the conditions above, with the `ClinicalTextSerializer` infrastructure serving both architectures.
+
 ## Planned future work
 
 - Replace `TermFrequencyEmbeddingProvider` with ONNX Runtime + all-MiniLM-L6-v2

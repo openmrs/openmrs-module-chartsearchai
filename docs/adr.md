@@ -368,6 +368,25 @@ The embedding-based architecture (Decisions 3–9) remains necessary when:
 
 Document this as an available architectural option. The embedding-based RAG approach (Decisions 3–9) remains the default for v1, as it has lower hardware requirements and provides sub-second retrieval. The direct LLM inference approach can be adopted when deployments meet the conditions above, with the `ClinicalTextSerializer` infrastructure serving both architectures.
 
+### Medical imaging data (X-rays, scans, etc.)
+
+The recommended Llama 3.2 3B model is text-only. Multimodal variants that can interpret images directly (Llama 3.2 11B and 90B) are too large for CPU inference in low-resource settings.
+
+#### Current approach: rely on text reports
+
+For v1, the module relies on the text reports that accompany imaging studies. In OpenMRS, imaging results typically have an associated obs with the radiologist's interpretation (e.g., `"Obs: Chest X-ray findings: bilateral infiltrates consistent with pneumonia"`). This text is already captured by `ObsTextSerializer` and flows through the existing pipeline — both the embedding-based and direct LLM inference architectures can search and reason over it.
+
+#### Future options for direct image interpretation
+
+These require either hardware beyond current low-resource constraints or an external service:
+
+- **Multimodal LLM (Llama 3.2 11B/90B)**: Can interpret images alongside text but requires GPU or significantly more RAM than available in target deployments.
+- **Specialized medical imaging models**: Small models trained for specific tasks (e.g., CheXNet for chest X-ray classification). Each covers only one type of image, so multiple models would be needed, adding significant complexity and storage requirements.
+- **Cloud API**: Offload image interpretation to a cloud-hosted multimodal model. Introduces external dependency, latency, cost, and data privacy concerns that conflict with the self-contained, offline-capable design goals.
+- **OCR for paper forms**: Convert photos of handwritten or printed paper forms to text at write time. The extracted text then flows through the existing serializer pipeline. This is more feasible than general medical image interpretation and addresses a common need in low-resource settings where paper forms are digitized by photographing them.
+
+Direct image interpretation is deferred to future work, pending either capable multimodal models that run on CPU within low-resource constraints, or a decision to support optional cloud API integration for sites that have connectivity and consent to external processing.
+
 ## Planned future work
 
 - Replace `TermFrequencyEmbeddingProvider` with ONNX Runtime + all-MiniLM-L6-v2

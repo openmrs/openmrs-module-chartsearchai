@@ -323,14 +323,24 @@ This is simpler and more reliable than citations with RAG. With RAG, the clinici
 
 ### Candidate models
 
-| Model | Quantized Size | RAM | Context Window |
-|-------|---------------|-----|----------------|
-| Qwen 2.5 1.5B | ~1GB | ~2GB | 32K tokens |
-| Phi-3 Mini 3.8B | ~2GB | ~4GB | 4K tokens (128K variant available) |
-| Llama 3.2 3B | ~2GB | ~4GB | 128K tokens |
-| Mistral 7B | ~4GB | ~8GB | 32K tokens |
+| Model | Quantized Size (Q4_K_M) | RAM | Context Window | CPU Speed (approx.) |
+|-------|------------------------|-----|----------------|---------------------|
+| Qwen 2.5 1.5B | ~1GB | ~2GB | 32K tokens | ~40–50 tok/s |
+| Llama 3.2 3B | ~2GB | ~4GB | 128K tokens | ~20–30 tok/s |
+| Phi-3 Mini 3.8B | ~2GB | ~4GB | 4K tokens (128K variant available) | ~15–25 tok/s |
+| Mistral 7B | ~4GB | ~8GB | 32K tokens | ~10–15 tok/s |
 
-Qwen 2.5 1.5B (~1GB) is the minimum viable option for clinical reasoning. Phi-3 Mini 3.8B (~2GB) is the safer choice. Both run on CPU via java-llama.cpp with quantization (Q4_K_M format).
+### Recommended model: Llama 3.2 3B
+
+Llama 3.2 3B is the best fit for this use case. Its 128K token context window can hold approximately 6,000 serialized patient records (~15 tokens each), which comfortably accommodates even the largest patient charts. At 3B parameters with Q4_K_M quantization, it is ~2GB on disk and runs at ~20–30 tokens per second on CPU — fast enough for acceptable clinical use.
+
+The alternatives each have a significant limitation for this use case:
+
+- **Qwen 2.5 1.5B** is faster and smaller but its 32K context window limits it to ~2,000 records, and its reasoning capability is weaker at 1.5B parameters.
+- **Phi-3 Mini 3.8B** has slightly better reasoning per parameter than Llama 3.2 3B, but its default 4K context window is far too small for full patient charts. The 128K variant exists but is slower on CPU due to the longer context handling.
+- **Mistral 7B** has strong reasoning but at 7B parameters it is noticeably slower on CPU (~10–15 tok/s) and requires ~8GB RAM, which may be prohibitive in low-resource deployments.
+
+All models run via java-llama.cpp with Q4_K_M quantization in GGUF format.
 
 ### When to use this approach
 

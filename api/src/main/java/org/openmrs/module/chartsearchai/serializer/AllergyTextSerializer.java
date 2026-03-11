@@ -32,8 +32,8 @@ public class AllergyTextSerializer implements ClinicalTextSerializer<Allergy> {
 		if (allergy.getAllergen().getAllergenType() != null) {
 			sb.append(" (").append(allergy.getAllergen().getAllergenType()).append(")");
 		}
-		if (allergy.getSeverity() != null && allergy.getSeverity().getName() != null) {
-			sb.append(". Severity: ").append(allergy.getSeverity().getName().getName());
+		if (allergy.getSeverity() != null) {
+			sb.append(". Severity: ").append(ConceptNameUtil.getName(allergy.getSeverity()));
 		}
 
 		List<AllergyReaction> reactions = allergy.getReactions();
@@ -44,8 +44,8 @@ public class AllergyTextSerializer implements ClinicalTextSerializer<Allergy> {
 					sb.append(", ");
 				}
 				AllergyReaction reaction = reactions.get(i);
-				if (reaction.getReaction() != null && reaction.getReaction().getName() != null) {
-					sb.append(reaction.getReaction().getName().getName());
+				if (reaction.getReaction() != null) {
+					sb.append(ConceptNameUtil.getName(reaction.getReaction()));
 				} else if (reaction.getReactionNonCoded() != null) {
 					sb.append(reaction.getReactionNonCoded());
 				}
@@ -62,9 +62,8 @@ public class AllergyTextSerializer implements ClinicalTextSerializer<Allergy> {
 		if (allergy.getAllergen() == null) {
 			return "Unknown";
 		}
-		if (allergy.getAllergen().getCodedAllergen() != null
-				&& allergy.getAllergen().getCodedAllergen().getName() != null) {
-			return allergy.getAllergen().getCodedAllergen().getName().getName();
+		if (allergy.getAllergen().getCodedAllergen() != null) {
+			return ConceptNameUtil.getName(allergy.getAllergen().getCodedAllergen());
 		}
 		if (allergy.getAllergen().getNonCodedAllergen() != null) {
 			return allergy.getAllergen().getNonCodedAllergen();

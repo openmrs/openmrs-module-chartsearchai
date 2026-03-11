@@ -12,7 +12,6 @@ package org.openmrs.module.chartsearchai.serializer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-import org.openmrs.Concept;
 import org.openmrs.Diagnosis;
 import org.springframework.stereotype.Component;
 
@@ -49,22 +48,12 @@ public class DiagnosisTextSerializer implements ClinicalTextSerializer<Diagnosis
 			return "Unknown";
 		}
 		if (diagnosis.getDiagnosis().getCoded() != null) {
-			return getConceptName(diagnosis.getDiagnosis().getCoded());
+			return ConceptNameUtil.getName(diagnosis.getDiagnosis().getCoded());
 		}
 		if (diagnosis.getDiagnosis().getNonCoded() != null) {
 			return diagnosis.getDiagnosis().getNonCoded();
 		}
 		return "Unknown";
-	}
-
-	private String getConceptName(Concept concept) {
-		if (concept == null) {
-			return "Unknown";
-		}
-		if (concept.getName() != null) {
-			return concept.getName().getName();
-		}
-		return "Concept:" + concept.getConceptId();
 	}
 
 	private String formatDate(Date date) {

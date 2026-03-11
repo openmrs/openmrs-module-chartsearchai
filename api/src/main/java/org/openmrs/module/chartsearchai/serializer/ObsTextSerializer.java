@@ -12,7 +12,6 @@ package org.openmrs.module.chartsearchai.serializer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-import org.openmrs.Concept;
 import org.openmrs.ConceptNumeric;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
@@ -45,7 +44,7 @@ public class ObsTextSerializer implements ClinicalTextSerializer<Obs> {
 			sb.append(" (").append(formatDate(enc.getEncounterDatetime())).append(") - ");
 		}
 
-		sb.append(getConceptName(obs.getConcept()));
+		sb.append(ConceptNameUtil.getName(obs.getConcept()));
 		sb.append(": ");
 		sb.append(formatValue(obs));
 
@@ -60,7 +59,7 @@ public class ObsTextSerializer implements ClinicalTextSerializer<Obs> {
 		if (obs.hasGroupMembers()) {
 			for (Obs member : obs.getGroupMembers()) {
 				sb.append("; ");
-				sb.append(getConceptName(member.getConcept()));
+				sb.append(ConceptNameUtil.getName(member.getConcept()));
 				sb.append(": ").append(formatValue(member));
 				if (member.getInterpretation() != null) {
 					sb.append(" (").append(member.getInterpretation()).append(")");
@@ -73,7 +72,7 @@ public class ObsTextSerializer implements ClinicalTextSerializer<Obs> {
 
 	private String formatValue(Obs obs) {
 		if (obs.getValueCoded() != null) {
-			return getConceptName(obs.getValueCoded());
+			return ConceptNameUtil.getName(obs.getValueCoded());
 		}
 		if (obs.getValueNumeric() != null) {
 			String units = getUnits(obs.getConcept());
@@ -91,21 +90,11 @@ public class ObsTextSerializer implements ClinicalTextSerializer<Obs> {
 		return "";
 	}
 
-	private String getUnits(Concept concept) {
+	private String getUnits(org.openmrs.Concept concept) {
 		if (concept instanceof ConceptNumeric) {
 			return ((ConceptNumeric) concept).getUnits();
 		}
 		return null;
-	}
-
-	private String getConceptName(Concept concept) {
-		if (concept == null) {
-			return "Unknown";
-		}
-		if (concept.getName() != null) {
-			return concept.getName().getName();
-		}
-		return "Concept:" + concept.getConceptId();
 	}
 
 	private String formatDate(Date date) {

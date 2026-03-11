@@ -12,7 +12,6 @@ package org.openmrs.module.chartsearchai.serializer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-import org.openmrs.Concept;
 import org.openmrs.Order;
 import org.springframework.stereotype.Component;
 
@@ -30,7 +29,7 @@ public class OrderTextSerializer implements ClinicalTextSerializer<Order> {
 	@Override
 	public String toText(Order order) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("Order: ").append(getConceptName(order.getConcept()));
+		sb.append("Order: ").append(ConceptNameUtil.getName(order.getConcept()));
 		sb.append(". Action: ").append(order.getAction());
 		sb.append(". Urgency: ").append(order.getUrgency());
 
@@ -38,7 +37,7 @@ public class OrderTextSerializer implements ClinicalTextSerializer<Order> {
 			sb.append(". Instructions: ").append(order.getInstructions().trim());
 		}
 		if (order.getOrderReason() != null) {
-			sb.append(". Reason: ").append(getConceptName(order.getOrderReason()));
+			sb.append(". Reason: ").append(ConceptNameUtil.getName(order.getOrderReason()));
 		} else if (order.getOrderReasonNonCoded() != null
 				&& !order.getOrderReasonNonCoded().trim().isEmpty()) {
 			sb.append(". Reason: ").append(order.getOrderReasonNonCoded().trim());
@@ -50,16 +49,6 @@ public class OrderTextSerializer implements ClinicalTextSerializer<Order> {
 		}
 
 		return sb.toString();
-	}
-
-	private String getConceptName(Concept concept) {
-		if (concept == null) {
-			return "Unknown";
-		}
-		if (concept.getName() != null) {
-			return concept.getName().getName();
-		}
-		return "Concept:" + concept.getConceptId();
 	}
 
 	private String formatDate(Date date) {

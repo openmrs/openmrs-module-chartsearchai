@@ -15,6 +15,8 @@ import java.util.Comparator;
 import java.util.List;
 
 import org.openmrs.Patient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
@@ -26,8 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Searches a patient's chart embeddings by computing cosine similarity between the query
- * embedding and all stored embeddings for that patient. Returns the top matching records
- * as the answer text with source references.
+ * embedding and all stored embeddings for that patient. Retrieves the top matching records,
+ * then sends them to the LLM for reasoning and synthesis (RAG pipeline).
  *
  * <p>For typical patient charts (&lt;2000 records), brute-force in-memory similarity is
  * fast enough (&lt;10ms).</p>
@@ -36,11 +38,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class EmbeddingSearchService implements ChartSearchService {
 
+	private static final Logger log = LoggerFactory.getLogger(EmbeddingSearchService.class);
+
 	@Autowired
 	private EmbeddingProvider embeddingProvider;
 
 	@Autowired
 	private ChartSearchAiDAO dao;
+
+	@Autowired
+	private LlmProvider llmProvider;
 
 	@Override
 	public ChartAnswer ask(Patient patient, String question) {
@@ -56,7 +63,10 @@ public class EmbeddingSearchService implements ChartSearchService {
 			references.add(new RecordReference(index, ce.getResourceType(), ce.getResourceId()));
 		}
 
-		return new ChartAnswer(sb.toString(), references);
+		log.debug("Sending {} retrieved records to LLM", references.size());
+		String response = llmProvider.ask(sb.toString(), question);
+
+		return new ChartAnswer(response, references);
 	}
 
 	/**

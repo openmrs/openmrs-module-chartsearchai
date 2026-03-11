@@ -9,13 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
-import de.kherud.llama.InferenceParameters;
-import de.kherud.llama.LlamaModel;
-import de.kherud.llama.ModelParameters;
-
 import org.openmrs.Patient;
-import org.openmrs.api.context.Context;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -26,62 +20,26 @@ import org.springframework.stereotype.Service;
 
 /**
  * Answers natural language questions about a patient's chart using direct LLM inference.
- * Serializes the full patient chart, sends it to a local Llama model with the question,
- * and returns the response with source citations that map back to OpenMRS records.
- *
- * <p>Requires a GGUF model file configured via the {@code chartsearchai.llm.modelPath}
- * global property (e.g., {@code llama-3.2-3b-instruct-q4_k_m.gguf}).</p>
+ * Serializes the full patient chart and sends all records to the LLM with the question.
  */
 @Service("chartSearchAi.llmInferenceService")
 public class LlmInferenceService implements ChartSearchService {
 
 	private static final Logger log = LoggerFactory.getLogger(LlmInferenceService.class);
 
-	private static final String SYSTEM_PROMPT = "You are a clinical assistant helping a clinician "
-			+ "review a patient's chart. Answer the question using only the patient records below. "
-			+ "Cite records by number in brackets (e.g. [1], [3]). "
-			+ "If the records do not contain enough information to answer, say so.";
-
 	@Autowired
 	private PatientChartSerializer chartSerializer;
 
-	private LlamaModel model;
+	@Autowired
+	private LlmProvider llmProvider;
 
 	@Override
 	public ChartAnswer ask(Patient patient, String question) {
-		LlamaModel llm = getModel();
 		PatientChart chart = chartSerializer.serialize(patient);
+		log.debug("Sending full chart to LLM ({} records)", chart.getReferences().size());
 
-		String prompt = SYSTEM_PROMPT + "\n\n"
-				+ "Patient records:\n" + chart.getText() + "\n"
-				+ "Question: " + question;
-
-		log.debug("Sending prompt to LLM ({} records)", chart.getReferences().size());
-
-		InferenceParameters params = new InferenceParameters(prompt)
-				.setTemperature(0.1f);
-
-		String response = llm.complete(params);
+		String response = llmProvider.ask(chart.getText(), question);
 
 		return new ChartAnswer(response, chart.getReferences());
-	}
-
-	private synchronized LlamaModel getModel() {
-		if (model == null) {
-			String modelPath = Context.getAdministrationService()
-					.getGlobalProperty(ChartSearchAiConstants.GP_LLM_MODEL_PATH);
-			if (modelPath == null || modelPath.trim().isEmpty()) {
-				throw new IllegalStateException(
-						"LLM model path not configured. Set the global property: "
-								+ ChartSearchAiConstants.GP_LLM_MODEL_PATH);
-			}
-			log.info("Loading LLM from {}", modelPath);
-			ModelParameters modelParams = new ModelParameters()
-					.setModel(modelPath)
-					.setGpuLayers(0);
-			model = new LlamaModel(modelParams);
-			log.info("LLM loaded successfully");
-		}
-		return model;
 	}
 }

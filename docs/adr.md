@@ -291,6 +291,36 @@ With direct inference, the LLM sees the full patient chart. It will not miss rel
 
 The mitigation is the same for both approaches: **never present LLM output as clinical fact**. The module should always show the source records alongside the LLM's answer so the clinician can verify. The direct inference approach actually makes this easier — since there is no retrieval step, every record the LLM saw is known and can be cited. With RAG, the clinician must additionally trust that the retrieval step found the right records.
 
+### Source citations
+
+With direct LLM inference, source citations are straightforward because we control exactly what the LLM sees. Each serialized record is numbered before being included in the prompt:
+
+```
+[1] Outpatient Visit (2024-01-15) - Systolic Blood Pressure: 120 mmHg (ABNORMAL)
+[2] Condition: Type 2 Diabetes Mellitus. Status: ACTIVE. Onset: 2019-03-10
+[3] Order: Metformin. Action: NEW. Date: 2019-03-10
+[4] Outpatient Visit (2024-02-12) - HbA1c: 8.2%
+```
+
+The system prompt instructs the LLM to cite record numbers in its answer:
+
+```
+Answer the question using only the patient records below. Cite records
+by number in brackets. If the records do not contain enough information
+to answer, say so.
+```
+
+The LLM responds with inline citations:
+
+> The patient's diabetes appears poorly controlled. Their most recent HbA1c was 8.2% [4],
+> above the target of 7%, despite being on Metformin since 2019 [3]. They also had an
+> abnormal blood pressure reading [1], which may indicate cardiovascular risk associated
+> with their diabetes [2].
+
+On the Java side, each number maps back to a `resource_type` + `resource_id` pair maintained in an ordered list during prompt construction. The UI can then link each citation directly to the source record in OpenMRS, allowing the clinician to verify every claim with one click.
+
+This is simpler and more reliable than citations with RAG. With RAG, the clinician must trust two things: that the retrieval step found the right records, and that the LLM cited them correctly. With direct inference, the first concern is eliminated — the LLM saw everything, so a missing citation means the LLM chose not to cite it, not that retrieval failed to find it.
+
 ### Candidate models
 
 | Model | Quantized Size | RAM | Context Window |

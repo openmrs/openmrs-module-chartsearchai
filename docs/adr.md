@@ -350,6 +350,35 @@ The model is not technically "open source" by the [Open Source Initiative's defi
 
 The license requires the following attribution to be included in all distributed copies: *"Llama 3.2 is licensed under the Llama 3.2 Community License, Copyright (C) Meta Platforms, Inc. All Rights Reserved."*
 
+### Deployment and memory requirements
+
+The model runs **in-process** inside the OpenMRS JVM via [java-llama.cpp](https://github.com/kherud/java-llama.cpp) JNI bindings. No separate web server, process, or HTTP service is needed. The deployment consists of two files:
+
+1. The `.omod` module file (includes the java-llama.cpp dependency)
+2. The `.gguf` model file (~2GB, placed in the OpenMRS application data directory)
+
+The model path is configured via the `chartsearchai.llm.modelPath` global property. The model loads into memory on first query and stays resident for subsequent requests.
+
+```
+OpenMRS JVM
+  └── chartsearchai module
+        └── LlmInferenceService
+              └── java-llama.cpp (JNI)
+                    └── llama.cpp (native C++)
+                          └── loads GGUF file from disk
+```
+
+**Memory consumption** for Llama 3.2 3B Q4_K_M:
+
+| Component | RAM |
+|-----------|-----|
+| Model weights | ~2GB |
+| KV cache (varies with context used) | ~0.5–1.5GB |
+| Inference buffers | ~200MB |
+| **Total (on top of OpenMRS JVM heap)** | **~3–4GB** |
+
+A server running OpenMRS typically uses 1–2GB for the JVM heap. With the LLM loaded, the system needs **at least 8GB total RAM** for comfortable operation. On a 4GB machine, the LLM approach is not viable — use the embedding-based architecture instead.
+
 ### When to use this approach
 
 This approach is viable when:

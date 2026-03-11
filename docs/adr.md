@@ -267,6 +267,30 @@ OpenMRS already has a concept dictionary with some relationship structure (conce
 
 The direct LLM inference approach is more practical for these settings: deploy a single model file and the module works out of the box with clinical reasoning capabilities, no graph construction or maintenance required. The tradeoff is accepting probabilistic answers (with hallucination risk) instead of deterministic graph traversal.
 
+### Hallucination risk comparison
+
+Both the direct LLM inference and embedding-based RAG approaches carry hallucination risk, but the failure modes are different.
+
+#### Embedding-based RAG hallucinations
+
+With RAG, the LLM only sees ~15 retrieved records. This limits how much it can hallucinate *about*, but it introduces a different risk: hallucinating from *missing context*. Examples:
+
+- The retrieval step misses a relevant record (e.g., a resolved penicillin allergy) because the query and record text are semantically distant. The LLM confidently says "no known drug allergies" based on the records it received.
+- The LLM sees a single elevated blood pressure reading without the surrounding context of the patient exercising beforehand (that context is in a different obs comment that was not retrieved). It may overstate the clinical significance.
+- The LLM receives a medication order and a lab result but not the clinician's note explaining why the medication was started. It invents a plausible but incorrect reason.
+
+#### Direct LLM inference hallucinations
+
+With direct inference, the LLM sees the full patient chart. It will not miss relevant records, but more input means more opportunity to hallucinate from *over-interpreting context*. Examples:
+
+- The LLM sees a headache obs and a new hypertension medication started the same week. It infers the medication caused the headache, when the timing was coincidental.
+- The LLM notices elevated liver enzymes and a hepatitis B diagnosis. It concludes the hepatitis is active and causing the elevation, when the enzymes were actually elevated due to a statin started recently.
+- The LLM sees multiple records mentioning fatigue across several visits and synthesizes a narrative about chronic fatigue syndrome, when each instance had a different, resolved cause.
+
+#### Mitigation
+
+The mitigation is the same for both approaches: **never present LLM output as clinical fact**. The module should always show the source records alongside the LLM's answer so the clinician can verify. The direct inference approach actually makes this easier — since there is no retrieval step, every record the LLM saw is known and can be cited. With RAG, the clinician must additionally trust that the retrieval step found the right records.
+
 ### Candidate models
 
 | Model | Quantized Size | RAM | Context Window |

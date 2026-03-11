@@ -38,11 +38,11 @@ public final class ConceptNameUtil {
 	 */
 	public static String getName(Concept concept) {
 		if (concept == null) {
-			return "Unknown";
+			return "";
 		}
 		ConceptName preferred = concept.getName();
 		if (preferred == null) {
-			return "Concept:" + concept.getConceptId();
+			return "";
 		}
 
 		String preferredText = preferred.getName();

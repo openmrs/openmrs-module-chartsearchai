@@ -60,7 +60,7 @@ public class AllergyTextSerializer implements ClinicalTextSerializer<Allergy> {
 
 	private String getAllergenName(Allergy allergy) {
 		if (allergy.getAllergen() == null) {
-			return "Unknown";
+			return "";
 		}
 		if (allergy.getAllergen().getCodedAllergen() != null) {
 			return ConceptNameUtil.getName(allergy.getAllergen().getCodedAllergen());

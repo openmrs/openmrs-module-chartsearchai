@@ -53,7 +53,7 @@ public class ConditionTextSerializer implements ClinicalTextSerializer<Condition
 
 	private String getConditionName(Condition condition) {
 		if (condition.getCondition() == null) {
-			return "Unknown";
+			return "";
 		}
 		if (condition.getCondition().getCoded() != null) {
 			return ConceptNameUtil.getName(condition.getCondition().getCoded());
@@ -61,7 +61,7 @@ public class ConditionTextSerializer implements ClinicalTextSerializer<Condition
 		if (condition.getCondition().getNonCoded() != null) {
 			return condition.getCondition().getNonCoded();
 		}
-		return "Unknown";
+		return "";
 	}
 
 	private String formatDate(Date date) {

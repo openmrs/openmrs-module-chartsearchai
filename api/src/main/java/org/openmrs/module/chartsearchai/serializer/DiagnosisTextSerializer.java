@@ -45,7 +45,7 @@ public class DiagnosisTextSerializer implements ClinicalTextSerializer<Diagnosis
 
 	private String getDiagnosisName(Diagnosis diagnosis) {
 		if (diagnosis.getDiagnosis() == null) {
-			return "Unknown";
+			return "";
 		}
 		if (diagnosis.getDiagnosis().getCoded() != null) {
 			return ConceptNameUtil.getName(diagnosis.getDiagnosis().getCoded());
@@ -53,7 +53,7 @@ public class DiagnosisTextSerializer implements ClinicalTextSerializer<Diagnosis
 		if (diagnosis.getDiagnosis().getNonCoded() != null) {
 			return diagnosis.getDiagnosis().getNonCoded();
 		}
-		return "Unknown";
+		return "";
 	}
 
 	private String formatDate(Date date) {

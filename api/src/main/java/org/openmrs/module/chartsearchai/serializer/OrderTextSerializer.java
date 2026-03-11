@@ -29,7 +29,10 @@ public class OrderTextSerializer implements ClinicalTextSerializer<Order> {
 	@Override
 	public String toText(Order order) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("Order: ").append(ConceptNameUtil.getName(order.getConcept()));
+		String name = ConceptNameUtil.getName(order.getConcept());
+		if (!name.isEmpty()) {
+			sb.append("Order: ").append(name);
+		}
 		sb.append(". Action: ").append(order.getAction());
 		sb.append(". Urgency: ").append(order.getUrgency());
 

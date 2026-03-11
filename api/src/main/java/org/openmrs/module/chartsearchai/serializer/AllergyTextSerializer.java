@@ -27,7 +27,10 @@ public class AllergyTextSerializer implements ClinicalTextSerializer<Allergy> {
 	@Override
 	public String toText(Allergy allergy) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("Allergy: ").append(getAllergenName(allergy));
+		String name = getAllergenName(allergy);
+		if (!name.isEmpty()) {
+			sb.append("Allergy: ").append(name);
+		}
 
 		if (allergy.getAllergen().getAllergenType() != null) {
 			sb.append(" (").append(allergy.getAllergen().getAllergenType()).append(")");

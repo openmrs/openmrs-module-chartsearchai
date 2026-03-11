@@ -29,7 +29,10 @@ public class DiagnosisTextSerializer implements ClinicalTextSerializer<Diagnosis
 	@Override
 	public String toText(Diagnosis diagnosis) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("Diagnosis: ").append(getDiagnosisName(diagnosis));
+		String name = getDiagnosisName(diagnosis);
+		if (!name.isEmpty()) {
+			sb.append("Diagnosis: ").append(name);
+		}
 
 		if (diagnosis.getCertainty() != null) {
 			sb.append(". Certainty: ").append(diagnosis.getCertainty());

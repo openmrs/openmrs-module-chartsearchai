@@ -29,7 +29,10 @@ public class ConditionTextSerializer implements ClinicalTextSerializer<Condition
 	@Override
 	public String toText(Condition condition) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("Condition: ").append(getConditionName(condition));
+		String name = getConditionName(condition);
+		if (!name.isEmpty()) {
+			sb.append("Condition: ").append(name);
+		}
 		sb.append(". Status: ").append(condition.getClinicalStatus());
 
 		if (condition.getVerificationStatus() != null) {

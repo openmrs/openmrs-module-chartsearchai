@@ -62,6 +62,21 @@
 		<class>org.openmrs.module.chartsearchai.api.EncounterIndexingAdvice</class>
 	</advice>
 
+	<advice>
+		<point>org.openmrs.api.ConditionService</point>
+		<class>org.openmrs.module.chartsearchai.api.PatientDataIndexingAdvice</class>
+	</advice>
+
+	<advice>
+		<point>org.openmrs.api.PatientService</point>
+		<class>org.openmrs.module.chartsearchai.api.PatientDataIndexingAdvice</class>
+	</advice>
+
+	<advice>
+		<point>org.openmrs.api.OrderService</point>
+		<class>org.openmrs.module.chartsearchai.api.PatientDataIndexingAdvice</class>
+	</advice>
+
 	<!-- Internationalization -->
 	<messages>
 		<lang>en</lang>

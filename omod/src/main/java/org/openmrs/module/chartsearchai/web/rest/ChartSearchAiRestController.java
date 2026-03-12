@@ -28,6 +28,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
 import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -82,6 +83,10 @@ public class ChartSearchAiRestController {
 	private ChartSearchService chartSearchService;
 
 	@Autowired
+	@Qualifier("chartSearchAi.patientAccessCheck")
+	private PatientAccessCheck patientAccessCheck;
+
+	@Autowired
 	private ChartSearchAiDAO dao;
 
 	@Transactional
@@ -122,6 +127,12 @@ public class ChartSearchAiRestController {
 		}
 
 		User user = Context.getAuthenticatedUser();
+
+		if (!patientAccessCheck.canAccess(user, patient)) {
+			return new ResponseEntity<Object>(
+					errorResponse("You do not have access to this patient's chart"),
+					HttpStatus.FORBIDDEN);
+		}
 
 		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
 		if (rateLimitError != null) {
@@ -233,6 +244,11 @@ public class ChartSearchAiRestController {
 		}
 
 		final User user = Context.getAuthenticatedUser();
+
+		if (!patientAccessCheck.canAccess(user, patient)) {
+			sendErrorAndComplete(emitter, "You do not have access to this patient's chart");
+			return emitter;
+		}
 
 		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
 		if (rateLimitError != null) {

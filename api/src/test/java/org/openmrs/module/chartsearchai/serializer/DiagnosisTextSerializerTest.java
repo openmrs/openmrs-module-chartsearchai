@@ -21,10 +21,10 @@ import org.openmrs.ConceptName;
 import org.openmrs.ConditionVerificationStatus;
 import org.openmrs.Diagnosis;
 import org.openmrs.Encounter;
-import org.openmrs.api.context.Context;
-import org.openmrs.test.jupiter.BaseContextSensitiveTest;
+import java.util.Locale;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
-public class DiagnosisTextSerializerTest extends BaseContextSensitiveTest {
+public class DiagnosisTextSerializerTest extends BaseModuleContextSensitiveTest {
 
 	private DiagnosisTextSerializer serializer;
 
@@ -37,7 +37,7 @@ public class DiagnosisTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldSerializeCodedDiagnosis() {
 		Diagnosis diagnosis = new Diagnosis();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Malaria", Context.getLocale()));
+		concept.addName(conceptName("Malaria"));
 		diagnosis.setDiagnosis(new CodedOrFreeText(concept, null, null));
 		diagnosis.setCertainty(ConditionVerificationStatus.CONFIRMED);
 		diagnosis.setRank(1);
@@ -63,7 +63,7 @@ public class DiagnosisTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeEncounterDate() {
 		Diagnosis diagnosis = new Diagnosis();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Pneumonia", Context.getLocale()));
+		concept.addName(conceptName("Pneumonia"));
 		diagnosis.setDiagnosis(new CodedOrFreeText(concept, null, null));
 		diagnosis.setRank(1);
 
@@ -82,5 +82,12 @@ public class DiagnosisTextSerializerTest extends BaseContextSensitiveTest {
 
 		String result = serializer.toText(diagnosis);
 		assertTrue(result.contains("Rank: Primary"));
+	}
+
+	private ConceptName conceptName(String name) {
+		ConceptName cn = new ConceptName();
+		cn.setName(name);
+		cn.setLocale(Locale.ENGLISH);
+		return cn;
 	}
 }

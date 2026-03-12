@@ -64,4 +64,12 @@ public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 		sessionFactory.getCurrentSession().save(auditLog);
 		return auditLog;
 	}
+
+	@Override
+	@SuppressWarnings("unchecked")
+	public List<Integer> getIndexedPatientIds() {
+		return sessionFactory.getCurrentSession()
+				.createQuery("select distinct patient.patientId from ChartEmbedding")
+				.list();
+	}
 }

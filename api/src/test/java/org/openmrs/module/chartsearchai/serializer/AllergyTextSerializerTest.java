@@ -20,10 +20,10 @@ import org.openmrs.AllergyReaction;
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
 import org.openmrs.Patient;
-import org.openmrs.api.context.Context;
-import org.openmrs.test.jupiter.BaseContextSensitiveTest;
+import java.util.Locale;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
-public class AllergyTextSerializerTest extends BaseContextSensitiveTest {
+public class AllergyTextSerializerTest extends BaseModuleContextSensitiveTest {
 
 	private AllergyTextSerializer serializer;
 
@@ -35,7 +35,7 @@ public class AllergyTextSerializerTest extends BaseContextSensitiveTest {
 	@Test
 	public void toText_shouldSerializeCodedAllergy() {
 		Concept codedAllergen = new Concept();
-		codedAllergen.addName(new ConceptName("Penicillin", Context.getLocale()));
+		codedAllergen.addName(conceptName("Penicillin"));
 		Allergen allergen = new Allergen(AllergenType.DRUG, codedAllergen, null);
 
 		Allergy allergy = new Allergy(new Patient(), allergen, null, null, null);
@@ -59,11 +59,11 @@ public class AllergyTextSerializerTest extends BaseContextSensitiveTest {
 	@Test
 	public void toText_shouldIncludeSeverity() {
 		Concept codedAllergen = new Concept();
-		codedAllergen.addName(new ConceptName("Aspirin", Context.getLocale()));
+		codedAllergen.addName(conceptName("Aspirin"));
 		Allergen allergen = new Allergen(AllergenType.DRUG, codedAllergen, null);
 
 		Concept severity = new Concept();
-		severity.addName(new ConceptName("Severe", Context.getLocale()));
+		severity.addName(conceptName("Severe"));
 
 		Allergy allergy = new Allergy(new Patient(), allergen, severity, null, null);
 
@@ -74,13 +74,13 @@ public class AllergyTextSerializerTest extends BaseContextSensitiveTest {
 	@Test
 	public void toText_shouldIncludeReactions() {
 		Concept codedAllergen = new Concept();
-		codedAllergen.addName(new ConceptName("Penicillin", Context.getLocale()));
+		codedAllergen.addName(conceptName("Penicillin"));
 		Allergen allergen = new Allergen(AllergenType.DRUG, codedAllergen, null);
 
 		Allergy allergy = new Allergy(new Patient(), allergen, null, null, null);
 
 		Concept reactionConcept = new Concept();
-		reactionConcept.addName(new ConceptName("Rash", Context.getLocale()));
+		reactionConcept.addName(conceptName("Rash"));
 		allergy.addReaction(new AllergyReaction(allergy, reactionConcept, null));
 
 		String result = serializer.toText(allergy);
@@ -90,12 +90,19 @@ public class AllergyTextSerializerTest extends BaseContextSensitiveTest {
 	@Test
 	public void toText_shouldIncludeComments() {
 		Concept codedAllergen = new Concept();
-		codedAllergen.addName(new ConceptName("Latex", Context.getLocale()));
+		codedAllergen.addName(conceptName("Latex"));
 		Allergen allergen = new Allergen(AllergenType.ENVIRONMENT, codedAllergen, null);
 
 		Allergy allergy = new Allergy(new Patient(), allergen, null, "Discovered during surgery", null);
 
 		String result = serializer.toText(allergy);
 		assertTrue(result.contains("Comments: Discovered during surgery"));
+	}
+
+	private ConceptName conceptName(String name) {
+		ConceptName cn = new ConceptName();
+		cn.setName(name);
+		cn.setLocale(Locale.ENGLISH);
+		return cn;
 	}
 }

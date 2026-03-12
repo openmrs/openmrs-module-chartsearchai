@@ -17,10 +17,9 @@ import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
-import org.openmrs.api.context.Context;
-import org.openmrs.test.jupiter.BaseContextSensitiveTest;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
-public class ConceptNameUtilTest extends BaseContextSensitiveTest {
+public class ConceptNameUtilTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void getName_shouldReturnEmptyStringForNullConcept() {
@@ -30,18 +29,17 @@ public class ConceptNameUtilTest extends BaseContextSensitiveTest {
 	@Test
 	public void getName_shouldReturnPreferredName() {
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Hypertension", Context.getLocale()));
+		concept.addName(conceptName("Hypertension"));
 
 		assertEquals("Hypertension", ConceptNameUtil.getName(concept));
 	}
 
 	@Test
 	public void getName_shouldIncludeSynonyms() {
-		Locale locale = Context.getLocale();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Hypertension", locale));
-		concept.addName(new ConceptName("HTN", locale));
-		concept.addName(new ConceptName("High Blood Pressure", locale));
+		concept.addName(conceptName("Hypertension"));
+		concept.addName(conceptName("HTN"));
+		concept.addName(conceptName("High Blood Pressure"));
 
 		String result = ConceptNameUtil.getName(concept);
 		assertTrue(result.startsWith("Hypertension"));
@@ -51,13 +49,12 @@ public class ConceptNameUtilTest extends BaseContextSensitiveTest {
 
 	@Test
 	public void getName_shouldLimitSynonymsToThree() {
-		Locale locale = Context.getLocale();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Preferred", locale));
-		concept.addName(new ConceptName("Syn1", locale));
-		concept.addName(new ConceptName("Syn2", locale));
-		concept.addName(new ConceptName("Syn3", locale));
-		concept.addName(new ConceptName("Syn4", locale));
+		concept.addName(conceptName("Preferred"));
+		concept.addName(conceptName("Syn1"));
+		concept.addName(conceptName("Syn2"));
+		concept.addName(conceptName("Syn3"));
+		concept.addName(conceptName("Syn4"));
 
 		String result = ConceptNameUtil.getName(concept);
 		// Should have at most 3 synonyms in parentheses
@@ -67,12 +64,21 @@ public class ConceptNameUtilTest extends BaseContextSensitiveTest {
 
 	@Test
 	public void getName_shouldExcludeDifferentLocaleSynonyms() {
-		Locale locale = Context.getLocale();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Hypertension", locale));
-		concept.addName(new ConceptName("Hipertensión", new Locale("es")));
+		concept.addName(conceptName("Hypertension"));
+		ConceptName spanishName = new ConceptName();
+		spanishName.setName("Hipertensión");
+		spanishName.setLocale(new Locale("es"));
+		concept.addName(spanishName);
 
 		String result = ConceptNameUtil.getName(concept);
 		assertEquals("Hypertension", result);
+	}
+
+	private ConceptName conceptName(String name) {
+		ConceptName cn = new ConceptName();
+		cn.setName(name);
+		cn.setLocale(Locale.ENGLISH);
+		return cn;
 	}
 }

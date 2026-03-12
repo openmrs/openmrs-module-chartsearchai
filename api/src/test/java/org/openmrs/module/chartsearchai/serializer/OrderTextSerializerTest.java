@@ -18,10 +18,10 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
 import org.openmrs.Order;
-import org.openmrs.api.context.Context;
-import org.openmrs.test.jupiter.BaseContextSensitiveTest;
+import java.util.Locale;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
-public class OrderTextSerializerTest extends BaseContextSensitiveTest {
+public class OrderTextSerializerTest extends BaseModuleContextSensitiveTest {
 
 	private OrderTextSerializer serializer;
 
@@ -34,7 +34,7 @@ public class OrderTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldSerializeBasicOrder() {
 		Order order = new Order();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Complete Blood Count", Context.getLocale()));
+		concept.addName(conceptName("Complete Blood Count"));
 		order.setConcept(concept);
 		order.setAction(Order.Action.NEW);
 		order.setUrgency(Order.Urgency.ROUTINE);
@@ -51,7 +51,7 @@ public class OrderTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeInstructions() {
 		Order order = new Order();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("X-Ray Chest", Context.getLocale()));
+		concept.addName(conceptName("X-Ray Chest"));
 		order.setConcept(concept);
 		order.setAction(Order.Action.NEW);
 		order.setUrgency(Order.Urgency.STAT);
@@ -66,14 +66,14 @@ public class OrderTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeCodedReason() {
 		Order order = new Order();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Hemoglobin", Context.getLocale()));
+		concept.addName(conceptName("Hemoglobin"));
 		order.setConcept(concept);
 		order.setAction(Order.Action.NEW);
 		order.setUrgency(Order.Urgency.ROUTINE);
 		order.setDateActivated(new Date());
 
 		Concept reason = new Concept();
-		reason.addName(new ConceptName("Suspected anemia", Context.getLocale()));
+		reason.addName(conceptName("Suspected anemia"));
 		order.setOrderReason(reason);
 
 		String result = serializer.toText(order);
@@ -84,7 +84,7 @@ public class OrderTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeNonCodedReason() {
 		Order order = new Order();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Urinalysis", Context.getLocale()));
+		concept.addName(conceptName("Urinalysis"));
 		order.setConcept(concept);
 		order.setAction(Order.Action.NEW);
 		order.setUrgency(Order.Urgency.ROUTINE);
@@ -99,7 +99,7 @@ public class OrderTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeUrgency() {
 		Order order = new Order();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Blood Culture", Context.getLocale()));
+		concept.addName(conceptName("Blood Culture"));
 		order.setConcept(concept);
 		order.setAction(Order.Action.NEW);
 		order.setUrgency(Order.Urgency.STAT);
@@ -107,5 +107,12 @@ public class OrderTextSerializerTest extends BaseContextSensitiveTest {
 
 		String result = serializer.toText(order);
 		assertTrue(result.contains("Urgency: STAT"));
+	}
+
+	private ConceptName conceptName(String name) {
+		ConceptName cn = new ConceptName();
+		cn.setName(name);
+		cn.setLocale(Locale.ENGLISH);
+		return cn;
 	}
 }

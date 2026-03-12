@@ -16,8 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
-public class TermFrequencyEmbeddingProviderTest {
+public class TermFrequencyEmbeddingProviderTest extends BaseModuleContextSensitiveTest {
 
 	private TermFrequencyEmbeddingProvider provider;
 

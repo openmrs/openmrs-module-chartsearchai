@@ -21,10 +21,10 @@ import org.openmrs.ConceptName;
 import org.openmrs.Condition;
 import org.openmrs.ConditionClinicalStatus;
 import org.openmrs.ConditionVerificationStatus;
-import org.openmrs.api.context.Context;
-import org.openmrs.test.jupiter.BaseContextSensitiveTest;
+import java.util.Locale;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
-public class ConditionTextSerializerTest extends BaseContextSensitiveTest {
+public class ConditionTextSerializerTest extends BaseModuleContextSensitiveTest {
 
 	private ConditionTextSerializer serializer;
 
@@ -37,7 +37,7 @@ public class ConditionTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldSerializeCodedCondition() {
 		Condition condition = new Condition();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Type 2 Diabetes", Context.getLocale()));
+		concept.addName(conceptName("Type 2 Diabetes"));
 		condition.setCondition(new CodedOrFreeText(concept, null, null));
 		condition.setClinicalStatus(ConditionClinicalStatus.ACTIVE);
 
@@ -60,7 +60,7 @@ public class ConditionTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeVerificationStatus() {
 		Condition condition = new Condition();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Asthma", Context.getLocale()));
+		concept.addName(conceptName("Asthma"));
 		condition.setCondition(new CodedOrFreeText(concept, null, null));
 		condition.setClinicalStatus(ConditionClinicalStatus.ACTIVE);
 		condition.setVerificationStatus(ConditionVerificationStatus.CONFIRMED);
@@ -73,7 +73,7 @@ public class ConditionTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeOnsetDate() {
 		Condition condition = new Condition();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Hypertension", Context.getLocale()));
+		concept.addName(conceptName("Hypertension"));
 		condition.setCondition(new CodedOrFreeText(concept, null, null));
 		condition.setClinicalStatus(ConditionClinicalStatus.ACTIVE);
 		condition.setOnsetDate(new Date());
@@ -86,7 +86,7 @@ public class ConditionTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeEndDateAndReason() {
 		Condition condition = new Condition();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Malaria", Context.getLocale()));
+		concept.addName(conceptName("Malaria"));
 		condition.setCondition(new CodedOrFreeText(concept, null, null));
 		condition.setClinicalStatus(ConditionClinicalStatus.INACTIVE);
 		condition.setEndDate(new Date());
@@ -95,5 +95,12 @@ public class ConditionTextSerializerTest extends BaseContextSensitiveTest {
 		String result = serializer.toText(condition);
 		assertTrue(result.contains("Resolved:"));
 		assertTrue(result.contains("Treatment completed"));
+	}
+
+	private ConceptName conceptName(String name) {
+		ConceptName cn = new ConceptName();
+		cn.setName(name);
+		cn.setLocale(Locale.ENGLISH);
+		return cn;
 	}
 }

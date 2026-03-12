@@ -26,4 +26,6 @@ public interface ChartSearchAiDAO {
 	void deleteByPatient(Patient patient);
 
 	ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog);
+
+	List<Integer> getIndexedPatientIds();
 }

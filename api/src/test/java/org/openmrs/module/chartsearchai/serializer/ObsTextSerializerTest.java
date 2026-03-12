@@ -22,10 +22,10 @@ import org.openmrs.ConceptNumeric;
 import org.openmrs.Encounter;
 import org.openmrs.EncounterType;
 import org.openmrs.Obs;
-import org.openmrs.api.context.Context;
-import org.openmrs.test.jupiter.BaseContextSensitiveTest;
+import java.util.Locale;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
-public class ObsTextSerializerTest extends BaseContextSensitiveTest {
+public class ObsTextSerializerTest extends BaseModuleContextSensitiveTest {
 
 	private ObsTextSerializer serializer;
 
@@ -45,7 +45,7 @@ public class ObsTextSerializerTest extends BaseContextSensitiveTest {
 		obs.setEncounter(enc);
 
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Weight", Context.getLocale()));
+		concept.addName(conceptName("Weight"));
 		obs.setConcept(concept);
 		obs.setValueNumeric(70.0);
 
@@ -58,7 +58,7 @@ public class ObsTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeNumericValueWithUnits() {
 		Obs obs = new Obs();
 		ConceptNumeric concept = new ConceptNumeric();
-		concept.addName(new ConceptName("Temperature", Context.getLocale()));
+		concept.addName(conceptName("Temperature"));
 		concept.setUnits("DEG C");
 		obs.setConcept(concept);
 		obs.setValueNumeric(37.5);
@@ -71,11 +71,11 @@ public class ObsTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeCodedValue() {
 		Obs obs = new Obs();
 		Concept question = new Concept();
-		question.addName(new ConceptName("Diagnosis", Context.getLocale()));
+		question.addName(conceptName("Diagnosis"));
 		obs.setConcept(question);
 
 		Concept answer = new Concept();
-		answer.addName(new ConceptName("Malaria", Context.getLocale()));
+		answer.addName(conceptName("Malaria"));
 		obs.setValueCoded(answer);
 
 		String result = serializer.toText(obs);
@@ -86,7 +86,7 @@ public class ObsTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeInterpretation() {
 		Obs obs = new Obs();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("Heart Rate", Context.getLocale()));
+		concept.addName(conceptName("Heart Rate"));
 		obs.setConcept(concept);
 		obs.setValueNumeric(120.0);
 		obs.setInterpretation(Obs.Interpretation.HIGH);
@@ -99,7 +99,7 @@ public class ObsTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldIncludeComment() {
 		Obs obs = new Obs();
 		Concept concept = new Concept();
-		concept.addName(new ConceptName("BP", Context.getLocale()));
+		concept.addName(conceptName("BP"));
 		obs.setConcept(concept);
 		obs.setValueNumeric(140.0);
 		obs.setComment("Taken after exercise");
@@ -112,13 +112,13 @@ public class ObsTextSerializerTest extends BaseContextSensitiveTest {
 	public void toText_shouldFlattenGroupMembers() {
 		Obs parent = new Obs();
 		Concept parentConcept = new Concept();
-		parentConcept.addName(new ConceptName("Vitals", Context.getLocale()));
+		parentConcept.addName(conceptName("Vitals"));
 		parent.setConcept(parentConcept);
 		parent.setValueText("group");
 
 		Obs child = new Obs();
 		Concept childConcept = new Concept();
-		childConcept.addName(new ConceptName("Pulse", Context.getLocale()));
+		childConcept.addName(conceptName("Pulse"));
 		child.setConcept(childConcept);
 		child.setValueNumeric(80.0);
 		parent.addGroupMember(child);
@@ -135,5 +135,12 @@ public class ObsTextSerializerTest extends BaseContextSensitiveTest {
 
 		String result = serializer.toText(obs);
 		assertEquals("some text", result);
+	}
+
+	private ConceptName conceptName(String name) {
+		ConceptName cn = new ConceptName();
+		cn.setName(name);
+		cn.setLocale(Locale.ENGLISH);
+		return cn;
 	}
 }

@@ -1,0 +1,17 @@
+<dataset>
+	<encounter_type encounter_type_id="100" name="Outpatient Visit" description="Test encounter type"
+		creator="1" date_created="2024-01-01 00:00:00" retired="false"
+		uuid="e09ab2c5-878e-4905-b25d-5784167d0216" />
+
+	<encounter encounter_id="100" encounter_type="100" patient_id="2" encounter_datetime="2024-01-15 10:00:00"
+		creator="1" date_created="2024-01-15 10:00:00" voided="false"
+		uuid="f09ab2c5-878e-4905-b25d-5784167d0216" />
+
+	<obs obs_id="2001" person_id="2" concept_id="5089" encounter_id="100" obs_datetime="2024-01-15 10:00:00"
+		value_numeric="72.5" status="FINAL" creator="1" date_created="2024-01-15 10:00:00" voided="false"
+		uuid="a19ab2c5-878e-4905-b25d-5784167d0216" />
+
+	<obs obs_id="2002" person_id="2" concept_id="5497" encounter_id="100" obs_datetime="2024-01-15 10:00:00"
+		value_numeric="850.0" status="FINAL" creator="1" date_created="2024-01-15 10:00:00" voided="false"
+		uuid="b19ab2c5-878e-4905-b25d-5784167d0216" />
+</dataset>

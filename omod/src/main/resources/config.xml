@@ -33,10 +33,34 @@
 
 	<!-- Global Properties -->
 	<globalProperty>
+		<property>chartsearchai.searchMode</property>
+		<defaultValue>llm</defaultValue>
+		<description>Search mode: "llm" sends the full patient chart to the LLM for direct inference. "embedding" uses vector similarity to retrieve relevant records before sending them to the LLM.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.llm.modelPath</property>
+		<defaultValue></defaultValue>
+		<description>Path to the GGUF LLM model file (e.g. Llama 3.2 3B). Required for both search modes.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.embedding.provider</property>
+		<defaultValue>term-frequency</defaultValue>
+		<description>Embedding provider for the embedding search mode: "term-frequency" (default hash-based vectors) or "onnx" (semantic vectors via all-MiniLM-L6-v2).</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.embedding.modelPath</property>
 		<defaultValue></defaultValue>
-		<description>Path to the ONNX embedding model file. If empty, uses the term-frequency fallback.</description>
+		<description>Path to the ONNX embedding model file. Required when embedding provider is set to "onnx".</description>
 	</globalProperty>
+
+	<!-- AOP -->
+	<advice>
+		<point>org.openmrs.api.EncounterService</point>
+		<class>org.openmrs.module.chartsearchai.api.EncounterIndexingAdvice</class>
+	</advice>
 
 	<!-- Internationalization -->
 	<messages>

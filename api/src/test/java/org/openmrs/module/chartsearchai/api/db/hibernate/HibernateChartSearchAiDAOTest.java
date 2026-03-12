@@ -135,6 +135,105 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 		}
 	}
 
+	@Test
+	public void getAuditLogs_shouldReturnAllLogsWhenNoFilters() {
+		createAuditLog("What medications?", "Metformin [1]");
+		createAuditLog("Any allergies?", "Penicillin allergy [2]");
+		Context.flushSession();
+
+		List<ChartSearchAuditLog> results = dao.getAuditLogs(null, null, null, null, 0, 50);
+		assertEquals(2, results.size());
+	}
+
+	@Test
+	public void getAuditLogs_shouldFilterByPatient() {
+		createAuditLog("What medications?", "Metformin [1]");
+		Context.flushSession();
+
+		List<ChartSearchAuditLog> results = dao.getAuditLogs(patient, null, null, null, 0, 50);
+		assertEquals(1, results.size());
+
+		Patient otherPatient = Context.getPatientService().getPatient(6);
+		List<ChartSearchAuditLog> empty = dao.getAuditLogs(otherPatient, null, null, null, 0, 50);
+		assertTrue(empty.isEmpty());
+	}
+
+	@Test
+	public void getAuditLogs_shouldFilterByUser() {
+		User user = Context.getAuthenticatedUser();
+		createAuditLog("What medications?", "Metformin [1]");
+		Context.flushSession();
+
+		List<ChartSearchAuditLog> results = dao.getAuditLogs(null, user, null, null, 0, 50);
+		assertEquals(1, results.size());
+	}
+
+	@Test
+	public void getAuditLogs_shouldFilterByDateRange() {
+		createAuditLog("What medications?", "Metformin [1]");
+		Context.flushSession();
+
+		Date now = new Date();
+		Date oneHourAgo = new Date(now.getTime() - 3600000);
+		Date oneHourFromNow = new Date(now.getTime() + 3600000);
+
+		List<ChartSearchAuditLog> results = dao.getAuditLogs(null, null, oneHourAgo, oneHourFromNow, 0, 50);
+		assertEquals(1, results.size());
+
+		Date tomorrow = new Date(now.getTime() + 86400000);
+		Date dayAfter = new Date(now.getTime() + 172800000);
+		List<ChartSearchAuditLog> empty = dao.getAuditLogs(null, null, tomorrow, dayAfter, 0, 50);
+		assertTrue(empty.isEmpty());
+	}
+
+	@Test
+	public void getAuditLogs_shouldRespectPagination() {
+		for (int i = 0; i < 5; i++) {
+			createAuditLog("Question " + i, "Answer " + i);
+		}
+		Context.flushSession();
+
+		List<ChartSearchAuditLog> page1 = dao.getAuditLogs(null, null, null, null, 0, 2);
+		assertEquals(2, page1.size());
+
+		List<ChartSearchAuditLog> page2 = dao.getAuditLogs(null, null, null, null, 2, 2);
+		assertEquals(2, page2.size());
+
+		List<ChartSearchAuditLog> page3 = dao.getAuditLogs(null, null, null, null, 4, 2);
+		assertEquals(1, page3.size());
+	}
+
+	@Test
+	public void getAuditLogCount_shouldReturnTotalMatchingCount() {
+		for (int i = 0; i < 3; i++) {
+			createAuditLog("Question " + i, "Answer " + i);
+		}
+		Context.flushSession();
+
+		Long count = dao.getAuditLogCount(null, null, null, null);
+		assertEquals(Long.valueOf(3), count);
+
+		Long patientCount = dao.getAuditLogCount(patient, null, null, null);
+		assertEquals(Long.valueOf(3), patientCount);
+
+		Patient otherPatient = Context.getPatientService().getPatient(6);
+		Long emptyCount = dao.getAuditLogCount(otherPatient, null, null, null);
+		assertEquals(Long.valueOf(0), emptyCount);
+	}
+
+	private void createAuditLog(String question, String answer) {
+		ChartSearchAuditLog log = new ChartSearchAuditLog();
+		log.setUser(Context.getAuthenticatedUser());
+		log.setPatient(patient);
+		log.setQuestion(question);
+		log.setAnswer(answer);
+		log.setReferenceCount(1);
+		log.setSearchMode("llm");
+		log.setResponseTimeMs(500L);
+		log.setDateCreated(new Date());
+		dao.saveAuditLog(log);
+	}
+
 	private ChartEmbedding createEmbedding(String resourceType, Integer resourceId, String text) {
 		ChartEmbedding ce = new ChartEmbedding();
 		ce.setPatient(patient);

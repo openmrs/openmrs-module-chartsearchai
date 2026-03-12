@@ -55,7 +55,7 @@ public class EncounterIndexingAdvice implements AfterReturningAdvice {
 				indexer.indexEncounter(encounter);
 			}
 			catch (Exception e) {
-				log.error("Failed to index encounter {}", encounter.getUuid(), e);
+				log.error("Failed to index encounter [id={}]", encounter.getEncounterId(), e);
 			}
 		} else if (REINDEX_METHODS.contains(methodName)) {
 			Patient patient = getPatientFromArgs(returnValue, args);

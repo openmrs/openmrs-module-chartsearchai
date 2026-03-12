@@ -64,7 +64,7 @@ public class EmbeddingIndexer {
 	 * @param patient the patient to index
 	 */
 	public void indexPatient(Patient patient) {
-		log.info("Indexing patient {}", patient.getUuid());
+		log.info("Indexing patient [id={}]", patient.getPatientId());
 		dao.deleteByPatient(patient);
 		Date now = new Date();
 
@@ -74,7 +74,7 @@ public class EmbeddingIndexer {
 					record.getText(), now);
 		}
 
-		log.info("Finished indexing patient {} ({} records)", patient.getUuid(), records.size());
+		log.info("Finished indexing patient [id={}] ({} records)", patient.getPatientId(), records.size());
 	}
 
 	/**
@@ -85,8 +85,8 @@ public class EmbeddingIndexer {
 	 */
 	public void indexEncounter(Encounter encounter) {
 		Patient patient = encounter.getPatient();
-		log.info("Incrementally indexing encounter {} for patient {}",
-				encounter.getUuid(), patient.getUuid());
+		log.info("Incrementally indexing encounter [id={}] for patient [id={}]",
+				encounter.getEncounterId(), patient.getPatientId());
 		Date now = new Date();
 
 		for (Obs obs : encounter.getAllObs()) {
@@ -104,7 +104,7 @@ public class EmbeddingIndexer {
 			}
 		}
 
-		log.info("Finished indexing encounter {}", encounter.getUuid());
+		log.info("Finished indexing encounter [id={}]", encounter.getEncounterId());
 	}
 
 	private void saveEmbedding(Patient patient, String resourceType, Integer resourceId,

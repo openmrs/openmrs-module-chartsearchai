@@ -147,7 +147,7 @@ public class ChartSearchAiRestController {
 					errorResponse(e.getMessage()), HttpStatus.SERVICE_UNAVAILABLE);
 		}
 		catch (Exception e) {
-			log.error("Chart search failed for patient {}", patient.getUuid(), e);
+			log.error("Chart search failed for patient [id={}]", patient.getPatientId(), e);
 			return new ResponseEntity<Object>(
 					errorResponse("Chart search failed. Please try again or contact your administrator."),
 					HttpStatus.INTERNAL_SERVER_ERROR);
@@ -316,8 +316,8 @@ public class ChartSearchAiRestController {
 					if (e.getMessage() != null && e.getMessage().contains("Client disconnected")) {
 						log.debug("Streaming ended due to client disconnect");
 					} else {
-						log.error("Chart search streaming failed for patient {}",
-								patient.getUuid(), e);
+						log.error("Chart search streaming failed for patient [id={}]",
+								patient.getPatientId(), e);
 						sendErrorAndComplete(emitter,
 								"Chart search failed. Please try again or contact your administrator.");
 					}

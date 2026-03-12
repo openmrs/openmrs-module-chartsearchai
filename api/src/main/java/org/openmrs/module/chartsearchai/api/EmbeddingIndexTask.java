@@ -78,7 +78,7 @@ public class EmbeddingIndexTask extends AbstractTask {
 				}
 				catch (Exception e) {
 					totalFailed++;
-					log.error("Failed to index patient {}: {}", patient.getUuid(), e.getMessage());
+					log.error("Failed to index patient [id={}]: {}", patient.getPatientId(), e.getMessage());
 				}
 
 				if (totalIndexed % 100 == 0 && totalIndexed > 0) {

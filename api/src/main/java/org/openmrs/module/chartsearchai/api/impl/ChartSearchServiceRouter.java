@@ -65,7 +65,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		if (ttlMinutes > 0) {
 			ChartAnswer cached = getCachedAnswer(cacheKey, ttlMinutes);
 			if (cached != null) {
-				log.debug("Cache hit for patient {} question", patient.getUuid());
+				log.debug("Cache hit for patient [id={}]", patient.getPatientId());
 				return cached;
 			}
 		}
@@ -88,7 +88,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		if (ttlMinutes > 0) {
 			ChartAnswer cached = getCachedAnswer(cacheKey, ttlMinutes);
 			if (cached != null) {
-				log.debug("Cache hit for patient {} question (streaming)", patient.getUuid());
+				log.debug("Cache hit for patient [id={}] (streaming)", patient.getPatientId());
 				tokenConsumer.accept(cached.getAnswer());
 				return cached;
 			}

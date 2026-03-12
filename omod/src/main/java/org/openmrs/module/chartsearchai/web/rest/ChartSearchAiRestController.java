@@ -33,6 +33,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -212,6 +214,14 @@ public class ChartSearchAiRestController {
 		response.put("totalCount", totalCount);
 
 		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	@ResponseBody
+	public ResponseEntity<Object> handleBadRequest(HttpMessageNotReadableException ex) {
+		return new ResponseEntity<Object>(
+				errorResponse("Invalid request body. Expected JSON with 'patientUuid' and 'question' fields."),
+				HttpStatus.BAD_REQUEST);
 	}
 
 	private Map<String, String> errorResponse(String message) {

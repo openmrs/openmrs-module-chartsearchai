@@ -15,12 +15,15 @@ import java.util.List;
 import java.util.Map;
 
 import org.openmrs.Patient;
+import org.openmrs.User;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.webservices.rest.web.RestConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -46,6 +49,14 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/chartsearchai")
 public class ChartSearchAiRestController {
 
+	private static final Logger log = LoggerFactory.getLogger(ChartSearchAiRestController.class);
+
+	private static final int MAX_QUESTION_LENGTH = 1000;
+
+	private static final String DISCLAIMER = "This response is AI-generated and may not be "
+			+ "accurate. It is not a substitute for clinical judgment. Always verify against "
+			+ "the patient's medical records.";
+
 	@Autowired
 	@Qualifier("chartSearchAi.chartSearchServiceRouter")
 	private ChartSearchService chartSearchService;
@@ -66,6 +77,12 @@ public class ChartSearchAiRestController {
 			return new ResponseEntity<Object>(
 					errorResponse("question is required"), HttpStatus.BAD_REQUEST);
 		}
+		if (question.length() > MAX_QUESTION_LENGTH) {
+			return new ResponseEntity<Object>(
+					errorResponse("question exceeds maximum length of "
+							+ MAX_QUESTION_LENGTH + " characters"),
+					HttpStatus.BAD_REQUEST);
+		}
 
 		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
 		if (patient == null) {
@@ -73,10 +90,20 @@ public class ChartSearchAiRestController {
 					errorResponse("Patient not found: " + patientUuid), HttpStatus.NOT_FOUND);
 		}
 
+		User user = Context.getAuthenticatedUser();
+		log.info("Chart search by user {} (uuid={}) for patient {} (uuid={}): {}",
+				user.getUsername(), user.getUuid(),
+				patient.getPatientId(), patient.getUuid(), question);
+
 		ChartAnswer chartAnswer = chartSearchService.ask(patient, question);
+
+		log.info("Chart search completed for patient {} by user {}, returned {} references",
+				patient.getUuid(), user.getUsername(),
+				chartAnswer.getReferences().size());
 
 		Map<String, Object> response = new HashMap<String, Object>();
 		response.put("answer", chartAnswer.getAnswer());
+		response.put("disclaimer", DISCLAIMER);
 
 		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
 		for (RecordReference ref : chartAnswer.getReferences()) {

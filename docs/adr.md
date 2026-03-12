@@ -395,7 +395,15 @@ The embedding-based architecture (Decisions 3–9) remains necessary when:
 
 ### Decision
 
-Document this as an available architectural option. The embedding-based RAG approach (Decisions 3–9) remains the default for v1, as it has lower hardware requirements and provides sub-second retrieval. The direct LLM inference approach can be adopted when deployments meet the conditions above, with the `ClinicalTextSerializer` infrastructure serving both architectures.
+Both architectures are implemented and switchable at runtime via global properties. The direct LLM inference approach is the default, as it provides better clinical reasoning with a simpler architecture. The embedding-based RAG approach is available as an alternative for comparison or for deployments where the full chart exceeds the LLM's context window.
+
+Both modes send records to the LLM for reasoning and synthesis — the difference is what the LLM sees:
+- **LLM mode** (`chartsearchai.searchMode = llm`): the LLM receives the full serialized patient chart.
+- **Embedding mode** (`chartsearchai.searchMode = embedding`): vector similarity retrieval narrows the chart to the top ~15 records, which are then sent to the LLM for synthesis (a full RAG pipeline).
+
+The embedding mode additionally supports switchable embedding providers via `chartsearchai.embedding.provider`:
+- `term-frequency` (default): placeholder hash-based vectors for basic keyword-overlap retrieval.
+- `onnx`: real semantic vectors via ONNX Runtime with all-MiniLM-L6-v2 (~90MB model file, configured via `chartsearchai.embedding.modelPath`).
 
 ### Medical imaging data (X-rays, scans, etc.)
 
@@ -418,11 +426,11 @@ Direct image interpretation is deferred to future work, pending either capable m
 
 ## Planned future work
 
-- Replace `TermFrequencyEmbeddingProvider` with ONNX Runtime + all-MiniLM-L6-v2
 - Add concept graph traversal as a complement to embedding search
 - Add pre-computed summaries for common queries
 - Agent/tool-use pattern for complex multi-step questions (when better local models are available)
 - Unstructured data / image OCR (photos of paper forms)
-- LLM-based query understanding and response synthesis layers
 - REST API endpoints for querying
 - Guardrail validation and audit logging
+- Proper WordPiece tokenizer for OnnxEmbeddingProvider (currently uses hash-based token approximation)
+- Evaluate whether to keep both search modes or drop one after comparison testing

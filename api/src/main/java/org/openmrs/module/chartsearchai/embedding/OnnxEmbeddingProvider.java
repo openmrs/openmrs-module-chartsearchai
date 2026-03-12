@@ -110,7 +110,12 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 				}
 			}
 			for (OnnxTensor tensor : inputs.values()) {
-				tensor.close();
+				try {
+					tensor.close();
+				}
+				catch (Exception e) {
+					log.warn("Error closing ONNX tensor", e);
+				}
 			}
 		}
 	}

@@ -150,7 +150,12 @@ public class WordPieceTokenizer {
 			}
 		}
 		finally {
-			reader.close();
+			try {
+				reader.close();
+			}
+			catch (IOException e) {
+				// suppress close exception to avoid masking the original
+			}
 		}
 		return vocabMap;
 	}

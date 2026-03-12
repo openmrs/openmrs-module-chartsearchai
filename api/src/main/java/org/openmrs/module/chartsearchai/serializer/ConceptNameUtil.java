@@ -47,13 +47,17 @@ public final class ConceptNameUtil {
 
 		String preferredText = preferred.getName();
 		Locale locale = Context.getLocale();
+		if (locale == null) {
+			locale = Locale.ENGLISH;
+		}
+		String localeLanguage = locale.getLanguage();
 		Set<String> synonyms = new LinkedHashSet<>();
 
 		for (ConceptName cn : concept.getNames()) {
 			if (synonyms.size() >= MAX_SYNONYMS) {
 				break;
 			}
-			if (cn.getLocale() != null && !cn.getLocale().getLanguage().equals(locale.getLanguage())) {
+			if (cn.getLocale() != null && !cn.getLocale().getLanguage().equals(localeLanguage)) {
 				continue;
 			}
 			String name = cn.getName();

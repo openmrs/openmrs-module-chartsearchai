@@ -138,6 +138,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		cache.put(key, new CachedAnswer(answer, System.currentTimeMillis()));
 	}
 
+	/** Must be called while holding the monitor (from a synchronized method). */
 	private void evictExpired() {
 		int ttlMinutes = getCacheTtlMinutes();
 		if (ttlMinutes <= 0) {

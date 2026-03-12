@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.api;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
@@ -38,8 +39,23 @@ public class EmbeddingIndexTask extends AbstractTask {
 
 	private static final int BATCH_SIZE = 50;
 
+	private static final AtomicBoolean running = new AtomicBoolean(false);
+
 	@Override
 	public void execute() {
+		if (!running.compareAndSet(false, true)) {
+			log.info("Embedding backfill already running, skipping this execution");
+			return;
+		}
+		try {
+			doExecute();
+		}
+		finally {
+			running.set(false);
+		}
+	}
+
+	private void doExecute() {
 		String searchMode = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_SEARCH_MODE, ChartSearchAiConstants.SEARCH_MODE_LLM);
 

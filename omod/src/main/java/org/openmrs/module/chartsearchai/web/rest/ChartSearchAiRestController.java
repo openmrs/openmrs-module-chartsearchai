@@ -261,6 +261,9 @@ public class ChartSearchAiRestController {
 		final String searchMode = (searchModeProp == null || searchModeProp.trim().isEmpty())
 				? ChartSearchAiConstants.SEARCH_MODE_LLM : searchModeProp;
 
+		final Integer patientId = patient.getPatientId();
+		final Integer userId = user.getUserId();
+
 		Thread streamThread = new Thread(new Runnable() {
 			@Override
 			public void run() {
@@ -268,10 +271,15 @@ public class ChartSearchAiRestController {
 				try {
 					Context.addProxyPrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
 
+					// Re-fetch entities in this thread's Hibernate session to avoid
+					// lazy-loading exceptions from detached objects
+					Patient threadPatient = Context.getPatientService().getPatient(patientId);
+					User threadUser = Context.getUserService().getUser(userId);
+
 					long startTime = System.currentTimeMillis();
 
 					ChartAnswer chartAnswer = chartSearchService.askStreaming(
-							patient, sanitizedQuestion, new java.util.function.Consumer<String>() {
+							threadPatient, sanitizedQuestion, new java.util.function.Consumer<String>() {
 								@Override
 								public void accept(String token) {
 									try {
@@ -289,8 +297,8 @@ public class ChartSearchAiRestController {
 					long responseTimeMs = System.currentTimeMillis() - startTime;
 
 					ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
-					auditLog.setUser(user);
-					auditLog.setPatient(patient);
+					auditLog.setUser(threadUser);
+					auditLog.setPatient(threadPatient);
 					auditLog.setQuestion(sanitizedQuestion);
 					auditLog.setAnswer(chartAnswer.getAnswer());
 					auditLog.setReferenceCount(chartAnswer.getReferences().size());
@@ -328,7 +336,7 @@ public class ChartSearchAiRestController {
 						log.debug("Streaming ended due to client disconnect");
 					} else {
 						log.error("Chart search streaming failed for patient [id={}]",
-								patient.getPatientId(), e);
+								patientId, e);
 						sendErrorAndComplete(emitter,
 								"Chart search failed. Please try again or contact your administrator.");
 					}

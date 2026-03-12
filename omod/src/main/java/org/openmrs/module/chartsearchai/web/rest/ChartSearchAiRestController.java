@@ -113,12 +113,13 @@ public class ChartSearchAiRestController {
 					HttpStatus.BAD_REQUEST);
 		}
 
+		question = CONTROL_CHARS.matcher(question).replaceAll("");
+
 		String sanitizationError = validateQuestion(question);
 		if (sanitizationError != null) {
 			return new ResponseEntity<Object>(
 					errorResponse(sanitizationError), HttpStatus.BAD_REQUEST);
 		}
-		question = CONTROL_CHARS.matcher(question).replaceAll("");
 
 		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
 		if (patient == null) {
@@ -149,7 +150,7 @@ public class ChartSearchAiRestController {
 		long responseTimeMs;
 		try {
 			long startTime = System.currentTimeMillis();
-			chartAnswer = chartSearchService.ask(patient, question);
+			chartAnswer = chartSearchService.search(patient, question);
 			responseTimeMs = System.currentTimeMillis() - startTime;
 		}
 		catch (IllegalStateException e) {
@@ -230,12 +231,13 @@ public class ChartSearchAiRestController {
 			return emitter;
 		}
 
-		String sanitizationError = validateQuestion(question);
+		final String sanitizedQuestion = CONTROL_CHARS.matcher(question).replaceAll("");
+
+		String sanitizationError = validateQuestion(sanitizedQuestion);
 		if (sanitizationError != null) {
 			sendErrorAndComplete(emitter, sanitizationError);
 			return emitter;
 		}
-		final String sanitizedQuestion = CONTROL_CHARS.matcher(question).replaceAll("");
 
 		final Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
 		if (patient == null) {
@@ -283,7 +285,7 @@ public class ChartSearchAiRestController {
 
 					long startTime = System.currentTimeMillis();
 
-					ChartAnswer chartAnswer = chartSearchService.askStreaming(
+					ChartAnswer chartAnswer = chartSearchService.searchStreaming(
 							threadPatient, sanitizedQuestion, new java.util.function.Consumer<String>() {
 								@Override
 								public void accept(String token) {
@@ -337,7 +339,7 @@ public class ChartSearchAiRestController {
 					sendErrorAndComplete(emitter, e.getMessage());
 				}
 				catch (Exception e) {
-					if (e.getMessage() != null && e.getMessage().contains("Client disconnected")) {
+					if (e.getCause() instanceof IOException) {
 						log.debug("Streaming ended due to client disconnect");
 					} else {
 						log.error("Chart search streaming failed for patient [id={}]",
@@ -476,7 +478,12 @@ public class ChartSearchAiRestController {
 				.getGlobalProperty(ChartSearchAiConstants.GP_LLM_TIMEOUT_SECONDS);
 		if (value != null && !value.trim().isEmpty()) {
 			try {
-				timeoutSeconds = Integer.parseInt(value.trim());
+				int parsed = Integer.parseInt(value.trim());
+				if (parsed > 0) {
+					timeoutSeconds = parsed;
+				} else {
+					log.warn("Timeout must be positive, got '{}', using default", parsed);
+				}
 			}
 			catch (NumberFormatException e) {
 				log.warn("Invalid timeout value '{}', using default", value);

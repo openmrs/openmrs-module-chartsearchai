@@ -98,8 +98,13 @@ public class ChartEmbedding implements Serializable {
 	 * Converts the stored byte array back to a float array for similarity computation.
 	 */
 	public float[] getEmbeddingVector() {
-		if (embedding == null) {
+		if (embedding == null || embedding.length == 0) {
 			return new float[0];
+		}
+		if (embedding.length % 4 != 0) {
+			throw new IllegalStateException(
+					"Corrupted embedding data: byte array length " + embedding.length
+					+ " is not a multiple of 4");
 		}
 		ByteBuffer buffer = ByteBuffer.wrap(embedding).order(ByteOrder.LITTLE_ENDIAN);
 		float[] vector = new float[embedding.length / 4];
@@ -113,6 +118,10 @@ public class ChartEmbedding implements Serializable {
 	 * Stores a float array as a byte array for persistence.
 	 */
 	public void setEmbeddingVector(float[] vector) {
+		if (vector == null) {
+			this.embedding = null;
+			return;
+		}
 		ByteBuffer buffer = ByteBuffer.allocate(vector.length * 4).order(ByteOrder.LITTLE_ENDIAN);
 		for (float v : vector) {
 			buffer.putFloat(v);

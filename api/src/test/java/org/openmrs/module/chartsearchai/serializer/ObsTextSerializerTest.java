@@ -137,6 +137,61 @@ public class ObsTextSerializerTest extends BaseModuleContextSensitiveTest {
 		assertEquals("some text", result);
 	}
 
+	@Test
+	public void toText_shouldIncludeDatetimeValue() {
+		Obs obs = new Obs();
+		Concept concept = new Concept();
+		concept.addName(conceptName("Date of Symptom Onset"));
+		obs.setConcept(concept);
+
+		java.util.Calendar cal = java.util.Calendar.getInstance();
+		cal.set(2024, java.util.Calendar.FEBRUARY, 10);
+		obs.setValueDatetime(cal.getTime());
+
+		String result = serializer.toText(obs);
+		assertTrue(result.contains("Date of Symptom Onset: 2024-02-10"));
+	}
+
+	@Test
+	public void toText_shouldIncludeTextValue() {
+		Obs obs = new Obs();
+		Concept concept = new Concept();
+		concept.addName(conceptName("Clinical Notes"));
+		obs.setConcept(concept);
+		obs.setValueText("Patient reports improvement");
+
+		String result = serializer.toText(obs);
+		assertTrue(result.contains("Clinical Notes: Patient reports improvement"));
+	}
+
+	@Test
+	public void toText_shouldHandleEncounterWithoutType() {
+		Obs obs = new Obs();
+		Encounter enc = new Encounter();
+		enc.setEncounterDatetime(new Date());
+		obs.setEncounter(enc);
+
+		Concept concept = new Concept();
+		concept.addName(conceptName("Weight"));
+		obs.setConcept(concept);
+		obs.setValueNumeric(70.0);
+
+		String result = serializer.toText(obs);
+		assertTrue(result.startsWith("Encounter ("));
+	}
+
+	@Test
+	public void toText_shouldHandleObsWithNoEncounter() {
+		Obs obs = new Obs();
+		Concept concept = new Concept();
+		concept.addName(conceptName("Temperature"));
+		obs.setConcept(concept);
+		obs.setValueNumeric(37.0);
+
+		String result = serializer.toText(obs);
+		assertTrue(result.startsWith("Temperature: 37.0"));
+	}
+
 	private ConceptName conceptName(String name) {
 		ConceptName cn = new ConceptName();
 		cn.setName(name);

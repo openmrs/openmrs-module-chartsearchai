@@ -58,8 +58,8 @@ public class EmbeddingSearchServiceTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void search_shouldReturnResultsOrderedBySimilarity() {
-		List<ChartEmbedding> results = searchService.search(patient, "blood pressure", 5);
+	public void findSimilar_shouldReturnResultsOrderedBySimilarity() {
+		List<ChartEmbedding> results = searchService.findSimilar(patient, "blood pressure", 5);
 
 		assertTrue(results.size() > 0);
 		// The blood pressure record should rank highest
@@ -68,23 +68,23 @@ public class EmbeddingSearchServiceTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void search_shouldRespectTopKLimit() {
-		List<ChartEmbedding> results = searchService.search(patient, "patient records", 2);
+	public void findSimilar_shouldRespectTopKLimit() {
+		List<ChartEmbedding> results = searchService.findSimilar(patient, "patient records", 2);
 		assertTrue(results.size() <= 2);
 	}
 
 	@Test
-	public void search_shouldReturnEmptyForPatientWithNoEmbeddings() {
+	public void findSimilar_shouldReturnEmptyForPatientWithNoEmbeddings() {
 		dao.deleteByPatient(patient);
 		Context.flushSession();
 
-		List<ChartEmbedding> results = searchService.search(patient, "blood pressure", 5);
+		List<ChartEmbedding> results = searchService.findSimilar(patient, "blood pressure", 5);
 		assertTrue(results.isEmpty());
 	}
 
 	@Test
-	public void search_shouldFindDiabetesRelatedRecords() {
-		List<ChartEmbedding> results = searchService.search(patient, "diabetes", 3);
+	public void findSimilar_shouldFindDiabetesRelatedRecords() {
+		List<ChartEmbedding> results = searchService.findSimilar(patient, "diabetes", 3);
 		assertTrue(results.size() > 0);
 
 		// Diabetes condition or metformin order should rank high
@@ -100,8 +100,8 @@ public class EmbeddingSearchServiceTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void search_shouldFindAllergyRecords() {
-		List<ChartEmbedding> results = searchService.search(patient, "penicillin allergy", 3);
+	public void findSimilar_shouldFindAllergyRecords() {
+		List<ChartEmbedding> results = searchService.findSimilar(patient, "penicillin allergy", 3);
 		assertTrue(results.size() > 0);
 
 		boolean foundAllergy = false;
@@ -124,4 +124,5 @@ public class EmbeddingSearchServiceTest extends BaseModuleContextSensitiveTest {
 		ce.setDateCreated(new Date());
 		dao.saveChartEmbedding(ce);
 	}
+
 }

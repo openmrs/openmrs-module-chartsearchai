@@ -81,8 +81,8 @@ public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 	public List<ChartSearchAuditLog> getAuditLogs(Patient patient, User user, Date fromDate, Date toDate,
 			Integer startIndex, Integer limit) {
 		Query query = buildAuditLogQuery("from ChartSearchAuditLog", patient, user, fromDate, toDate);
-		query.setFirstResult(startIndex != null ? startIndex : 0);
-		query.setMaxResults(limit != null ? limit : 50);
+		query.setFirstResult(startIndex != null && startIndex > 0 ? startIndex : 0);
+		query.setMaxResults(limit != null && limit > 0 ? limit : 50);
 		return query.list();
 	}
 

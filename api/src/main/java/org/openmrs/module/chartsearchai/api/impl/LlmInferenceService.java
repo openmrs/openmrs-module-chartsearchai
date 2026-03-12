@@ -44,11 +44,11 @@ public class LlmInferenceService implements ChartSearchService {
 	private static final Pattern CITATION_PATTERN = Pattern.compile("\\[(\\d+)\\]");
 
 	@Override
-	public ChartAnswer ask(Patient patient, String question) {
+	public ChartAnswer search(Patient patient, String question) {
 		PatientChart chart = chartSerializer.serialize(patient);
 		log.debug("Sending full chart to LLM ({} records)", chart.getReferences().size());
 
-		String response = llmProvider.ask(chart.getText(), question);
+		String response = llmProvider.search(chart.getText(), question);
 
 		List<RecordReference> citedReferences = filterCitedReferences(
 				response, chart.getReferences());
@@ -57,12 +57,12 @@ public class LlmInferenceService implements ChartSearchService {
 	}
 
 	@Override
-	public ChartAnswer askStreaming(Patient patient, String question,
+	public ChartAnswer searchStreaming(Patient patient, String question,
 			Consumer<String> tokenConsumer) {
 		PatientChart chart = chartSerializer.serialize(patient);
 		log.debug("Streaming full chart to LLM ({} records)", chart.getReferences().size());
 
-		String response = llmProvider.askStreaming(chart.getText(), question, tokenConsumer);
+		String response = llmProvider.searchStreaming(chart.getText(), question, tokenConsumer);
 
 		List<RecordReference> citedReferences = filterCitedReferences(
 				response, chart.getReferences());

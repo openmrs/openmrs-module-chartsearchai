@@ -49,7 +49,7 @@ public class LlmProvider {
 	 * @return the LLM's response with inline citations
 	 * @throws APIException if the request exceeds the configured timeout
 	 */
-	public synchronized String ask(String numberedRecords, String question) {
+	public synchronized String search(String numberedRecords, String question) {
 		LlamaModel llm = getModel();
 
 		String prompt = buildPrompt(numberedRecords, question);
@@ -75,7 +75,7 @@ public class LlmProvider {
 	}
 
 	/**
-	 * Streaming variant of {@link #ask}. Calls the tokenConsumer for each token as it is
+	 * Streaming variant of {@link #search}. Calls the tokenConsumer for each token as it is
 	 * generated, and returns the full response when complete.
 	 *
 	 * @param numberedRecords the numbered patient records text
@@ -84,7 +84,7 @@ public class LlmProvider {
 	 * @return the complete LLM response
 	 * @throws APIException if the request exceeds the configured timeout
 	 */
-	public synchronized String askStreaming(String numberedRecords, String question,
+	public synchronized String searchStreaming(String numberedRecords, String question,
 			Consumer<String> tokenConsumer) {
 		LlamaModel llm = getModel();
 
@@ -140,7 +140,11 @@ public class LlmProvider {
 				.getGlobalProperty(ChartSearchAiConstants.GP_LLM_TIMEOUT_SECONDS);
 		if (value != null && !value.trim().isEmpty()) {
 			try {
-				return Integer.parseInt(value.trim());
+				int parsed = Integer.parseInt(value.trim());
+				if (parsed > 0) {
+					return parsed;
+				}
+				log.warn("Timeout must be positive, got '{}', using default", parsed);
 			}
 			catch (NumberFormatException e) {
 				log.warn("Invalid timeout value '{}', using default", value);

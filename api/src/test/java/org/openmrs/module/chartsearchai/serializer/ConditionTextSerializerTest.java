@@ -97,6 +97,28 @@ public class ConditionTextSerializerTest extends BaseModuleContextSensitiveTest 
 		assertTrue(result.contains("Treatment completed"));
 	}
 
+	@Test
+	public void toText_shouldIncludeAdditionalDetail() {
+		Condition condition = new Condition();
+		Concept concept = new Concept();
+		concept.addName(conceptName("Chronic Kidney Disease"));
+		condition.setCondition(new CodedOrFreeText(concept, null, null));
+		condition.setClinicalStatus(ConditionClinicalStatus.ACTIVE);
+		condition.setAdditionalDetail("Stage 3, GFR 45 mL/min");
+
+		String result = serializer.toText(condition);
+		assertTrue(result.contains("Detail: Stage 3, GFR 45 mL/min"));
+	}
+
+	@Test
+	public void toText_shouldHandleNullConditionObject() {
+		Condition condition = new Condition();
+		condition.setClinicalStatus(ConditionClinicalStatus.ACTIVE);
+
+		String result = serializer.toText(condition);
+		assertTrue(result.contains("Status: ACTIVE"));
+	}
+
 	private ConceptName conceptName(String name) {
 		ConceptName cn = new ConceptName();
 		cn.setName(name);

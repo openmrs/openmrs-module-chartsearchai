@@ -20,6 +20,7 @@ import org.openmrs.ConceptName;
 import org.openmrs.Order;
 import java.util.Locale;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 public class OrderTextSerializerTest extends BaseModuleContextSensitiveTest {
 
@@ -107,6 +108,38 @@ public class OrderTextSerializerTest extends BaseModuleContextSensitiveTest {
 
 		String result = serializer.toText(order);
 		assertTrue(result.contains("Urgency: STAT"));
+	}
+
+	@Test
+	public void toText_shouldIncludeDateStopped() {
+		Order order = new Order();
+		Concept concept = new Concept();
+		concept.addName(conceptName("Metformin"));
+		order.setConcept(concept);
+		order.setAction(Order.Action.DISCONTINUE);
+		order.setUrgency(Order.Urgency.ROUTINE);
+		order.setDateActivated(new Date());
+
+		java.util.Calendar cal = java.util.Calendar.getInstance();
+		cal.set(2024, java.util.Calendar.JUNE, 20);
+		ReflectionTestUtils.setField(order, "dateStopped", cal.getTime());
+
+		String result = serializer.toText(order);
+		assertTrue(result.contains("Stopped: 2024-06-20"));
+	}
+
+	@Test
+	public void toText_shouldOmitStoppedWhenNotSet() {
+		Order order = new Order();
+		Concept concept = new Concept();
+		concept.addName(conceptName("Lisinopril"));
+		order.setConcept(concept);
+		order.setAction(Order.Action.NEW);
+		order.setUrgency(Order.Urgency.ROUTINE);
+		order.setDateActivated(new Date());
+
+		String result = serializer.toText(order);
+		assertTrue(!result.contains("Stopped:"));
 	}
 
 	private ConceptName conceptName(String name) {

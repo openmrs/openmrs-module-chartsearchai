@@ -106,14 +106,18 @@ public class EmbeddingIndexer {
 			if (obs.getObsGroup() != null) {
 				continue;
 			}
-			upsertEmbedding(patient, "obs", obs.getObsId(),
-					obsSerializer.toText(obs), now);
+			String text = obsSerializer.toText(obs);
+			if (text != null && !text.trim().isEmpty()) {
+				upsertEmbedding(patient, "obs", obs.getObsId(), text, now);
+			}
 		}
 
 		if (encounter.getDiagnoses() != null) {
 			for (Diagnosis diagnosis : encounter.getDiagnoses()) {
-				upsertEmbedding(patient, "diagnosis", diagnosis.getDiagnosisId(),
-						diagnosisSerializer.toText(diagnosis), now);
+				String text = diagnosisSerializer.toText(diagnosis);
+				if (text != null && !text.trim().isEmpty()) {
+					upsertEmbedding(patient, "diagnosis", diagnosis.getDiagnosisId(), text, now);
+				}
 			}
 		}
 

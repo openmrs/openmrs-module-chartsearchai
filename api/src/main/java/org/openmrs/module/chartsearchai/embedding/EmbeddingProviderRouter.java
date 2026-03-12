@@ -45,7 +45,7 @@ public class EmbeddingProviderRouter implements EmbeddingProvider {
 		return getProvider().getDimensions();
 	}
 
-	private EmbeddingProvider getProvider() {
+	protected EmbeddingProvider getProvider() {
 		String provider = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_PROVIDER);
 

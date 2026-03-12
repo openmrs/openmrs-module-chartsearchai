@@ -204,6 +204,52 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 	}
 
 	@Test
+	public void deleteAuditLogsBefore_shouldDeleteOldEntries() {
+		// Create an old audit log (100 days ago)
+		java.util.Calendar cal = java.util.Calendar.getInstance();
+		cal.add(java.util.Calendar.DAY_OF_MONTH, -100);
+		ChartSearchAuditLog oldLog = new ChartSearchAuditLog();
+		oldLog.setUser(Context.getAuthenticatedUser());
+		oldLog.setPatient(patient);
+		oldLog.setQuestion("old question");
+		oldLog.setAnswer("old answer");
+		oldLog.setReferenceCount(0);
+		oldLog.setSearchMode("llm");
+		oldLog.setResponseTimeMs(100L);
+		oldLog.setDateCreated(cal.getTime());
+		dao.saveAuditLog(oldLog);
+
+		// Create a recent audit log
+		createAuditLog("recent question", "recent answer");
+		Context.flushSession();
+
+		// Delete entries older than 90 days
+		cal = java.util.Calendar.getInstance();
+		cal.add(java.util.Calendar.DAY_OF_MONTH, -90);
+		int deleted = dao.deleteAuditLogsBefore(cal.getTime());
+
+		assertEquals(1, deleted);
+
+		Context.flushSession();
+		Context.clearSession();
+
+		Long remaining = dao.getAuditLogCount(null, null, null, null);
+		assertEquals(Long.valueOf(1), remaining);
+	}
+
+	@Test
+	public void deleteAuditLogsBefore_shouldReturnZeroWhenNothingToDelete() {
+		createAuditLog("recent question", "recent answer");
+		Context.flushSession();
+
+		java.util.Calendar cal = java.util.Calendar.getInstance();
+		cal.add(java.util.Calendar.DAY_OF_MONTH, -90);
+		int deleted = dao.deleteAuditLogsBefore(cal.getTime());
+
+		assertEquals(0, deleted);
+	}
+
+	@Test
 	public void getAuditLogCount_shouldReturnTotalMatchingCount() {
 		for (int i = 0; i < 3; i++) {
 			createAuditLog("Question " + i, "Answer " + i);
@@ -232,6 +278,46 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 		log.setResponseTimeMs(500L);
 		log.setDateCreated(new Date());
 		dao.saveAuditLog(log);
+	}
+
+	@Test
+	public void getIndexedPatientIds_shouldReturnDistinctPatientIds() {
+		dao.saveChartEmbedding(createEmbedding("obs", 1001, "BP reading"));
+		dao.saveChartEmbedding(createEmbedding("obs", 1002, "Weight reading"));
+		Context.flushSession();
+
+		List<Integer> ids = dao.getIndexedPatientIds();
+		assertEquals(1, ids.size());
+		assertEquals(patient.getPatientId(), ids.get(0));
+	}
+
+	@Test
+	public void getIndexedPatientIds_shouldReturnEmptyWhenNoEmbeddings() {
+		List<Integer> ids = dao.getIndexedPatientIds();
+		assertTrue(ids.isEmpty());
+	}
+
+	@Test
+	public void getQueryCountByUserSince_shouldCountRecentQueries() {
+		User user = Context.getAuthenticatedUser();
+		createAuditLog("Question 1", "Answer 1");
+		createAuditLog("Question 2", "Answer 2");
+		Context.flushSession();
+
+		Date oneHourAgo = new Date(System.currentTimeMillis() - 3600000);
+		long count = dao.getQueryCountByUserSince(user, oneHourAgo);
+		assertEquals(2, count);
+	}
+
+	@Test
+	public void getQueryCountByUserSince_shouldReturnZeroWhenNoRecentQueries() {
+		User user = Context.getAuthenticatedUser();
+		createAuditLog("Question 1", "Answer 1");
+		Context.flushSession();
+
+		Date inTheFuture = new Date(System.currentTimeMillis() + 3600000);
+		long count = dao.getQueryCountByUserSince(user, inTheFuture);
+		assertEquals(0, count);
 	}
 
 	private ChartEmbedding createEmbedding(String resourceType, Integer resourceId, String text) {

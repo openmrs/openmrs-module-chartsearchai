@@ -99,6 +99,32 @@ public class AllergyTextSerializerTest extends BaseModuleContextSensitiveTest {
 		assertTrue(result.contains("Comments: Discovered during surgery"));
 	}
 
+	@Test
+	public void toText_shouldHandleNullSeverity() {
+		Concept codedAllergen = new Concept();
+		codedAllergen.addName(conceptName("Ibuprofen"));
+		Allergen allergen = new Allergen(AllergenType.DRUG, codedAllergen, null);
+
+		Allergy allergy = new Allergy(new Patient(), allergen, null, null, null);
+
+		String result = serializer.toText(allergy);
+		assertTrue(result.contains("Allergy: Ibuprofen"));
+		assertTrue(!result.contains("Severity:"));
+	}
+
+	@Test
+	public void toText_shouldIncludeNonCodedReaction() {
+		Concept codedAllergen = new Concept();
+		codedAllergen.addName(conceptName("Sulfa drugs"));
+		Allergen allergen = new Allergen(AllergenType.DRUG, codedAllergen, null);
+
+		Allergy allergy = new Allergy(new Patient(), allergen, null, null, null);
+		allergy.addReaction(new AllergyReaction(allergy, null, "Skin peeling"));
+
+		String result = serializer.toText(allergy);
+		assertTrue(result.contains("Reactions: Skin peeling"));
+	}
+
 	private ConceptName conceptName(String name) {
 		ConceptName cn = new ConceptName();
 		cn.setName(name);

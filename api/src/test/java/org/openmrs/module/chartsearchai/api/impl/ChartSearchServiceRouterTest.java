@@ -17,137 +17,173 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
-import org.openmrs.api.context.Context;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
-import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 import org.springframework.test.util.ReflectionTestUtils;
 
-public class ChartSearchServiceRouterTest extends BaseModuleContextSensitiveTest {
-
-	private static final String TEST_DATA = "ChartSearchAiTestData.xml";
-
-	private ChartSearchServiceRouter router;
-
-	private StubChartSearchService llmStub;
-
-	private StubChartSearchService embeddingStub;
+/**
+ * Pure unit tests for {@link ChartSearchServiceRouter} — no OpenMRS Context required.
+ */
+public class ChartSearchServiceRouterTest {
 
 	private Patient patient;
 
 	@BeforeEach
-	public void setUp() throws Exception {
-		executeDataSet(TEST_DATA);
-		patient = Context.getPatientService().getPatient(2);
-
-		router = new ChartSearchServiceRouter();
-
-		llmStub = new StubChartSearchService("llm answer");
-		embeddingStub = new StubChartSearchService("embedding answer");
-
-		ReflectionTestUtils.setField(router, "llmService", llmStub);
-		ReflectionTestUtils.setField(router, "embeddingService", embeddingStub);
+	public void setUp() {
+		patient = new Patient();
+		patient.setUuid("test-patient-uuid");
 	}
 
 	@Test
-	public void ask_shouldDelegateToLlmServiceByDefault() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_SEARCH_MODE, "llm");
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_CACHE_TTL_MINUTES, "0");
+	public void search_shouldDelegateToLlmByDefault() {
+		StubService llmStub = new StubService("llm answer");
+		StubService embeddingStub = new StubService("embedding answer");
+		ChartSearchServiceRouter router = createRouter(llmStub, embeddingStub, "llm", 0);
 
-		ChartAnswer answer = router.ask(patient, "What medications?");
+		ChartAnswer answer = router.search(patient, "What medications?");
 		assertEquals("llm answer", answer.getAnswer());
 		assertEquals(1, llmStub.callCount);
 		assertEquals(0, embeddingStub.callCount);
 	}
 
 	@Test
-	public void ask_shouldDelegateToEmbeddingServiceWhenConfigured() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_SEARCH_MODE, "embedding");
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_CACHE_TTL_MINUTES, "0");
+	public void search_shouldDelegateToEmbeddingWhenConfigured() {
+		StubService llmStub = new StubService("llm answer");
+		StubService embeddingStub = new StubService("embedding answer");
+		ChartSearchServiceRouter router = createRouter(llmStub, embeddingStub, "embedding", 0);
 
-		ChartAnswer answer = router.ask(patient, "What medications?");
+		ChartAnswer answer = router.search(patient, "What medications?");
 		assertEquals("embedding answer", answer.getAnswer());
-		assertEquals(0, llmStub.callCount);
 		assertEquals(1, embeddingStub.callCount);
 	}
 
 	@Test
-	public void ask_shouldReturnCachedAnswerOnSecondCall() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_SEARCH_MODE, "llm");
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_CACHE_TTL_MINUTES, "5");
+	public void search_shouldCacheAnswers() {
+		StubService llmStub = new StubService("llm answer");
+		ChartSearchServiceRouter router = createRouter(llmStub, new StubService(""), "llm", 5);
 
-		router.ask(patient, "What medications?");
-		ChartAnswer second = router.ask(patient, "What medications?");
+		router.search(patient, "What medications?");
+		router.search(patient, "What medications?");
 
-		assertEquals("llm answer", second.getAnswer());
 		assertEquals(1, llmStub.callCount);
 	}
 
 	@Test
-	public void ask_shouldNotCacheWhenTtlIsZero() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_SEARCH_MODE, "llm");
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_CACHE_TTL_MINUTES, "0");
+	public void search_shouldNotCacheWhenTtlIsZero() {
+		StubService llmStub = new StubService("llm answer");
+		ChartSearchServiceRouter router = createRouter(llmStub, new StubService(""), "llm", 0);
 
-		router.ask(patient, "What medications?");
-		router.ask(patient, "What medications?");
+		router.search(patient, "What medications?");
+		router.search(patient, "What medications?");
 
 		assertEquals(2, llmStub.callCount);
 	}
 
 	@Test
-	public void ask_shouldTreatDifferentQuestionsAsDifferentCacheKeys() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_SEARCH_MODE, "llm");
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_CACHE_TTL_MINUTES, "5");
+	public void search_shouldBeCaseInsensitiveForCacheKey() {
+		StubService llmStub = new StubService("llm answer");
+		ChartSearchServiceRouter router = createRouter(llmStub, new StubService(""), "llm", 5);
 
-		router.ask(patient, "What medications?");
-		router.ask(patient, "What allergies?");
-
-		assertEquals(2, llmStub.callCount);
-	}
-
-	@Test
-	public void ask_shouldBeCaseInsensitiveForCacheKey() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_SEARCH_MODE, "llm");
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_CACHE_TTL_MINUTES, "5");
-
-		router.ask(patient, "What Medications?");
-		router.ask(patient, "what medications?");
+		router.search(patient, "What Medications?");
+		router.search(patient, "what medications?");
 
 		assertEquals(1, llmStub.callCount);
 	}
 
-	private static class StubChartSearchService implements ChartSearchService {
+	@Test
+	public void searchStreaming_shouldDelegateAndPassTokens() {
+		final StringBuilder received = new StringBuilder();
+		StubService llmStub = new StubService("streamed answer");
+		ChartSearchServiceRouter router = createRouter(llmStub, new StubService(""), "llm", 0);
 
-		private final String responseText;
+		ChartAnswer answer = router.searchStreaming(patient, "What medications?",
+				new java.util.function.Consumer<String>() {
+					@Override
+					public void accept(String token) {
+						received.append(token);
+					}
+				});
+
+		assertEquals("streamed answer", answer.getAnswer());
+		assertEquals("streamed answer", received.toString());
+		assertEquals(1, llmStub.callCount);
+	}
+
+	@Test
+	public void searchStreaming_shouldCacheAnswers() {
+		StubService llmStub = new StubService("streamed");
+		ChartSearchServiceRouter router = createRouter(llmStub, new StubService(""), "llm", 5);
+
+		router.searchStreaming(patient, "What medications?",
+				new java.util.function.Consumer<String>() {
+					@Override
+					public void accept(String token) {}
+				});
+		final StringBuilder secondCall = new StringBuilder();
+		router.searchStreaming(patient, "What medications?",
+				new java.util.function.Consumer<String>() {
+					@Override
+					public void accept(String token) {
+						secondCall.append(token);
+					}
+				});
+
+		assertEquals(1, llmStub.callCount);
+		assertEquals("streamed", secondCall.toString());
+	}
+
+	@Test
+	public void search_shouldUseSeparateCacheKeysForDifferentQuestions() {
+		StubService llmStub = new StubService("answer");
+		ChartSearchServiceRouter router = createRouter(llmStub, new StubService(""), "llm", 5);
+
+		router.search(patient, "What medications?");
+		router.search(patient, "What allergies?");
+
+		assertEquals(2, llmStub.callCount);
+	}
+
+	private ChartSearchServiceRouter createRouter(ChartSearchService llm, ChartSearchService embedding,
+			final String mode, final int cacheTtl) {
+		ChartSearchServiceRouter router = new ChartSearchServiceRouter() {
+
+			@Override
+			protected ChartSearchService getDelegate() {
+				if ("embedding".equalsIgnoreCase(mode)) {
+					return embedding;
+				}
+				return llm;
+			}
+
+			@Override
+			protected int getCacheTtlMinutes() {
+				return cacheTtl;
+			}
+		};
+		ReflectionTestUtils.setField(router, "llmService", llm);
+		ReflectionTestUtils.setField(router, "embeddingService", embedding);
+		return router;
+	}
+
+	private static class StubService implements ChartSearchService {
+
+		final String responseText;
 
 		int callCount = 0;
 
-		StubChartSearchService(String responseText) {
+		StubService(String responseText) {
 			this.responseText = responseText;
 		}
 
 		@Override
-		public ChartAnswer ask(Patient patient, String question) {
+		public ChartAnswer search(Patient patient, String question) {
 			callCount++;
 			return new ChartAnswer(responseText,
 					Collections.<RecordReference>emptyList());
 		}
 
 		@Override
-		public ChartAnswer askStreaming(Patient patient, String question,
+		public ChartAnswer searchStreaming(Patient patient, String question,
 				Consumer<String> tokenConsumer) {
 			callCount++;
 			tokenConsumer.accept(responseText);

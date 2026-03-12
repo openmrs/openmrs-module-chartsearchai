@@ -53,8 +53,8 @@ public class EmbeddingSearchService implements ChartSearchService {
 	private LlmProvider llmProvider;
 
 	@Override
-	public ChartAnswer ask(Patient patient, String question) {
-		List<ChartEmbedding> results = search(patient, question,
+	public ChartAnswer search(Patient patient, String question) {
+		List<ChartEmbedding> results = findSimilar(patient, question,
 				ChartSearchAiConstants.DEFAULT_RETRIEVAL_TOP_K);
 
 		List<RecordReference> references = new ArrayList<RecordReference>();
@@ -67,7 +67,7 @@ public class EmbeddingSearchService implements ChartSearchService {
 		}
 
 		log.debug("Sending {} retrieved records to LLM", references.size());
-		String response = llmProvider.ask(sb.toString(), question);
+		String response = llmProvider.search(sb.toString(), question);
 
 		List<RecordReference> citedReferences = LlmInferenceService.filterCitedReferences(
 				response, references);
@@ -76,9 +76,9 @@ public class EmbeddingSearchService implements ChartSearchService {
 	}
 
 	@Override
-	public ChartAnswer askStreaming(Patient patient, String question,
+	public ChartAnswer searchStreaming(Patient patient, String question,
 			Consumer<String> tokenConsumer) {
-		List<ChartEmbedding> results = search(patient, question,
+		List<ChartEmbedding> results = findSimilar(patient, question,
 				ChartSearchAiConstants.DEFAULT_RETRIEVAL_TOP_K);
 
 		List<RecordReference> references = new ArrayList<RecordReference>();
@@ -91,7 +91,7 @@ public class EmbeddingSearchService implements ChartSearchService {
 		}
 
 		log.debug("Streaming {} retrieved records to LLM", references.size());
-		String response = llmProvider.askStreaming(sb.toString(), question, tokenConsumer);
+		String response = llmProvider.searchStreaming(sb.toString(), question, tokenConsumer);
 
 		List<RecordReference> citedReferences = LlmInferenceService.filterCitedReferences(
 				response, references);
@@ -100,14 +100,14 @@ public class EmbeddingSearchService implements ChartSearchService {
 	}
 
 	/**
-	 * Search a patient's embeddings for the most relevant records matching a query.
+	 * Find the most relevant embeddings for a patient matching a query by cosine similarity.
 	 *
 	 * @param patient the patient whose chart to search
 	 * @param query the natural-language query
 	 * @param topK the maximum number of results to return
 	 * @return the most relevant chart embeddings, ordered by similarity (highest first)
 	 */
-	public List<ChartEmbedding> search(Patient patient, String query, int topK) {
+	public List<ChartEmbedding> findSimilar(Patient patient, String query, int topK) {
 		float[] queryVector = embeddingProvider.embed(query);
 
 		List<ChartEmbedding> allEmbeddings = dao.getByPatient(patient);
@@ -137,14 +137,16 @@ public class EmbeddingSearchService implements ChartSearchService {
 	}
 
 	/**
-	 * Search with the default topK value.
+	 * Find similar with the default topK value.
 	 */
-	public List<ChartEmbedding> search(Patient patient, String query) {
-		return search(patient, query, ChartSearchAiConstants.DEFAULT_RETRIEVAL_TOP_K);
+	public List<ChartEmbedding> findSimilar(Patient patient, String query) {
+		return findSimilar(patient, query, ChartSearchAiConstants.DEFAULT_RETRIEVAL_TOP_K);
 	}
 
 	private double cosineSimilarity(float[] a, float[] b) {
 		if (a.length != b.length) {
+			log.warn("Embedding dimension mismatch: query={} vs stored={}. "
+					+ "This may indicate a model change or corrupted data.", a.length, b.length);
 			return 0;
 		}
 		double dot = 0;

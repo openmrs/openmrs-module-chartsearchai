@@ -58,7 +58,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 	};
 
 	@Override
-	public ChartAnswer ask(Patient patient, String question) {
+	public ChartAnswer search(Patient patient, String question) {
 		String cacheKey = buildCacheKey(patient, question);
 		int ttlMinutes = getCacheTtlMinutes();
 
@@ -70,7 +70,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 			}
 		}
 
-		ChartAnswer answer = getDelegate().ask(patient, question);
+		ChartAnswer answer = getDelegate().search(patient, question);
 
 		if (ttlMinutes > 0) {
 			putCache(cacheKey, answer);
@@ -80,7 +80,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 	}
 
 	@Override
-	public ChartAnswer askStreaming(Patient patient, String question,
+	public ChartAnswer searchStreaming(Patient patient, String question,
 			Consumer<String> tokenConsumer) {
 		String cacheKey = buildCacheKey(patient, question);
 		int ttlMinutes = getCacheTtlMinutes();
@@ -94,7 +94,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 			}
 		}
 
-		ChartAnswer answer = getDelegate().askStreaming(patient, question, tokenConsumer);
+		ChartAnswer answer = getDelegate().searchStreaming(patient, question, tokenConsumer);
 
 		if (ttlMinutes > 0) {
 			putCache(cacheKey, answer);
@@ -103,7 +103,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		return answer;
 	}
 
-	private ChartSearchService getDelegate() {
+	protected ChartSearchService getDelegate() {
 		String mode = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_SEARCH_MODE);
 
@@ -155,7 +155,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		}
 	}
 
-	private int getCacheTtlMinutes() {
+	protected int getCacheTtlMinutes() {
 		String value = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_CACHE_TTL_MINUTES);
 		if (value != null && !value.trim().isEmpty()) {

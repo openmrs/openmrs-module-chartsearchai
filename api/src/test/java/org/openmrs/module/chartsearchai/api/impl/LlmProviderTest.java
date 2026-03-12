@@ -73,6 +73,11 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void defaultSystemPrompt_shouldConstrainToQuestionAsked() {
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("ONLY the specific question asked"));
+	}
+
+	@Test
 	public void close_shouldNotFailWhenModelIsNull() {
 		LlmProvider provider = new LlmProvider();
 		// Should not throw

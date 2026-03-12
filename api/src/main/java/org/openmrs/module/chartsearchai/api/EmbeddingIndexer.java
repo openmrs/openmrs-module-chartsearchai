@@ -10,7 +10,9 @@
 package org.openmrs.module.chartsearchai.api;
 
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.openmrs.Diagnosis;
 import org.openmrs.Encounter;
@@ -101,13 +103,14 @@ public class EmbeddingIndexer {
 		log.info("Incrementally indexing encounter [id={}] for patient [id={}]",
 				encounter.getEncounterId(), patient.getPatientId());
 		Date now = new Date();
+		Set<String> seenText = new HashSet<String>();
 
 		for (Obs obs : encounter.getAllObs()) {
 			if (obs.getObsGroup() != null) {
 				continue;
 			}
 			String text = obsSerializer.toText(obs);
-			if (text != null && !text.trim().isEmpty()) {
+			if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
 				upsertEmbedding(patient, "obs", obs.getObsId(), text, now);
 			}
 		}
@@ -115,7 +118,7 @@ public class EmbeddingIndexer {
 		if (encounter.getDiagnoses() != null) {
 			for (Diagnosis diagnosis : encounter.getDiagnoses()) {
 				String text = diagnosisSerializer.toText(diagnosis);
-				if (text != null && !text.trim().isEmpty()) {
+				if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
 					upsertEmbedding(patient, "diagnosis", diagnosis.getDiagnosisId(), text, now);
 				}
 			}

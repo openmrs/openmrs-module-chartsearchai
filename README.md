@@ -22,13 +22,13 @@ The `.omod` file is in `omod/target/`.
 
 Download Llama 3.2 3B (Q4_K_M quantization) in GGUF format (~2GB) from [Hugging Face](https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF).
 
-Place the `.gguf` file somewhere accessible on the server (e.g., `&lt;openmrs-application-data-directory&gt;/chartsearchai/`).
+Place the `.gguf` file inside the OpenMRS application data directory (e.g., `<openmrs-application-data-directory>/chartsearchai/`). Model paths are resolved relative to this directory for security.
 
 ### 3. Download the embedding model (optional)
 
 If you plan to use the embedding search mode with semantic vectors, download the all-MiniLM-L6-v2 ONNX model (~90MB) from [Hugging Face](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2). You need the `model.onnx` file from the repository.
 
-Place it alongside the LLM model (e.g., `&lt;openmrs-application-data-directory&gt;/chartsearchai/all-MiniLM-L6-v2.onnx`).
+Place it alongside the LLM model (e.g., `<openmrs-application-data-directory>/chartsearchai/all-MiniLM-L6-v2.onnx`).
 
 This is not required if you use the default `llm` search mode or the `term-frequency` embedding provider.
 
@@ -42,10 +42,10 @@ Set these global properties in **Admin > Settings**:
 
 | Property | Required | Description |
 |----------|----------|-------------|
-| `chartsearchai.llm.modelPath` | Yes | Path to the `.gguf` model file |
+| `chartsearchai.llm.modelPath` | Yes | Relative path (within the OpenMRS application data directory) to the `.gguf` model file, e.g. `chartsearchai/Llama-3.2-3B-Instruct-Q4_K_M.gguf` |
 | `chartsearchai.searchMode` | No | `llm` (default) or `embedding` |
 | `chartsearchai.embedding.provider` | No | `term-frequency` (default) or `onnx` |
-| `chartsearchai.embedding.modelPath` | Only if using `onnx` | Path to the ONNX embedding model file |
+| `chartsearchai.embedding.modelPath` | Only if using `onnx` | Relative path (within the OpenMRS application data directory) to the ONNX embedding model file, e.g. `chartsearchai/all-MiniLM-L6-v2.onnx` |
 
 ### 6. Grant privilege
 

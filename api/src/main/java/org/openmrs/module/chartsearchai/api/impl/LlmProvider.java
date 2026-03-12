@@ -58,13 +58,15 @@ public class LlmProvider {
 
 	private synchronized LlamaModel getModel() {
 		if (model == null) {
-			String modelPath = Context.getAdministrationService()
+			String configuredPath = Context.getAdministrationService()
 					.getGlobalProperty(ChartSearchAiConstants.GP_LLM_MODEL_PATH);
-			if (modelPath == null || modelPath.trim().isEmpty()) {
+			if (configuredPath == null || configuredPath.trim().isEmpty()) {
 				throw new IllegalStateException(
 						"LLM model path not configured. Set the global property: "
 								+ ChartSearchAiConstants.GP_LLM_MODEL_PATH);
 			}
+			String modelPath = ChartSearchAiConstants.resolveModelPath(
+					configuredPath.trim(), ChartSearchAiConstants.GP_LLM_MODEL_PATH);
 			log.info("Loading LLM from {}", modelPath);
 			ModelParameters modelParams = new ModelParameters()
 					.setModel(modelPath)

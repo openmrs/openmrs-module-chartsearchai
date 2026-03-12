@@ -131,13 +131,15 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 
 	private synchronized OrtSession getSession() throws OrtException {
 		if (session == null) {
-			String modelPath = Context.getAdministrationService()
+			String configuredPath = Context.getAdministrationService()
 					.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_MODEL_PATH);
-			if (modelPath == null || modelPath.trim().isEmpty()) {
+			if (configuredPath == null || configuredPath.trim().isEmpty()) {
 				throw new IllegalStateException(
 						"Embedding model path not configured. Set the global property: "
 								+ ChartSearchAiConstants.GP_EMBEDDING_MODEL_PATH);
 			}
+			String modelPath = ChartSearchAiConstants.resolveModelPath(
+					configuredPath.trim(), ChartSearchAiConstants.GP_EMBEDDING_MODEL_PATH);
 			log.info("Loading ONNX embedding model from {}", modelPath);
 			env = OrtEnvironment.getEnvironment();
 			session = env.createSession(modelPath);

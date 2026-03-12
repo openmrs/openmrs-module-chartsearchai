@@ -9,6 +9,11 @@
  */
 package org.openmrs.module.chartsearchai;
 
+import java.io.File;
+import java.io.IOException;
+
+import org.openmrs.util.OpenmrsUtil;
+
 public class ChartSearchAiConstants {
 
 	public static final String PRIV_QUERY_PATIENT_DATA = "AI Query Patient Data";
@@ -34,6 +39,49 @@ public class ChartSearchAiConstants {
 	public static final int EMBEDDING_DIMENSIONS = 384;
 
 	public static final int DEFAULT_RETRIEVAL_TOP_K = 15;
+
+	/**
+	 * Resolves a model path relative to the OpenMRS application data directory.
+	 * Rejects paths containing ".." to prevent path traversal and verifies the
+	 * resolved path stays within the application data directory.
+	 *
+	 * @param relativePath the relative path from the global property (e.g. "chartsearchai/model.gguf")
+	 * @param globalPropertyName the global property name, used in error messages
+	 * @return the absolute path to the model file
+	 * @throws IllegalStateException if the path is invalid, traverses outside the data directory,
+	 *         or the file does not exist
+	 */
+	public static String resolveModelPath(String relativePath, String globalPropertyName) {
+		if (relativePath.contains("..")) {
+			throw new IllegalStateException(
+					"Model path must not contain '..': " + globalPropertyName);
+		}
+
+		File appDataDir = new File(OpenmrsUtil.getApplicationDataDirectory());
+		File modelFile = new File(appDataDir, relativePath);
+
+		try {
+			String canonicalPath = modelFile.getCanonicalPath();
+			String canonicalDataDir = appDataDir.getCanonicalPath();
+			if (!canonicalPath.startsWith(canonicalDataDir + File.separator)) {
+				throw new IllegalStateException(
+						"Model path must resolve to within the OpenMRS application data directory: "
+								+ globalPropertyName);
+			}
+		}
+		catch (IOException e) {
+			throw new IllegalStateException(
+					"Failed to resolve model path for " + globalPropertyName, e);
+		}
+
+		if (!modelFile.exists()) {
+			throw new IllegalStateException(
+					"Model file not found: " + modelFile.getAbsolutePath()
+							+ ". Set the correct relative path in " + globalPropertyName);
+		}
+
+		return modelFile.getAbsolutePath();
+	}
 
 	private ChartSearchAiConstants() {
 	}

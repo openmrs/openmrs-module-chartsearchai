@@ -47,7 +47,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  * <pre>
  * POST /ws/rest/v1/chartsearchai/search
  * {
- *   "patientUuid": "patient-uuid-here",
+ *   "patient": "patient-uuid-here",
  *   "question": "What medications is this patient on?"
  * }
  * </pre>
@@ -77,12 +77,12 @@ public class ChartSearchAiRestController {
 	public ResponseEntity<Object> search(@RequestBody Map<String, String> body) {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
 
-		String patientUuid = body.get("patientUuid");
+		String patientUuid = body.get("patient");
 		String question = body.get("question");
 
 		if (patientUuid == null || patientUuid.trim().isEmpty()) {
 			return new ResponseEntity<Object>(
-					errorResponse("patientUuid is required"), HttpStatus.BAD_REQUEST);
+					errorResponse("patient is required"), HttpStatus.BAD_REQUEST);
 		}
 		if (question == null || question.trim().isEmpty()) {
 			return new ResponseEntity<Object>(
@@ -159,8 +159,8 @@ public class ChartSearchAiRestController {
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)
 	@ResponseBody
 	public ResponseEntity<Object> getAuditLogs(
-			@RequestParam(value = "patientUuid", required = false) String patientUuid,
-			@RequestParam(value = "userUuid", required = false) String userUuid,
+			@RequestParam(value = "patient", required = false) String patientUuid,
+			@RequestParam(value = "user", required = false) String userUuid,
 			@RequestParam(value = "fromDate", required = false) Long fromDateMs,
 			@RequestParam(value = "toDate", required = false) Long toDateMs,
 			@RequestParam(value = "startIndex", required = false) Integer startIndex,
@@ -197,9 +197,9 @@ public class ChartSearchAiRestController {
 		for (ChartSearchAuditLog auditLog : logs) {
 			Map<String, Object> entry = new HashMap<String, Object>();
 			entry.put("auditLogId", auditLog.getAuditLogId());
-			entry.put("userUuid", auditLog.getUser().getUuid());
+			entry.put("user", auditLog.getUser().getUuid());
 			entry.put("username", auditLog.getUser().getUsername());
-			entry.put("patientUuid", auditLog.getPatient().getUuid());
+			entry.put("patient", auditLog.getPatient().getUuid());
 			entry.put("question", auditLog.getQuestion());
 			entry.put("answer", auditLog.getAnswer());
 			entry.put("referenceCount", auditLog.getReferenceCount());
@@ -220,7 +220,7 @@ public class ChartSearchAiRestController {
 	@ResponseBody
 	public ResponseEntity<Object> handleBadRequest(HttpMessageNotReadableException ex) {
 		return new ResponseEntity<Object>(
-				errorResponse("Invalid request body. Expected JSON with 'patientUuid' and 'question' fields."),
+				errorResponse("Invalid request body. Expected JSON with 'patient' and 'question' fields."),
 				HttpStatus.BAD_REQUEST);
 	}
 

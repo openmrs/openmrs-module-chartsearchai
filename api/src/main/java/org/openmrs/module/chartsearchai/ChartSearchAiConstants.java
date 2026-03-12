@@ -52,6 +52,12 @@ public class ChartSearchAiConstants {
 
 	public static final int DEFAULT_RATE_LIMIT_PER_MINUTE = 10;
 
+	public static final String GP_CACHE_TTL_MINUTES = "chartsearchai.cacheTtlMinutes";
+
+	public static final int DEFAULT_CACHE_TTL_MINUTES = 5;
+
+	public static final int DEFAULT_CACHE_MAX_SIZE = 100;
+
 	/**
 	 * Resolves a model path relative to the OpenMRS application data directory.
 	 * Rejects paths containing ".." to prevent path traversal and verifies the

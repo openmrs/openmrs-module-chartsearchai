@@ -62,6 +62,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.cacheTtlMinutes</property>
+		<defaultValue>5</defaultValue>
+		<description>Number of minutes to cache AI chart search responses for identical patient and question combinations. Avoids redundant LLM calls. Set to 0 to disable caching.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.embedding.provider</property>
 		<defaultValue>term-frequency</defaultValue>
 		<description>Embedding provider for the embedding search mode: "term-frequency" (default hash-based vectors) or "onnx" (semantic vectors via all-MiniLM-L6-v2).</description>

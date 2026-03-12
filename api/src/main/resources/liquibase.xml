@@ -59,6 +59,10 @@
 				<constraints nullable="false"/>
 			</column>
 			<column name="reference_count" type="int"/>
+			<column name="search_mode" type="varchar(20)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="response_time_ms" type="bigint"/>
 			<column name="date_created" type="datetime">
 				<constraints nullable="false"/>
 			</column>

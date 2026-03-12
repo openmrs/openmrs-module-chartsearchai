@@ -96,7 +96,15 @@ public class ChartSearchAiRestController {
 
 		User user = Context.getAuthenticatedUser();
 
+		String searchMode = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_SEARCH_MODE);
+		if (searchMode == null || searchMode.trim().isEmpty()) {
+			searchMode = ChartSearchAiConstants.SEARCH_MODE_LLM;
+		}
+
+		long startTime = System.currentTimeMillis();
 		ChartAnswer chartAnswer = chartSearchService.ask(patient, question);
+		long responseTimeMs = System.currentTimeMillis() - startTime;
 
 		ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
 		auditLog.setUser(user);
@@ -104,6 +112,8 @@ public class ChartSearchAiRestController {
 		auditLog.setQuestion(question);
 		auditLog.setAnswer(chartAnswer.getAnswer());
 		auditLog.setReferenceCount(chartAnswer.getReferences().size());
+		auditLog.setSearchMode(searchMode);
+		auditLog.setResponseTimeMs(responseTimeMs);
 		auditLog.setDateCreated(new Date());
 		dao.saveAuditLog(auditLog);
 

@@ -34,6 +34,10 @@ public class ChartSearchAuditLog implements Serializable {
 
 	private Integer referenceCount;
 
+	private String searchMode;
+
+	private Long responseTimeMs;
+
 	private Date dateCreated;
 
 	public Integer getAuditLogId() {
@@ -82,6 +86,22 @@ public class ChartSearchAuditLog implements Serializable {
 
 	public void setReferenceCount(Integer referenceCount) {
 		this.referenceCount = referenceCount;
+	}
+
+	public String getSearchMode() {
+		return searchMode;
+	}
+
+	public void setSearchMode(String searchMode) {
+		this.searchMode = searchMode;
+	}
+
+	public Long getResponseTimeMs() {
+		return responseTimeMs;
+	}
+
+	public void setResponseTimeMs(Long responseTimeMs) {
+		this.responseTimeMs = responseTimeMs;
 	}
 
 	public Date getDateCreated() {

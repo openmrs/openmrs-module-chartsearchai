@@ -129,6 +129,20 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 		return ChartSearchAiConstants.EMBEDDING_DIMENSIONS;
 	}
 
+	public synchronized void close() {
+		if (session != null) {
+			log.info("Closing ONNX embedding session");
+			try {
+				session.close();
+			}
+			catch (OrtException e) {
+				log.warn("Error closing ONNX session", e);
+			}
+			session = null;
+			env = null;
+		}
+	}
+
 	private synchronized OrtSession getSession() throws OrtException {
 		if (session == null) {
 			String configuredPath = Context.getAdministrationService()

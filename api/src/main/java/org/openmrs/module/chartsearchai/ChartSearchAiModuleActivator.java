@@ -12,6 +12,8 @@ package org.openmrs.module.chartsearchai;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.BaseModuleActivator;
 import org.openmrs.module.chartsearchai.api.EmbeddingIndexTask;
+import org.openmrs.module.chartsearchai.api.impl.LlmProvider;
+import org.openmrs.module.chartsearchai.embedding.OnnxEmbeddingProvider;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
 import org.slf4j.Logger;
@@ -31,6 +33,20 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator {
 
 	@Override
 	public void stopped() {
+		log.info("Chart Search AI Module stopping");
+		try {
+			Context.getRegisteredComponent("llmProvider", LlmProvider.class).close();
+		}
+		catch (Exception e) {
+			log.warn("Error closing LLM provider", e);
+		}
+		try {
+			Context.getRegisteredComponent("chartSearchAi.onnxEmbeddingProvider",
+					OnnxEmbeddingProvider.class).close();
+		}
+		catch (Exception e) {
+			log.warn("Error closing ONNX embedding provider", e);
+		}
 		log.info("Chart Search AI Module stopped");
 	}
 

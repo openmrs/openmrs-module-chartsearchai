@@ -56,6 +56,14 @@ public class LlmProvider {
 		return llm.complete(params);
 	}
 
+	public synchronized void close() {
+		if (model != null) {
+			log.info("Closing LLM model");
+			model.close();
+			model = null;
+		}
+	}
+
 	private synchronized LlamaModel getModel() {
 		if (model == null) {
 			String configuredPath = Context.getAdministrationService()

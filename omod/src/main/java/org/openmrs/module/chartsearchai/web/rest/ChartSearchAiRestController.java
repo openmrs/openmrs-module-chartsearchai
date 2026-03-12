@@ -18,6 +18,8 @@ import java.util.Map;
 import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.api.context.Context;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
@@ -50,6 +52,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @Controller
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/chartsearchai")
 public class ChartSearchAiRestController {
+
+	private static final Logger log = LoggerFactory.getLogger(ChartSearchAiRestController.class);
 
 	private static final int MAX_QUESTION_LENGTH = 1000;
 
@@ -102,9 +106,24 @@ public class ChartSearchAiRestController {
 			searchMode = ChartSearchAiConstants.SEARCH_MODE_LLM;
 		}
 
-		long startTime = System.currentTimeMillis();
-		ChartAnswer chartAnswer = chartSearchService.ask(patient, question);
-		long responseTimeMs = System.currentTimeMillis() - startTime;
+		ChartAnswer chartAnswer;
+		long responseTimeMs;
+		try {
+			long startTime = System.currentTimeMillis();
+			chartAnswer = chartSearchService.ask(patient, question);
+			responseTimeMs = System.currentTimeMillis() - startTime;
+		}
+		catch (IllegalStateException e) {
+			log.error("Chart search configuration error", e);
+			return new ResponseEntity<Object>(
+					errorResponse(e.getMessage()), HttpStatus.SERVICE_UNAVAILABLE);
+		}
+		catch (Exception e) {
+			log.error("Chart search failed for patient {}", patient.getUuid(), e);
+			return new ResponseEntity<Object>(
+					errorResponse("Chart search failed. Please try again or contact your administrator."),
+					HttpStatus.INTERNAL_SERVER_ERROR);
+		}
 
 		ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
 		auditLog.setUser(user);

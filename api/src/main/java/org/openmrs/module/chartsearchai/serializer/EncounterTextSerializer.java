@@ -9,7 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.serializer;
 
-import java.text.SimpleDateFormat;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 
 import org.openmrs.Diagnosis;
@@ -29,7 +30,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class EncounterTextSerializer implements ClinicalTextSerializer<Encounter> {
 
-	private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
+	private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 	@Autowired
 	private ObsTextSerializer obsSerializer;
@@ -86,8 +87,6 @@ public class EncounterTextSerializer implements ClinicalTextSerializer<Encounter
 		if (date == null) {
 			return "unknown";
 		}
-		synchronized (DATE_FORMAT) {
-			return DATE_FORMAT.format(date);
-		}
+		return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().format(DATE_FORMAT);
 	}
 }

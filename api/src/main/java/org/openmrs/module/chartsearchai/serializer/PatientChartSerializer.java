@@ -12,13 +12,9 @@ package org.openmrs.module.chartsearchai.serializer;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.openmrs.Allergy;
-import org.openmrs.Condition;
-import org.openmrs.Obs;
-import org.openmrs.Order;
 import org.openmrs.Patient;
-import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -32,16 +28,7 @@ import org.springframework.stereotype.Component;
 public class PatientChartSerializer {
 
 	@Autowired
-	private ObsTextSerializer obsSerializer;
-
-	@Autowired
-	private ConditionTextSerializer conditionSerializer;
-
-	@Autowired
-	private AllergyTextSerializer allergySerializer;
-
-	@Autowired
-	private OrderTextSerializer orderSerializer;
+	private PatientRecordLoader recordLoader;
 
 	/**
 	 * Serialize all clinical records for a patient into numbered text lines.
@@ -50,55 +37,15 @@ public class PatientChartSerializer {
 	 * @return the serialized chart with numbered records and their source references
 	 */
 	public PatientChart serialize(Patient patient) {
+		List<SerializedRecord> records = recordLoader.loadAll(patient);
 		List<RecordReference> references = new ArrayList<RecordReference>();
 		StringBuilder sb = new StringBuilder();
-		int index = 1;
 
-		// Observations (top-level only — group members are inlined by serializer)
-		List<Obs> observations = Context.getObsService().getObservationsByPerson(patient);
-		for (Obs obs : observations) {
-			if (obs.getObsGroup() != null) {
-				continue;
-			}
-			String text = obsSerializer.toText(obs);
-			if (!text.trim().isEmpty()) {
-				sb.append("[").append(index).append("] ").append(text).append("\n");
-				references.add(new RecordReference(index, "obs", obs.getObsId()));
-				index++;
-			}
-		}
-
-		// Conditions
-		List<Condition> conditions = Context.getConditionService().getActiveConditions(patient);
-		for (Condition condition : conditions) {
-			String text = conditionSerializer.toText(condition);
-			if (!text.trim().isEmpty()) {
-				sb.append("[").append(index).append("] ").append(text).append("\n");
-				references.add(new RecordReference(index, "condition", condition.getConditionId()));
-				index++;
-			}
-		}
-
-		// Allergies
-		List<Allergy> allergies = Context.getPatientService().getAllergies(patient);
-		for (Allergy allergy : allergies) {
-			String text = allergySerializer.toText(allergy);
-			if (!text.trim().isEmpty()) {
-				sb.append("[").append(index).append("] ").append(text).append("\n");
-				references.add(new RecordReference(index, "allergy", allergy.getAllergyId()));
-				index++;
-			}
-		}
-
-		// Orders
-		List<Order> orders = Context.getOrderService().getAllOrdersByPatient(patient);
-		for (Order order : orders) {
-			String text = orderSerializer.toText(order);
-			if (!text.trim().isEmpty()) {
-				sb.append("[").append(index).append("] ").append(text).append("\n");
-				references.add(new RecordReference(index, "order", order.getOrderId()));
-				index++;
-			}
+		for (int i = 0; i < records.size(); i++) {
+			SerializedRecord record = records.get(i);
+			int index = i + 1;
+			sb.append("[").append(index).append("] ").append(record.getText()).append("\n");
+			references.add(new RecordReference(index, record.getResourceType(), record.getResourceId()));
 		}
 
 		return new PatientChart(sb.toString(), references);

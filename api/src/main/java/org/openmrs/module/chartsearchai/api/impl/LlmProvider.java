@@ -47,7 +47,7 @@ public class LlmProvider {
 	 * @return the LLM's response with inline citations
 	 * @throws APIException if the request exceeds the configured timeout
 	 */
-	public String ask(String numberedRecords, String question) {
+	public synchronized String ask(String numberedRecords, String question) {
 		LlamaModel llm = getModel();
 
 		String prompt = SYSTEM_PROMPT + "\n\n"

@@ -14,6 +14,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.openmrs.Patient;
 import org.openmrs.User;
@@ -60,6 +61,13 @@ public class ChartSearchAiRestController {
 
 	private static final int MAX_QUESTION_LENGTH = 1000;
 
+	private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]");
+
+	private static final Pattern PROMPT_INJECTION = Pattern.compile(
+			"(?i)(ignore (previous|above|all) (instructions|prompts|rules)"
+			+ "|disregard (your|the|all) (instructions|rules|prompt)"
+			+ "|you are now|new instructions:|system prompt:)");
+
 	private static final String DISCLAIMER = "This response is AI-generated and may not be "
 			+ "accurate. It is not a substitute for clinical judgment. Always verify against "
 			+ "the patient's medical records.";
@@ -94,6 +102,13 @@ public class ChartSearchAiRestController {
 							+ MAX_QUESTION_LENGTH + " characters"),
 					HttpStatus.BAD_REQUEST);
 		}
+
+		String sanitizationError = validateQuestion(question);
+		if (sanitizationError != null) {
+			return new ResponseEntity<Object>(
+					errorResponse(sanitizationError), HttpStatus.BAD_REQUEST);
+		}
+		question = CONTROL_CHARS.matcher(question).replaceAll("");
 
 		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
 		if (patient == null) {
@@ -222,6 +237,18 @@ public class ChartSearchAiRestController {
 		return new ResponseEntity<Object>(
 				errorResponse("Invalid request body. Expected JSON with 'patient' and 'question' fields."),
 				HttpStatus.BAD_REQUEST);
+	}
+
+	/**
+	 * Validates and sanitizes the question input. Returns an error message if the question
+	 * is rejected, or null if it passes validation.
+	 */
+	static String validateQuestion(String question) {
+		if (PROMPT_INJECTION.matcher(question).find()) {
+			log.warn("Rejected question containing prompt injection pattern");
+			return "Question contains disallowed content";
+		}
+		return null;
 	}
 
 	private Map<String, String> errorResponse(String message) {

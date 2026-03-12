@@ -39,7 +39,7 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 	private OrtSession session;
 
 	@Override
-	public float[] embed(String text) {
+	public synchronized float[] embed(String text) {
 		try {
 			OrtSession ortSession = getSession();
 

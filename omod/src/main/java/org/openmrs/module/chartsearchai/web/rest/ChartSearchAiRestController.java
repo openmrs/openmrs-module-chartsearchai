@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  * REST endpoint for AI-powered chart search.
  *
  * <pre>
- * POST /ws/rest/v1/chartsearchai/ask
+ * POST /ws/rest/v1/chartsearchai/search
  * {
  *   "patientUuid": "patient-uuid-here",
  *   "question": "What medications is this patient on?"
@@ -50,9 +50,9 @@ public class ChartSearchAiRestController {
 	@Qualifier("chartSearchAi.chartSearchServiceRouter")
 	private ChartSearchService chartSearchService;
 
-	@RequestMapping(value = "/ask", method = RequestMethod.POST)
+	@RequestMapping(value = "/search", method = RequestMethod.POST)
 	@ResponseBody
-	public ResponseEntity<Object> ask(@RequestBody Map<String, String> body) {
+	public ResponseEntity<Object> search(@RequestBody Map<String, String> body) {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
 
 		String patientUuid = body.get("patientUuid");

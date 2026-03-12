@@ -20,9 +20,9 @@ public class ChartSearchAiConstants {
 
 	public static final String PRIV_VIEW_AUDIT_LOGS = "View AI Audit Logs";
 
-	public static final String GP_EMBEDDING_MODEL_PATH = "chartsearchai.embedding.modelPath";
+	public static final String GP_EMBEDDING_MODEL_FILE_PATH = "chartsearchai.embedding.modelFilePath";
 
-	public static final String GP_LLM_MODEL_PATH = "chartsearchai.llm.modelPath";
+	public static final String GP_LLM_MODEL_FILE_PATH = "chartsearchai.llm.modelFilePath";
 
 	public static final String GP_SEARCH_MODE = "chartsearchai.searchMode";
 

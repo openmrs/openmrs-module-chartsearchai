@@ -357,7 +357,7 @@ The model runs **in-process** inside the OpenMRS JVM via [java-llama.cpp](https:
 1. The `.omod` module file (includes the java-llama.cpp dependency)
 2. The `.gguf` model file (~2GB, placed in the OpenMRS application data directory)
 
-The model path is configured via the `chartsearchai.llm.modelPath` global property. The model loads into memory on first query and stays resident for subsequent requests.
+The model path is configured via the `chartsearchai.llm.modelFilePath` global property. The model loads into memory on first query and stays resident for subsequent requests.
 
 ```
 OpenMRS JVM
@@ -403,7 +403,7 @@ Both modes send records to the LLM for reasoning and synthesis — the differenc
 
 The embedding mode additionally supports switchable embedding providers via `chartsearchai.embedding.provider`:
 - `term-frequency` (default): placeholder hash-based vectors for basic keyword-overlap retrieval.
-- `onnx`: real semantic vectors via ONNX Runtime with all-MiniLM-L6-v2 (~90MB model file, configured via `chartsearchai.embedding.modelPath`).
+- `onnx`: real semantic vectors via ONNX Runtime with all-MiniLM-L6-v2 (~90MB model file, configured via `chartsearchai.embedding.modelFilePath`).
 
 ### Medical imaging data (X-rays, scans, etc.)
 

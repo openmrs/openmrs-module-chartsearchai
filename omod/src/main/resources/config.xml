@@ -44,9 +44,9 @@
 	</globalProperty>
 
 	<globalProperty>
-		<property>chartsearchai.llm.modelPath</property>
+		<property>chartsearchai.llm.modelFilePath</property>
 		<defaultValue></defaultValue>
-		<description>Relative path (within the OpenMRS application data directory) to the GGUF LLM model file used for inference. Required for both search modes. Example: chartsearchai/Llama-3.2-3B-Instruct-Q4_K_M.gguf. The recommended model is Llama 3.2 3B Instruct (Q4_K_M quantization, ~2GB). Download from https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF. Path traversal (e.g. "..") is not allowed.</description>
+		<description>Relative path, including the filename, within the OpenMRS application data directory to the GGUF LLM model file used for inference. Required for both search modes. Example: chartsearchai/Llama-3.2-3B-Instruct-Q4_K_M.gguf (resolves to &lt;application-data-directory&gt;/chartsearchai/Llama-3.2-3B-Instruct-Q4_K_M.gguf). The recommended model is Llama 3.2 3B Instruct (Q4_K_M quantization, ~2GB). Download from https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF. Path traversal (e.g. "..") is not allowed.</description>
 	</globalProperty>
 
 	<globalProperty>
@@ -56,9 +56,9 @@
 	</globalProperty>
 
 	<globalProperty>
-		<property>chartsearchai.embedding.modelPath</property>
+		<property>chartsearchai.embedding.modelFilePath</property>
 		<defaultValue></defaultValue>
-		<description>Relative path (within the OpenMRS application data directory) to the ONNX embedding model file. Required only when chartsearchai.embedding.provider is set to "onnx". Example: chartsearchai/all-MiniLM-L6-v2.onnx. Download the model.onnx file from https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2 and rename it. Path traversal (e.g. "..") is not allowed.</description>
+		<description>Relative path, including the filename, within the OpenMRS application data directory to the ONNX embedding model file. Required only when chartsearchai.embedding.provider is set to "onnx". Example: chartsearchai/all-MiniLM-L6-v2.onnx (resolves to &lt;application-data-directory&gt;/chartsearchai/all-MiniLM-L6-v2.onnx). Download the model.onnx file from https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2 and rename it. Path traversal (e.g. "..") is not allowed.</description>
 	</globalProperty>
 
 	<!-- AOP -->

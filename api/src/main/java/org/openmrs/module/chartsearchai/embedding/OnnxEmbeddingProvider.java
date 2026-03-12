@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 /**
  * Embedding provider using ONNX Runtime with the all-MiniLM-L6-v2 model. Produces
  * 384-dimensional vectors for semantic similarity search. The ONNX model file path
- * is configured via the {@code chartsearchai.embedding.modelPath} global property.
+ * is configured via the {@code chartsearchai.embedding.modelFilePath} global property.
  */
 @Component("chartSearchAi.onnxEmbeddingProvider")
 public class OnnxEmbeddingProvider implements EmbeddingProvider {
@@ -132,14 +132,14 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 	private synchronized OrtSession getSession() throws OrtException {
 		if (session == null) {
 			String configuredPath = Context.getAdministrationService()
-					.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_MODEL_PATH);
+					.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_MODEL_FILE_PATH);
 			if (configuredPath == null || configuredPath.trim().isEmpty()) {
 				throw new IllegalStateException(
 						"Embedding model path not configured. Set the global property: "
-								+ ChartSearchAiConstants.GP_EMBEDDING_MODEL_PATH);
+								+ ChartSearchAiConstants.GP_EMBEDDING_MODEL_FILE_PATH);
 			}
 			String modelPath = ChartSearchAiConstants.resolveModelPath(
-					configuredPath.trim(), ChartSearchAiConstants.GP_EMBEDDING_MODEL_PATH);
+					configuredPath.trim(), ChartSearchAiConstants.GP_EMBEDDING_MODEL_FILE_PATH);
 			log.info("Loading ONNX embedding model from {}", modelPath);
 			env = OrtEnvironment.getEnvironment();
 			session = env.createSession(modelPath);

@@ -42,10 +42,10 @@ Set these global properties in **Admin > Settings**:
 
 | Property | Required | Description |
 |----------|----------|-------------|
-| `chartsearchai.llm.modelPath` | Yes | Relative path (within the OpenMRS application data directory) to the `.gguf` model file, e.g. `chartsearchai/Llama-3.2-3B-Instruct-Q4_K_M.gguf` |
+| `chartsearchai.llm.modelFilePath` | Yes | Relative path (within the OpenMRS application data directory) to the `.gguf` model file, e.g. `chartsearchai/Llama-3.2-3B-Instruct-Q4_K_M.gguf` |
 | `chartsearchai.searchMode` | No | `llm` (default) or `embedding` |
 | `chartsearchai.embedding.provider` | No | `term-frequency` (default) or `onnx` |
-| `chartsearchai.embedding.modelPath` | Only if using `onnx` | Relative path (within the OpenMRS application data directory) to the ONNX embedding model file, e.g. `chartsearchai/all-MiniLM-L6-v2.onnx` |
+| `chartsearchai.embedding.modelFilePath` | Only if using `onnx` | Relative path (within the OpenMRS application data directory) to the ONNX embedding model file, e.g. `chartsearchai/all-MiniLM-L6-v2.onnx` |
 
 ### 6. Grant privilege
 

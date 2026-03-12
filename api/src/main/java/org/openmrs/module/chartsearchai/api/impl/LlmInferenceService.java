@@ -9,6 +9,13 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
@@ -33,6 +40,8 @@ public class LlmInferenceService implements ChartSearchService {
 	@Autowired
 	private LlmProvider llmProvider;
 
+	private static final Pattern CITATION_PATTERN = Pattern.compile("\\[(\\d+)\\]");
+
 	@Override
 	public ChartAnswer ask(Patient patient, String question) {
 		PatientChart chart = chartSerializer.serialize(patient);
@@ -40,6 +49,26 @@ public class LlmInferenceService implements ChartSearchService {
 
 		String response = llmProvider.ask(chart.getText(), question);
 
-		return new ChartAnswer(response, chart.getReferences());
+		List<RecordReference> citedReferences = filterCitedReferences(
+				response, chart.getReferences());
+
+		return new ChartAnswer(response, citedReferences);
+	}
+
+	static List<RecordReference> filterCitedReferences(String answer,
+			List<RecordReference> allReferences) {
+		Set<Integer> citedIndices = new HashSet<Integer>();
+		Matcher matcher = CITATION_PATTERN.matcher(answer);
+		while (matcher.find()) {
+			citedIndices.add(Integer.parseInt(matcher.group(1)));
+		}
+
+		List<RecordReference> cited = new ArrayList<RecordReference>();
+		for (RecordReference ref : allReferences) {
+			if (citedIndices.contains(ref.getIndex())) {
+				cited.add(ref);
+			}
+		}
+		return cited;
 	}
 }

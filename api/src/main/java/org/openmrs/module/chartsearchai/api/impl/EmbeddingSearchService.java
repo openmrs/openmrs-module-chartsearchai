@@ -68,7 +68,10 @@ public class EmbeddingSearchService implements ChartSearchService {
 		log.debug("Sending {} retrieved records to LLM", references.size());
 		String response = llmProvider.ask(sb.toString(), question);
 
-		return new ChartAnswer(response, references);
+		List<RecordReference> citedReferences = LlmInferenceService.filterCitedReferences(
+				response, references);
+
+		return new ChartAnswer(response, citedReferences);
 	}
 
 	/**

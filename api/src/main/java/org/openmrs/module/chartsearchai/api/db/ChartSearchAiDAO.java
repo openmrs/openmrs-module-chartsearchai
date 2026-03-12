@@ -13,6 +13,7 @@ import java.util.List;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.model.ChartEmbedding;
+import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 
 public interface ChartSearchAiDAO {
 
@@ -23,4 +24,6 @@ public interface ChartSearchAiDAO {
 	List<ChartEmbedding> getByPatient(Patient patient);
 
 	void deleteByPatient(Patient patient);
+
+	ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog);
 }

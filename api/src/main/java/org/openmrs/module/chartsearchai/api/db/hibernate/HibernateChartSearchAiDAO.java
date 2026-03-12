@@ -15,6 +15,7 @@ import org.hibernate.SessionFactory;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
 import org.openmrs.module.chartsearchai.model.ChartEmbedding;
+import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
@@ -56,5 +57,11 @@ public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 				.createQuery("delete from ChartEmbedding where patient = :patient")
 				.setParameter("patient", patient)
 				.executeUpdate();
+	}
+
+	@Override
+	public ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog) {
+		sessionFactory.getCurrentSession().save(auditLog);
+		return auditLog;
 	}
 }

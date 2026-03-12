@@ -22,6 +22,7 @@
 	<!-- Hibernate Mappings -->
 	<mappingFiles>
 		ChartEmbedding.hbm.xml
+		ChartSearchAuditLog.hbm.xml
 	</mappingFiles>
 
 	<!-- Privileges -->

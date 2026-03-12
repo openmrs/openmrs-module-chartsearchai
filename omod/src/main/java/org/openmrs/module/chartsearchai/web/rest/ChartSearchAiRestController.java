@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.web.rest;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,14 +22,15 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
+import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.webservices.rest.web.RestConstants;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -49,8 +51,6 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @RequestMapping("/rest/" + RestConstants.VERSION_1 + "/chartsearchai")
 public class ChartSearchAiRestController {
 
-	private static final Logger log = LoggerFactory.getLogger(ChartSearchAiRestController.class);
-
 	private static final int MAX_QUESTION_LENGTH = 1000;
 
 	private static final String DISCLAIMER = "This response is AI-generated and may not be "
@@ -61,6 +61,10 @@ public class ChartSearchAiRestController {
 	@Qualifier("chartSearchAi.chartSearchServiceRouter")
 	private ChartSearchService chartSearchService;
 
+	@Autowired
+	private ChartSearchAiDAO dao;
+
+	@Transactional
 	@RequestMapping(value = "/search", method = RequestMethod.POST)
 	@ResponseBody
 	public ResponseEntity<Object> search(@RequestBody Map<String, String> body) {
@@ -91,15 +95,16 @@ public class ChartSearchAiRestController {
 		}
 
 		User user = Context.getAuthenticatedUser();
-		log.info("Chart search by user {} (uuid={}) for patient {} (uuid={}): {}",
-				user.getUsername(), user.getUuid(),
-				patient.getPatientId(), patient.getUuid(), question);
 
 		ChartAnswer chartAnswer = chartSearchService.ask(patient, question);
 
-		log.info("Chart search completed for patient {} by user {}, returned {} references",
-				patient.getUuid(), user.getUsername(),
-				chartAnswer.getReferences().size());
+		ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
+		auditLog.setUser(user);
+		auditLog.setPatient(patient);
+		auditLog.setQuestion(question);
+		auditLog.setReferenceCount(chartAnswer.getReferences().size());
+		auditLog.setDateCreated(new Date());
+		dao.saveAuditLog(auditLog);
 
 		Map<String, Object> response = new HashMap<String, Object>();
 		response.put("answer", chartAnswer.getAnswer());

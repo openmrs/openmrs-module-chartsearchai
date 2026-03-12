@@ -40,4 +40,41 @@
 				constraintName="uk_chartsearchai_embedding_resource"/>
 	</changeSet>
 
+	<changeSet id="chartsearchai-002" author="openmrs">
+		<comment>Create chartsearchai_audit_log table for recording AI chart search queries</comment>
+		<createTable tableName="chartsearchai_audit_log">
+			<column name="audit_log_id" type="int" autoIncrement="true">
+				<constraints primaryKey="true" nullable="false"/>
+			</column>
+			<column name="user_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="patient_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="question" type="text">
+				<constraints nullable="false"/>
+			</column>
+			<column name="reference_count" type="int"/>
+			<column name="date_created" type="datetime">
+				<constraints nullable="false"/>
+			</column>
+		</createTable>
+		<addForeignKeyConstraint baseTableName="chartsearchai_audit_log" baseColumnNames="user_id"
+				referencedTableName="users" referencedColumnNames="user_id"
+				constraintName="fk_chartsearchai_audit_log_user"/>
+		<addForeignKeyConstraint baseTableName="chartsearchai_audit_log" baseColumnNames="patient_id"
+				referencedTableName="patient" referencedColumnNames="patient_id"
+				constraintName="fk_chartsearchai_audit_log_patient"/>
+		<createIndex tableName="chartsearchai_audit_log" indexName="idx_chartsearchai_audit_log_patient">
+			<column name="patient_id"/>
+		</createIndex>
+		<createIndex tableName="chartsearchai_audit_log" indexName="idx_chartsearchai_audit_log_user">
+			<column name="user_id"/>
+		</createIndex>
+		<createIndex tableName="chartsearchai_audit_log" indexName="idx_chartsearchai_audit_log_date">
+			<column name="date_created"/>
+		</createIndex>
+	</changeSet>
+
 </databaseChangeLog>

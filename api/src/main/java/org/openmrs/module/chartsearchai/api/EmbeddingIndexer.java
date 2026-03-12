@@ -65,13 +65,26 @@ public class EmbeddingIndexer {
 	 */
 	public void indexPatient(Patient patient) {
 		log.info("Indexing patient [id={}]", patient.getPatientId());
-		dao.deleteByPatient(patient);
 		Date now = new Date();
 
+		// Build all embeddings first so the patient is never without data
 		List<SerializedRecord> records = recordLoader.loadAll(patient);
+		List<ChartEmbedding> newEmbeddings = new java.util.ArrayList<ChartEmbedding>(records.size());
 		for (SerializedRecord record : records) {
-			saveEmbedding(patient, record.getResourceType(), record.getResourceId(),
-					record.getText(), now);
+			ChartEmbedding ce = new ChartEmbedding();
+			ce.setPatient(patient);
+			ce.setResourceType(record.getResourceType());
+			ce.setResourceId(record.getResourceId());
+			ce.setTextContent(record.getText());
+			ce.setEmbeddingVector(embeddingProvider.embed(record.getText()));
+			ce.setDateCreated(now);
+			newEmbeddings.add(ce);
+		}
+
+		// Delete old and insert new within the same transaction
+		dao.deleteByPatient(patient);
+		for (ChartEmbedding ce : newEmbeddings) {
+			dao.saveChartEmbedding(ce);
 		}
 
 		log.info("Finished indexing patient [id={}] ({} records)", patient.getPatientId(), records.size());

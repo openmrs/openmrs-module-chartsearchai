@@ -12,7 +12,7 @@ package org.openmrs.module.chartsearchai.api.db.hibernate;
 import java.util.Date;
 import java.util.List;
 
-import org.hibernate.Query;
+import org.hibernate.query.Query;
 import org.hibernate.SessionFactory;
 import org.openmrs.Patient;
 import org.openmrs.User;

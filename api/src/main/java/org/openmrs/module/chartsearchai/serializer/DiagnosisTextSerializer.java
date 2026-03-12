@@ -9,10 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.serializer;
 
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.Date;
-
 import org.openmrs.Diagnosis;
 import org.springframework.stereotype.Component;
 
@@ -24,8 +20,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class DiagnosisTextSerializer implements ClinicalTextSerializer<Diagnosis> {
-
-	private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 	@Override
 	public String toText(Diagnosis diagnosis) {
@@ -41,7 +35,7 @@ public class DiagnosisTextSerializer implements ClinicalTextSerializer<Diagnosis
 		sb.append(". Rank: ").append(diagnosis.getRank() == 1 ? "Primary" : "Secondary");
 
 		if (diagnosis.getEncounter() != null && diagnosis.getEncounter().getEncounterDatetime() != null) {
-			sb.append(". Date: ").append(formatDate(diagnosis.getEncounter().getEncounterDatetime()));
+			sb.append(". Date: ").append(DateFormatUtil.formatDate(diagnosis.getEncounter().getEncounterDatetime()));
 		}
 
 		return sb.toString();
@@ -61,10 +55,4 @@ public class DiagnosisTextSerializer implements ClinicalTextSerializer<Diagnosis
 		return "";
 	}
 
-	private String formatDate(Date date) {
-		if (date == null) {
-			return "unknown";
-		}
-		return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().format(DATE_FORMAT);
-	}
 }

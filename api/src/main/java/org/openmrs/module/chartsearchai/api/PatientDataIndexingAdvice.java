@@ -80,8 +80,8 @@ public class PatientDataIndexingAdvice implements AfterReturningAdvice {
 			indexer.indexPatient(patient);
 		}
 		catch (Exception e) {
-			log.error("Failed to re-index patient {} after {} call",
-					patient.getUuid(), methodName, e);
+			log.error("Failed to re-index patient [id={}] after {} call",
+					patient.getPatientId(), methodName, e);
 		}
 	}
 }

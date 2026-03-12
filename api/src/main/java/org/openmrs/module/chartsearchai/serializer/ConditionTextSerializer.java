@@ -9,10 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.serializer;
 
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.Date;
-
 import org.openmrs.Condition;
 import org.springframework.stereotype.Component;
 
@@ -24,8 +20,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class ConditionTextSerializer implements ClinicalTextSerializer<Condition> {
-
-	private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 	@Override
 	public String toText(Condition condition) {
@@ -40,13 +34,13 @@ public class ConditionTextSerializer implements ClinicalTextSerializer<Condition
 			sb.append(". Verification: ").append(condition.getVerificationStatus());
 		}
 		if (condition.getOnsetDate() != null) {
-			sb.append(". Onset: ").append(formatDate(condition.getOnsetDate()));
+			sb.append(". Onset: ").append(DateFormatUtil.formatDate(condition.getOnsetDate()));
 		}
 		if (condition.getAdditionalDetail() != null && !condition.getAdditionalDetail().trim().isEmpty()) {
 			sb.append(". Detail: ").append(condition.getAdditionalDetail().trim());
 		}
 		if (condition.getEndDate() != null) {
-			sb.append(". Resolved: ").append(formatDate(condition.getEndDate()));
+			sb.append(". Resolved: ").append(DateFormatUtil.formatDate(condition.getEndDate()));
 			if (condition.getEndReason() != null && !condition.getEndReason().trim().isEmpty()) {
 				sb.append(" (").append(condition.getEndReason().trim()).append(")");
 			}
@@ -69,10 +63,4 @@ public class ConditionTextSerializer implements ClinicalTextSerializer<Condition
 		return "";
 	}
 
-	private String formatDate(Date date) {
-		if (date == null) {
-			return "unknown";
-		}
-		return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().format(DATE_FORMAT);
-	}
 }

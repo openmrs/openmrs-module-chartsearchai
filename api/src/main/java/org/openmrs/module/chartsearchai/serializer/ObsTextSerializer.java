@@ -9,10 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.serializer;
 
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.Date;
-
 import org.openmrs.ConceptNumeric;
 import org.openmrs.Encounter;
 import org.openmrs.Obs;
@@ -28,8 +24,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class ObsTextSerializer implements ClinicalTextSerializer<Obs> {
 
-	private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-
 	@Override
 	public String toText(Obs obs) {
 		StringBuilder sb = new StringBuilder();
@@ -42,7 +36,7 @@ public class ObsTextSerializer implements ClinicalTextSerializer<Obs> {
 			} else {
 				sb.append("Encounter");
 			}
-			sb.append(" (").append(formatDate(enc.getEncounterDatetime())).append(") - ");
+			sb.append(" (").append(DateFormatUtil.formatDate(enc.getEncounterDatetime())).append(") - ");
 		}
 
 		String conceptName = ConceptNameUtil.getName(obs.getConcept());
@@ -88,7 +82,7 @@ public class ObsTextSerializer implements ClinicalTextSerializer<Obs> {
 			return obs.getValueText();
 		}
 		if (obs.getValueDatetime() != null) {
-			return formatDate(obs.getValueDatetime());
+			return DateFormatUtil.formatDate(obs.getValueDatetime());
 		}
 		if (obs.getValueDrug() != null) {
 			return obs.getValueDrug().getName();
@@ -103,10 +97,4 @@ public class ObsTextSerializer implements ClinicalTextSerializer<Obs> {
 		return null;
 	}
 
-	private String formatDate(Date date) {
-		if (date == null) {
-			return "unknown";
-		}
-		return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().format(DATE_FORMAT);
-	}
 }

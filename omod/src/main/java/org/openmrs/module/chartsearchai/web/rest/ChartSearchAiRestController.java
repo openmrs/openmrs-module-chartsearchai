@@ -123,7 +123,7 @@ public class ChartSearchAiRestController {
 		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
 		if (patient == null) {
 			return new ResponseEntity<Object>(
-					errorResponse("Patient not found: " + patientUuid), HttpStatus.NOT_FOUND);
+					errorResponse("Patient not found"), HttpStatus.NOT_FOUND);
 		}
 
 		User user = Context.getAuthenticatedUser();
@@ -239,7 +239,7 @@ public class ChartSearchAiRestController {
 
 		final Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
 		if (patient == null) {
-			sendErrorAndComplete(emitter, "Patient not found: " + patientUuid);
+			sendErrorAndComplete(emitter, "Patient not found");
 			return emitter;
 		}
 
@@ -264,7 +264,10 @@ public class ChartSearchAiRestController {
 		Thread streamThread = new Thread(new Runnable() {
 			@Override
 			public void run() {
+				Context.openSession();
 				try {
+					Context.addProxyPrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
 					long startTime = System.currentTimeMillis();
 
 					ChartAnswer chartAnswer = chartSearchService.askStreaming(
@@ -294,15 +297,7 @@ public class ChartSearchAiRestController {
 					auditLog.setSearchMode(searchMode);
 					auditLog.setResponseTimeMs(responseTimeMs);
 					auditLog.setDateCreated(new Date());
-					Context.openSession();
-					try {
-						Context.addProxyPrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
-						dao.saveAuditLog(auditLog);
-					}
-					finally {
-						Context.removeProxyPrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
-						Context.closeSession();
-					}
+					dao.saveAuditLog(auditLog);
 
 					Map<String, Object> doneData = new HashMap<String, Object>();
 					doneData.put("answer", chartAnswer.getAnswer());
@@ -338,6 +333,10 @@ public class ChartSearchAiRestController {
 								"Chart search failed. Please try again or contact your administrator.");
 					}
 				}
+				finally {
+					Context.removeProxyPrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+					Context.closeSession();
+				}
 			}
 		}, "chartsearchai-stream");
 		streamThread.setDaemon(true);
@@ -363,7 +362,7 @@ public class ChartSearchAiRestController {
 			patient = Context.getPatientService().getPatientByUuid(patientUuid);
 			if (patient == null) {
 				return new ResponseEntity<Object>(
-						errorResponse("Patient not found: " + patientUuid), HttpStatus.NOT_FOUND);
+						errorResponse("Patient not found"), HttpStatus.NOT_FOUND);
 			}
 		}
 

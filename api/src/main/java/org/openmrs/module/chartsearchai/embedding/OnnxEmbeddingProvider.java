@@ -45,6 +45,8 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 
 	@Override
 	public synchronized float[] embed(String text) {
+		Map<String, OnnxTensor> inputs = new HashMap<String, OnnxTensor>();
+		OrtSession.Result result = null;
 		try {
 			OrtSession ortSession = getSession();
 			WordPieceTokenizer wpTokenizer = getTokenizer();
@@ -56,12 +58,11 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 			long[][] attentionMaskArr = { tokenized.getAttentionMask() };
 			long[][] tokenTypeIdsArr = { tokenized.getTokenTypeIds() };
 
-			Map<String, OnnxTensor> inputs = new HashMap<String, OnnxTensor>();
 			inputs.put("input_ids", OnnxTensor.createTensor(env, inputIdsArr));
 			inputs.put("attention_mask", OnnxTensor.createTensor(env, attentionMaskArr));
 			inputs.put("token_type_ids", OnnxTensor.createTensor(env, tokenTypeIdsArr));
 
-			OrtSession.Result result = ortSession.run(inputs);
+			result = ortSession.run(inputs);
 
 			// Mean pooling over token embeddings (masked by attention)
 			float[][][] output = (float[][][]) result.get(0).getValue();
@@ -94,16 +95,23 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 				}
 			}
 
-			// Clean up tensors
-			for (OnnxTensor tensor : inputs.values()) {
-				tensor.close();
-			}
-			result.close();
-
 			return embedding;
 		}
 		catch (OrtException e) {
 			throw new RuntimeException("Failed to compute embedding", e);
+		}
+		finally {
+			if (result != null) {
+				try {
+					result.close();
+				}
+				catch (Exception e) {
+					log.warn("Error closing ONNX result", e);
+				}
+			}
+			for (OnnxTensor tensor : inputs.values()) {
+				tensor.close();
+			}
 		}
 	}
 

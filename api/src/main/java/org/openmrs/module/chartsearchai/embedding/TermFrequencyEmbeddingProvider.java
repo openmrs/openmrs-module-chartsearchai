@@ -30,7 +30,7 @@ public class TermFrequencyEmbeddingProvider implements EmbeddingProvider {
 			if (token.isEmpty()) {
 				continue;
 			}
-			int index = Math.abs(token.hashCode() % dimensions);
+			int index = (token.hashCode() & 0x7FFFFFFF) % dimensions;
 			embedding[index] += 1.0f;
 		}
 

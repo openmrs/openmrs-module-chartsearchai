@@ -56,6 +56,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.rateLimitPerMinute</property>
+		<defaultValue>10</defaultValue>
+		<description>Maximum number of AI chart search queries a single user can make per minute. Set to 0 to disable rate limiting.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.embedding.provider</property>
 		<defaultValue>term-frequency</defaultValue>
 		<description>Embedding provider for the embedding search mode: "term-frequency" (default hash-based vectors) or "onnx" (semantic vectors via all-MiniLM-L6-v2).</description>

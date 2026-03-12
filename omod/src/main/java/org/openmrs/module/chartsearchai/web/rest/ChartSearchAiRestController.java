@@ -118,6 +118,11 @@ public class ChartSearchAiRestController {
 
 		User user = Context.getAuthenticatedUser();
 
+		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
+		if (rateLimitError != null) {
+			return rateLimitError;
+		}
+
 		String searchMode = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_SEARCH_MODE);
 		if (searchMode == null || searchMode.trim().isEmpty()) {
@@ -237,6 +242,37 @@ public class ChartSearchAiRestController {
 		return new ResponseEntity<Object>(
 				errorResponse("Invalid request body. Expected JSON with 'patient' and 'question' fields."),
 				HttpStatus.BAD_REQUEST);
+	}
+
+	private ResponseEntity<Object> checkRateLimit(User user) {
+		int maxPerMinute = ChartSearchAiConstants.DEFAULT_RATE_LIMIT_PER_MINUTE;
+		String configured = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_RATE_LIMIT_PER_MINUTE);
+		if (configured != null && !configured.trim().isEmpty()) {
+			try {
+				maxPerMinute = Integer.parseInt(configured.trim());
+			}
+			catch (NumberFormatException e) {
+				log.warn("Invalid rate limit value '{}', using default", configured);
+			}
+		}
+
+		if (maxPerMinute <= 0) {
+			return null; // rate limiting disabled
+		}
+
+		Date oneMinuteAgo = new Date(System.currentTimeMillis() - 60000);
+		long recentCount = dao.getQueryCountByUserSince(user, oneMinuteAgo);
+
+		if (recentCount >= maxPerMinute) {
+			log.warn("Rate limit exceeded for user {} ({} queries in last minute)",
+					user.getUserId(), recentCount);
+			return new ResponseEntity<Object>(
+					errorResponse("Rate limit exceeded. Maximum " + maxPerMinute
+							+ " queries per minute."),
+					HttpStatus.TOO_MANY_REQUESTS);
+		}
+		return null;
 	}
 
 	/**

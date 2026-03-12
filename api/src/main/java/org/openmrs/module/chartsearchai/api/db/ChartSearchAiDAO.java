@@ -35,4 +35,9 @@ public interface ChartSearchAiDAO {
 			Integer startIndex, Integer limit);
 
 	Long getAuditLogCount(Patient patient, User user, Date fromDate, Date toDate);
+
+	/**
+	 * Count the number of queries made by a user since the given time.
+	 */
+	long getQueryCountByUserSince(User user, Date since);
 }

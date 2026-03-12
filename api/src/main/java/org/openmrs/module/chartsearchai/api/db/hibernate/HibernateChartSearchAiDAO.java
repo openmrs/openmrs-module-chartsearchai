@@ -93,6 +93,16 @@ public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 		return (Long) query.uniqueResult();
 	}
 
+	@Override
+	public long getQueryCountByUserSince(User user, Date since) {
+		Long count = (Long) sessionFactory.getCurrentSession()
+				.createQuery("select count(*) from ChartSearchAuditLog where user = :user and dateCreated >= :since")
+				.setParameter("user", user)
+				.setParameter("since", since)
+				.uniqueResult();
+		return count != null ? count : 0;
+	}
+
 	private Query buildAuditLogQuery(String select, Patient patient, User user, Date fromDate, Date toDate) {
 		StringBuilder hql = new StringBuilder(select);
 		hql.append(" where 1=1");

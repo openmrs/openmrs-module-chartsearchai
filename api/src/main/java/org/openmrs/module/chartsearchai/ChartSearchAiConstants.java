@@ -46,6 +46,10 @@ public class ChartSearchAiConstants {
 
 	public static final int DEFAULT_MAX_TOKENS = 2048;
 
+	public static final String GP_RATE_LIMIT_PER_MINUTE = "chartsearchai.rateLimitPerMinute";
+
+	public static final int DEFAULT_RATE_LIMIT_PER_MINUTE = 10;
+
 	/**
 	 * Resolves a model path relative to the OpenMRS application data directory.
 	 * Rejects paths containing ".." to prevent path traversal and verifies the

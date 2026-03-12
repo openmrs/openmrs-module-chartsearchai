@@ -9,10 +9,13 @@
  */
 package org.openmrs.module.chartsearchai.serializer;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,6 +76,18 @@ public class PatientRecordLoaderTest extends BaseModuleContextSensitiveTest {
 			assertFalse(record.getText().trim().isEmpty(),
 					"No record should have empty text");
 		}
+	}
+
+	@Test
+	public void loadAll_shouldNotReturnDuplicateTextContent() {
+		List<SerializedRecord> records = recordLoader.loadAll(patient);
+
+		Set<String> seenText = new HashSet<String>();
+		for (SerializedRecord record : records) {
+			assertTrue(seenText.add(record.getText()),
+					"Duplicate text found: " + record.getText());
+		}
+		assertEquals(records.size(), seenText.size());
 	}
 
 	@Test

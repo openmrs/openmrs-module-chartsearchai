@@ -180,8 +180,8 @@ The `UNIQUE KEY (resource_type, resource_id)` constraint prevents duplicate embe
 ### Decision
 
 Two modes:
-- **Batch**: Full patient re-index on first query or via nightly scheduled task. Deletes existing embeddings and re-creates from current chart state.
-- **Incremental**: On encounter save (via OpenMRS event system), index only the new/updated encounter's records using upsert. Avoids re-indexing the entire patient for each data change.
+- **Backfill**: A one-time scheduled task (`EmbeddingIndexTask`) indexes all patients that don't yet have embeddings. This handles initial population when the module is installed on a system with existing patient data. The task skips already-indexed patients, so it is safe to re-run and picks up where it left off if stopped. Admins trigger it from the scheduler UI; it does not run automatically.
+- **Incremental**: On encounter save (via AOP advice on `EncounterService`), index only the new/updated encounter's observations and diagnoses using upsert. Avoids re-indexing the entire patient for each data change.
 
 ## Decision 9: Text serialization — ClinicalTextSerializer pattern
 

@@ -22,13 +22,13 @@ The `.omod` file is in `omod/target/`.
 
 Download Llama 3.2 3B (Q4_K_M quantization) in GGUF format (~2GB) from [Hugging Face](https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF).
 
-Place the `.gguf` file somewhere accessible on the server (e.g., `/opt/openmrs/models/`).
+Place the `.gguf` file somewhere accessible on the server (e.g., `&lt;openmrs-application-data-directory&gt;/chartsearchai/`).
 
 ### 3. Download the embedding model (optional)
 
 If you plan to use the embedding search mode with semantic vectors, download the all-MiniLM-L6-v2 ONNX model (~90MB) from [Hugging Face](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2). You need the `model.onnx` file from the repository.
 
-Place it alongside the LLM model (e.g., `/opt/openmrs/models/all-MiniLM-L6-v2.onnx`).
+Place it alongside the LLM model (e.g., `&lt;openmrs-application-data-directory&gt;/chartsearchai/all-MiniLM-L6-v2.onnx`).
 
 This is not required if you use the default `llm` search mode or the `term-frequency` embedding provider.
 

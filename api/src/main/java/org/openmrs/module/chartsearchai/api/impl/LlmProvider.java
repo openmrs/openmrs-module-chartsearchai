@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.function.Consumer;
+
 import de.kherud.llama.InferenceParameters;
 import de.kherud.llama.LlamaModel;
 import de.kherud.llama.LlamaOutput;
@@ -70,6 +72,47 @@ public class LlmProvider {
 						+ ChartSearchAiConstants.GP_LLM_TIMEOUT_SECONDS);
 			}
 			result.append(output);
+		}
+
+		return result.toString();
+	}
+
+	/**
+	 * Streaming variant of {@link #ask}. Calls the tokenConsumer for each token as it is
+	 * generated, and returns the full response when complete.
+	 *
+	 * @param numberedRecords the numbered patient records text
+	 * @param question the clinician's natural language question
+	 * @param tokenConsumer called with each token fragment as it is generated
+	 * @return the complete LLM response
+	 * @throws APIException if the request exceeds the configured timeout
+	 */
+	public synchronized String askStreaming(String numberedRecords, String question,
+			Consumer<String> tokenConsumer) {
+		LlamaModel llm = getModel();
+
+		String prompt = SYSTEM_PROMPT + "\n\n"
+				+ "Patient records:\n" + numberedRecords + "\n"
+				+ "Question: " + question;
+
+		int timeoutSeconds = getTimeoutSeconds();
+		InferenceParameters params = new InferenceParameters(prompt)
+				.setTemperature(0.1f)
+				.setNPredict(ChartSearchAiConstants.DEFAULT_MAX_TOKENS);
+
+		long deadline = System.currentTimeMillis() + (timeoutSeconds * 1000L);
+		StringBuilder result = new StringBuilder();
+
+		for (LlamaOutput output : llm.generate(params)) {
+			if (System.currentTimeMillis() > deadline) {
+				log.warn("LLM inference timed out after {} seconds", timeoutSeconds);
+				throw new APIException("LLM inference timed out after " + timeoutSeconds
+						+ " seconds. Try a more specific question or increase the timeout via "
+						+ ChartSearchAiConstants.GP_LLM_TIMEOUT_SECONDS);
+			}
+			String token = output.toString();
+			result.append(token);
+			tokenConsumer.accept(token);
 		}
 
 		return result.toString();

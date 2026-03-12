@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Consumer;
 
 import org.openmrs.Patient;
 import org.slf4j.Logger;
@@ -67,6 +68,30 @@ public class EmbeddingSearchService implements ChartSearchService {
 
 		log.debug("Sending {} retrieved records to LLM", references.size());
 		String response = llmProvider.ask(sb.toString(), question);
+
+		List<RecordReference> citedReferences = LlmInferenceService.filterCitedReferences(
+				response, references);
+
+		return new ChartAnswer(response, citedReferences);
+	}
+
+	@Override
+	public ChartAnswer askStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer) {
+		List<ChartEmbedding> results = search(patient, question,
+				ChartSearchAiConstants.DEFAULT_RETRIEVAL_TOP_K);
+
+		List<RecordReference> references = new ArrayList<RecordReference>();
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < results.size(); i++) {
+			ChartEmbedding ce = results.get(i);
+			int index = i + 1;
+			sb.append("[").append(index).append("] ").append(ce.getTextContent()).append("\n");
+			references.add(new RecordReference(index, ce.getResourceType(), ce.getResourceId()));
+		}
+
+		log.debug("Streaming {} retrieved records to LLM", references.size());
+		String response = llmProvider.askStreaming(sb.toString(), question, tokenConsumer);
 
 		List<RecordReference> citedReferences = LlmInferenceService.filterCitedReferences(
 				response, references);

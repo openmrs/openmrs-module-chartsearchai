@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.function.Consumer;
+
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -49,5 +51,20 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 
 		log.debug("Using LLM inference search mode");
 		return llmService.ask(patient, question);
+	}
+
+	@Override
+	public ChartAnswer askStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer) {
+		String mode = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_SEARCH_MODE);
+
+		if (ChartSearchAiConstants.SEARCH_MODE_EMBEDDING.equalsIgnoreCase(mode)) {
+			log.debug("Using embedding search mode (streaming)");
+			return embeddingService.askStreaming(patient, question, tokenConsumer);
+		}
+
+		log.debug("Using LLM inference search mode (streaming)");
+		return llmService.askStreaming(patient, question, tokenConsumer);
 	}
 }

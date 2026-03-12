@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,6 +49,20 @@ public class LlmInferenceService implements ChartSearchService {
 		log.debug("Sending full chart to LLM ({} records)", chart.getReferences().size());
 
 		String response = llmProvider.ask(chart.getText(), question);
+
+		List<RecordReference> citedReferences = filterCitedReferences(
+				response, chart.getReferences());
+
+		return new ChartAnswer(response, citedReferences);
+	}
+
+	@Override
+	public ChartAnswer askStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer) {
+		PatientChart chart = chartSerializer.serialize(patient);
+		log.debug("Streaming full chart to LLM ({} records)", chart.getReferences().size());
+
+		String response = llmProvider.askStreaming(chart.getText(), question, tokenConsumer);
 
 		List<RecordReference> citedReferences = filterCitedReferences(
 				response, chart.getReferences());

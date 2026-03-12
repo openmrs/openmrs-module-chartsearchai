@@ -51,6 +51,10 @@ Set these global properties in **Admin > Settings**:
 
 Assign the **"AI Query Patient Data"** privilege to users or roles that should have access.
 
+### 7. Backfill embeddings (embedding mode only)
+
+If you set `chartsearchai.searchMode` to `embedding` on a system with existing patient data, you need to build the initial embedding index. Go to **Admin > Scheduler > Manage Scheduler** and run the **"Chart Search AI - Embedding Backfill"** task. It indexes only patients that don't have embeddings yet, so it's safe to re-run. After the initial backfill, new data is indexed automatically when encounters are saved.
+
 ## Usage
 
 ```

@@ -50,6 +50,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.llm.systemPrompt</property>
+		<defaultValue></defaultValue>
+		<description>Custom system prompt sent to the LLM before patient records and the question. If empty, uses the built-in default which instructs the model to act as a clinical assistant, answer from records only, and cite by number. Customize this to adjust the LLM's behavior, tone, or citation format.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.llm.timeoutSeconds</property>
 		<defaultValue>120</defaultValue>
 		<description>Maximum number of seconds to wait for the LLM to generate a response before timing out.</description>

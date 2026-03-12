@@ -42,6 +42,8 @@ public class ChartSearchAiConstants {
 
 	public static final int DEFAULT_RETRIEVAL_TOP_K = 15;
 
+	public static final String GP_SYSTEM_PROMPT = "chartsearchai.llm.systemPrompt";
+
 	public static final String GP_LLM_TIMEOUT_SECONDS = "chartsearchai.llm.timeoutSeconds";
 
 	public static final int DEFAULT_LLM_TIMEOUT_SECONDS = 120;

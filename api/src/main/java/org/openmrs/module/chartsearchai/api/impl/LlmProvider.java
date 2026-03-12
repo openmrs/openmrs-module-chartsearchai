@@ -33,7 +33,7 @@ public class LlmProvider {
 
 	private static final Logger log = LoggerFactory.getLogger(LlmProvider.class);
 
-	private static final String SYSTEM_PROMPT = "You are a clinical assistant helping a clinician "
+	static final String DEFAULT_SYSTEM_PROMPT = "You are a clinical assistant helping a clinician "
 			+ "review a patient's chart. Answer the question using only the patient records below. "
 			+ "Cite records by number in brackets (e.g. [1], [3]). "
 			+ "If the records do not contain enough information to answer, say so.";
@@ -52,10 +52,7 @@ public class LlmProvider {
 	public synchronized String ask(String numberedRecords, String question) {
 		LlamaModel llm = getModel();
 
-		String prompt = SYSTEM_PROMPT + "\n\n"
-				+ "Patient records:\n" + numberedRecords + "\n"
-				+ "Question: " + question;
-
+		String prompt = buildPrompt(numberedRecords, question);
 		int timeoutSeconds = getTimeoutSeconds();
 		InferenceParameters params = new InferenceParameters(prompt)
 				.setTemperature(0.1f)
@@ -91,10 +88,7 @@ public class LlmProvider {
 			Consumer<String> tokenConsumer) {
 		LlamaModel llm = getModel();
 
-		String prompt = SYSTEM_PROMPT + "\n\n"
-				+ "Patient records:\n" + numberedRecords + "\n"
-				+ "Question: " + question;
-
+		String prompt = buildPrompt(numberedRecords, question);
 		int timeoutSeconds = getTimeoutSeconds();
 		InferenceParameters params = new InferenceParameters(prompt)
 				.setTemperature(0.1f)
@@ -124,6 +118,21 @@ public class LlmProvider {
 			model.close();
 			model = null;
 		}
+	}
+
+	private String buildPrompt(String numberedRecords, String question) {
+		return getSystemPrompt() + "\n\n"
+				+ "Patient records:\n" + numberedRecords + "\n"
+				+ "Question: " + question;
+	}
+
+	private String getSystemPrompt() {
+		String value = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_SYSTEM_PROMPT);
+		if (value != null && !value.trim().isEmpty()) {
+			return value.trim();
+		}
+		return DEFAULT_SYSTEM_PROMPT;
 	}
 
 	private int getTimeoutSeconds() {

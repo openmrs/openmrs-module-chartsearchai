@@ -24,11 +24,19 @@ Download Llama 3.2 3B (Q4_K_M quantization) in GGUF format (~2GB) from [Hugging 
 
 Place the `.gguf` file somewhere accessible on the server (e.g., `/opt/openmrs/models/`).
 
-### 3. Install
+### 3. Download the embedding model (optional)
+
+If you plan to use the embedding search mode with semantic vectors, download the all-MiniLM-L6-v2 ONNX model (~90MB) from [Hugging Face](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2). You need the `model.onnx` file from the repository.
+
+Place it alongside the LLM model (e.g., `/opt/openmrs/models/all-MiniLM-L6-v2.onnx`).
+
+This is not required if you use the default `llm` search mode or the `term-frequency` embedding provider.
+
+### 4. Install
 
 Upload the `.omod` file via **Admin > Manage Modules** in OpenMRS.
 
-### 4. Configure
+### 5. Configure
 
 Set these global properties in **Admin > Settings**:
 
@@ -39,7 +47,7 @@ Set these global properties in **Admin > Settings**:
 | `chartsearchai.embedding.provider` | No | `term-frequency` (default) or `onnx` |
 | `chartsearchai.embedding.modelPath` | Only if using `onnx` | Path to the ONNX embedding model file |
 
-### 5. Grant privilege
+### 6. Grant privilege
 
 Assign the **"AI Query Patient Data"** privilege to users or roles that should have access.
 

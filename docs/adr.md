@@ -424,13 +424,53 @@ These require either hardware beyond current low-resource constraints or an exte
 
 Direct image interpretation is deferred to future work, pending either capable multimodal models that run on CPU within low-resource constraints, or a decision to support optional cloud API integration for sites that have connectivity and consent to external processing.
 
+## Decision 11: REST API and guardrails
+
+### REST endpoint
+
+The module exposes a single REST endpoint for chart search queries:
+
+```
+POST /ws/rest/v1/chartsearchai/search
+{
+  "patientUuid": "patient-uuid-here",
+  "question": "What medications is this patient on?"
+}
+```
+
+Response:
+```json
+{
+  "answer": "The patient is currently on...[1]...[3]",
+  "disclaimer": "This response is AI-generated and may not be accurate...",
+  "references": [
+    { "index": 1, "resourceType": "obs", "resourceId": 456 },
+    { "index": 3, "resourceType": "order", "resourceId": 789 }
+  ]
+}
+```
+
+The endpoint requires the `AI Query Patient Data` privilege and is registered under the OpenMRS `webservices.rest` module namespace.
+
+### Guardrails
+
+- **Input validation**: Patient UUID and question are required. Questions are limited to 1000 characters.
+- **AI disclaimer**: Every response includes a disclaimer stating the output is AI-generated and not a substitute for clinical judgment.
+- **Database audit logging**: Every query is recorded in the `chartsearchai_audit_log` table with:
+  - The authenticated user and patient
+  - The question asked and the LLM's response
+  - The number of source references returned
+  - The search mode used (`llm` or `embedding`)
+  - Response time in milliseconds
+  - Timestamp
+
+  This audit trail supports compliance review (who queried which patient's data and what the AI responded) and performance comparison between search modes.
+
 ## Planned future work
 
 - Add concept graph traversal as a complement to embedding search
 - Add pre-computed summaries for common queries
 - Agent/tool-use pattern for complex multi-step questions (when better local models are available)
 - Unstructured data / image OCR (photos of paper forms)
-- REST API endpoints for querying
-- Guardrail validation and audit logging
 - Proper WordPiece tokenizer for OnnxEmbeddingProvider (currently uses hash-based token approximation)
 - Evaluate whether to keep both search modes or drop one after comparison testing

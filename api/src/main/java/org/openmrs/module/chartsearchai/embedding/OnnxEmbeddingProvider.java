@@ -9,7 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.embedding;
 
-import java.nio.LongBuffer;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -20,6 +20,7 @@ import ai.onnxruntime.OrtSession;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.embedding.WordPieceTokenizer.TokenizedInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -34,45 +35,26 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 
 	private static final Logger log = LoggerFactory.getLogger(OnnxEmbeddingProvider.class);
 
+	private static final int MAX_SEQUENCE_LENGTH = 256;
+
 	private OrtEnvironment env;
 
 	private OrtSession session;
+
+	private WordPieceTokenizer tokenizer;
 
 	@Override
 	public synchronized float[] embed(String text) {
 		try {
 			OrtSession ortSession = getSession();
+			WordPieceTokenizer wpTokenizer = getTokenizer();
 
-			// Simple whitespace tokenization with padding — a proper tokenizer
-			// (WordPiece) should replace this for production use
-			String[] words = text.toLowerCase().split("\\s+");
-			int maxLen = Math.min(words.length, 256);
+			TokenizedInput tokenized = wpTokenizer.tokenize(text);
+			int seqLen = tokenized.getLength();
 
-			long[] inputIds = new long[maxLen];
-			long[] attentionMask = new long[maxLen];
-			long[] tokenTypeIds = new long[maxLen];
-
-			// CLS token
-			inputIds[0] = 101;
-			attentionMask[0] = 1;
-			tokenTypeIds[0] = 0;
-
-			for (int i = 1; i < maxLen - 1 && i < words.length; i++) {
-				inputIds[i] = Math.abs(words[i].hashCode() % 30000) + 1000;
-				attentionMask[i] = 1;
-				tokenTypeIds[i] = 0;
-			}
-
-			// SEP token
-			if (maxLen > 1) {
-				inputIds[maxLen - 1] = 102;
-				attentionMask[maxLen - 1] = 1;
-				tokenTypeIds[maxLen - 1] = 0;
-			}
-
-			long[][] inputIdsArr = { inputIds };
-			long[][] attentionMaskArr = { attentionMask };
-			long[][] tokenTypeIdsArr = { tokenTypeIds };
+			long[][] inputIdsArr = { tokenized.getInputIds() };
+			long[][] attentionMaskArr = { tokenized.getAttentionMask() };
+			long[][] tokenTypeIdsArr = { tokenized.getTokenTypeIds() };
 
 			Map<String, OnnxTensor> inputs = new HashMap<String, OnnxTensor>();
 			inputs.put("input_ids", OnnxTensor.createTensor(env, inputIdsArr));
@@ -81,11 +63,12 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 
 			OrtSession.Result result = ortSession.run(inputs);
 
-			// Mean pooling over token embeddings
+			// Mean pooling over token embeddings (masked by attention)
 			float[][][] output = (float[][][]) result.get(0).getValue();
 			float[] embedding = new float[ChartSearchAiConstants.EMBEDDING_DIMENSIONS];
+			long[] attentionMask = tokenized.getAttentionMask();
 			int tokenCount = 0;
-			for (int i = 0; i < maxLen; i++) {
+			for (int i = 0; i < seqLen; i++) {
 				if (attentionMask[i] == 1) {
 					for (int j = 0; j < embedding.length; j++) {
 						embedding[j] += output[0][i][j];
@@ -139,6 +122,7 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 				log.warn("Error closing ONNX session", e);
 			}
 			session = null;
+			tokenizer = null;
 			env = null;
 		}
 	}
@@ -160,5 +144,29 @@ public class OnnxEmbeddingProvider implements EmbeddingProvider {
 			log.info("ONNX embedding model loaded successfully");
 		}
 		return session;
+	}
+
+	private synchronized WordPieceTokenizer getTokenizer() {
+		if (tokenizer == null) {
+			String configuredPath = Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_VOCAB_FILE_PATH);
+			if (configuredPath == null || configuredPath.trim().isEmpty()) {
+				throw new IllegalStateException(
+						"Embedding vocabulary path not configured. Set the global property: "
+								+ ChartSearchAiConstants.GP_EMBEDDING_VOCAB_FILE_PATH);
+			}
+			String vocabPath = ChartSearchAiConstants.resolveModelPath(
+					configuredPath.trim(), ChartSearchAiConstants.GP_EMBEDDING_VOCAB_FILE_PATH);
+			log.info("Loading WordPiece vocabulary from {}", vocabPath);
+			try {
+				tokenizer = new WordPieceTokenizer(vocabPath, MAX_SEQUENCE_LENGTH);
+			}
+			catch (IOException e) {
+				throw new IllegalStateException("Failed to load WordPiece vocabulary from "
+						+ vocabPath, e);
+			}
+			log.info("WordPiece vocabulary loaded successfully");
+		}
+		return tokenizer;
 	}
 }

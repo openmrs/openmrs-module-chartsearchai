@@ -69,6 +69,8 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator {
 			if (ChartSearchAiConstants.EMBEDDING_PROVIDER_ONNX.equals(embeddingProvider)) {
 				validateModelFile(ChartSearchAiConstants.GP_EMBEDDING_MODEL_FILE_PATH,
 						"ONNX embedding");
+				validateModelFile(ChartSearchAiConstants.GP_EMBEDDING_VOCAB_FILE_PATH,
+						"WordPiece vocabulary");
 			}
 		}
 	}

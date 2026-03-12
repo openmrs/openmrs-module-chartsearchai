@@ -73,6 +73,12 @@
 		<description>Relative path, including the filename, within the OpenMRS application data directory to the ONNX embedding model file. Required only when chartsearchai.embedding.provider is set to "onnx". Example: chartsearchai/all-MiniLM-L6-v2.onnx (resolves to &lt;application-data-directory&gt;/chartsearchai/all-MiniLM-L6-v2.onnx). Download the model.onnx file from https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2 and rename it. Path traversal (e.g. "..") is not allowed.</description>
 	</globalProperty>
 
+	<globalProperty>
+		<property>chartsearchai.embedding.vocabFilePath</property>
+		<defaultValue></defaultValue>
+		<description>Relative path, including the filename, within the OpenMRS application data directory to the WordPiece vocabulary file (vocab.txt) for the ONNX embedding model. Required only when chartsearchai.embedding.provider is set to "onnx". Example: chartsearchai/vocab.txt (resolves to &lt;application-data-directory&gt;/chartsearchai/vocab.txt). Download vocab.txt from the same model repository as the ONNX model (e.g. https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2). Path traversal (e.g. "..") is not allowed.</description>
+	</globalProperty>
+
 	<!-- AOP -->
 	<advice>
 		<point>org.openmrs.api.EncounterService</point>

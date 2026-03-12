@@ -12,6 +12,10 @@
 	<updateURL>https://modules.openmrs.org/modules/download/${project.parent.artifactId}/update.rdf</updateURL>
 	<require_version>${openmrsPlatformVersion}</require_version>
 
+	<require_modules>
+		<require_module version="2.44.0">org.openmrs.module.webservices.rest</require_module>
+	</require_modules>
+
 	<!-- Module Activator -->
 	<activator>org.openmrs.module.chartsearchai.ChartSearchAiModuleActivator</activator>
 

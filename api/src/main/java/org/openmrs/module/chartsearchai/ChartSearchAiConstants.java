@@ -13,6 +13,8 @@ public class ChartSearchAiConstants {
 
 	public static final String PRIV_QUERY_PATIENT_DATA = "AI Query Patient Data";
 
+	public static final String PRIV_VIEW_AUDIT_LOGS = "View AI Audit Logs";
+
 	public static final String GP_EMBEDDING_MODEL_PATH = "chartsearchai.embedding.modelPath";
 
 	public static final String GP_LLM_MODEL_PATH = "chartsearchai.llm.modelPath";

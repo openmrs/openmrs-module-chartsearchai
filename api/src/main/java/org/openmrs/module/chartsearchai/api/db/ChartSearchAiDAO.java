@@ -9,9 +9,11 @@
  */
 package org.openmrs.module.chartsearchai.api.db;
 
+import java.util.Date;
 import java.util.List;
 
 import org.openmrs.Patient;
+import org.openmrs.User;
 import org.openmrs.module.chartsearchai.model.ChartEmbedding;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 
@@ -28,4 +30,9 @@ public interface ChartSearchAiDAO {
 	ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog);
 
 	List<Integer> getIndexedPatientIds();
+
+	List<ChartSearchAuditLog> getAuditLogs(Patient patient, User user, Date fromDate, Date toDate,
+			Integer startIndex, Integer limit);
+
+	Long getAuditLogCount(Patient patient, User user, Date fromDate, Date toDate);
 }

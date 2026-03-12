@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
@@ -149,6 +150,66 @@ public class ChartSearchAiRestController {
 			refs.add(refMap);
 		}
 		response.put("references", refs);
+
+		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> getAuditLogs(
+			@RequestParam(value = "patientUuid", required = false) String patientUuid,
+			@RequestParam(value = "userUuid", required = false) String userUuid,
+			@RequestParam(value = "fromDate", required = false) Long fromDateMs,
+			@RequestParam(value = "toDate", required = false) Long toDateMs,
+			@RequestParam(value = "startIndex", required = false) Integer startIndex,
+			@RequestParam(value = "limit", required = false) Integer limit) {
+
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_VIEW_AUDIT_LOGS);
+
+		Patient patient = null;
+		if (patientUuid != null && !patientUuid.trim().isEmpty()) {
+			patient = Context.getPatientService().getPatientByUuid(patientUuid);
+			if (patient == null) {
+				return new ResponseEntity<Object>(
+						errorResponse("Patient not found: " + patientUuid), HttpStatus.NOT_FOUND);
+			}
+		}
+
+		User user = null;
+		if (userUuid != null && !userUuid.trim().isEmpty()) {
+			user = Context.getUserService().getUserByUuid(userUuid);
+			if (user == null) {
+				return new ResponseEntity<Object>(
+						errorResponse("User not found: " + userUuid), HttpStatus.NOT_FOUND);
+			}
+		}
+
+		Date fromDate = fromDateMs != null ? new Date(fromDateMs) : null;
+		Date toDate = toDateMs != null ? new Date(toDateMs) : null;
+
+		List<ChartSearchAuditLog> logs = dao.getAuditLogs(patient, user, fromDate, toDate,
+				startIndex, limit);
+		Long totalCount = dao.getAuditLogCount(patient, user, fromDate, toDate);
+
+		List<Map<String, Object>> results = new ArrayList<Map<String, Object>>();
+		for (ChartSearchAuditLog auditLog : logs) {
+			Map<String, Object> entry = new HashMap<String, Object>();
+			entry.put("auditLogId", auditLog.getAuditLogId());
+			entry.put("userUuid", auditLog.getUser().getUuid());
+			entry.put("username", auditLog.getUser().getUsername());
+			entry.put("patientUuid", auditLog.getPatient().getUuid());
+			entry.put("question", auditLog.getQuestion());
+			entry.put("answer", auditLog.getAnswer());
+			entry.put("referenceCount", auditLog.getReferenceCount());
+			entry.put("searchMode", auditLog.getSearchMode());
+			entry.put("responseTimeMs", auditLog.getResponseTimeMs());
+			entry.put("dateCreated", auditLog.getDateCreated().getTime());
+			results.add(entry);
+		}
+
+		Map<String, Object> response = new HashMap<String, Object>();
+		response.put("results", results);
+		response.put("totalCount", totalCount);
 
 		return new ResponseEntity<Object>(response, HttpStatus.OK);
 	}

@@ -80,6 +80,16 @@ Response:
 }
 ```
 
+### Audit log
+
+Requires the **"View AI Audit Logs"** privilege.
+
+```
+GET /ws/rest/v1/chartsearchai/auditlog?patientUuid=...&userUuid=...&fromDate=...&toDate=...&startIndex=0&limit=50
+```
+
+All query parameters are optional. `fromDate` and `toDate` are epoch milliseconds. Returns paginated results ordered by most recent first, with a `totalCount` for pagination.
+
 ## Architecture
 
 See [docs/adr.md](docs/adr.md) for architectural decisions and design rationale.

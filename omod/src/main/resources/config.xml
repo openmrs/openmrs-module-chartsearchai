@@ -31,6 +31,11 @@
 		<description>Allows querying patient charts using the AI-powered chart search</description>
 	</privilege>
 
+	<privilege>
+		<name>View AI Audit Logs</name>
+		<description>Allows viewing the audit log of AI chart search queries</description>
+	</privilege>
+
 	<!-- Global Properties -->
 	<globalProperty>
 		<property>chartsearchai.searchMode</property>

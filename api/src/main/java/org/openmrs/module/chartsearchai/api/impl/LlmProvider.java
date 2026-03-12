@@ -54,9 +54,7 @@ public class LlmProvider {
 
 		String prompt = buildPrompt(numberedRecords, question);
 		int timeoutSeconds = getTimeoutSeconds();
-		InferenceParameters params = new InferenceParameters(prompt)
-				.setTemperature(0.1f)
-				.setNPredict(ChartSearchAiConstants.DEFAULT_MAX_TOKENS);
+		InferenceParameters params = createInferenceParameters(prompt);
 
 		long deadline = System.currentTimeMillis() + (timeoutSeconds * 1000L);
 		StringBuilder result = new StringBuilder();
@@ -90,9 +88,7 @@ public class LlmProvider {
 
 		String prompt = buildPrompt(numberedRecords, question);
 		int timeoutSeconds = getTimeoutSeconds();
-		InferenceParameters params = new InferenceParameters(prompt)
-				.setTemperature(0.1f)
-				.setNPredict(ChartSearchAiConstants.DEFAULT_MAX_TOKENS);
+		InferenceParameters params = createInferenceParameters(prompt);
 
 		long deadline = System.currentTimeMillis() + (timeoutSeconds * 1000L);
 		StringBuilder result = new StringBuilder();
@@ -120,13 +116,22 @@ public class LlmProvider {
 		}
 	}
 
-	private String buildPrompt(String numberedRecords, String question) {
+	private InferenceParameters createInferenceParameters(String prompt) {
+		return new InferenceParameters(prompt)
+				.setTemperature(0.1f)
+				.setNPredict(ChartSearchAiConstants.DEFAULT_MAX_TOKENS)
+				.setRepeatPenalty(1.1f)
+				.setRepeatLastN(256)
+				.setFrequencyPenalty(0.1f);
+	}
+
+	protected String buildPrompt(String numberedRecords, String question) {
 		return getSystemPrompt() + "\n\n"
 				+ "Patient records:\n" + numberedRecords + "\n"
 				+ "Question: " + question;
 	}
 
-	private String getSystemPrompt() {
+	protected String getSystemPrompt() {
 		String value = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_SYSTEM_PROMPT);
 		if (value != null && !value.trim().isEmpty()) {
@@ -135,7 +140,7 @@ public class LlmProvider {
 		return DEFAULT_SYSTEM_PROMPT;
 	}
 
-	private int getTimeoutSeconds() {
+	protected int getTimeoutSeconds() {
 		String value = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_LLM_TIMEOUT_SECONDS);
 		if (value != null && !value.trim().isEmpty()) {

@@ -72,7 +72,7 @@ public class EncounterIndexingAdvice implements AfterReturningAdvice {
 		}
 	}
 
-	private Patient getPatientFromArgs(Object returnValue, Object[] args) {
+	Patient getPatientFromArgs(Object returnValue, Object[] args) {
 		if (returnValue instanceof Encounter) {
 			return ((Encounter) returnValue).getPatient();
 		}

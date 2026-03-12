@@ -62,7 +62,7 @@ public class ObsIndexingAdvice implements AfterReturningAdvice {
 		}
 	}
 
-	private Patient getPatientFromArgs(Object returnValue, Object[] args) {
+	Patient getPatientFromArgs(Object returnValue, Object[] args) {
 		if (returnValue instanceof Obs) {
 			return ((Obs) returnValue).getPerson() instanceof Patient
 					? (Patient) ((Obs) returnValue).getPerson() : null;

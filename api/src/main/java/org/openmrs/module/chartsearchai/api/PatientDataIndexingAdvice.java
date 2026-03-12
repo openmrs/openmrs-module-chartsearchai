@@ -50,19 +50,7 @@ public class PatientDataIndexingAdvice implements AfterReturningAdvice {
 	public void afterReturning(Object returnValue, Method method, Object[] args, Object target) {
 		String methodName = method.getName();
 
-		Patient patient = null;
-
-		if (CONDITION_METHODS.contains(methodName) && args.length > 0 && args[0] instanceof Condition) {
-			patient = ((Condition) args[0]).getPatient();
-		} else if (ALLERGY_METHODS.contains(methodName)) {
-			if (args.length > 0 && args[0] instanceof Patient) {
-				patient = (Patient) args[0];
-			} else if (args.length > 0 && args[0] instanceof Allergy) {
-				patient = ((Allergy) args[0]).getPatient();
-			}
-		} else if (ORDER_METHODS.contains(methodName) && args.length > 0 && args[0] instanceof Order) {
-			patient = ((Order) args[0]).getPatient();
-		}
+		Patient patient = extractPatient(methodName, args);
 
 		if (patient == null) {
 			return;
@@ -83,5 +71,20 @@ public class PatientDataIndexingAdvice implements AfterReturningAdvice {
 			log.error("Failed to re-index patient [id={}] after {} call",
 					patient.getPatientId(), methodName, e);
 		}
+	}
+
+	Patient extractPatient(String methodName, Object[] args) {
+		if (CONDITION_METHODS.contains(methodName) && args.length > 0 && args[0] instanceof Condition) {
+			return ((Condition) args[0]).getPatient();
+		} else if (ALLERGY_METHODS.contains(methodName)) {
+			if (args.length > 0 && args[0] instanceof Patient) {
+				return (Patient) args[0];
+			} else if (args.length > 0 && args[0] instanceof Allergy) {
+				return ((Allergy) args[0]).getPatient();
+			}
+		} else if (ORDER_METHODS.contains(methodName) && args.length > 0 && args[0] instanceof Order) {
+			return ((Order) args[0]).getPatient();
+		}
+		return null;
 	}
 }

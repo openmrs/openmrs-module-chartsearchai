@@ -10,7 +10,9 @@
 package org.openmrs.module.chartsearchai.serializer;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.openmrs.Allergy;
 import org.openmrs.Condition;
@@ -49,6 +51,7 @@ public class PatientRecordLoader {
 	 */
 	public List<SerializedRecord> loadAll(Patient patient) {
 		List<SerializedRecord> records = new ArrayList<SerializedRecord>();
+		Set<String> seenText = new HashSet<String>();
 
 		// Observations (top-level only — group members are inlined by serializer)
 		for (Obs obs : Context.getObsService().getObservationsByPerson(patient)) {
@@ -56,7 +59,7 @@ public class PatientRecordLoader {
 				continue;
 			}
 			String text = obsSerializer.toText(obs);
-			if (text != null && !text.trim().isEmpty()) {
+			if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
 				records.add(new SerializedRecord("obs", obs.getObsId(), text));
 			}
 		}
@@ -64,7 +67,7 @@ public class PatientRecordLoader {
 		// Conditions
 		for (Condition condition : Context.getConditionService().getActiveConditions(patient)) {
 			String text = conditionSerializer.toText(condition);
-			if (text != null && !text.trim().isEmpty()) {
+			if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
 				records.add(new SerializedRecord("condition", condition.getConditionId(), text));
 			}
 		}
@@ -72,7 +75,7 @@ public class PatientRecordLoader {
 		// Allergies
 		for (Allergy allergy : Context.getPatientService().getAllergies(patient)) {
 			String text = allergySerializer.toText(allergy);
-			if (text != null && !text.trim().isEmpty()) {
+			if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
 				records.add(new SerializedRecord("allergy", allergy.getAllergyId(), text));
 			}
 		}
@@ -80,7 +83,7 @@ public class PatientRecordLoader {
 		// Orders
 		for (Order order : Context.getOrderService().getAllOrdersByPatient(patient)) {
 			String text = orderSerializer.toText(order);
-			if (text != null && !text.trim().isEmpty()) {
+			if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
 				records.add(new SerializedRecord("order", order.getOrderId(), text));
 			}
 		}

@@ -55,6 +55,9 @@
 			<column name="question" type="text">
 				<constraints nullable="false"/>
 			</column>
+			<column name="answer" type="text">
+				<constraints nullable="false"/>
+			</column>
 			<column name="reference_count" type="int"/>
 			<column name="date_created" type="datetime">
 				<constraints nullable="false"/>

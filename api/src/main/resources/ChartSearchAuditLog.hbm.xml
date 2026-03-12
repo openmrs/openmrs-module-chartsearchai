@@ -17,6 +17,8 @@
 
 		<property name="question" column="question" type="text" not-null="true"/>
 
+		<property name="answer" column="answer" type="text" not-null="true"/>
+
 		<property name="referenceCount" column="reference_count" type="int"/>
 
 		<property name="dateCreated" column="date_created" type="timestamp" not-null="true"/>

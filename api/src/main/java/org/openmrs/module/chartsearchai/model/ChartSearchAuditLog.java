@@ -30,6 +30,8 @@ public class ChartSearchAuditLog implements Serializable {
 
 	private String question;
 
+	private String answer;
+
 	private Integer referenceCount;
 
 	private Date dateCreated;
@@ -64,6 +66,14 @@ public class ChartSearchAuditLog implements Serializable {
 
 	public void setQuestion(String question) {
 		this.question = question;
+	}
+
+	public String getAnswer() {
+		return answer;
+	}
+
+	public void setAnswer(String answer) {
+		this.answer = answer;
 	}
 
 	public Integer getReferenceCount() {

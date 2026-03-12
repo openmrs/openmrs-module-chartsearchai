@@ -102,6 +102,7 @@ public class ChartSearchAiRestController {
 		auditLog.setUser(user);
 		auditLog.setPatient(patient);
 		auditLog.setQuestion(question);
+		auditLog.setAnswer(chartAnswer.getAnswer());
 		auditLog.setReferenceCount(chartAnswer.getReferences().size());
 		auditLog.setDateCreated(new Date());
 		dao.saveAuditLog(auditLog);

@@ -276,6 +276,11 @@ public class ChartSearchAiRestController {
 					Patient threadPatient = Context.getPatientService().getPatient(patientId);
 					User threadUser = Context.getUserService().getUser(userId);
 
+					if (threadPatient == null || threadUser == null) {
+						sendErrorAndComplete(emitter, "Patient or user no longer available");
+						return;
+					}
+
 					long startTime = System.currentTimeMillis();
 
 					ChartAnswer chartAnswer = chartSearchService.askStreaming(
@@ -394,15 +399,16 @@ public class ChartSearchAiRestController {
 		for (ChartSearchAuditLog auditLog : logs) {
 			Map<String, Object> entry = new HashMap<String, Object>();
 			entry.put("auditLogId", auditLog.getAuditLogId());
-			entry.put("user", auditLog.getUser().getUuid());
-			entry.put("username", auditLog.getUser().getUsername());
-			entry.put("patient", auditLog.getPatient().getUuid());
+			entry.put("user", auditLog.getUser() != null ? auditLog.getUser().getUuid() : null);
+			entry.put("username", auditLog.getUser() != null ? auditLog.getUser().getUsername() : null);
+			entry.put("patient", auditLog.getPatient() != null ? auditLog.getPatient().getUuid() : null);
 			entry.put("question", auditLog.getQuestion());
 			entry.put("answer", auditLog.getAnswer());
 			entry.put("referenceCount", auditLog.getReferenceCount());
 			entry.put("searchMode", auditLog.getSearchMode());
 			entry.put("responseTimeMs", auditLog.getResponseTimeMs());
-			entry.put("dateCreated", auditLog.getDateCreated().getTime());
+			entry.put("dateCreated", auditLog.getDateCreated() != null
+					? auditLog.getDateCreated().getTime() : null);
 			results.add(entry);
 		}
 

@@ -11,8 +11,10 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import de.kherud.llama.InferenceParameters;
 import de.kherud.llama.LlamaModel;
+import de.kherud.llama.LlamaOutput;
 import de.kherud.llama.ModelParameters;
 
+import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.slf4j.Logger;
@@ -38,10 +40,12 @@ public class LlmProvider {
 
 	/**
 	 * Send numbered patient records and a question to the LLM for synthesis.
+	 * Uses streaming generation with a wall-clock timeout to prevent indefinite blocking.
 	 *
 	 * @param numberedRecords the numbered patient records text
 	 * @param question the clinician's natural language question
 	 * @return the LLM's response with inline citations
+	 * @throws APIException if the request exceeds the configured timeout
 	 */
 	public String ask(String numberedRecords, String question) {
 		LlamaModel llm = getModel();
@@ -50,10 +54,25 @@ public class LlmProvider {
 				+ "Patient records:\n" + numberedRecords + "\n"
 				+ "Question: " + question;
 
+		int timeoutSeconds = getTimeoutSeconds();
 		InferenceParameters params = new InferenceParameters(prompt)
-				.setTemperature(0.1f);
+				.setTemperature(0.1f)
+				.setNPredict(ChartSearchAiConstants.DEFAULT_MAX_TOKENS);
 
-		return llm.complete(params);
+		long deadline = System.currentTimeMillis() + (timeoutSeconds * 1000L);
+		StringBuilder result = new StringBuilder();
+
+		for (LlamaOutput output : llm.generate(params)) {
+			if (System.currentTimeMillis() > deadline) {
+				log.warn("LLM inference timed out after {} seconds", timeoutSeconds);
+				throw new APIException("LLM inference timed out after " + timeoutSeconds
+						+ " seconds. Try a more specific question or increase the timeout via "
+						+ ChartSearchAiConstants.GP_LLM_TIMEOUT_SECONDS);
+			}
+			result.append(output);
+		}
+
+		return result.toString();
 	}
 
 	public synchronized void close() {
@@ -62,6 +81,20 @@ public class LlmProvider {
 			model.close();
 			model = null;
 		}
+	}
+
+	private int getTimeoutSeconds() {
+		String value = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_LLM_TIMEOUT_SECONDS);
+		if (value != null && !value.trim().isEmpty()) {
+			try {
+				return Integer.parseInt(value.trim());
+			}
+			catch (NumberFormatException e) {
+				log.warn("Invalid timeout value '{}', using default", value);
+			}
+		}
+		return ChartSearchAiConstants.DEFAULT_LLM_TIMEOUT_SECONDS;
 	}
 
 	private synchronized LlamaModel getModel() {

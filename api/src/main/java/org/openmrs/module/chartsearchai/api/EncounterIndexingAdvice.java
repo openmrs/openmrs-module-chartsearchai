@@ -10,8 +10,12 @@
 package org.openmrs.module.chartsearchai.api;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.openmrs.Encounter;
+import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.slf4j.Logger;
@@ -19,7 +23,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.aop.AfterReturningAdvice;
 
 /**
- * AOP advice that triggers incremental embedding indexing after an encounter is saved.
+ * AOP advice that triggers embedding indexing after encounters are saved, voided, or unvoided.
+ * On save, does an incremental index of the encounter. On void/unvoid, does a full patient
+ * re-index to remove orphaned embeddings from voided encounters.
  * Only active when the search mode is set to {@code embedding}.
  *
  * <p>Registered in config.xml as advice on {@code org.openmrs.api.EncounterService}.</p>
@@ -28,11 +34,12 @@ public class EncounterIndexingAdvice implements AfterReturningAdvice {
 
 	private static final Logger log = LoggerFactory.getLogger(EncounterIndexingAdvice.class);
 
+	private static final Set<String> REINDEX_METHODS = new HashSet<String>(
+			Arrays.asList("voidEncounter", "unvoidEncounter", "purgeEncounter"));
+
 	@Override
 	public void afterReturning(Object returnValue, Method method, Object[] args, Object target) {
-		if (!"saveEncounter".equals(method.getName())) {
-			return;
-		}
+		String methodName = method.getName();
 
 		String mode = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_SEARCH_MODE);
@@ -40,7 +47,7 @@ public class EncounterIndexingAdvice implements AfterReturningAdvice {
 			return;
 		}
 
-		if (returnValue instanceof Encounter) {
+		if ("saveEncounter".equals(methodName) && returnValue instanceof Encounter) {
 			Encounter encounter = (Encounter) returnValue;
 			try {
 				EmbeddingIndexer indexer = Context.getRegisteredComponent(
@@ -50,6 +57,28 @@ public class EncounterIndexingAdvice implements AfterReturningAdvice {
 			catch (Exception e) {
 				log.error("Failed to index encounter {}", encounter.getUuid(), e);
 			}
+		} else if (REINDEX_METHODS.contains(methodName)) {
+			Patient patient = getPatientFromArgs(returnValue, args);
+			if (patient != null) {
+				try {
+					EmbeddingIndexer indexer = Context.getRegisteredComponent(
+							"embeddingIndexer", EmbeddingIndexer.class);
+					indexer.indexPatient(patient);
+				}
+				catch (Exception e) {
+					log.error("Failed to re-index patient after {} call", methodName, e);
+				}
+			}
 		}
+	}
+
+	private Patient getPatientFromArgs(Object returnValue, Object[] args) {
+		if (returnValue instanceof Encounter) {
+			return ((Encounter) returnValue).getPatient();
+		}
+		if (args != null && args.length > 0 && args[0] instanceof Encounter) {
+			return ((Encounter) args[0]).getPatient();
+		}
+		return null;
 	}
 }

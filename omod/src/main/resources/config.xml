@@ -80,6 +80,11 @@
 	</advice>
 
 	<advice>
+		<point>org.openmrs.api.ObsService</point>
+		<class>org.openmrs.module.chartsearchai.api.ObsIndexingAdvice</class>
+	</advice>
+
+	<advice>
 		<point>org.openmrs.api.ConditionService</point>
 		<class>org.openmrs.module.chartsearchai.api.PatientDataIndexingAdvice</class>
 	</advice>

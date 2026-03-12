@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai;
 
+import java.io.File;
+
 import org.openmrs.api.context.Context;
 import org.openmrs.module.BaseModuleActivator;
 import org.openmrs.module.chartsearchai.api.EmbeddingIndexTask;
@@ -16,6 +18,7 @@ import org.openmrs.module.chartsearchai.api.impl.LlmProvider;
 import org.openmrs.module.chartsearchai.embedding.OnnxEmbeddingProvider;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +31,7 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator {
 	@Override
 	public void started() {
 		log.info("Chart Search AI Module started");
+		validateConfiguration();
 		registerBackfillTask();
 	}
 
@@ -48,6 +52,51 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator {
 			log.warn("Error closing ONNX embedding provider", e);
 		}
 		log.info("Chart Search AI Module stopped");
+	}
+
+	private void validateConfiguration() {
+		String searchMode = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_SEARCH_MODE);
+		if (searchMode == null || searchMode.trim().isEmpty()) {
+			searchMode = ChartSearchAiConstants.SEARCH_MODE_LLM;
+		}
+
+		validateModelFile(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH, "LLM");
+
+		if (ChartSearchAiConstants.SEARCH_MODE_EMBEDDING.equals(searchMode)) {
+			String embeddingProvider = Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_PROVIDER);
+			if (ChartSearchAiConstants.EMBEDDING_PROVIDER_ONNX.equals(embeddingProvider)) {
+				validateModelFile(ChartSearchAiConstants.GP_EMBEDDING_MODEL_FILE_PATH,
+						"ONNX embedding");
+			}
+		}
+	}
+
+	private void validateModelFile(String globalProperty, String label) {
+		String configuredPath = Context.getAdministrationService()
+				.getGlobalProperty(globalProperty);
+		if (configuredPath == null || configuredPath.trim().isEmpty()) {
+			log.warn("Chart Search AI: {} model path not configured. "
+					+ "Set '{}' before using the module.", label, globalProperty);
+			return;
+		}
+
+		try {
+			String resolvedPath = ChartSearchAiConstants.resolveModelPath(
+					configuredPath.trim(), globalProperty);
+			File modelFile = new File(resolvedPath);
+			if (!modelFile.canRead()) {
+				log.warn("Chart Search AI: {} model file is not readable: {}",
+						label, resolvedPath);
+			} else {
+				log.info("Chart Search AI: {} model file validated: {}", label, resolvedPath);
+			}
+		}
+		catch (IllegalStateException e) {
+			log.warn("Chart Search AI: {} model file validation failed: {}",
+					label, e.getMessage());
+		}
 	}
 
 	private void registerBackfillTask() {

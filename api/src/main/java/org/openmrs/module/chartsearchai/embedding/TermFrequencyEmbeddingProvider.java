@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
  * basic keyword-overlap retrieval. This is a placeholder; replace with ONNX Runtime +
  * all-MiniLM-L6-v2 for semantic similarity.
  */
-@Component
+@Component("chartSearchAi.termFrequencyEmbeddingProvider")
 public class TermFrequencyEmbeddingProvider implements EmbeddingProvider {
 
 	@Override

@@ -23,6 +23,12 @@ public class ChartSearchAiConstants {
 
 	public static final String SEARCH_MODE_EMBEDDING = "embedding";
 
+	public static final String GP_EMBEDDING_PROVIDER = "chartsearchai.embedding.provider";
+
+	public static final String EMBEDDING_PROVIDER_ONNX = "onnx";
+
+	public static final String EMBEDDING_PROVIDER_TERM_FREQUENCY = "term-frequency";
+
 	public static final int EMBEDDING_DIMENSIONS = 384;
 
 	public static final int DEFAULT_RETRIEVAL_TOP_K = 15;

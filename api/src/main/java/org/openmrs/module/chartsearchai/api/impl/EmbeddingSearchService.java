@@ -23,6 +23,7 @@ import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
 import org.openmrs.module.chartsearchai.embedding.EmbeddingProvider;
 import org.openmrs.module.chartsearchai.model.ChartEmbedding;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,7 @@ public class EmbeddingSearchService implements ChartSearchService {
 	private static final Logger log = LoggerFactory.getLogger(EmbeddingSearchService.class);
 
 	@Autowired
+	@Qualifier("chartSearchAi.embeddingProvider")
 	private EmbeddingProvider embeddingProvider;
 
 	@Autowired

@@ -103,6 +103,14 @@ public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 		return count != null ? count : 0;
 	}
 
+	@Override
+	public int deleteAuditLogsBefore(Date before) {
+		return sessionFactory.getCurrentSession()
+				.createQuery("delete from ChartSearchAuditLog where dateCreated < :before")
+				.setParameter("before", before)
+				.executeUpdate();
+	}
+
 	private Query buildAuditLogQuery(String select, Patient patient, User user, Date fromDate, Date toDate) {
 		StringBuilder hql = new StringBuilder(select);
 		hql.append(" where 1=1");

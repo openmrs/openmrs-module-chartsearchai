@@ -13,6 +13,7 @@ import java.io.File;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.BaseModuleActivator;
+import org.openmrs.module.chartsearchai.api.AuditLogPurgeTask;
 import org.openmrs.module.chartsearchai.api.EmbeddingIndexTask;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider;
 import org.openmrs.module.chartsearchai.embedding.OnnxEmbeddingProvider;
@@ -28,11 +29,16 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator {
 
 	private static final String TASK_NAME = "Chart Search AI - Embedding Backfill";
 
+	private static final String PURGE_TASK_NAME = "Chart Search AI - Audit Log Purge";
+
+	private static final long DAILY_INTERVAL_SECONDS = 86400L;
+
 	@Override
 	public void started() {
 		log.info("Chart Search AI Module started");
 		validateConfiguration();
 		registerBackfillTask();
+		registerAuditLogPurgeTask();
 	}
 
 	@Override
@@ -126,6 +132,33 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator {
 		}
 		catch (Exception e) {
 			log.error("Failed to register embedding backfill task", e);
+		}
+	}
+
+	private void registerAuditLogPurgeTask() {
+		SchedulerService schedulerService = Context.getSchedulerService();
+
+		TaskDefinition existing = schedulerService.getTaskByName(PURGE_TASK_NAME);
+		if (existing != null) {
+			log.debug("Audit log purge task already registered");
+			return;
+		}
+
+		TaskDefinition task = new TaskDefinition();
+		task.setName(PURGE_TASK_NAME);
+		task.setDescription("Deletes AI chart search audit log entries older than the "
+				+ "configured retention period (chartsearchai.auditLogRetentionDays, "
+				+ "default 90 days). Set retention to 0 to disable purging.");
+		task.setTaskClass(AuditLogPurgeTask.class.getName());
+		task.setRepeatInterval(DAILY_INTERVAL_SECONDS);
+		task.setStartOnStartup(true);
+
+		try {
+			schedulerService.saveTaskDefinition(task);
+			log.info("Registered audit log purge task");
+		}
+		catch (Exception e) {
+			log.error("Failed to register audit log purge task", e);
 		}
 	}
 }

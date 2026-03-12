@@ -42,6 +42,10 @@ public class ChartSearchAiConstants {
 
 	public static final int DEFAULT_RETRIEVAL_TOP_K = 15;
 
+	public static final String GP_AUDIT_LOG_RETENTION_DAYS = "chartsearchai.auditLogRetentionDays";
+
+	public static final int DEFAULT_AUDIT_LOG_RETENTION_DAYS = 90;
+
 	public static final String GP_SYSTEM_PROMPT = "chartsearchai.llm.systemPrompt";
 
 	public static final String GP_LLM_TIMEOUT_SECONDS = "chartsearchai.llm.timeoutSeconds";

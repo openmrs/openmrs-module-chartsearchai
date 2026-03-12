@@ -68,6 +68,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.auditLogRetentionDays</property>
+		<defaultValue>90</defaultValue>
+		<description>Number of days to retain AI chart search audit log entries. Entries older than this are automatically purged by a daily scheduled task. Set to 0 to disable purging and retain all logs indefinitely.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.cacheTtlMinutes</property>
 		<defaultValue>5</defaultValue>
 		<description>Number of minutes to cache AI chart search responses for identical patient and question combinations. Avoids redundant LLM calls. Set to 0 to disable caching.</description>

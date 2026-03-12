@@ -40,4 +40,12 @@ public interface ChartSearchAiDAO {
 	 * Count the number of queries made by a user since the given time.
 	 */
 	long getQueryCountByUserSince(User user, Date since);
+
+	/**
+	 * Delete audit log entries created before the given date.
+	 *
+	 * @param before the cutoff date
+	 * @return the number of deleted entries
+	 */
+	int deleteAuditLogsBefore(Date before);
 }

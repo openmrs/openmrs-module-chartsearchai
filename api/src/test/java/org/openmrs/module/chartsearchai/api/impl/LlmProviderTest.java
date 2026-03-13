@@ -127,6 +127,14 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void cleanResponse_shouldTruncateAtNextQuestion() {
+		assertEquals("No relevant information was found in the patient's records.",
+				LlmProvider.cleanResponse("No relevant information was found in the patient's records."
+						+ "\nQuestion: Is the patient experiencing a fever?"
+						+ "\nAnswer: The patient has had high temperatures [22]."));
+	}
+
+	@Test
 	public void cleanResponse_shouldHandleEmptyString() {
 		assertEquals("", LlmProvider.cleanResponse(""));
 	}

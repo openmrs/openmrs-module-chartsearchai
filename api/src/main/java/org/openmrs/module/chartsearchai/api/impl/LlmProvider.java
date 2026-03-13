@@ -128,6 +128,12 @@ public class LlmProvider {
 			cleaned = cleaned.substring("Answer:".length()).trim();
 		}
 
+		// Truncate if the model starts generating additional Q&A pairs
+		int nextQuestion = cleaned.indexOf("\nQuestion:");
+		if (nextQuestion > 0) {
+			cleaned = cleaned.substring(0, nextQuestion).trim();
+		}
+
 		return cleaned;
 	}
 
@@ -145,7 +151,8 @@ public class LlmProvider {
 				.setNPredict(ChartSearchAiConstants.DEFAULT_MAX_TOKENS)
 				.setRepeatPenalty(1.1f)
 				.setRepeatLastN(256)
-				.setFrequencyPenalty(0.1f);
+				.setFrequencyPenalty(0.1f)
+				.setStopStrings("Question:", "\nQuestion:");
 	}
 
 	protected String buildPrompt(String numberedRecords, String question) {

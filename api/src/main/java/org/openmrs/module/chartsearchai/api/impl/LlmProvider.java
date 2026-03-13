@@ -43,10 +43,12 @@ public class LlmProvider {
 			+ "Do not explain which records you checked or add any other commentary. "
 			+ "Keep your answer concise — one to three sentences.\n\n"
 			+ "Examples:\n\n"
-			+ "Records:\n[1] Diagnosis: Zorblitis (2024-01-15)\n[2] Medication: Xanthuril 50mg daily\n"
-			+ "[3] Lab: Flobnar level 12.4\n\n"
-			+ "Question: What medications is the patient taking?\n"
-			+ "Answer: The patient is currently taking Xanthuril 50mg daily [2].\n\n"
+			+ "Records:\n[1] Condition: Zorblitis (active, 2024-01-15)\n"
+			+ "[2] Medication: Xanthuril 50mg daily\n"
+			+ "[3] Lab: Flobnar level 12.4\n"
+			+ "[4] Condition: Quexian syndrome (active, 2023-06-01)\n\n"
+			+ "Question: What conditions does the patient have?\n"
+			+ "Answer: The patient has Zorblitis [1] and Quexian syndrome [4].\n\n"
 			+ "Question: Does the patient have diabetes?\n"
 			+ "Answer: No relevant information was found in the patient's records.";
 

@@ -43,11 +43,11 @@ public class LlmProvider {
 			+ "Do not explain which records you checked or add any other commentary. "
 			+ "Keep your answer concise — one to three sentences.\n\n"
 			+ "Examples:\n\n"
+			+ "Records:\n[1] Diagnosis: Zorblitis (2024-01-15)\n[2] Medication: Xanthuril 50mg daily\n"
+			+ "[3] Lab: Flobnar level 12.4\n\n"
 			+ "Question: What medications is the patient taking?\n"
-			+ "Answer: The patient is currently taking Metformin 500mg twice daily [2] and Lisinopril 10mg daily [5].\n\n"
-			+ "Question: Does the patient have any allergies to antibiotics?\n"
-			+ "Answer: Yes, the patient has a documented allergy to Penicillin [4].\n\n"
-			+ "Question: Has the patient had any surgeries?\n"
+			+ "Answer: The patient is currently taking Xanthuril 50mg daily [2].\n\n"
+			+ "Question: Does the patient have diabetes?\n"
 			+ "Answer: No relevant information was found in the patient's records.";
 
 	private LlamaModel model;

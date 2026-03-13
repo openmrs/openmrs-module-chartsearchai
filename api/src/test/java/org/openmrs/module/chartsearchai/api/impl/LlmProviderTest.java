@@ -102,6 +102,35 @@ public class LlmProviderTest {
 		assertEquals("custom prompt", prompt);
 	}
 
+	@Test
+	public void cleanResponse_shouldStripAnswerPrefix() {
+		assertEquals("The patient is on Metformin [1].",
+				LlmProvider.cleanResponse("Answer: The patient is on Metformin [1]."));
+	}
+
+	@Test
+	public void cleanResponse_shouldStripLeadingWhitespace() {
+		assertEquals("No relevant information was found in the patient's records.",
+				LlmProvider.cleanResponse("\n\nNo relevant information was found in the patient's records."));
+	}
+
+	@Test
+	public void cleanResponse_shouldStripWhitespaceAndAnswerPrefix() {
+		assertEquals("No relevant information was found in the patient's records.",
+				LlmProvider.cleanResponse("\nAnswer: No relevant information was found in the patient's records."));
+	}
+
+	@Test
+	public void cleanResponse_shouldNotModifyCleanResponse() {
+		assertEquals("The patient is on Metformin [1].",
+				LlmProvider.cleanResponse("The patient is on Metformin [1]."));
+	}
+
+	@Test
+	public void cleanResponse_shouldHandleEmptyString() {
+		assertEquals("", LlmProvider.cleanResponse(""));
+	}
+
 	private LlmProvider createProvider(final String customSystemPrompt) {
 		return new LlmProvider() {
 

@@ -81,7 +81,7 @@ public class LlmProvider {
 			result.append(output);
 		}
 
-		return result.toString();
+		return cleanResponse(result.toString());
 	}
 
 	/**
@@ -117,7 +117,18 @@ public class LlmProvider {
 			tokenConsumer.accept(token);
 		}
 
-		return result.toString();
+		return cleanResponse(result.toString());
+	}
+
+	static String cleanResponse(String response) {
+		String cleaned = response.trim();
+
+		// Strip "Answer:" prefix the model sometimes echoes from few-shot examples
+		if (cleaned.startsWith("Answer:")) {
+			cleaned = cleaned.substring("Answer:".length()).trim();
+		}
+
+		return cleaned;
 	}
 
 	public synchronized void close() {

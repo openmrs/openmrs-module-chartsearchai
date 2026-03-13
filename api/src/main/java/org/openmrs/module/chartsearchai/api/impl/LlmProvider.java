@@ -9,15 +9,12 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Consumer;
 
 import de.kherud.llama.InferenceParameters;
 import de.kherud.llama.LlamaModel;
 import de.kherud.llama.LlamaOutput;
 import de.kherud.llama.ModelParameters;
-import de.kherud.llama.Pair;
 
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
@@ -133,19 +130,20 @@ public class LlmProvider {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = "Patient records:\n" + numberedRecords + "\n\nQuestion: " + question;
 
-		List<Pair<String, String>> messages = new ArrayList<Pair<String, String>>();
-		messages.add(new Pair<String, String>("user", userMessage));
+		String prompt = "<|begin_of_text|>"
+				+ "<|start_header_id|>system<|end_header_id|>\n\n"
+				+ systemPrompt + "<|eot_id|>"
+				+ "<|start_header_id|>user<|end_header_id|>\n\n"
+				+ userMessage + "<|eot_id|>"
+				+ "<|start_header_id|>assistant<|end_header_id|>\n\n";
 
-		InferenceParameters params = new InferenceParameters("")
-				.setMessages(systemPrompt, messages)
-				.setUseChatTemplate(true)
+		return new InferenceParameters(prompt)
 				.setTemperature(0.1f)
 				.setNPredict(ChartSearchAiConstants.DEFAULT_MAX_TOKENS)
 				.setRepeatPenalty(1.1f)
 				.setRepeatLastN(256)
-				.setFrequencyPenalty(0.1f);
-
-		return params;
+				.setFrequencyPenalty(0.1f)
+				.setStopStrings("<|eot_id|>", "<|end_of_text|>");
 	}
 
 	protected String getSystemPrompt() {

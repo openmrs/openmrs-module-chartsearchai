@@ -47,6 +47,9 @@ public class LlmInferenceService implements ChartSearchService {
 	public ChartAnswer search(Patient patient, String question) {
 		PatientChart chart = chartSerializer.serialize(patient);
 		log.debug("Sending full chart to LLM ({} records)", chart.getReferences().size());
+		if (log.isTraceEnabled()) {
+			log.trace("Serialized patient chart:\n{}", chart.getText());
+		}
 
 		String response = llmProvider.search(chart.getText(), question);
 

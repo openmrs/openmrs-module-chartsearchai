@@ -40,7 +40,7 @@ public class LlmProvider {
 			+ "Do not list records that are irrelevant to the question. "
 			+ "If the records do not contain enough information to answer, say exactly: "
 			+ "\"No relevant information was found in the patient's records.\" and nothing else. "
-			+ "Do not explain which records you checked or add any other commentary. "
+			+ "Do not add notes, observations, disclaimers, or any text beyond the direct answer. "
 			+ "Keep your answer concise — one to three sentences.\n\n"
 			+ "Examples:\n\n"
 			+ "Records:\n[1] Diagnosis: Zorblitis (2024-01-15)\n"

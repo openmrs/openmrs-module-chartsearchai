@@ -61,6 +61,46 @@ public class LlmProviderTest {
 		assertEquals("custom prompt", prompt);
 	}
 
+	@Test
+	public void cleanResponse_shouldStripTrailingParagraphsWithoutCitations() {
+		String response = "The patient has Hypertension [48] and Diabetes [49].\n\n"
+				+ "Note that there is no information about allergies in the records.";
+		assertEquals("The patient has Hypertension [48] and Diabetes [49].",
+				LlmProvider.cleanResponse(response));
+	}
+
+	@Test
+	public void cleanResponse_shouldKeepMultipleParagraphsWithCitations() {
+		String response = "The patient has Hypertension [48].\n\n"
+				+ "They also have Diabetes [49].";
+		assertEquals(response, LlmProvider.cleanResponse(response));
+	}
+
+	@Test
+	public void cleanResponse_shouldKeepSingleParagraphWithCitation() {
+		String response = "The patient is taking Metformin [2].";
+		assertEquals(response, LlmProvider.cleanResponse(response));
+	}
+
+	@Test
+	public void cleanResponse_shouldReturnFirstParagraphWhenNoCitations() {
+		String response = "No relevant information was found in the patient's records.\n\n"
+				+ "Please consult additional sources.";
+		assertEquals("No relevant information was found in the patient's records.",
+				LlmProvider.cleanResponse(response));
+	}
+
+	@Test
+	public void cleanResponse_shouldHandleEmptyString() {
+		assertEquals("", LlmProvider.cleanResponse(""));
+	}
+
+	@Test
+	public void cleanResponse_shouldTrimWhitespace() {
+		assertEquals("The patient has Diabetes [1].",
+				LlmProvider.cleanResponse("\n  The patient has Diabetes [1].  \n"));
+	}
+
 	private LlmProvider createProvider(final String customSystemPrompt) {
 		return new LlmProvider() {
 

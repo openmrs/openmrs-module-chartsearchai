@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 import de.kherud.llama.InferenceParameters;
 import de.kherud.llama.LlamaModel;
@@ -40,7 +41,7 @@ public class LlmProvider {
 			+ "Do not list records that are irrelevant to the question. "
 			+ "If the records do not contain enough information to answer, say exactly: "
 			+ "\"No relevant information was found in the patient's records.\" and nothing else. "
-			+ "Do not add notes, observations, disclaimers, or any text beyond the direct answer. "
+			+ "Do not add any text beyond the direct answer. "
 			+ "Keep your answer concise — one to three sentences.\n\n"
 			+ "Examples:\n\n"
 			+ "Records:\n[1] Diagnosis: Zorblitis (2024-01-15)\n"
@@ -81,7 +82,7 @@ public class LlmProvider {
 			result.append(output);
 		}
 
-		return result.toString().trim();
+		return cleanResponse(result.toString());
 	}
 
 	/**
@@ -116,7 +117,46 @@ public class LlmProvider {
 			tokenConsumer.accept(token);
 		}
 
-		return result.toString().trim();
+		return cleanResponse(result.toString());
+	}
+
+	private static final Pattern CITATION_PATTERN = Pattern.compile("\\[\\d+\\]");
+
+	/**
+	 * Strips trailing paragraphs that contain no citations, as these are typically
+	 * unsolicited notes or disclaimers added by the model.
+	 */
+	static String cleanResponse(String response) {
+		String trimmed = response.trim();
+		if (trimmed.isEmpty()) {
+			return trimmed;
+		}
+
+		// Split on double newlines (paragraph breaks)
+		String[] paragraphs = trimmed.split("\n\n");
+
+		// Find the last paragraph that contains a citation
+		int lastCitedParagraph = -1;
+		for (int i = 0; i < paragraphs.length; i++) {
+			if (CITATION_PATTERN.matcher(paragraphs[i]).find()) {
+				lastCitedParagraph = i;
+			}
+		}
+
+		// If no citations found, return the first paragraph only
+		if (lastCitedParagraph == -1) {
+			return paragraphs[0].trim();
+		}
+
+		// Keep everything up to and including the last cited paragraph
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i <= lastCitedParagraph; i++) {
+			if (i > 0) {
+				sb.append("\n\n");
+			}
+			sb.append(paragraphs[i]);
+		}
+		return sb.toString().trim();
 	}
 
 	public synchronized void close() {

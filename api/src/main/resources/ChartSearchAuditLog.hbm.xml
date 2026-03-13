@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC
+		"-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+		"http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping package="org.openmrs.module.chartsearchai.model">
+
+	<class name="ChartSearchAuditLog" table="chartsearchai_audit_log">
+
+		<id name="auditLogId" column="audit_log_id" type="int">
+			<generator class="native"/>
+		</id>
+
+		<many-to-one name="user" class="org.openmrs.User" column="user_id" not-null="true"/>
+
+		<many-to-one name="patient" class="org.openmrs.Patient" column="patient_id" not-null="true"/>
+
+		<property name="question" column="question" type="text" not-null="true"/>
+
+		<property name="answer" column="answer" type="text" not-null="true"/>
+
+		<property name="referenceCount" column="reference_count" type="int"/>
+
+		<property name="searchMode" column="search_mode" type="string" length="20" not-null="true"/>
+
+		<property name="responseTimeMs" column="response_time_ms" type="long"/>
+
+		<property name="dateCreated" column="date_created" type="timestamp" not-null="true"/>
+
+	</class>
+
+</hibernate-mapping>

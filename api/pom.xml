@@ -19,6 +19,16 @@
 			<type>jar</type>
 		</dependency>
 		<dependency>
+			<groupId>de.kherud</groupId>
+			<artifactId>llama</artifactId>
+			<version>4.1.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.microsoft.onnxruntime</groupId>
+			<artifactId>onnxruntime</artifactId>
+			<version>1.23.2</version>
+		</dependency>
+		<dependency>
 			<groupId>org.openmrs.api</groupId>
 			<artifactId>openmrs-api</artifactId>
 			<type>test-jar</type>

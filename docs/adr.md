@@ -355,7 +355,7 @@ The license requires the following attribution to be included in all distributed
 The model runs **in-process** inside the OpenMRS JVM via [java-llama.cpp](https://github.com/kherud/java-llama.cpp) JNI bindings. No separate web server, process, or HTTP service is needed. The deployment consists of two files:
 
 1. The `.omod` module file (includes the java-llama.cpp dependency)
-2. The `.gguf` model file (~2GB, placed in the OpenMRS application data directory)
+2. The `.gguf` model file (placed in the OpenMRS application data directory)
 
 The model path is configured via the `chartsearchai.llm.modelFilePath` global property. The model loads into memory on first query and stays resident for subsequent requests.
 
@@ -368,21 +368,28 @@ OpenMRS JVM
                           └── loads GGUF file from disk
 ```
 
-**Memory consumption** for Llama 3.2 3B Q4_K_M:
+### Model size trade-offs
 
-| Component | RAM |
-|-----------|-----|
-| Model weights | ~2GB |
-| KV cache (varies with context used) | ~0.5–1.5GB |
-| Inference buffers | ~200MB |
-| **Total (on top of OpenMRS JVM heap)** | **~3–4GB** |
+The module works with any GGUF-format model. Larger models produce better responses (more accurate, better instruction following, fewer hallucinations) but require more RAM and are slower on CPU. All figures below are for Q4_K_M quantization.
 
-A server running OpenMRS typically uses 1–2GB for the JVM heap. With the LLM loaded, the system needs **at least 8GB total RAM** for comfortable operation. On a 4GB machine, the LLM approach is not viable — use the embedding-based architecture instead.
+| Model | File Size | RAM (model + KV cache) | Total with OpenMRS JVM | CPU Inference Speed |
+|-------|-----------|------------------------|------------------------|---------------------|
+| **3B** (e.g. Llama 3.2 3B) | ~2GB | ~3–4GB | ~5–6GB | ~5–15 tokens/sec |
+| **7B** (e.g. Llama 3.1 8B) | ~4GB | ~6–8GB | ~8–10GB | ~3–8 tokens/sec |
+| **13B** (e.g. Llama 2 13B) | ~7–8GB | ~10–14GB | ~12–16GB | ~1–4 tokens/sec |
+
+**3B models** are the most deployable in low-resource settings but struggle with strict instruction following — they tend to produce verbose responses, add unsolicited commentary, and hedge when they should give a direct "not found" answer. Few-shot examples in the system prompt help but do not fully solve this.
+
+**7B models** are the recommended middle ground — significantly better instruction following and clinical reasoning, while still feasible on a 16GB server.
+
+**13B models** provide the best response quality but need 16–32GB of RAM and noticeably slower inference. Suitable for well-resourced deployments where response quality is prioritized over speed.
+
+A server running OpenMRS typically uses 1–2GB for the JVM heap. On a 4GB machine, only the embedding-based architecture (without LLM inference) is viable.
 
 ### When to use this approach
 
 This approach is viable when:
-- The deployment has sufficient RAM for the model (~2–4GB above baseline).
+- The deployment has sufficient RAM for the chosen model size.
 - Latency of a few seconds per query is acceptable (CPU inference on quantized models).
 - The patient chart fits within the model's context window after serialization.
 

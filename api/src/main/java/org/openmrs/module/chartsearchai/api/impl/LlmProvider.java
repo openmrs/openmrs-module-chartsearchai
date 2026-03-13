@@ -34,12 +34,21 @@ public class LlmProvider {
 	private static final Logger log = LoggerFactory.getLogger(LlmProvider.class);
 
 	static final String DEFAULT_SYSTEM_PROMPT = "You are a clinical assistant helping a clinician "
-			+ "review a patient's chart. Answer ONLY the specific question asked — do not volunteer "
-			+ "additional observations, advice, or commentary beyond what was asked. "
+			+ "review a patient's chart. Answer ONLY the specific question asked. "
 			+ "Use only the patient records below. "
-			+ "Cite records by number in brackets (e.g. [1], [3]). "
-			+ "If the records do not contain enough information to answer, say so. "
-			+ "Keep your answer concise.";
+			+ "Cite only the records that directly support your answer by number in brackets (e.g. [1], [3]). "
+			+ "Do not list records that are irrelevant to the question. "
+			+ "If the records do not contain enough information to answer, say exactly: "
+			+ "\"No relevant information was found in the patient's records.\" and nothing else. "
+			+ "Do not explain which records you checked or add any other commentary. "
+			+ "Keep your answer concise — one to three sentences.\n\n"
+			+ "Examples:\n\n"
+			+ "Question: What medications is the patient taking?\n"
+			+ "Answer: The patient is currently taking Metformin 500mg twice daily [2] and Lisinopril 10mg daily [5].\n\n"
+			+ "Question: Does the patient have any allergies to antibiotics?\n"
+			+ "Answer: Yes, the patient has a documented allergy to Penicillin [4].\n\n"
+			+ "Question: Has the patient had any surgeries?\n"
+			+ "Answer: No relevant information was found in the patient's records.";
 
 	private LlamaModel model;
 

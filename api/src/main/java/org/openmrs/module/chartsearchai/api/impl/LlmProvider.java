@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 
 import de.kherud.llama.InferenceParameters;
 import de.kherud.llama.LlamaModel;
@@ -39,18 +38,29 @@ public class LlmProvider {
 			+ "Use only the patient records below. "
 			+ "Include the relevant details from the records in your answer and cite them by number in brackets (e.g. [1], [3]). "
 			+ "Do not list records that are irrelevant to the question. "
-			+ "If the records do not contain enough information to answer, say exactly: "
-			+ "\"No relevant information was found in the patient's records.\" and nothing else. "
-			+ "Do not add any text beyond the direct answer. "
-			+ "Keep your answer concise — one to three sentences.\n\n"
+			+ "If the records do not contain enough information to answer, respond with: "
+			+ "\"No relevant information was found in the patient's records.\" "
+			+ "Keep your answer concise — one to three sentences. "
+			+ "Respond with ONLY a JSON object in this exact format: {\"answer\": \"your answer here\"}\n\n"
 			+ "Examples:\n\n"
 			+ "Records:\n[1] Diagnosis: Zorblitis (2024-01-15)\n"
 			+ "[2] Medication: Xanthuril 50mg daily\n"
 			+ "[3] Lab: Flobnar level 12.4\n\n"
 			+ "Question: What medications is the patient taking?\n"
-			+ "Answer: The patient is currently taking Xanthuril 50mg daily [2].\n\n"
+			+ "{\"answer\": \"The patient is currently taking Xanthuril 50mg daily [2].\"}\n\n"
 			+ "Question: Does the patient have diabetes?\n"
-			+ "Answer: No relevant information was found in the patient's records.";
+			+ "{\"answer\": \"No relevant information was found in the patient's records.\"}";
+
+	// GBNF grammar that constrains output to: {"answer": "..."}
+	// Allows any characters inside the string value including escaped quotes
+	private static final String JSON_ANSWER_GRAMMAR =
+			"root   ::= \"{\" ws \"\\\"answer\\\"\" ws \":\" ws string ws \"}\"\n"
+			+ "string ::= \"\\\"\" chars \"\\\"\"\n"
+			+ "chars  ::= char*\n"
+			+ "char   ::= [^\"\\\\] | \"\\\\\" escape\n"
+			+ "escape ::= [\"\\\\/bfnrt] | \"u\" hex hex hex hex\n"
+			+ "hex    ::= [0-9a-fA-F]\n"
+			+ "ws     ::= [ \\t\\n]*\n";
 
 	private LlamaModel model;
 
@@ -82,7 +92,7 @@ public class LlmProvider {
 			result.append(output);
 		}
 
-		return cleanResponse(result.toString());
+		return extractAnswer(result.toString());
 	}
 
 	/**
@@ -117,46 +127,66 @@ public class LlmProvider {
 			tokenConsumer.accept(token);
 		}
 
-		return cleanResponse(result.toString());
+		return extractAnswer(result.toString());
 	}
 
-	private static final Pattern CITATION_PATTERN = Pattern.compile("\\[\\d+\\]");
-
 	/**
-	 * Strips trailing paragraphs that contain no citations, as these are typically
-	 * unsolicited notes or disclaimers added by the model.
+	 * Extracts the answer from the JSON response produced by the grammar-constrained LLM.
+	 * Expected format: {"answer": "..."}
+	 * Falls back to returning the raw response if JSON parsing fails.
 	 */
-	static String cleanResponse(String response) {
+	static String extractAnswer(String response) {
 		String trimmed = response.trim();
 		if (trimmed.isEmpty()) {
 			return trimmed;
 		}
 
-		// Split on double newlines (paragraph breaks)
-		String[] paragraphs = trimmed.split("\n\n");
+		// Find the answer value between the first "answer": " and the closing "
+		int keyIndex = trimmed.indexOf("\"answer\"");
+		if (keyIndex == -1) {
+			log.warn("LLM response did not contain expected JSON format, returning raw response");
+			return trimmed;
+		}
 
-		// Find the last paragraph that contains a citation
-		int lastCitedParagraph = -1;
-		for (int i = 0; i < paragraphs.length; i++) {
-			if (CITATION_PATTERN.matcher(paragraphs[i]).find()) {
-				lastCitedParagraph = i;
+		int colonIndex = trimmed.indexOf(':', keyIndex + 8);
+		if (colonIndex == -1) {
+			return trimmed;
+		}
+
+		int openQuote = trimmed.indexOf('"', colonIndex + 1);
+		if (openQuote == -1) {
+			return trimmed;
+		}
+
+		// Parse the JSON string value, handling escaped characters
+		StringBuilder answer = new StringBuilder();
+		for (int i = openQuote + 1; i < trimmed.length(); i++) {
+			char c = trimmed.charAt(i);
+			if (c == '\\' && i + 1 < trimmed.length()) {
+				char next = trimmed.charAt(i + 1);
+				if (next == '"') {
+					answer.append('"');
+					i++;
+				} else if (next == '\\') {
+					answer.append('\\');
+					i++;
+				} else if (next == 'n') {
+					answer.append('\n');
+					i++;
+				} else if (next == 't') {
+					answer.append('\t');
+					i++;
+				} else {
+					answer.append(c);
+				}
+			} else if (c == '"') {
+				break;
+			} else {
+				answer.append(c);
 			}
 		}
 
-		// If no citations found, return the first paragraph only
-		if (lastCitedParagraph == -1) {
-			return paragraphs[0].trim();
-		}
-
-		// Keep everything up to and including the last cited paragraph
-		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i <= lastCitedParagraph; i++) {
-			if (i > 0) {
-				sb.append("\n\n");
-			}
-			sb.append(paragraphs[i]);
-		}
-		return sb.toString().trim();
+		return answer.toString().trim();
 	}
 
 	public synchronized void close() {
@@ -181,6 +211,7 @@ public class LlmProvider {
 		return new InferenceParameters(prompt)
 				.setTemperature(0.1f)
 				.setNPredict(ChartSearchAiConstants.DEFAULT_MAX_TOKENS)
+				.setGrammar(JSON_ANSWER_GRAMMAR)
 				.setRepeatPenalty(1.1f)
 				.setRepeatLastN(256)
 				.setFrequencyPenalty(0.1f)

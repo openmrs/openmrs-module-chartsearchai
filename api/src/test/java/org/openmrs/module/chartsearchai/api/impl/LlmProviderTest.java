@@ -62,43 +62,49 @@ public class LlmProviderTest {
 	}
 
 	@Test
-	public void cleanResponse_shouldStripTrailingParagraphsWithoutCitations() {
-		String response = "The patient has Hypertension [48] and Diabetes [49].\n\n"
-				+ "Note that there is no information about allergies in the records.";
+	public void extractAnswer_shouldParseJsonResponse() {
+		String response = "{\"answer\": \"The patient has Hypertension [48] and Diabetes [49].\"}";
 		assertEquals("The patient has Hypertension [48] and Diabetes [49].",
-				LlmProvider.cleanResponse(response));
+				LlmProvider.extractAnswer(response));
 	}
 
 	@Test
-	public void cleanResponse_shouldKeepMultipleParagraphsWithCitations() {
-		String response = "The patient has Hypertension [48].\n\n"
-				+ "They also have Diabetes [49].";
-		assertEquals(response, LlmProvider.cleanResponse(response));
+	public void extractAnswer_shouldHandleEscapedQuotes() {
+		String response = "{\"answer\": \"The patient said \\\"I feel fine\\\" during the visit.\"}";
+		assertEquals("The patient said \"I feel fine\" during the visit.",
+				LlmProvider.extractAnswer(response));
 	}
 
 	@Test
-	public void cleanResponse_shouldKeepSingleParagraphWithCitation() {
-		String response = "The patient is taking Metformin [2].";
-		assertEquals(response, LlmProvider.cleanResponse(response));
+	public void extractAnswer_shouldHandleEscapedBackslashes() {
+		String response = "{\"answer\": \"Path: C:\\\\Users\\\\data\"}";
+		assertEquals("Path: C:\\Users\\data",
+				LlmProvider.extractAnswer(response));
 	}
 
 	@Test
-	public void cleanResponse_shouldReturnFirstParagraphWhenNoCitations() {
-		String response = "No relevant information was found in the patient's records.\n\n"
-				+ "Please consult additional sources.";
-		assertEquals("No relevant information was found in the patient's records.",
-				LlmProvider.cleanResponse(response));
+	public void extractAnswer_shouldHandleEscapedNewlines() {
+		String response = "{\"answer\": \"Line 1\\nLine 2\"}";
+		assertEquals("Line 1\nLine 2",
+				LlmProvider.extractAnswer(response));
 	}
 
 	@Test
-	public void cleanResponse_shouldHandleEmptyString() {
-		assertEquals("", LlmProvider.cleanResponse(""));
+	public void extractAnswer_shouldHandleEmptyString() {
+		assertEquals("", LlmProvider.extractAnswer(""));
 	}
 
 	@Test
-	public void cleanResponse_shouldTrimWhitespace() {
-		assertEquals("The patient has Diabetes [1].",
-				LlmProvider.cleanResponse("\n  The patient has Diabetes [1].  \n"));
+	public void extractAnswer_shouldFallBackToRawResponseWhenNotJson() {
+		String response = "The patient has Diabetes [1].";
+		assertEquals(response, LlmProvider.extractAnswer(response));
+	}
+
+	@Test
+	public void extractAnswer_shouldHandleWhitespaceInJson() {
+		String response = "{ \"answer\" : \"No relevant information was found.\" }";
+		assertEquals("No relevant information was found.",
+				LlmProvider.extractAnswer(response));
 	}
 
 	private LlmProvider createProvider(final String customSystemPrompt) {

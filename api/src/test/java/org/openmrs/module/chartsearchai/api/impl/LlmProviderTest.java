@@ -16,51 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 /**
- * Pure unit tests for {@link LlmProvider} prompt building and configuration logic.
+ * Pure unit tests for {@link LlmProvider} configuration logic.
  * Uses a subclass to override Context-dependent methods.
  */
 public class LlmProviderTest {
-
-	@Test
-	public void buildPrompt_shouldIncludeSystemPromptRecordsAndQuestion() {
-		LlmProvider provider = createProvider("You are a test assistant.");
-
-		String prompt = provider.buildPrompt("[1] BP 120/80\n[2] Weight 70kg", "What is the BP?");
-
-		assertTrue(prompt.startsWith("You are a test assistant."));
-		assertTrue(prompt.contains("[1] BP 120/80"));
-		assertTrue(prompt.contains("[2] Weight 70kg"));
-		assertTrue(prompt.contains("Question: What is the BP?"));
-	}
-
-	@Test
-	public void buildPrompt_shouldUseDefaultSystemPromptWhenNoneConfigured() {
-		LlmProvider provider = createProvider(null);
-
-		String prompt = provider.buildPrompt("[1] record", "question");
-
-		assertTrue(prompt.startsWith(LlmProvider.DEFAULT_SYSTEM_PROMPT));
-	}
-
-	@Test
-	public void buildPrompt_shouldUseDefaultSystemPromptWhenEmpty() {
-		LlmProvider provider = createProvider("  ");
-
-		String prompt = provider.buildPrompt("[1] record", "question");
-
-		assertTrue(prompt.startsWith(LlmProvider.DEFAULT_SYSTEM_PROMPT));
-	}
-
-	@Test
-	public void buildPrompt_shouldSeparateSectionsWithNewlines() {
-		LlmProvider provider = createProvider("System prompt.");
-
-		String prompt = provider.buildPrompt("records", "question");
-
-		assertTrue(prompt.contains("System prompt.\n\n"));
-		assertTrue(prompt.contains("Patient records:\nrecords\n"));
-		assertTrue(prompt.contains("Question: question"));
-	}
 
 	@Test
 	public void defaultSystemPrompt_shouldMentionClinicalAssistant() {
@@ -100,43 +59,6 @@ public class LlmProviderTest {
 		String prompt = provider.getSystemPrompt();
 		assertFalse(prompt.startsWith(" "));
 		assertEquals("custom prompt", prompt);
-	}
-
-	@Test
-	public void cleanResponse_shouldStripAnswerPrefix() {
-		assertEquals("The patient is on Metformin [1].",
-				LlmProvider.cleanResponse("Answer: The patient is on Metformin [1]."));
-	}
-
-	@Test
-	public void cleanResponse_shouldStripLeadingWhitespace() {
-		assertEquals("No relevant information was found in the patient's records.",
-				LlmProvider.cleanResponse("\n\nNo relevant information was found in the patient's records."));
-	}
-
-	@Test
-	public void cleanResponse_shouldStripWhitespaceAndAnswerPrefix() {
-		assertEquals("No relevant information was found in the patient's records.",
-				LlmProvider.cleanResponse("\nAnswer: No relevant information was found in the patient's records."));
-	}
-
-	@Test
-	public void cleanResponse_shouldNotModifyCleanResponse() {
-		assertEquals("The patient is on Metformin [1].",
-				LlmProvider.cleanResponse("The patient is on Metformin [1]."));
-	}
-
-	@Test
-	public void cleanResponse_shouldTruncateAtNextQuestion() {
-		assertEquals("No relevant information was found in the patient's records.",
-				LlmProvider.cleanResponse("No relevant information was found in the patient's records."
-						+ "\nQuestion: Is the patient experiencing a fever?"
-						+ "\nAnswer: The patient has had high temperatures [22]."));
-	}
-
-	@Test
-	public void cleanResponse_shouldHandleEmptyString() {
-		assertEquals("", LlmProvider.cleanResponse(""));
 	}
 
 	private LlmProvider createProvider(final String customSystemPrompt) {

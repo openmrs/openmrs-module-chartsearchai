@@ -9,12 +9,15 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 import de.kherud.llama.InferenceParameters;
 import de.kherud.llama.LlamaModel;
 import de.kherud.llama.LlamaOutput;
 import de.kherud.llama.ModelParameters;
+import de.kherud.llama.Pair;
 
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
@@ -64,9 +67,8 @@ public class LlmProvider {
 	public synchronized String search(String numberedRecords, String question) {
 		LlamaModel llm = getModel();
 
-		String prompt = buildPrompt(numberedRecords, question);
 		int timeoutSeconds = getTimeoutSeconds();
-		InferenceParameters params = createInferenceParameters(prompt);
+		InferenceParameters params = createInferenceParameters(numberedRecords, question);
 
 		long deadline = System.currentTimeMillis() + (timeoutSeconds * 1000L);
 		StringBuilder result = new StringBuilder();
@@ -81,7 +83,7 @@ public class LlmProvider {
 			result.append(output);
 		}
 
-		return cleanResponse(result.toString());
+		return result.toString().trim();
 	}
 
 	/**
@@ -98,9 +100,8 @@ public class LlmProvider {
 			Consumer<String> tokenConsumer) {
 		LlamaModel llm = getModel();
 
-		String prompt = buildPrompt(numberedRecords, question);
 		int timeoutSeconds = getTimeoutSeconds();
-		InferenceParameters params = createInferenceParameters(prompt);
+		InferenceParameters params = createInferenceParameters(numberedRecords, question);
 
 		long deadline = System.currentTimeMillis() + (timeoutSeconds * 1000L);
 		StringBuilder result = new StringBuilder();
@@ -117,24 +118,7 @@ public class LlmProvider {
 			tokenConsumer.accept(token);
 		}
 
-		return cleanResponse(result.toString());
-	}
-
-	static String cleanResponse(String response) {
-		String cleaned = response.trim();
-
-		// Strip "Answer:" prefix the model sometimes echoes from few-shot examples
-		if (cleaned.startsWith("Answer:")) {
-			cleaned = cleaned.substring("Answer:".length()).trim();
-		}
-
-		// Truncate if the model starts generating additional Q&A pairs
-		int nextQuestion = cleaned.indexOf("\nQuestion:");
-		if (nextQuestion > 0) {
-			cleaned = cleaned.substring(0, nextQuestion).trim();
-		}
-
-		return cleaned;
+		return result.toString().trim();
 	}
 
 	public synchronized void close() {
@@ -145,20 +129,23 @@ public class LlmProvider {
 		}
 	}
 
-	private InferenceParameters createInferenceParameters(String prompt) {
-		return new InferenceParameters(prompt)
+	private InferenceParameters createInferenceParameters(String numberedRecords, String question) {
+		String systemPrompt = getSystemPrompt();
+		String userMessage = "Patient records:\n" + numberedRecords + "\n\nQuestion: " + question;
+
+		List<Pair<String, String>> messages = new ArrayList<Pair<String, String>>();
+		messages.add(new Pair<String, String>("user", userMessage));
+
+		InferenceParameters params = new InferenceParameters("")
+				.setMessages(systemPrompt, messages)
+				.setUseChatTemplate(true)
 				.setTemperature(0.1f)
 				.setNPredict(ChartSearchAiConstants.DEFAULT_MAX_TOKENS)
 				.setRepeatPenalty(1.1f)
 				.setRepeatLastN(256)
-				.setFrequencyPenalty(0.1f)
-				.setStopStrings("Question:", "\nQuestion:");
-	}
+				.setFrequencyPenalty(0.1f);
 
-	protected String buildPrompt(String numberedRecords, String question) {
-		return getSystemPrompt() + "\n\n"
-				+ "Patient records:\n" + numberedRecords + "\n"
-				+ "Question: " + question;
+		return params;
 	}
 
 	protected String getSystemPrompt() {

@@ -10,7 +10,9 @@
 package org.openmrs.module.chartsearchai.serializer;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
@@ -19,10 +21,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Serializes an entire patient chart into numbered records for direct LLM inference.
- * Each record is prefixed with a sequential number that the LLM can use for citations.
- * The {@link RecordReference} list maps each number back to a resource type and ID so
- * the UI can link citations to the source record in OpenMRS.
+ * Serializes an entire patient chart into labeled records for direct LLM inference.
+ * Each record is prefixed with a typed label (e.g. [Obs #1], [Allergy #2]) that the
+ * LLM can use for citations. The {@link RecordReference} list maps each label back to
+ * a resource type and ID so the UI can link citations to the source record in OpenMRS.
  */
 @Component
 public class PatientChartSerializer {
@@ -31,24 +33,36 @@ public class PatientChartSerializer {
 	private PatientRecordLoader recordLoader;
 
 	/**
-	 * Serialize all clinical records for a patient into numbered text lines.
+	 * Serialize all clinical records for a patient into labeled text lines.
 	 *
 	 * @param patient the patient whose chart to serialize
-	 * @return the serialized chart with numbered records and their source references
+	 * @return the serialized chart with labeled records and their source references
 	 */
 	public PatientChart serialize(Patient patient) {
 		List<SerializedRecord> records = recordLoader.loadAll(patient);
 		List<RecordReference> references = new ArrayList<RecordReference>();
 		StringBuilder sb = new StringBuilder();
+		Map<String, Integer> typeCounters = new HashMap<String, Integer>();
 
 		for (int i = 0; i < records.size(); i++) {
 			SerializedRecord record = records.get(i);
-			int index = i + 1;
-			sb.append("[").append(index).append("] ").append(record.getText()).append("\n");
-			references.add(new RecordReference(index, record.getResourceType(), record.getResourceId()));
+			String type = record.getResourceType();
+			String displayType = toDisplayType(type);
+			int count = typeCounters.containsKey(type) ? typeCounters.get(type) + 1 : 1;
+			typeCounters.put(type, count);
+			String label = displayType + " #" + count;
+			sb.append("[").append(label).append("] ").append(record.getText()).append("\n");
+			references.add(new RecordReference(label, type, record.getResourceId()));
 		}
 
 		return new PatientChart(sb.toString(), references);
+	}
+
+	public static String toDisplayType(String resourceType) {
+		if (resourceType == null || resourceType.isEmpty()) {
+			return "Record";
+		}
+		return resourceType.substring(0, 1).toUpperCase() + resourceType.substring(1);
 	}
 
 	/**

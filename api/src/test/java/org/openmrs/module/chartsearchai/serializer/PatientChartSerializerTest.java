@@ -25,15 +25,15 @@ import org.springframework.test.util.ReflectionTestUtils;
 public class PatientChartSerializerTest {
 
 	@Test
-	public void serialize_shouldNumberRecordsStartingAtOne() {
+	public void serialize_shouldLabelRecordsByType() {
 		PatientChartSerializer serializer = createSerializer(
 				new SerializedRecord("obs", 101, "Blood pressure 120/80"),
 				new SerializedRecord("obs", 102, "Weight 72 kg"));
 
 		PatientChart chart = serializer.serialize(new Patient());
 
-		assertTrue(chart.getText().startsWith("[1] Blood pressure 120/80\n"));
-		assertTrue(chart.getText().contains("[2] Weight 72 kg\n"));
+		assertTrue(chart.getText().startsWith("[Obs #1] Blood pressure 120/80\n"));
+		assertTrue(chart.getText().contains("[Obs #2] Weight 72 kg\n"));
 	}
 
 	@Test
@@ -46,10 +46,10 @@ public class PatientChartSerializerTest {
 		List<RecordReference> refs = chart.getReferences();
 
 		assertEquals(2, refs.size());
-		assertEquals(1, refs.get(0).getIndex());
+		assertEquals("Obs #1", refs.get(0).getLabel());
 		assertEquals("obs", refs.get(0).getResourceType());
 		assertEquals(101, refs.get(0).getResourceId());
-		assertEquals(2, refs.get(1).getIndex());
+		assertEquals("Order #1", refs.get(1).getLabel());
 		assertEquals("order", refs.get(1).getResourceType());
 		assertEquals(201, refs.get(1).getResourceId());
 	}

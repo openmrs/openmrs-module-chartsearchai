@@ -24,24 +24,24 @@ public class LlmInferenceServiceTest {
 	@Test
 	public void filterCitedReferences_shouldReturnOnlyCitedReferences() {
 		List<RecordReference> all = Arrays.asList(
-				new RecordReference(1, "obs", 101),
-				new RecordReference(2, "obs", 102),
-				new RecordReference(3, "order", 201),
-				new RecordReference(4, "condition", 301));
+				new RecordReference("Obs #1", "obs", 101),
+				new RecordReference("Obs #2", "obs", 102),
+				new RecordReference("Order #1", "order", 201),
+				new RecordReference("Condition #1", "condition", 301));
 
 		List<RecordReference> result = LlmInferenceService.filterCitedReferences(
-				"The patient is on Metformin [1] and has hypertension [3].", all);
+				"The patient is on Metformin [Obs #1] and has hypertension [Order #1].", all);
 
 		assertEquals(2, result.size());
-		assertEquals(1, result.get(0).getIndex());
-		assertEquals(3, result.get(1).getIndex());
+		assertEquals("Obs #1", result.get(0).getLabel());
+		assertEquals("Order #1", result.get(1).getLabel());
 	}
 
 	@Test
 	public void filterCitedReferences_shouldReturnEmptyWhenNoCitations() {
 		List<RecordReference> all = Arrays.asList(
-				new RecordReference(1, "obs", 101),
-				new RecordReference(2, "obs", 102));
+				new RecordReference("Obs #1", "obs", 101),
+				new RecordReference("Obs #2", "obs", 102));
 
 		List<RecordReference> result = LlmInferenceService.filterCitedReferences(
 				"I could not find relevant information in the records.", all);
@@ -50,35 +50,35 @@ public class LlmInferenceServiceTest {
 	}
 
 	@Test
-	public void filterCitedReferences_shouldHandleMultipleCitationsOfSameIndex() {
+	public void filterCitedReferences_shouldHandleMultipleCitationsOfSameLabel() {
 		List<RecordReference> all = Arrays.asList(
-				new RecordReference(1, "obs", 101),
-				new RecordReference(2, "obs", 102));
+				new RecordReference("Obs #1", "obs", 101),
+				new RecordReference("Obs #2", "obs", 102));
 
 		List<RecordReference> result = LlmInferenceService.filterCitedReferences(
-				"Blood pressure was 120/80 [1]. This is within normal range [1].", all);
+				"Blood pressure was 120/80 [Obs #1]. This is within normal range [Obs #1].", all);
 
 		assertEquals(1, result.size());
-		assertEquals(1, result.get(0).getIndex());
+		assertEquals("Obs #1", result.get(0).getLabel());
 	}
 
 	@Test
 	public void filterCitedReferences_shouldIgnoreCitationsWithNoMatchingReference() {
 		List<RecordReference> all = Arrays.asList(
-				new RecordReference(1, "obs", 101),
-				new RecordReference(2, "obs", 102));
+				new RecordReference("Obs #1", "obs", 101),
+				new RecordReference("Obs #2", "obs", 102));
 
 		List<RecordReference> result = LlmInferenceService.filterCitedReferences(
-				"The patient takes Metformin [1] and Lisinopril [5].", all);
+				"The patient takes Metformin [Obs #1] and Lisinopril [Order #5].", all);
 
 		assertEquals(1, result.size());
-		assertEquals(1, result.get(0).getIndex());
+		assertEquals("Obs #1", result.get(0).getLabel());
 	}
 
 	@Test
 	public void filterCitedReferences_shouldHandleEmptyReferenceList() {
 		List<RecordReference> result = LlmInferenceService.filterCitedReferences(
-				"Some answer [1] [2].", Collections.<RecordReference>emptyList());
+				"Some answer [Obs #1] [Obs #2].", Collections.<RecordReference>emptyList());
 
 		assertTrue(result.isEmpty());
 	}
@@ -86,7 +86,7 @@ public class LlmInferenceServiceTest {
 	@Test
 	public void filterCitedReferences_shouldHandleEmptyAnswer() {
 		List<RecordReference> all = Arrays.asList(
-				new RecordReference(1, "obs", 101));
+				new RecordReference("Obs #1", "obs", 101));
 
 		List<RecordReference> result = LlmInferenceService.filterCitedReferences("", all);
 

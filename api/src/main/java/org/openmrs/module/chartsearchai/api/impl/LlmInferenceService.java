@@ -41,7 +41,7 @@ public class LlmInferenceService implements ChartSearchService {
 	@Autowired
 	private LlmProvider llmProvider;
 
-	private static final Pattern CITATION_PATTERN = Pattern.compile("\\[(\\d+)\\]");
+	private static final Pattern CITATION_PATTERN = Pattern.compile("\\[([A-Z][a-z]+ #\\d+)\\]");
 
 	@Override
 	public ChartAnswer search(Patient patient, String question) {
@@ -75,15 +75,15 @@ public class LlmInferenceService implements ChartSearchService {
 
 	static List<RecordReference> filterCitedReferences(String answer,
 			List<RecordReference> allReferences) {
-		Set<Integer> citedIndices = new HashSet<Integer>();
+		Set<String> citedLabels = new HashSet<String>();
 		Matcher matcher = CITATION_PATTERN.matcher(answer);
 		while (matcher.find()) {
-			citedIndices.add(Integer.parseInt(matcher.group(1)));
+			citedLabels.add(matcher.group(1));
 		}
 
 		List<RecordReference> cited = new ArrayList<RecordReference>();
 		for (RecordReference ref : allReferences) {
-			if (citedIndices.contains(ref.getIndex())) {
+			if (citedLabels.contains(ref.getLabel())) {
 				cited.add(ref);
 			}
 		}

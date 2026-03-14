@@ -12,7 +12,9 @@ package org.openmrs.module.chartsearchai.api.impl;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import org.openmrs.Patient;
@@ -21,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.embedding.EmbeddingProvider;
 import org.openmrs.module.chartsearchai.model.ChartEmbedding;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,11 +62,16 @@ public class EmbeddingSearchService implements ChartSearchService {
 
 		List<RecordReference> references = new ArrayList<RecordReference>();
 		StringBuilder sb = new StringBuilder();
+		Map<String, Integer> typeCounters = new HashMap<String, Integer>();
 		for (int i = 0; i < results.size(); i++) {
 			ChartEmbedding ce = results.get(i);
-			int index = i + 1;
-			sb.append("[").append(index).append("] ").append(ce.getTextContent()).append("\n");
-			references.add(new RecordReference(index, ce.getResourceType(), ce.getResourceId()));
+			String type = ce.getResourceType();
+			String displayType = PatientChartSerializer.toDisplayType(type);
+			int count = typeCounters.containsKey(type) ? typeCounters.get(type) + 1 : 1;
+			typeCounters.put(type, count);
+			String label = displayType + " #" + count;
+			sb.append("[").append(label).append("] ").append(ce.getTextContent()).append("\n");
+			references.add(new RecordReference(label, type, ce.getResourceId()));
 		}
 
 		log.debug("Sending {} retrieved records to LLM", references.size());
@@ -83,11 +91,16 @@ public class EmbeddingSearchService implements ChartSearchService {
 
 		List<RecordReference> references = new ArrayList<RecordReference>();
 		StringBuilder sb = new StringBuilder();
+		Map<String, Integer> typeCounters = new HashMap<String, Integer>();
 		for (int i = 0; i < results.size(); i++) {
 			ChartEmbedding ce = results.get(i);
-			int index = i + 1;
-			sb.append("[").append(index).append("] ").append(ce.getTextContent()).append("\n");
-			references.add(new RecordReference(index, ce.getResourceType(), ce.getResourceId()));
+			String type = ce.getResourceType();
+			String displayType = PatientChartSerializer.toDisplayType(type);
+			int count = typeCounters.containsKey(type) ? typeCounters.get(type) + 1 : 1;
+			typeCounters.put(type, count);
+			String label = displayType + " #" + count;
+			sb.append("[").append(label).append("] ").append(ce.getTextContent()).append("\n");
+			references.add(new RecordReference(label, type, ce.getResourceId()));
 		}
 
 		log.debug("Streaming {} retrieved records to LLM", references.size());

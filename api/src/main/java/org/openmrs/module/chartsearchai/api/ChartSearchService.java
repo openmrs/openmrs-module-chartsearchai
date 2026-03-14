@@ -62,14 +62,15 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * The response text, which may contain citation numbers in brackets (e.g. [1], [3]).
+		 * The response text, which may contain typed citation labels in brackets
+		 * (e.g. [Allergy #1], [Obs #3]).
 		 */
 		public String getAnswer() {
 			return answer;
 		}
 
 		/**
-		 * The ordered list of record references. Citation numbers from the answer map to
+		 * The ordered list of record references. Citation labels from the answer map to
 		 * entries in this list for linking to the source record in OpenMRS.
 		 */
 		public List<RecordReference> getReferences() {
@@ -78,24 +79,24 @@ public interface ChartSearchService {
 	}
 
 	/**
-	 * Maps a citation number back to a source record in OpenMRS.
+	 * Maps a citation label back to a source record in OpenMRS.
 	 */
 	class RecordReference {
 
-		private final int index;
+		private final String label;
 
 		private final String resourceType;
 
 		private final Integer resourceId;
 
-		public RecordReference(int index, String resourceType, Integer resourceId) {
-			this.index = index;
+		public RecordReference(String label, String resourceType, Integer resourceId) {
+			this.label = label;
 			this.resourceType = resourceType;
 			this.resourceId = resourceId;
 		}
 
-		public int getIndex() {
-			return index;
+		public String getLabel() {
+			return label;
 		}
 
 		public String getResourceType() {

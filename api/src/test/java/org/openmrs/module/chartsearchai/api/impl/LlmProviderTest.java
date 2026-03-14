@@ -101,6 +101,13 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void extractAnswer_shouldDecodeUnicodeEscapes() {
+		String response = "{\"answer\": \"Temperature is 38.9\\u00b0C\"}";
+		assertEquals("Temperature is 38.9\u00b0C",
+				LlmProvider.extractAnswer(response));
+	}
+
+	@Test
 	public void extractAnswer_shouldHandleWhitespaceInJson() {
 		String response = "{ \"answer\" : \"No relevant information was found.\" }";
 		assertEquals("No relevant information was found.",

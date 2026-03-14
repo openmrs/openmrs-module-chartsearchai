@@ -9,8 +9,12 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.io.IOException;
+import java.util.Map;
 import java.util.function.Consumer;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import de.kherud.llama.InferenceParameters;
 import de.kherud.llama.LlamaModel;
 import de.kherud.llama.LlamaOutput;
@@ -130,6 +134,8 @@ public class LlmProvider {
 		return extractAnswer(result.toString());
 	}
 
+	private static final ObjectMapper MAPPER = new ObjectMapper();
+
 	/**
 	 * Extracts the answer from the JSON response produced by the grammar-constrained LLM.
 	 * Expected format: {"answer": "..."}
@@ -141,52 +147,18 @@ public class LlmProvider {
 			return trimmed;
 		}
 
-		// Find the answer value between the first "answer": " and the closing "
-		int keyIndex = trimmed.indexOf("\"answer\"");
-		if (keyIndex == -1) {
-			log.warn("LLM response did not contain expected JSON format, returning raw response");
-			return trimmed;
-		}
-
-		int colonIndex = trimmed.indexOf(':', keyIndex + 8);
-		if (colonIndex == -1) {
-			return trimmed;
-		}
-
-		int openQuote = trimmed.indexOf('"', colonIndex + 1);
-		if (openQuote == -1) {
-			return trimmed;
-		}
-
-		// Parse the JSON string value, handling escaped characters
-		StringBuilder answer = new StringBuilder();
-		for (int i = openQuote + 1; i < trimmed.length(); i++) {
-			char c = trimmed.charAt(i);
-			if (c == '\\' && i + 1 < trimmed.length()) {
-				char next = trimmed.charAt(i + 1);
-				if (next == '"') {
-					answer.append('"');
-					i++;
-				} else if (next == '\\') {
-					answer.append('\\');
-					i++;
-				} else if (next == 'n') {
-					answer.append('\n');
-					i++;
-				} else if (next == 't') {
-					answer.append('\t');
-					i++;
-				} else {
-					answer.append(c);
-				}
-			} else if (c == '"') {
-				break;
-			} else {
-				answer.append(c);
+		try {
+			Map<String, String> parsed = MAPPER.readValue(trimmed,
+					new TypeReference<Map<String, String>>() {});
+			String answer = parsed.get("answer");
+			if (answer != null) {
+				return answer.trim();
 			}
 		}
-
-		return answer.toString().trim();
+		catch (IOException e) {
+			log.warn("LLM response did not contain expected JSON format, returning raw response");
+		}
+		return trimmed;
 	}
 
 	public synchronized void close() {

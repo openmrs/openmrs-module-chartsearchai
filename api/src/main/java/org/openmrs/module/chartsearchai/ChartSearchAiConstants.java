@@ -60,7 +60,7 @@ public class ChartSearchAiConstants {
 
 	public static final String GP_CACHE_TTL_MINUTES = "chartsearchai.cacheTtlMinutes";
 
-	public static final int DEFAULT_CACHE_TTL_MINUTES = 5;
+	public static final int DEFAULT_CACHE_TTL_MINUTES = 0;
 
 	public static final int DEFAULT_CACHE_MAX_SIZE = 100;
 

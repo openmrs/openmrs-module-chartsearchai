@@ -88,8 +88,8 @@ Question: Does the patient have diabetes?
 
 	<globalProperty>
 		<property>chartsearchai.cacheTtlMinutes</property>
-		<defaultValue>5</defaultValue>
-		<description>Number of minutes to cache AI chart search responses for identical patient and question combinations. Avoids redundant LLM calls. Set to 0 to disable caching.</description>
+		<defaultValue>0</defaultValue>
+		<description>Number of minutes to cache AI chart search responses for identical patient and question combinations. Avoids redundant LLM calls. Set to 0 to disable caching (default).</description>
 	</globalProperty>
 
 	<globalProperty>

@@ -50,6 +50,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.llm.chatTemplate</property>
+		<defaultValue>llama3</defaultValue>
+		<description>Chat template for formatting prompts sent to the LLM. Use a preset name (llama3, mistral, phi3, chatml) or a custom template string with {system} and {user} placeholders. Default: llama3.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.llm.systemPrompt</property>
 		<defaultValue>You are a clinical assistant helping a clinician review a patient's chart. Answer ONLY the specific question asked. Use only the patient records below. Include the relevant details from the records in your answer and cite them by their label in brackets exactly as shown (e.g. [Obs #1], [Allergy #2]). Do not list records that are irrelevant to the question. If the records do not contain enough information to answer, respond with: "No relevant information was found in the patient's records." Keep your answer concise — one to three sentences. Respond with ONLY a JSON object in this exact format: {"answer": "your answer here"}
 

@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -112,6 +113,78 @@ public class LlmProviderTest {
 		String response = "{ \"answer\" : \"No relevant information was found.\" }";
 		assertEquals("No relevant information was found.",
 				LlmProvider.extractAnswer(response));
+	}
+
+	@Test
+	public void formatPrompt_shouldUseLlama3Template() {
+		String result = LlmProvider.formatPrompt("llama3", "sys", "usr");
+		assertTrue(result.contains("<|begin_of_text|>"));
+		assertTrue(result.contains("<|start_header_id|>system<|end_header_id|>\n\nsys<|eot_id|>"));
+		assertTrue(result.contains("<|start_header_id|>user<|end_header_id|>\n\nusr<|eot_id|>"));
+		assertTrue(result.contains("<|start_header_id|>assistant<|end_header_id|>"));
+	}
+
+	@Test
+	public void formatPrompt_shouldUseMistralTemplate() {
+		String result = LlmProvider.formatPrompt("mistral", "sys", "usr");
+		assertEquals("[INST] sys\n\nusr [/INST]", result);
+	}
+
+	@Test
+	public void formatPrompt_shouldUsePhi3Template() {
+		String result = LlmProvider.formatPrompt("phi3", "sys", "usr");
+		assertTrue(result.startsWith("<|system|>\nsys<|end|>"));
+		assertTrue(result.contains("<|user|>\nusr<|end|>"));
+		assertTrue(result.endsWith("<|assistant|>\n"));
+	}
+
+	@Test
+	public void formatPrompt_shouldUseChatMlTemplate() {
+		String result = LlmProvider.formatPrompt("chatml", "sys", "usr");
+		assertTrue(result.contains("<|im_start|>system\nsys<|im_end|>"));
+		assertTrue(result.contains("<|im_start|>user\nusr<|im_end|>"));
+		assertTrue(result.contains("<|im_start|>assistant"));
+	}
+
+	@Test
+	public void formatPrompt_shouldBeCaseInsensitive() {
+		String lower = LlmProvider.formatPrompt("llama3", "sys", "usr");
+		String upper = LlmProvider.formatPrompt("LLAMA3", "sys", "usr");
+		assertEquals(lower, upper);
+	}
+
+	@Test
+	public void formatPrompt_shouldUseCustomTemplateWithPlaceholders() {
+		String custom = "<<SYS>>{system}<</SYS>>[INST]{user}[/INST]";
+		String result = LlmProvider.formatPrompt(custom, "my system", "my question");
+		assertEquals("<<SYS>>my system<</SYS>>[INST]my question[/INST]", result);
+	}
+
+	@Test
+	public void resolveStopStrings_shouldReturnLlama3Stops() {
+		assertArrayEquals(new String[]{"<|eot_id|>", "<|end_of_text|>"},
+				LlmProvider.resolveStopStrings("llama3"));
+	}
+
+	@Test
+	public void resolveStopStrings_shouldReturnMistralStops() {
+		assertArrayEquals(new String[]{"</s>"}, LlmProvider.resolveStopStrings("mistral"));
+	}
+
+	@Test
+	public void resolveStopStrings_shouldReturnPhi3Stops() {
+		assertArrayEquals(new String[]{"<|end|>"}, LlmProvider.resolveStopStrings("phi3"));
+	}
+
+	@Test
+	public void resolveStopStrings_shouldReturnChatMlStops() {
+		assertArrayEquals(new String[]{"<|im_end|>"}, LlmProvider.resolveStopStrings("chatml"));
+	}
+
+	@Test
+	public void resolveStopStrings_shouldReturnEmptyForCustomTemplate() {
+		assertArrayEquals(new String[0],
+				LlmProvider.resolveStopStrings("<<SYS>>{system}<</SYS>>"));
 	}
 
 	private LlmProvider createProvider(final String customSystemPrompt) {

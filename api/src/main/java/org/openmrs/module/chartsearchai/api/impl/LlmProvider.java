@@ -10,6 +10,9 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -65,6 +68,32 @@ public class LlmProvider {
 			+ "escape ::= [\"\\\\/bfnrt] | \"u\" hex hex hex hex\n"
 			+ "hex    ::= [0-9a-fA-F]\n"
 			+ "ws     ::= [ \\t\\n]*\n";
+
+	static final Map<String, String> PRESET_TEMPLATES;
+
+	static final Map<String, List<String>> PRESET_STOP_STRINGS;
+
+	static {
+		Map<String, String> templates = new LinkedHashMap<>();
+		templates.put("llama3",
+				"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+				+ "{system}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n"
+				+ "{user}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n");
+		templates.put("mistral", "[INST] {system}\n\n{user} [/INST]");
+		templates.put("phi3",
+				"<|system|>\n{system}<|end|>\n<|user|>\n{user}<|end|>\n<|assistant|>\n");
+		templates.put("chatml",
+				"<|im_start|>system\n{system}<|im_end|>\n"
+				+ "<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n");
+		PRESET_TEMPLATES = Collections.unmodifiableMap(templates);
+
+		Map<String, List<String>> stops = new LinkedHashMap<>();
+		stops.put("llama3", List.of("<|eot_id|>", "<|end_of_text|>"));
+		stops.put("mistral", List.of("</s>"));
+		stops.put("phi3", List.of("<|end|>"));
+		stops.put("chatml", List.of("<|im_end|>"));
+		PRESET_STOP_STRINGS = Collections.unmodifiableMap(stops);
+	}
 
 	private LlamaModel model;
 
@@ -175,13 +204,10 @@ public class LlmProvider {
 	private InferenceParameters createInferenceParameters(String numberedRecords, String question) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = "Patient records:\n" + numberedRecords + "\n\nQuestion: " + question;
+		String templateValue = getChatTemplate();
 
-		String prompt = "<|begin_of_text|>"
-				+ "<|start_header_id|>system<|end_header_id|>\n\n"
-				+ systemPrompt + "<|eot_id|>"
-				+ "<|start_header_id|>user<|end_header_id|>\n\n"
-				+ userMessage + "<|eot_id|>"
-				+ "<|start_header_id|>assistant<|end_header_id|>\n\n";
+		String prompt = formatPrompt(templateValue, systemPrompt, userMessage);
+		String[] stopStrings = resolveStopStrings(templateValue);
 
 		return new InferenceParameters(prompt)
 				.setTemperature(0.0f)
@@ -190,7 +216,29 @@ public class LlmProvider {
 				.setRepeatPenalty(1.1f)
 				.setRepeatLastN(256)
 				.setFrequencyPenalty(0.1f)
-				.setStopStrings("<|eot_id|>", "<|end_of_text|>");
+				.setStopStrings(stopStrings);
+	}
+
+	static String formatPrompt(String templateValue, String systemPrompt, String userMessage) {
+		String template = PRESET_TEMPLATES.getOrDefault(templateValue.toLowerCase(), templateValue);
+		return template.replace("{system}", systemPrompt).replace("{user}", userMessage);
+	}
+
+	static String[] resolveStopStrings(String templateValue) {
+		List<String> stops = PRESET_STOP_STRINGS.get(templateValue.toLowerCase());
+		if (stops != null) {
+			return stops.toArray(new String[0]);
+		}
+		return new String[0];
+	}
+
+	protected String getChatTemplate() {
+		String value = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_LLM_CHAT_TEMPLATE);
+		if (value != null && !value.trim().isEmpty()) {
+			return value.trim();
+		}
+		return "llama3";
 	}
 
 	protected String getSystemPrompt() {

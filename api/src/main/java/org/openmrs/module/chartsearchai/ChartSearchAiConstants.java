@@ -46,6 +46,8 @@ public class ChartSearchAiConstants {
 
 	public static final int DEFAULT_AUDIT_LOG_RETENTION_DAYS = 90;
 
+	public static final String GP_LLM_CHAT_TEMPLATE = "chartsearchai.llm.chatTemplate";
+
 	public static final String GP_SYSTEM_PROMPT = "chartsearchai.llm.systemPrompt";
 
 	public static final String GP_LLM_TIMEOUT_SECONDS = "chartsearchai.llm.timeoutSeconds";

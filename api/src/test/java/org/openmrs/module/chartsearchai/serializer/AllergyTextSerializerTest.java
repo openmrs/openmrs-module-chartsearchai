@@ -20,6 +20,7 @@ import org.openmrs.AllergyReaction;
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
 import org.openmrs.Patient;
+import java.util.Calendar;
 import java.util.Locale;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
@@ -123,6 +124,21 @@ public class AllergyTextSerializerTest extends BaseModuleContextSensitiveTest {
 
 		String result = serializer.toText(allergy);
 		assertTrue(result.contains("Reactions: Skin peeling"));
+	}
+
+	@Test
+	public void toText_shouldIncludeDateCreated() {
+		Concept codedAllergen = new Concept();
+		codedAllergen.addName(conceptName("Penicillin"));
+		Allergen allergen = new Allergen(AllergenType.DRUG, codedAllergen, null);
+
+		Allergy allergy = new Allergy(new Patient(), allergen, null, null, null);
+		Calendar cal = Calendar.getInstance();
+		cal.set(2024, Calendar.MARCH, 15, 0, 0, 0);
+		allergy.setDateCreated(cal.getTime());
+
+		String result = serializer.toText(allergy);
+		assertTrue(result.contains("Date: 2024-03-15"));
 	}
 
 	private ConceptName conceptName(String name) {

@@ -58,6 +58,9 @@ public class AllergyTextSerializer implements ClinicalTextSerializer<Allergy> {
 		if (allergy.getComments() != null && !allergy.getComments().trim().isEmpty()) {
 			sb.append(". Comments: ").append(allergy.getComments().trim());
 		}
+		if (allergy.getDateCreated() != null) {
+			sb.append(". Date: ").append(DateFormatUtil.formatDate(allergy.getDateCreated()));
+		}
 
 		return sb.toString();
 	}

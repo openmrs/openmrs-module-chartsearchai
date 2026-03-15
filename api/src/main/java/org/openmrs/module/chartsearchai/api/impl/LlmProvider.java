@@ -207,7 +207,7 @@ public class LlmProvider {
 		String templateValue = getChatTemplate();
 
 		String prompt = formatPrompt(templateValue, systemPrompt, userMessage);
-		log.info("LLM prompt size: {} tokens", model.encode(prompt).length);
+		log.warn("LLM prompt size: {} tokens", model.encode(prompt).length);
 		String[] stopStrings = resolveStopStrings(templateValue);
 
 		return new InferenceParameters(prompt)

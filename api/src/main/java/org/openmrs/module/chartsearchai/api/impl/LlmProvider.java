@@ -68,6 +68,8 @@ public class LlmProvider {
 
 	private LlamaModel model;
 
+	private String loadedModelPath;
+
 	/**
 	 * Send numbered patient records and a question to the LLM for synthesis.
 	 * Uses streaming generation with a wall-clock timeout to prevent indefinite blocking.
@@ -167,6 +169,7 @@ public class LlmProvider {
 			model.close();
 			model = null;
 		}
+		loadedModelPath = null;
 	}
 
 	private InferenceParameters createInferenceParameters(String numberedRecords, String question) {
@@ -218,21 +221,28 @@ public class LlmProvider {
 	}
 
 	private synchronized LlamaModel getModel() {
+		String configuredPath = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
+		if (configuredPath == null || configuredPath.trim().isEmpty()) {
+			throw new IllegalStateException(
+					"LLM model path not configured. Set the global property: "
+							+ ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
+		}
+		String modelPath = ChartSearchAiConstants.resolveModelPath(
+				configuredPath.trim(), ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
+
+		if (model != null && !modelPath.equals(loadedModelPath)) {
+			log.info("LLM model path changed from {} to {}, reloading", loadedModelPath, modelPath);
+			close();
+		}
+
 		if (model == null) {
-			String configuredPath = Context.getAdministrationService()
-					.getGlobalProperty(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
-			if (configuredPath == null || configuredPath.trim().isEmpty()) {
-				throw new IllegalStateException(
-						"LLM model path not configured. Set the global property: "
-								+ ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
-			}
-			String modelPath = ChartSearchAiConstants.resolveModelPath(
-					configuredPath.trim(), ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
 			log.info("Loading LLM from {}", modelPath);
 			ModelParameters modelParams = new ModelParameters()
 					.setModel(modelPath)
 					.setGpuLayers(0);
 			model = new LlamaModel(modelParams);
+			loadedModelPath = modelPath;
 			log.info("LLM loaded successfully");
 		}
 		return model;

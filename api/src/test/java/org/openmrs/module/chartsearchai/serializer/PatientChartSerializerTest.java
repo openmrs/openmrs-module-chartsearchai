@@ -27,8 +27,8 @@ public class PatientChartSerializerTest {
 	@Test
 	public void serialize_shouldLabelRecordsByType() {
 		PatientChartSerializer serializer = createSerializer(
-				new SerializedRecord("obs", 101, "Blood pressure 120/80"),
-				new SerializedRecord("obs", 102, "Weight 72 kg"));
+				new SerializedRecord("obs", 101, "Blood pressure 120/80", null),
+				new SerializedRecord("obs", 102, "Weight 72 kg", null));
 
 		PatientChart chart = serializer.serialize(new Patient());
 
@@ -39,8 +39,8 @@ public class PatientChartSerializerTest {
 	@Test
 	public void serialize_shouldBuildMatchingReferences() {
 		PatientChartSerializer serializer = createSerializer(
-				new SerializedRecord("obs", 101, "Blood pressure"),
-				new SerializedRecord("order", 201, "Metformin"));
+				new SerializedRecord("obs", 101, "Blood pressure", null),
+				new SerializedRecord("order", 201, "Metformin", null));
 
 		PatientChart chart = serializer.serialize(new Patient());
 		List<RecordReference> refs = chart.getReferences();

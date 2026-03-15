@@ -184,7 +184,7 @@ public class LlmProvider {
 				+ "<|start_header_id|>assistant<|end_header_id|>\n\n";
 
 		return new InferenceParameters(prompt)
-				.setTemperature(0.1f)
+				.setTemperature(0.0f)
 				.setNPredict(ChartSearchAiConstants.DEFAULT_MAX_TOKENS)
 				.setGrammar(JSON_ANSWER_GRAMMAR)
 				.setRepeatPenalty(1.1f)

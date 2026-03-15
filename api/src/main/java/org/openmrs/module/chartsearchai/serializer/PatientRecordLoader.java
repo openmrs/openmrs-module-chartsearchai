@@ -10,6 +10,9 @@
 package org.openmrs.module.chartsearchai.serializer;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -60,7 +63,8 @@ public class PatientRecordLoader {
 			}
 			String text = obsSerializer.toText(obs);
 			if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
-				records.add(new SerializedRecord("obs", obs.getObsId(), text));
+				Date date = obs.getEncounter() != null ? obs.getEncounter().getEncounterDatetime() : obs.getDateCreated();
+				records.add(new SerializedRecord("obs", obs.getObsId(), text, date));
 			}
 		}
 
@@ -68,7 +72,8 @@ public class PatientRecordLoader {
 		for (Condition condition : Context.getConditionService().getActiveConditions(patient)) {
 			String text = conditionSerializer.toText(condition);
 			if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
-				records.add(new SerializedRecord("condition", condition.getConditionId(), text));
+				Date date = condition.getOnsetDate() != null ? condition.getOnsetDate() : condition.getDateCreated();
+				records.add(new SerializedRecord("condition", condition.getConditionId(), text, date));
 			}
 		}
 
@@ -76,7 +81,7 @@ public class PatientRecordLoader {
 		for (Allergy allergy : Context.getPatientService().getAllergies(patient)) {
 			String text = allergySerializer.toText(allergy);
 			if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
-				records.add(new SerializedRecord("allergy", allergy.getAllergyId(), text));
+				records.add(new SerializedRecord("allergy", allergy.getAllergyId(), text, allergy.getDateCreated()));
 			}
 		}
 
@@ -84,9 +89,12 @@ public class PatientRecordLoader {
 		for (Order order : Context.getOrderService().getAllOrdersByPatient(patient)) {
 			String text = orderSerializer.toText(order);
 			if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
-				records.add(new SerializedRecord("order", order.getOrderId(), text));
+				records.add(new SerializedRecord("order", order.getOrderId(), text, order.getDateActivated()));
 			}
 		}
+
+		Collections.sort(records, Comparator.comparing(SerializedRecord::getDate,
+				Comparator.nullsLast(Comparator.reverseOrder())));
 
 		return records;
 	}
@@ -102,10 +110,13 @@ public class PatientRecordLoader {
 
 		private final String text;
 
-		public SerializedRecord(String resourceType, Integer resourceId, String text) {
+		private final Date date;
+
+		public SerializedRecord(String resourceType, Integer resourceId, String text, Date date) {
 			this.resourceType = resourceType;
 			this.resourceId = resourceId;
 			this.text = text;
+			this.date = date;
 		}
 
 		public String getResourceType() {
@@ -118,6 +129,10 @@ public class PatientRecordLoader {
 
 		public String getText() {
 			return text;
+		}
+
+		public Date getDate() {
+			return date;
 		}
 	}
 }

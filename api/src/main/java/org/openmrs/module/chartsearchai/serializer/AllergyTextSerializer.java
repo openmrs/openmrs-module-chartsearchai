@@ -18,8 +18,8 @@ import org.springframework.stereotype.Component;
 /**
  * Serializes an {@link Allergy} into embedding-friendly text.
  *
- * <p>Example output: {@code "Allergy: Penicillin (DRUG). Severity: Severe. Reactions:
- * Anaphylaxis, Rash"}</p>
+ * <p>Example output: {@code "Allergy: Penicillin (DRUG). Date: 2024-03-15. Severity: Severe.
+ * Reactions: Anaphylaxis, Rash"}</p>
  */
 @Component
 public class AllergyTextSerializer implements ClinicalTextSerializer<Allergy> {
@@ -34,6 +34,9 @@ public class AllergyTextSerializer implements ClinicalTextSerializer<Allergy> {
 
 		if (allergy.getAllergen().getAllergenType() != null) {
 			sb.append(" (").append(allergy.getAllergen().getAllergenType()).append(")");
+		}
+		if (allergy.getDateCreated() != null) {
+			sb.append(". Date: ").append(DateFormatUtil.formatDate(allergy.getDateCreated()));
 		}
 		if (allergy.getSeverity() != null) {
 			sb.append(". Severity: ").append(ConceptNameUtil.getName(allergy.getSeverity()));
@@ -57,9 +60,6 @@ public class AllergyTextSerializer implements ClinicalTextSerializer<Allergy> {
 		}
 		if (allergy.getComments() != null && !allergy.getComments().trim().isEmpty()) {
 			sb.append(". Comments: ").append(allergy.getComments().trim());
-		}
-		if (allergy.getDateCreated() != null) {
-			sb.append(". Date: ").append(DateFormatUtil.formatDate(allergy.getDateCreated()));
 		}
 
 		return sb.toString();

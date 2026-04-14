@@ -21,7 +21,7 @@ on:
       gguf_model_url:
         description: 'Download URL for the GGUF model file'
         required: false
-        default: ''
+        default: 'https://huggingface.co/mradermacher/medgemma-1.5-4b-it-GGUF/resolve/main/medgemma-1.5-4b-it.Q4_K_M.gguf'
         type: string
       onnx_model_url:
         description: 'Download URL for the ONNX model file'

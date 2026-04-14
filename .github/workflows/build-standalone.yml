@@ -1,0 +1,224 @@
+name: Build O3 Standalone with Chart Search AI
+
+on:
+  workflow_dispatch:
+    inputs:
+      refapp_version:
+        description: 'O3 Reference Application version'
+        required: false
+        default: '3.6.0'
+        type: string
+      openmrs_version:
+        description: 'OpenMRS Core version'
+        required: false
+        default: '2.8.5'
+        type: string
+      standalone_branch:
+        description: 'openmrs-standalone branch to build from'
+        required: false
+        default: 'openmrs-emr3'
+        type: string
+      gguf_model_url:
+        description: 'Download URL for the GGUF model file'
+        required: false
+        default: ''
+        type: string
+      onnx_model_url:
+        description: 'Download URL for the ONNX model file'
+        required: false
+        default: ''
+        type: string
+      vocab_url:
+        description: 'Download URL for the vocab.txt file'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: build-standalone
+  cancel-in-progress: true
+
+jobs:
+  build-standalone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout chartsearchai backend module
+        uses: actions/checkout@v4
+        with:
+          path: chartsearchai-backend
+
+      - name: Checkout chartsearchai frontend module
+        uses: actions/checkout@v4
+        with:
+          repository: openmrs/openmrs-esm-chartsearchai
+          path: chartsearchai-frontend
+
+      - name: Checkout openmrs-standalone
+        uses: actions/checkout@v4
+        with:
+          repository: openmrs/openmrs-standalone
+          ref: ${{ inputs.standalone_branch }}
+          path: standalone
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Enable Corepack (Yarn 4.x)
+        run: corepack enable
+
+      - name: Set up Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      # Build and install the chartsearchai omod into the local Maven repo
+      - name: Build chartsearchai backend module
+        working-directory: chartsearchai-backend
+        run: |
+          mvn clean install -B -DskipTests \
+            --settings ../standalone/.github/maven-settings.xml
+
+      # Build the chartsearchai frontend ESM
+      - name: Build chartsearchai frontend module
+        working-directory: chartsearchai-frontend
+        run: |
+          yarn install
+          yarn build
+
+      # Download AI model files if URLs are provided
+      - name: Download AI model files
+        run: |
+          mkdir -p standalone/target/chartsearchai
+
+          if [ -n "${{ inputs.gguf_model_url }}" ]; then
+            echo "Downloading GGUF model..."
+            curl -L -o standalone/target/chartsearchai/$(basename "${{ inputs.gguf_model_url }}") \
+              "${{ inputs.gguf_model_url }}"
+          fi
+
+          if [ -n "${{ inputs.onnx_model_url }}" ]; then
+            echo "Downloading ONNX model..."
+            curl -L -o standalone/target/chartsearchai/model.onnx \
+              "${{ inputs.onnx_model_url }}"
+          fi
+
+          if [ -n "${{ inputs.vocab_url }}" ]; then
+            echo "Downloading vocab file..."
+            curl -L -o standalone/target/chartsearchai/vocab.txt \
+              "${{ inputs.vocab_url }}"
+          fi
+
+          echo "AI model files:"
+          ls -lh standalone/target/chartsearchai/ || echo "No model files downloaded"
+
+      # Patch the standalone build to include chartsearchai
+      - name: Configure standalone build for chartsearchai
+        working-directory: standalone
+        run: |
+          # 1. Update OpenMRS Core and RefApp versions in pom.xml
+          sed -i "s|<openmrs.version>.*</openmrs.version>|<openmrs.version>${{ inputs.openmrs_version }}</openmrs.version>|" pom.xml
+          sed -i "s|<refapp.version>.*</refapp.version>|<refapp.version>${{ inputs.refapp_version }}</refapp.version>|" pom.xml
+
+          # 2. Add chartsearchai omod to the distro properties via pom-step-01.xml
+          #    Insert an echo task after the existing replaceregexp tasks
+          sed -i '/<\/target>/i \
+                                  <echo file="${project.build.directory}/openmrs3x/openmrs-distro.properties"\
+                                        append="true" message="${line.separator}omod.chartsearchai=1.0.0-SNAPSHOT${line.separator}"/>' pom-step-01.xml
+
+          # 3. Add chartsearchai model files to the assembly descriptor (if models were downloaded)
+          if [ -d "target/chartsearchai" ] && [ "$(ls -A target/chartsearchai 2>/dev/null)" ]; then
+            sed -i '/<\/fileSets>/i \
+              <fileSet>\
+                <directory>${project.build.directory}/chartsearchai</directory>\
+                <outputDirectory>${project.build.finalName}/appdata/chartsearchai</outputDirectory>\
+              </fileSet>' src/main/assembly/zip-standalone.xml
+          fi
+
+      - name: Pre-run OpenMRS SDK Plugin
+        working-directory: standalone
+        run: mvn org.openmrs.maven.plugins:openmrs-sdk-maven-plugin:setup-sdk -B --settings .github/maven-settings.xml
+
+      # Build the standalone distribution (skip Docker init in CI)
+      - name: Build standalone distribution
+        working-directory: standalone
+        run: |
+          mvn package -Pci -B \
+            --settings .github/maven-settings.xml \
+            -Drefapp.version=${{ inputs.refapp_version }} \
+            -Dopenmrs.version=${{ inputs.openmrs_version }}
+
+      # Integrate the chartsearchai ESM into the assembled frontend
+      - name: Integrate chartsearchai frontend module
+        working-directory: standalone
+        run: |
+          FRONTEND_DIR="target/distro/web/openmrs_spa"
+          MODULE_NAME="openmrs-esm-chartsearchai-app"
+
+          # Copy built ESM files
+          mkdir -p "$FRONTEND_DIR/$MODULE_NAME"
+          cp -r ../chartsearchai-frontend/dist/* "$FRONTEND_DIR/$MODULE_NAME/"
+
+          # Update importmap.json
+          if [ -f "$FRONTEND_DIR/importmap.json" ]; then
+            jq --arg key "@openmrs/esm-chartsearchai-app" \
+               --arg val "./$MODULE_NAME/$MODULE_NAME.js" \
+               '.imports[$key] = $val' \
+               "$FRONTEND_DIR/importmap.json" > "$FRONTEND_DIR/importmap.json.tmp"
+            mv "$FRONTEND_DIR/importmap.json.tmp" "$FRONTEND_DIR/importmap.json"
+          fi
+
+          # Update routes.registry.json
+          ROUTES_JSON="$FRONTEND_DIR/$MODULE_NAME/routes.json"
+          if [ -f "$FRONTEND_DIR/routes.registry.json" ] && [ -f "$ROUTES_JSON" ]; then
+            jq --slurpfile routes "$ROUTES_JSON" \
+               '.["@openmrs/esm-chartsearchai-app"] = $routes[0]' \
+               "$FRONTEND_DIR/routes.registry.json" > "$FRONTEND_DIR/routes.registry.json.tmp"
+            mv "$FRONTEND_DIR/routes.registry.json.tmp" "$FRONTEND_DIR/routes.registry.json"
+          fi
+
+      # Re-run just the assembly phase to produce the final zip with the ESM included
+      - name: Assemble final standalone zip
+        working-directory: standalone
+        run: |
+          mvn package -rf :referenceapplication-standalone-zip-stage -Dexec.skip=true -B \
+            --settings .github/maven-settings.xml \
+            -Drefapp.version=${{ inputs.refapp_version }} \
+            -Dopenmrs.version=${{ inputs.openmrs_version }}
+
+      - name: Verify chartsearchai components in zip
+        working-directory: standalone
+        run: |
+          ZIP_FILE="target/referenceapplication-standalone-${{ inputs.refapp_version }}.zip"
+          echo "=== Standalone zip ==="
+          ls -lh "$ZIP_FILE"
+
+          echo ""
+          echo "=== Chartsearchai components ==="
+          zipinfo -1 "$ZIP_FILE" | grep -i chartsearch || echo "WARNING: No chartsearchai files found"
+
+          echo ""
+          echo "=== Importmap entry ==="
+          unzip -p "$ZIP_FILE" "*/frontend/importmap.json" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); print(d['imports'].get('@openmrs/esm-chartsearchai-app', 'NOT FOUND'))"
+
+          echo ""
+          echo "=== Routes registry entry ==="
+          unzip -p "$ZIP_FILE" "*/frontend/routes.registry.json" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); print('@openmrs/esm-chartsearchai-app' in d)"
+
+      - name: Upload standalone zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmrs-standalone-chartsearchai-${{ inputs.refapp_version }}
+          path: standalone/target/referenceapplication-standalone-${{ inputs.refapp_version }}.zip
+          retention-days: 30

@@ -26,12 +26,12 @@ on:
       onnx_model_url:
         description: 'Download URL for the ONNX model file'
         required: false
-        default: ''
+        default: 'https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx'
         type: string
       vocab_url:
         description: 'Download URL for the vocab.txt file'
         required: false
-        default: ''
+        default: 'https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/vocab.txt'
         type: string
 
 concurrency:

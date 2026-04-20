@@ -25,7 +25,7 @@ jobs:
             platform: Mac
             arch: x86_64
             binary: llama-server
-            cmake_extra: '-DCMAKE_OSX_ARCHITECTURES=x86_64 -DGGML_NATIVE=OFF'
+            cmake_extra: '-DCMAKE_OSX_ARCHITECTURES=x86_64 -DGGML_NATIVE=OFF -DLLAMA_OPENSSL=OFF'
           - os: ubuntu-22.04
             platform: Linux
             arch: x86_64

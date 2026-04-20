@@ -43,9 +43,9 @@ jobs:
             cmake_extra: ''
           - os: windows-2022
             platform: Windows
-            arch: aarch64
+            arch: x86
             binary: llama-server.exe
-            cmake_extra: '-A ARM64'
+            cmake_extra: '-A Win32'
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout llama.cpp

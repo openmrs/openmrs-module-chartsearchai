@@ -599,6 +599,9 @@ public class LocalLlmEngine implements LlmEngine {
 		if (osArch.contains("aarch64") || osArch.contains("arm64")) {
 			return "aarch64";
 		}
+		if (osArch.equals("x86") || osArch.equals("i386") || osArch.equals("i686")) {
+			return "x86";
+		}
 		return "x86_64";
 	}
 }

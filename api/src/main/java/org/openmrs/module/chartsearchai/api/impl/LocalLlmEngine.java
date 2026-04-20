@@ -199,6 +199,7 @@ public class LocalLlmEngine implements LlmEngine {
 		command.add("-ngl");
 		command.add("99");
 		command.add("-fa");
+		command.add("on");
 		command.add("-c");
 		command.add("4096");
 		command.add("--log-disable");

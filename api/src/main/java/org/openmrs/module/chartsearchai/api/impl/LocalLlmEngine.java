@@ -591,10 +591,6 @@ public class LocalLlmEngine implements LlmEngine {
 		if (osName.contains("Mac") || osName.contains("Darwin")) {
 			return "Mac";
 		}
-		String runtime = System.getProperty("java.runtime.name", "").toLowerCase();
-		if (runtime.contains("android")) {
-			return "Linux-Android";
-		}
 		return "Linux";
 	}
 

@@ -1,6 +1,5 @@
-# Native binaries are downloaded in CI, not checked into git.
+# Native binaries are built in CI, not checked into git.
 # Run the publish-natives workflow to build and publish them.
 src/main/resources/llama-server/Mac/
 src/main/resources/llama-server/Linux/
 src/main/resources/llama-server/Windows/
-src/main/resources/llama-server/Linux-Android/

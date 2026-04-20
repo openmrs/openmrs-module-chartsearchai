@@ -21,11 +21,11 @@ jobs:
             arch: aarch64
             binary: llama-server
             cmake_extra: ''
-          - os: macos-13
+          - os: macos-14
             platform: Mac
             arch: x86_64
             binary: llama-server
-            cmake_extra: ''
+            cmake_extra: '-DCMAKE_OSX_ARCHITECTURES=x86_64'
           - os: ubuntu-22.04
             platform: Linux
             arch: x86_64
@@ -41,6 +41,11 @@ jobs:
             arch: x86_64
             binary: llama-server.exe
             cmake_extra: ''
+          - os: windows-2022
+            platform: Windows
+            arch: aarch64
+            binary: llama-server.exe
+            cmake_extra: '-A ARM64'
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout llama.cpp
@@ -62,7 +67,7 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ matrix.arch }}
+          name: ${{ matrix.platform }}---${{ matrix.arch }}
           path: |
             build/bin/${{ matrix.binary }}
             build/bin/Release/${{ matrix.binary }}
@@ -83,8 +88,8 @@ jobs:
           NATIVES=llama-server-natives/src/main/resources/llama-server
           for dir in artifacts/*/; do
             name="$(basename "$dir")"
-            platform="${name%%-*}"
-            arch="${name##*-}"
+            platform="${name%---*}"
+            arch="${name##*---}"
             mkdir -p "$NATIVES/$platform/$arch"
             cp "$dir"/* "$NATIVES/$platform/$arch/"
             chmod +x "$NATIVES/$platform/$arch/"* 2>/dev/null || true

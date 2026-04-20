@@ -86,7 +86,7 @@ jobs:
             platform="${name%---*}"
             arch="${name##*---}"
             mkdir -p "$NATIVES/$platform/$arch"
-            cp "$dir"/* "$NATIVES/$platform/$arch/"
+            find "$dir" -type f | xargs -I{} cp {} "$NATIVES/$platform/$arch/"
             chmod +x "$NATIVES/$platform/$arch/"* 2>/dev/null || true
           done
           echo "Assembled natives:"

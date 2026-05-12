@@ -93,15 +93,28 @@ public class LocalLlmEngineTest {
 	}
 
 	@Test
-	public void buildRequestBody_shouldUseGreedySamplerOnly() throws IOException {
+	public void buildRequestBody_shouldPinSamplerChainToDryAndTemperature() throws IOException {
 		String body = engine.buildRequestBody("sys", "usr", false);
 		JsonNode root = MAPPER.readTree(body);
 
 		JsonNode samplers = root.get("samplers");
-		assertEquals(1, samplers.size(),
+		assertEquals(2, samplers.size(),
 				"at temperature=0 the decode is greedy; the default 9-sampler chain is wasted "
-				+ "work per token. Pin samplers to [\"temperature\"] to short-circuit it");
-		assertEquals("temperature", samplers.get(0).asText());
+				+ "work per token. Pin samplers to [\"dry\", \"temperature\"] so the only active "
+				+ "samplers are DRY (breaks degenerate multi-token loops that small models emit "
+				+ "on chart search) and temperature");
+		assertEquals("dry", samplers.get(0).asText());
+		assertEquals("temperature", samplers.get(1).asText());
+
+		assertEquals(4, root.get("dry_allowed_length").asInt(),
+				"dry_allowed_length=4 only penalizes n-gram repeats of 4+ tokens. Shorter "
+				+ "values (2-3) catch legitimate date prefixes like \"2026-02\" in the chart "
+				+ "context and force the model to fabricate dates or insert space tokens "
+				+ "inside dates to dodge the penalty");
+		assertEquals(-1, root.get("dry_penalty_last_n").asInt(),
+				"dry_penalty_last_n=-1 looks at the full sequence for repeats, so a loop "
+				+ "started near the prompt end is still caught after generation grows past "
+				+ "the default window");
 	}
 
 	@Test

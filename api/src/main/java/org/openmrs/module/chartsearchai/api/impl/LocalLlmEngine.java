@@ -468,12 +468,29 @@ public class LocalLlmEngine implements LlmEngine {
 		root.put("stream", stream);
 		// At temperature=0 the decode is greedy (argmax). The default sampler chain
 		// (penalties, dry, top_n_sigma, top_k, typ_p, top_p, min_p, xtc, temperature)
-		// runs every one of those samplers per token, but at greedy they're all no-ops
-		// on the OUTPUT — they still consume CPU. Pinning samplers to ["temperature"]
-		// short-circuits the chain to the only one that matters.
+		// runs every one of those samplers per token. At greedy most are no-ops on
+		// the OUTPUT but still consume CPU, so we pin the chain to the two samplers
+		// that matter: DRY (penalizes multi-token sequence repeats, which is the
+		// failure mode small models exhibit on chart search — verbatim repetition
+		// of date+finding blocks — without penalizing single-token repetition,
+		// which is required for legitimate extraction of dates and identifiers
+		// from the chart) and temperature.
 		ArrayNode samplers = MAPPER.createArrayNode();
+		samplers.add("dry");
 		samplers.add("temperature");
 		root.set("samplers", samplers);
+		// DRY parameters tuned for extractive QA over patient charts: penalize
+		// n-gram repeats of length >= 4 (catastrophic loops are 5+ token sequences
+		// like ", Ovarian cyst, Zika virus disease, Haemoglobin: 15.8 g/dL (HIGH),"
+		// repeated hundreds of times). At allowed_length=2 the penalty fires on
+		// 2-token date prefixes like "2026-02" present in the chart context,
+		// forcing the model to fabricate dates like 2027-02-27 or insert spaces
+		// inside dates ("20 27-02-27") to dodge the penalty. allowed_length=4
+		// catches the long loops while leaving date and identifier n-grams alone.
+		root.put("dry_multiplier", 0.8);
+		root.put("dry_base", 1.75);
+		root.put("dry_allowed_length", 4);
+		root.put("dry_penalty_last_n", -1);
 		// llama.cpp-specific extension. Without it, each request reprocesses the
 		// whole prompt from scratch, so successive queries on the same patient
 		// pay full prefill cost every time. With it set, llama-server reuses

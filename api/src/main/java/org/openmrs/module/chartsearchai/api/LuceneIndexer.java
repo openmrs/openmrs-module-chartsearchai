@@ -63,7 +63,7 @@ public class LuceneIndexer implements Closeable {
 
 	static final String FIELD_RESOURCE_TYPE = "resource_type";
 
-	static final String FIELD_RESOURCE_ID = "resource_id";
+	static final String FIELD_RESOURCE_UUID = "resource_uuid";
 
 	static final String FIELD_TEXT = "text";
 
@@ -221,7 +221,7 @@ public class LuceneIndexer implements Closeable {
 						Document doc = searcher.doc(scoreDoc.doc);
 						results.add(new LuceneSearchResult(
 								doc.get(FIELD_RESOURCE_TYPE),
-								Integer.parseInt(doc.get(FIELD_RESOURCE_ID)),
+								doc.get(FIELD_RESOURCE_UUID),
 								scoreDoc.score));
 					}
 				}
@@ -330,8 +330,8 @@ public class LuceneIndexer implements Closeable {
 		doc.add(new IntPoint(FIELD_PATIENT_ID, patient.getPatientId()));
 		doc.add(new StringField(FIELD_RESOURCE_TYPE,
 				record.getResourceType(), Field.Store.YES));
-		doc.add(new StringField(FIELD_RESOURCE_ID,
-				String.valueOf(record.getResourceId()), Field.Store.YES));
+		doc.add(new StringField(FIELD_RESOURCE_UUID,
+				record.getResourceUuid(), Field.Store.YES));
 		// Index the prefixed text so Lucene gets the same type signals
 		// as the embedding pipeline (e.g. "Medical condition: Condition: ...")
 		// Includes any category hints (e.g. concept-set names) so keyword
@@ -351,13 +351,13 @@ public class LuceneIndexer implements Closeable {
 
 		private final String resourceType;
 
-		private final int resourceId;
+		private final String resourceUuid;
 
 		private final float score;
 
-		public LuceneSearchResult(String resourceType, int resourceId, float score) {
+		public LuceneSearchResult(String resourceType, String resourceUuid, float score) {
 			this.resourceType = resourceType;
-			this.resourceId = resourceId;
+			this.resourceUuid = resourceUuid;
 			this.score = score;
 		}
 
@@ -365,8 +365,8 @@ public class LuceneIndexer implements Closeable {
 			return resourceType;
 		}
 
-		public int getResourceId() {
-			return resourceId;
+		public String getResourceUuid() {
+			return resourceUuid;
 		}
 
 		public float getScore() {

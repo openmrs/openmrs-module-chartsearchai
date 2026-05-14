@@ -2,16 +2,16 @@
   "dataset": "citation-accuracy-v1",
   "description": "Tests that citation extraction correctly parses LLM JSON output and maps to record references",
   "records": [
-    { "index": 1, "resourceType": "order", "resourceId": 101, "text": "Drug order: Azithromycin" },
-    { "index": 2, "resourceType": "order", "resourceId": 102, "text": "Drug order: Azithromycin (stopped)" },
-    { "index": 3, "resourceType": "program", "resourceId": 301, "text": "Program: PMTCT" },
-    { "index": 4, "resourceType": "obs", "resourceId": 401, "text": "Immunization history" },
-    { "index": 5, "resourceType": "allergy", "resourceId": 501, "text": "Allergy: Beef" },
-    { "index": 6, "resourceType": "obs", "resourceId": 601, "text": "Method of family planning: Condoms" },
-    { "index": 7, "resourceType": "obs", "resourceId": 701, "text": "Method of family planning: Diaphragm" },
-    { "index": 8, "resourceType": "condition", "resourceId": 801, "text": "Condition: Tuberculosis. Status: ACTIVE" },
-    { "index": 9, "resourceType": "obs", "resourceId": 901, "text": "CD4 Count: 988.0" },
-    { "index": 10, "resourceType": "obs", "resourceId": 1001, "text": "CD4 Count: 1191.0" }
+    { "index": 1, "resourceType": "order", "resourceUuid": "00000000-0000-0000-0000-000000000101", "text": "Drug order: Azithromycin" },
+    { "index": 2, "resourceType": "order", "resourceUuid": "00000000-0000-0000-0000-000000000102", "text": "Drug order: Azithromycin (stopped)" },
+    { "index": 3, "resourceType": "program", "resourceUuid": "00000000-0000-0000-0000-000000000301", "text": "Program: PMTCT" },
+    { "index": 4, "resourceType": "obs", "resourceUuid": "00000000-0000-0000-0000-000000000401", "text": "Immunization history" },
+    { "index": 5, "resourceType": "allergy", "resourceUuid": "00000000-0000-0000-0000-000000000501", "text": "Allergy: Beef" },
+    { "index": 6, "resourceType": "obs", "resourceUuid": "00000000-0000-0000-0000-000000000601", "text": "Method of family planning: Condoms" },
+    { "index": 7, "resourceType": "obs", "resourceUuid": "00000000-0000-0000-0000-000000000701", "text": "Method of family planning: Diaphragm" },
+    { "index": 8, "resourceType": "condition", "resourceUuid": "00000000-0000-0000-0000-000000000801", "text": "Condition: Tuberculosis. Status: ACTIVE" },
+    { "index": 9, "resourceType": "obs", "resourceUuid": "00000000-0000-0000-0000-000000000901", "text": "CD4 Count: 988.0" },
+    { "index": 10, "resourceType": "obs", "resourceUuid": "00000000-0000-0000-0000-000000001001", "text": "CD4 Count: 1191.0" }
   ],
   "cases": [
     {

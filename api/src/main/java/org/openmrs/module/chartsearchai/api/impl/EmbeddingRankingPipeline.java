@@ -282,18 +282,18 @@ final class EmbeddingRankingPipeline {
 							String.format("%.4f", partialKwFloor));
 				} else if (rMaxKw < bonusThreshold
 						&& rMaxSem < partialKwFloor) {
-					Set<Integer> badIds =
-							new HashSet<Integer>();
+					Set<String> badIds =
+							new HashSet<String>();
 					for (ScoredEmbedding se : refined) {
 						badIds.add(
-								se.embedding.getResourceId());
+								se.embedding.getResourceUuid());
 					}
 					List<ScoredEmbedding> cleaned =
 							new ArrayList<ScoredEmbedding>();
 					for (ScoredEmbedding se : candidates) {
 						if (!badIds.contains(
 								se.embedding
-										.getResourceId())) {
+										.getResourceUuid())) {
 							cleaned.add(se);
 						}
 					}
@@ -376,10 +376,10 @@ final class EmbeddingRankingPipeline {
 								* config.similarityRatio
 						: config.similarityRatio;
 				double mergeFloor = kwMaxSem * rescueRatio;
-				Set<Integer> inCandidates = new HashSet<Integer>();
+				Set<String> inCandidates = new HashSet<String>();
 				for (ScoredEmbedding se : candidates) {
 					inCandidates.add(
-							se.embedding.getResourceId());
+							se.embedding.getResourceUuid());
 				}
 
 				// For the selective-keyword rescue path, compute a
@@ -391,7 +391,7 @@ final class EmbeddingRankingPipeline {
 							new ArrayList<Double>();
 					for (ScoredEmbedding se : scored) {
 						if (inCandidates.contains(
-								se.embedding.getResourceId())
+								se.embedding.getResourceUuid())
 								|| se.keywordScore > 0) {
 							continue;
 						}
@@ -449,7 +449,7 @@ final class EmbeddingRankingPipeline {
 						new ArrayList<ScoredEmbedding>();
 				for (ScoredEmbedding se : scored) {
 					if (inCandidates.contains(
-							se.embedding.getResourceId())
+							se.embedding.getResourceUuid())
 							|| se.keywordScore > 0
 							|| se.semanticScore < mergeFloor) {
 						continue;
@@ -482,11 +482,11 @@ final class EmbeddingRankingPipeline {
 					// Concept-pairing for rescued records.
 					Set<String> rescuedConcepts =
 							new HashSet<String>();
-					Set<Integer> rescuedIds =
-							new HashSet<Integer>();
+					Set<String> rescuedIds =
+							new HashSet<String>();
 					for (ScoredEmbedding se : rescued) {
 						rescuedIds.add(
-								se.embedding.getResourceId());
+								se.embedding.getResourceUuid());
 						String cn = ConceptNameUtil
 								.extractConceptName(
 										se.embedding
@@ -498,8 +498,8 @@ final class EmbeddingRankingPipeline {
 					if (selectiveKwRescued
 						&& !rescuedConcepts.isEmpty()) {
 						for (ScoredEmbedding se : scored) {
-							int rid = se.embedding
-									.getResourceId();
+							String rid = se.embedding
+									.getResourceUuid();
 							if (inCandidates.contains(rid)
 									|| rescuedIds.contains(rid)) {
 								continue;
@@ -582,7 +582,7 @@ final class EmbeddingRankingPipeline {
 			}
 			ScoredEmbedding se = scored.get(i);
 			scores.append(se.embedding.getResourceType())
-					.append(":").append(se.embedding.getResourceId())
+					.append(":").append(se.embedding.getResourceUuid())
 					.append("=").append(String.format("%.4f", se.score));
 		}
 		log.warn("Similarity scores: [{}], minScore: {}, adaptiveCutoff: {}",

@@ -21,7 +21,7 @@ public interface ChartSearchAiDAO {
 
 	ChartEmbedding saveChartEmbedding(ChartEmbedding chartEmbedding);
 
-	ChartEmbedding getByResource(String resourceType, Integer resourceId);
+	ChartEmbedding getByResource(String resourceType, String resourceUuid);
 
 	List<ChartEmbedding> getByPatient(Patient patient);
 

@@ -178,7 +178,8 @@ public class EmbeddingIndexerTest extends BaseModuleContextSensitiveTest {
 				new OnnxEmbeddingProvider(MODEL_PATH, VOCAB_PATH);
 		try {
 			SerializedRecord recordWithHints = new SerializedRecord(
-					"obs", 1, "Finding — Temperature: 36.7", new Date(),
+					"obs", "00000000-0000-0000-0000-000000000001",
+					"Finding — Temperature: 36.7", new Date(),
 					Arrays.asList("Vital signs"));
 
 			List<ChartEmbedding> embeddings = EmbeddingIndexer.buildEmbeddings(
@@ -205,7 +206,8 @@ public class EmbeddingIndexerTest extends BaseModuleContextSensitiveTest {
 				new OnnxEmbeddingProvider(MODEL_PATH, VOCAB_PATH);
 		try {
 			SerializedRecord recordNoHints = new SerializedRecord(
-					"obs", 1, "Finding — Temperature: 36.7", new Date());
+					"obs", "00000000-0000-0000-0000-000000000001",
+					"Finding — Temperature: 36.7", new Date());
 
 			List<ChartEmbedding> embeddings = EmbeddingIndexer.buildEmbeddings(
 					Collections.singletonList(recordNoHints), provider);
@@ -236,9 +238,9 @@ public class EmbeddingIndexerTest extends BaseModuleContextSensitiveTest {
 		try {
 			String body = "Finding — Temperature: 36.7";
 			SerializedRecord noHints = new SerializedRecord(
-					"obs", 1, body, new Date());
+					"obs", "00000000-0000-0000-0000-000000000001", body, new Date());
 			SerializedRecord withHints = new SerializedRecord(
-					"obs", 2, body, new Date(),
+					"obs", "00000000-0000-0000-0000-000000000002", body, new Date(),
 					Arrays.asList("Vital signs"));
 
 			List<ChartEmbedding> embeddings = EmbeddingIndexer.buildEmbeddings(

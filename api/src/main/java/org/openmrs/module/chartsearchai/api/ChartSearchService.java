@@ -135,14 +135,14 @@ public interface ChartSearchService {
 
 		private final String resourceType;
 
-		private final Integer resourceId;
+		private final String resourceUuid;
 
 		private final Date date;
 
-		public RecordReference(int index, String resourceType, Integer resourceId, Date date) {
+		public RecordReference(int index, String resourceType, String resourceUuid, Date date) {
 			this.index = index;
 			this.resourceType = resourceType;
-			this.resourceId = resourceId;
+			this.resourceUuid = resourceUuid;
 			this.date = date;
 		}
 
@@ -154,8 +154,8 @@ public interface ChartSearchService {
 			return resourceType;
 		}
 
-		public Integer getResourceId() {
-			return resourceId;
+		public String getResourceUuid() {
+			return resourceUuid;
 		}
 
 		public Date getDate() {

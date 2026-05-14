@@ -70,7 +70,7 @@ public class ElasticsearchIndexer implements Closeable {
 
 	static final String FIELD_RESOURCE_TYPE = "resource_type";
 
-	static final String FIELD_RESOURCE_ID = "resource_id";
+	static final String FIELD_RESOURCE_UUID = "resource_uuid";
 
 	static final String FIELD_TEXT = "text";
 
@@ -382,7 +382,7 @@ public class ElasticsearchIndexer implements Closeable {
 			String prefixedText = ChartSearchAiUtils.buildPrefixedText(
 					ce.getResourceType(), ce.getTextContent());
 			String docId = patientId + "_"
-					+ ce.getResourceType() + "_" + ce.getResourceId();
+					+ ce.getResourceType() + "_" + ce.getResourceUuid();
 
 			ObjectNode action = mapper.createObjectNode();
 			action.putObject("index")
@@ -393,7 +393,7 @@ public class ElasticsearchIndexer implements Closeable {
 			ObjectNode doc = mapper.createObjectNode();
 			doc.put(FIELD_PATIENT_ID, patientId);
 			doc.put(FIELD_RESOURCE_TYPE, ce.getResourceType());
-			doc.put(FIELD_RESOURCE_ID, ce.getResourceId());
+			doc.put(FIELD_RESOURCE_UUID, ce.getResourceUuid());
 			doc.put(FIELD_TEXT, prefixedText);
 			ArrayNode embArr = doc.putArray(FIELD_EMBEDDING);
 			for (float v : ce.getEmbeddingVector()) {
@@ -515,7 +515,7 @@ public class ElasticsearchIndexer implements Closeable {
 			body.put("size", 10000);
 			ArrayNode source = body.putArray("_source");
 			source.add(FIELD_RESOURCE_TYPE);
-			source.add(FIELD_RESOURCE_ID);
+			source.add(FIELD_RESOURCE_UUID);
 			source.add(FIELD_EMBEDDING);
 			source.add(FIELD_TEXT);
 			body.putObject("query").putObject("term")
@@ -528,7 +528,7 @@ public class ElasticsearchIndexer implements Closeable {
 					EntityUtils.toString(response.getEntity()));
 			for (JsonNode hit : responseJson.path("hits").path("hits")) {
 				JsonNode src = hit.path("_source");
-				if (!src.has(FIELD_RESOURCE_TYPE) || !src.has(FIELD_RESOURCE_ID)) {
+				if (!src.has(FIELD_RESOURCE_TYPE) || !src.has(FIELD_RESOURCE_UUID)) {
 					continue;
 				}
 				float[] embedding = null;
@@ -542,7 +542,7 @@ public class ElasticsearchIndexer implements Closeable {
 				String text = src.has(FIELD_TEXT) ? src.get(FIELD_TEXT).asText() : null;
 				out.add(new ElasticsearchSearchResult(
 						src.get(FIELD_RESOURCE_TYPE).asText(),
-						src.get(FIELD_RESOURCE_ID).asInt(),
+						src.get(FIELD_RESOURCE_UUID).asText(),
 						0f, embedding, text));
 			}
 		}
@@ -579,7 +579,7 @@ public class ElasticsearchIndexer implements Closeable {
 			JsonNode hits = responseJson.path("hits").path("hits");
 			for (JsonNode hit : hits) {
 				JsonNode src = hit.path("_source");
-				if (!src.has(FIELD_RESOURCE_TYPE) || !src.has(FIELD_RESOURCE_ID)) {
+				if (!src.has(FIELD_RESOURCE_TYPE) || !src.has(FIELD_RESOURCE_UUID)) {
 					log.warn("Elasticsearch: skipping hit with missing fields");
 					continue;
 				}
@@ -594,7 +594,7 @@ public class ElasticsearchIndexer implements Closeable {
 				String text = src.has(FIELD_TEXT) ? src.get(FIELD_TEXT).asText() : null;
 				results.add(new ElasticsearchSearchResult(
 						src.get(FIELD_RESOURCE_TYPE).asText(),
-						src.get(FIELD_RESOURCE_ID).asInt(),
+						src.get(FIELD_RESOURCE_UUID).asText(),
 						hit.has("_score") ? hit.get("_score").floatValue() : 0f,
 						embedding, text));
 			}
@@ -685,7 +685,7 @@ public class ElasticsearchIndexer implements Closeable {
 
 		private final String resourceType;
 
-		private final int resourceId;
+		private final String resourceUuid;
 
 		private final float score;
 
@@ -693,10 +693,10 @@ public class ElasticsearchIndexer implements Closeable {
 
 		private final String text;
 
-		public ElasticsearchSearchResult(String resourceType, int resourceId,
+		public ElasticsearchSearchResult(String resourceType, String resourceUuid,
 				float score, float[] embedding, String text) {
 			this.resourceType = resourceType;
-			this.resourceId = resourceId;
+			this.resourceUuid = resourceUuid;
 			this.score = score;
 			this.embedding = embedding;
 			this.text = text;
@@ -706,8 +706,8 @@ public class ElasticsearchIndexer implements Closeable {
 			return resourceType;
 		}
 
-		public int getResourceId() {
-			return resourceId;
+		public String getResourceUuid() {
+			return resourceUuid;
 		}
 
 		public float getScore() {

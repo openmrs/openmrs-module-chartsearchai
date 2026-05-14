@@ -51,7 +51,7 @@ final class ElasticsearchQueryBuilder {
 
 		properties.putObject(ElasticsearchIndexer.FIELD_PATIENT_ID).put("type", "integer");
 		properties.putObject(ElasticsearchIndexer.FIELD_RESOURCE_TYPE).put("type", "keyword");
-		properties.putObject(ElasticsearchIndexer.FIELD_RESOURCE_ID).put("type", "integer");
+		properties.putObject(ElasticsearchIndexer.FIELD_RESOURCE_UUID).put("type", "keyword");
 		properties.putObject(ElasticsearchIndexer.FIELD_TEXT).put("type", "text").put("analyzer", "english");
 
 		ObjectNode embeddingField = properties.putObject(ElasticsearchIndexer.FIELD_EMBEDDING);
@@ -185,7 +185,7 @@ final class ElasticsearchQueryBuilder {
 		body.put("size", maxResults);
 		ArrayNode source = body.putArray("_source");
 		source.add(ElasticsearchIndexer.FIELD_RESOURCE_TYPE);
-		source.add(ElasticsearchIndexer.FIELD_RESOURCE_ID);
+		source.add(ElasticsearchIndexer.FIELD_RESOURCE_UUID);
 		source.add(ElasticsearchIndexer.FIELD_EMBEDDING);
 		source.add(ElasticsearchIndexer.FIELD_TEXT);
 		return body;

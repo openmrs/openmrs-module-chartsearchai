@@ -138,11 +138,11 @@ public class EmbeddingIndexer {
 					try {
 						List<String> hints = ChartSearchAiUtils.extractCategoryHints(obs.getConcept());
 						upsertEmbedding(patient, ChartSearchAiConstants.RESOURCE_TYPE_OBS,
-								obs.getObsId(), text, hints, now);
+								obs.getUuid(), text, hints, now);
 					}
 					catch (Exception e) {
-						log.warn("Failed to embed obs [id={}] for patient [id={}]: {}",
-								obs.getObsId(), patient.getPatientId(), e.getMessage());
+						log.warn("Failed to embed obs [uuid={}] for patient [id={}]: {}",
+								obs.getUuid(), patient.getPatientId(), e.getMessage());
 					}
 				}
 			}
@@ -154,12 +154,12 @@ public class EmbeddingIndexer {
 				if (text != null && !text.trim().isEmpty() && seenText.add(text)) {
 					try {
 						upsertEmbedding(patient, ChartSearchAiConstants.RESOURCE_TYPE_DIAGNOSIS,
-								diagnosis.getDiagnosisId(), text,
+								diagnosis.getUuid(), text,
 								Collections.<String>emptyList(), now);
 					}
 					catch (Exception e) {
-						log.warn("Failed to embed diagnosis [id={}] for patient [id={}]: {}",
-								diagnosis.getDiagnosisId(), patient.getPatientId(), e.getMessage());
+						log.warn("Failed to embed diagnosis [uuid={}] for patient [id={}]: {}",
+								diagnosis.getUuid(), patient.getPatientId(), e.getMessage());
 					}
 				}
 			}
@@ -168,13 +168,13 @@ public class EmbeddingIndexer {
 		log.info("Finished indexing encounter [id={}]", encounter.getEncounterId());
 	}
 
-	private void saveEmbedding(Patient patient, String resourceType, Integer resourceId,
+	private void saveEmbedding(Patient patient, String resourceType, String resourceUuid,
 			String text, List<String> categoryHints, Date now) {
 		String hintInjectedBody = ChartSearchAiUtils.injectCategoryHints(text, categoryHints);
 		ChartEmbedding ce = new ChartEmbedding();
 		ce.setPatient(patient);
 		ce.setResourceType(resourceType);
-		ce.setResourceId(resourceId);
+		ce.setResourceUuid(resourceUuid);
 		ce.setTextContent(hintInjectedBody);
 		ce.setEmbeddingVector(embeddingProvider.embed(
 				ChartSearchAiUtils.buildPrefixedText(resourceType, hintInjectedBody)));
@@ -182,9 +182,9 @@ public class EmbeddingIndexer {
 		dao.saveChartEmbedding(ce);
 	}
 
-	private void upsertEmbedding(Patient patient, String resourceType, Integer resourceId,
+	private void upsertEmbedding(Patient patient, String resourceType, String resourceUuid,
 			String text, List<String> categoryHints, Date now) {
-		ChartEmbedding existing = dao.getByResource(resourceType, resourceId);
+		ChartEmbedding existing = dao.getByResource(resourceType, resourceUuid);
 		if (existing != null) {
 			String hintInjectedBody = ChartSearchAiUtils.injectCategoryHints(text, categoryHints);
 			existing.setTextContent(hintInjectedBody);
@@ -193,7 +193,7 @@ public class EmbeddingIndexer {
 			existing.setDateCreated(now);
 			dao.saveChartEmbedding(existing);
 		} else {
-			saveEmbedding(patient, resourceType, resourceId, text, categoryHints, now);
+			saveEmbedding(patient, resourceType, resourceUuid, text, categoryHints, now);
 		}
 	}
 
@@ -214,7 +214,7 @@ public class EmbeddingIndexer {
 			try {
 				ChartEmbedding ce = new ChartEmbedding();
 				ce.setResourceType(record.getResourceType());
-				ce.setResourceId(record.getResourceId());
+				ce.setResourceUuid(record.getResourceUuid());
 				// Inject category hints into the stored body so that downstream
 				// keyword scoring and concept-name extraction see the same
 				// hint-augmented text the embedding vector was computed from.
@@ -227,8 +227,8 @@ public class EmbeddingIndexer {
 				result.add(ce);
 			}
 			catch (Exception e) {
-				log.warn("Failed to embed {} [id={}]: {}",
-						record.getResourceType(), record.getResourceId(),
+				log.warn("Failed to embed {} [uuid={}]: {}",
+						record.getResourceType(), record.getResourceUuid(),
 						e.getMessage());
 			}
 		}

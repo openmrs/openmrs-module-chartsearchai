@@ -73,11 +73,11 @@ public class PatientRecordLoader {
 	 * Load all clinical records for a patient and serialize each to text.
 	 *
 	 * @param patient the patient whose records to load
-	 * @return serialized records with resource type and ID for each
+	 * @return serialized records with resource type and UUID for each
 	 */
 	public List<SerializedRecord> loadAll(Patient patient) {
 		List<SerializedRecord> records = new ArrayList<SerializedRecord>();
-		// Deduplicate by resource key (type:id) to avoid re-processing the same record,
+		// Deduplicate by resource key (type:uuid) to avoid re-processing the same record,
 		// but allow distinct records with identical text (e.g. two separate BP readings
 		// that happen to have the same value).
 		Set<String> seenKeys = new HashSet<String>();
@@ -88,7 +88,7 @@ public class PatientRecordLoader {
 				continue;
 			}
 			String text = obsSerializer.toText(obs);
-			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_OBS, obs.getObsId(), seenKeys)) {
+			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_OBS, obs.getUuid(), seenKeys)) {
 				// Record timestamp: when the observation was recorded
 				Date date = obs.getObsDatetime() != null ? obs.getObsDatetime() : obs.getDateCreated();
 				// Category hints from the Obs concept (e.g. Temperature
@@ -103,14 +103,14 @@ public class PatientRecordLoader {
 					hints = ChartSearchAiUtils.extractCategoryHints(obs.getValueCoded());
 				}
 				records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_OBS,
-						obs.getObsId(), text, date, hints));
+						obs.getUuid(), text, date, hints));
 			}
 		}
 
 		// Conditions
 		for (Condition condition : Context.getConditionService().getAllConditions(patient)) {
 			String text = conditionSerializer.toText(condition);
-			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_CONDITION, condition.getConditionId(), seenKeys)) {
+			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_CONDITION, condition.getUuid(), seenKeys)) {
 				// Record timestamp: onset date (not in serialized text — see
 				// ConditionTextSerializer). End date is clinically significant
 				// and IS included in the text as "Resolved: <date>".
@@ -118,32 +118,32 @@ public class PatientRecordLoader {
 				List<String> hints = ChartSearchAiUtils.extractCategoryHints(
 						condition.getCondition() != null ? condition.getCondition().getCoded() : null);
 				records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION,
-						condition.getConditionId(), text, date, hints));
+						condition.getUuid(), text, date, hints));
 			}
 		}
 
 		// Allergies (no clinically significant dates — only record timestamp)
 		for (Allergy allergy : Context.getPatientService().getAllergies(patient)) {
 			String text = allergySerializer.toText(allergy);
-			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY, allergy.getAllergyId(), seenKeys)) {
+			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY, allergy.getUuid(), seenKeys)) {
 				List<String> hints = allergy.getAllergen() != null
 						? ChartSearchAiUtils.extractCategoryHints(allergy.getAllergen().getCodedAllergen())
 						: Collections.<String>emptyList();
 				records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY,
-						allergy.getAllergyId(), text, allergy.getDateCreated(), hints));
+						allergy.getUuid(), text, allergy.getDateCreated(), hints));
 			}
 		}
 
 		// Diagnoses
 		for (Diagnosis diagnosis : Context.getDiagnosisService().getDiagnoses(patient, null)) {
 			String text = diagnosisSerializer.toText(diagnosis);
-			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_DIAGNOSIS, diagnosis.getDiagnosisId(), seenKeys)) {
+			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_DIAGNOSIS, diagnosis.getUuid(), seenKeys)) {
 				Date date = diagnosis.getEncounter() != null
 						? diagnosis.getEncounter().getEncounterDatetime() : diagnosis.getDateCreated();
 				List<String> hints = ChartSearchAiUtils.extractCategoryHints(
 						diagnosis.getDiagnosis() != null ? diagnosis.getDiagnosis().getCoded() : null);
 				records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DIAGNOSIS,
-						diagnosis.getDiagnosisId(), text, date, hints));
+						diagnosis.getUuid(), text, date, hints));
 			}
 		}
 
@@ -155,10 +155,10 @@ public class PatientRecordLoader {
 				continue;
 			}
 			String text = orderSerializer.toText(order);
-			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_ORDER, order.getOrderId(), seenKeys)) {
+			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_ORDER, order.getUuid(), seenKeys)) {
 				List<String> hints = ChartSearchAiUtils.extractCategoryHints(order.getConcept());
 				records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_ORDER,
-						order.getOrderId(), text, order.getDateActivated(), hints));
+						order.getUuid(), text, order.getDateActivated(), hints));
 			}
 		}
 
@@ -168,12 +168,12 @@ public class PatientRecordLoader {
 		for (PatientProgram pp : Context.getProgramWorkflowService()
 				.getPatientPrograms(patient, null, null, null, null, null, false)) {
 			String text = programSerializer.toText(pp);
-			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_PROGRAM, pp.getPatientProgramId(), seenKeys)) {
+			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_PROGRAM, pp.getUuid(), seenKeys)) {
 				List<String> hints = pp.getProgram() != null
 						? ChartSearchAiUtils.extractCategoryHints(pp.getProgram().getConcept())
 						: Collections.<String>emptyList();
 				records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_PROGRAM,
-						pp.getPatientProgramId(), text, pp.getDateEnrolled(), hints));
+						pp.getUuid(), text, pp.getDateEnrolled(), hints));
 			}
 		}
 
@@ -186,14 +186,14 @@ public class PatientRecordLoader {
 				.getMedicationDispenseByCriteria(dispenseCriteria)) {
 			String text = medicationDispenseSerializer.toText(dispense);
 			if (addIfValid(text, ChartSearchAiConstants.RESOURCE_TYPE_MEDICATION_DISPENSE,
-					dispense.getMedicationDispenseId(), seenKeys)) {
+					dispense.getUuid(), seenKeys)) {
 				Date date = dispense.getDateHandedOver() != null
 						? dispense.getDateHandedOver() : dispense.getDateCreated();
 				Concept dispenseConcept = dispense.getDrug() != null
 						? dispense.getDrug().getConcept() : dispense.getConcept();
 				List<String> hints = ChartSearchAiUtils.extractCategoryHints(dispenseConcept);
 				records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_MEDICATION_DISPENSE,
-						dispense.getMedicationDispenseId(), text, date, hints));
+						dispense.getUuid(), text, date, hints));
 			}
 		}
 
@@ -203,22 +203,22 @@ public class PatientRecordLoader {
 		return records;
 	}
 
-	private static boolean addIfValid(String text, String resourceType, Integer resourceId,
+	private static boolean addIfValid(String text, String resourceType, String resourceUuid,
 			Set<String> seenKeys) {
 		if (text == null || text.trim().isEmpty()) {
 			return false;
 		}
-		return seenKeys.add(resourceType + ":" + resourceId);
+		return seenKeys.add(resourceType + ":" + resourceUuid);
 	}
 
 	/**
-	 * A serialized clinical record with its resource type and ID.
+	 * A serialized clinical record with its resource type and UUID.
 	 */
 	public static class SerializedRecord {
 
 		private final String resourceType;
 
-		private final Integer resourceId;
+		private final String resourceUuid;
 
 		private final String text;
 
@@ -226,14 +226,14 @@ public class PatientRecordLoader {
 
 		private final List<String> categoryHints;
 
-		public SerializedRecord(String resourceType, Integer resourceId, String text, Date date) {
-			this(resourceType, resourceId, text, date, Collections.<String>emptyList());
+		public SerializedRecord(String resourceType, String resourceUuid, String text, Date date) {
+			this(resourceType, resourceUuid, text, date, Collections.<String>emptyList());
 		}
 
-		public SerializedRecord(String resourceType, Integer resourceId, String text, Date date,
+		public SerializedRecord(String resourceType, String resourceUuid, String text, Date date,
 				List<String> categoryHints) {
 			this.resourceType = resourceType;
-			this.resourceId = resourceId;
+			this.resourceUuid = resourceUuid;
 			this.text = text;
 			this.date = date;
 			this.categoryHints = categoryHints != null
@@ -244,8 +244,8 @@ public class PatientRecordLoader {
 			return resourceType;
 		}
 
-		public Integer getResourceId() {
-			return resourceId;
+		public String getResourceUuid() {
+			return resourceUuid;
 		}
 
 		public String getText() {

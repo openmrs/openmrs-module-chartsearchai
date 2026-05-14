@@ -341,10 +341,10 @@ final class CoherenceFilters {
 		if (queryTerms == null || queryTerms.length == 0) {
 			return filtered;
 		}
-		Set<Integer> filteredIds = new HashSet<Integer>();
+		Set<String> filteredIds = new HashSet<String>();
 		Set<String> coveredTerms = new HashSet<String>();
 		for (ScoredEmbedding se : filtered) {
-			filteredIds.add(se.embedding.getResourceId());
+			filteredIds.add(se.embedding.getResourceUuid());
 			String text = ChartSearchAiUtils.buildPrefixedText(
 					se.embedding.getResourceType(),
 					ConceptNameUtil.stripSynonyms(
@@ -359,13 +359,13 @@ final class CoherenceFilters {
 		}
 		List<ScoredEmbedding> result =
 				new ArrayList<ScoredEmbedding>(filtered);
-		Set<Integer> restoredIds = new HashSet<Integer>(filteredIds);
+		Set<String> restoredIds = new HashSet<String>(filteredIds);
 		// Pass 1: restore records that cover query terms NOT already
 		// covered by coherence survivors.
 		for (ScoredEmbedding se : original) {
 			if (se.keywordScore <= 0
 					|| restoredIds.contains(
-							se.embedding.getResourceId())) {
+							se.embedding.getResourceUuid())) {
 				continue;
 			}
 			String text = ChartSearchAiUtils.buildPrefixedText(
@@ -378,7 +378,7 @@ final class CoherenceFilters {
 				if (!coveredTerms.contains(term)
 						&& SimilarityAndScoringEngine.termMatchesText(term, text, words)) {
 					result.add(se);
-					restoredIds.add(se.embedding.getResourceId());
+					restoredIds.add(se.embedding.getResourceUuid());
 					break;
 				}
 			}
@@ -388,12 +388,12 @@ final class CoherenceFilters {
 		// threshold (min(2,N)/N query terms) ensures only records with
 		// strong keyword evidence are restored.
 		for (ScoredEmbedding se : original) {
-			if (restoredIds.contains(se.embedding.getResourceId())) {
+			if (restoredIds.contains(se.embedding.getResourceUuid())) {
 				continue;
 			}
 			if (se.keywordScore >= bonusThreshold) {
 				result.add(se);
-				restoredIds.add(se.embedding.getResourceId());
+				restoredIds.add(se.embedding.getResourceUuid());
 			}
 		}
 		return result;
@@ -422,7 +422,7 @@ final class CoherenceFilters {
 			String cn = ConceptNameUtil.extractConceptName(
 					se.embedding.getTextContent());
 			if (cn == null) {
-				cn = "__unnamed_" + se.embedding.getResourceId();
+				cn = "__unnamed_" + se.embedding.getResourceUuid();
 			}
 			List<ScoredEmbedding> list = byConcept.get(cn);
 			if (list == null) {

@@ -401,7 +401,7 @@ final class RetrievalQuery {
 				for (ChartEmbedding ce : pipelineResult) {
 					if (kept.length() > 0) kept.append(", ");
 					kept.append(ce.getResourceType()).append(":")
-							.append(ce.getResourceId());
+							.append(ce.getResourceUuid());
 				}
 				log.warn("Concept-name rerank {}: {} -> {} [{}]",
 						Arrays.toString(queryTerms),
@@ -610,7 +610,7 @@ final class RetrievalQuery {
 		Set<String> relevantKeys = new HashSet<String>();
 		for (ChartEmbedding ce : similar) {
 			relevantKeys.add(ChartSearchAiUtils.resourceKey(
-					ce.getResourceType(), ce.getResourceId()));
+					ce.getResourceType(), ce.getResourceUuid()));
 		}
 
 		log.warn("findRelevantRecords: {} embeddings -> {} keys",

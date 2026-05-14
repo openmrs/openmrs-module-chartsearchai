@@ -202,7 +202,7 @@ Adding a vector database would introduce extra infrastructure to install, config
 
 Store embeddings as `MEDIUMBLOB` in a regular MySQL table (`chartsearchai_embedding`), indexed by `patient_id`. Load a patient's embeddings into memory and compute cosine similarity in Java. Zero new infrastructure.
 
-The `UNIQUE KEY (resource_type, resource_id)` constraint prevents duplicate embeddings and enables upsert on re-index.
+The `UNIQUE KEY (resource_type, resource_uuid)` constraint prevents duplicate embeddings and enables upsert on re-index.
 
 ### CQRS separation
 
@@ -559,7 +559,7 @@ Example LLM output:
 {"answer": "The patient's diabetes appears poorly controlled. Their most recent HbA1c was 8.2% [4], above the target of 7%, despite being on Metformin [3].", "citations": [4, 3]}
 ```
 
-On the Java side, each citation number maps back to a `resource_type` + `resource_id` pair maintained in an ordered list (`RecordMapping`) during prompt construction. The UI can then link each citation directly to the source record in OpenMRS, allowing the clinician to verify every claim with one click.
+On the Java side, each citation number maps back to a `resource_type` + `resource_uuid` pair maintained in an ordered list (`RecordMapping`) during prompt construction. The UI can then link each citation directly to the source record in OpenMRS, allowing the clinician to verify every claim with one click.
 
 As a safety net, any slash-separated citations that small LLMs occasionally produce in the answer text (e.g., `[5/12]`) are normalized to `[5], [12]` before returning to the user. This is cosmetic only — the authoritative citations come from the structured `citations` array.
 
@@ -767,8 +767,8 @@ Response:
   "answer": "The patient is currently on...[1]...[3]",
   "disclaimer": "This response is AI-generated and may not be accurate...",
   "references": [
-    { "index": 3, "resourceType": "order", "resourceId": 789, "date": "2025-03-15" },
-    { "index": 1, "resourceType": "obs", "resourceId": 456, "date": "2025-01-10" }
+    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15" },
+    { "index": 1, "resourceType": "obs", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10" }
   ]
 }
 ```
@@ -785,7 +785,7 @@ POST /ws/rest/v1/chartsearchai/search/stream
 
 Returns a `text/event-stream` with three event types:
 - `token` — a chunk of the answer text, streamed as generated
-- `done` — final JSON with the complete answer, references (with `index`, `resourceType`, `resourceId`, `date`), and disclaimer
+- `done` — final JSON with the complete answer, references (with `index`, `resourceType`, `resourceUuid`, `date`), and disclaimer
 - `error` — an error message if something goes wrong
 
 Both search endpoints return a `questionId` (the audit log row ID as a string) that the frontend uses to submit user feedback.

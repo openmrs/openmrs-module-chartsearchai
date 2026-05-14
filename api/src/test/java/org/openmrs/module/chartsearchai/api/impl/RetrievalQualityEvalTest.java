@@ -91,10 +91,13 @@ public class RetrievalQualityEvalTest {
 		// embedding text format (prefix, no date) matches what runs in prod.
 		List<org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord> records =
 				TestDatasetHelper.toSerializedRecords(DATASET);
-		// Eval dataset uses 1-based resourceId (* 100) for metric matching
+		// Replace the default UUID with a 1-based, sparsely numbered UUID
+		// (index * 100) — keeps eval-dataset fixtures distinguishable from
+		// the default 0-based dataset indices used elsewhere.
 		for (int i = 0; i < records.size(); i++) {
 			records.set(i, new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-					records.get(i).getResourceType(), (i + 1) * 100,
+					records.get(i).getResourceType(),
+					TestDatasetHelper.uuidForIndex((i + 1) * 100),
 					records.get(i).getText(), null));
 		}
 		List<ChartEmbedding> embeddings =

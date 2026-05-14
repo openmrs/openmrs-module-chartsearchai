@@ -81,7 +81,7 @@ public class HybridRetriever {
 	 * @param queryText the normalized query text
 	 * @param queryPrefix prefix for the query embedding (e.g. "" or "search_query: ")
 	 * @param maxResults maximum number of results to return
-	 * @return set of "resourceType:resourceId" keys for the top results
+	 * @return set of "resourceType:resourceUuid" keys for the top results
 	 */
 	public Set<String> search(Patient patient, String queryText,
 			String queryPrefix, int maxResults) {
@@ -92,7 +92,7 @@ public class HybridRetriever {
 				luceneIndexer.search(patient, queryText, windowSize);
 		List<String> bm25Ranked = new ArrayList<String>(bm25Results.size());
 		for (LuceneIndexer.LuceneSearchResult r : bm25Results) {
-			bm25Ranked.add(ChartSearchAiUtils.resourceKey(r.getResourceType(), r.getResourceId()));
+			bm25Ranked.add(ChartSearchAiUtils.resourceKey(r.getResourceType(), r.getResourceUuid()));
 		}
 
 		// kNN ranked list from embeddings — defer ranking until we know
@@ -126,7 +126,7 @@ public class HybridRetriever {
 						queryVector, vec);
 				sims[i] = sim;
 				allScored.add(new SimilarityResult(
-						ChartSearchAiUtils.resourceKey(ce.getResourceType(), ce.getResourceId()),
+						ChartSearchAiUtils.resourceKey(ce.getResourceType(), ce.getResourceUuid()),
 						sim, vec));
 			}
 
@@ -226,7 +226,7 @@ public class HybridRetriever {
 		for (ChartEmbedding ce : embeddings) {
 			float[] vec = ce.getEmbeddingVector();
 			double sim = ChartSearchAiUtils.cosineSimilarity(queryVector, vec);
-			String key = ChartSearchAiUtils.resourceKey(ce.getResourceType(), ce.getResourceId());
+			String key = ChartSearchAiUtils.resourceKey(ce.getResourceType(), ce.getResourceUuid());
 			scored.add(new java.util.AbstractMap.SimpleEntry<String, Double>(key, sim));
 		}
 

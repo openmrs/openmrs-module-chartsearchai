@@ -215,7 +215,7 @@ public class ChartSearchAiRestController {
 			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
 			refMap.put("index", ref.getIndex());
 			refMap.put("resourceType", ref.getResourceType());
-			refMap.put("resourceId", ref.getResourceId());
+			refMap.put("resourceUuid", ref.getResourceUuid());
 			refMap.put("date", formatDate(ref.getDate()));
 			refs.add(refMap);
 		}
@@ -397,7 +397,7 @@ public class ChartSearchAiRestController {
 				Map<String, Object> refMap = new LinkedHashMap<String, Object>();
 				refMap.put("index", ref.getIndex());
 				refMap.put("resourceType", ref.getResourceType());
-				refMap.put("resourceId", ref.getResourceId());
+				refMap.put("resourceUuid", ref.getResourceUuid());
 				refMap.put("date", formatDate(ref.getDate()));
 				refs.add(refMap);
 			}

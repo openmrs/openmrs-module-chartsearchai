@@ -61,7 +61,7 @@ public class CitationEvalTest {
 			mappings = new ArrayList<>();
 			for (EvalDataset.EvalRecord record : getDataset().getRecords()) {
 				mappings.add(new RecordMapping(record.getIndex(), record.getResourceType(),
-						record.getResourceId(), null));
+						record.getResourceUuid(), null));
 			}
 		}
 		return mappings;

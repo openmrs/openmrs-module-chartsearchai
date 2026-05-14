@@ -30,7 +30,7 @@ public class ChartEmbedding implements Serializable {
 
 	private String resourceType;
 
-	private Integer resourceId;
+	private String resourceUuid;
 
 	private String textContent;
 
@@ -62,12 +62,12 @@ public class ChartEmbedding implements Serializable {
 		this.resourceType = resourceType;
 	}
 
-	public Integer getResourceId() {
-		return resourceId;
+	public String getResourceUuid() {
+		return resourceUuid;
 	}
 
-	public void setResourceId(Integer resourceId) {
-		this.resourceId = resourceId;
+	public void setResourceUuid(String resourceUuid) {
+		this.resourceUuid = resourceUuid;
 	}
 
 	public String getTextContent() {

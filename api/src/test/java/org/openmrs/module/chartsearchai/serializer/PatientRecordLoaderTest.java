@@ -84,7 +84,7 @@ public class PatientRecordLoaderTest extends BaseModuleContextSensitiveTest {
 
 		Set<String> seenKeys = new HashSet<String>();
 		for (SerializedRecord record : records) {
-			String key = record.getResourceType() + ":" + record.getResourceId();
+			String key = record.getResourceType() + ":" + record.getResourceUuid();
 			assertTrue(seenKeys.add(key),
 					"Duplicate resource key found: " + key);
 		}
@@ -106,12 +106,30 @@ public class PatientRecordLoaderTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void loadAll_shouldIncludeResourceIds() {
+	public void loadAll_shouldIncludeResourceUuids() {
 		List<SerializedRecord> records = recordLoader.loadAll(patient);
 
+		assertFalse(records.isEmpty(), "Test fixture should produce at least one record");
+		// UUID-shape check: 36 chars, 8-4-4-4-12 segments separated by dashes.
+		// Each segment must be non-empty and contain only alphanumerics — we
+		// allow non-hex chars in segments because the openmrs-core fixture
+		// dataset (standardTestDataset.xml) has a long-standing typo on one
+		// order uuid ("...d808fbc226dh", ending in 'h'). The loader's contract
+		// is to pass through what the persisted entity's getUuid() returns,
+		// not to validate hex-purity. This is the UUID-equivalent of the old
+		// "resourceId > 0" check: ensures the loader populated a real persisted
+		// identifier (canonical 36-char UUID literal) rather than a default
+		// like null, "", "0", or a stray integer string.
+		final java.util.regex.Pattern UUID_SHAPE = java.util.regex.Pattern.compile(
+				"^[0-9a-zA-Z]{8}-[0-9a-zA-Z]{4}-[0-9a-zA-Z]{4}-[0-9a-zA-Z]{4}-[0-9a-zA-Z]{12}$");
 		for (SerializedRecord record : records) {
-			assertTrue(record.getResourceId() != null && record.getResourceId() > 0,
-					"Each record should have a resource ID");
+			String uuid = record.getResourceUuid();
+			assertTrue(uuid != null && !uuid.isEmpty(),
+					"Each record should have a non-empty resource UUID, got: " + uuid
+							+ " for " + record.getResourceType());
+			assertTrue(UUID_SHAPE.matcher(uuid).matches(),
+					"Resource UUID does not match the 8-4-4-4-12 UUID shape: "
+							+ uuid + " for " + record.getResourceType());
 		}
 	}
 }

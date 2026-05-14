@@ -43,36 +43,42 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 		patient = Context.getPatientService().getPatient(2);
 	}
 
+	private static final String UUID_1001 = "00000000-0000-0000-0000-000000001001";
+
+	private static final String UUID_1002 = "00000000-0000-0000-0000-000000001002";
+
+	private static final String UUID_9999 = "00000000-0000-0000-0000-000000009999";
+
 	@Test
 	public void saveChartEmbedding_shouldSaveAndReturnEmbedding() {
-		ChartEmbedding ce = createEmbedding("obs", 1001, "Test text");
+		ChartEmbedding ce = createEmbedding("obs", UUID_1001, "Test text");
 		ChartEmbedding saved = dao.saveChartEmbedding(ce);
 
 		assertNotNull(saved.getEmbeddingId());
 		assertEquals("obs", saved.getResourceType());
-		assertEquals(Integer.valueOf(1001), saved.getResourceId());
+		assertEquals(UUID_1001, saved.getResourceUuid());
 		assertEquals("Test text", saved.getTextContent());
 	}
 
 	@Test
 	public void getByResource_shouldReturnEmbeddingByTypeAndId() {
-		dao.saveChartEmbedding(createEmbedding("obs", 1001, "Blood pressure"));
+		dao.saveChartEmbedding(createEmbedding("obs", UUID_1001, "Blood pressure"));
 		Context.flushSession();
 
-		ChartEmbedding result = dao.getByResource("obs", 1001);
+		ChartEmbedding result = dao.getByResource("obs", UUID_1001);
 		assertNotNull(result);
 		assertEquals("Blood pressure", result.getTextContent());
 	}
 
 	@Test
 	public void getByResource_shouldReturnNullForNonexistent() {
-		assertNull(dao.getByResource("obs", 9999));
+		assertNull(dao.getByResource("obs", UUID_9999));
 	}
 
 	@Test
 	public void getByPatient_shouldReturnAllEmbeddingsForPatient() {
-		dao.saveChartEmbedding(createEmbedding("obs", 1001, "BP reading"));
-		dao.saveChartEmbedding(createEmbedding("obs", 1002, "Weight reading"));
+		dao.saveChartEmbedding(createEmbedding("obs", UUID_1001, "BP reading"));
+		dao.saveChartEmbedding(createEmbedding("obs", UUID_1002, "Weight reading"));
 		Context.flushSession();
 
 		List<ChartEmbedding> results = dao.getByPatient(patient);
@@ -87,8 +93,8 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 
 	@Test
 	public void deleteByPatient_shouldRemoveAllEmbeddingsForPatient() {
-		dao.saveChartEmbedding(createEmbedding("obs", 1001, "BP reading"));
-		dao.saveChartEmbedding(createEmbedding("obs", 1002, "Weight reading"));
+		dao.saveChartEmbedding(createEmbedding("obs", UUID_1001, "BP reading"));
+		dao.saveChartEmbedding(createEmbedding("obs", UUID_1002, "Weight reading"));
 		Context.flushSession();
 
 		assertEquals(2, dao.getByPatient(patient).size());
@@ -120,13 +126,13 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 	@Test
 	public void embeddingVector_shouldRoundTripCorrectly() {
 		float[] original = { 0.1f, 0.2f, 0.3f, -0.5f };
-		ChartEmbedding ce = createEmbedding("obs", 1001, "Test");
+		ChartEmbedding ce = createEmbedding("obs", UUID_1001, "Test");
 		ce.setEmbeddingVector(original);
 		dao.saveChartEmbedding(ce);
 		Context.flushSession();
 		Context.clearSession();
 
-		ChartEmbedding loaded = dao.getByResource("obs", 1001);
+		ChartEmbedding loaded = dao.getByResource("obs", UUID_1001);
 		float[] loaded_vector = loaded.getEmbeddingVector();
 
 		assertEquals(original.length, loaded_vector.length);
@@ -282,8 +288,8 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 
 	@Test
 	public void getIndexedPatientIds_shouldReturnDistinctPatientIds() {
-		dao.saveChartEmbedding(createEmbedding("obs", 1001, "BP reading"));
-		dao.saveChartEmbedding(createEmbedding("obs", 1002, "Weight reading"));
+		dao.saveChartEmbedding(createEmbedding("obs", UUID_1001, "BP reading"));
+		dao.saveChartEmbedding(createEmbedding("obs", UUID_1002, "Weight reading"));
 		Context.flushSession();
 
 		List<Integer> ids = dao.getIndexedPatientIds();
@@ -320,11 +326,11 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 		assertEquals(0, count);
 	}
 
-	private ChartEmbedding createEmbedding(String resourceType, Integer resourceId, String text) {
+	private ChartEmbedding createEmbedding(String resourceType, String resourceUuid, String text) {
 		ChartEmbedding ce = new ChartEmbedding();
 		ce.setPatient(patient);
 		ce.setResourceType(resourceType);
-		ce.setResourceId(resourceId);
+		ce.setResourceUuid(resourceUuid);
 		ce.setTextContent(text);
 		ce.setEmbeddingVector(new float[] { 0.1f, 0.2f, 0.3f });
 		ce.setDateCreated(new Date());

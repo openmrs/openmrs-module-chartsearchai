@@ -116,7 +116,7 @@ public final class ModelNoiseProfile {
 			String name = ConceptNameUtil.extractConceptName(
 					ce.getTextContent());
 			if (name == null) {
-				name = ce.getResourceType() + ":" + ce.getResourceId();
+				name = ce.getResourceType() + ":" + ce.getResourceUuid();
 			}
 			List<float[]> vecs = byConcept.get(name);
 			if (vecs == null) {

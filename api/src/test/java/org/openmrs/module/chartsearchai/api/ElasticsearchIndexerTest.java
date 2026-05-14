@@ -49,7 +49,7 @@ public class ElasticsearchIndexerTest {
 
 		assertEquals("integer", properties.path("patient_id").path("type").asText());
 		assertEquals("keyword", properties.path("resource_type").path("type").asText());
-		assertEquals("integer", properties.path("resource_id").path("type").asText());
+		assertEquals("keyword", properties.path("resource_uuid").path("type").asText());
 		assertEquals("text", properties.path("text").path("type").asText());
 		assertEquals("english", properties.path("text").path("analyzer").asText());
 		assertEquals("dense_vector", properties.path("embedding").path("type").asText());
@@ -320,11 +320,12 @@ public class ElasticsearchIndexerTest {
 	@Test
 	public void elasticsearchSearchResult_shouldExposeFields() {
 		float[] embedding = new float[] { 0.1f, 0.2f };
+		String uuid42 = "00000000-0000-0000-0000-000000000042";
 		ElasticsearchIndexer.ElasticsearchSearchResult result =
 				new ElasticsearchIndexer.ElasticsearchSearchResult(
-						"obs", 42, 1.5f, embedding, "test text");
+						"obs", uuid42, 1.5f, embedding, "test text");
 		assertEquals("obs", result.getResourceType());
-		assertEquals(42, result.getResourceId());
+		assertEquals(uuid42, result.getResourceUuid());
 		assertEquals(1.5f, result.getScore(), 0.001f);
 		assertEquals(embedding, result.getEmbedding());
 		assertEquals("test text", result.getText());

@@ -167,10 +167,15 @@ public class EnrichedRetrievalEvalTest {
 				cachingProvider, query,
 				ChartSearchAiConstants.DEFAULT_QUERY_EMBEDDING_PREFIX,
 				datasetConfigs[datasetIndex]);
+		// Tests/baseline assert on dataset indices (the i passed to
+		// toSerializedRecords). Production now identifies records by UUID;
+		// toSerializedRecords encodes the dataset index in the trailing
+		// digits of a deterministic UUID, so we map back at the test
+		// boundary to keep the baseline JSON and assertions unchanged.
 		List<Integer> indices = new ArrayList<>();
 		if (results != null) {
 			for (SerializedRecord r : results) {
-				indices.add(r.getResourceId());
+				indices.add(TestDatasetHelper.indexForUuid(r.getResourceUuid()));
 			}
 		}
 		Collections.sort(indices);
@@ -547,7 +552,7 @@ public class EnrichedRetrievalEvalTest {
 		StringBuilder details = new StringBuilder();
 		if (result != null) {
 			for (SerializedRecord r : result) {
-				details.append("\n  [").append(r.getResourceId())
+				details.append("\n  [").append(TestDatasetHelper.indexForUuid(r.getResourceUuid()))
 						.append("] ").append(r.getText());
 				if ("allergy".equals(r.getResourceType())) {
 					hasAllergy = true;

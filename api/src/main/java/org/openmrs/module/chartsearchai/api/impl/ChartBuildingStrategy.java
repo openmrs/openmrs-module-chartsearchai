@@ -152,7 +152,7 @@ class ChartBuildingStrategy {
 
 		Set<String> relevantKeys = new HashSet<String>();
 		for (ChartEmbedding ce : similar) {
-			relevantKeys.add(ChartSearchAiUtils.resourceKey(ce.getResourceType(), ce.getResourceId()));
+			relevantKeys.add(ChartSearchAiUtils.resourceKey(ce.getResourceType(), ce.getResourceUuid()));
 		}
 
 		log.warn("findSimilar returned {} records for query '{}' patient [id={}]: {}",
@@ -191,7 +191,7 @@ class ChartBuildingStrategy {
 
 		Set<String> relevantKeys = new HashSet<String>();
 		for (LuceneIndexer.LuceneSearchResult result : results) {
-			relevantKeys.add(ChartSearchAiUtils.resourceKey(result.getResourceType(), result.getResourceId()));
+			relevantKeys.add(ChartSearchAiUtils.resourceKey(result.getResourceType(), result.getResourceUuid()));
 		}
 
 		log.debug("Lucene returned {} results for query '{}'",
@@ -266,7 +266,7 @@ class ChartBuildingStrategy {
 		if (pipelineFiltered != null) {
 			for (ChartEmbedding ce : pipelineFiltered) {
 				relevantKeys.add(ChartSearchAiUtils.resourceKey(
-						ce.getResourceType(), ce.getResourceId()));
+						ce.getResourceType(), ce.getResourceUuid()));
 			}
 		}
 
@@ -300,7 +300,7 @@ class ChartBuildingStrategy {
 			}
 			ChartEmbedding ce = new ChartEmbedding();
 			ce.setResourceType(r.getResourceType());
-			ce.setResourceId(r.getResourceId());
+			ce.setResourceUuid(r.getResourceUuid());
 			ce.setEmbeddingVector(r.getEmbedding());
 			String text = r.getText();
 			if (text != null) {
@@ -351,7 +351,7 @@ class ChartBuildingStrategy {
 
 			ChartEmbedding ce = new ChartEmbedding();
 			ce.setResourceType(r.getResourceType());
-			ce.setResourceId(r.getResourceId());
+			ce.setResourceUuid(r.getResourceUuid());
 			ce.setEmbeddingVector(r.getEmbedding());
 			embeddings[i] = ce;
 		}
@@ -362,13 +362,13 @@ class ChartBuildingStrategy {
 
 		Set<String> survivorKeys = new HashSet<String>();
 		for (ChartEmbedding ce : filtered) {
-			survivorKeys.add(ChartSearchAiUtils.resourceKey(ce.getResourceType(), ce.getResourceId()));
+			survivorKeys.add(ChartSearchAiUtils.resourceKey(ce.getResourceType(), ce.getResourceUuid()));
 		}
 
 		List<ElasticsearchIndexer.ElasticsearchSearchResult> out =
 				new ArrayList<ElasticsearchIndexer.ElasticsearchSearchResult>();
 		for (ElasticsearchIndexer.ElasticsearchSearchResult r : results) {
-			if (survivorKeys.contains(ChartSearchAiUtils.resourceKey(r.getResourceType(), r.getResourceId()))) {
+			if (survivorKeys.contains(ChartSearchAiUtils.resourceKey(r.getResourceType(), r.getResourceUuid()))) {
 				out.add(r);
 			}
 		}

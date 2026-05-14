@@ -199,11 +199,20 @@ public class ElasticsearchKnnFallbackTest {
 				topK * ChartSearchAiConstants.ES_FETCH_MULTIPLIER);
 	}
 
+	// Tests assert on dataset indices. toSerializedRecords encodes the
+	// dataset index in the trailing digits of the deterministic UUID, so
+	// converting back at the test boundary preserves every assertion verbatim
+	// against the UUID-typed production surface.
+	private static int indexOf(ElasticsearchSearchResult r) {
+		return TestDatasetHelper.indexForUuid(r.getResourceUuid());
+	}
+
 	private static boolean containsRecord(List<ElasticsearchSearchResult> results,
-			int... resourceIds) {
+			int... datasetIndices) {
 		for (ElasticsearchSearchResult r : results) {
-			for (int id : resourceIds) {
-				if (r.getResourceId() == id) {
+			int idx = indexOf(r);
+			for (int datasetIndex : datasetIndices) {
+				if (idx == datasetIndex) {
 					return true;
 				}
 			}
@@ -233,7 +242,7 @@ public class ElasticsearchKnnFallbackTest {
 			org.openmrs.module.chartsearchai.model.ChartEmbedding ce =
 					new org.openmrs.module.chartsearchai.model.ChartEmbedding();
 			ce.setResourceType(r.getResourceType());
-			ce.setResourceId(r.getResourceId());
+			ce.setResourceUuid(r.getResourceUuid());
 			ce.setEmbeddingVector(r.getEmbedding());
 			String text = r.getText();
 			if (text != null) {
@@ -258,7 +267,7 @@ public class ElasticsearchKnnFallbackTest {
 		if (pipelineFiltered != null) {
 			for (org.openmrs.module.chartsearchai.model.ChartEmbedding ce : pipelineFiltered) {
 				pipelineKeys.add(org.openmrs.module.chartsearchai.ChartSearchAiUtils
-						.resourceKey(ce.getResourceType(), ce.getResourceId()));
+						.resourceKey(ce.getResourceType(), ce.getResourceUuid()));
 			}
 		}
 
@@ -266,7 +275,7 @@ public class ElasticsearchKnnFallbackTest {
 		List<ElasticsearchSearchResult> out = new java.util.ArrayList<ElasticsearchSearchResult>();
 		for (ElasticsearchSearchResult r : results) {
 			if (pipelineKeys.contains(org.openmrs.module.chartsearchai.ChartSearchAiUtils
-					.resourceKey(r.getResourceType(), r.getResourceId()))) {
+					.resourceKey(r.getResourceType(), r.getResourceUuid()))) {
 				out.add(r);
 			}
 		}
@@ -276,7 +285,7 @@ public class ElasticsearchKnnFallbackTest {
 	private static List<Integer> sortedIds(List<ElasticsearchSearchResult> results) {
 		List<Integer> ids = new ArrayList<>();
 		for (ElasticsearchSearchResult r : results) {
-			ids.add(r.getResourceId());
+			ids.add(indexOf(r));
 		}
 		java.util.Collections.sort(ids);
 		return ids;
@@ -333,7 +342,7 @@ public class ElasticsearchKnnFallbackTest {
 			float[] embedding = r.getEmbedding();
 			assertTrue(embedding != null && embedding.length > 0,
 					"Each result should include its embedding vector, got null/empty for "
-					+ r.getResourceType() + ":" + r.getResourceId());
+					+ r.getResourceType() + ":" + r.getResourceUuid());
 		}
 	}
 
@@ -476,7 +485,7 @@ public class ElasticsearchKnnFallbackTest {
 				sb.append(", ");
 			}
 			ElasticsearchSearchResult r = results.get(i);
-			sb.append(r.getResourceType()).append(":").append(r.getResourceId());
+			sb.append(r.getResourceType()).append(":").append(indexOf(r));
 		}
 		return sb.append("]").toString();
 	}

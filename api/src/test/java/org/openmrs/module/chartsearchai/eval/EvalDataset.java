@@ -82,7 +82,7 @@ public class EvalDataset {
 
 		private String resourceType;
 
-		private int resourceId;
+		private String resourceUuid;
 
 		private String text;
 
@@ -102,12 +102,12 @@ public class EvalDataset {
 			this.resourceType = resourceType;
 		}
 
-		public int getResourceId() {
-			return resourceId;
+		public String getResourceUuid() {
+			return resourceUuid;
 		}
 
-		public void setResourceId(int resourceId) {
-			this.resourceId = resourceId;
+		public void setResourceUuid(String resourceUuid) {
+			this.resourceUuid = resourceUuid;
 		}
 
 		public String getText() {

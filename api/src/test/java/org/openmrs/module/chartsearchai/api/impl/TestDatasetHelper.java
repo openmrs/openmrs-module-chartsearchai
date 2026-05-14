@@ -920,8 +920,8 @@ final class TestDatasetHelper {
 			for (org.openmrs.module.chartsearchai.model.ChartEmbedding ce : embeddings) {
 				// resourceType
 				out.writeUTF(ce.getResourceType());
-				// resourceId
-				out.writeInt(ce.getResourceId());
+				// resourceUuid
+				out.writeUTF(ce.getResourceUuid());
 				// textContent
 				out.writeUTF(ce.getTextContent());
 				// embedding vector
@@ -948,7 +948,7 @@ final class TestDatasetHelper {
 				org.openmrs.module.chartsearchai.model.ChartEmbedding ce =
 						new org.openmrs.module.chartsearchai.model.ChartEmbedding();
 				ce.setResourceType(in.readUTF());
-				ce.setResourceId(in.readInt());
+				ce.setResourceUuid(in.readUTF());
 				ce.setTextContent(in.readUTF());
 				int vecLen = in.readInt();
 				float[] vec = new float[vecLen];
@@ -1126,9 +1126,29 @@ final class TestDatasetHelper {
 			List<String> hints = categoryHintsMap != null
 					? categoryHintsMap.getOrDefault(i, Collections.<String>emptyList())
 					: Collections.<String>emptyList();
-			records.add(new SerializedRecord(resourceType, i, textContent, null, hints));
+			records.add(new SerializedRecord(resourceType, uuidForIndex(i), textContent, null, hints));
 		}
 		return records;
+	}
+
+	/**
+	 * Deterministic UUID literal derived from a dataset index. Keeps fixture
+	 * identifiers sortable and recognizable in failure messages — the trailing
+	 * digits match the dataset index. Used in place of the old integer
+	 * resource ID throughout test fixtures.
+	 */
+	static String uuidForIndex(int index) {
+		return String.format("00000000-0000-0000-0000-%012d", index);
+	}
+
+	/**
+	 * Inverse of {@link #uuidForIndex}: extracts the dataset index from a
+	 * fixture UUID literal. Used by eval baselines that store dataset indices
+	 * but must compare against actual UUIDs after the migration.
+	 */
+	static int indexForUuid(String uuid) {
+		int dash = uuid.lastIndexOf('-');
+		return Integer.parseInt(uuid.substring(dash + 1));
 	}
 
 	/**

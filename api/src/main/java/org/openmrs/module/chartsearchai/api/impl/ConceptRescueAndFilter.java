@@ -80,7 +80,7 @@ final class ConceptRescueAndFilter {
 		List<SerializedRecord> filtered = new ArrayList<SerializedRecord>();
 		for (SerializedRecord record : allRecords) {
 			if (relevantKeys.contains(ChartSearchAiUtils.resourceKey(
-					record.getResourceType(), record.getResourceId()))) {
+					record.getResourceType(), record.getResourceUuid()))) {
 				filtered.add(record);
 			}
 		}
@@ -509,7 +509,7 @@ final class ConceptRescueAndFilter {
 		for (SerializedRecord r : records) {
 			String name = ConceptNameUtil.extractConceptName(r.getText());
 			if (name == null) {
-				name = r.getResourceType() + ":" + r.getResourceId();
+				name = r.getResourceType() + ":" + r.getResourceUuid();
 			}
 			byConcept.computeIfAbsent(name,
 					k -> new ArrayList<SerializedRecord>()).add(r);

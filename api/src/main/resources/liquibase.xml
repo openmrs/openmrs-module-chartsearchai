@@ -17,7 +17,7 @@
 			<column name="resource_type" type="varchar(50)">
 				<constraints nullable="false"/>
 			</column>
-			<column name="resource_id" type="int">
+			<column name="resource_uuid" type="varchar(38)">
 				<constraints nullable="false"/>
 			</column>
 			<column name="text_content" type="text">
@@ -36,7 +36,7 @@
 		<createIndex tableName="chartsearchai_embedding" indexName="idx_chartsearchai_embedding_patient">
 			<column name="patient_id"/>
 		</createIndex>
-		<addUniqueConstraint tableName="chartsearchai_embedding" columnNames="resource_type,resource_id"
+		<addUniqueConstraint tableName="chartsearchai_embedding" columnNames="resource_type,resource_uuid"
 				constraintName="uk_chartsearchai_embedding_resource"/>
 	</changeSet>
 

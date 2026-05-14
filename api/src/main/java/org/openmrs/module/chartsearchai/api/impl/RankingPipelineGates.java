@@ -318,7 +318,7 @@ final class RankingPipelineGates {
 			for (ScoredEmbedding se : candidates) {
 				if (sb.length() > 0) sb.append(", ");
 				sb.append(se.embedding.getResourceType())
-					.append(':').append(se.embedding.getResourceId())
+					.append(':').append(se.embedding.getResourceUuid())
 					.append(" sem=").append(String.format("%.4f", se.semanticScore))
 					.append(" kw=").append(String.format("%.4f", se.keywordScore));
 			}
@@ -414,7 +414,7 @@ final class RankingPipelineGates {
 						pair.add(candidates.get(p1));
 						pair.add(candidates.get(p2));
 						log.debug("Small-cluster gate: removed outlier [{}], kept pair cos={}, concept={}",
-								candidates.get(worstIdx).embedding.getResourceId(),
+								candidates.get(worstIdx).embedding.getResourceUuid(),
 								String.format("%.4f", pairCos), cn1);
 						candidates = pair;
 					} else {

@@ -82,7 +82,7 @@ final class ConceptNameReranker {
 			String name = ConceptNameUtil.extractConceptName(
 					ce.getTextContent());
 			if (name == null) {
-				name = ce.getResourceType() + ":" + ce.getResourceId();
+				name = ce.getResourceType() + ":" + ce.getResourceUuid();
 			}
 			byConcept.computeIfAbsent(name,
 					k -> new ArrayList<ChartEmbedding>()).add(ce);

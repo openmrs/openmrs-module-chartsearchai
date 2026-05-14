@@ -161,7 +161,7 @@ public class LlmInferenceService implements ChartSearchService {
 			RecordMapping mapping = indexMap.get(index);
 			if (mapping != null) {
 				references.add(new RecordReference(index, mapping.getResourceType(),
-						mapping.getResourceId(), mapping.getDate()));
+						mapping.getResourceUuid(), mapping.getDate()));
 			} else {
 				log.warn("LLM cited record [{}] which does not exist in the provided records", index);
 			}

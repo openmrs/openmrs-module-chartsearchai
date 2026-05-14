@@ -216,11 +216,16 @@ public class LlmInferenceServiceEvalTest {
 						ChartSearchAiConstants.DEFAULT_QUERY_EMBEDDING_PREFIX,
 						configWithNoise);
 
+		// Tests assert on dataset indices (the i passed to toSerializedRecords).
+		// Production now identifies records by UUID; toSerializedRecords encodes
+		// the dataset index in the trailing digits of a deterministic UUID, so
+		// we map back here at the test boundary. This preserves every existing
+		// assertion verbatim.
 		List<Integer> indices = new ArrayList<Integer>();
 		if (results != null) {
 			for (org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord r
 					: results) {
-				indices.add(r.getResourceId());
+				indices.add(TestDatasetHelper.indexForUuid(r.getResourceUuid()));
 			}
 		}
 		Collections.sort(indices);
@@ -305,7 +310,7 @@ public class LlmInferenceServiceEvalTest {
 		Collections.sort(descending, Collections.reverseOrder());
 		for (int idx : descending) {
 			records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-					"obs", idx, FULL_PATIENT_DATASET[idx], null));
+					"obs", TestDatasetHelper.uuidForIndex(idx), FULL_PATIENT_DATASET[idx], null));
 		}
 
 		List<org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord> capped

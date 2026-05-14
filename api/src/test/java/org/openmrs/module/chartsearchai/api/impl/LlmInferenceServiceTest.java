@@ -45,26 +45,30 @@ public class LlmInferenceServiceTest {
 	private static final String[] FIFTH_PATIENT_DATASET =
 			TestDatasetHelper.FIFTH_PATIENT_DATASET;
 
+	private static String uuid(int i) {
+		return TestDatasetHelper.uuidForIndex(i);
+	}
+
 	@Test
 	public void extractCitedReferences_shouldExtractReferencesFromCitations() {
 		List<RecordMapping> mappings = Arrays.asList(
-				new RecordMapping(1, "obs", 456, null),
-				new RecordMapping(2, "order", 201, null));
+				new RecordMapping(1, "obs", uuid(456), null),
+				new RecordMapping(2, "order", uuid(201), null));
 
 		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
 				Arrays.asList(1, 2), mappings);
 
 		assertEquals(2, result.size());
 		assertEquals("obs", result.get(0).getResourceType());
-		assertEquals(Integer.valueOf(456), result.get(0).getResourceId());
+		assertEquals(uuid(456), result.get(0).getResourceUuid());
 		assertEquals("order", result.get(1).getResourceType());
-		assertEquals(Integer.valueOf(201), result.get(1).getResourceId());
+		assertEquals(uuid(201), result.get(1).getResourceUuid());
 	}
 
 	@Test
 	public void extractCitedReferences_shouldReturnEmptyWhenNoCitations() {
 		List<RecordMapping> mappings = Arrays.asList(
-				new RecordMapping(1, "obs", 456, null));
+				new RecordMapping(1, "obs", uuid(456), null));
 
 		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
 				Collections.emptyList(), mappings);
@@ -75,41 +79,41 @@ public class LlmInferenceServiceTest {
 	@Test
 	public void extractCitedReferences_shouldDeduplicateRepeatedCitations() {
 		List<RecordMapping> mappings = Arrays.asList(
-				new RecordMapping(1, "obs", 456, null));
+				new RecordMapping(1, "obs", uuid(456), null));
 
 		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
 				Arrays.asList(1, 1), mappings);
 
 		assertEquals(1, result.size());
-		assertEquals(Integer.valueOf(456), result.get(0).getResourceId());
+		assertEquals(uuid(456), result.get(0).getResourceUuid());
 	}
 
 	@Test
 	public void extractCitedReferences_shouldHandleMultipleCitations() {
 		List<RecordMapping> mappings = Arrays.asList(
-				new RecordMapping(1, "obs", 101, null),
-				new RecordMapping(2, "obs", 102, null),
-				new RecordMapping(3, "obs", 103, null));
+				new RecordMapping(1, "obs", uuid(101), null),
+				new RecordMapping(2, "obs", uuid(102), null),
+				new RecordMapping(3, "obs", uuid(103), null));
 
 		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
 				Arrays.asList(1, 2, 3), mappings);
 
 		assertEquals(3, result.size());
-		assertEquals(Integer.valueOf(101), result.get(0).getResourceId());
-		assertEquals(Integer.valueOf(102), result.get(1).getResourceId());
-		assertEquals(Integer.valueOf(103), result.get(2).getResourceId());
+		assertEquals(uuid(101), result.get(0).getResourceUuid());
+		assertEquals(uuid(102), result.get(1).getResourceUuid());
+		assertEquals(uuid(103), result.get(2).getResourceUuid());
 	}
 
 	@Test
 	public void extractCitedReferences_shouldIgnoreNumbersNotInMappings() {
 		List<RecordMapping> mappings = Arrays.asList(
-				new RecordMapping(1, "obs", 10, null));
+				new RecordMapping(1, "obs", uuid(10), null));
 
 		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
 				Arrays.asList(1, 99), mappings);
 
 		assertEquals(1, result.size());
-		assertEquals(Integer.valueOf(10), result.get(0).getResourceId());
+		assertEquals(uuid(10), result.get(0).getResourceUuid());
 	}
 
 	@Test
@@ -119,19 +123,19 @@ public class LlmInferenceServiceTest {
 		Date feb = makeDate(2025, 2, 20);
 
 		List<RecordMapping> mappings = Arrays.asList(
-				new RecordMapping(1, "condition", 50, jan),
-				new RecordMapping(2, "order", 30, mar),
-				new RecordMapping(3, "obs", 999, feb));
+				new RecordMapping(1, "condition", uuid(50), jan),
+				new RecordMapping(2, "order", uuid(30), mar),
+				new RecordMapping(3, "obs", uuid(999), feb));
 
 		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
 				Arrays.asList(1, 2, 3), mappings);
 
 		assertEquals(3, result.size());
-		assertEquals(Integer.valueOf(30), result.get(0).getResourceId());
+		assertEquals(uuid(30), result.get(0).getResourceUuid());
 		assertEquals(mar, result.get(0).getDate());
-		assertEquals(Integer.valueOf(999), result.get(1).getResourceId());
+		assertEquals(uuid(999), result.get(1).getResourceUuid());
 		assertEquals(feb, result.get(1).getDate());
-		assertEquals(Integer.valueOf(50), result.get(2).getResourceId());
+		assertEquals(uuid(50), result.get(2).getResourceUuid());
 		assertEquals(jan, result.get(2).getDate());
 	}
 
@@ -140,16 +144,16 @@ public class LlmInferenceServiceTest {
 		Date recent = makeDate(2025, 3, 1);
 
 		List<RecordMapping> mappings = Arrays.asList(
-				new RecordMapping(1, "obs", 100, null),
-				new RecordMapping(2, "obs", 200, recent));
+				new RecordMapping(1, "obs", uuid(100), null),
+				new RecordMapping(2, "obs", uuid(200), recent));
 
 		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
 				Arrays.asList(1, 2), mappings);
 
 		assertEquals(2, result.size());
-		assertEquals(Integer.valueOf(200), result.get(0).getResourceId());
+		assertEquals(uuid(200), result.get(0).getResourceUuid());
 		assertEquals(recent, result.get(0).getDate());
-		assertEquals(Integer.valueOf(100), result.get(1).getResourceId());
+		assertEquals(uuid(100), result.get(1).getResourceUuid());
 		assertNull(result.get(1).getDate());
 	}
 
@@ -339,19 +343,19 @@ public class LlmInferenceServiceTest {
 				= new ArrayList<>();
 		// 4 systolic BP records, 3 weight records
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 1, "Clinical observation: Test — Systolic Blood Pressure: 151.0", null));
+				"obs", uuid(1), "Clinical observation: Test — Systolic Blood Pressure: 151.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 2, "Clinical observation: Test — Systolic Blood Pressure: 134.0", null));
+				"obs", uuid(2), "Clinical observation: Test — Systolic Blood Pressure: 134.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 3, "Clinical observation: Test — Weight (kg): 68.0", null));
+				"obs", uuid(3), "Clinical observation: Test — Weight (kg): 68.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 4, "Clinical observation: Test — Systolic Blood Pressure: 117.0", null));
+				"obs", uuid(4), "Clinical observation: Test — Systolic Blood Pressure: 117.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 5, "Clinical observation: Test — Weight (kg): 121.0", null));
+				"obs", uuid(5), "Clinical observation: Test — Weight (kg): 121.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 6, "Clinical observation: Test — Systolic Blood Pressure: 102.0", null));
+				"obs", uuid(6), "Clinical observation: Test — Systolic Blood Pressure: 102.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 7, "Clinical observation: Test — Weight (kg): 94.0", null));
+				"obs", uuid(7), "Clinical observation: Test — Weight (kg): 94.0", null));
 
 		List<org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord> result
 				= LlmInferenceService.capPerConcept(records, 2);
@@ -359,11 +363,11 @@ public class LlmInferenceServiceTest {
 		// Should keep 2 SBP + 2 Weight = 4 records
 		assertEquals(4, result.size());
 		// First two should be the first 2 SBP records (ids 1, 2)
-		assertEquals(Integer.valueOf(1), result.get(0).getResourceId());
-		assertEquals(Integer.valueOf(2), result.get(1).getResourceId());
+		assertEquals(uuid(1), result.get(0).getResourceUuid());
+		assertEquals(uuid(2), result.get(1).getResourceUuid());
 		// Next two should be the first 2 Weight records (ids 3, 5)
-		assertEquals(Integer.valueOf(3), result.get(2).getResourceId());
-		assertEquals(Integer.valueOf(5), result.get(3).getResourceId());
+		assertEquals(uuid(3), result.get(2).getResourceUuid());
+		assertEquals(uuid(5), result.get(3).getResourceUuid());
 	}
 
 	@Test
@@ -371,9 +375,9 @@ public class LlmInferenceServiceTest {
 		List<org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord> records
 				= new ArrayList<>();
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"condition", 1, "Medical condition: Condition: Tuberculosis. Status: ACTIVE", null));
+				"condition", uuid(1), "Medical condition: Condition: Tuberculosis. Status: ACTIVE", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"condition", 2, "Medical condition: Condition: Hypertension. Status: ACTIVE", null));
+				"condition", uuid(2), "Medical condition: Condition: Hypertension. Status: ACTIVE", null));
 
 		List<org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord> result
 				= LlmInferenceService.capPerConcept(records, 1);
@@ -388,31 +392,31 @@ public class LlmInferenceServiceTest {
 				= new ArrayList<>();
 		// Interleaved: BP, Weight, BP, Temp, Weight, BP
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 1, "Clinical observation: Test — Systolic Blood Pressure: 151.0", null));
+				"obs", uuid(1), "Clinical observation: Test — Systolic Blood Pressure: 151.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 2, "Clinical observation: Test — Weight (kg): 94.0", null));
+				"obs", uuid(2), "Clinical observation: Test — Weight (kg): 94.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 3, "Clinical observation: Test — Systolic Blood Pressure: 134.0", null));
+				"obs", uuid(3), "Clinical observation: Test — Systolic Blood Pressure: 134.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 4, "Clinical observation: Test — Temperature (C): 36.7", null));
+				"obs", uuid(4), "Clinical observation: Test — Temperature (C): 36.7", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 5, "Clinical observation: Test — Weight (kg): 68.0", null));
+				"obs", uuid(5), "Clinical observation: Test — Weight (kg): 68.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 6, "Clinical observation: Test — Systolic Blood Pressure: 102.0", null));
+				"obs", uuid(6), "Clinical observation: Test — Systolic Blood Pressure: 102.0", null));
 
 		List<org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord> result
 				= LlmInferenceService.groupByConcept(records);
 
 		assertEquals(6, result.size(), "All records should be preserved");
 		// BP group first (first concept encountered), in original order
-		assertEquals(Integer.valueOf(1), result.get(0).getResourceId());
-		assertEquals(Integer.valueOf(3), result.get(1).getResourceId());
-		assertEquals(Integer.valueOf(6), result.get(2).getResourceId());
+		assertEquals(uuid(1), result.get(0).getResourceUuid());
+		assertEquals(uuid(3), result.get(1).getResourceUuid());
+		assertEquals(uuid(6), result.get(2).getResourceUuid());
 		// Weight group next
-		assertEquals(Integer.valueOf(2), result.get(3).getResourceId());
-		assertEquals(Integer.valueOf(5), result.get(4).getResourceId());
+		assertEquals(uuid(2), result.get(3).getResourceUuid());
+		assertEquals(uuid(5), result.get(4).getResourceUuid());
 		// Temperature group last
-		assertEquals(Integer.valueOf(4), result.get(5).getResourceId());
+		assertEquals(uuid(4), result.get(5).getResourceUuid());
 	}
 
 	@Test
@@ -420,16 +424,16 @@ public class LlmInferenceServiceTest {
 		List<org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord> records
 				= new ArrayList<>();
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 1, "Clinical observation: Test — Weight (kg): 94.0", null));
+				"obs", uuid(1), "Clinical observation: Test — Weight (kg): 94.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 2, "Clinical observation: Test — Weight (kg): 68.0", null));
+				"obs", uuid(2), "Clinical observation: Test — Weight (kg): 68.0", null));
 
 		List<org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord> result
 				= LlmInferenceService.groupByConcept(records);
 
 		assertEquals(2, result.size());
-		assertEquals(Integer.valueOf(1), result.get(0).getResourceId());
-		assertEquals(Integer.valueOf(2), result.get(1).getResourceId());
+		assertEquals(uuid(1), result.get(0).getResourceUuid());
+		assertEquals(uuid(2), result.get(1).getResourceUuid());
 	}
 
 	@Test
@@ -444,21 +448,21 @@ public class LlmInferenceServiceTest {
 		List<org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord> records
 				= new ArrayList<>();
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 1, "Clinical observation: Test — Systolic Blood Pressure: 97.0", null));
+				"obs", uuid(1), "Clinical observation: Test — Systolic Blood Pressure: 97.0", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"condition", 2, "Medical condition: Condition: Hypertension. Status: ACTIVE", null));
+				"condition", uuid(2), "Medical condition: Condition: Hypertension. Status: ACTIVE", null));
 		records.add(new org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord(
-				"obs", 3, "Clinical observation: Test — Systolic Blood Pressure: 134.0", null));
+				"obs", uuid(3), "Clinical observation: Test — Systolic Blood Pressure: 134.0", null));
 
 		List<org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord> result
 				= LlmInferenceService.groupByConcept(records);
 
 		assertEquals(3, result.size());
 		// BP records grouped together
-		assertEquals(Integer.valueOf(1), result.get(0).getResourceId());
-		assertEquals(Integer.valueOf(3), result.get(1).getResourceId());
+		assertEquals(uuid(1), result.get(0).getResourceUuid());
+		assertEquals(uuid(3), result.get(1).getResourceUuid());
 		// Condition separate
-		assertEquals(Integer.valueOf(2), result.get(2).getResourceId());
+		assertEquals(uuid(2), result.get(2).getResourceUuid());
 	}
 
 	@Test
@@ -861,7 +865,7 @@ public class LlmInferenceServiceTest {
 			keywordScores[i] = 0.0;
 			ChartEmbedding ce = new ChartEmbedding();
 			ce.setResourceType("obs");
-			ce.setResourceId(i);
+			ce.setResourceUuid(uuid(i));
 			ce.setTextContent(concepts[i] + " \u2014 " + concepts[i] + ": value");
 			float[] vec = new float[384];
 			vec[i * 100] = 1.0f; // orthogonal vectors → low coherence
@@ -875,7 +879,7 @@ public class LlmInferenceServiceTest {
 			keywordScores[i] = 0.0;
 			ChartEmbedding ce = new ChartEmbedding();
 			ce.setResourceType("obs");
-			ce.setResourceId(i);
+			ce.setResourceUuid(uuid(i));
 			ce.setTextContent("Noise \u2014 Record" + i + ": value");
 			float[] vec = new float[384];
 			vec[(i * 7) % 384] = 1.0f;
@@ -1045,7 +1049,7 @@ public class LlmInferenceServiceTest {
 		for (int i = 0; i < texts.length; i++) {
 			ChartEmbedding ce = new ChartEmbedding();
 			ce.setResourceType("obs");
-			ce.setResourceId(i);
+			ce.setResourceUuid(uuid(i));
 			ce.setTextContent(texts[i]);
 			byte[] raw = new byte[16];
 			ce.setEmbedding(raw);

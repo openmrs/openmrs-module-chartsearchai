@@ -66,7 +66,7 @@ public class PatientChartSerializer {
 		for (int i = 0; i < records.size(); i++) {
 			SerializedRecord record = records.get(i);
 			int index = i + 1;
-			mappings.add(new RecordMapping(index, record.getResourceType(), record.getResourceId(), record.getDate()));
+			mappings.add(new RecordMapping(index, record.getResourceType(), record.getResourceUuid(), record.getDate()));
 
 			sb.append("[").append(index).append("] ");
 			if (record.getDate() != null) {
@@ -129,14 +129,14 @@ public class PatientChartSerializer {
 
 		private final String resourceType;
 
-		private final Integer resourceId;
+		private final String resourceUuid;
 
 		private final Date date;
 
-		public RecordMapping(int index, String resourceType, Integer resourceId, Date date) {
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date) {
 			this.index = index;
 			this.resourceType = resourceType;
-			this.resourceId = resourceId;
+			this.resourceUuid = resourceUuid;
 			this.date = date;
 		}
 
@@ -148,8 +148,8 @@ public class PatientChartSerializer {
 			return resourceType;
 		}
 
-		public Integer getResourceId() {
-			return resourceId;
+		public String getResourceUuid() {
+			return resourceUuid;
 		}
 
 		public Date getDate() {

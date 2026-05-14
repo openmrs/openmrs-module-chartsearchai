@@ -394,8 +394,8 @@ Response:
   "disclaimer": "This response is AI-generated and may not be accurate...",
   "questionId": "42",
   "references": [
-    { "index": 3, "resourceType": "order", "resourceId": 789, "date": "2025-03-15" },
-    { "index": 1, "resourceType": "order", "resourceId": 456, "date": "2025-01-10" }
+    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15" },
+    { "index": 1, "resourceType": "order", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10" }
   ]
 }
 ```
@@ -422,7 +422,7 @@ SSE events:
 | Event | Description |
 |-------|-------------|
 | `token` | A chunk of the answer text as it is generated |
-| `done` | Final JSON with the complete answer, references (sorted most recent first, with `index`, `resourceType`, `resourceId`, `date`), `questionId`, and disclaimer |
+| `done` | Final JSON with the complete answer, references (sorted most recent first, with `index`, `resourceType`, `resourceUuid`, `date`), `questionId`, and disclaimer |
 | `error` | Error message if something goes wrong |
 
 ### Warmup

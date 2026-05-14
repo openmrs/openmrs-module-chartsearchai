@@ -37,11 +37,11 @@ public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public ChartEmbedding getByResource(String resourceType, Integer resourceId) {
+	public ChartEmbedding getByResource(String resourceType, String resourceUuid) {
 		List<ChartEmbedding> results = sessionFactory.getCurrentSession()
-				.createQuery("from ChartEmbedding where resourceType = :type and resourceId = :id")
+				.createQuery("from ChartEmbedding where resourceType = :type and resourceUuid = :uuid")
 				.setParameter("type", resourceType)
-				.setParameter("id", resourceId)
+				.setParameter("uuid", resourceUuid)
 				.list();
 		return results.isEmpty() ? null : results.get(0);
 	}

@@ -270,7 +270,8 @@ public class EndToEndSearchTest extends BaseModuleContextSensitiveTest {
 		ChartEmbedding ce = new ChartEmbedding();
 		ce.setPatient(patient);
 		ce.setResourceType("obs");
-		ce.setResourceId(99999);
+		String uuid99999 = "00000000-0000-0000-0000-000000099999";
+		ce.setResourceUuid(uuid99999);
 		ce.setTextContent("test");
 		ce.setEmbeddingVector(original);
 		ce.setDateCreated(new java.util.Date());
@@ -279,7 +280,7 @@ public class EndToEndSearchTest extends BaseModuleContextSensitiveTest {
 		Context.flushSession();
 		Context.clearSession();
 
-		ChartEmbedding loaded = dao.getByResource("obs", 99999);
+		ChartEmbedding loaded = dao.getByResource("obs", uuid99999);
 		assertNotNull(loaded, "Should find saved embedding");
 
 		float[] fromDb = loaded.getEmbeddingVector();
@@ -327,7 +328,7 @@ public class EndToEndSearchTest extends BaseModuleContextSensitiveTest {
 						if (v != 0.0f) { allZero = false; break; }
 					}
 					assertFalse(allZero, "Embedding for " + ce.getResourceType()
-							+ ":" + ce.getResourceId() + " should not be all-zeros");
+							+ ":" + ce.getResourceUuid() + " should not be all-zeros");
 				}
 
 				// Best match for vitals query should exceed the floor gate
@@ -444,7 +445,7 @@ public class EndToEndSearchTest extends BaseModuleContextSensitiveTest {
 							ref.getResourceType(),
 							"All references should be obs, got: "
 							+ ref.getResourceType()
-							+ " for resourceId " + ref.getResourceId());
+							+ " for resourceUuid " + ref.getResourceUuid());
 				}
 
 				// Query about data absent from this dataset should still

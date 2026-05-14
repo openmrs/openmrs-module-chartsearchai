@@ -240,13 +240,13 @@ final class RefinementPaths {
 					double scoreFloor = coreMinSem * expansionRatio;
 					List<ScoredEmbedding> expanded =
 							new ArrayList<ScoredEmbedding>(semanticCore);
-					Set<Integer> expandedIds = new HashSet<Integer>();
+					Set<String> expandedIds = new HashSet<String>();
 					for (ScoredEmbedding se : semanticCore) {
-						expandedIds.add(se.embedding.getResourceId());
+						expandedIds.add(se.embedding.getResourceUuid());
 					}
 					if (!semanticDominance) {
 						for (ScoredEmbedding se : preRefinementCandidates) {
-							if (expandedIds.contains(se.embedding.getResourceId())) {
+							if (expandedIds.contains(se.embedding.getResourceUuid())) {
 								continue;
 							}
 							if (se.semanticScore < scoreFloor) {
@@ -263,7 +263,7 @@ final class RefinementPaths {
 							}
 							if (maxCos >= ChartSearchAiConstants.SEMANTIC_CORE_MIN_COSINE) {
 								expanded.add(se);
-								expandedIds.add(se.embedding.getResourceId());
+								expandedIds.add(se.embedding.getResourceUuid());
 							}
 						}
 					}
@@ -280,7 +280,7 @@ final class RefinementPaths {
 						}
 					}
 					for (ScoredEmbedding se : candidates) {
-						if (expandedIds.contains(se.embedding.getResourceId())) {
+						if (expandedIds.contains(se.embedding.getResourceUuid())) {
 							continue;
 						}
 						if (se.keywordScore <= 0) {
@@ -290,9 +290,9 @@ final class RefinementPaths {
 								se.embedding.getTextContent());
 						if (cn != null && expandedConcepts.contains(cn)) {
 							expanded.add(se);
-							expandedIds.add(se.embedding.getResourceId());
+							expandedIds.add(se.embedding.getResourceUuid());
 							log.debug("Concept-pair rescue: re-added kw-matched [{}] (concept={})",
-									se.embedding.getResourceId(), cn);
+									se.embedding.getResourceUuid(), cn);
 						}
 					}
 					candidates = expanded;
@@ -539,7 +539,7 @@ final class RefinementPaths {
 					if (cn != null && survivorConcepts.contains(cn)) {
 						strict.add(se);
 						log.debug("Concept-pairing rescue: [{}] gap={}, concept={}",
-								se.embedding.getResourceId(),
+								se.embedding.getResourceUuid(),
 								String.format("%.4f", gap), cn);
 					}
 				}

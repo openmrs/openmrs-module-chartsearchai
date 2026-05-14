@@ -39,16 +39,16 @@ public class ChartSearchAiUtils {
 	private static final Logger log = LoggerFactory.getLogger(ChartSearchAiUtils.class);
 
 	/**
-	 * Builds a composite key from a resource type and resource ID.
+	 * Builds a composite key from a resource type and resource UUID.
 	 * This is the single canonical format for resource keys used across
 	 * retrieval pipelines, filter methods, and result sets.
 	 *
 	 * @param resourceType the resource type constant
-	 * @param resourceId the resource ID
-	 * @return a key in the format "resourceType:resourceId"
+	 * @param resourceUuid the resource UUID
+	 * @return a key in the format "resourceType:resourceUuid"
 	 */
-	public static String resourceKey(String resourceType, int resourceId) {
-		return resourceType + ":" + resourceId;
+	public static String resourceKey(String resourceType, String resourceUuid) {
+		return resourceType + ":" + resourceUuid;
 	}
 
 	/**

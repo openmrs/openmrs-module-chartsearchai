@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.lang.reflect.Method;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -20,23 +22,25 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
-import org.openmrs.module.querystore.api.QueryStoreService;
-import org.openmrs.module.querystore.model.QueryDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Bridge to the querystore module's {@code searchByPatient} API. Resolves
- * the service lazily via {@link Context#getService(Class)} so chartsearchai
- * still starts when the querystore omod isn't installed — lookup failure
- * surfaces as an empty chart, same outcome as a search returning no hits.
+ * Bridge to the querystore module's {@code searchByPatient} API. Resolved
+ * reflectively so chartsearchai compiles and starts without the
+ * querystore-api jar on the classpath; absence surfaces as an empty chart,
+ * same outcome as a search returning no hits.
  */
 @Component("chartSearchAi.queryStoreChartBuilder")
 class QueryStoreChartBuilder {
 
 	private static final Logger log = LoggerFactory.getLogger(QueryStoreChartBuilder.class);
+
+	private static final String QUERY_STORE_SERVICE_CLASS = "org.openmrs.module.querystore.api.QueryStoreService";
+
+	private static final String QUERY_DOCUMENT_CLASS = "org.openmrs.module.querystore.model.QueryDocument";
 
 	@Autowired
 	private PatientChartSerializer chartSerializer;
@@ -44,51 +48,124 @@ class QueryStoreChartBuilder {
 	PatientChart build(Patient patient, String question) {
 		if (patient == null || patient.getUuid() == null
 				|| question == null || question.trim().isEmpty()) {
-			return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());
+			return emptyChart(patient);
 		}
 
-		QueryStoreService queryStore;
+		Class<?> serviceClass;
 		try {
-			queryStore = Context.getService(QueryStoreService.class);
+			serviceClass = Class.forName(QUERY_STORE_SERVICE_CLASS);
+		}
+		catch (ClassNotFoundException e) {
+			log.info("QueryStoreService class not on classpath (querystore omod not installed)");
+			return emptyChart(patient);
+		}
+
+		Object queryStore;
+		try {
+			queryStore = Context.getService(serviceClass);
 		}
 		catch (APIException | LinkageError e) {
-			// LinkageError covers NoClassDefFoundError when the querystore-api jar
-			// is absent at runtime — the QueryStoreService.class literal forces
-			// JVM linkage, which APIException doesn't catch.
-			log.info("QueryStoreService not available (querystore omod installed?)");
-			return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());
+			log.info("QueryStoreService not registered with the Context (querystore omod installed?)");
+			return emptyChart(patient);
 		}
 
 		String preprocessedQuestion = QueryPreprocessor.stripQueryStopwords(question);
-		List<QueryDocument> hits;
+		List<?> hits;
 		try {
-			hits = queryStore.searchByPatient(patient.getUuid(), preprocessedQuestion,
+			Method searchByPatient = serviceClass.getMethod(
+					"searchByPatient", String.class, String.class, int.class);
+			hits = (List<?>) searchByPatient.invoke(queryStore,
+					patient.getUuid(), preprocessedQuestion,
 					PipelineSettings.getQueryStoreTopK());
 		}
-		catch (RuntimeException e) {
+		catch (ReflectiveOperationException | RuntimeException e) {
 			log.error("QueryStore search failed for patient [uuid={}]", patient.getUuid(), e);
-			return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());
+			return emptyChart(patient);
 		}
 
 		if (hits == null || hits.isEmpty()) {
-			return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());
+			return emptyChart(patient);
+		}
+
+		QueryDocumentAccess access;
+		try {
+			access = QueryDocumentAccess.resolve();
+		}
+		catch (ReflectiveOperationException e) {
+			log.error("QueryDocument accessors not resolvable (querystore-api shape changed?)", e);
+			return emptyChart(patient);
 		}
 
 		List<SerializedRecord> records = new ArrayList<SerializedRecord>(hits.size());
-		for (QueryDocument doc : hits) {
+		for (Object doc : hits) {
 			if (doc == null) {
 				log.warn("Skipping null QueryDocument");
 				continue;
 			}
-			if (doc.getResourceType() == null || doc.getResourceUuid() == null) {
-				log.warn("Skipping malformed QueryDocument: type={} uuid={}",
-						doc.getResourceType(), doc.getResourceUuid());
-				continue;
+			SerializedRecord record = access.toSerializedRecord(doc, log);
+			if (record != null) {
+				records.add(record);
 			}
-			String text = doc.getText() == null ? "" : doc.getText();
-			records.add(new SerializedRecord(doc.getResourceType(), doc.getResourceUuid(),
-					text, DateFormatUtil.toLegacyDate(doc.getDate())));
 		}
 		return chartSerializer.serialize(patient, records);
+	}
+
+	private PatientChart emptyChart(Patient patient) {
+		return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());
+	}
+
+	/**
+	 * Cached reflective accessors over {@code QueryDocument} methods. Looked
+	 * up once per build invocation (the resolution result isn't cached at
+	 * class level since the querystore-api jar may not be on the classpath
+	 * at chartsearchai start-up).
+	 */
+	private static final class QueryDocumentAccess {
+
+		private final Method getResourceType;
+
+		private final Method getResourceUuid;
+
+		private final Method getText;
+
+		private final Method getDate;
+
+		private QueryDocumentAccess(Method getResourceType, Method getResourceUuid,
+				Method getText, Method getDate) {
+			this.getResourceType = getResourceType;
+			this.getResourceUuid = getResourceUuid;
+			this.getText = getText;
+			this.getDate = getDate;
+		}
+
+		static QueryDocumentAccess resolve() throws ReflectiveOperationException {
+			Class<?> docClass = Class.forName(QUERY_DOCUMENT_CLASS);
+			return new QueryDocumentAccess(
+					docClass.getMethod("getResourceType"),
+					docClass.getMethod("getResourceUuid"),
+					docClass.getMethod("getText"),
+					docClass.getMethod("getDate"));
+		}
+
+		SerializedRecord toSerializedRecord(Object doc, Logger log) {
+			try {
+				String resourceType = (String) getResourceType.invoke(doc);
+				String resourceUuid = (String) getResourceUuid.invoke(doc);
+				if (resourceType == null || resourceUuid == null) {
+					log.warn("Skipping malformed QueryDocument: type={} uuid={}",
+							resourceType, resourceUuid);
+					return null;
+				}
+				Object textObj = getText.invoke(doc);
+				String text = textObj == null ? "" : (String) textObj;
+				LocalDate date = (LocalDate) getDate.invoke(doc);
+				return new SerializedRecord(resourceType, resourceUuid, text,
+						DateFormatUtil.toLegacyDate(date));
+			}
+			catch (ReflectiveOperationException e) {
+				log.error("Failed to read QueryDocument fields", e);
+				return null;
+			}
+		}
 	}
 }

@@ -12,7 +12,10 @@ package org.openmrs.module.chartsearchai.api.impl;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -70,7 +73,7 @@ final class LlmAnswerExtractor {
 			int cachedTokens) {
 		LlmResponse parsed = extractResponse(response);
 		return new LlmResponse(parsed.getAnswer(), parsed.getCitations(),
-				inputTokens, outputTokens, cachedTokens);
+				parsed.getBlocks(), inputTokens, outputTokens, cachedTokens);
 	}
 
 	static LlmResponse extractResponse(String response) {
@@ -105,7 +108,8 @@ final class LlmAnswerExtractor {
 						}
 					}
 				}
-				return new LlmResponse(answer, citations);
+				List<ResponseBlock> blocks = parseBlocks(root.get("blocks"));
+				return new LlmResponse(answer, citations, blocks, 0, 0, 0);
 			}
 		}
 		catch (IOException e) {
@@ -150,6 +154,78 @@ final class LlmAnswerExtractor {
 		}
 
 		return new LlmResponse(trimmed, Collections.emptyList());
+	}
+
+	/**
+	 * Walk the {@code blocks} JSON array and materialize a list of
+	 * {@link ResponseBlock} values. Tolerates a missing or non-array node
+	 * (returns empty list) so legacy {@code {answer, citations}} responses
+	 * keep working. Skips blocks of unknown {@code kind} silently — future
+	 * block types (list, timeline) won't be understood by older parsers but
+	 * shouldn't break the response.
+	 */
+	private static List<ResponseBlock> parseBlocks(JsonNode blocksNode) {
+		if (blocksNode == null || !blocksNode.isArray()) {
+			return Collections.emptyList();
+		}
+		List<ResponseBlock> out = new ArrayList<>(blocksNode.size());
+		for (JsonNode blockNode : blocksNode) {
+			JsonNode kindNode = blockNode.get("kind");
+			if (kindNode == null || !ResponseBlock.KIND_TABLE.equals(kindNode.asText())) {
+				continue;
+			}
+			String title = blockNode.path("title").asText(null);
+			List<ResponseBlock.Column> columns = parseColumns(blockNode.get("columns"));
+			List<ResponseBlock.Row> rows = parseRows(blockNode.get("rows"));
+			out.add(new ResponseBlock(ResponseBlock.KIND_TABLE, title, columns, rows));
+		}
+		return out;
+	}
+
+	private static List<ResponseBlock.Column> parseColumns(JsonNode columnsNode) {
+		if (columnsNode == null || !columnsNode.isArray()) {
+			return Collections.emptyList();
+		}
+		List<ResponseBlock.Column> out = new ArrayList<>(columnsNode.size());
+		for (JsonNode c : columnsNode) {
+			String key = c.path("key").asText("");
+			String label = c.path("label").asText(key);
+			if (!key.isEmpty()) {
+				out.add(new ResponseBlock.Column(key, label));
+			}
+		}
+		return out;
+	}
+
+	private static List<ResponseBlock.Row> parseRows(JsonNode rowsNode) {
+		if (rowsNode == null || !rowsNode.isArray()) {
+			return Collections.emptyList();
+		}
+		List<ResponseBlock.Row> out = new ArrayList<>(rowsNode.size());
+		for (JsonNode rowNode : rowsNode) {
+			JsonNode cellsNode = rowNode.get("cells");
+			Map<String, ResponseBlock.Cell> cells = new LinkedHashMap<>();
+			if (cellsNode != null && cellsNode.isObject()) {
+				Iterator<Map.Entry<String, JsonNode>> fields = cellsNode.fields();
+				while (fields.hasNext()) {
+					Map.Entry<String, JsonNode> entry = fields.next();
+					JsonNode cellNode = entry.getValue();
+					String text = cellNode.path("text").asText("");
+					List<Integer> refs = new ArrayList<>();
+					JsonNode refsNode = cellNode.get("refs");
+					if (refsNode != null && refsNode.isArray()) {
+						for (JsonNode r : refsNode) {
+							if (r.isInt()) {
+								refs.add(r.asInt());
+							}
+						}
+					}
+					cells.put(entry.getKey(), new ResponseBlock.Cell(text, refs));
+				}
+			}
+			out.add(new ResponseBlock.Row(cells));
+		}
+		return out;
 	}
 
 	static String normalizeSlashCitations(String text) {

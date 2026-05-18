@@ -126,6 +126,29 @@ class ChartBuildingStrategy {
 		return buildChartWithEmbeddings(patient, question);
 	}
 
+	/**
+	 * Build the FULL patient chart (no retrieval, no pre-filter) regardless of
+	 * the operator's {@code chartsearchai.embedding.preFilter} setting. Used
+	 * by the multi-turn chat path which needs a byte-stable chart prefix
+	 * across all turns of a session — pre-filter pipelines build a different
+	 * chart per question, which would break the LLM's prompt cache and make
+	 * "what about the diabetes?" follow-ups impossible to ground.
+	 *
+	 * <p>Mirrors the no-pre-filter branch of {@link #buildChart} but is
+	 * always full-chart so the caller doesn't have to know about the global
+	 * property. The {@code chartCache} is shared with that branch so a
+	 * session-create within seconds of a single-shot search hits the cache.
+	 */
+	PatientChart buildChartUnfiltered(Patient patient) {
+		PatientChart cached = chartCache.get(patient);
+		if (cached != null) {
+			return cached;
+		}
+		PatientChart chart = chartSerializer.serialize(patient);
+		chartCache.put(patient, chart);
+		return chart;
+	}
+
 	private PatientChart buildChartWithEmbeddings(Patient patient, String question) {
 		// findSimilar returns null when no embeddings exist (needs indexing),
 		// or an empty list when embeddings exist but nothing matched the query.

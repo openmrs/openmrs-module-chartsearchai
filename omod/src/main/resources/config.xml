@@ -27,6 +27,8 @@
 	<mappingFiles>
 		ChartEmbedding.hbm.xml
 		ChartSearchAuditLog.hbm.xml
+		ChatSession.hbm.xml
+		ChatMessage.hbm.xml
 	</mappingFiles>
 
 	<!-- Privileges -->

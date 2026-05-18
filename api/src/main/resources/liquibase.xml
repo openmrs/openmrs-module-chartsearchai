@@ -124,4 +124,131 @@
 		</update>
 	</changeSet>
 
+	<changeSet id="chartsearchai-007" author="openmrs">
+		<comment>
+			Multi-turn chat history. Two tables — a session header and the message rows.
+			Existing chartsearchai_audit_log is intentionally untouched: it remains the
+			regulatory audit-of-record (long retention). chartsearchai_chat_message holds
+			conversation content (shorter clinical-utility retention) and links to the
+			audit row via a nullable assistant-side FK.
+
+			Columns reserved for future capability without future migrations:
+			  - chat_message.parent_message_id  → branching / regenerate-answer
+			  - chat_message.is_summary         → context-window summarization
+			  - chat_message.finish_reason      → honest partial-stream / abort rows
+			  - chat_session.title              → LLM-generated thread titles
+			  - chat_session.status             → idle-close policy (POC default: persistent)
+		</comment>
+		<createTable tableName="chartsearchai_chat_session">
+			<column name="session_id" type="int" autoIncrement="true">
+				<constraints primaryKey="true" nullable="false"/>
+			</column>
+			<column name="uuid" type="char(38)">
+				<constraints nullable="false" unique="true"
+						uniqueConstraintName="uk_chartsearchai_chat_session_uuid"/>
+			</column>
+			<column name="patient_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="user_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="started_at" type="datetime">
+				<constraints nullable="false"/>
+			</column>
+			<column name="last_activity_at" type="datetime">
+				<constraints nullable="false"/>
+			</column>
+			<column name="ended_at" type="datetime"/>
+			<column name="title" type="varchar(200)"/>
+			<column name="status" type="varchar(20)" defaultValue="active">
+				<constraints nullable="false"/>
+			</column>
+		</createTable>
+		<addForeignKeyConstraint baseTableName="chartsearchai_chat_session" baseColumnNames="patient_id"
+				referencedTableName="patient" referencedColumnNames="patient_id"
+				constraintName="fk_chartsearchai_chat_session_patient"/>
+		<addForeignKeyConstraint baseTableName="chartsearchai_chat_session" baseColumnNames="user_id"
+				referencedTableName="users" referencedColumnNames="user_id"
+				constraintName="fk_chartsearchai_chat_session_user"/>
+		<createIndex tableName="chartsearchai_chat_session" indexName="idx_chartsearchai_chat_session_lookup">
+			<column name="patient_id"/>
+			<column name="user_id"/>
+			<column name="last_activity_at"/>
+		</createIndex>
+
+		<createTable tableName="chartsearchai_chat_message">
+			<column name="message_id" type="int" autoIncrement="true">
+				<constraints primaryKey="true" nullable="false"/>
+			</column>
+			<column name="uuid" type="char(38)">
+				<constraints nullable="false" unique="true"
+						uniqueConstraintName="uk_chartsearchai_chat_message_uuid"/>
+			</column>
+			<column name="session_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="parent_message_id" type="int"/>
+			<column name="ordinal" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="role" type="varchar(16)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="content" type="mediumtext">
+				<constraints nullable="false"/>
+			</column>
+			<column name="created_at" type="datetime">
+				<constraints nullable="false"/>
+			</column>
+			<column name="audit_log_id" type="int"/>
+			<column name="input_tokens" type="int"/>
+			<column name="output_tokens" type="int"/>
+			<column name="is_summary" type="boolean" defaultValueBoolean="false">
+				<constraints nullable="false"/>
+			</column>
+			<column name="finish_reason" type="varchar(20)"/>
+		</createTable>
+		<addForeignKeyConstraint baseTableName="chartsearchai_chat_message" baseColumnNames="session_id"
+				referencedTableName="chartsearchai_chat_session" referencedColumnNames="session_id"
+				constraintName="fk_chartsearchai_chat_message_session"/>
+		<addForeignKeyConstraint baseTableName="chartsearchai_chat_message" baseColumnNames="parent_message_id"
+				referencedTableName="chartsearchai_chat_message" referencedColumnNames="message_id"
+				constraintName="fk_chartsearchai_chat_message_parent"/>
+		<addForeignKeyConstraint baseTableName="chartsearchai_chat_message" baseColumnNames="audit_log_id"
+				referencedTableName="chartsearchai_audit_log" referencedColumnNames="audit_log_id"
+				constraintName="fk_chartsearchai_chat_message_audit"/>
+		<addUniqueConstraint tableName="chartsearchai_chat_message" columnNames="session_id,ordinal"
+				constraintName="uk_chartsearchai_chat_message_ordinal"/>
+		<createIndex tableName="chartsearchai_chat_message" indexName="idx_chartsearchai_chat_message_session">
+			<column name="session_id"/>
+			<column name="created_at"/>
+		</createIndex>
+	</changeSet>
+
+	<changeSet id="chartsearchai-008" author="openmrs">
+		<comment>
+			Add the per-session frozen chart snapshot. Multi-turn chat needs a
+			byte-stable patient-chart prefix across every turn of a session so
+			the LLM's prompt cache hits (Anthropic / OpenAI / llama.cpp all
+			converge on "static content at top, variable at end" for caching).
+			Today the chart sits in the variable-tail current-user message and
+			is rebuilt per question; this makes the cache miss and, more
+			importantly, prevents the LLM from seeing any prior turns when the
+			chart alone fills the budget.
+
+			The snapshot is taken once on session create (full chart, bypassing
+			usePreFilter — chat ignores the pre-filter setting). It's also
+			rewritten when the operator clicks "New chat" (closeAndStartNew).
+			chart_mappings_json carries the citation lookup table so [N] in the
+			LLM's answer can be resolved to a record uuid without rebuilding
+			the chart at every turn.
+		</comment>
+		<addColumn tableName="chartsearchai_chat_session">
+			<column name="chart_snapshot" type="mediumtext"/>
+			<column name="chart_mappings_json" type="mediumtext"/>
+			<column name="chart_built_at" type="datetime"/>
+		</addColumn>
+	</changeSet>
+
 </databaseChangeLog>

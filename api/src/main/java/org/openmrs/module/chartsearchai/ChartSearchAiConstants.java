@@ -239,6 +239,28 @@ public class ChartSearchAiConstants {
 
 	public static final int DEFAULT_AUDIT_LOG_RETENTION_DAYS = 90;
 
+	public static final String GP_CHAT_MAX_CONTEXT_TOKENS = "chartsearchai.chat.maxContextTokens";
+
+	/**
+	 * Default budget for the multi-turn prompt assembly ({@code system} + prior
+	 * turns + current user message with the patient chart). The chart alone is
+	 * routinely ~10K tokens for a real patient, so this default has to be sized
+	 * to the operator's configured {@link #GP_LLM_CONTEXT_SIZE} (default 32768)
+	 * minus the LLM's expected response width
+	 * ({@link #DEFAULT_LLM_MAX_OUTPUT_TOKENS}, default 1024) and some headroom.
+	 *
+	 * <p>A too-small value here is a silent footgun: {@code ChatMessages.fromTurns}
+	 * drops every prior turn when the chart already exceeds the budget, so every
+	 * "chat" turn becomes effectively single-shot and the assistant ignores the
+	 * conversation. Set this to a small value only when running against a
+	 * deliberately tiny model context.
+	 */
+	public static final int DEFAULT_CHAT_MAX_CONTEXT_TOKENS = 30000;
+
+	public static final String GP_CHAT_RETENTION_DAYS = "chartsearchai.chat.retentionDays";
+
+	public static final int DEFAULT_CHAT_RETENTION_DAYS = 90;
+
 	public static final String GP_LLM_ENGINE = "chartsearchai.llm.engine";
 
 	public static final String LLM_ENGINE_LOCAL = "local";

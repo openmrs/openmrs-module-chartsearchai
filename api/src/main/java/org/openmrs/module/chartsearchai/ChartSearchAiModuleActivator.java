@@ -10,8 +10,13 @@
 package org.openmrs.module.chartsearchai;
 
 import java.io.File;
+import java.util.Arrays;
+import java.util.List;
 
+import org.openmrs.Privilege;
+import org.openmrs.Role;
 import org.openmrs.api.APIException;
+import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.BaseModuleActivator;
 import org.openmrs.module.DaemonToken;
@@ -53,8 +58,93 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 	public void started() {
 		log.info("Chart Search AI Module started");
 		validateConfiguration();
+		provisionPrivilegesAndRoles();
 		registerBackfillTask();
 		registerAuditLogPurgeTask();
+	}
+
+	/**
+	 * Standard OpenMRS auto-creates module-declared privileges from
+	 * {@code config.xml} only on initial install. If the {@code privilege}
+	 * table is later wiped (e.g. by reseeding from a SQL dump that predates
+	 * the module, or any DB restore that doesn't carry module metadata),
+	 * subsequent module restarts will NOT re-create those privileges — and
+	 * gated extensions disappear from the SPA. Run on every startup so the
+	 * privilege set is the source of truth and resilient to DB resets.
+	 *
+	 * <p>Also binds the privileges to the standard admin roles. Without an
+	 * explicit binding, {@code System Developer} (a super-role with backend
+	 * bypass) does not enumerate them in the REST {@code /session} response,
+	 * which means {@code userHasAccess()} in the SPA returns false and the
+	 * AI button never renders.
+	 */
+	void provisionPrivilegesAndRoles() {
+		UserService userService;
+		try {
+			userService = Context.getUserService();
+		}
+		catch (Exception e) {
+			log.warn("UserService unavailable; skipping privilege provisioning", e);
+			return;
+		}
+
+		List<String[]> privileges = Arrays.asList(
+				new String[] { ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA,
+						"Allows querying patient charts using the AI-powered chart search" },
+				new String[] { ChartSearchAiConstants.PRIV_VIEW_AUDIT_LOGS,
+						"Allows viewing the audit log of AI chart search queries" });
+
+		for (String[] entry : privileges) {
+			ensurePrivilege(userService, entry[0], entry[1]);
+		}
+
+		List<String> adminRoles = Arrays.asList("System Developer", "Privilege Level: Full",
+				"Organizational: System Administrator");
+		for (String roleName : adminRoles) {
+			for (String[] entry : privileges) {
+				bindPrivilegeToRole(userService, roleName, entry[0]);
+			}
+		}
+	}
+
+	private void ensurePrivilege(UserService userService, String name, String description) {
+		try {
+			Privilege existing = userService.getPrivilege(name);
+			if (existing != null) {
+				return;
+			}
+			Privilege priv = new Privilege(name, description);
+			userService.savePrivilege(priv);
+			log.info("Provisioned privilege '{}'", name);
+		}
+		catch (Exception e) {
+			log.warn("Failed to provision privilege '{}'", name, e);
+		}
+	}
+
+	private void bindPrivilegeToRole(UserService userService, String roleName, String privilege) {
+		try {
+			Role role = userService.getRole(roleName);
+			if (role == null) {
+				// Role doesn't exist on this distro (e.g. fresh OpenMRS without the
+				// reference roles); skip silently — the priv still exists for any
+				// site-defined role to pick up.
+				return;
+			}
+			if (role.hasPrivilege(privilege)) {
+				return;
+			}
+			Privilege priv = userService.getPrivilege(privilege);
+			if (priv == null) {
+				return;
+			}
+			role.addPrivilege(priv);
+			userService.saveRole(role);
+			log.info("Bound privilege '{}' to role '{}'", privilege, roleName);
+		}
+		catch (Exception e) {
+			log.warn("Failed to bind privilege '{}' to role '{}'", privilege, roleName, e);
+		}
 	}
 
 	@Override

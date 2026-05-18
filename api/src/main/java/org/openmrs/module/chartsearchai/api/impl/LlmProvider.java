@@ -14,8 +14,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.model.ChatMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +35,8 @@ import org.springframework.stereotype.Component;
 public class LlmProvider {
 
 	private static final Logger log = LoggerFactory.getLogger(LlmProvider.class);
+
+	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	static final String DEFAULT_SYSTEM_PROMPT = "You are a clinical assistant helping a clinician "
 			+ "review a patient's chart. Answer ONLY the specific query. "
@@ -256,6 +262,90 @@ public class LlmProvider {
 				delegate.accept(out.toString());
 			}
 		}
+	}
+
+	/**
+	 * Multi-turn variant: assembles {@code [system, ...priorTurns..., currentUser]}
+	 * with drop-oldest budget trimming via {@link ChatMessages#fromTurns} and
+	 * hands the prebuilt array to the engine.
+	 *
+	 * <p>Note: only the CURRENT user message carries the patient chart. Prior
+	 * user turns store just the original question text (not chart+question), so
+	 * the chart never appears twice in the message array and stale chart copies
+	 * never confuse the LLM if data changed between turns.
+	 */
+	/**
+	 * Multi-turn chat assembly using the stable system+chart prefix design
+	 * ({@link ChatMessages#assembleChat}). The {@code chartEnvelope} is the
+	 * frozen-per-session bytes (typically "Patient records (most recent
+	 * first):\n<numbered records>") and stays byte-identical across all
+	 * turns; the {@code question} is just the raw clinician text; priors
+	 * carry user/assistant pairs (no chart bytes inside).
+	 *
+	 * <p>This produces:
+	 * <pre>
+	 *   [system, user(chartEnvelope), ...priors..., user(question)]
+	 * </pre>
+	 * which hits the LLM server's prompt cache on every follow-up because
+	 * the first two messages are byte-identical across turns of a session.
+	 */
+	public LlmResponse chat(String chartEnvelope, List<ChatMessage> priorTurns, String question) {
+		String systemPrompt = getSystemPrompt();
+		int maxTokens = getMaxContextTokens();
+		int responseReserve = ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS;
+		ArrayNode messages = ChatMessages.assembleChat(
+				MAPPER, systemPrompt, chartEnvelope, priorTurns, question, maxTokens, responseReserve);
+		int includedPriors = messages.size() - 3; // size minus [system, chart_user, current_user]
+		log.debug("chat: priors available={}, included={}, chart_chars={}, budget={} tokens",
+				priorTurns == null ? 0 : priorTurns.size(), Math.max(0, includedPriors),
+				chartEnvelope == null ? 0 : chartEnvelope.length(), maxTokens);
+		LlmEngine.InferenceResult result = getActiveEngine().infer(messages, getTimeoutSeconds());
+		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
+				result.getCachedTokens());
+	}
+
+	/**
+	 * Streaming multi-turn variant. Same assembly contract as
+	 * {@link #chat(String, List, String)}; tokenConsumer receives unwrapped
+	 * answer text via {@link AnswerExtractingConsumer}.
+	 */
+	public LlmResponse chatStreaming(String chartEnvelope, List<ChatMessage> priorTurns,
+			String question, Consumer<String> tokenConsumer) {
+		String systemPrompt = getSystemPrompt();
+		int maxTokens = getMaxContextTokens();
+		int responseReserve = ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS;
+		ArrayNode messages = ChatMessages.assembleChat(
+				MAPPER, systemPrompt, chartEnvelope, priorTurns, question, maxTokens, responseReserve);
+		int includedPriors = messages.size() - 3;
+		log.debug("chatStreaming: priors available={}, included={}, chart_chars={}, budget={} tokens",
+				priorTurns == null ? 0 : priorTurns.size(), Math.max(0, includedPriors),
+				chartEnvelope == null ? 0 : chartEnvelope.length(), maxTokens);
+
+		AnswerExtractingConsumer filter = new AnswerExtractingConsumer(tokenConsumer);
+
+		LlmEngine.InferenceResult result = getActiveEngine().inferStreaming(
+				messages, getTimeoutSeconds(), filter);
+
+		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
+				result.getCachedTokens());
+	}
+
+	protected int getMaxContextTokens() {
+		String value = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_CHAT_MAX_CONTEXT_TOKENS);
+		if (value != null && !value.trim().isEmpty()) {
+			try {
+				int parsed = Integer.parseInt(value.trim());
+				if (parsed > 0) {
+					return parsed;
+				}
+				log.warn("chartsearchai.chat.maxContextTokens must be positive, got '{}', using default", parsed);
+			}
+			catch (NumberFormatException e) {
+				log.warn("Invalid chartsearchai.chat.maxContextTokens '{}', using default", value);
+			}
+		}
+		return ChartSearchAiConstants.DEFAULT_CHAT_MAX_CONTEXT_TOKENS;
 	}
 
 	/**

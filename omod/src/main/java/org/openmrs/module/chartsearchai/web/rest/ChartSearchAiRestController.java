@@ -36,9 +36,13 @@ import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
+import org.openmrs.module.chartsearchai.api.ChatService;
+import org.openmrs.module.chartsearchai.api.ChatService.ChatTurnResult;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
+import org.openmrs.module.chartsearchai.model.ChatMessage;
+import org.openmrs.module.chartsearchai.model.ChatSession;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -110,6 +114,10 @@ public class ChartSearchAiRestController {
 	@Autowired
 	@Qualifier("chartSearchAi.warmupExecutor")
 	private WarmupExecutor warmupExecutor;
+
+	@Autowired
+	@Qualifier("chartSearchAi.chatService")
+	private ChatService chatService;
 
 	@RequestMapping(value = "/search", method = RequestMethod.POST)
 	@ResponseBody
@@ -549,6 +557,348 @@ public class ChartSearchAiRestController {
 		Map<String, Object> response = new HashMap<String, Object>();
 		response.put("success", true);
 		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	// ============================================================================
+	// Multi-turn chat endpoints. The {@code /search} family above is single-shot;
+	// these maintain a per-(patient, user) ChatSession that carries prior turns
+	// into each LLM call. Persistence is handled by {@link ChatService}.
+	// ============================================================================
+
+	/**
+	 * Streaming chat turn. Reuses the (patient, user) session if {@code session}
+	 * is provided AND resolves to an active session; otherwise opens-or-loads the
+	 * latest active session for the user. Surfaces the session uuid via the
+	 * {@code X-ChartSearchAi-Session} response header before the SSE stream opens
+	 * so the client can pin subsequent posts to the same conversation.
+	 *
+	 * <pre>
+	 * POST /ws/rest/v1/chartsearchai/chat/stream
+	 * { "patient": "uuid", "session": "uuid?" , "question": "..." }
+	 * </pre>
+	 */
+	@RequestMapping(value = "/chat/stream", method = RequestMethod.POST)
+	public void chatStream(@RequestBody Map<String, String> body,
+			HttpServletResponse response) throws IOException {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		String patientUuid = body.get("patient");
+		String sessionUuid = body.get("session");
+		String question = body.get("question");
+
+		if (patientUuid == null || patientUuid.trim().isEmpty()) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "patient is required");
+			return;
+		}
+		if (question == null || question.trim().isEmpty()) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "question is required");
+			return;
+		}
+		if (question.length() > MAX_QUESTION_LENGTH) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST,
+					"question exceeds maximum length of " + MAX_QUESTION_LENGTH + " characters");
+			return;
+		}
+
+		String sanitizedQuestion = CONTROL_CHARS.matcher(question).replaceAll("");
+		if (sanitizedQuestion.trim().isEmpty()) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "question is required");
+			return;
+		}
+		String sanitizationError = validateQuestion(sanitizedQuestion);
+		if (sanitizationError != null) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, sanitizationError);
+			return;
+		}
+
+		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
+		if (patient == null) {
+			writeJsonError(response, HttpServletResponse.SC_NOT_FOUND, "Patient not found");
+			return;
+		}
+
+		User user = Context.getAuthenticatedUser();
+		if (!patientAccessCheck.canAccess(user, patient)) {
+			writeJsonError(response, HttpServletResponse.SC_FORBIDDEN,
+					"You do not have access to this patient's chart");
+			return;
+		}
+
+		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
+		if (rateLimitError != null) {
+			writeJsonError(response, 429, "Rate limit exceeded");
+			return;
+		}
+
+		ChatSession session = resolveOrOpenSession(patient, sessionUuid);
+
+		// Unwrap any response wrappers that buffer the body (kills SSE liveness).
+		HttpServletResponse unwrapped = response;
+		while (unwrapped instanceof HttpServletResponseWrapper) {
+			javax.servlet.ServletResponse inner =
+					((HttpServletResponseWrapper) unwrapped).getResponse();
+			if (inner instanceof HttpServletResponse) {
+				unwrapped = (HttpServletResponse) inner;
+			} else {
+				break;
+			}
+		}
+
+		response.setContentType("text/event-stream");
+		response.setCharacterEncoding("UTF-8");
+		response.setHeader("Cache-Control", "no-cache");
+		response.setHeader("X-Accel-Buffering", "no");
+		response.setHeader("Connection", "keep-alive");
+		// Surface the session uuid BEFORE the stream opens — the client uses
+		// it to pin all subsequent posts in this conversation.
+		response.setHeader("X-ChartSearchAi-Session", session.getUuid());
+		unwrapped.setBufferSize(0);
+
+		final OutputStream out = unwrapped.getOutputStream();
+		unwrapped.flushBuffer();
+
+		try {
+			ChatTurnResult result = chatService.chatStreaming(
+					session, sanitizedQuestion, new java.util.function.Consumer<String>() {
+						@Override
+						public void accept(String token) {
+							try {
+								writeSseEvent(out, "token", token);
+							}
+							catch (IOException e) {
+								log.debug("Client disconnected during chat streaming");
+								throw new RuntimeException("Client disconnected", e);
+							}
+						}
+					});
+
+			ChartAnswer answer = result.getAnswer();
+			Map<String, Object> doneData = new LinkedHashMap<String, Object>();
+			doneData.put("answer", answer.getAnswer());
+			doneData.put("disclaimer", DISCLAIMER);
+
+			List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
+			for (RecordReference ref : answer.getReferences()) {
+				Map<String, Object> refMap = new LinkedHashMap<String, Object>();
+				refMap.put("index", ref.getIndex());
+				refMap.put("resourceType", ref.getResourceType());
+				refMap.put("resourceUuid", ref.getResourceUuid());
+				refMap.put("date", formatDate(ref.getDate()));
+				refs.add(refMap);
+			}
+			doneData.put("references", refs);
+			doneData.put("session", result.getSessionUuid());
+			doneData.put("messageId", result.getAssistantMessageUuid());
+
+			writeSseEvent(out, "done", new ObjectMapper().writeValueAsString(doneData));
+		}
+		catch (ChartTooLargeException e) {
+			log.warn("Chart too large for chat streaming for patient [id={}]: {}",
+					patient.getPatientId(), e.getMessage());
+			try {
+				writeSseEvent(out, "error",
+						"This patient's chart is too large to process. "
+								+ "Contact your administrator to increase the LLM context size.");
+			}
+			catch (IOException ioe) {
+				log.debug("Could not send too-large error event, client likely disconnected");
+			}
+		}
+		catch (IllegalStateException e) {
+			log.error("Chat configuration error during streaming", e);
+			try {
+				writeSseEvent(out, "error",
+						"Chart search is not properly configured. Contact your administrator.");
+			}
+			catch (IOException ioe) {
+				log.debug("Could not send config error event, client likely disconnected");
+			}
+		}
+		catch (Exception e) {
+			if (e.getCause() instanceof IOException) {
+				log.debug("Chat streaming ended due to client disconnect");
+			} else {
+				log.error("Chat streaming failed for patient [id={}]", patient.getPatientId(), e);
+				try {
+					writeSseEvent(out, "error",
+							"Chart search failed. Please try again or contact your administrator.");
+				}
+				catch (IOException ioe) {
+					log.debug("Could not send error event, client likely disconnected");
+				}
+			}
+		}
+
+		try {
+			out.flush();
+		}
+		catch (IOException e) {
+			log.debug("Could not flush chat SSE stream, client likely disconnected");
+		}
+	}
+
+	/**
+	 * Synchronous chat (non-streaming) — convenience for callers that don't need
+	 * SSE. Same persistence semantics as {@link #chatStream}; the session uuid is
+	 * returned in the JSON body (no SSE header).
+	 */
+	@RequestMapping(value = "/chat", method = RequestMethod.POST)
+	@ResponseBody
+	public ResponseEntity<Object> chat(@RequestBody Map<String, String> body) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		String patientUuid = body.get("patient");
+		String sessionUuid = body.get("session");
+		String question = body.get("question");
+
+		PatientResolution resolved = resolvePatient(patientUuid);
+		if (resolved.hasError()) {
+			return new ResponseEntity<Object>(
+					errorResponse(resolved.errorMessage), resolved.errorStatus);
+		}
+		Patient patient = resolved.patient;
+
+		if (question == null || question.trim().isEmpty()) {
+			return new ResponseEntity<Object>(
+					errorResponse("question is required"), HttpStatus.BAD_REQUEST);
+		}
+		if (question.length() > MAX_QUESTION_LENGTH) {
+			return new ResponseEntity<Object>(
+					errorResponse("question exceeds maximum length of "
+							+ MAX_QUESTION_LENGTH + " characters"),
+					HttpStatus.BAD_REQUEST);
+		}
+		question = CONTROL_CHARS.matcher(question).replaceAll("");
+		if (question.trim().isEmpty()) {
+			return new ResponseEntity<Object>(
+					errorResponse("question is required"), HttpStatus.BAD_REQUEST);
+		}
+		String sanitizationError = validateQuestion(question);
+		if (sanitizationError != null) {
+			return new ResponseEntity<Object>(
+					errorResponse(sanitizationError), HttpStatus.BAD_REQUEST);
+		}
+
+		User user = Context.getAuthenticatedUser();
+		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
+		if (rateLimitError != null) {
+			return rateLimitError;
+		}
+
+		ChatSession session = resolveOrOpenSession(patient, sessionUuid);
+
+		ChatTurnResult result;
+		try {
+			result = chatService.chat(session, question);
+		}
+		catch (ChartTooLargeException e) {
+			log.warn("Chart too large for chat for patient [id={}]: {}",
+					patient.getPatientId(), e.getMessage());
+			return new ResponseEntity<Object>(
+					errorResponse("This patient's chart is too large to process. "
+							+ "Contact your administrator to increase the LLM context size."),
+					HttpStatus.PAYLOAD_TOO_LARGE);
+		}
+		catch (Exception e) {
+			log.error("Chat failed for patient [id={}]", patient.getPatientId(), e);
+			return new ResponseEntity<Object>(
+					errorResponse("Chart search failed. Please try again or contact your administrator."),
+					HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+
+		ChartAnswer answer = result.getAnswer();
+		Map<String, Object> response = new LinkedHashMap<String, Object>();
+		response.put("answer", answer.getAnswer());
+		response.put("disclaimer", DISCLAIMER);
+
+		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
+		for (RecordReference ref : answer.getReferences()) {
+			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
+			refMap.put("index", ref.getIndex());
+			refMap.put("resourceType", ref.getResourceType());
+			refMap.put("resourceUuid", ref.getResourceUuid());
+			refMap.put("date", formatDate(ref.getDate()));
+			refs.add(refMap);
+		}
+		response.put("references", refs);
+		response.put("session", result.getSessionUuid());
+		response.put("messageId", result.getAssistantMessageUuid());
+
+		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	/**
+	 * Close the current active session for the (patient, user) pair and open
+	 * a fresh one. Returns the new session uuid + empty messages.
+	 */
+	@RequestMapping(value = "/chat/new", method = RequestMethod.POST)
+	@ResponseBody
+	public ResponseEntity<Object> chatNew(@RequestBody Map<String, String> body) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		PatientResolution resolved = resolvePatient(body.get("patient"));
+		if (resolved.hasError()) {
+			return new ResponseEntity<Object>(
+					errorResponse(resolved.errorMessage), resolved.errorStatus);
+		}
+
+		ChatSession session = chatService.closeAndStartNew(resolved.patient);
+		Map<String, Object> response = new LinkedHashMap<String, Object>();
+		response.put("session", session.getUuid());
+		response.put("messages", new ArrayList<Map<String, Object>>());
+		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	/**
+	 * Hydrate the SPA on mount: returns the current (patient, user) session
+	 * (creating one if none exists) and its prior messages in chronological
+	 * order. Empty {@code messages[]} on a freshly-created session.
+	 */
+	@RequestMapping(value = "/chat", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> chatHistory(
+			@RequestParam(value = "patient") String patientUuid) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		PatientResolution resolved = resolvePatient(patientUuid);
+		if (resolved.hasError()) {
+			return new ResponseEntity<Object>(
+					errorResponse(resolved.errorMessage), resolved.errorStatus);
+		}
+
+		ChatSession session = chatService.openOrLoadActiveSession(resolved.patient);
+		List<ChatMessage> messages = chatService.getMessages(session);
+
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		for (ChatMessage m : messages) {
+			Map<String, Object> entry = new LinkedHashMap<String, Object>();
+			entry.put("messageId", m.getUuid());
+			entry.put("role", m.getRole());
+			entry.put("content", m.getContent());
+			entry.put("createdAt", m.getCreatedAt() != null ? m.getCreatedAt().getTime() : null);
+			out.add(entry);
+		}
+
+		Map<String, Object> response = new LinkedHashMap<String, Object>();
+		response.put("session", session.getUuid());
+		response.put("messages", out);
+		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	/**
+	 * Look up an existing session by uuid (loadByUuid); fall back to
+	 * openOrLoadActive when the uuid is missing or stale (e.g. expired).
+	 * Always returns a non-null session.
+	 */
+	private ChatSession resolveOrOpenSession(Patient patient, String sessionUuid) {
+		if (sessionUuid != null && !sessionUuid.trim().isEmpty()) {
+			ChatSession existing = chatService.loadByUuid(sessionUuid.trim());
+			if (existing != null && patient.equals(existing.getPatient())
+					&& ChatSession.STATUS_ACTIVE.equals(existing.getStatus())) {
+				return existing;
+			}
+		}
+		return chatService.openOrLoadActiveSession(patient);
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)

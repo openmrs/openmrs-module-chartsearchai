@@ -27,6 +27,7 @@ import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.embedding.EmbeddingProvider;
 import org.openmrs.module.chartsearchai.embedding.ModelNoiseProfile;
 import org.openmrs.module.chartsearchai.model.ChartEmbedding;
+import org.openmrs.module.chartsearchai.model.ChatMessage;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord;
@@ -125,6 +126,60 @@ public class LlmInferenceService implements ChartSearchService {
 
 		return new ChartAnswer(response.getAnswer(),
 				extractCitedReferences(response.getCitations(), chart.getMappings()),
+				response.getInputTokens(), response.getOutputTokens(),
+				response.getCachedTokens());
+	}
+
+	/**
+	 * Build the full, retrieval-free patient chart that the chat path uses
+	 * as its frozen session prefix. Bypasses {@code chartsearchai.embedding.preFilter}
+	 * deliberately — chat needs byte-stability across turns so the LLM's
+	 * prompt cache can hit, which pre-filter's query-dependent chart breaks.
+	 *
+	 * <p>Returned text is the LLM-ready envelope: "Patient records (most
+	 * recent first):\n<numbered records>". Stored on
+	 * {@code chat_session.chart_snapshot} by {@link ChatServiceImpl}.
+	 */
+	public PatientChart buildSessionChart(Patient patient) {
+		PatientChart chart = chartBuildingStrategy.buildChartUnfiltered(patient);
+		String envelope = "Patient records (most recent first):\n"
+				+ (chart.getText() == null || chart.getText().trim().isEmpty()
+						? "This patient has no records." : chart.getText().stripTrailing());
+		return new PatientChart(envelope, chart.getMappings());
+	}
+
+	/**
+	 * Multi-turn chat using a frozen session-scoped chart envelope. The
+	 * envelope and mappings are passed in (by the {@link ChatServiceImpl},
+	 * sourced from {@code chat_session.chart_snapshot} +
+	 * {@code chart_mappings_json}), so consecutive turns of one session
+	 * send the byte-identical chart prefix and the LLM's prompt cache
+	 * hits on follow-ups.
+	 *
+	 * <p>The {@code question} is the raw clinician text — assembleChat
+	 * places it as the trailing user message, separate from the chart
+	 * envelope.
+	 */
+	public ChartAnswer chat(String chartEnvelope, List<RecordMapping> mappings,
+			List<ChatMessage> priorTurns, String question) {
+		LlmResponse response = llmProvider.chat(chartEnvelope, priorTurns, question);
+
+		return new ChartAnswer(response.getAnswer(),
+				extractCitedReferences(response.getCitations(), mappings),
+				response.getInputTokens(), response.getOutputTokens(),
+				response.getCachedTokens());
+	}
+
+	/**
+	 * Streaming variant of {@link #chat}.
+	 */
+	public ChartAnswer chatStreaming(String chartEnvelope, List<RecordMapping> mappings,
+			List<ChatMessage> priorTurns, String question, Consumer<String> tokenConsumer) {
+		LlmResponse response = llmProvider.chatStreaming(
+				chartEnvelope, priorTurns, question, tokenConsumer);
+
+		return new ChartAnswer(response.getAnswer(),
+				extractCitedReferences(response.getCitations(), mappings),
 				response.getInputTokens(), response.getOutputTokens(),
 				response.getCachedTokens());
 	}

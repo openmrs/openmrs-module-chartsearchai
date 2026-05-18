@@ -108,9 +108,15 @@ public class LocalLlmEngine implements LlmEngine {
 	@Override
 	public synchronized InferenceResult infer(String systemPrompt, String userMessage,
 			int timeoutSeconds) {
+		return infer(ChatMessages.systemAndUser(MAPPER, systemPrompt, userMessage), timeoutSeconds);
+	}
+
+	@Override
+	public synchronized InferenceResult infer(ArrayNode messages, int timeoutSeconds) {
 		ensureServerRunning();
 
-		String requestBody = buildRequestBody(systemPrompt, userMessage, false);
+		String requestBody = buildRequestBody(messages, false,
+				ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS);
 
 		HttpRequest request = HttpRequest.newBuilder()
 				.uri(URI.create(getCompletionsUrl()))
@@ -151,9 +157,17 @@ public class LocalLlmEngine implements LlmEngine {
 	@Override
 	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer) {
+		return inferStreaming(ChatMessages.systemAndUser(MAPPER, systemPrompt, userMessage),
+				timeoutSeconds, tokenConsumer);
+	}
+
+	@Override
+	public synchronized InferenceResult inferStreaming(ArrayNode messages, int timeoutSeconds,
+			Consumer<String> tokenConsumer) {
 		ensureServerRunning();
 
-		String requestBody = buildRequestBody(systemPrompt, userMessage, true);
+		String requestBody = buildRequestBody(messages, true,
+				ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS);
 
 		HttpRequest request = HttpRequest.newBuilder()
 				.uri(URI.create(getCompletionsUrl()))
@@ -462,6 +476,11 @@ public class LocalLlmEngine implements LlmEngine {
 
 	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
 			int maxTokens) {
+		return buildRequestBody(ChatMessages.systemAndUser(MAPPER, systemPrompt, userMessage),
+				stream, maxTokens);
+	}
+
+	String buildRequestBody(ArrayNode messages, boolean stream, int maxTokens) {
 		ObjectNode root = MAPPER.createObjectNode();
 		root.put("temperature", 0.0);
 		root.put("max_tokens", maxTokens);
@@ -509,7 +528,7 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 
 		root.set("response_format", ChartAnswerResponseFormat.build(MAPPER));
-		root.set("messages", ChatMessages.systemAndUser(MAPPER, systemPrompt, userMessage));
+		root.set("messages", messages);
 
 		try {
 			return MAPPER.writeValueAsString(root);

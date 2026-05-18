@@ -11,6 +11,8 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.function.Consumer;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+
 /**
  * Abstraction for LLM inference engines. Implementations handle the actual
  * model invocation (local or remote) while prompt construction and response
@@ -29,6 +31,17 @@ public interface LlmEngine {
 	InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds);
 
 	/**
+	 * Multi-turn variant: takes a prebuilt OpenAI-compatible messages array
+	 * (system + interleaved user/assistant prior turns + current user message).
+	 * Used by the chat path; the single-turn path keeps calling the
+	 * 3-arg form above.
+	 */
+	default InferenceResult infer(ArrayNode messages, int timeoutSeconds) {
+		throw new UnsupportedOperationException(
+				"infer(messages, timeoutSeconds) not implemented on " + getClass().getSimpleName());
+	}
+
+	/**
 	 * Run inference with streaming, calling the consumer for each token fragment.
 	 *
 	 * @param systemPrompt the system prompt
@@ -39,6 +52,16 @@ public interface LlmEngine {
 	 */
 	InferenceResult inferStreaming(String systemPrompt, String userMessage, int timeoutSeconds,
 			Consumer<String> tokenConsumer);
+
+	/**
+	 * Streaming variant of {@link #infer(ArrayNode, int)}.
+	 */
+	default InferenceResult inferStreaming(ArrayNode messages, int timeoutSeconds,
+			Consumer<String> tokenConsumer) {
+		throw new UnsupportedOperationException(
+				"inferStreaming(messages, timeoutSeconds, consumer) not implemented on "
+						+ getClass().getSimpleName());
+	}
 
 	/**
 	 * Prime the engine's prompt cache with the given prefix. Implementations that

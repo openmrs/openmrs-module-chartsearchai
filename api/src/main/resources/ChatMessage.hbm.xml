@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC
+		"-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+		"http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping package="org.openmrs.module.chartsearchai.model">
+
+	<class name="ChatMessage" table="chartsearchai_chat_message">
+
+		<id name="messageId" column="message_id" type="int">
+			<generator class="native"/>
+		</id>
+
+		<property name="uuid" column="uuid" type="string" length="38" not-null="true" unique="true"/>
+
+		<many-to-one name="session" class="ChatSession" column="session_id" not-null="true"/>
+
+		<many-to-one name="parentMessage" class="ChatMessage" column="parent_message_id"/>
+
+		<property name="ordinal" column="ordinal" type="int" not-null="true"/>
+
+		<property name="role" column="role" type="string" length="16" not-null="true"/>
+
+		<property name="content" column="content" type="text" not-null="true"/>
+
+		<property name="createdAt" column="created_at" type="timestamp" not-null="true"/>
+
+		<many-to-one name="auditLog" class="ChartSearchAuditLog" column="audit_log_id"/>
+
+		<property name="inputTokens" column="input_tokens" type="java.lang.Integer"/>
+
+		<property name="outputTokens" column="output_tokens" type="java.lang.Integer"/>
+
+		<property name="summary" column="is_summary" type="boolean" not-null="true"/>
+
+		<property name="finishReason" column="finish_reason" type="string" length="20"/>
+
+	</class>
+
+</hibernate-mapping>

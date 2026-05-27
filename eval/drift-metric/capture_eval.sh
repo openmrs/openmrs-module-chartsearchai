@@ -1,6 +1,6 @@
 #!/bin/bash
 # Capture full response JSON per cell. Arg1 = output dir. (bash 3.2 safe: no associative arrays)
-AUTH="admin:Admin123"; BASE="http://localhost:8080/openmrs/ws/rest/v1"
+AUTH="${OPENMRS_AUTH:-admin:Admin123}"; BASE="${OPENMRS_REST:-http://localhost:8080/openmrs/ws/rest/v1}"
 OUT="$1"; mkdir -p "$OUT"
 PATIENTS=("4acc0b80-83c4-40f7-86fd-0e11a68dd405" "07e26b8e-00a9-4b31-b805-3560ad4e9e2e" "be83f269-66bd-4ba1-80ec-cc62d0d0c84e" "61d0a9db-d35f-40c9-aeae-ccd264470de5")
 QUERIES=("Is the patient enrolled in any programs?" "Does the patient have any allergies?" "What medications is the patient taking?" "Does the patient have any eye problems?" "Does the patient have any heart or cardiac problems?" "Has the patient had any fractures or broken bones?" "Does the patient have any kidney problems?" "Does the patient have any mental health or psychiatric conditions?")

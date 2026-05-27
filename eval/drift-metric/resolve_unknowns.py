@@ -3,7 +3,8 @@
 Usage: resolve_unknowns.py <capture_dir>  (reads metric_gold.json + offtopic_adj.json alongside this script)"""
 import json,glob,os,sys,urllib.request,base64
 HERE=os.path.dirname(os.path.abspath(__file__))
-AUTH=base64.b64encode(b"admin:Admin123").decode(); BASE="http://localhost:8080/openmrs/ws/rest/v1"
+AUTH=base64.b64encode(os.environ.get("OPENMRS_AUTH","admin:Admin123").encode()).decode()
+BASE=os.environ.get("OPENMRS_REST","http://localhost:8080/openmrs/ws/rest/v1")
 EP={'obs':'obs','condition':'condition','diagnosis':'patientdiagnoses','test_order':'order',
     'encounter':'encounter','visit':'visit','program':'programenrollment','appointments_appointment':'appointmentscheduling/appointment'}
 def disp(rt,u):

@@ -37,7 +37,9 @@ compares cited UUIDs to a human gold set, so it cannot inherit a single model's 
 
 - `capture_eval.sh <outdir>` — fires the 32 cells at the live REST endpoint, saving the full
   response JSON (references carry `resourceUuid`) per cell. Requires a running standalone with
-  `chartsearchai.querystore.enabled=true`, `embedding.preFilter=true`.
+  `chartsearchai.querystore.enabled=true`, `embedding.preFilter=true`. Override `OPENMRS_AUTH`
+  (default `admin:Admin123`) and `OPENMRS_REST` for a non-default standalone (also used by
+  `resolve_unknowns.py`).
 - `metric_gold.json` — per cell: `present` (is the topic actually in the chart), `ontopic`
   (UUID→text of genuinely on-topic records), `focus_uuids` (the top-30 the search returned).
 - `offtopic_adj.json` — out-of-focus cited records adjudicated on/off-topic (`_ontopic` map for

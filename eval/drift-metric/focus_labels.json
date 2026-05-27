@@ -1,0 +1,39 @@
+{
+  "_doc": "Claude-adjudicated on-topic ranks per cell. key=patientUuid|topic. present=topic actually in chart. ranks=1-based ranks of genuinely on-topic records. Vitals (BP/pulse) treated as NOISE for 'heart problems' (a reading is not a cardiac condition). Test ORDERS and substance-use disorders treated as NOISE for 'what medications'. Visceral/nerve injuries (ureter/bladder/cranial nerve) excluded from 'fractures or broken bones'; fractures+wounds+burns+assault+bite+crush+late-effect-of-injury included. 'Disorder of nervous system' excluded from mental (neuro confounder).",
+
+  "4acc0b80-83c4-40f7-86fd-0e11a68dd405|allergies":   {"present": false, "ranks": []},
+  "4acc0b80-83c4-40f7-86fd-0e11a68dd405|eye":         {"present": false, "ranks": []},
+  "4acc0b80-83c4-40f7-86fd-0e11a68dd405|fractures":   {"present": true,  "ranks": [1,2,3,4]},
+  "4acc0b80-83c4-40f7-86fd-0e11a68dd405|heart":       {"present": false, "ranks": []},
+  "4acc0b80-83c4-40f7-86fd-0e11a68dd405|kidney":      {"present": true,  "ranks": [1,2]},
+  "4acc0b80-83c4-40f7-86fd-0e11a68dd405|medications": {"present": true,  "ranks": [1]},
+  "4acc0b80-83c4-40f7-86fd-0e11a68dd405|mental":      {"present": true,  "ranks": [1,2,3,4,5,6,7,8,11,13]},
+  "4acc0b80-83c4-40f7-86fd-0e11a68dd405|programs":    {"present": true,  "ranks": [1]},
+
+  "07e26b8e-00a9-4b31-b805-3560ad4e9e2e|allergies":   {"present": true,  "ranks": [3,4,6,8,10]},
+  "07e26b8e-00a9-4b31-b805-3560ad4e9e2e|eye":         {"present": true,  "ranks": [1,2,3,4]},
+  "07e26b8e-00a9-4b31-b805-3560ad4e9e2e|fractures":   {"present": true,  "ranks": [1,2,3,4,5,9,10,11,13,15,22,24,28]},
+  "07e26b8e-00a9-4b31-b805-3560ad4e9e2e|heart":       {"present": true,  "ranks": [2,3,4,5,27]},
+  "07e26b8e-00a9-4b31-b805-3560ad4e9e2e|kidney":      {"present": true,  "ranks": [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,19,22,23,25,27,28]},
+  "07e26b8e-00a9-4b31-b805-3560ad4e9e2e|medications": {"present": false, "ranks": []},
+  "07e26b8e-00a9-4b31-b805-3560ad4e9e2e|mental":      {"present": true,  "ranks": [1,2,4,6,8,9,10,11,12,14,16,19,26,29]},
+  "07e26b8e-00a9-4b31-b805-3560ad4e9e2e|programs":    {"present": false, "ranks": []},
+
+  "be83f269-66bd-4ba1-80ec-cc62d0d0c84e|allergies":   {"present": true,  "ranks": [2,4]},
+  "be83f269-66bd-4ba1-80ec-cc62d0d0c84e|eye":         {"present": false, "ranks": []},
+  "be83f269-66bd-4ba1-80ec-cc62d0d0c84e|fractures":   {"present": true,  "ranks": [1,2,3,4,5,6,7,9,13,27]},
+  "be83f269-66bd-4ba1-80ec-cc62d0d0c84e|heart":       {"present": true,  "ranks": [1,2,3,4,5,8,11]},
+  "be83f269-66bd-4ba1-80ec-cc62d0d0c84e|kidney":      {"present": true,  "ranks": [1,2,3,4,5,6,7,8,9,11,13,14,15,16,17,18,19,20,21,22,24,26,27]},
+  "be83f269-66bd-4ba1-80ec-cc62d0d0c84e|medications": {"present": false, "ranks": []},
+  "be83f269-66bd-4ba1-80ec-cc62d0d0c84e|mental":      {"present": true,  "ranks": [1,2,3,4,5,6,8,10,11]},
+  "be83f269-66bd-4ba1-80ec-cc62d0d0c84e|programs":    {"present": false, "ranks": []},
+
+  "61d0a9db-d35f-40c9-aeae-ccd264470de5|allergies":   {"present": true,  "ranks": [2,4]},
+  "61d0a9db-d35f-40c9-aeae-ccd264470de5|eye":         {"present": false, "ranks": []},
+  "61d0a9db-d35f-40c9-aeae-ccd264470de5|fractures":   {"present": true,  "ranks": [1,2,4,5,6,7,9,11,12,18]},
+  "61d0a9db-d35f-40c9-aeae-ccd264470de5|heart":       {"present": true,  "ranks": [1,2,13]},
+  "61d0a9db-d35f-40c9-aeae-ccd264470de5|kidney":      {"present": true,  "ranks": [2,3,10,14,16,29]},
+  "61d0a9db-d35f-40c9-aeae-ccd264470de5|medications": {"present": false, "ranks": []},
+  "61d0a9db-d35f-40c9-aeae-ccd264470de5|mental":      {"present": true,  "ranks": [1,2,4,5,15]},
+  "61d0a9db-d35f-40c9-aeae-ccd264470de5|programs":    {"present": false, "ranks": []}
+}

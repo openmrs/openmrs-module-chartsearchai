@@ -13,7 +13,7 @@ off-topic terms derived from one model's (Gemma-4-E2B) known mistakes. That list
 | metric | E2B | E4B | reading |
 |---|---|---|---|
 | `score_eval` (keyword, E2B-tuned) | 6 drift | **1 drift** | "E4B is a big win — ship it" |
-| **this metric — mean F1** | **0.545** | 0.512 | E4B slightly worse |
+| **this metric — mean F1** | **0.538** | 0.504 | E4B slightly worse |
 | **this metric — abstention acc** | **0.82** (9/11) | 0.73 (8/11) | E4B worse |
 | **this metric — off-topic citations** | **76** | 82 | E4B worse |
 
@@ -48,7 +48,7 @@ compares cited UUIDs to a human gold set, so it cannot inherit a single model's 
 - `build_gold.py` — focus labels (+ focus dumps) → `metric_gold.json`.
 - `resolve_unknowns.py <capture_dir>` — lists cited records not yet in gold and resolves their
   names via OpenMRS REST (`/obs`, `/condition`, `/patientdiagnoses`, …) so they can be adjudicated.
-- `metric_score.py <capture_dir> [offtopic_adj.json]` — UUID set comparison → per-cell
+- `metric_score.py <capture_dir> [offtopic_adj.json] [metric_gold.json]` — UUID set comparison → per-cell
   precision/recall/F1 (present cells) + abstention correctness (absent cells), aggregate.
 
 ## Workflow to score a new model

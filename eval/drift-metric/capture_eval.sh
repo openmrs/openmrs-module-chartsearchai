@@ -14,8 +14,13 @@ topic_of() {
 for uuid in "${PATIENTS[@]}"; do
   for q in "${QUERIES[@]}"; do
     t=$(topic_of "$q")
-    curl -s -u "$AUTH" --max-time 180 -H "Content-Type: application/json" -X POST "$BASE/chartsearchai/search" \
-      -d "$(printf '{"patient":"%s","question":"%s"}' "$uuid" "$q")" -o "$OUT/${uuid}__${t}.json"
+    if [ "$t" = unknown ]; then echo "ERROR: no topic mapping for query: $q (add a case to topic_of)" >&2; exit 1; fi
+    out="$OUT/${uuid}__${t}.json"
+    code=$(curl -s -u "$AUTH" --max-time 180 -H "Content-Type: application/json" -X POST "$BASE/chartsearchai/search" \
+      -d "$(printf '{"patient":"%s","question":"%s"}' "$uuid" "$q")" -o "$out" -w "%{http_code}")
+    # Keep only HTTP 200 as a scoreable .json; an error body (401/500) would otherwise score as a
+    # legitimate empty answer (false abstention). Move non-200 aside so the scorer's *.json glob skips it.
+    if [ "$code" != 200 ]; then echo "WARN: $uuid/$t HTTP $code -> $out.err (not scored)" >&2; mv "$out" "$out.err" 2>/dev/null; fi
   done
 done
 echo "CAPTURE_DONE $(ls "$OUT"/*.json 2>/dev/null | wc -l | tr -d ' ') cells -> $OUT"

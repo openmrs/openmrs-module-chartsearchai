@@ -341,7 +341,59 @@ public class ChartSearchAiRestController {
 		response.put("current", snapshot.getCurrent());
 		response.put("available", snapshot.getAvailable());
 		response.put("endpointUrl", snapshot.getEndpointUrl());
+		// Enriched fields — populated when LM Studio /api/v1/models probe
+		// succeeded; null/empty otherwise. The picker reads `provider` for
+		// sub-category grouping and `entries[].loaded` for the per-entry
+		// state affix. Older SPA builds ignore these fields.
+		if (snapshot.getProvider() != null) {
+			response.put("provider", snapshot.getProvider());
+		}
+		if (snapshot.getEntries() != null && !snapshot.getEntries().isEmpty()) {
+			List<Map<String, Object>> entries = new ArrayList<Map<String, Object>>();
+			for (org.openmrs.module.chartsearchai.api.impl.ModelSwitchService.ModelEntry e
+					: snapshot.getEntries()) {
+				Map<String, Object> row = new LinkedHashMap<String, Object>();
+				row.put("id", e.getId());
+				row.put("displayName", e.getDisplayName());
+				row.put("type", e.getType());
+				row.put("loaded", e.isLoaded());
+				if (e.getMaxContextLength() != null) {
+					row.put("maxContextLength", e.getMaxContextLength());
+				}
+				entries.add(row);
+			}
+			response.put("entries", entries);
+		}
 		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	/**
+	 * Request that the upstream LM Studio server pre-load the named model
+	 * into memory. Returns 200 on success (model loaded; subsequent chat
+	 * completion will be fast), 400 for blank input, 503 when the active
+	 * engine is local or no LM Studio v1 endpoint is reachable.
+	 *
+	 * <p>Body: {@code {"modelName": "<id>"}}. Same gate as {@code /model}.
+	 */
+	@RequestMapping(value = "/model/load", method = RequestMethod.POST)
+	@ResponseBody
+	public ResponseEntity<Object> loadModel(@RequestBody Map<String, String> body) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+		String requested = body == null ? null : body.get("modelName");
+		try {
+			modelSwitchService.requestModelLoad(requested);
+			Map<String, Object> response = new LinkedHashMap<String, Object>();
+			response.put("loaded", requested == null ? "" : requested.trim());
+			return new ResponseEntity<Object>(response, HttpStatus.OK);
+		}
+		catch (IllegalArgumentException e) {
+			return new ResponseEntity<Object>(errorResponse(e.getMessage()),
+					HttpStatus.BAD_REQUEST);
+		}
+		catch (org.openmrs.api.APIException e) {
+			return new ResponseEntity<Object>(errorResponse(e.getMessage()),
+					HttpStatus.SERVICE_UNAVAILABLE);
+		}
 	}
 
 	/**

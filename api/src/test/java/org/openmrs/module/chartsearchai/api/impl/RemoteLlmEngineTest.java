@@ -97,12 +97,13 @@ public class RemoteLlmEngineTest {
 		assertFalse(schema.get("additionalProperties").asBoolean());
 
 		JsonNode properties = schema.get("properties");
+		assertEquals("string", properties.get("reasoning").get("type").asText());
 		assertEquals("string", properties.get("answer").get("type").asText());
 		assertEquals("array", properties.get("citations").get("type").asText());
 		assertEquals("integer", properties.get("citations").get("items").get("type").asText());
 
 		JsonNode required = schema.get("required");
-		assertEquals(2, required.size());
+		assertEquals(3, required.size(), "reasoning, answer and citations are all required");
 	}
 
 	@Test

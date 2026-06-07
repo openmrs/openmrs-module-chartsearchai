@@ -13,13 +13,29 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-/** Strict {answer, citations} schema — forces close-brace stop and avoids Anthropic's `json_object` 400. */
+/**
+ * Strict {reasoning, answer, citations} schema — forces close-brace stop and avoids Anthropic's
+ * `json_object` 400.
+ *
+ * <p>The leading {@code reasoning} field is deliberate and load-bearing. A json_schema response
+ * format is compiled to a grammar that emits object properties <em>in schema order</em>, so making
+ * {@code reasoning} the first property forces the model to think before it commits to an answer.
+ * Without it — jumping straight to {@code answer} — the small local model (Gemma E4B) defaults to
+ * literal-token matching and abstains whenever the query word is not verbatim in the chart (e.g.
+ * "ear problems" failing to surface a "Hearing Loss" record). The reasoning step lets it make the
+ * clinical-meaning connection it is otherwise fully capable of. {@code reasoning} is the model's
+ * scratchpad: {@link LlmAnswerExtractor} reads only {@code answer}/{@code citations} and never
+ * surfaces it.
+ */
 final class ChartAnswerResponseFormat {
 
 	private ChartAnswerResponseFormat() {
 	}
 
 	static ObjectNode build(ObjectMapper mapper) {
+		ObjectNode reasoningProp = mapper.createObjectNode();
+		reasoningProp.put("type", "string");
+
 		ObjectNode answerProp = mapper.createObjectNode();
 		answerProp.put("type", "string");
 
@@ -29,11 +45,15 @@ final class ChartAnswerResponseFormat {
 		citationsProp.put("type", "array");
 		citationsProp.set("items", citationItem);
 
+		// Insertion order matters: the grammar generates properties in this order, so reasoning
+		// is emitted (thought) before the answer is committed.
 		ObjectNode properties = mapper.createObjectNode();
+		properties.set("reasoning", reasoningProp);
 		properties.set("answer", answerProp);
 		properties.set("citations", citationsProp);
 
 		ArrayNode required = mapper.createArrayNode();
+		required.add("reasoning");
 		required.add("answer");
 		required.add("citations");
 

@@ -87,14 +87,37 @@ public class LlmProviderTest {
 				+ "'Records ranked by similarity to the query: ...' format the user message uses, "
 				+ "so the demonstration matches the real prompt shape. Prompt:\n" + prompt);
 		String afterRanked = prompt.substring(rankedAt);
+		// The demo object leads with a "reasoning" field (chain-of-thought), so match the
+		// abstaining answer + empty citations + closing brace rather than a literal "{...}" — the
+		// intent is unchanged: the focus-hint line is immediately followed by an abstaining answer.
 		assertTrue(afterRanked.contains(
-				"{\"answer\": \"There are no records of banana deliveries.\", \"citations\": []}"),
+				"\"answer\": \"There are no records of banana deliveries.\", \"citations\": []}"),
 				"The focus-hint line must be immediately followed by the abstaining banana answer "
 				+ "(empty citations) — not just any later empty-citations answer. This pins the "
 				+ "demonstration order: a non-empty ranked list does NOT guarantee the listed "
 				+ "records are about the query, so the correct response can be to cite nothing. A "
 				+ "loose check would pass even if the abstention few-shot were reordered before the "
 				+ "ranked line or its answer swapped. Prompt:\n" + prompt);
+	}
+
+	@Test
+	public void extractResponse_shouldIgnoreLeadingReasoningField() {
+		// The output schema puts a "reasoning" field first (chain-of-thought). The extractor must
+		// read answer/citations and ignore reasoning — it is the model's scratchpad, never shown.
+		String response = "{\"reasoning\": \"Hearing Loss is an ear-related condition, so [89] is "
+				+ "relevant.\", \"answer\": \"Hearing Loss [89].\", \"citations\": [89]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals("Hearing Loss [89].", result.getAnswer());
+		assertEquals(Arrays.asList(89), result.getCitations());
+	}
+
+	@Test
+	public void defaultSystemPrompt_fewShotShouldDemonstrateReasoningField() {
+		// The few-shot demo answers must match the schema shape (reasoning first), or the
+		// demonstrated format contradicts the grammar the model is constrained to.
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("\"reasoning\":"),
+				"Few-shot demo answers must include a \"reasoning\" field so the demonstrated "
+				+ "format matches the response schema");
 	}
 
 	@Test

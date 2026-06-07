@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 
@@ -118,6 +120,73 @@ public class LlmProviderTest {
 		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("\"reasoning\":"),
 				"Few-shot demo answers must include a \"reasoning\" field so the demonstrated "
 				+ "format matches the response schema");
+	}
+
+	/** Feeds {@code json} to a fresh AnswerExtractingConsumer in the given chunk sizes and
+	 *  returns what reached the client. chunkSize 0 means feed the whole string at once. */
+	private static String streamThrough(String json, int chunkSize) {
+		StringBuilder out = new StringBuilder();
+		Consumer<String> delegate = out::append;
+		LlmProvider.AnswerExtractingConsumer consumer = new LlmProvider.AnswerExtractingConsumer(delegate);
+		if (chunkSize <= 0) {
+			consumer.accept(json);
+		} else {
+			for (int i = 0; i < json.length(); i += chunkSize) {
+				consumer.accept(json.substring(i, Math.min(i + chunkSize, json.length())));
+			}
+		}
+		return out.toString();
+	}
+
+	@Test
+	public void streamingConsumer_shouldNotLeakLeadingReasoningField() {
+		// The schema emits "reasoning" FIRST, before "answer". The streaming path (/search/stream)
+		// must forward only the answer value to the clinician — never the model's reasoning
+		// scratchpad. Exercised both as one chunk and char-by-char (real token streams arrive in
+		// arbitrary fragments, so the state machine must skip reasoning across chunk boundaries).
+		String json = "{\"reasoning\": \"Hearing Loss is an ear-related condition, so record [89] "
+				+ "is relevant to the query about ears.\", \"answer\": \"Hearing Loss [89].\", "
+				+ "\"citations\": [89]}";
+		assertEquals("Hearing Loss [89].", streamThrough(json, 0),
+				"whole-string: only the answer value must reach the client, not reasoning");
+		assertEquals("Hearing Loss [89].", streamThrough(json, 1),
+				"char-by-char: reasoning must be skipped across token boundaries too");
+		assertEquals("Hearing Loss [89].", streamThrough(json, 7),
+				"7-char chunks: reasoning must be skipped regardless of fragment alignment");
+	}
+
+	@Test
+	public void streamingConsumer_shouldDecodeUnicodeEscapes() {
+		// The non-streaming path decodes \\uXXXX via Jackson (see
+		// extractResponse_shouldDecodeUnicodeEscapes); the streaming consumer must match, or a
+		// streamed clinical value like "38.9°C" reaches the clinician as literal "38.9\\u00b0C".
+		// The 4 hex digits must also decode when they straddle streaming-chunk boundaries.
+		String json = "{\"reasoning\": \"unit conversion\", \"answer\": \"Temperature is "
+				+ "38.9\\u00b0C\", \"citations\": [1]}";
+		assertEquals("Temperature is 38.9°C", streamThrough(json, 0),
+				"whole-string: streamed answer must decode \\uXXXX like the non-streaming path");
+		assertEquals("Temperature is 38.9°C", streamThrough(json, 1),
+				"char-by-char: \\uXXXX must decode even when its hex digits span chunk boundaries");
+	}
+
+	@Test
+	public void streamingConsumer_shouldDecodeControlCharEscapes() {
+		// JSON control-char escapes (\r, \b, \f) must decode like Jackson on the non-streaming
+		// path — otherwise a streamed answer with one shows the literal backslash sequence.
+		String json = "{\"reasoning\": \"x\", \"answer\": \"line1\\r\\nline2\\tend\", \"citations\": []}";
+		assertEquals("line1\r\nline2\tend", streamThrough(json, 0));
+		assertEquals("line1\r\nline2\tend", streamThrough(json, 1));
+	}
+
+	@Test
+	public void streamingConsumer_reasoningMentioningAnswerWordShouldNotFalseTrigger() {
+		// Adversarial: the reasoning text itself contains the escaped word \"answer\". An escaped
+		// quote inside the reasoning value must NOT be mistaken for the real "answer" key, or the
+		// client would see reasoning text. Only the genuine answer value may be forwarded.
+		String json = "{\"reasoning\": \"The query literally says \\\"answer\\\" but I judge by "
+				+ "meaning.\", \"answer\": \"No relevant records.\", \"citations\": []}";
+		assertEquals("No relevant records.", streamThrough(json, 0));
+		assertEquals("No relevant records.", streamThrough(json, 1));
 	}
 
 	@Test

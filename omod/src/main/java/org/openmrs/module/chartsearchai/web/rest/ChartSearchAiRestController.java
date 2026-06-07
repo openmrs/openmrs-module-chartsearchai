@@ -85,7 +85,7 @@ public class ChartSearchAiRestController {
 	// Defense-in-depth: catches common prompt injection phrases. This is a blocklist
 	// and can be bypassed with paraphrasing. The primary defense is the structured-output
 	// constraint (response_format: json_schema, used by both engines) which forces LLM
-	// output into a fixed {answer, citations} shape regardless of prompt content.
+	// output into a fixed {reasoning, answer, citations} shape regardless of prompt content.
 	private static final Pattern PROMPT_INJECTION = Pattern.compile(
 			"(?i)(ignore\\s+(previous|above|all)\\s+(instructions|prompts|rules)"
 			+ "|disregard\\s+(your|the|all)\\s+(instructions|rules|prompt)"

@@ -553,7 +553,7 @@ Patient: 45-year-old Male
 [4] (2025-09-15) HbA1c: 8.2%
 ```
 
-The system prompt instructs the LLM to cite record numbers in brackets and respond with a JSON object. A strict JSON-schema constraint (`response_format: json_schema`, built by `LocalLlmEngine.buildJsonSchemaResponseFormat()` and enforced by llama-server via a derived GBNF grammar) forces the LLM output to the exact shape `{"answer": "...", "citations": [1, 2]}`, making it structurally impossible for the LLM to produce malformed citations. The `citations` array is parsed directly as structured data — no regex parsing of free text is needed.
+The system prompt instructs the LLM to cite record numbers in brackets and respond with a JSON object. A strict JSON-schema constraint (`response_format: json_schema`, built by `LocalLlmEngine.buildJsonSchemaResponseFormat()` and enforced by llama-server via a derived GBNF grammar) forces the LLM output to the exact shape `{"reasoning": "...", "answer": "...", "citations": [1, 2]}`, making it structurally impossible for the LLM to produce malformed citations. The leading `reasoning` field is a deliberate chain-of-thought slot (the grammar emits properties in order, so the model thinks before it answers — without it the small local model abstains on queries whose wording differs from the record, e.g. "ear problems" vs a "Hearing Loss" record); it is the model's scratchpad and is ignored by the parser. The `answer` and `citations` are parsed directly as structured data — no regex parsing of free text is needed.
 
 Example LLM output:
 ```json

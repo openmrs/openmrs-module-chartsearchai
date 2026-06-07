@@ -29,8 +29,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * (answer text + citation indices). Handles three response shapes the
  * model may emit, in priority order:
  *
+ * <p>The schema emits a leading {@code "reasoning"} field (the model's chain-of-thought) before
+ * {@code answer}; it is the model's scratchpad and is ignored here — only {@code answer} and
+ * {@code citations} are read.</p>
+ *
  * <ol>
- *   <li>Clean JSON: {@code {"answer":"...","citations":[1,2]}}.</li>
+ *   <li>Clean JSON: {@code {"reasoning":"...","answer":"...","citations":[1,2]}}.</li>
  *   <li>Markdown-fenced JSON: a {@code ```json\n...\n```} wrapper that
  *       some models (e.g. Gemma) add even when constrained.</li>
  *   <li>Truncated/malformed JSON: regex fallback that pulls the

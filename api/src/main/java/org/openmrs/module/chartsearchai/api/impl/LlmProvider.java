@@ -148,9 +148,14 @@ public class LlmProvider {
 	 * A streaming token consumer that buffers the raw JSON tokens from the LLM
 	 * and only forwards text content from inside the {@code "answer"} value.
 	 *
-	 * <p>The LLM is prompted to produce {@code {"answer": "...", "citations": [...]}}.
-	 * This consumer processes each character through a simple state machine and only
-	 * forwards characters that belong to the answer string value.</p>
+	 * <p>The LLM is prompted to produce
+	 * {@code {"reasoning": "...", "answer": "...", "citations": [...]}}. The {@code reasoning}
+	 * field is emitted FIRST (the model's chain-of-thought) and must NOT reach the client: the
+	 * state machine scans for the {@code "answer"} key and forwards only its value, so the
+	 * leading reasoning tokens are silently consumed. (Trade-off: the visible answer starts
+	 * streaming only after reasoning finishes generating.) This consumer processes each
+	 * character through a simple state machine and only forwards characters that belong to the
+	 * answer string value.</p>
 	 */
 	static class AnswerExtractingConsumer implements Consumer<String> {
 
@@ -176,6 +181,14 @@ public class LlmProvider {
 
 		/** Whether the next character in the answer value is escaped. */
 		private boolean escaped;
+
+		/** When > 0, we are partway through a {@code \\uXXXX} escape and this many hex digits
+		 *  remain. Held as a field (not a local) because the 4 digits can arrive across separate
+		 *  streaming chunks. */
+		private int unicodeRemaining;
+
+		/** Accumulated value of the {@code \\uXXXX} hex digits seen so far. */
+		private int unicodeValue;
 
 		AnswerExtractingConsumer(Consumer<String> delegate) {
 			this.delegate = delegate;
@@ -254,6 +267,21 @@ public class LlmProvider {
 			StringBuilder out = new StringBuilder();
 			for (int i = 0; i < text.length(); i++) {
 				char c = text.charAt(i);
+				if (unicodeRemaining > 0) {
+					int digit = Character.digit(c, 16);
+					if (digit < 0) {
+						// Malformed \\uXXXX (a grammar-constrained model shouldn't emit this) —
+						// emit the marker literally rather than crash, then handle c normally.
+						out.append("\\u");
+						unicodeRemaining = 0;
+					} else {
+						unicodeValue = (unicodeValue << 4) | digit;
+						if (--unicodeRemaining == 0) {
+							out.append((char) unicodeValue);
+						}
+						continue;
+					}
+				}
 				if (escaped) {
 					switch (c) {
 						case 'n':
@@ -261,6 +289,15 @@ public class LlmProvider {
 							break;
 						case 't':
 							out.append('\t');
+							break;
+						case 'r':
+							out.append('\r');
+							break;
+						case 'b':
+							out.append('\b');
+							break;
+						case 'f':
+							out.append('\f');
 							break;
 						case '"':
 							out.append('"');
@@ -270,6 +307,13 @@ public class LlmProvider {
 							break;
 						case '/':
 							out.append('/');
+							break;
+						case 'u':
+							// Begin a \\uXXXX escape; the 4 hex digits follow (possibly in the
+							// next chunk). Mirrors Jackson's decoding on the non-streaming path so
+							// streamed and non-streamed answers render identically.
+							unicodeRemaining = 4;
+							unicodeValue = 0;
 							break;
 						default:
 							out.append('\\').append(c);

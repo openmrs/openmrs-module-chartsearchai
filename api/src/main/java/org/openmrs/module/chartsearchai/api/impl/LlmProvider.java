@@ -129,16 +129,34 @@ public class LlmProvider {
 	/** Focus-hint variant of {@link #searchStreaming}. See {@link #search(String, List, String)}. */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
 			Consumer<String> tokenConsumer) {
+		return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer, chunk -> { });
+	}
+
+	/**
+	 * Reasoning-aware streaming variant. Forwards the model's leading {@code "reasoning"} value to
+	 * {@code reasoningConsumer} (so a caller can surface it as a live "thinking" indicator) and the
+	 * {@code "answer"} value to {@code tokenConsumer}, as each is generated. Two independent
+	 * field-scanning {@link AnswerExtractingConsumer}s split the single engine token stream;
+	 * reasoning is emitted first (schema order: reasoning precedes answer). The reasoning channel is
+	 * purely additive — the answer stream is byte-identical to the non-reasoning overload.
+	 */
+	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question);
 		int timeoutSeconds = getTimeoutSeconds();
 
-		// Wrap the consumer to extract only the "answer" value from the JSON
-		// envelope the LLM generates, so the UI sees clean text instead of raw JSON.
-		AnswerExtractingConsumer filter = new AnswerExtractingConsumer(tokenConsumer);
+		// Extract the "answer" value (shown to the clinician) and the "reasoning" value (the
+		// model's chain-of-thought) from the JSON envelope, each on its own channel.
+		AnswerExtractingConsumer answerFilter = new AnswerExtractingConsumer("answer", tokenConsumer);
+		AnswerExtractingConsumer reasoningFilter = new AnswerExtractingConsumer("reasoning", reasoningConsumer);
+		Consumer<String> tee = chunk -> {
+			reasoningFilter.accept(chunk);
+			answerFilter.accept(chunk);
+		};
 
 		LlmEngine.InferenceResult result = getActiveEngine().inferStreaming(
-				systemPrompt, userMessage, timeoutSeconds, filter);
+				systemPrompt, userMessage, timeoutSeconds, tee);
 
 		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
 				result.getCachedTokens());
@@ -174,9 +192,12 @@ public class LlmProvider {
 
 		private State state = State.BEFORE_KEY;
 
-		private static final String ANSWER_KEY = "\"answer\"";
+		/** The quoted JSON key whose string value this instance extracts, e.g. {@code "answer"}
+		 *  or {@code "reasoning"}. Two instances (one per key) split the single token stream into
+		 *  the answer and the reasoning ("thinking") channels. */
+		private final String key;
 
-		/** How many characters of ANSWER_KEY we have matched so far. */
+		/** How many characters of {@link #key} we have matched so far. */
 		private int keyMatchPos;
 
 		/** Whether the next character in the answer value is escaped. */
@@ -191,6 +212,12 @@ public class LlmProvider {
 		private int unicodeValue;
 
 		AnswerExtractingConsumer(Consumer<String> delegate) {
+			this("answer", delegate);
+		}
+
+		/** Extracts the string value of {@code fieldName} (e.g. {@code answer} or {@code reasoning}). */
+		AnswerExtractingConsumer(String fieldName, Consumer<String> delegate) {
+			this.key = "\"" + fieldName + "\"";
 			this.delegate = delegate;
 		}
 
@@ -201,7 +228,7 @@ public class LlmProvider {
 			}
 
 			if (state == State.IN_VALUE) {
-				forwardAnswerContent(token);
+				forwardValueContent(token);
 				return;
 			}
 
@@ -210,21 +237,21 @@ public class LlmProvider {
 				char c = token.charAt(i);
 				switch (state) {
 					case BEFORE_KEY:
-						if (c == ANSWER_KEY.charAt(0)) {
+						if (c == key.charAt(0)) {
 							keyMatchPos = 1;
 							state = State.IN_KEY;
 						}
 						break;
 					case IN_KEY:
-						if (c == ANSWER_KEY.charAt(keyMatchPos)) {
+						if (c == key.charAt(keyMatchPos)) {
 							keyMatchPos++;
-							if (keyMatchPos == ANSWER_KEY.length()) {
+							if (keyMatchPos == key.length()) {
 								state = State.AFTER_KEY;
 							}
 						} else {
 							// Mismatch — restart. Check if current char starts a new match.
 							state = State.BEFORE_KEY;
-							if (c == ANSWER_KEY.charAt(0)) {
+							if (c == key.charAt(0)) {
 								keyMatchPos = 1;
 								state = State.IN_KEY;
 							}
@@ -244,9 +271,9 @@ public class LlmProvider {
 							state = State.IN_VALUE;
 							// Forward remainder of this token as answer content
 							if (i + 1 < token.length()) {
-								forwardAnswerContent(token.substring(i + 1));
+								forwardValueContent(token.substring(i + 1));
 							}
-							return; // rest of token handled by forwardAnswerContent
+							return; // rest of token handled by forwardValueContent
 						} else if (c != ' ') {
 							// Value isn't a string, reset
 							state = State.BEFORE_KEY;
@@ -263,7 +290,7 @@ public class LlmProvider {
 		 * Forward characters from {@code text} that are part of the answer
 		 * string value, stopping at the unescaped closing double-quote.
 		 */
-		private void forwardAnswerContent(String text) {
+		private void forwardValueContent(String text) {
 			StringBuilder out = new StringBuilder();
 			for (int i = 0; i < text.length(); i++) {
 				char c = text.charAt(i);

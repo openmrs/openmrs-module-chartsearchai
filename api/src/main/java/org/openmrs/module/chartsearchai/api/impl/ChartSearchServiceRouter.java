@@ -75,6 +75,12 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 	@Override
 	public ChartAnswer searchStreaming(Patient patient, String question,
 			Consumer<String> tokenConsumer) {
+		return searchStreaming(patient, question, tokenConsumer, chunk -> { });
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
 		int ttlMinutes = getCacheTtlMinutes();
 
 		if (ttlMinutes > 0) {
@@ -82,16 +88,19 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 			ChartAnswer cached = getCachedAnswer(cacheKey, ttlMinutes);
 			if (cached != null) {
 				log.debug("Cache hit for patient [id={}] (streaming)", patient.getPatientId());
+				// Cache hit: the answer is returned instantly with no LLM call, so there is no
+				// live reasoning to stream — only replay the cached answer.
 				tokenConsumer.accept(cached.getAnswer());
 				return cached;
 			}
 
-			ChartAnswer answer = llmService.searchStreaming(patient, question, tokenConsumer);
+			ChartAnswer answer = llmService.searchStreaming(patient, question, tokenConsumer,
+					reasoningConsumer);
 			putCache(cacheKey, answer);
 			return answer;
 		}
 
-		return llmService.searchStreaming(patient, question, tokenConsumer);
+		return llmService.searchStreaming(patient, question, tokenConsumer, reasoningConsumer);
 	}
 
 	@Override

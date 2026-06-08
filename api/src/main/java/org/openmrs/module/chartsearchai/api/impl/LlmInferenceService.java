@@ -217,6 +217,12 @@ public class LlmInferenceService implements ChartSearchService {
 	@Override
 	public ChartAnswer searchStreaming(Patient patient, String question,
 			Consumer<String> tokenConsumer) {
+		return searchStreaming(patient, question, tokenConsumer, chunk -> { });
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
 		// LOG FORMAT — stable contract: same field set as search() with op=searchStreaming
 		// in the log tag. Streaming is the path the frontend actually uses by default, so
 		// this is what demo operators see in their logs. try/finally so exceptions still
@@ -233,7 +239,8 @@ public class LlmInferenceService implements ChartSearchService {
 
 			long llmStart = System.currentTimeMillis();
 			LlmResponse response = llmProvider.searchStreaming(
-					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer);
+					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
+					reasoningConsumer);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();

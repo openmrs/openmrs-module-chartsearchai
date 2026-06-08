@@ -44,6 +44,24 @@ public interface ChartSearchService {
 	ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer);
 
 	/**
+	 * Streaming variant that additionally forwards the model's reasoning (chain-of-thought) to
+	 * {@code reasoningConsumer} as it is generated, so a caller can surface it as a live "thinking"
+	 * indicator. The answer stream to {@code tokenConsumer} is unchanged. Default implementation
+	 * ignores reasoning and delegates to the three-arg variant, so existing implementations and
+	 * callers are unaffected.
+	 *
+	 * @param patient the patient whose chart to query
+	 * @param question the clinician's natural language question
+	 * @param tokenConsumer called with each answer-text fragment as it is generated
+	 * @param reasoningConsumer called with each reasoning-text fragment as it is generated
+	 * @return the complete answer with source references
+	 */
+	default ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer,
+			Consumer<String> reasoningConsumer) {
+		return searchStreaming(patient, question, tokenConsumer);
+	}
+
+	/**
 	 * Pre-warm any patient-specific caches (serialized chart, LLM prompt cache) so the
 	 * first real query on this patient does not pay cold-start cost. Implementations
 	 * that don't support warmup may return immediately. Callers should treat this as

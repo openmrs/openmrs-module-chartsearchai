@@ -262,6 +262,8 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>SSE event types:</p>
 	 * <ul>
+	 *   <li>{@code thinking} — a chunk of the model's reasoning (chain-of-thought), emitted
+	 *       before the answer; render distinctly (e.g. a collapsible panel), not as the answer</li>
 	 *   <li>{@code token} — a chunk of the answer text</li>
 	 *   <li>{@code done} — final JSON with answer, references, and disclaimer</li>
 	 *   <li>{@code error} — an error message if something goes wrong</li>
@@ -366,6 +368,21 @@ public class ChartSearchAiRestController {
 							}
 							catch (IOException e) {
 								log.debug("Client disconnected during streaming");
+								throw new RuntimeException("Client disconnected", e);
+							}
+						}
+					}, new java.util.function.Consumer<String>() {
+						// The model's reasoning (chain-of-thought) is emitted before the answer.
+						// Stream it on a separate "thinking" event so the UI can show live progress
+						// (and the rationale) instead of a dead spinner. It is NOT the answer and
+						// must be rendered distinctly (e.g. a collapsible "thinking" panel).
+						@Override
+						public void accept(String reasoning) {
+							try {
+								writeSseEvent(out, "thinking", reasoning);
+							}
+							catch (IOException e) {
+								log.debug("Client disconnected during streaming (reasoning)");
 								throw new RuntimeException("Client disconnected", e);
 							}
 						}

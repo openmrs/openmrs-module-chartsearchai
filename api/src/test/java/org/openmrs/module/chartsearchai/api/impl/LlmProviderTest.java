@@ -138,6 +138,39 @@ public class LlmProviderTest {
 		return out.toString();
 	}
 
+	/** Splits {@code json} into the (reasoning, answer) channels the streaming path uses: two
+	 *  field-scanning consumers fed the same stream, exactly as LlmProvider.searchStreaming tees. */
+	private static String[] streamSplit(String json, int chunkSize) {
+		StringBuilder reasoning = new StringBuilder();
+		StringBuilder answer = new StringBuilder();
+		LlmProvider.AnswerExtractingConsumer r = new LlmProvider.AnswerExtractingConsumer("reasoning", reasoning::append);
+		LlmProvider.AnswerExtractingConsumer a = new LlmProvider.AnswerExtractingConsumer("answer", answer::append);
+		Consumer<String> tee = chunk -> { r.accept(chunk); a.accept(chunk); };
+		if (chunkSize <= 0) {
+			tee.accept(json);
+		} else {
+			for (int i = 0; i < json.length(); i += chunkSize) {
+				tee.accept(json.substring(i, Math.min(i + chunkSize, json.length())));
+			}
+		}
+		return new String[] { reasoning.toString(), answer.toString() };
+	}
+
+	@Test
+	public void streamingConsumer_shouldSplitReasoningAndAnswerOntoSeparateChannels() {
+		// The "thinking" feature: the reasoning channel must receive ONLY the reasoning value and
+		// the answer channel ONLY the answer value — no cross-leak — even when the stream arrives
+		// char-by-char. Reasoning contains a quoted span and [n] markers to stress the scanner.
+		String json = "{\"reasoning\": \"The query is about ears; record [89] is 'Hearing Loss', an "
+				+ "ear problem.\", \"answer\": \"Hearing Loss [89].\", \"citations\": [89]}";
+		String expReasoning = "The query is about ears; record [89] is 'Hearing Loss', an ear problem.";
+		for (int chunk : new int[] { 0, 1, 5 }) {
+			String[] ra = streamSplit(json, chunk);
+			assertEquals(expReasoning, ra[0], "reasoning channel must get the full reasoning value (chunk=" + chunk + ")");
+			assertEquals("Hearing Loss [89].", ra[1], "answer channel must get only the answer (chunk=" + chunk + ")");
+		}
+	}
+
 	@Test
 	public void streamingConsumer_shouldNotLeakLeadingReasoningField() {
 		// The schema emits "reasoning" FIRST, before "answer". The streaming path (/search/stream)

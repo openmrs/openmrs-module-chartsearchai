@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -80,6 +81,11 @@ public class CitationGroundingVerifierTest {
 
 		int batches;
 
+		/** The statements passed to each {@code entailsBatch} invocation, in call order. Lets a test
+		 *  assert how citations are GROUPED into calls (e.g. that two citations of one compound
+		 *  sentence are not co-batched, which would let the LLM couple their verdicts). */
+		final List<List<String>> statementsPerCall = new ArrayList<List<String>>();
+
 		StubLlmProvider(Boolean verdict) {
 			this.verdict = verdict;
 		}
@@ -88,6 +94,7 @@ public class CitationGroundingVerifierTest {
 		public List<Boolean> entailsBatch(List<String> sources, List<String> statements) {
 			batches++;
 			calls += sources.size();
+			statementsPerCall.add(new ArrayList<String>(statements));
 			List<Boolean> out = new ArrayList<Boolean>();
 			for (int i = 0; i < sources.size(); i++) {
 				out.add(verdict);
@@ -414,5 +421,152 @@ public class CitationGroundingVerifierTest {
 		assertTrue(sentences.get(0).cites(1));
 		assertTrue(sentences.get(1).cites(2));
 		assertTrue(sentences.get(1).cites(3));
+	}
+
+	// ---- clause-scoped grounding ----
+
+	@Test
+	public void splitIntoClauseScopedSentences_cumulativePrefixAttributedToOneCitation() {
+		List<CitationGroundingVerifier.Sentence> clauses =
+				CitationGroundingVerifier.splitIntoClauseScopedSentences("A condition [1] and a diagnosis [2].");
+		assertEquals(2, clauses.size());
+		assertEquals("A condition [1]", clauses.get(0).text);
+		assertTrue(clauses.get(0).cites(1));
+		assertFalse(clauses.get(0).cites(2), "[1]'s clause must not be attributed to [2]");
+		// [2]'s clause is the cumulative prefix (keeps the subject) but is attributed to [2] only.
+		assertEquals("A condition [1] and a diagnosis [2]", clauses.get(1).text);
+		assertTrue(clauses.get(1).cites(2));
+		assertFalse(clauses.get(1).cites(1), "[2]'s clause cites only [2] though its text contains [1]");
+	}
+
+	@Test
+	public void splitIntoClauseScopedSentences_middleMarkerClauseStopsAtItsOwnMarker() {
+		// 3+ citations: the MIDDLE marker's clause is the cumulative prefix through ITS OWN marker —
+		// it keeps the earlier marker's text (so the subject/first claim is retained for entailment)
+		// but must STOP before the later marker, and be attributed to the middle index alone. The
+		// 2-citation case cannot catch a "clause runs past its own marker into the next clause" bug
+		// because its last marker has no following text to wrongly absorb.
+		List<CitationGroundingVerifier.Sentence> clauses =
+				CitationGroundingVerifier.splitIntoClauseScopedSentences(
+						"Has diabetes [1] and hypertension [2] and cancer [3].");
+		assertEquals(3, clauses.size());
+		assertEquals("Has diabetes [1]", clauses.get(0).text);
+		assertEquals("Has diabetes [1] and hypertension [2]", clauses.get(1).text);
+		assertEquals("Has diabetes [1] and hypertension [2] and cancer [3]", clauses.get(2).text);
+		// middle clause: cumulative prefix keeps [1]'s text, stops before the later [3], cites only [2].
+		assertTrue(clauses.get(1).cites(2));
+		assertFalse(clauses.get(1).cites(1), "middle clause keeps [1]'s text but is not attributed to [1]");
+		assertFalse(clauses.get(1).cites(3), "middle clause must stop before the later [3]");
+	}
+
+	@Test
+	public void splitIntoClauseScopedSentences_leavesSingleCitationSentencesUnchanged() {
+		List<CitationGroundingVerifier.Sentence> clauses =
+				CitationGroundingVerifier.splitIntoClauseScopedSentences("Patient has diabetes [1].");
+		assertEquals(1, clauses.size());
+		assertTrue(clauses.get(0).cites(1));
+	}
+
+	@Test
+	public void clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence() {
+		// Compound sentence: [1]'s own clause matches its record, but the WHOLE sentence (which also
+		// makes a second, different claim cited by [2]) does not — the [89]/[91] scenario. Sentence-
+		// scope flags [1] not-grounded; clause-scope grounds it against its clause.
+		String answer = "Hearing loss is a condition [1] and a provisional diagnosis [2].";
+		embeddings.register(answer, AXIS_B);                       // whole sentence: orthogonal to record 1
+		embeddings.register("Hearing loss is a condition [1]", AXIS_A);  // [1]'s clause: aligned to record 1
+		embeddings.register("active condition hearing loss", AXIS_A);    // record 1
+		embeddings.register("provisional diagnosis hearing loss", AXIS_B);
+
+		List<RecordReference> refs = Arrays.asList(reference(1), reference(2));
+		List<RecordMapping> maps = Arrays.asList(
+				mapping(1, "active condition hearing loss"), mapping(2, "provisional diagnosis hearing loss"));
+
+		List<RecordReference> sentenceScoped = verifier.verify(answer,
+				new ArrayList<RecordReference>(refs), maps, FLOOR, TIER1_ONLY, false);
+		assertEquals(Boolean.FALSE, sentenceScoped.get(0).getGrounded(),
+				"sentence-scope: [1] vs the whole compound sentence -> not grounded");
+
+		List<RecordReference> clauseScoped = verifier.verify(answer,
+				new ArrayList<RecordReference>(refs), maps, FLOOR, TIER1_ONLY, true);
+		assertEquals(Boolean.TRUE, clauseScoped.get(0).getGrounded(),
+				"clause-scope: [1] vs its own clause -> grounded");
+	}
+
+	@Test
+	public void clauseScoped_singleCitationSentenceVerdictIsUnchanged() {
+		String answer = "Patient has diabetes [1].";
+		embeddings.register(answer, AXIS_A);
+		embeddings.register("type 2 diabetes mellitus", AXIS_A);
+		List<RecordReference> refs = Arrays.asList(reference(1));
+		List<RecordMapping> maps = Arrays.asList(mapping(1, "type 2 diabetes mellitus"));
+
+		Boolean sentence = verifier.verify(answer, new ArrayList<RecordReference>(refs), maps,
+				FLOOR, TIER1_ONLY, false).get(0).getGrounded();
+		Boolean clause = verifier.verify(answer, new ArrayList<RecordReference>(refs), maps,
+				FLOOR, TIER1_ONLY, true).get(0).getGrounded();
+		assertEquals(Boolean.TRUE, sentence);
+		assertEquals(sentence, clause, "single-citation sentence: clause-scope must not change the verdict");
+	}
+
+	@Test
+	public void clauseScoped_emptyLeadingClauseIsUngroundedNotCrash() {
+		// A compound sentence whose FIRST citation has no descriptive text before its marker yields an
+		// empty / marker-only clause "[1]". Clause-scope must handle it safely: [1]'s clause embeds to
+		// a zero vector -> cosine 0 (< floor) -> NOT grounded, never a NaN/crash and never spurious.
+		// (Tier-2's blank-statement skip is pinned separately in LlmProviderTest.entailsBatch_*.)
+		String answer = "[1] and hearing loss [2].";
+		embeddings.register("active condition", AXIS_A);       // record 1; its clause "[1]" is unregistered -> zero vector
+		embeddings.register("provisional diagnosis", AXIS_A);  // record 2
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "active condition"), mapping(2, "provisional diagnosis")),
+				FLOOR, TIER1_ONLY, true);
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"empty leading clause -> cosine 0 -> safe under-ground, not a crash or spurious verdict");
+	}
+
+	@Test
+	public void clauseScoped_doesNotCoBatchTwoCitationsOfTheSameCompoundSentence() {
+		// The Tier-2 regression is a batch-COUPLING effect: when [1] and [2] of ONE compound sentence
+		// share an entailsBatch call, the LLM's verdict for one bleeds into the other (on the live
+		// model, shortening [1]'s clause flipped [2]'s verdict, 3/3). The fix judges each
+		// compound-sentence citation in its OWN entailment call, so [1] and [2] must NOT land in the
+		// same call; [3], the sole citation of a separate sentence, is unaffected and may stay batched.
+		// The real grounding effect needs the live LLM (verified by eval/grounding-scope/); a stub
+		// returns a fixed verdict regardless of co-batching, so here we pin the structural contract the
+		// stub CAN observe — the call grouping that the coupling depends on.
+		String answer = "A condition [1] and a diagnosis [2]. A separate finding [3].";
+		embeddings.register("A condition [1]", AXIS_A);
+		embeddings.register("A condition [1] and a diagnosis [2]", AXIS_A);
+		embeddings.register("A separate finding [3].", AXIS_A);
+		embeddings.register("rec1", AXIS_A);
+		embeddings.register("rec2", AXIS_A);
+		embeddings.register("rec3", AXIS_A);
+		llm.verdict = Boolean.TRUE;
+		List<RecordReference> refs = Arrays.asList(reference(1), reference(2), reference(3));
+		List<RecordMapping> maps = Arrays.asList(mapping(1, "rec1"), mapping(2, "rec2"), mapping(3, "rec3"));
+
+		verifier.verify(answer, new ArrayList<RecordReference>(refs), maps, FLOOR, TIER2_ON, true);
+
+		// Use the production marker-stripper to derive the exact statements the verifier emits.
+		String stmt1 = CitationGroundingVerifier.stripCitationMarkers("A condition [1]");
+		String stmt2 = CitationGroundingVerifier.stripCitationMarkers("A condition [1] and a diagnosis [2]");
+		int call1 = callIndexContaining(stmt1);
+		int call2 = callIndexContaining(stmt2);
+		assertTrue(call1 >= 0 && call2 >= 0, "both compound-sentence citations must be verified by Tier-2");
+		assertFalse(call1 == call2,
+				"[1] and [2] from the same compound sentence must be judged in separate entailment calls");
+	}
+
+	/** Index of the first {@code entailsBatch} call whose statement list contains {@code statement}
+	 *  exactly, or -1 — lets a test assert how citations were grouped into calls. */
+	private int callIndexContaining(String statement) {
+		for (int i = 0; i < llm.statementsPerCall.size(); i++) {
+			if (llm.statementsPerCall.get(i).contains(statement)) {
+				return i;
+			}
+		}
+		return -1;
 	}
 }

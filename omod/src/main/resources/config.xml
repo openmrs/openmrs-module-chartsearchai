@@ -230,7 +230,13 @@
 	<globalProperty>
 		<property>chartsearchai.grounding.entailment.enabled</property>
 		<defaultValue>false</defaultValue>
-		<description>When true (and chartsearchai.grounding.enabled is also on), the Tier-1 cosine verdict is confirmed by a Tier-2 entailment check: a short yes/no LLM call asking whether the cited record actually supports the answer sentence. This catches high-overlap-but-false citations ("patient has X [5]" where record 5 says a relative had X, or the record negates X) that cosine similarity cannot separate. Costs one extra LLM call per cited reference (capped per answer), so it is a separate opt-in from the cheap Tier-1 pass. Default: false.</description>
+		<description>When true (and chartsearchai.grounding.enabled is also on), the Tier-1 cosine verdict is confirmed by a Tier-2 entailment check: a yes/no LLM judgement of whether the cited record actually supports the answer sentence. This catches high-overlap-but-false citations ("patient has X [5]" where record 5 says a relative had X, or the record negates X) that cosine similarity cannot separate. An answer's citations are verified in a batched LLM call (capped per answer; see chartsearchai.grounding.clauseScoped for when a compound sentence's citations are instead verified individually), so it is a separate opt-in from the cheap Tier-1 pass. Default: false.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.grounding.clauseScoped</property>
+		<defaultValue>false</defaultValue>
+		<description>When true, citation grounding is clause-scoped: in a sentence that cites multiple records, each citation is checked against the answer text up to and including its own [N] marker, rather than the whole compound sentence. This grounds a citation that supports its own clause but not a later clause cited by a different record — e.g. "Hearing Loss was noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an active condition) does not support the "provisional diagnosis" clause that [91] backs. The clause is the cumulative prefix through the marker, so it keeps the sentence subject when the subject precedes the first marker (the normal case) and still flags family-history/negation flips in later clauses. Default: false (sentence-scoped). Only affects which text a citation is verified against; never changes the answer or which records are cited.</description>
 	</globalProperty>
 
 	<!-- AOP -->

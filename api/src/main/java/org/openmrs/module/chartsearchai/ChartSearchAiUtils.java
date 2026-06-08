@@ -525,6 +525,25 @@ public class ChartSearchAiUtils {
 	}
 
 	/**
+	 * @return true when grounding is clause-scoped via
+	 *         {@link ChartSearchAiConstants#GP_GROUNDING_CLAUSE_SCOPED} — each citation in a
+	 *         multi-citation sentence is checked against its own clause rather than the whole
+	 *         sentence. Fails safe to {@code false} (sentence-scoped) when no admin service is
+	 *         available.
+	 */
+	public static boolean isGroundingClauseScoped() {
+		try {
+			String value = org.openmrs.api.context.Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_GROUNDING_CLAUSE_SCOPED,
+							String.valueOf(ChartSearchAiConstants.DEFAULT_GROUNDING_CLAUSE_SCOPED));
+			return "true".equalsIgnoreCase(value.trim());
+		}
+		catch (RuntimeException e) {
+			return ChartSearchAiConstants.DEFAULT_GROUNDING_CLAUSE_SCOPED;
+		}
+	}
+
+	/**
 	 * @return the cosine floor below which a citation is treated as ungrounded,
 	 *         read from {@link ChartSearchAiConstants#GP_GROUNDING_MIN_COSINE},
 	 *         falling back to {@link ChartSearchAiConstants#DEFAULT_GROUNDING_MIN_COSINE}

@@ -370,22 +370,75 @@ public class CitationGroundingVerifier {
 	 * indices it cites inline. Returns an empty list for null/blank answers.
 	 */
 	static List<Sentence> splitIntoCitedSentences(String answer) {
-		List<Sentence> sentences = new ArrayList<Sentence>();
+		List<Sentence> units = new ArrayList<Sentence>();
 		if (answer == null || answer.trim().isEmpty()) {
-			return sentences;
+			return units;
 		}
 		for (String raw : SENTENCE_SPLIT.split(answer)) {
 			if (raw.trim().isEmpty()) {
 				continue;
 			}
-			Sentence sentence = new Sentence(raw);
+			List<int[]> marks = new ArrayList<int[]>(); // {start, end, index}
 			Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(raw);
 			while (marker.find()) {
-				sentence.citedIndexes.add(Integer.valueOf(marker.group(1)));
+				marks.add(new int[] { marker.start(), marker.end(), Integer.parseInt(marker.group(1)) });
 			}
-			sentences.add(sentence);
+			if (marks.size() <= 1) {
+				// Single (or no) citation: the whole sentence is the claim unit (unchanged).
+				Sentence s = new Sentence(raw);
+				for (int[] mk : marks) {
+					s.citedIndexes.add(Integer.valueOf(mk[2]));
+				}
+				units.add(s);
+				continue;
+			}
+			// Multiple citations in one sentence: split into per-clause claim units so a
+			// record is grounded against ITS clause, not the whole compound sentence (a
+			// record supporting only one clause would otherwise be flagged unsupported).
+			// A run of ADJACENT markers (only separators between them, e.g. [2][3] or
+			// [2], [3]) stays in one clause — those cite the same claim.
+			int clauseStart = 0;
+			int i = 0;
+			while (i < marks.size()) {
+				int runStart = i;
+				while (i + 1 < marks.size() && !hasSubstantiveWord(raw, marks.get(i)[1], marks.get(i + 1)[0])) {
+					i++;
+				}
+				int clauseEnd = marks.get(i)[1];
+				Sentence s = new Sentence(raw.substring(clauseStart, clauseEnd));
+				for (int j = runStart; j <= i; j++) {
+					s.citedIndexes.add(Integer.valueOf(marks.get(j)[2]));
+				}
+				units.add(s);
+				clauseStart = clauseEnd;
+				i++;
+			}
+			// Trailing text after the last marker carries no citation — dropped.
 		}
-		return sentences;
+		return units;
+	}
+
+	/** Connectives/articles that join citations of the SAME claim (e.g. "[1] and [2]") rather
+	 *  than introducing a new one — text consisting only of these does not start a new clause. */
+	private static final java.util.Set<String> CONNECTIVES = new java.util.HashSet<String>(java.util.Arrays.asList(
+			"and", "or", "also", "as", "a", "an", "the", "with", "plus", "along", "to", "of", "&"));
+
+	private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{Nd}]+");
+
+	/**
+	 * True if {@code s[from,to)} contains a word that is NOT a mere connective/article — i.e.
+	 * a substantive claim word. Markers separated only by connectives ("[1] and [2]") cite the
+	 * same claim and stay in one clause; markers separated by real content ("[1] … diagnosis [2]")
+	 * start distinct clauses.
+	 */
+	private static boolean hasSubstantiveWord(String s, int from, int to) {
+		Matcher w = WORD.matcher(s.substring(from, to));
+		while (w.find()) {
+			if (!CONNECTIVES.contains(w.group().toLowerCase(java.util.Locale.ROOT))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** An answer sentence and the citation indices it references inline. */

@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -373,7 +374,59 @@ public class CitationGroundingVerifierTest {
 
 		assertEquals(2, sentences.size());
 		assertTrue(sentences.get(0).cites(1));
+		// Adjacent markers [2][3] (no words between) stay in ONE clause — same claim.
 		assertTrue(sentences.get(1).cites(2));
 		assertTrue(sentences.get(1).cites(3));
+	}
+
+	@Test
+	public void splitIntoCitedSentences_splitsMultiClaimSentencePerClause() {
+		// Two distinct claims in one sentence, separated by text -> two clause units,
+		// each citing only its own index and containing only its own claim.
+		List<CitationGroundingVerifier.Sentence> u =
+				CitationGroundingVerifier.splitIntoCitedSentences(
+						"Hearing Loss is a condition [89] and a provisional diagnosis [91].");
+
+		assertEquals(2, u.size());
+		assertTrue(u.get(0).cites(89));
+		assertFalse(u.get(0).cites(91));
+		assertTrue(u.get(0).text.contains("condition"));
+		assertFalse(u.get(0).text.contains("provisional"),
+				"the [89] clause must NOT carry [91]'s 'provisional diagnosis' claim");
+		assertTrue(u.get(1).cites(91));
+		assertFalse(u.get(1).cites(89));
+		assertTrue(u.get(1).text.contains("provisional"));
+	}
+
+	@Test
+	public void splitIntoCitedSentences_keepsCitationsJoinedByConnectiveTogether() {
+		// "[355] and [365]" cite the SAME claim (only "and" between them) -> ONE clause with
+		// both indices, NOT a degenerate " and [365]" clause that would wrongly be unsupported.
+		List<CitationGroundingVerifier.Sentence> u =
+				CitationGroundingVerifier.splitIntoCitedSentences("Diabetic foot ulcer [355] and [365].");
+
+		assertEquals(1, u.size());
+		assertTrue(u.get(0).cites(355));
+		assertTrue(u.get(0).cites(365));
+	}
+
+	@Test
+	public void verify_groundsEachCitationAgainstItsOwnClause() {
+		// "Alpha [1] and Beta [2]" -> clauses "Alpha [1]" and "and Beta [2]". Each record
+		// matches ITS clause but the whole sentence string is left UNREGISTERED (-> zero
+		// vector, cosine 0). So a True verdict proves grounding used the clause, not the
+		// whole compound sentence (which would have failed).
+		String answer = "Alpha [1] and Beta [2]";
+		embeddings.register("Alpha [1]", AXIS_A);
+		embeddings.register("Alpha", AXIS_A);
+		embeddings.register(" and Beta [2]", AXIS_B);
+		embeddings.register("Beta", AXIS_B);
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "Alpha"), mapping(2, "Beta")), FLOOR, TIER1_ONLY);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "[1] grounded against its own clause");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "[2] grounded against its own clause");
 	}
 }

@@ -559,6 +559,48 @@ public class CitationGroundingVerifierTest {
 				"[1] and [2] from the same compound sentence must be judged in separate entailment calls");
 	}
 
+	@Test
+	public void clauseScoped_singleCitationSentencesStayInOneBatch() {
+		// The other half of the isolate/batch split: sentences that each cite ONE record are left
+		// unsplit (isolate=false), so under clause-scope they must all share the SINGLE batched Tier-2
+		// call — not fan out into one call apiece. This is the latency win (list-style answers pay no
+		// extra calls). A regression that isolated every citation would still ground them correctly but
+		// silently do N serial calls; only a call-count assertion catches that.
+		String answer = "Has diabetes [1]. Has hypertension [2]. Has asthma [3].";
+		embeddings.register("Has diabetes [1].", AXIS_A);
+		embeddings.register("Has hypertension [2].", AXIS_A);
+		embeddings.register("Has asthma [3].", AXIS_A);
+		embeddings.register("rec1", AXIS_A);
+		embeddings.register("rec2", AXIS_A);
+		embeddings.register("rec3", AXIS_A);
+		llm.verdict = Boolean.TRUE;
+		verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2), reference(3))),
+				Arrays.asList(mapping(1, "rec1"), mapping(2, "rec2"), mapping(3, "rec3")), FLOOR, TIER2_ON, true);
+		assertEquals(1, llm.batches, "single-citation sentences must share ONE batched call, not one per citation");
+		assertEquals(3, llm.calls, "all three single-citation pairs belong to that one batch");
+	}
+
+	@Test
+	public void clauseScoped_isolateCitationAppliesItsSinglePairTier2Verdict() {
+		// A compound sentence's citations are Tier-2'd in their own single-pair calls; prove that
+		// verdict is actually APPLIED and authoritative. Tier-1 passes (record aligned to its clause),
+		// but the single-pair entailment returns NO -> both must come back grounded=false. If the
+		// isolate verdict-assembly loop failed to assign, the verdict would wrongly stay Tier-1 (true).
+		String answer = "Has diabetes [1] and hypertension [2].";
+		embeddings.register("Has diabetes [1]", AXIS_A);                       // [1]'s clause
+		embeddings.register("Has diabetes [1] and hypertension [2]", AXIS_A);  // [2]'s clause (cumulative prefix)
+		embeddings.register("rec1", AXIS_A);
+		embeddings.register("rec2", AXIS_A);
+		llm.verdict = Boolean.FALSE; // Tier-2 says NO on each isolate single-pair call
+		List<RecordReference> out = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "rec1"), mapping(2, "rec2")), FLOOR, TIER2_ON, true);
+		assertEquals(Boolean.FALSE, out.get(0).getGrounded(), "[1]: isolate Tier-2 NO overrides the Tier-1 pass");
+		assertEquals(Boolean.FALSE, out.get(1).getGrounded(), "[2]: isolate Tier-2 NO overrides the Tier-1 pass");
+		assertEquals(2, llm.batches, "each compound-sentence citation is verified in its own single-pair call");
+	}
+
 	/** Index of the first {@code entailsBatch} call whose statement list contains {@code statement}
 	 *  exactly, or -1 — lets a test assert how citations were grouped into calls. */
 	private int callIndexContaining(String statement) {

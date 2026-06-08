@@ -338,6 +338,17 @@ public class ChartSearchAiConstants {
 	public static final boolean DEFAULT_GROUNDING_ENTAILMENT_ENABLED = false;
 
 	/**
+	 * When set, citation grounding is clause-scoped: a sentence citing multiple records checks each
+	 * citation against the answer text up to and including its own {@code [N]} marker, not the whole
+	 * compound sentence. This grounds a citation that supports its own clause but not a later clause
+	 * cited by a different record (e.g. an active condition cited alongside a provisional diagnosis in
+	 * one sentence). Default {@code false} (sentence-scoped, the original behaviour).
+	 */
+	public static final String GP_GROUNDING_CLAUSE_SCOPED = "chartsearchai.grounding.clauseScoped";
+
+	public static final boolean DEFAULT_GROUNDING_CLAUSE_SCOPED = false;
+
+	/**
 	 * Upper bound on the number of citations Tier-2 entailment verifies per answer (i.e. the batch
 	 * size), so a heavily-cited answer cannot make the single batched entailment prompt grow without
 	 * bound. References beyond this many keep their Tier-1 verdict; the verifier logs once when the

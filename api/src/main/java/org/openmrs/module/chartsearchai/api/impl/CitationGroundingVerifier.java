@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,9 +53,13 @@ import org.springframework.stereotype.Service;
  * confirmed by a yes/no LLM entailment verdict that is authoritative. This is what
  * catches the subject/polarity flips cosine cannot. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
- * citation) is a Tier-1 pass, so confirming only failures would miss it. All of an answer's
- * cited references are verified in a SINGLE batched call ({@link LlmProvider#entailsBatch}),
- * capped at {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer;
+ * citation) is a Tier-1 pass, so confirming only failures would miss it. References are verified
+ * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except that, under clause-scoped
+ * grounding, the citations of one compound sentence are each verified in their OWN call: batched
+ * entailment is NOT per-pair independent, so co-batching a compound sentence's citations (whose
+ * overlapping clause statements differ only by length) lets the LLM couple their verdicts and
+ * silently flip a correct citation to not-grounded. The total is capped at
+ * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer;
  * references beyond the cap keep their Tier-1 verdict.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
@@ -164,7 +169,17 @@ public class CitationGroundingVerifier {
 	public List<RecordReference> verify(String answer, List<RecordReference> references,
 			List<RecordMapping> mappings) {
 		return verify(answer, references, mappings, ChartSearchAiUtils.getGroundingMinCosine(),
-				ChartSearchAiUtils.isGroundingEntailmentEnabled());
+				ChartSearchAiUtils.isGroundingEntailmentEnabled(),
+				ChartSearchAiUtils.isGroundingClauseScoped());
+	}
+
+	/**
+	 * Backward-compatible 5-arg overload — sentence-scoped grounding (the original behaviour).
+	 * Existing tests pin this; the public {@link #verify} now delegates to the 6-arg form.
+	 */
+	List<RecordReference> verify(String answer, List<RecordReference> references,
+			List<RecordMapping> mappings, double floor, boolean entailmentEnabled) {
+		return verify(answer, references, mappings, floor, entailmentEnabled, false);
 	}
 
 	/**
@@ -177,13 +192,21 @@ public class CitationGroundingVerifier {
 	 * confirmed by a Tier-2 LLM entailment verdict that is authoritative
 	 * (cosine errs in both directions, and the dangerous error — a high-overlap
 	 * but unsupported citation — is exactly the case Tier-1 cannot self-detect,
-	 * so the LLM must see Tier-1 passes too, not only failures). All of them are checked in
-	 * ONE batched call ({@link LlmProvider#entailsBatch}), capped at
-	 * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer;
-	 * references beyond the cap keep their Tier-1 verdict.
+	 * so the LLM must see Tier-1 passes too, not only failures). They are confirmed in a batched
+	 * call ({@link LlmProvider#entailsBatch}), capped at
+	 * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer; references
+	 * beyond the cap keep their Tier-1 verdict (but see the clause-scoped exception below).
+	 *
+	 * <p>When {@code clauseScoped}, a sentence citing multiple records is split so each citation is
+	 * checked against the answer text up to and including its own {@code [N]} marker, not the whole
+	 * compound sentence (see {@link #splitIntoClauseScopedSentences}). Those split citations are each
+	 * Tier-2 verified in their OWN entailment call rather than co-batched: batched entailment is not
+	 * per-pair independent, so co-batching a compound sentence's citations (whose clause statements
+	 * overlap) lets the LLM couple their verdicts. Every other citation is still confirmed in the one
+	 * shared batched call.
 	 */
 	List<RecordReference> verify(String answer, List<RecordReference> references,
-			List<RecordMapping> mappings, double floor, boolean entailmentEnabled) {
+			List<RecordMapping> mappings, double floor, boolean entailmentEnabled, boolean clauseScoped) {
 		if (references == null || references.isEmpty()) {
 			return references;
 		}
@@ -195,7 +218,9 @@ public class CitationGroundingVerifier {
 			}
 		}
 
-		List<Sentence> sentences = splitIntoCitedSentences(answer);
+		List<Sentence> sentences = clauseScoped
+				? splitIntoClauseScopedSentences(answer)
+				: splitIntoCitedSentences(answer);
 		TextEmbedder embedder = resolveEmbedder();
 
 		// Embedding caches: each record and each sentence is embedded at most
@@ -211,9 +236,17 @@ public class CitationGroundingVerifier {
 		int entailmentBudget = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
 		int cappedCount = 0;
 		Tier1Result[] tier1Results = new Tier1Result[references.size()];
-		List<Integer> tier2Positions = new ArrayList<Integer>();
+		// Non-isolate candidates share ONE batch — their statements don't overlap, so the batched
+		// (not per-pair-independent) LLM cannot couple them.
+		List<Integer> batchPositions = new ArrayList<Integer>();
 		List<String> batchSources = new ArrayList<String>();
 		List<String> batchStatements = new ArrayList<String>();
+		// Isolate candidates — the citations of one compound sentence under clause-scope, whose clause
+		// statements overlap — are each verified in their OWN single-pair call so the LLM cannot couple
+		// their verdicts (see this class's Tier-2 javadoc).
+		List<Integer> isolatePositions = new ArrayList<Integer>();
+		List<String> isolateSources = new ArrayList<String>();
+		List<String> isolateStatements = new ArrayList<String>();
 		for (int i = 0; i < references.size(); i++) {
 			RecordReference reference = references.get(i);
 			Tier1Result tier1 = verdictTier1(reference.getIndex(), textByIndex, sentences,
@@ -225,29 +258,42 @@ public class CitationGroundingVerifier {
 					&& tier1.recordText != null) {
 				if (entailmentBudget > 0) {
 					entailmentBudget--;
-					tier2Positions.add(i);
-					batchSources.add(tier1.recordText);
-					batchStatements.add(stripCitationMarkers(tier1.bestSentence));
+					String statement = stripCitationMarkers(tier1.bestSentence);
+					if (tier1.isolate) {
+						isolatePositions.add(i);
+						isolateSources.add(tier1.recordText);
+						isolateStatements.add(statement);
+					} else {
+						batchPositions.add(i);
+						batchSources.add(tier1.recordText);
+						batchStatements.add(statement);
+					}
 				} else {
 					cappedCount++;
 				}
 			}
 		}
 
-		// One batched entailment call confirms every collected citation at once — replacing one
-		// serial LLM call per citation (the single-slot engine ran them strictly in sequence, the
-		// dominant grounding latency). A null result (whole-batch failure) or a short result leaves
-		// the affected verdicts null, i.e. the Tier-1 verdict stands.
-		List<Boolean> batchVerdicts = batchSources.isEmpty()
-				? java.util.Collections.<Boolean> emptyList()
-				: safeEntailsBatch(batchSources, batchStatements);
-		// Tier-2 verdict per reference position (parallel to tier1Results). A null entry means
-		// either "not a Tier-2 candidate" or "Tier-2 could not verify" — Pass 2 treats both the
-		// same (keep the Tier-1 verdict), so they collapse to one null with no information lost.
 		Boolean[] tier2Verdict = new Boolean[references.size()];
-		for (int k = 0; k < tier2Positions.size(); k++) {
-			tier2Verdict[tier2Positions.get(k)] = (batchVerdicts != null && k < batchVerdicts.size())
-					? batchVerdicts.get(k) : null;
+		// One batched call confirms all NON-isolate citations at once (the latency win); a null/short
+		// result leaves those verdicts null, i.e. the Tier-1 verdict stands. A null entry in
+		// tier2Verdict means "not a Tier-2 candidate" OR "Tier-2 could not verify" — Pass 2 keeps the
+		// Tier-1 verdict for both, so they collapse to one null with no information lost.
+		if (!batchSources.isEmpty()) {
+			List<Boolean> batchVerdicts = safeEntailsBatch(batchSources, batchStatements);
+			for (int k = 0; k < batchPositions.size(); k++) {
+				tier2Verdict[batchPositions.get(k)] = (batchVerdicts != null && k < batchVerdicts.size())
+						? batchVerdicts.get(k) : null;
+			}
+		}
+		// Isolate citations (one compound sentence's, under clause-scope) get a single-pair call each,
+		// so the batched LLM cannot couple their overlapping clause statements into each other's
+		// verdicts. Same null-degrades-to-Tier-1 contract as the batch.
+		for (int k = 0; k < isolatePositions.size(); k++) {
+			List<Boolean> verdict = safeEntailsBatch(Collections.singletonList(isolateSources.get(k)),
+					Collections.singletonList(isolateStatements.get(k)));
+			tier2Verdict[isolatePositions.get(k)] = (verdict != null && !verdict.isEmpty())
+					? verdict.get(0) : null;
 		}
 
 		// Pass 2: assemble — Tier-2 is authoritative when it reached a verdict, else keep Tier-1.
@@ -278,9 +324,9 @@ public class CitationGroundingVerifier {
 	}
 
 	/**
-	 * Computes the Tier-1 cosine verdict for one cited index and identifies the
-	 * single best-matching claim sentence (used as the Tier-2 entailment target).
-	 * Never throws: an embedding failure yields a {@code null} verdict.
+	 * Computes the Tier-1 cosine verdict for one cited index and identifies the single best-matching
+	 * claim sentence — a clause when grounding is clause-scoped — used as the Tier-2 entailment
+	 * target. Never throws: an embedding failure yields a {@code null} verdict.
 	 */
 	private Tier1Result verdictTier1(int index, Map<Integer, String> textByIndex,
 			List<Sentence> sentences, double floor,
@@ -288,7 +334,7 @@ public class CitationGroundingVerifier {
 			TextEmbedder embedder, GroundingStats stats) {
 		String recordText = textByIndex.get(index);
 		if (recordText == null || recordText.trim().isEmpty()) {
-			return new Tier1Result(null, null, null); // nothing to compare against
+			return new Tier1Result(null, null, null, false); // nothing to compare against
 		}
 		try {
 			float[] recordVector = embedRecord(index, recordText, recordVectors, embedder);
@@ -298,6 +344,7 @@ public class CitationGroundingVerifier {
 			// so it must produce FALSE, not be mistaken for "nothing to compare".
 			double best = -Double.MAX_VALUE;
 			String bestSentence = null;
+			boolean bestIsolate = false;
 			boolean compared = false;
 			boolean anyInlineCite = false;
 			for (int s = 0; s < sentences.size(); s++) {
@@ -308,6 +355,7 @@ public class CitationGroundingVerifier {
 					if (sim > best) {
 						best = sim;
 						bestSentence = sentences.get(s).text;
+						bestIsolate = sentences.get(s).isolate;
 					}
 				}
 			}
@@ -322,20 +370,21 @@ public class CitationGroundingVerifier {
 					if (sim > best) {
 						best = sim;
 						bestSentence = sentences.get(s).text;
+						bestIsolate = sentences.get(s).isolate;
 					}
 				}
 			}
 
 			if (!compared) {
-				return new Tier1Result(null, null, recordText); // no sentences (empty answer)
+				return new Tier1Result(null, null, recordText, false); // no sentences (empty answer)
 			}
-			return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText);
+			return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText, bestIsolate);
 		}
 		catch (RuntimeException e) {
 			// Never break the search path on a verification failure; count it for the
 			// single summary log in verify() rather than spamming per citation.
 			stats.recordFailure(e);
-			return new Tier1Result(null, null, recordText);
+			return new Tier1Result(null, null, recordText, false);
 		}
 	}
 
@@ -366,7 +415,8 @@ public class CitationGroundingVerifier {
 		return ChartSearchAiUtils.INLINE_CITATION.matcher(text).replaceAll("").trim();
 	}
 
-	/** Tier-1 outcome plus the claim sentence and record text Tier-2 needs. */
+	/** Tier-1 outcome plus the claim sentence/clause, record text, and whether that clause must be
+	 *  Tier-2 verified in isolation — everything Tier-2 needs. */
 	private static class Tier1Result {
 
 		final Boolean verdict;
@@ -375,10 +425,15 @@ public class CitationGroundingVerifier {
 
 		final String recordText;
 
-		Tier1Result(Boolean verdict, String bestSentence, String recordText) {
+		/** True when {@link #bestSentence} is a clause from a multi-citation sentence under
+		 *  clause-scope, so it must be Tier-2 verified in its own call rather than co-batched. */
+		final boolean isolate;
+
+		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate) {
 			this.verdict = verdict;
 			this.bestSentence = bestSentence;
 			this.recordText = recordText;
+			this.isolate = isolate;
 		}
 	}
 
@@ -425,15 +480,73 @@ public class CitationGroundingVerifier {
 		return sentences;
 	}
 
-	/** An answer sentence and the citation indices it references inline. */
+	/**
+	 * Clause-scoped variant of {@link #splitIntoCitedSentences}: a sentence citing MORE than one
+	 * record is split so each citation is checked against the answer text up to and including its
+	 * own {@code [N]} marker, not the whole compound sentence. This grounds a citation that supports
+	 * its own clause but not a later clause cited by a different record — e.g. "Hearing Loss was
+	 * noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an
+	 * active condition) does not support the "provisional diagnosis" clause that [91] backs. The
+	 * clause is the cumulative prefix through the marker, so it retains the sentence subject whenever
+	 * the subject precedes the first marker (the normal case — answers state the finding before its
+	 * citation): a family-history / negation flip in a later clause is then still judged against the
+	 * full preceding claim, not a subject-stripped fragment. A leading {@code [N]} with no text
+	 * before it yields an empty clause, which grounds conservatively (not-grounded) rather than
+	 * spuriously. Single-citation sentences are returned unchanged. Each split clause is flagged for
+	 * isolation ({@link Sentence#isolate}) so Tier-2 verifies it in its OWN call rather than
+	 * co-batching the sentence's citations, whose overlapping clause statements would otherwise couple
+	 * the (not per-pair-independent) batched LLM verdict.
+	 */
+	static List<Sentence> splitIntoClauseScopedSentences(String answer) {
+		List<Sentence> clauses = new ArrayList<Sentence>();
+		for (Sentence sentence : splitIntoCitedSentences(answer)) {
+			if (sentence.citedIndexes.size() <= 1) {
+				clauses.add(sentence);
+				continue;
+			}
+			Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(sentence.text);
+			while (marker.find()) {
+				Integer idx = Integer.valueOf(marker.group(1));
+				clauses.add(new Sentence(sentence.text.substring(0, marker.end()),
+						Collections.singleton(idx), true));
+			}
+		}
+		return clauses;
+	}
+
+	/**
+	 * An answer sentence (or, under clause-scoped grounding, a clause) and the citation indices it is
+	 * scored against. For a whole sentence (the default path) {@link #citedIndexes} is exactly the
+	 * {@code [N]} markers in {@link #text}; for a clause-scoped fragment the text may contain earlier
+	 * markers while {@code citedIndexes} holds only the one citation the clause is attributed to — so
+	 * do NOT re-derive citedIndexes by re-parsing the text.
+	 */
 	static class Sentence {
 
 		final String text;
 
 		final java.util.Set<Integer> citedIndexes = new java.util.HashSet<Integer>();
 
+		/**
+		 * True when this is a clause split from a MULTI-citation sentence, so its citation must be
+		 * Tier-2 verified ALONE — not co-batched with the sentence's other citations, whose
+		 * overlapping clause-scoped statements would otherwise couple the (not per-pair-independent)
+		 * batched LLM verdict. False for a whole sentence: sentence-scope, or a single-citation
+		 * sentence under clause-scope.
+		 */
+		final boolean isolate;
+
 		Sentence(String text) {
+			this(text, java.util.Collections.<Integer> emptySet(), false);
+		}
+
+		/** Clause constructor: text, an explicit cited-index set, and whether the clause must be
+		 *  Tier-2 verified in isolation (used by clause-scoped splitting, where a clause's text may
+		 *  contain earlier markers but is attributed to one citation only). */
+		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate) {
 			this.text = text;
+			this.citedIndexes.addAll(citedIndexes);
+			this.isolate = isolate;
 		}
 
 		boolean cites(int index) {

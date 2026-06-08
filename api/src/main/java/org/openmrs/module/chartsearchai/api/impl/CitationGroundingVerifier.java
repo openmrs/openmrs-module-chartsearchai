@@ -150,7 +150,7 @@ public class CitationGroundingVerifier {
 	 * Returns a copy of {@code references} with each entry's grounding verdict
 	 * set. A reference is grounded when its record's text is at least
 	 * {@link ChartSearchAiUtils#getGroundingMinCosine()} cosine-similar to the
-	 * best-matching answer sentence that cites it (or, when no sentence cites it
+	 * best-matching answer clause that cites it (or, when no clause cites it
 	 * inline — e.g. it appeared only in the structured citations array — to the
 	 * best-matching sentence anywhere in the answer). References whose record
 	 * carries no text, or that cannot be embedded, are returned with a
@@ -441,7 +441,13 @@ public class CitationGroundingVerifier {
 		return false;
 	}
 
-	/** An answer sentence and the citation indices it references inline. */
+	/**
+	 * A claim unit and the citation indices it references inline. This is a whole answer
+	 * sentence in the common case, but a single clause of a sentence when that sentence cites
+	 * multiple records with distinct claims (see {@link #splitIntoCitedSentences}). Citation
+	 * attribution assumes the model places each {@code [N]} marker after the content it cites
+	 * (as the system prompt's few-shot demonstrates).
+	 */
 	static class Sentence {
 
 		final String text;

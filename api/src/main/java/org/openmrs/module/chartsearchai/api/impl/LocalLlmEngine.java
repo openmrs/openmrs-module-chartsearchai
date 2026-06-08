@@ -109,9 +109,26 @@ public class LocalLlmEngine implements LlmEngine {
 	public synchronized InferenceResult infer(String systemPrompt, String userMessage,
 			int timeoutSeconds) {
 		ensureServerRunning();
+		return postForResult(buildRequestBody(systemPrompt, userMessage, false), timeoutSeconds);
+	}
 
-		String requestBody = buildRequestBody(systemPrompt, userMessage, false);
+	@Override
+	public synchronized InferenceResult infer(String systemPrompt, String userMessage,
+			int timeoutSeconds, ObjectNode responseFormat) {
+		ensureServerRunning();
+		String requestBody = responseFormat == null
+				? buildRequestBody(systemPrompt, userMessage, false)
+				: buildRequestBody(systemPrompt, userMessage, false,
+						ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS, responseFormat);
+		return postForResult(requestBody, timeoutSeconds);
+	}
 
+	/**
+	 * Sends a pre-built request body to the local llama-server and parses the (non-streaming)
+	 * result. Shared by the default-schema and custom-{@code response_format} {@link #infer}
+	 * overloads. Called only from {@code synchronized} methods, so it runs under the engine lock.
+	 */
+	private InferenceResult postForResult(String requestBody, int timeoutSeconds) {
 		HttpRequest request = HttpRequest.newBuilder()
 				.uri(URI.create(getCompletionsUrl()))
 				.timeout(Duration.ofSeconds(timeoutSeconds))
@@ -474,6 +491,19 @@ public class LocalLlmEngine implements LlmEngine {
 
 	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
 			int maxTokens) {
+		return buildRequestBody(systemPrompt, userMessage, stream, maxTokens,
+				ChartAnswerResponseFormat.build(MAPPER));
+	}
+
+	/**
+	 * As {@link #buildRequestBody(String, String, boolean, int)} but with a caller-supplied
+	 * {@code response_format} (e.g. the verdict-only {@link EntailmentBatchResponseFormat}) in
+	 * place of the default chart-answer schema. Every other field — temperature, the pinned
+	 * sampler chain, DRY penalties, {@code cache_prompt} — is identical, so KV-cache reuse and
+	 * decoding behaviour are unchanged.
+	 */
+	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
+			int maxTokens, ObjectNode responseFormat) {
 		ObjectNode root = MAPPER.createObjectNode();
 		root.put("temperature", 0.0);
 		root.put("max_tokens", maxTokens);
@@ -520,7 +550,7 @@ public class LocalLlmEngine implements LlmEngine {
 			root.set("stream_options", streamOptions);
 		}
 
-		root.set("response_format", ChartAnswerResponseFormat.build(MAPPER));
+		root.set("response_format", responseFormat);
 		root.set("messages", ChatMessages.systemAndUser(MAPPER, systemPrompt, userMessage));
 
 		try {

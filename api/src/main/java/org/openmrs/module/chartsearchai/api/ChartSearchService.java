@@ -62,6 +62,24 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * Streaming variant that additionally forwards the answer's citations to {@code citationsConsumer}
+	 * the moment the answer is generated — <em>before</em> the citation-grounding pass — so a caller
+	 * can render the answer and its clickable citations immediately and let grounding verdicts arrive
+	 * afterwards. Grounding (Tier-2 entailment) can add a tail of LLM work; this keeps it off the
+	 * path to a readable, cited answer. The returned {@link ChartAnswer} still carries the fully
+	 * grounded references. The default ignores {@code citationsConsumer} and delegates to the four-arg
+	 * variant, so existing implementations and callers are unaffected.
+	 *
+	 * @param citationsConsumer called once with the answer's references <em>before</em> grounding
+	 *        (verdicts not yet attached); the returned answer carries the grounded references
+	 * @return the complete answer with grounded source references
+	 */
+	default ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer,
+			Consumer<String> reasoningConsumer, Consumer<List<RecordReference>> citationsConsumer) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer);
+	}
+
+	/**
 	 * Pre-warm any patient-specific caches (serialized chart, LLM prompt cache) so the
 	 * first real query on this patient does not pay cold-start cost. Implementations
 	 * that don't support warmup may return immediately. Callers should treat this as

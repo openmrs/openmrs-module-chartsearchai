@@ -48,14 +48,14 @@ import org.springframework.stereotype.Service;
  * "has X") — those embed nearly identically.
  *
  * <p><strong>Tier-2 (optional).</strong> When
- * {@code chartsearchai.grounding.entailment.enabled} is set, each reference
- * Tier-1 could evaluate is confirmed by a short yes/no LLM entailment call
- * ({@link LlmProvider#entails}) whose verdict is authoritative. This is what
+ * {@code chartsearchai.grounding.entailment.enabled} is set, the cited references are
+ * confirmed by a yes/no LLM entailment verdict that is authoritative. This is what
  * catches the subject/polarity flips cosine cannot. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
- * citation) is a Tier-1 pass, so confirming only failures would miss it — and
- * costs one LLM call per cited reference, capped at
- * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} per answer.
+ * citation) is a Tier-1 pass, so confirming only failures would miss it. All of an answer's
+ * cited references are verified in a SINGLE batched call ({@link LlmProvider#entailsBatch}),
+ * capped at {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer;
+ * references beyond the cap keep their Tier-1 verdict.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"
@@ -174,12 +174,13 @@ public class CitationGroundingVerifier {
 	 * tests can exercise the grounding logic without an OpenMRS context.
 	 *
 	 * <p>When {@code entailmentEnabled}, every reference Tier-1 could evaluate is
-	 * confirmed by a Tier-2 LLM entailment call whose verdict is authoritative
+	 * confirmed by a Tier-2 LLM entailment verdict that is authoritative
 	 * (cosine errs in both directions, and the dangerous error — a high-overlap
 	 * but unsupported citation — is exactly the case Tier-1 cannot self-detect,
-	 * so the LLM must see Tier-1 passes too, not only failures). Tier-2 is
-	 * capped at {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS}
-	 * calls per answer; references beyond the cap keep their Tier-1 verdict.
+	 * so the LLM must see Tier-1 passes too, not only failures). All of them are checked in
+	 * ONE batched call ({@link LlmProvider#entailsBatch}), capped at
+	 * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer;
+	 * references beyond the cap keep their Tier-1 verdict.
 	 */
 	List<RecordReference> verify(String answer, List<RecordReference> references,
 			List<RecordMapping> mappings, double floor, boolean entailmentEnabled) {
@@ -203,31 +204,61 @@ public class CitationGroundingVerifier {
 		Map<Integer, float[]> sentenceVectors = new HashMap<Integer, float[]>();
 		GroundingStats stats = new GroundingStats();
 
+		// Pass 1: Tier-1 (cosine) for every reference, collecting the claim/record pairs Tier-2
+		// should confirm — up to the per-answer cap. Tier-2 runs on Tier-1 passes AND failures:
+		// the dangerous case (high cosine but unsupported, e.g. a family-history flip) is a Tier-1
+		// pass, so confirming only failures would miss it.
 		int entailmentBudget = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
 		int cappedCount = 0;
-
-		List<RecordReference> annotated = new ArrayList<RecordReference>(references.size());
-		for (RecordReference reference : references) {
+		Tier1Result[] tier1Results = new Tier1Result[references.size()];
+		List<Integer> tier2Positions = new ArrayList<Integer>();
+		List<String> batchSources = new ArrayList<String>();
+		List<String> batchStatements = new ArrayList<String>();
+		for (int i = 0; i < references.size(); i++) {
+			RecordReference reference = references.get(i);
 			Tier1Result tier1 = verdictTier1(reference.getIndex(), textByIndex, sentences,
 					floor, recordVectors, sentenceVectors, embedder, stats);
-			Boolean verdict = tier1.verdict;
-
-			// Tier-2: only meaningful when Tier-1 reached a definite verdict and
-			// we have a concrete claim sentence to fact-check against the record.
+			tier1Results[i] = tier1;
+			// Tier-2 candidate: only meaningful when Tier-1 reached a definite verdict and we have
+			// a concrete claim sentence to fact-check against the record.
 			if (entailmentEnabled && tier1.verdict != null && tier1.bestSentence != null
 					&& tier1.recordText != null) {
 				if (entailmentBudget > 0) {
 					entailmentBudget--;
-					Boolean llmVerdict = safeEntails(tier1.recordText, tier1.bestSentence,
-							reference.getIndex());
-					if (llmVerdict != null) {
-						verdict = llmVerdict; // authoritative; null -> keep Tier-1
-					}
+					tier2Positions.add(i);
+					batchSources.add(tier1.recordText);
+					batchStatements.add(stripCitationMarkers(tier1.bestSentence));
 				} else {
 					cappedCount++;
 				}
 			}
-			annotated.add(reference.withGrounded(verdict));
+		}
+
+		// One batched entailment call confirms every collected citation at once — replacing one
+		// serial LLM call per citation (the single-slot engine ran them strictly in sequence, the
+		// dominant grounding latency). A null result (whole-batch failure) or a short result leaves
+		// the affected verdicts null, i.e. the Tier-1 verdict stands.
+		List<Boolean> batchVerdicts = batchSources.isEmpty()
+				? java.util.Collections.<Boolean> emptyList()
+				: safeEntailsBatch(batchSources, batchStatements);
+		// Tier-2 verdict per reference position (parallel to tier1Results). A null entry means
+		// either "not a Tier-2 candidate" or "Tier-2 could not verify" — Pass 2 treats both the
+		// same (keep the Tier-1 verdict), so they collapse to one null with no information lost.
+		Boolean[] tier2Verdict = new Boolean[references.size()];
+		for (int k = 0; k < tier2Positions.size(); k++) {
+			tier2Verdict[tier2Positions.get(k)] = (batchVerdicts != null && k < batchVerdicts.size())
+					? batchVerdicts.get(k) : null;
+		}
+
+		// Pass 2: assemble — Tier-2 is authoritative when it reached a verdict, else keep Tier-1.
+		List<RecordReference> annotated = new ArrayList<RecordReference>(references.size());
+		for (int i = 0; i < references.size(); i++) {
+			Boolean verdict = tier1Results[i].verdict;
+			Boolean llmVerdict = tier2Verdict[i];
+			if (llmVerdict != null) {
+				verdict = llmVerdict; // authoritative; null (no Tier-2 or unverifiable) -> keep Tier-1
+			}
+			annotated.add(references.get(i).withGrounded(verdict));
 		}
 		if (cappedCount > 0) {
 			log.info("Tier-2 entailment cap ({}) reached; {} citation(s) kept their Tier-1 verdict only",
@@ -308,13 +339,19 @@ public class CitationGroundingVerifier {
 		}
 	}
 
-	/** Wraps the Tier-2 LLM call so a failure degrades to "could not verify" (null). */
-	private Boolean safeEntails(String recordText, String claim, int index) {
+	/**
+	 * Wraps the batched Tier-2 call so a failure degrades to all-"could not verify" ({@code null}),
+	 * leaving every affected citation on its Tier-1 verdict — the verifier never breaks the search
+	 * path. Returns {@code null} (not an empty list) on failure so the caller can tell "batch failed"
+	 * from "batch ran and returned verdicts".
+	 */
+	private List<Boolean> safeEntailsBatch(List<String> sources, List<String> statements) {
 		try {
-			return llmProvider.entails(recordText, stripCitationMarkers(claim));
+			return llmProvider.entailsBatch(sources, statements);
 		}
 		catch (RuntimeException e) {
-			log.warn("Tier-2 entailment check failed for citation [{}]; keeping Tier-1 verdict", index, e);
+			log.warn("Tier-2 batch entailment failed for {} citation(s); keeping Tier-1 verdicts",
+					sources.size(), e);
 			return null;
 		}
 	}

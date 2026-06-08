@@ -11,6 +11,8 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.function.Consumer;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 /**
  * Abstraction for LLM inference engines. Implementations handle the actual
  * model invocation (local or remote) while prompt construction and response
@@ -27,6 +29,24 @@ public interface LlmEngine {
 	 * @return the inference result containing generated text and input/output token counts
 	 */
 	InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds);
+
+	/**
+	 * Run inference constraining the output to a caller-supplied JSON-schema {@code response_format}
+	 * instead of the default chart-answer schema. Used by batch citation grounding to apply a
+	 * verdict-only schema (see {@link EntailmentBatchResponseFormat}) that omits the per-call
+	 * reasoning the chart-answer schema would force.
+	 *
+	 * <p>The default ignores {@code responseFormat} and falls back to {@link #infer(String, String,
+	 * int)}: an engine that has not opted in simply uses its normal schema, and grounding then reads
+	 * a different envelope and degrades each verdict to "could not verify" (Tier-1 fallback) — never
+	 * a crash. {@link LocalLlmEngine} and {@link RemoteLlmEngine} override it.
+	 *
+	 * @param responseFormat an OpenAI-style {@code response_format} node, or {@code null} for the default
+	 */
+	default InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+			ObjectNode responseFormat) {
+		return infer(systemPrompt, userMessage, timeoutSeconds);
+	}
 
 	/**
 	 * Run inference with streaming, calling the consumer for each token fragment.

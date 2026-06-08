@@ -232,13 +232,21 @@ public class LlmInferenceService implements ChartSearchService {
 	@Override
 	public ChartAnswer searchStreaming(Patient patient, String question,
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, refs -> { });
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			Consumer<List<RecordReference>> citationsConsumer) {
 		// LOG FORMAT — stable contract: same field set as search() with op=searchStreaming
-		// in the log tag. Streaming is the path the frontend actually uses by default, so
-		// this is what demo operators see in their logs. try/finally so exceptions still
-		// emit a timing line — see search() for the exception-safety rationale.
+		// in the log tag, plus groundMs (Tier-2 grounding is now timed separately so the tail is
+		// visible). Streaming is the path the frontend actually uses by default, so this is what
+		// demo operators see in their logs. try/finally so exceptions still emit a timing line.
 		long buildStart = System.currentTimeMillis();
 		long buildMs = 0;
 		long llmMs = 0;
+		long groundMs = 0;
 		long inputTokens = 0;
 		long cachedTokens = 0;
 		String outcome = "error";
@@ -254,10 +262,19 @@ public class LlmInferenceService implements ChartSearchService {
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
 
-			List<RecordReference> references = groundReferences(response.getAnswer(),
-					extractCitedReferences(response.getAnswer(), response.getCitations(),
-							chart.getMappings()),
+			// Citations are known as soon as the answer is generated. Hand them to the caller
+			// BEFORE the grounding pass (which can add a tail of Tier-2 entailment calls) so the UI
+			// can render the answer and its clickable citations immediately; the returned answer
+			// carries the grounded references once verification completes.
+			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
+					response.getCitations(), chart.getMappings());
+			citationsConsumer.accept(cited);
+
+			long groundStart = System.currentTimeMillis();
+			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
+			groundMs = System.currentTimeMillis() - groundStart;
+
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens());
@@ -265,9 +282,9 @@ public class LlmInferenceService implements ChartSearchService {
 			return answer;
 		}
 		finally {
-			log.info("[timing] searchStreaming patient={} chartBuildMs={} llmMs={} totalMs={} inputTokens={} cachedTokens={} outcome={}",
+			log.info("[timing] searchStreaming patient={} chartBuildMs={} llmMs={} groundMs={} totalMs={} inputTokens={} cachedTokens={} outcome={}",
 					patient == null ? null : patient.getPatientId(),
-					buildMs, llmMs, buildMs + llmMs,
+					buildMs, llmMs, groundMs, buildMs + llmMs + groundMs,
 					inputTokens, cachedTokens, outcome);
 		}
 	}

@@ -21,12 +21,16 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.model.ChartEmbedding;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.api.impl.PipelineConfig;
 import org.openmrs.module.chartsearchai.api.impl.ScoredEmbedding;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -265,6 +269,52 @@ public class LlmInferenceServiceTest {
 				"Demographics-only chart has non-empty text");
 		assertTrue(chart.getMappings().isEmpty(),
 				"Demographics-only chart should have no record mappings");
+	}
+
+	@Test
+	public void searchStreaming_emitsCitationsOnTheCitationsChannelDuringTheCall() {
+		// The async-grounding contract: the answer's citations are pushed to the citations channel
+		// DURING the call (so the UI can render clickable citations immediately) — not only via the
+		// returned answer — and they carry no grounding verdict yet (grounded == null). Exercises the
+		// real production orchestration (buildChart -> generate -> extract citations -> ground) with
+		// the chart/LLM collaborators stubbed; grounding is off (no context) so it is a clean no-op.
+		List<RecordMapping> mappings = Arrays.asList(
+				new RecordMapping(1, "obs", uuid(11), null),
+				new RecordMapping(2, "order", uuid(22), null));
+		PatientChart chart = new PatientChart("records", mappings);
+
+		LlmInferenceService service = new LlmInferenceService();
+		service.setChartBuildingStrategy(new ChartBuildingStrategy() {
+
+			@Override
+			PatientChart buildChart(Patient patient, String question) {
+				return chart;
+			}
+		});
+		service.setLlmProvider(new LlmProvider() {
+
+			@Override
+			public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
+					String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
+				tokenConsumer.accept("Finding A [1] and finding B [2].");
+				return new LlmResponse("Finding A [1] and finding B [2].", Arrays.asList(1, 2));
+			}
+		});
+
+		List<List<RecordReference>> captured = new ArrayList<List<RecordReference>>();
+		ChartAnswer answer = service.searchStreaming(null, "any findings?",
+				token -> { }, reasoning -> { }, captured::add);
+
+		assertEquals(1, captured.size(), "citations channel must fire exactly once per answer");
+		List<RecordReference> early = captured.get(0);
+		assertEquals(2, early.size(), "both cited records must reach the citations channel");
+		assertEquals(uuid(11), early.get(0).getResourceUuid());
+		assertEquals(uuid(22), early.get(1).getResourceUuid());
+		// Emitted before grounding -> no verdict yet; clients must render these as unverified.
+		assertNull(early.get(0).getGrounded());
+		assertNull(early.get(1).getGrounded());
+		// The same citations come back on the returned answer.
+		assertEquals(2, answer.getReferences().size());
 	}
 
 	@Test

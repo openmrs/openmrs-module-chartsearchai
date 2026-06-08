@@ -66,21 +66,33 @@ public class CitationGroundingVerifierTest {
 		}
 	}
 
-	/** A LlmProvider whose {@link #entails} returns a programmed verdict and counts calls. */
+	/**
+	 * A LlmProvider whose batch entailment returns the programmed verdict for every pair.
+	 * {@code calls} counts pairs verified (so the per-citation expectations still read naturally
+	 * under batching — N citations verified == {@code calls == N}); {@code batches} counts
+	 * {@code entailsBatch} invocations, which must be one per answer.
+	 */
 	private static class StubLlmProvider extends LlmProvider {
 
 		Boolean verdict;
 
 		int calls;
 
+		int batches;
+
 		StubLlmProvider(Boolean verdict) {
 			this.verdict = verdict;
 		}
 
 		@Override
-		public Boolean entails(String source, String statement) {
-			calls++;
-			return verdict;
+		public List<Boolean> entailsBatch(List<String> sources, List<String> statements) {
+			batches++;
+			calls += sources.size();
+			List<Boolean> out = new ArrayList<Boolean>();
+			for (int i = 0; i < sources.size(); i++) {
+				out.add(verdict);
+			}
+			return out;
 		}
 	}
 
@@ -295,7 +307,7 @@ public class CitationGroundingVerifierTest {
 		StubLlmProvider throwing = new StubLlmProvider(null) {
 
 			@Override
-			public Boolean entails(String source, String statement) {
+			public List<Boolean> entailsBatch(List<String> sources, List<String> statements) {
 				throw new RuntimeException("llama-server timed out");
 			}
 		};
@@ -351,6 +363,33 @@ public class CitationGroundingVerifierTest {
 		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "within cap -> entailment applied");
 		assertEquals(Boolean.FALSE, result.get(total - 1).getGrounded(),
 				"beyond cap -> keeps Tier-1 verdict");
+	}
+
+	@Test
+	public void tier2_verifiesAllCitationsInOneBatchCall() {
+		// The latency fix: every cited reference Tier-2 confirms is checked in ONE entailsBatch
+		// call, not one serial LLM call per citation. Three on-topic citations -> a single batch
+		// of three pairs, and each reference still gets the batch's verdict.
+		String answer = "Diabetes [1]. Hypertension [2]. Asthma [3].";
+		embeddings.register("Diabetes [1].", AXIS_A);
+		embeddings.register("Hypertension [2].", AXIS_A);
+		embeddings.register("Asthma [3].", AXIS_A);
+		embeddings.register("type 2 diabetes", AXIS_A);
+		embeddings.register("essential hypertension", AXIS_A);
+		embeddings.register("mild asthma", AXIS_A);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2), reference(3))),
+				Arrays.asList(mapping(1, "type 2 diabetes"), mapping(2, "essential hypertension"),
+						mapping(3, "mild asthma")),
+				FLOOR, TIER2_ON);
+
+		assertEquals(1, llm.batches, "all citations must be verified in a single batch call");
+		assertEquals(3, llm.calls, "the one batch must carry all three (record, claim) pairs");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded());
 	}
 
 	// ---- helpers ----

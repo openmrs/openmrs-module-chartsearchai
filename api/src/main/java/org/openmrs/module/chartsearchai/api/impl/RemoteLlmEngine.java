@@ -47,11 +47,17 @@ public class RemoteLlmEngine implements LlmEngine {
 
 	@Override
 	public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds) {
+		return infer(systemPrompt, userMessage, timeoutSeconds, null);
+	}
+
+	@Override
+	public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+			ObjectNode responseFormat) {
 		String endpointUrl = getRequiredGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL);
 		String apiKey = getOptionalRuntimeProperty(ChartSearchAiConstants.RP_LLM_REMOTE_API_KEY);
 		String modelName = getRequiredGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME);
 
-		String requestBody = buildRequestBody(systemPrompt, userMessage, modelName, false);
+		String requestBody = buildRequestBody(systemPrompt, userMessage, modelName, false, responseFormat);
 
 		HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
 				.uri(URI.create(endpointUrl))
@@ -152,6 +158,16 @@ public class RemoteLlmEngine implements LlmEngine {
 
 	String buildRequestBody(String systemPrompt, String userMessage, String modelName,
 			boolean stream) {
+		return buildRequestBody(systemPrompt, userMessage, modelName, stream, null);
+	}
+
+	/**
+	 * As {@link #buildRequestBody(String, String, String, boolean)} but with a caller-supplied
+	 * {@code response_format} (e.g. the verdict-only batch-grounding schema). A {@code null}
+	 * {@code responseFormat} falls back to the default chart-answer schema.
+	 */
+	String buildRequestBody(String systemPrompt, String userMessage, String modelName,
+			boolean stream, ObjectNode responseFormat) {
 		ObjectNode root = MAPPER.createObjectNode();
 		root.put("model", modelName);
 		// Anthropic's compat endpoint rejects temperature/top_p on Opus 4.7; top_k=1 is the only greedy-decoding lever it still accepts.
@@ -168,7 +184,8 @@ public class RemoteLlmEngine implements LlmEngine {
 			root.set("stream_options", streamOptions);
 		}
 
-		root.set("response_format", ChartAnswerResponseFormat.build(MAPPER));
+		root.set("response_format",
+				responseFormat != null ? responseFormat : ChartAnswerResponseFormat.build(MAPPER));
 		root.set("messages", ChatMessages.systemAndUser(MAPPER, systemPrompt, userMessage));
 
 		try {

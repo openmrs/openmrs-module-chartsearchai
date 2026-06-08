@@ -11,11 +11,16 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.junit.jupiter.api.Test;
 
@@ -407,6 +412,132 @@ public class LlmProviderTest {
 		assertTrue(result.getAnswer().startsWith("On 2026-01-1 the patient had encounter [0]"),
 				"should recover the answer prefix from a truncated JSON, got: "
 						+ result.getAnswer().substring(0, Math.min(80, result.getAnswer().length())));
+	}
+
+	// ---- batch entailment verdict parsing (Tier-2 grounding, one call for many citations) ----
+
+	@Test
+	public void parseBatchVerdicts_readsYesNoArrayInOrder() {
+		assertEquals(Arrays.asList(Boolean.TRUE, Boolean.FALSE, Boolean.TRUE),
+				LlmProvider.parseBatchVerdicts("{\"verdicts\": [\"YES\", \"NO\", \"YES\"]}", 3));
+	}
+
+	@Test
+	public void parseBatchVerdicts_nullOrBlankYieldsEmptyList() {
+		assertTrue(LlmProvider.parseBatchVerdicts(null, 3).isEmpty());
+		assertTrue(LlmProvider.parseBatchVerdicts("   ", 3).isEmpty());
+	}
+
+	@Test
+	public void parseBatchVerdicts_envelopeFreeReplyDegradesToEmpty() {
+		// A reply that is not the {"verdicts":[...]} envelope (e.g. an engine that ignored the
+		// custom schema and used chart_answer) must yield an empty list so the caller falls back to
+		// the Tier-1 verdict instead of misreading a verdict from the wrong field.
+		assertTrue(LlmProvider.parseBatchVerdicts(
+				"{\"reasoning\": \"x\", \"answer\": \"YES\", \"citations\": []}", 1).isEmpty());
+		assertTrue(LlmProvider.parseBatchVerdicts("not json at all", 1).isEmpty());
+	}
+
+	@Test
+	public void parseBatchVerdicts_unrecognisedElementBecomesNull() {
+		// Defensive: an element that is neither YES nor NO is undecidable (null), not a guess —
+		// grounding then keeps the Tier-1 verdict for that citation.
+		java.util.List<Boolean> v = LlmProvider.parseBatchVerdicts("{\"verdicts\": [\"YES\", \"MAYBE\"]}", 2);
+		assertEquals(2, v.size());
+		assertEquals(Boolean.TRUE, v.get(0));
+		assertNull(v.get(1));
+	}
+
+	/** Minimal {@link LlmEngine} that echoes a canned response body, so {@code entailsBatch}'s
+	 *  numbering / blank-skip / position-mapping / parse wiring can be exercised without a real
+	 *  model or an OpenMRS context. */
+	private static class StubEngine implements LlmEngine {
+
+		private final String content;
+
+		StubEngine(String content) {
+			this.content = content;
+		}
+
+		@Override
+		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds) {
+			return new InferenceResult(content, 0, 0);
+		}
+
+		@Override
+		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+				ObjectNode responseFormat) {
+			return new InferenceResult(content, 0, 0);
+		}
+
+		@Override
+		public InferenceResult inferStreaming(String systemPrompt, String userMessage, int timeoutSeconds,
+				Consumer<String> tokenConsumer) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public void warmup(String systemPrompt, String userMessage, int timeoutSeconds) {
+		}
+
+		@Override
+		public void close() {
+		}
+
+		@Override
+		public void shutdown() {
+		}
+	}
+
+	@Test
+	public void entailsBatch_mapsVerdictsToInputPositionsAndSkipsBlankPairs() {
+		// entailsBatch numbers ONLY the checkable pairs (1..k) in the prompt, then maps the model's
+		// k verdicts back to the ORIGINAL input positions. A blank pair stays null and must not
+		// shift the others — an off-by-one here would assign one citation's verdict to another (a
+		// silent grounding error). Stub the engine to echo a fixed verdicts array.
+		LlmProvider provider = new LlmProvider() {
+
+			@Override
+			LlmEngine getActiveEngine() {
+				return new StubEngine("{\"verdicts\": [\"NO\", \"YES\"]}");
+			}
+
+			@Override
+			protected int getTimeoutSeconds() {
+				return 30;
+			}
+		};
+		// Middle pair has a blank source -> only positions 0 and 2 are checked -> verdicts [NO, YES].
+		List<Boolean> out = provider.entailsBatch(
+				Arrays.asList("record A", "   ", "record C"),
+				Arrays.asList("claim A", "claim B", "claim C"));
+		assertEquals(3, out.size());
+		assertEquals(Boolean.FALSE, out.get(0), "first checkable pair -> NO");
+		assertNull(out.get(1), "blank pair -> not checked -> null verdict");
+		assertEquals(Boolean.TRUE, out.get(2), "second checkable pair -> YES (not shifted by the blank)");
+	}
+
+	@Test
+	public void entailsBatch_rejectsMismatchedInputLengths() {
+		assertThrows(IllegalArgumentException.class,
+				() -> new LlmProvider().entailsBatch(Arrays.asList("a"), Arrays.asList("x", "y")));
+	}
+
+	@Test
+	public void entailsBatch_makesNoEngineCallWhenNoPairIsCheckable() {
+		// Every pair blank -> returns all-null WITHOUT touching the engine (getActiveEngine throws
+		// if called), so a degenerate answer never issues a wasted LLM round-trip.
+		LlmProvider provider = new LlmProvider() {
+
+			@Override
+			LlmEngine getActiveEngine() {
+				throw new AssertionError("entailsBatch must not call the engine when nothing is checkable");
+			}
+		};
+		List<Boolean> out = provider.entailsBatch(Arrays.asList("", "  "), Arrays.asList("", "x"));
+		assertEquals(2, out.size());
+		assertNull(out.get(0));
+		assertNull(out.get(1));
 	}
 
 }

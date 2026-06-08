@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -81,6 +82,13 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 	@Override
 	public ChartAnswer searchStreaming(Patient patient, String question,
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, refs -> { });
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			Consumer<List<RecordReference>> citationsConsumer) {
 		int ttlMinutes = getCacheTtlMinutes();
 
 		if (ttlMinutes > 0) {
@@ -89,18 +97,22 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 			if (cached != null) {
 				log.debug("Cache hit for patient [id={}] (streaming)", patient.getPatientId());
 				// Cache hit: the answer is returned instantly with no LLM call, so there is no
-				// live reasoning to stream — only replay the cached answer.
+				// live reasoning to stream — only replay the cached answer. Its references are
+				// already grounded, so also surface them on the citations channel for protocol
+				// parity with the live path.
 				tokenConsumer.accept(cached.getAnswer());
+				citationsConsumer.accept(cached.getReferences());
 				return cached;
 			}
 
 			ChartAnswer answer = llmService.searchStreaming(patient, question, tokenConsumer,
-					reasoningConsumer);
+					reasoningConsumer, citationsConsumer);
 			putCache(cacheKey, answer);
 			return answer;
 		}
 
-		return llmService.searchStreaming(patient, question, tokenConsumer, reasoningConsumer);
+		return llmService.searchStreaming(patient, question, tokenConsumer, reasoningConsumer,
+				citationsConsumer);
 	}
 
 	@Override

@@ -338,10 +338,11 @@ public class ChartSearchAiConstants {
 	public static final boolean DEFAULT_GROUNDING_ENTAILMENT_ENABLED = false;
 
 	/**
-	 * Upper bound on Tier-2 entailment LLM calls per answer, so a heavily-cited
-	 * answer cannot trigger an unbounded number of round-trips. References
-	 * beyond this many keep their Tier-1 verdict; the verifier logs once when
-	 * the cap is hit (no silent truncation).
+	 * Upper bound on the number of citations Tier-2 entailment verifies per answer (i.e. the batch
+	 * size), so a heavily-cited answer cannot make the single batched entailment prompt grow without
+	 * bound. References beyond this many keep their Tier-1 verdict; the verifier logs once when the
+	 * cap is hit (no silent truncation). Tier-2 issues one batched LLM call per answer regardless of
+	 * how many citations it carries.
 	 */
 	public static final int GROUNDING_ENTAILMENT_MAX_CHECKS = 16;
 

@@ -362,15 +362,20 @@ public class ChartSearchAiRestController {
 		try {
 			long startTime = System.currentTimeMillis();
 
-			// Two channels: "token" carries the answer; "thinking" carries the model's reasoning
-			// (chain-of-thought), which is emitted first so the UI can show live progress and the
-			// rationale instead of a dead spinner. The frontend must render "thinking" distinctly
-			// (e.g. a collapsible panel), never as the answer. Both unwind on client disconnect via
-			// writeSseEventOrThrow.
+			// Three channels: "token" carries the answer; "thinking" carries the model's reasoning
+			// (chain-of-thought), emitted first so the UI can show live progress and the rationale
+			// instead of a dead spinner; "references" carries the answer's citations the moment the
+			// answer is done — BEFORE the grounding pass — so the UI can render clickable citations
+			// immediately and not wait on Tier-2 verification. The final "done" event re-sends the
+			// same references with their grounding verdicts attached. The frontend must render
+			// "thinking" distinctly (e.g. a collapsible panel), never as the answer; until "done"
+			// arrives it must show "references" citations as unverified. All unwind on client
+			// disconnect via writeSseEventOrThrow.
 			ChartAnswer chartAnswer = chartSearchService.searchStreaming(
 					patient, sanitizedQuestion,
 					token -> writeSseEventOrThrow(out, "token", token),
-					reasoning -> writeSseEventOrThrow(out, "thinking", reasoning));
+					reasoning -> writeSseEventOrThrow(out, "thinking", reasoning),
+					citations -> sendReferencesEvent(out, citations));
 
 			long responseTimeMs = System.currentTimeMillis() - startTime;
 
@@ -396,19 +401,7 @@ public class ChartSearchAiRestController {
 			doneData.put("answer", chartAnswer.getAnswer());
 			doneData.put("disclaimer", DISCLAIMER);
 
-			List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
-			for (RecordReference ref : chartAnswer.getReferences()) {
-				Map<String, Object> refMap = new LinkedHashMap<String, Object>();
-				refMap.put("index", ref.getIndex());
-				refMap.put("resourceType", ref.getResourceType());
-				refMap.put("resourceUuid", ref.getResourceUuid());
-				refMap.put("date", formatDate(ref.getDate()));
-				// null when grounding is disabled or could not run — clients must
-				// render null as "unverified", never as "verified".
-				refMap.put("grounded", ref.getGrounded());
-				refs.add(refMap);
-			}
-			doneData.put("references", refs);
+			doneData.put("references", serializeReferences(chartAnswer.getReferences()));
 			if (auditLog.getAuditLogId() != null) {
 				doneData.put("questionId", String.valueOf(auditLog.getAuditLogId()));
 			}
@@ -728,6 +721,47 @@ public class ChartSearchAiRestController {
 			return "Question contains disallowed content";
 		}
 		return null;
+	}
+
+	/**
+	 * Serializes references to the SSE wire shape shared by the early {@code references} event
+	 * (grounding verdicts not yet attached) and the final {@code done} event (grounded).
+	 * {@code grounded} is null when grounding is disabled or could not run — clients must render
+	 * null as "unverified", never as "verified".
+	 */
+	private List<Map<String, Object>> serializeReferences(List<RecordReference> references) {
+		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
+		for (RecordReference ref : references) {
+			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
+			refMap.put("index", ref.getIndex());
+			refMap.put("resourceType", ref.getResourceType());
+			refMap.put("resourceUuid", ref.getResourceUuid());
+			refMap.put("date", formatDate(ref.getDate()));
+			refMap.put("grounded", ref.getGrounded());
+			refs.add(refMap);
+		}
+		return refs;
+	}
+
+	/**
+	 * Emits the {@code references} SSE event carrying the answer's citations before the grounding
+	 * pass completes, so the UI can render clickable citations without waiting on Tier-2
+	 * verification. A serialization failure is non-fatal — the final {@code done} event re-sends the
+	 * references with verdicts — but a client disconnect during the write unwinds the stream like the
+	 * other channels (via {@link #writeSseEventOrThrow}).
+	 */
+	private void sendReferencesEvent(OutputStream out, List<RecordReference> references) {
+		String json;
+		try {
+			Map<String, Object> data = new HashMap<String, Object>();
+			data.put("references", serializeReferences(references));
+			json = new ObjectMapper().writeValueAsString(data);
+		}
+		catch (IOException e) {
+			log.warn("Could not serialize early references event; the final done event still carries them", e);
+			return;
+		}
+		writeSseEventOrThrow(out, "references", json);
 	}
 
 	private void writeSseEvent(OutputStream out, String event, String data) throws IOException {

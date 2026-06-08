@@ -139,11 +139,18 @@ public interface ChartSearchService {
 
 		private final Date date;
 
+		private final Boolean grounded;
+
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date) {
+			this(index, resourceType, resourceUuid, date, null);
+		}
+
+		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
 			this.date = date;
+			this.grounded = grounded;
 		}
 
 		public int getIndex() {
@@ -160,6 +167,26 @@ public interface ChartSearchService {
 
 		public Date getDate() {
 			return date;
+		}
+
+		/**
+		 * Whether the cited record was found to actually support the answer
+		 * sentence(s) that cite it. {@code TRUE}/{@code FALSE} when grounding
+		 * verification ran (see {@code chartsearchai.grounding.enabled});
+		 * {@code null} when verification was disabled or could not run for this
+		 * reference (e.g. the record carried no text to compare against). A
+		 * {@code null} verdict must be rendered as "unverified", never as
+		 * "verified".
+		 */
+		public Boolean getGrounded() {
+			return grounded;
+		}
+
+		/**
+		 * @return a copy of this reference carrying the given grounding verdict
+		 */
+		public RecordReference withGrounded(Boolean verdict) {
+			return new RecordReference(index, resourceType, resourceUuid, date, verdict);
 		}
 	}
 }

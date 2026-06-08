@@ -220,6 +220,9 @@ public class ChartSearchAiRestController {
 			refMap.put("resourceType", ref.getResourceType());
 			refMap.put("resourceUuid", ref.getResourceUuid());
 			refMap.put("date", formatDate(ref.getDate()));
+			// null when grounding is disabled or could not run — clients must
+			// render null as "unverified", never as "verified".
+			refMap.put("grounded", ref.getGrounded());
 			refs.add(refMap);
 		}
 		response.put("references", refs);
@@ -402,6 +405,9 @@ public class ChartSearchAiRestController {
 				refMap.put("resourceType", ref.getResourceType());
 				refMap.put("resourceUuid", ref.getResourceUuid());
 				refMap.put("date", formatDate(ref.getDate()));
+				// null when grounding is disabled or could not run — clients must
+				// render null as "unverified", never as "verified".
+				refMap.put("grounded", ref.getGrounded());
 				refs.add(refMap);
 			}
 			doneData.put("references", refs);

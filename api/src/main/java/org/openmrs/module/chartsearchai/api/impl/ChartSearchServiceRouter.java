@@ -99,25 +99,32 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		llmService.warmup(patient);
 	}
 
+	/**
+	 * Test seam: resolves a global property. Overridable so {@link #buildCacheKey} can be unit-tested
+	 * (which GPs are folded into the key) without standing up an OpenMRS context.
+	 */
+	protected String gp(String property, String defaultValue) {
+		return Context.getAdministrationService().getGlobalProperty(property, defaultValue);
+	}
+
 	protected String buildCacheKey(Patient patient, String question) {
-		String preFilter = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
-		String pipeline = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_RETRIEVAL_PIPELINE,
-						ChartSearchAiConstants.PIPELINE_EMBEDDING);
-		String topK = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_TOP_K, "");
-		String similarityRatio = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_SIMILARITY_RATIO, "");
-		String keywordWeight = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_KEYWORD_WEIGHT, "");
-		String scoreGapMultiplier = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_SCORE_GAP_MULTIPLIER, "");
-		String minScoreGap = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_MIN_SCORE_GAP, "");
-		String gapValidationCosine = Context.getAdministrationService()
-				.getGlobalProperty(
-						ChartSearchAiConstants.GP_EMBEDDING_GAP_VALIDATION_COSINE_THRESHOLD, "");
+		String preFilter = gp(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
+		String pipeline = gp(ChartSearchAiConstants.GP_RETRIEVAL_PIPELINE,
+				ChartSearchAiConstants.PIPELINE_EMBEDDING);
+		String topK = gp(ChartSearchAiConstants.GP_EMBEDDING_TOP_K, "");
+		String similarityRatio = gp(ChartSearchAiConstants.GP_EMBEDDING_SIMILARITY_RATIO, "");
+		String keywordWeight = gp(ChartSearchAiConstants.GP_EMBEDDING_KEYWORD_WEIGHT, "");
+		String scoreGapMultiplier = gp(ChartSearchAiConstants.GP_EMBEDDING_SCORE_GAP_MULTIPLIER, "");
+		String minScoreGap = gp(ChartSearchAiConstants.GP_EMBEDDING_MIN_SCORE_GAP, "");
+		String gapValidationCosine = gp(
+				ChartSearchAiConstants.GP_EMBEDDING_GAP_VALIDATION_COSINE_THRESHOLD, "");
+		// Grounding GPs change the answer's per-citation `grounded` verdict, so
+		// they must be part of the key — otherwise toggling grounding (or its
+		// floor / entailment flag) while caching is on would serve answers whose
+		// verdicts no longer match the current configuration.
+		String grounding = gp(ChartSearchAiConstants.GP_GROUNDING_ENABLED, "");
+		String groundingMinCosine = gp(ChartSearchAiConstants.GP_GROUNDING_MIN_COSINE, "");
+		String groundingEntailment = gp(ChartSearchAiConstants.GP_GROUNDING_ENTAILMENT_ENABLED, "");
 		return patient.getUuid() + "::" + preFilter.trim().toLowerCase()
 				+ "::" + pipeline.trim().toLowerCase()
 				+ "::" + topK.trim()
@@ -126,6 +133,9 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 				+ "::" + scoreGapMultiplier.trim()
 				+ "::" + minScoreGap.trim()
 				+ "::" + gapValidationCosine.trim()
+				+ "::" + grounding.trim().toLowerCase()
+				+ "::" + groundingMinCosine.trim()
+				+ "::" + groundingEntailment.trim().toLowerCase()
 				+ "::" + question.trim().toLowerCase();
 	}
 

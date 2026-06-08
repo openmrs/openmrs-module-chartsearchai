@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.openmrs.Concept;
 import org.openmrs.ConceptSet;
@@ -38,6 +39,14 @@ import org.slf4j.LoggerFactory;
 public class ChartSearchAiUtils {
 
 	private static final Logger log = LoggerFactory.getLogger(ChartSearchAiUtils.class);
+
+	/**
+	 * Matches an inline {@code [N]} citation marker in LLM answer prose. The
+	 * single source of truth for citation-marker parsing, shared by citation
+	 * extraction ({@code LlmInferenceService}) and grounding
+	 * ({@code CitationGroundingVerifier}) so the two cannot drift apart.
+	 */
+	public static final Pattern INLINE_CITATION = Pattern.compile("\\[(\\d{1,9})\\]");
 
 	/**
 	 * Builds a composite key from a resource type and resource UUID.
@@ -476,6 +485,71 @@ public class ChartSearchAiUtils {
 		String value = org.openmrs.api.context.Context.getAdministrationService()
 				.getGlobalProperty(GP_QUERYSTORE_ENABLED, "false");
 		return "true".equalsIgnoreCase(value.trim());
+	}
+
+	/**
+	 * @return true when post-answer citation grounding is enabled via
+	 *         {@link ChartSearchAiConstants#GP_GROUNDING_ENABLED}.
+	 *         Fails safe to {@code false} when no admin service is available.
+	 */
+	public static boolean isGroundingEnabled() {
+		try {
+			String value = org.openmrs.api.context.Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_GROUNDING_ENABLED,
+							String.valueOf(ChartSearchAiConstants.DEFAULT_GROUNDING_ENABLED));
+			return "true".equalsIgnoreCase(value.trim());
+		}
+		catch (RuntimeException e) {
+			// No admin service (e.g. context not started) -> treat grounding as
+			// off rather than breaking the search path. Grounding is an opt-in
+			// annotation; its absence is always safe.
+			return false;
+		}
+	}
+
+	/**
+	 * @return true when the Tier-2 entailment confirmation is enabled via
+	 *         {@link ChartSearchAiConstants#GP_GROUNDING_ENTAILMENT_ENABLED}.
+	 *         Fails safe to {@code false} when no admin service is available.
+	 */
+	public static boolean isGroundingEntailmentEnabled() {
+		try {
+			String value = org.openmrs.api.context.Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_GROUNDING_ENTAILMENT_ENABLED,
+							String.valueOf(ChartSearchAiConstants.DEFAULT_GROUNDING_ENTAILMENT_ENABLED));
+			return "true".equalsIgnoreCase(value.trim());
+		}
+		catch (RuntimeException e) {
+			return false;
+		}
+	}
+
+	/**
+	 * @return the cosine floor below which a citation is treated as ungrounded,
+	 *         read from {@link ChartSearchAiConstants#GP_GROUNDING_MIN_COSINE},
+	 *         falling back to {@link ChartSearchAiConstants#DEFAULT_GROUNDING_MIN_COSINE}
+	 *         when unset or unparseable
+	 */
+	public static double getGroundingMinCosine() {
+		try {
+			String value = org.openmrs.api.context.Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_GROUNDING_MIN_COSINE, "");
+			if (value != null && !value.trim().isEmpty()) {
+				return Double.parseDouble(value.trim());
+			}
+		}
+		catch (NumberFormatException e) {
+			log.warn("Invalid {} value, using default {}",
+					ChartSearchAiConstants.GP_GROUNDING_MIN_COSINE,
+					ChartSearchAiConstants.DEFAULT_GROUNDING_MIN_COSINE);
+		}
+		catch (RuntimeException e) {
+			// No admin service (e.g. context not started) -> use default.
+			log.warn("Could not read {} (admin service unavailable); using default {}",
+					ChartSearchAiConstants.GP_GROUNDING_MIN_COSINE,
+					ChartSearchAiConstants.DEFAULT_GROUNDING_MIN_COSINE);
+		}
+		return ChartSearchAiConstants.DEFAULT_GROUNDING_MIN_COSINE;
 	}
 
 	private ChartSearchAiUtils() {

@@ -283,6 +283,55 @@ public class ChartSearchAiConstants {
 
 	public static final String GP_WARMUP_ENABLED = "chartsearchai.warmupEnabled";
 
+	/**
+	 * When {@code true}, every cited record is checked for grounding after the
+	 * LLM answers: the record's text must be semantically close enough to the
+	 * answer sentence(s) that cite it, otherwise the citation is flagged as
+	 * unverified. Index validation alone (does {@code [N]} map to a real
+	 * retrieved record?) cannot catch the dangerous case of a real record cited
+	 * for a claim it does not actually support. Default {@code false} so the
+	 * feature is opt-in. See {@code CitationGroundingVerifier}.
+	 */
+	public static final String GP_GROUNDING_ENABLED = "chartsearchai.grounding.enabled";
+
+	public static final boolean DEFAULT_GROUNDING_ENABLED = false;
+
+	/**
+	 * Minimum cosine similarity between a cited record's text and the answer
+	 * sentence that cites it for the citation to count as grounded. Tunable
+	 * because the right floor depends on the embedding model. The default is
+	 * deliberately permissive: this Tier-1 check is meant to catch grossly
+	 * off-topic citations (a record about blood pressure cited for a diabetes
+	 * claim), not subtle subject/negation flips ("patient has X" vs "mother had
+	 * X"), which embedding cosine cannot reliably separate and which need an
+	 * entailment/NLI second pass.
+	 */
+	public static final String GP_GROUNDING_MIN_COSINE = "chartsearchai.grounding.minCosine";
+
+	public static final double DEFAULT_GROUNDING_MIN_COSINE = 0.40;
+
+	/**
+	 * When {@code true} (and {@link #GP_GROUNDING_ENABLED} is also on), the
+	 * Tier-1 cosine verdict is confirmed by a Tier-2 entailment check: a short
+	 * yes/no LLM call asking whether the cited record actually supports the
+	 * answer sentence. This is what catches high-overlap-but-false citations
+	 * ("patient has X [5]" where record 5 says a relative had X, or the record
+	 * negates X) that cosine similarity cannot separate. Costs one extra LLM
+	 * call per cited reference, so it is a separate opt-in from the cheap
+	 * Tier-1 pass. Default {@code false}. See {@code CitationGroundingVerifier}.
+	 */
+	public static final String GP_GROUNDING_ENTAILMENT_ENABLED = "chartsearchai.grounding.entailment.enabled";
+
+	public static final boolean DEFAULT_GROUNDING_ENTAILMENT_ENABLED = false;
+
+	/**
+	 * Upper bound on Tier-2 entailment LLM calls per answer, so a heavily-cited
+	 * answer cannot trigger an unbounded number of round-trips. References
+	 * beyond this many keep their Tier-1 verdict; the verifier logs once when
+	 * the cap is hit (no silent truncation).
+	 */
+	public static final int GROUNDING_ENTAILMENT_MAX_CHECKS = 16;
+
 	// Resource type identifiers used in embeddings and citations
 	public static final String RESOURCE_TYPE_OBS = "obs";
 

@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -60,6 +59,14 @@ public class LlmInferenceService implements ChartSearchService {
 
 	@Autowired
 	private ChartBuildingStrategy chartBuildingStrategy;
+
+	@Autowired
+	private CitationGroundingVerifier citationGroundingVerifier;
+
+	/** Test seam: production wires {@link CitationGroundingVerifier} via {@link Autowired}. */
+	void setCitationGroundingVerifier(CitationGroundingVerifier citationGroundingVerifier) {
+		this.citationGroundingVerifier = citationGroundingVerifier;
+	}
 
 	/** Test seam: production wires {@link LlmProvider} via {@link Autowired}.
 	 *  Package-private to allow {@code LlmInferenceServiceWarmupIntegrationTest} to
@@ -126,9 +133,11 @@ public class LlmInferenceService implements ChartSearchService {
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
 
-			ChartAnswer answer = new ChartAnswer(response.getAnswer(),
+			List<RecordReference> references = groundReferences(response.getAnswer(),
 					extractCitedReferences(response.getAnswer(), response.getCitations(),
 							chart.getMappings()),
+					chart.getMappings());
+			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens());
 			outcome = "ok";
@@ -238,9 +247,11 @@ public class LlmInferenceService implements ChartSearchService {
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
 
-			ChartAnswer answer = new ChartAnswer(response.getAnswer(),
+			List<RecordReference> references = groundReferences(response.getAnswer(),
 					extractCitedReferences(response.getAnswer(), response.getCitations(),
 							chart.getMappings()),
+					chart.getMappings());
+			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens());
 			outcome = "ok";
@@ -269,8 +280,20 @@ public class LlmInferenceService implements ChartSearchService {
 		return !"false".equalsIgnoreCase(value.trim());
 	}
 
-	/** Matches an inline {@code [N]} citation marker in the answer prose. */
-	private static final Pattern INLINE_CITATION = Pattern.compile("\\[(\\d{1,9})\\]");
+	/**
+	 * Annotates each index-validated citation with a grounding verdict when
+	 * {@code chartsearchai.grounding.enabled} is set, otherwise returns the
+	 * references unchanged. Annotate-only: it never drops or reorders
+	 * references, so disabling the flag (or a verifier failure, which degrades
+	 * to an unverified verdict) leaves today's behavior intact.
+	 */
+	private List<RecordReference> groundReferences(String answer, List<RecordReference> references,
+			List<RecordMapping> mappings) {
+		if (references == null || references.isEmpty() || !ChartSearchAiUtils.isGroundingEnabled()) {
+			return references;
+		}
+		return citationGroundingVerifier.verify(answer, references, mappings);
+	}
 
 	static List<RecordReference> extractCitedReferences(List<Integer> citations,
 			List<RecordMapping> mappings) {
@@ -302,7 +325,7 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 		}
 		if (answer != null) {
-			Matcher marker = INLINE_CITATION.matcher(answer);
+			Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(answer);
 			while (marker.find()) {
 				seen.add(Integer.valueOf(marker.group(1)));
 			}

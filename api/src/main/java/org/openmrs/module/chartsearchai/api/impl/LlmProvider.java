@@ -335,6 +335,106 @@ public class LlmProvider {
 		}
 	}
 
+	static final String ENTAILMENT_SYSTEM_PROMPT = "You are a strict clinical fact-checker. "
+			+ "You are given a SOURCE record and a STATEMENT. The SOURCE supports the STATEMENT only "
+			+ "if it explicitly states it. It does NOT support the STATEMENT when the STATEMENT is "
+			+ "about a different person (e.g. a relative or family history), is negated or denied by "
+			+ "the SOURCE, or is simply not stated. Do not use any outside knowledge. "
+			// The shared response schema (ChartAnswerResponseFormat) makes the model emit
+			// {"reasoning": ..., "answer": ..., "citations": ...} — reasoning first. So tell it to
+			// reason briefly, then put the one-word verdict in the answer field; parseEntailmentVerdict
+			// reads YES/NO from that answer field, not from the reasoning. Citations stay empty.
+			+ "Briefly reason about whether the SOURCE supports the STATEMENT, then put your verdict "
+			+ "— the single word YES or NO — in the \"answer\" field, with an empty \"citations\" array.";
+
+	/**
+	 * Tier-2 grounding check: asks the active LLM whether {@code source} actually
+	 * supports {@code statement}. Used by {@code CitationGroundingVerifier} to
+	 * confirm a citation that cosine similarity alone cannot judge (high lexical
+	 * overlap but a subject/polarity flip, e.g. "patient has X" vs "mother had X").
+	 *
+	 * @param source the cited record's text
+	 * @param statement the answer sentence that cites it
+	 * @return {@code TRUE}/{@code FALSE} when the model answers YES/NO,
+	 *         {@code null} when the answer is empty or unparseable (caller should
+	 *         then fall back to the Tier-1 verdict rather than guess)
+	 */
+	public Boolean entails(String source, String statement) {
+		if (source == null || source.trim().isEmpty() || statement == null || statement.trim().isEmpty()) {
+			return null;
+		}
+		String userMessage = "SOURCE: " + source.trim() + "\nSTATEMENT: " + statement.trim()
+				+ "\nDoes the SOURCE support the STATEMENT? Answer YES or NO.";
+		LlmEngine.InferenceResult result = getActiveEngine().infer(
+				ENTAILMENT_SYSTEM_PROMPT, userMessage, getTimeoutSeconds());
+		return parseEntailmentVerdict(result == null ? null : result.getText());
+	}
+
+	/**
+	 * Reads the YES/NO entailment verdict out of the LLM's raw reply. The shared response schema
+	 * ({@link ChartAnswerResponseFormat}) emits a leading {@code "reasoning"} field before
+	 * {@code "answer"}, and a fact-checker's reasoning routinely contains words like "no" ("no
+	 * explicit mention…") — so scanning the RAW reply for the first YES/NO token (what
+	 * {@link #parseYesNo} does) would read the verdict out of the reasoning and flip it. Parse the
+	 * structured {@code answer} field first ({@link #extractResponse} ignores reasoning), then read
+	 * the verdict from that. Degrades safely: a bare, envelope-free reply ("YES") falls through
+	 * extractResponse unchanged, and a null/empty reply yields {@code null}.
+	 */
+	/** Matches a standalone YES or NO verdict token (word-boundary anchored). */
+	private static final java.util.regex.Pattern VERDICT_TOKEN =
+			java.util.regex.Pattern.compile("\\b(YES|NO)\\b");
+
+	static Boolean parseEntailmentVerdict(String rawLlmText) {
+		if (rawLlmText == null) {
+			return null;
+		}
+		String answer = extractResponse(rawLlmText).getAnswer();
+		// A compliant fact-check reply is the single word YES or NO in the answer
+		// field. If the model wrote a verbose answer containing BOTH verdict words
+		// (e.g. "Yes, but there is no explicit confirmation"), positional parsing
+		// could pick the wrong one and silently flip a citation's grounded verdict
+		// — so treat it as undecidable and let grounding fall back to its Tier-1
+		// verdict rather than guess.
+		if (answer != null && hasBothVerdicts(answer)) {
+			return null;
+		}
+		return parseYesNo(answer);
+	}
+
+	/** True when {@code text} contains both a standalone YES and a standalone NO token. */
+	private static boolean hasBothVerdicts(String text) {
+		boolean hasYes = false;
+		boolean hasNo = false;
+		java.util.regex.Matcher m = VERDICT_TOKEN.matcher(text.toUpperCase(java.util.Locale.ROOT));
+		while (m.find()) {
+			if ("YES".equals(m.group(1))) {
+				hasYes = true;
+			} else {
+				hasNo = true;
+			}
+		}
+		return hasYes && hasNo;
+	}
+
+	/**
+	 * Parses a YES/NO entailment reply. Tolerant of surrounding whitespace,
+	 * punctuation, casing, and a leading JSON-ish or markdown wrapper — looks
+	 * for the first standalone YES or NO token. Returns {@code null} when
+	 * neither is found. Callers that must not misread a verbose both-words reply
+	 * should screen with {@link #hasBothVerdicts} first (see
+	 * {@link #parseEntailmentVerdict}).
+	 */
+	static Boolean parseYesNo(String text) {
+		if (text == null) {
+			return null;
+		}
+		java.util.regex.Matcher m = VERDICT_TOKEN.matcher(text.toUpperCase(java.util.Locale.ROOT));
+		if (m.find()) {
+			return Boolean.valueOf("YES".equals(m.group(1)));
+		}
+		return null;
+	}
+
 	/**
 	 * Pre-warm the LLM's prompt cache by sending the same prefix a real query
 	 * would, with an empty trailing question. See {@link #buildUserMessage} for

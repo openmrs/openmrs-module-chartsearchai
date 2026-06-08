@@ -87,7 +87,8 @@ public class PatientChartSerializer {
 		for (int i = 0; i < records.size(); i++) {
 			SerializedRecord record = records.get(i);
 			int index = i + 1;
-			mappings.add(new RecordMapping(index, record.getResourceType(), record.getResourceUuid(), record.getDate()));
+			mappings.add(new RecordMapping(index, record.getResourceType(), record.getResourceUuid(),
+					record.getDate(), record.getText()));
 
 			sb.append("[").append(index).append("] ");
 			if (record.getDate() != null) {
@@ -174,11 +175,24 @@ public class PatientChartSerializer {
 
 		private final Date date;
 
+		private final String text;
+
+		/**
+		 * Backward-compatible constructor that carries no source text. Mappings
+		 * built this way cannot be grounding-checked; the grounding verifier
+		 * treats a null/blank text as "cannot verify" and leaves the citation
+		 * unannotated.
+		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date) {
+			this(index, resourceType, resourceUuid, date, null);
+		}
+
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
 			this.date = date;
+			this.text = text;
 		}
 
 		public int getIndex() {
@@ -195,6 +209,16 @@ public class PatientChartSerializer {
 
 		public Date getDate() {
 			return date;
+		}
+
+		/**
+		 * The serialized record body the LLM saw for this index, used by the
+		 * citation grounding verifier to check that a cited record actually
+		 * supports the answer sentence(s) citing it. May be {@code null} when
+		 * the mapping was built without text.
+		 */
+		public String getText() {
+			return text;
 		}
 	}
 }

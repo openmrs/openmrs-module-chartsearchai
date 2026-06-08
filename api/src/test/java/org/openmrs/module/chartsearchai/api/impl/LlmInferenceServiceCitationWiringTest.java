@@ -124,7 +124,7 @@ public class LlmInferenceServiceCitationWiringTest {
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
-				String question, Consumer<String> tokenConsumer) {
+				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
 			return canned();
 		}
 	}

@@ -215,6 +215,24 @@
 		<description>Relative path, including the filename, within the OpenMRS application data directory to the WordPiece vocabulary file (vocab.txt) for the ONNX embedding model. Required when embedding pre-filtering is enabled (chartsearchai.embedding.preFilter is true (non-default)). Example: chartsearchai/vocab.txt (resolves to &lt;application-data-directory&gt;/chartsearchai/vocab.txt). Download vocab.txt from the same model repository as the ONNX model (e.g. https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2). Path traversal (e.g. "..") is not allowed.</description>
 	</globalProperty>
 
+	<globalProperty>
+		<property>chartsearchai.grounding.enabled</property>
+		<defaultValue>false</defaultValue>
+		<description>When true, every cited record is checked for grounding after the LLM answers: the record's text must be semantically close enough to the answer sentence(s) that cite it, otherwise the citation is flagged as unverified. Index validation alone (does [N] map to a real retrieved record?) cannot catch the dangerous case of a real record cited for a claim it does not actually support. Default: false (opt-in).</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.grounding.minCosine</property>
+		<defaultValue>0.40</defaultValue>
+		<description>Minimum cosine similarity between a cited record's text and the answer sentence that cites it for the citation to count as grounded. This Tier-1 check catches grossly off-topic citations (a blood-pressure record cited for a diabetes claim), not subtle subject/negation flips ("patient has X" vs "mother had X") — those need the Tier-2 entailment pass. The right floor depends on the embedding model: 0.40 suits a wide-spread model like all-MiniLM-L6-v2, but is far too low for e5 (the model querystore uses, which the verifier reuses when chartsearchai.querystore.enabled=true) — set it to ~0.82 on an e5/querystore deployment. Must be between 0 and 1. Default: 0.40.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.grounding.entailment.enabled</property>
+		<defaultValue>false</defaultValue>
+		<description>When true (and chartsearchai.grounding.enabled is also on), the Tier-1 cosine verdict is confirmed by a Tier-2 entailment check: a short yes/no LLM call asking whether the cited record actually supports the answer sentence. This catches high-overlap-but-false citations ("patient has X [5]" where record 5 says a relative had X, or the record negates X) that cosine similarity cannot separate. Costs one extra LLM call per cited reference (capped per answer), so it is a separate opt-in from the cheap Tier-1 pass. Default: false.</description>
+	</globalProperty>
+
 	<!-- AOP -->
 	<advice>
 		<point>org.openmrs.api.EncounterService</point>

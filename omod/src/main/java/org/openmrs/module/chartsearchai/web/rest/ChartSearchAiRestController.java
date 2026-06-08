@@ -359,34 +359,15 @@ public class ChartSearchAiRestController {
 		try {
 			long startTime = System.currentTimeMillis();
 
+			// Two channels: "token" carries the answer; "thinking" carries the model's reasoning
+			// (chain-of-thought), which is emitted first so the UI can show live progress and the
+			// rationale instead of a dead spinner. The frontend must render "thinking" distinctly
+			// (e.g. a collapsible panel), never as the answer. Both unwind on client disconnect via
+			// writeSseEventOrThrow.
 			ChartAnswer chartAnswer = chartSearchService.searchStreaming(
-					patient, sanitizedQuestion, new java.util.function.Consumer<String>() {
-						@Override
-						public void accept(String token) {
-							try {
-								writeSseEvent(out, "token", token);
-							}
-							catch (IOException e) {
-								log.debug("Client disconnected during streaming");
-								throw new RuntimeException("Client disconnected", e);
-							}
-						}
-					}, new java.util.function.Consumer<String>() {
-						// The model's reasoning (chain-of-thought) is emitted before the answer.
-						// Stream it on a separate "thinking" event so the UI can show live progress
-						// (and the rationale) instead of a dead spinner. It is NOT the answer and
-						// must be rendered distinctly (e.g. a collapsible "thinking" panel).
-						@Override
-						public void accept(String reasoning) {
-							try {
-								writeSseEvent(out, "thinking", reasoning);
-							}
-							catch (IOException e) {
-								log.debug("Client disconnected during streaming (reasoning)");
-								throw new RuntimeException("Client disconnected", e);
-							}
-						}
-					});
+					patient, sanitizedQuestion,
+					token -> writeSseEventOrThrow(out, "token", token),
+					reasoning -> writeSseEventOrThrow(out, "thinking", reasoning));
 
 			long responseTimeMs = System.currentTimeMillis() - startTime;
 
@@ -752,6 +733,21 @@ public class ChartSearchAiRestController {
 		sb.append('\n');
 		out.write(sb.toString().getBytes("UTF-8"));
 		out.flush();
+	}
+
+	/**
+	 * Writes an SSE event, converting a client-disconnect {@link IOException} into the
+	 * {@link RuntimeException} the streaming loop unwinds on. Shared by the answer ({@code token})
+	 * and reasoning ({@code thinking}) channels so both handle a mid-stream disconnect identically.
+	 */
+	private void writeSseEventOrThrow(OutputStream out, String event, String data) {
+		try {
+			writeSseEvent(out, event, data);
+		}
+		catch (IOException e) {
+			log.debug("Client disconnected during streaming ({})", event);
+			throw new RuntimeException("Client disconnected", e);
+		}
 	}
 
 	private void writeJsonError(HttpServletResponse response, int status, String message)

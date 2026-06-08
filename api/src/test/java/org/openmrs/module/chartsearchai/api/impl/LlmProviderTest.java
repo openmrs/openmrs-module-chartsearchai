@@ -172,6 +172,20 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void streamingConsumer_answerWordInReasoningMustNotLeakToAnswerChannel() {
+		// Adversarial: the reasoning value itself contains the word "answer". The answer channel
+		// must extract ONLY the real "answer" field — it must not latch onto the word inside the
+		// reasoning value (it can't: once in the reasoning value the scanner forwards content
+		// without re-matching keys, and only the quoted "answer": key triggers the answer channel).
+		String json = "{\"reasoning\": \"To answer this I checked record [89] for ear conditions.\", "
+				+ "\"answer\": \"Hearing Loss [89].\", \"citations\": [89]}";
+		String[] ra = streamSplit(json, 1);
+		assertEquals("To answer this I checked record [89] for ear conditions.", ra[0]);
+		assertEquals("Hearing Loss [89].", ra[1],
+				"the word 'answer' inside reasoning must not leak into or truncate the answer channel");
+	}
+
+	@Test
 	public void streamingConsumer_shouldNotLeakLeadingReasoningField() {
 		// The schema emits "reasoning" FIRST, before "answer". The streaming path (/search/stream)
 		// must forward only the answer value to the clinician — never the model's reasoning

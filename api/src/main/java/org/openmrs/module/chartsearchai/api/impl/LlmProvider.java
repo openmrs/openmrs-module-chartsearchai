@@ -163,29 +163,30 @@ public class LlmProvider {
 	}
 
 	/**
-	 * A streaming token consumer that buffers the raw JSON tokens from the LLM
-	 * and only forwards text content from inside the {@code "answer"} value.
+	 * A streaming token consumer that buffers the raw JSON tokens from the LLM and forwards the
+	 * decoded text content of <em>one</em> configured string field — its {@link #key} — to its
+	 * delegate, character by character as it arrives.
 	 *
 	 * <p>The LLM is prompted to produce
-	 * {@code {"reasoning": "...", "answer": "...", "citations": [...]}}. The {@code reasoning}
-	 * field is emitted FIRST (the model's chain-of-thought) and must NOT reach the client: the
-	 * state machine scans for the {@code "answer"} key and forwards only its value, so the
-	 * leading reasoning tokens are silently consumed. (Trade-off: the visible answer starts
-	 * streaming only after reasoning finishes generating.) This consumer processes each
-	 * character through a simple state machine and only forwards characters that belong to the
-	 * answer string value.</p>
+	 * {@code {"reasoning": "...", "answer": "...", "citations": [...]}}. Two instances split this
+	 * single stream onto two channels: one with {@code key="answer"} feeds the clinician-facing
+	 * answer, and one with {@code key="reasoning"} feeds the live "thinking" indicator (the model's
+	 * chain-of-thought, emitted first). An instance scans for its key, forwards only that field's
+	 * value, and ignores everything else (other fields, punctuation, the citations array). JSON
+	 * string escapes (including {@code \\uXXXX}, possibly split across chunks) are decoded so the
+	 * streamed text matches the non-streaming path.</p>
 	 */
 	static class AnswerExtractingConsumer implements Consumer<String> {
 
 		private final Consumer<String> delegate;
 
 		/**
-		 * Character-level state machine:
-		 * BEFORE_KEY   — scanning for the start of {@code "answer"}
-		 * IN_KEY       — matching characters of {@code "answer"}
+		 * Character-level state machine ({@link #key} is the target field, e.g. {@code "answer"}):
+		 * BEFORE_KEY   — scanning for the start of {@link #key}
+		 * IN_KEY       — matching characters of {@link #key}
 		 * AFTER_KEY    — matched key, looking for {@code :}
 		 * AFTER_COLON  — found {@code :}, looking for opening {@code "}
-		 * IN_VALUE     — inside the answer string, forwarding content
+		 * IN_VALUE     — inside the field's string value, forwarding content
 		 * DONE         — found closing quote, ignoring remaining tokens
 		 */
 		private enum State { BEFORE_KEY, IN_KEY, AFTER_KEY, AFTER_COLON, IN_VALUE, DONE }
@@ -200,7 +201,7 @@ public class LlmProvider {
 		/** How many characters of {@link #key} we have matched so far. */
 		private int keyMatchPos;
 
-		/** Whether the next character in the answer value is escaped. */
+		/** Whether the next character in the field's value is escaped. */
 		private boolean escaped;
 
 		/** When > 0, we are partway through a {@code \\uXXXX} escape and this many hex digits
@@ -232,7 +233,7 @@ public class LlmProvider {
 				return;
 			}
 
-			// Process character by character until we enter the answer value
+			// Process character by character until we enter the field's value
 			for (int i = 0; i < token.length(); i++) {
 				char c = token.charAt(i);
 				switch (state) {

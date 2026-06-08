@@ -92,6 +92,60 @@ public class CitationGroundingVerifier {
 		this.llmProvider = llmProvider;
 	}
 
+	/** Embeds text to a vector — abstracts over which module's provider is used. */
+	interface TextEmbedder {
+
+		float[] embed(String text);
+	}
+
+	/**
+	 * Resolves the embedding provider for a grounding run. When querystore is the
+	 * retrieval backend ({@code chartsearchai.querystore.enabled=true}), grounding
+	 * reuses querystore's configured provider (the same e5/ONNX model that built
+	 * the index) so the verifier embeds with the same model as retrieval — and so
+	 * no separate chartsearchai embedding model has to be installed. Falls back to
+	 * chartsearchai's own {@link EmbeddingProvider} when querystore is absent,
+	 * disabled, or its provider can't be resolved. Never throws.
+	 *
+	 * <p>querystore is a {@code provided}-scope (optional) dependency, so its
+	 * {@code EmbeddingProvider} type may be absent at runtime — the
+	 * {@code LinkageError} catch covers {@code NoClassDefFoundError}, mirroring
+	 * {@code QueryStoreChartBuilder}'s guard.
+	 */
+	TextEmbedder resolveEmbedder() {
+		try {
+			if (ChartSearchAiUtils.isQueryStoreEnabled()) {
+				org.openmrs.module.querystore.embedding.EmbeddingProvider qs =
+						org.openmrs.api.context.Context.getRegisteredComponent(
+								"querystore.embedding.dispatcher",
+								org.openmrs.module.querystore.embedding.EmbeddingProvider.class);
+				if (qs != null) {
+					return qs::embed;
+				}
+			}
+		}
+		catch (RuntimeException | LinkageError e) {
+			log.warn("Grounding: querystore embedding provider unavailable ({}); "
+					+ "falling back to chartsearchai's own embedding model", e.toString());
+		}
+		return embeddingProvider == null ? null : embeddingProvider::embed;
+	}
+
+	/** Accumulates embedding failures across a run so they are logged once, not per citation. */
+	private static final class GroundingStats {
+
+		int embedFailures;
+
+		String firstError;
+
+		void recordFailure(Throwable t) {
+			embedFailures++;
+			if (firstError == null) {
+				firstError = t.getClass().getSimpleName() + ": " + t.getMessage();
+			}
+		}
+	}
+
 	/**
 	 * Returns a copy of {@code references} with each entry's grounding verdict
 	 * set. A reference is grounded when its record's text is at least
@@ -141,11 +195,13 @@ public class CitationGroundingVerifier {
 		}
 
 		List<Sentence> sentences = splitIntoCitedSentences(answer);
+		TextEmbedder embedder = resolveEmbedder();
 
 		// Embedding caches: each record and each sentence is embedded at most
 		// once per call, even when an index is cited by several sentences.
 		Map<Integer, float[]> recordVectors = new HashMap<Integer, float[]>();
 		Map<Integer, float[]> sentenceVectors = new HashMap<Integer, float[]>();
+		GroundingStats stats = new GroundingStats();
 
 		int entailmentBudget = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
 		int cappedCount = 0;
@@ -153,7 +209,7 @@ public class CitationGroundingVerifier {
 		List<RecordReference> annotated = new ArrayList<RecordReference>(references.size());
 		for (RecordReference reference : references) {
 			Tier1Result tier1 = verdictTier1(reference.getIndex(), textByIndex, sentences,
-					floor, recordVectors, sentenceVectors);
+					floor, recordVectors, sentenceVectors, embedder, stats);
 			Boolean verdict = tier1.verdict;
 
 			// Tier-2: only meaningful when Tier-1 reached a definite verdict and
@@ -177,6 +233,16 @@ public class CitationGroundingVerifier {
 			log.info("Tier-2 entailment cap ({}) reached; {} citation(s) kept their Tier-1 verdict only",
 					ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS, cappedCount);
 		}
+		// One summary line instead of a per-citation stacktrace: the usual cause is a
+		// misconfigured/absent embedding model, which would otherwise spam the log once
+		// per citation and bury the root cause.
+		if (stats.embedFailures > 0) {
+			log.warn("Citation grounding: could not verify {} of {} citation(s) — embedding provider "
+					+ "failed ({}); those citations are left unverified. If querystore is the backend, "
+					+ "ensure its embedding model is configured; otherwise set "
+					+ "chartsearchai.embedding.modelFilePath.",
+					stats.embedFailures, references.size(), stats.firstError);
+		}
 		return annotated;
 	}
 
@@ -187,13 +253,14 @@ public class CitationGroundingVerifier {
 	 */
 	private Tier1Result verdictTier1(int index, Map<Integer, String> textByIndex,
 			List<Sentence> sentences, double floor,
-			Map<Integer, float[]> recordVectors, Map<Integer, float[]> sentenceVectors) {
+			Map<Integer, float[]> recordVectors, Map<Integer, float[]> sentenceVectors,
+			TextEmbedder embedder, GroundingStats stats) {
 		String recordText = textByIndex.get(index);
 		if (recordText == null || recordText.trim().isEmpty()) {
 			return new Tier1Result(null, null, null); // nothing to compare against
 		}
 		try {
-			float[] recordVector = embedRecord(index, recordText, recordVectors);
+			float[] recordVector = embedRecord(index, recordText, recordVectors, embedder);
 
 			// Track whether ANY comparison happened separately from the best
 			// score: a negative cosine is the strongest "not grounded" signal,
@@ -206,7 +273,7 @@ public class CitationGroundingVerifier {
 				if (sentences.get(s).cites(index)) {
 					anyInlineCite = true;
 					compared = true;
-					double sim = similarity(recordVector, s, sentences, sentenceVectors);
+					double sim = similarity(recordVector, s, sentences, sentenceVectors, embedder);
 					if (sim > best) {
 						best = sim;
 						bestSentence = sentences.get(s).text;
@@ -220,7 +287,7 @@ public class CitationGroundingVerifier {
 			if (!anyInlineCite) {
 				for (int s = 0; s < sentences.size(); s++) {
 					compared = true;
-					double sim = similarity(recordVector, s, sentences, sentenceVectors);
+					double sim = similarity(recordVector, s, sentences, sentenceVectors, embedder);
 					if (sim > best) {
 						best = sim;
 						bestSentence = sentences.get(s).text;
@@ -234,8 +301,9 @@ public class CitationGroundingVerifier {
 			return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText);
 		}
 		catch (RuntimeException e) {
-			// Never break the search path on a verification failure.
-			log.warn("Grounding check failed for citation [{}]; leaving unverified", index, e);
+			// Never break the search path on a verification failure; count it for the
+			// single summary log in verify() rather than spamming per citation.
+			stats.recordFailure(e);
 			return new Tier1Result(null, null, recordText);
 		}
 	}
@@ -278,19 +346,20 @@ public class CitationGroundingVerifier {
 	}
 
 	private double similarity(float[] recordVector, int sentenceIdx,
-			List<Sentence> sentences, Map<Integer, float[]> sentenceVectors) {
+			List<Sentence> sentences, Map<Integer, float[]> sentenceVectors, TextEmbedder embedder) {
 		float[] sentenceVector = sentenceVectors.get(sentenceIdx);
 		if (sentenceVector == null) {
-			sentenceVector = embeddingProvider.embed(sentences.get(sentenceIdx).text);
+			sentenceVector = embedder.embed(sentences.get(sentenceIdx).text);
 			sentenceVectors.put(sentenceIdx, sentenceVector);
 		}
 		return ChartSearchAiUtils.cosineSimilarity(recordVector, sentenceVector);
 	}
 
-	private float[] embedRecord(int index, String recordText, Map<Integer, float[]> recordVectors) {
+	private float[] embedRecord(int index, String recordText, Map<Integer, float[]> recordVectors,
+			TextEmbedder embedder) {
 		float[] vector = recordVectors.get(index);
 		if (vector == null) {
-			vector = embeddingProvider.embed(recordText);
+			vector = embedder.embed(recordText);
 			recordVectors.put(index, vector);
 		}
 		return vector;

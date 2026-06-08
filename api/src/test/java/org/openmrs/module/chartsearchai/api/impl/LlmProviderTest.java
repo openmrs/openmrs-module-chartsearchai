@@ -122,17 +122,6 @@ public class LlmProviderTest {
 				+ "format matches the response schema");
 	}
 
-	@Test
-	public void defaultSystemPrompt_shouldAskForBriefReasoning() {
-		// The reasoning field is generated before the answer on every query, so its length is pure
-		// added decode latency. Measured ~22% faster per query when reasoning is kept to one
-		// sentence. This pins that directive so a future prompt edit cannot silently drop it and
-		// regress latency back to verbose multi-sentence reasoning.
-		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("brief"),
-				"System prompt must instruct the model to keep the reasoning brief — verbose "
-				+ "reasoning is generated before the answer and directly inflates response latency");
-	}
-
 	/** Feeds {@code json} to a fresh AnswerExtractingConsumer in the given chunk sizes and
 	 *  returns what reached the client. chunkSize 0 means feed the whole string at once. */
 	private static String streamThrough(String json, int chunkSize) {

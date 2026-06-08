@@ -87,14 +87,22 @@ public class PatientChartSerializer {
 		for (int i = 0; i < records.size(); i++) {
 			SerializedRecord record = records.get(i);
 			int index = i + 1;
-			mappings.add(new RecordMapping(index, record.getResourceType(), record.getResourceUuid(),
-					record.getDate(), record.getText()));
-
-			sb.append("[").append(index).append("] ");
+			// The exact per-record content the LLM sees in the chart line (everything after
+			// the "[N] " index): the date parenthetical plus the synonym-stripped body. The
+			// grounding verifier compares cited records against this same string, so its view
+			// matches the model's — otherwise a cited date (which the model reads from the
+			// prefix) would look unsupported because the bare record body omits it.
+			StringBuilder rendered = new StringBuilder();
 			if (record.getDate() != null) {
-				sb.append("(").append(DateFormatUtil.formatDate(record.getDate())).append(") ");
+				rendered.append("(").append(DateFormatUtil.formatDate(record.getDate())).append(") ");
 			}
-			sb.append(ConceptNameUtil.stripSynonyms(record.getText())).append("\n");
+			rendered.append(ConceptNameUtil.stripSynonyms(record.getText()));
+			String renderedText = rendered.toString();
+
+			mappings.add(new RecordMapping(index, record.getResourceType(), record.getResourceUuid(),
+					record.getDate(), renderedText));
+
+			sb.append("[").append(index).append("] ").append(renderedText).append("\n");
 
 			if (focusUuids != null && focusUuids.contains(record.getResourceUuid())) {
 				focusIndices.add(index);
@@ -212,10 +220,12 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * The serialized record body the LLM saw for this index, used by the
-		 * citation grounding verifier to check that a cited record actually
-		 * supports the answer sentence(s) citing it. May be {@code null} when
-		 * the mapping was built without text.
+		 * The exact per-record content the LLM saw in the chart line for this
+		 * index — the date parenthetical (if any) plus the synonym-stripped body,
+		 * i.e. everything after the {@code "[N] "} prefix. The citation grounding
+		 * verifier compares cited records against this so its view matches the
+		 * model's (including the date the model may cite). May be {@code null}
+		 * when the mapping was built without text.
 		 */
 		public String getText() {
 			return text;

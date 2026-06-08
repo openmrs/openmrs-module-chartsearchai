@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.serializer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Date;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord;
+import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 
 /**
  * Pure unit tests for {@link PatientChartSerializer}. Patient is passed as
@@ -28,22 +30,28 @@ import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.Serialize
 public class PatientChartSerializerTest {
 
 	@Test
-	public void serialize_shouldCarryEachRecordsTextIntoItsMapping() {
-		// Pins the prerequisite the citation grounding verifier depends on: the
-		// RecordMapping must carry the source text so the verifier can check that
-		// a cited record actually supports the answer. If a future edit drops the
-		// text argument, grounding silently degrades to "cannot verify" for every
-		// citation and no other test would catch it.
-		SerializedRecord r1 = new SerializedRecord("obs", "uuid-1", "Temperature: 36.7", new Date());
-		SerializedRecord r2 = new SerializedRecord("condition", "uuid-2", "Type 2 diabetes mellitus", new Date());
+	public void serialize_mappingTextMatchesWhatTheLlmSaw() {
+		// Pins the contract the citation grounding verifier depends on: the RecordMapping
+		// must carry the SAME per-record content the LLM saw in the chart line (date
+		// parenthetical + body), not the bare record body. Otherwise Tier-2 entailment
+		// flags an otherwise-valid citation as unsupported when the model cites the date
+		// (the date lives in the prefix, not in record.getText()). If a future edit drops
+		// the rendered text, grounding silently degrades and no other test would catch it.
+		Date d = new Date(1700000000000L); // fixed instant for determinism
+		String datePrefix = "(" + DateFormatUtil.formatDate(d) + ") ";
+		SerializedRecord dated = new SerializedRecord("obs", "uuid-1", "Temperature: 36.7", d);
+		SerializedRecord undated = new SerializedRecord("condition", "uuid-2", "Type 2 diabetes mellitus", null);
 
-		PatientChart chart = new PatientChartSerializer().serialize(null, Arrays.asList(r1, r2));
-
+		PatientChart chart = new PatientChartSerializer().serialize(null, Arrays.asList(dated, undated));
 		List<RecordMapping> mappings = chart.getMappings();
+
 		assertEquals(2, mappings.size());
-		assertEquals(1, mappings.get(0).getIndex());
-		assertEquals("Temperature: 36.7", mappings.get(0).getText());
-		assertEquals(2, mappings.get(1).getIndex());
+		// Dated record: mapping text includes the date prefix the model can cite.
+		assertEquals(datePrefix + "Temperature: 36.7", mappings.get(0).getText());
+		// Undated record: just the body, no parenthetical.
 		assertEquals("Type 2 diabetes mellitus", mappings.get(1).getText());
+		// And the mapping text is exactly the chart line content after the "[N] " prefix.
+		assertTrue(chart.getText().contains("[1] " + datePrefix + "Temperature: 36.7"),
+				"chart line should equal '[N] ' + the mapping text; chart was:\n" + chart.getText());
 	}
 }

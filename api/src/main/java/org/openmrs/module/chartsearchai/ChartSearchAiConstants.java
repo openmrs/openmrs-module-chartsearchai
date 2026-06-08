@@ -298,13 +298,26 @@ public class ChartSearchAiConstants {
 
 	/**
 	 * Minimum cosine similarity between a cited record's text and the answer
-	 * sentence that cites it for the citation to count as grounded. Tunable
-	 * because the right floor depends on the embedding model. The default is
-	 * deliberately permissive: this Tier-1 check is meant to catch grossly
-	 * off-topic citations (a record about blood pressure cited for a diabetes
-	 * claim), not subtle subject/negation flips ("patient has X" vs "mother had
-	 * X"), which embedding cosine cannot reliably separate and which need an
-	 * entailment/NLI second pass.
+	 * sentence that cites it for the citation to count as grounded. This Tier-1
+	 * check catches grossly off-topic citations (a blood-pressure record cited
+	 * for a diabetes claim), not subtle subject/negation flips ("patient has X"
+	 * vs "mother had X") — those need the Tier-2 entailment pass.
+	 *
+	 * <p><strong>The right floor depends on the embedding model — tune it.</strong>
+	 * The {@link #DEFAULT_GROUNDING_MIN_COSINE} of {@value #DEFAULT_GROUNDING_MIN_COSINE}
+	 * suits a wide-spread model like all-MiniLM-L6-v2 (chartsearchai's own default).
+	 * It is far too low for <em>e5</em> — the model querystore uses, which the
+	 * grounding verifier reuses when {@code chartsearchai.querystore.enabled=true}.
+	 * Measured e5 cosines (mean-pooled, no prefix): supported pairs ~0.83–0.96,
+	 * unrelated pairs ~0.75–0.80. So on an e5/querystore deployment set this to
+	 * <strong>~0.82</strong>; at {@value #DEFAULT_GROUNDING_MIN_COSINE} e5 marks
+	 * essentially everything grounded (no discrimination).
+	 *
+	 * <p>Note the e5 supported-vs-unrelated gap is narrow (~0.03), so Tier-1 alone
+	 * is a weak discriminator there — enable {@link #GP_GROUNDING_ENTAILMENT_ENABLED}
+	 * for reliable grounding on e5. Erring high is the safer direction: an
+	 * over-flagged citation ("unsupported") prompts a clinician to verify, whereas
+	 * an under-flagged one ("verified") gives false assurance.
 	 */
 	public static final String GP_GROUNDING_MIN_COSINE = "chartsearchai.grounding.minCosine";
 

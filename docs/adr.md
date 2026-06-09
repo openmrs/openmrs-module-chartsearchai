@@ -1605,6 +1605,41 @@ Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440
 - **−** Slower per-record embedding than L6-v2 (~5× the parameters: 110M vs 22M). Bounded by querystore's per-patient projection (lazy indexing on chart open), not paid on every query.
 - **−** Quality on this path is judged by end-to-end LLM-answer correctness rather than the recall@K eval baseline that drives Decisions 19–21. A separate eval harness for the LLM-as-filter path is future work.
 
+## Decision 23: Drug-reference injection + post-answer drug-safety validation
+
+**Status: Accepted** (June 2026)
+
+### Context
+
+Chart-search answers are grounded only in what the patient's chart contains. The chart says *what was prescribed*; it does not carry the reference facts a clinician weighs against it — published dosing maxima, drug–drug interactions, allergy/condition contraindications. Asked "is ibuprofen safe for this patient?" against a chart with an NSAID allergy, the LLM can reason it out only if the allergy record happens to surface *and* the model connects "NSAID" to "ibuprofen" — a colloquial-to-clinical bridge it makes unreliably, and exactly the gap the "Concept graph traversal" future-work item (see Planned future work) was meant to close through retrieval.
+
+### Decision
+
+Add an additive, opt-in (`chartsearchai.drugReference.enabled`, default `false`) drug-reference subsystem in two deterministic parts:
+
+1. **Injection (`DrugReferenceInjector`, pre-answer)** — append reference entries matching the question (by alias) or the patient's active orders (by ATC code) to the serialized chart as numbered, citable records carrying the `drug_reference` resource type. Numeric dosing is age-gated (a pediatric maximum is never surfaced for an adult). The LLM cites them the same way it cites chart records; the system prompt notes that `drug_reference` records are reference data, not the patient's own.
+2. **Validation (`DrugSafetyValidator`, post-answer)** — a deterministic check that annotates the answer with non-blocking `SafetyWarning`s (overdose / interaction / contraindication), cross-referencing the reference table against the patient's age, active orders, allergies, and conditions. It never rewrites or blocks the answer.
+
+### Why deterministic + data-driven
+
+The clinical knowledge lives in a configurable JSON dataset (`drug-reference.json`, operator-overridable via `chartsearchai.drugReference.dataFilePath`, with the bundled dataset as a classpath fallback), **not** in the algorithm — consistent with the project rule against encoding clinical domain knowledge into code. The matching (alias / ATC), age-banding, and safety checks are domain-agnostic mechanisms over that data. The validator runs deterministically (no second LLM call) so the safety net does not inherit the LLM's variability, and it is conservative by construction: a warning fires only when a dose can be computed and exceeds a published maximum, or a named drug matches an interaction/contraindication rule against real patient data — so a chart-sufficient answer naming no reference drug produces nothing.
+
+### Dose parser: clause-scoped, alias-anchored
+
+The overdose check parses `(drug, mg, frequency)` from the free-text answer. To avoid false alarms, dose attribution is **clause-scoped and anchored to the nearest drug name**: a dose stated for one drug in a neighbouring clause is not charged to another (`"ibuprofen or paracetamol 1000 mg"` does not flag ibuprofen), a number introduced by a limit cue (`"maximum 2400 mg/day"`) is treated as a ceiling rather than a prescribed dose, and frequency word-forms are word-boundary matched (`"bd"` does not match inside `"abdominal"`). Known v1 limitation: only the literal unit `mg` is parsed — doses in grams are not flagged (the conservative, miss-not-false-positive direction).
+
+### Wire & frontend
+
+`ChartAnswer` carries `safetyWarnings`; the REST controller emits a `safetyWarnings` array (`{ type, drug, detail }`) on both the blocking `/search` response and the streaming `done` event (always present, possibly empty). The [frontend ESM](https://github.com/openmrs/openmrs-esm-chartsearchai) renders them as colour-coded chips below the answer and renders `drug_reference` citations as non-navigating reference chips. With the feature off (the default), the wire carries an empty array and the frontend is a no-op.
+
+### Trade-offs
+
+- **+** Reference facts (dosing / interactions / contraindications) the chart alone can't provide, cited and grounded like any record, plus a deterministic safety net independent of LLM variability.
+- **+** Knowledge is data, not code — operators extend `drug-reference.json` without a rebuild.
+- **−** The seed dataset is small (ibuprofen, paracetamol, amoxicillin, gentamicin; WHO Model List of Essential Medicines for Children) — coverage expands per deployment.
+- **−** The overdose arm depends on the LLM stating a parseable dose in the answer; with chart-grounded prompts the model often recites reference maxima rather than proposing doses, so in practice the interaction/contraindication arms (which only need the drug *named* plus matching patient data) fire more than the overdose arm.
+- **−** Injected `drug_reference` records add a little answer/grounding latency when the feature is enabled and a reference is cited.
+
 ## Known limitations
 
 - **Counting questions**: LLMs are unreliable at precise counting tasks (e.g., "how many weight records in the last 10 years?"). The model may undercount or overcount even when all relevant records are provided. Larger, more capable models perform better at counting but are still not perfectly reliable. This is a fundamental limitation of LLM inference, not a retrieval issue. Questions that require exact counts are better suited to structured queries.

@@ -248,6 +248,23 @@ These settings apply when `chartsearchai.retrieval.pipeline` is `embedding` (the
 | `chartsearchai.llm.contextSize` | `32768` | *(Local engine only)* Context window size in tokens for the embedded llama-server. The system prompt + serialized chart + question must fit within this. Larger values let bigger charts pass through full-chart mode but increase the KV cache memory footprint roughly linearly. Increase if you see "Patient chart exceeds the LLM context window" (HTTP 413) and have headroom for a larger KV cache; reduce on memory-constrained hardware |
 | `chartsearchai.warmupEnabled` | `true` | When `true`, opening a patient chart triggers a background warmup that primes the LLM prompt cache (system prompt + serialized chart) so the first AI query on that patient skips the full prefill cost. No-op when `chartsearchai.llm.engine` is `remote` (remote providers manage their own caching) and when `chartsearchai.embedding.preFilter` is `true` (the prompt prefix varies per query, so a chart-only warmup cannot be reused) |
 
+#### Drug reference & safety *(optional, off by default)*
+
+An additive, opt-in feature that (1) injects matching clinical drug-reference records into the chart so the LLM can cite reference dosing / interaction / contraindication facts, and (2) runs a deterministic post-answer check that annotates the answer with non-blocking safety warnings. The clinical knowledge lives in a data file (`drug-reference.json`), not in code. See [Drug-reference injection & safety validation](#drug-reference-injection--safety-validation) and [ADR Decision 23](docs/adr.md#decision-23-drug-reference-injection--post-answer-drug-safety-validation).
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `chartsearchai.drugReference.enabled` | `false` | Master switch for both parts. When `false` (default), behaviour is unchanged — no records injected, no warnings produced |
+| `chartsearchai.drugReference.dataFilePath` | `chartsearchai/drug-reference.json` | Relative path (within the OpenMRS application data directory) to the drug-reference dataset. When absent/unreadable, the dataset bundled with the module is used. Path traversal (`..`) is rejected. Editing takes effect on the next module restart |
+| `chartsearchai.drugReference.injectFromOrders` | `true` | Inject a reference entry whose ATC code matches one of the patient's active drug orders, even when the question doesn't name the drug |
+| `chartsearchai.drugReference.injectFromQuery` | `true` | Inject a reference entry whose alias appears in the question. Numeric dosing is rendered only when the patient's age falls in a published band, so a pediatric maximum is never surfaced for an adult |
+| `chartsearchai.drugSafety.validateAnswers` | `true` | Enable the post-answer validator. Annotates the answer with non-blocking warnings; it never rewrites or blocks the answer |
+| `chartsearchai.drugSafety.warnOnDoseExcess` | `true` | Flag a daily dose parsed from the answer that exceeds the reference maximum for the patient's age band |
+| `chartsearchai.drugSafety.warnOnInteractions` | `true` | Flag a drug named in the answer that interacts with one of the patient's active orders |
+| `chartsearchai.drugSafety.warnOnContraindications` | `true` | Flag a drug named in the answer that is contraindicated by an active allergy or condition |
+
+The `drugSafety.*` checks require both `chartsearchai.drugReference.enabled` and `chartsearchai.drugSafety.validateAnswers`.
+
 #### Rate limiting and caching
 
 | Property | Default | Description |
@@ -419,6 +436,15 @@ Questions with numeric recency constraints are automatically detected and honore
 
 Questions are checked against common prompt injection patterns (e.g., "ignore previous instructions", "you are now", "system prompt:") and rejected with HTTP 400 if matched. This is a defense-in-depth measure — the primary protection is the structured-output constraint (`response_format: json_schema`, sent by both engines and shared via `ChartAnswerResponseFormat`; the local llama-server enforces it via a derived GBNF grammar internally, and remote OpenAI-compat providers enforce it server-side) that forces LLM output into a fixed `{answer, citations}` shape regardless of prompt content. Normal clinical questions containing words like "ignore" or "instructions" in non-adversarial contexts (e.g., "What instructions were given at discharge?") are not affected.
 
+### Drug-reference injection & safety validation
+
+When `chartsearchai.drugReference.enabled` is `true` (off by default), two additive stages run around the answer:
+
+- **Injection (pre-answer)** — clinical drug-reference entries matching the question (by alias) or the patient's active orders (by ATC code) are appended to the chart as numbered, citable records carrying the `drug_reference` resource type. Numeric dosing is age-gated. This lets the LLM ground reference facts (dosing, interactions, contraindications) the same way it grounds chart records.
+- **Safety validation (post-answer)** — a deterministic check annotates the answer with non-blocking `safetyWarnings` (overdose / interaction / contraindication), computed from the reference table and the patient's age, active orders, allergies, and conditions. It never rewrites or blocks the answer; the clinician decides. It is conservative: a warning fires only when a value can actually be computed or matched, so a chart-sufficient answer naming no reference drug produces nothing.
+
+The clinical knowledge lives in a configurable data file (`drug-reference.json`), not in code. The overdose dose-parser recognises the literal unit `mg` only — doses written in grams are not flagged (the conservative, no-false-positive direction). See [ADR Decision 23](docs/adr.md#decision-23-drug-reference-injection--post-answer-drug-safety-validation) for the full design.
+
 ## API
 
 ### Search
@@ -443,11 +469,14 @@ Response:
   "references": [
     { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15" },
     { "index": 1, "resourceType": "order", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10" }
-  ]
+  ],
+  "safetyWarnings": []
 }
 ```
 
 `questionId` is a string identifier for this query, used to submit feedback (see below). It is omitted if audit logging fails.
+
+`safetyWarnings` is an array of non-blocking drug-safety advisories (each `{ type, drug, detail }`, where `type` is `overdose` / `interaction` / `contraindication`). The key is always present and empty unless the optional drug-reference feature is enabled and something was flagged (see [Drug-reference injection & safety validation](#drug-reference-injection--safety-validation)).
 
 ### Streaming search (SSE)
 
@@ -471,8 +500,8 @@ SSE events:
 | `thinking` | A chunk of the model's reasoning, emitted before the answer; render distinctly (e.g. a collapsible panel), never as the answer |
 | `token` | A chunk of the answer text as it is generated |
 | `references` | The answer's citations the moment the answer is complete — before grounding verdicts exist; render as unverified until verdicts arrive |
-| `done` | Final JSON with the complete answer, references (sorted most recent first, with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`), `questionId`, and disclaimer. With `chartsearchai.grounding.async=true`, `done` is emitted as soon as the answer is complete and its references carry no verdicts yet |
-| `grounded` | Only with `chartsearchai.grounding.async=true`: the references re-sent with their grounding verdicts (`grounded` true/false/null) once Tier-2 verification completes, with the same `questionId`. Keep consuming the stream after `done` to receive it |
+| `done` | Final JSON with the complete answer, references (sorted most recent first, with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`), `safetyWarnings`, `questionId`, and disclaimer. With `chartsearchai.grounding.async=true`, `done` is emitted as soon as the answer is complete — its references carry no verdicts yet and `safetyWarnings` is empty (validation runs with grounding) |
+| `grounded` | Only with `chartsearchai.grounding.async=true`: the references re-sent with their grounding verdicts (`grounded` true/false/null) once Tier-2 verification completes, plus the final `safetyWarnings`, with the same `questionId`. Keep consuming the stream after `done` to receive it |
 | `error` | Error message if something goes wrong |
 
 ### Warmup

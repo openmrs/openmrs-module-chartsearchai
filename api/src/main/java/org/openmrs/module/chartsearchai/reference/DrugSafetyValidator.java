@@ -50,11 +50,32 @@ public class DrugSafetyValidator {
 
 	private static final Pattern EVERY_N_HOURS = Pattern.compile("(?:every\\s+(\\d+)\\s*(?:hours|hrs|hr|h)\\b|q(\\d+)h\\b|(\\d+)\\s*hourly\\b)");
 
-	/** Characters before an alias to include when looking for an associated dose/frequency. */
-	private static final int WINDOW_BEFORE = 50;
+	// Frequency word-forms, word-boundary anchored so "bd"/"od" do not match inside larger words
+	// such as "abdominal" or "blood".
+	private static final Pattern FREQ_QID = Pattern.compile("\\b(?:four times|qid|qds)\\b");
 
-	/** Characters after an alias to include when looking for an associated dose/frequency. */
-	private static final int WINDOW_AFTER = 90;
+	private static final Pattern FREQ_TID = Pattern.compile("\\b(?:three times|thrice|tid|tds)\\b");
+
+	private static final Pattern FREQ_BID = Pattern.compile("\\b(?:twice|two times|bid|bd)\\b");
+
+	private static final Pattern FREQ_OD = Pattern.compile("\\b(?:once daily|once a day|once|od|daily)\\b");
+
+	/** A number immediately preceded (within {@link #LIMIT_CUE_LOOKBACK} chars) by one of these cues
+	 *  is a CEILING, not a prescribed dose, so it must not be flagged as an overdose — e.g. the
+	 *  reference "maximum 2400 mg/day" the injector feeds the LLM, recited back in the answer. */
+	private static final Pattern LIMIT_CUE = Pattern.compile(
+			"(?:maximum|max|up to|no more than|not exceed|do not exceed|exceeds?|ceiling|limit|less than|under)\\b\\W*$");
+
+	private static final int LIMIT_CUE_LOOKBACK = 24;
+
+	/** Splits an answer into clauses so dose attribution and frequency never cross a boundary into a
+	 *  neighbouring drug's clause. A period is a boundary only when NOT between digits, so a decimal
+	 *  dose ("1.5 mg") is never split on its decimal point. */
+	private static final Pattern CLAUSE_DELIMITER = Pattern.compile("[;!?\\n]+|\\.(?!\\d)");
+
+	/** How far before/after a dose a drug alias may sit and still own that dose; bounds attribution
+	 *  so a dose far from any drug name is ignored. */
+	private static final int MAX_ALIAS_TO_DOSE_DISTANCE = 120;
 
 	@Autowired
 	private DrugReferenceService drugReferenceService;
@@ -98,7 +119,8 @@ public class DrugSafetyValidator {
 		boolean warnContra = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS);
 
-		for (DrugReference ref : drugReferenceService.getAll()) {
+		List<DrugReference> all = drugReferenceService.getAll();
+		for (DrugReference ref : all) {
 			if (!ref.matchesText(lower)) {
 				continue;
 			}
@@ -109,7 +131,7 @@ public class DrugSafetyValidator {
 				addInteractions(warnings, ref, context);
 			}
 			if (warnDose) {
-				addOverdose(warnings, ref, context, lower);
+				addOverdose(warnings, ref, context, lower, all);
 			}
 		}
 		if (!warnings.isEmpty()) {
@@ -157,68 +179,115 @@ public class DrugSafetyValidator {
 	}
 
 	private void addOverdose(List<SafetyWarning> warnings, DrugReference ref,
-			PatientClinicalContext context, String lowerAnswer) {
+			PatientClinicalContext context, String lowerAnswer, List<DrugReference> allEntries) {
 		Integer age = context != null ? context.getAgeYears() : null;
 		DrugReference.AgeBand band = ref.bandForAge(age);
 		if (band == null || band.getMaxDailyDoseMg() <= 0) {
 			return;
 		}
-		Double dailyMg = parseDailyDoseMg(lowerAnswer, ref);
+		Double dailyMg = parseDailyDoseMg(lowerAnswer, ref, allEntries);
 		if (dailyMg != null && dailyMg > band.getMaxDailyDoseMg()) {
 			warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, ref.getName(),
-					"stated dose ~" + trim(dailyMg) + " mg/day exceeds the " + trim(band.getMaxDailyDoseMg())
-							+ " mg/day maximum for ages " + band.getMinYears() + "-" + band.getMaxYears()));
+					"stated dose ~" + DrugReference.formatNumber(dailyMg) + " mg/day exceeds the "
+							+ DrugReference.formatNumber(band.getMaxDailyDoseMg()) + " mg/day maximum for ages "
+							+ band.getMinYears() + "-" + band.getMaxYears()));
 		}
 	}
 
 	/**
-	 * Parses the largest plausible daily dose (mg) the answer states for the given
-	 * drug, by scanning a window around each alias occurrence for a {@code N mg}
-	 * dose and a frequency. Returns null when no dose is found near the drug. When
-	 * a dose is found but no frequency, the per-dose value is used (frequency 1),
-	 * which is conservative — it cannot over-report a daily total.
+	 * Parses the largest plausible daily dose (mg) the answer states <em>for {@code ref}</em>.
+	 *
+	 * <p>Attribution is clause-scoped and alias-anchored so one drug is never charged with another's
+	 * dose: the answer is split into clauses, and within each clause that names {@code ref} a
+	 * {@code N mg} value counts only when (a) it is not introduced by a limit cue — "maximum", "up
+	 * to", … make it a ceiling, not a prescribed dose — and (b) {@code ref}'s alias is the nearest
+	 * drug name to it (no other entry's alias sits strictly closer). The frequency is read from the
+	 * same clause, so a frequency stated for a different drug in a neighbouring sentence is never
+	 * applied. When a dose is found without a frequency, frequency 1 is assumed (conservative — it
+	 * cannot over-report a daily total).
+	 *
+	 * <p>Known limitation (v1): only the literal unit {@code mg} is recognised; doses written in
+	 * grams ("1 g"), "mgs", or "milligrams" are not parsed and will not be flagged. That is the
+	 * conservative (miss, never false-positive) direction.
 	 */
-	static Double parseDailyDoseMg(String lowerAnswer, DrugReference ref) {
+	static Double parseDailyDoseMg(String lowerAnswer, DrugReference ref, List<DrugReference> allEntries) {
 		Double best = null;
-		for (String alias : ref.getAliases()) {
-			if (alias == null || alias.isEmpty()) {
+		for (String clause : CLAUSE_DELIMITER.split(lowerAnswer)) {
+			if (!ref.matchesText(clause)) {
 				continue;
 			}
-			String a = alias.toLowerCase(Locale.ROOT);
-			int idx = lowerAnswer.indexOf(a);
-			while (idx >= 0) {
-				int start = Math.max(0, idx - WINDOW_BEFORE);
-				int end = Math.min(lowerAnswer.length(), idx + a.length() + WINDOW_AFTER);
-				String window = lowerAnswer.substring(start, end);
-
-				Double perDose = firstDoseMg(window);
-				if (perDose != null) {
-					int freq = frequencyPerDay(window);
-					double daily = perDose * (freq > 0 ? freq : 1);
-					if (best == null || daily > best) {
-						best = daily;
-					}
+			Matcher m = DOSE_MG.matcher(clause);
+			while (m.find()) {
+				int dosePos = m.start();
+				if (precededByLimitCue(clause, dosePos) || !aliasOwnsDose(clause, dosePos, ref, allEntries)) {
+					continue;
 				}
-				idx = lowerAnswer.indexOf(a, idx + 1);
+				double perDose;
+				try {
+					perDose = Double.parseDouble(m.group(1));
+				}
+				catch (NumberFormatException e) {
+					continue;
+				}
+				int freq = frequencyPerDay(clause);
+				double daily = perDose * (freq > 0 ? freq : 1);
+				if (best == null || daily > best) {
+					best = daily;
+				}
 			}
 		}
 		return best;
 	}
 
-	private static Double firstDoseMg(String window) {
-		Matcher m = DOSE_MG.matcher(window);
-		if (m.find()) {
-			try {
-				return Double.valueOf(m.group(1));
-			}
-			catch (NumberFormatException e) {
-				return null;
-			}
-		}
-		return null;
+	/** @return true when a limit cue ("maximum", "up to", "do not exceed", …) sits immediately
+	 *          before the dose at {@code dosePos}, marking it a ceiling rather than a stated dose. */
+	private static boolean precededByLimitCue(String clause, int dosePos) {
+		int from = Math.max(0, dosePos - LIMIT_CUE_LOOKBACK);
+		return LIMIT_CUE.matcher(clause.substring(from, dosePos)).find();
 	}
 
-	/** @return doses-per-day implied by a frequency phrase in the window, or 0 when none found. */
+	/** @return true when {@code ref}'s alias is the nearest drug name to the dose at {@code dosePos}
+	 *          within {@code clause} (and within {@link #MAX_ALIAS_TO_DOSE_DISTANCE}). A different
+	 *          entry's alias sitting strictly closer means the dose belongs to that drug, not this. */
+	private static boolean aliasOwnsDose(String clause, int dosePos, DrugReference ref,
+			List<DrugReference> allEntries) {
+		int mine = nearestAliasDistance(clause, dosePos, ref);
+		if (mine == Integer.MAX_VALUE || mine > MAX_ALIAS_TO_DOSE_DISTANCE) {
+			return false;
+		}
+		for (DrugReference other : allEntries) {
+			if (other != ref && nearestAliasDistance(clause, dosePos, other) < mine) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** @return character distance from {@code pos} to the nearest occurrence of any of {@code ref}'s
+	 *          aliases in {@code text}, or {@link Integer#MAX_VALUE} when none occur. */
+	private static int nearestAliasDistance(String text, int pos, DrugReference ref) {
+		int best = Integer.MAX_VALUE;
+		for (String alias : ref.getAliases()) {
+			if (alias == null || alias.isEmpty()) {
+				continue;
+			}
+			String a = alias.toLowerCase(Locale.ROOT);
+			int idx = text.indexOf(a);
+			while (idx >= 0) {
+				int end = idx + a.length();
+				int dist = pos < idx ? idx - pos : (pos > end ? pos - end : 0);
+				if (dist < best) {
+					best = dist;
+				}
+				idx = text.indexOf(a, idx + 1);
+			}
+		}
+		return best;
+	}
+
+	/** @return doses-per-day implied by a frequency phrase in {@code window}, or 0 when none found.
+	 *          Word-forms are word-boundary anchored, so "bd"/"od" do not match inside larger words
+	 *          such as "abdominal" or "blood". */
 	static int frequencyPerDay(String window) {
 		Matcher hours = EVERY_N_HOURS.matcher(window);
 		if (hours.find()) {
@@ -234,28 +303,19 @@ public class DrugSafetyValidator {
 				// fall through to word forms
 			}
 		}
-		if (contains(window, "four times", "qid", "qds")) {
+		if (FREQ_QID.matcher(window).find()) {
 			return 4;
 		}
-		if (contains(window, "three times", "thrice", "tid", "tds")) {
+		if (FREQ_TID.matcher(window).find()) {
 			return 3;
 		}
-		if (contains(window, "twice", "two times", "bid", "bd")) {
+		if (FREQ_BID.matcher(window).find()) {
 			return 2;
 		}
-		if (contains(window, "once", "once daily", "once a day", " od ", " daily")) {
+		if (FREQ_OD.matcher(window).find()) {
 			return 1;
 		}
 		return 0;
-	}
-
-	private static boolean contains(String haystack, String... needles) {
-		for (String needle : needles) {
-			if (haystack.contains(needle)) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	private static boolean toggle(String property, boolean defaultValue) {
@@ -264,12 +324,5 @@ public class DrugSafetyValidator {
 
 	private static String noteOrToken(String note, String token) {
 		return note != null && !note.isEmpty() ? note : token;
-	}
-
-	private static String trim(double value) {
-		if (value == Math.floor(value) && !Double.isInfinite(value)) {
-			return Long.toString((long) value);
-		}
-		return Double.toString(value);
 	}
 }

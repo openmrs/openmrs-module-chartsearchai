@@ -120,4 +120,62 @@ public class DrugSafetyValidatorTest {
 		assertEquals(3, DrugSafetyValidator.frequencyPerDay("three times a day"));
 		assertEquals(0, DrugSafetyValidator.frequencyPerDay("as needed for pain"));
 	}
+
+	@Test
+	public void overdoseNotAttributedToADrugNamedInANeighbouringClause() {
+		// A paracetamol dose in the next clause must not be charged to ibuprofen, which
+		// has no dose of its own here. The dose must attribute to the nearest drug.
+		List<SafetyWarning> warnings = validator().validate(
+				"Ibuprofen may help with pain; paracetamol 1000 mg every 6 hours is an alternative.",
+				ctx(5, null, null, null));
+		assertFalse(has(warnings, SafetyWarning.TYPE_OVERDOSE, "ibuprofen"),
+				"a paracetamol dose in a neighbouring clause must not flag ibuprofen");
+	}
+
+	@Test
+	public void overdoseFrequencyDoesNotBleedAcrossSentences() {
+		// Ibuprofen 600 mg with no frequency in its own sentence = 600 mg/day, under the
+		// 1200 max. The "every 6 hours" belongs to the next sentence and must not apply.
+		List<SafetyWarning> warnings = validator().validate(
+				"Ibuprofen 600 mg was administered. Paracetamol every 6 hours was also charted.",
+				ctx(5, null, null, null));
+		assertFalse(has(warnings, SafetyWarning.TYPE_OVERDOSE, "ibuprofen"),
+				"a frequency in a different sentence must not inflate the ibuprofen daily total");
+	}
+
+	@Test
+	public void statedReferenceCeilingIsNotReadAsAPrescribedDose() {
+		// Reciting the reference maximum (which the injector feeds the LLM) must not itself
+		// trip an overdose: a number introduced by a limit cue is a ceiling, not a dose.
+		List<SafetyWarning> warnings = validator().validate(
+				"For ibuprofen, the maximum 2400 mg per day should not be exceeded.",
+				ctx(5, null, null, null));
+		assertFalse(has(warnings, SafetyWarning.TYPE_OVERDOSE, "ibuprofen"),
+				"a dose introduced by 'maximum' is a ceiling, not a prescribed dose");
+	}
+
+	@Test
+	public void frequencyWordFormsRequireWordBoundaries() {
+		// "bd" inside "abdominal" must not be read as twice-daily; a real "bd" still parses.
+		assertEquals(0, DrugSafetyValidator.frequencyPerDay("for abdominal discomfort"));
+		assertEquals(2, DrugSafetyValidator.frequencyPerDay("ibuprofen 200 mg bd"));
+	}
+
+	@Test
+	public void decimalDoseIsNotSplitByTheClauseDelimiter() {
+		// The clause splitter must not break "333.5" on its decimal point: 333.5 mg x4 = 1334 mg/day.
+		List<SafetyWarning> warnings = validator().validate(
+				"Ibuprofen 333.5 mg every 6 hours.", ctx(5, null, null, null));
+		assertTrue(has(warnings, SafetyWarning.TYPE_OVERDOSE, "ibuprofen"),
+				"a decimal mg dose must be parsed, not split on its decimal point");
+	}
+
+	@Test
+	public void realSingleDrugOverdoseStillFlaggedAfterAnchoring() {
+		// Guard against over-correction: a genuine single-drug overdose must still fire.
+		List<SafetyWarning> warnings = validator().validate(
+				"Ibuprofen 800 mg every 6 hours.", ctx(5, null, null, null));
+		assertTrue(has(warnings, SafetyWarning.TYPE_OVERDOSE, "ibuprofen"),
+				"800 mg x4 = 3200 mg/day must still exceed the 1200 mg/day maximum");
+	}
 }

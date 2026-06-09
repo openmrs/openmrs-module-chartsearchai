@@ -151,10 +151,10 @@ public class DrugReferenceInjector {
 		DrugReference.AgeBand band = ref.bandForAge(age);
 		if (band != null) {
 			sb.append(" Dosing for ages ").append(band.getMinYears()).append("-").append(band.getMaxYears())
-					.append(": ").append(formatNum(band.getMgPerKgMin())).append("-")
-					.append(formatNum(band.getMgPerKgMax())).append(" mg/kg per dose");
+					.append(": ").append(DrugReference.formatNumber(band.getMgPerKgMin())).append("-")
+					.append(DrugReference.formatNumber(band.getMgPerKgMax())).append(" mg/kg per dose");
 			if (band.getMaxDailyDoseMg() > 0) {
-				sb.append(", maximum ").append(formatNum(band.getMaxDailyDoseMg())).append(" mg/day");
+				sb.append(", maximum ").append(DrugReference.formatNumber(band.getMaxDailyDoseMg())).append(" mg/day");
 			} else {
 				sb.append(" (no pediatric daily maximum published for this age — consult a dosing reference)");
 			}
@@ -182,12 +182,5 @@ public class DrugReferenceInjector {
 			sb.append(" Source: ").append(ref.getSource()).append(".");
 		}
 		return sb.toString();
-	}
-
-	private static String formatNum(double value) {
-		if (value == Math.floor(value) && !Double.isInfinite(value)) {
-			return Long.toString((long) value);
-		}
-		return Double.toString(value);
 	}
 }

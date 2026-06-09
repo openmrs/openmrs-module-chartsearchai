@@ -171,6 +171,19 @@ public class DrugReference {
 	}
 
 	/**
+	 * Formats a dose number for display, dropping a redundant trailing {@code .0} so an integral
+	 * dose renders as "400" not "400.0". Shared by the reference renderer
+	 * ({@link DrugReferenceInjector}) and the safety validator ({@link DrugSafetyValidator}) so both
+	 * print doses identically.
+	 */
+	static String formatNumber(double value) {
+		if (value == Math.floor(value) && !Double.isInfinite(value)) {
+			return Long.toString((long) value);
+		}
+		return Double.toString(value);
+	}
+
+	/**
 	 * An age-banded dosing rule. {@code maxDailyDoseMg} of 0 means "no safe
 	 * pediatric maximum is published for this band" — the validator treats a 0
 	 * ceiling as "do not surface a numeric dose" rather than "unlimited".

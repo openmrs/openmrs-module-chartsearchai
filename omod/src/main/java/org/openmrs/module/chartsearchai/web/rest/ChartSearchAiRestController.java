@@ -44,6 +44,7 @@ import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -228,6 +229,7 @@ public class ChartSearchAiRestController {
 			refs.add(refMap);
 		}
 		response.put("references", refs);
+		response.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
 		if (auditLog.getAuditLogId() != null) {
 			response.put("questionId", String.valueOf(auditLog.getAuditLogId()));
 		}
@@ -468,6 +470,7 @@ public class ChartSearchAiRestController {
 				// replace its reference list wholesale; questionId correlates the two events.
 				Map<String, Object> groundedData = new HashMap<String, Object>();
 				groundedData.put("references", serializeReferences(chartAnswer.getReferences()));
+				groundedData.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
 				if (earlyQuestionId[0] != null) {
 					groundedData.put("questionId", earlyQuestionId[0]);
 				}
@@ -555,6 +558,7 @@ public class ChartSearchAiRestController {
 		doneData.put("answer", answer.getAnswer());
 		doneData.put("disclaimer", DISCLAIMER);
 		doneData.put("references", serializeReferences(answer.getReferences()));
+		doneData.put("safetyWarnings", serializeSafetyWarnings(answer.getSafetyWarnings()));
 		if (questionId != null) {
 			doneData.put("questionId", questionId);
 		}
@@ -867,6 +871,26 @@ public class ChartSearchAiRestController {
 	 * references with verdicts — but a client disconnect during the write unwinds the stream like the
 	 * other channels (via {@link #writeSseEventOrThrow}).
 	 */
+	/**
+	 * Serializes the post-answer drug-safety advisories to the wire shape rendered as chips below the
+	 * answer. Empty list when the drug-reference feature is off or nothing was flagged. The key is
+	 * always present (possibly empty) so the frontend can branch on length without a null check.
+	 */
+	private List<Map<String, Object>> serializeSafetyWarnings(List<SafetyWarning> warnings) {
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		if (warnings == null) {
+			return out;
+		}
+		for (SafetyWarning warning : warnings) {
+			Map<String, Object> map = new LinkedHashMap<String, Object>();
+			map.put("type", warning.getType());
+			map.put("drug", warning.getDrug());
+			map.put("detail", warning.getDetail());
+			out.add(map);
+		}
+		return out;
+	}
+
 	private void sendReferencesEvent(OutputStream out, List<RecordReference> references) {
 		String json;
 		try {

@@ -375,6 +375,53 @@ public class ChartSearchAiConstants {
 
 	public static final boolean DEFAULT_GROUNDING_ASYNC = false;
 
+	// ---------------------------------------------------------------------
+	// Drug reference + post-answer drug-safety validation (additive, opt-in).
+	// See DrugReferenceService, DrugReferenceInjector, DrugSafetyValidator.
+	// ---------------------------------------------------------------------
+
+	/** Master switch for both the DrugReference resource type and the DrugSafetyValidator. Default off. */
+	public static final String GP_DRUG_REFERENCE_ENABLED = "chartsearchai.drugReference.enabled";
+
+	public static final boolean DEFAULT_DRUG_REFERENCE_ENABLED = false;
+
+	/** Path (relative to the OpenMRS application data directory) to the drug-reference dataset.
+	 *  When absent, the dataset bundled on the module classpath is used. */
+	public static final String GP_DRUG_REFERENCE_DATA_FILE_PATH = "chartsearchai.drugReference.dataFilePath";
+
+	public static final String DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH = "chartsearchai/drug-reference.json";
+
+	/** Patient-driven injection: inject reference entries that match an active order's ATC code. */
+	public static final String GP_DRUG_REFERENCE_INJECT_FROM_ORDERS = "chartsearchai.drugReference.injectFromOrders";
+
+	public static final boolean DEFAULT_DRUG_REFERENCE_INJECT_FROM_ORDERS = true;
+
+	/** Question-driven injection: inject reference entries whose aliases match the query text. */
+	public static final String GP_DRUG_REFERENCE_INJECT_FROM_QUERY = "chartsearchai.drugReference.injectFromQuery";
+
+	public static final boolean DEFAULT_DRUG_REFERENCE_INJECT_FROM_QUERY = true;
+
+	/** Enables the post-LLM drug-safety validator (requires {@link #GP_DRUG_REFERENCE_ENABLED}). */
+	public static final String GP_DRUG_SAFETY_VALIDATE_ANSWERS = "chartsearchai.drugSafety.validateAnswers";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS = true;
+
+	/** Flag answer doses above the reference {@code maxDailyDoseMg} for the patient's age band. */
+	public static final String GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS = "chartsearchai.drugSafety.warnOnDoseExcess";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_DOSE_EXCESS = true;
+
+	/** Cross-check drugs named in the answer against the patient's active orders for interactions. */
+	public static final String GP_DRUG_SAFETY_WARN_ON_INTERACTIONS = "chartsearchai.drugSafety.warnOnInteractions";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS = true;
+
+	/** Cross-check drugs named in the answer against the patient's allergies/conditions for contraindications. */
+	public static final String GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS =
+			"chartsearchai.drugSafety.warnOnContraindications";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS = true;
+
 	// Resource type identifiers used in embeddings and citations
 	public static final String RESOURCE_TYPE_OBS = "obs";
 
@@ -389,6 +436,9 @@ public class ChartSearchAiConstants {
 	public static final String RESOURCE_TYPE_PROGRAM = "program";
 
 	public static final String RESOURCE_TYPE_MEDICATION_DISPENSE = "medication_dispense";
+
+	/** Reference data, not patient data — injected by {@link org.openmrs.module.chartsearchai.reference.DrugReferenceInjector}. */
+	public static final String RESOURCE_TYPE_DRUG_REFERENCE = "drug_reference";
 
 	private ChartSearchAiConstants() {
 	}

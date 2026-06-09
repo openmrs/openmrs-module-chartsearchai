@@ -245,6 +245,55 @@
 		<description>When true, citation grounding is clause-scoped: in a sentence that cites multiple records, each citation is checked against the answer text up to and including its own [N] marker, rather than the whole compound sentence. This grounds a citation that supports its own clause but not a later clause cited by a different record — e.g. "Hearing Loss was noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an active condition) does not support the "provisional diagnosis" clause that [91] backs. The clause is the cumulative prefix through the marker, so it keeps the sentence subject when the subject precedes the first marker (the normal case) and still flags family-history/negation flips in later clauses. Default: false (sentence-scoped). Only affects which text a citation is verified against; never changes the answer or which records are cited.</description>
 	</globalProperty>
 
+	<!-- Drug reference + post-answer drug-safety validation (additive, opt-in) -->
+	<globalProperty>
+		<property>chartsearchai.drugReference.enabled</property>
+		<defaultValue>false</defaultValue>
+		<description>Master switch for the drug-reference feature: both the DrugReference resource type (Part 1, injected reference records the LLM can cite) and the post-answer DrugSafetyValidator (Part 2). When false (default), behavior is unchanged — no reference records are injected and no safety warnings are produced. The dataset is loaded from chartsearchai.drugReference.dataFilePath, falling back to the dataset bundled with the module. Default: false.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.drugReference.dataFilePath</property>
+		<defaultValue>chartsearchai/drug-reference.json</defaultValue>
+		<description>Relative path, including the filename, within the OpenMRS application data directory to the drug-reference JSON dataset (resolves to &lt;application-data-directory&gt;/chartsearchai/drug-reference.json). When the file is absent or unreadable, the dataset bundled on the module classpath is used, so the feature works out of the box. Each entry carries aliases (question-driven matching), ATC codes (order-driven matching), age-banded dosing, and interaction/contraindication rules. Path traversal (e.g. "..") is not allowed. Editing the file takes effect on the next module restart.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.drugReference.injectFromOrders</property>
+		<defaultValue>true</defaultValue>
+		<description>Patient-driven injection: when true, a reference entry whose ATC code matches one of the patient's active drug orders is injected into the chart even if the question does not mention the drug. Requires chartsearchai.drugReference.enabled. Orders without an ATC concept mapping cannot trigger this path; question-driven injection (injectFromQuery) still works via aliases. Default: true.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.drugReference.injectFromQuery</property>
+		<defaultValue>true</defaultValue>
+		<description>Question-driven injection: when true, a reference entry whose alias appears in the clinician's query is injected into the chart. Requires chartsearchai.drugReference.enabled. Numeric dosing is rendered only when the patient's age falls in a published age band, so a pediatric maximum is never surfaced for an adult query; contraindication and interaction facts are rendered regardless of age. Default: true.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.drugSafety.validateAnswers</property>
+		<defaultValue>true</defaultValue>
+		<description>Enables the post-LLM DrugSafetyValidator, which runs after the answer is generated and annotates it with non-blocking safety warnings (it never rewrites or suppresses the answer). Requires chartsearchai.drugReference.enabled. The individual checks are toggled by chartsearchai.drugSafety.warnOnDoseExcess, .warnOnInteractions, and .warnOnContraindications. Default: true.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.drugSafety.warnOnDoseExcess</property>
+		<defaultValue>true</defaultValue>
+		<description>When true, the validator parses (drug, mg, frequency) from the answer and flags a daily dose that exceeds the reference maxDailyDoseMg for the patient's age band. Conservative: a warning is raised only when a daily total can be computed AND it exceeds a published maximum, so a sufficient-chart answer with no reference dosing produces no warning. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.drugSafety.warnOnInteractions</property>
+		<defaultValue>true</defaultValue>
+		<description>When true, the validator cross-references each drug named in the answer against the patient's active drug orders and flags known interactions from the reference dataset. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.drugSafety.warnOnContraindications</property>
+		<defaultValue>true</defaultValue>
+		<description>When true, the validator cross-references each drug named in the answer against the patient's active allergies and conditions and flags contraindications from the reference dataset. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
+	</globalProperty>
+
 	<!-- AOP -->
 	<advice>
 		<point>org.openmrs.api.EncounterService</point>

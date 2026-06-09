@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 
 /**
  * Answers natural language questions about a patient's chart using a local LLM.
@@ -140,6 +141,8 @@ public interface ChartSearchService {
 
 		private final int cachedTokens;
 
+		private final List<SafetyWarning> safetyWarnings;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -151,12 +154,22 @@ public interface ChartSearchService {
 
 		public ChartAnswer(String answer, List<RecordReference> references,
 				int inputTokens, int outputTokens, int cachedTokens) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens,
+					java.util.Collections.<SafetyWarning> emptyList());
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
 			this.inputTokens = inputTokens;
 			this.outputTokens = outputTokens;
 			this.cachedTokens = cachedTokens;
+			this.safetyWarnings = java.util.Collections.unmodifiableList(
+					new java.util.ArrayList<>(safetyWarnings == null
+							? java.util.Collections.<SafetyWarning> emptyList() : safetyWarnings));
 		}
 
 		/**
@@ -194,6 +207,16 @@ public interface ChartSearchService {
 		 */
 		public int getCachedTokens() {
 			return cachedTokens;
+		}
+
+		/**
+		 * Non-blocking drug-safety advisories raised by the post-answer validator
+		 * (overdose / interaction / contraindication). Empty when the drug-reference
+		 * feature is disabled or nothing was flagged. These annotate the answer; they
+		 * never alter or suppress it.
+		 */
+		public List<SafetyWarning> getSafetyWarnings() {
+			return safetyWarnings;
 		}
 	}
 

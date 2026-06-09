@@ -28,6 +28,9 @@ import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.embedding.EmbeddingProvider;
 import org.openmrs.module.chartsearchai.embedding.ModelNoiseProfile;
 import org.openmrs.module.chartsearchai.model.ChartEmbedding;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord;
@@ -63,9 +66,25 @@ public class LlmInferenceService implements ChartSearchService {
 	@Autowired
 	private CitationGroundingVerifier citationGroundingVerifier;
 
+	@Autowired
+	private DrugReferenceInjector drugReferenceInjector;
+
+	@Autowired
+	private DrugSafetyValidator drugSafetyValidator;
+
 	/** Test seam: production wires {@link CitationGroundingVerifier} via {@link Autowired}. */
 	void setCitationGroundingVerifier(CitationGroundingVerifier citationGroundingVerifier) {
 		this.citationGroundingVerifier = citationGroundingVerifier;
+	}
+
+	/** Test seam: production wires {@link DrugReferenceInjector} via {@link Autowired}. */
+	void setDrugReferenceInjector(DrugReferenceInjector drugReferenceInjector) {
+		this.drugReferenceInjector = drugReferenceInjector;
+	}
+
+	/** Test seam: production wires {@link DrugSafetyValidator} via {@link Autowired}. */
+	void setDrugSafetyValidator(DrugSafetyValidator drugSafetyValidator) {
+		this.drugSafetyValidator = drugSafetyValidator;
 	}
 
 	/** Test seam: production wires {@link LlmProvider} via {@link Autowired}.
@@ -124,6 +143,7 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
+			chart = drugReferenceInjector.inject(chart, patient, question);
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			long llmStart = System.currentTimeMillis();
@@ -137,9 +157,10 @@ public class LlmInferenceService implements ChartSearchService {
 					extractCitedReferences(response.getAnswer(), response.getCitations(),
 							chart.getMappings()),
 					chart.getMappings());
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), patient);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens());
+					response.getCachedTokens(), safetyWarnings);
 			outcome = "ok";
 			return answer;
 		}
@@ -267,6 +288,7 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
+			chart = drugReferenceInjector.inject(chart, patient, question);
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			long llmStart = System.currentTimeMillis();
@@ -298,9 +320,10 @@ public class LlmInferenceService implements ChartSearchService {
 					chart.getMappings());
 			groundMs = System.currentTimeMillis() - groundStart;
 
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), patient);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens());
+					response.getCachedTokens(), safetyWarnings);
 			outcome = "ok";
 			return answer;
 		}

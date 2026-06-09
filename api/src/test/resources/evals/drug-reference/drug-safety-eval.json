@@ -1,0 +1,56 @@
+{
+  "dataset": "drug-safety-v1",
+  "description": "Post-LLM drug-safety validator eval cases. Each case feeds a simulated answer plus a patient clinical context to the real DrugSafetyValidator and asserts the warning types raised. Model-free: it exercises the deterministic post-check, not the LLM. The 'question' field documents the clinical intent for future LLM-level evals.",
+  "cases": [
+    {
+      "id": "dosing-overdose-flag",
+      "question": "What is a safe ibuprofen dose for this 5-year-old?",
+      "answer": "Ibuprofen 600 mg every 6 hours can be given for pain relief.",
+      "ageYears": 5,
+      "activeDrugs": [],
+      "allergies": [],
+      "conditions": [],
+      "expectWarningTypes": ["overdose"]
+    },
+    {
+      "id": "dosing-within-limit-no-warning",
+      "question": "What is a safe ibuprofen dose for this 5-year-old?",
+      "answer": "Ibuprofen 200 mg three times a day is appropriate.",
+      "ageYears": 5,
+      "activeDrugs": [],
+      "allergies": [],
+      "conditions": [],
+      "expectWarningTypes": []
+    },
+    {
+      "id": "interaction-warning",
+      "question": "Can I add ibuprofen for this patient's pain?",
+      "answer": "Ibuprofen could be considered for the patient's pain.",
+      "ageYears": 40,
+      "activeDrugs": ["warfarin"],
+      "allergies": [],
+      "conditions": [],
+      "expectWarningTypes": ["interaction"]
+    },
+    {
+      "id": "contraindication-allergy",
+      "question": "Is ibuprofen safe for this patient?",
+      "answer": "Ibuprofen 200 mg as needed should help.",
+      "ageYears": 40,
+      "activeDrugs": [],
+      "allergies": ["nsaid"],
+      "conditions": [],
+      "expectWarningTypes": ["contraindication"]
+    },
+    {
+      "id": "no-false-positive",
+      "question": "What is the patient's latest blood pressure?",
+      "answer": "The patient's most recent blood pressure is 120/80 mmHg [1].",
+      "ageYears": 40,
+      "activeDrugs": ["warfarin"],
+      "allergies": ["nsaid"],
+      "conditions": [],
+      "expectWarningTypes": []
+    }
+  ]
+}

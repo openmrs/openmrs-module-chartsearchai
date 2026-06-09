@@ -590,6 +590,37 @@ public class ChartSearchAiUtils {
 		return ChartSearchAiConstants.DEFAULT_GROUNDING_MIN_COSINE;
 	}
 
+	/**
+	 * Reads a boolean global property, failing safe to {@code defaultValue} when
+	 * the value is unset/blank or no admin service is available (e.g. context not
+	 * started, or a unit test). Mirrors {@link #isGroundingEnabled()} but
+	 * parameterized so the drug-reference feature's several toggles share one
+	 * reader instead of copy-pasting the try/catch each time.
+	 */
+	public static boolean getBooleanGlobalProperty(String property, boolean defaultValue) {
+		try {
+			String value = org.openmrs.api.context.Context.getAdministrationService()
+					.getGlobalProperty(property, String.valueOf(defaultValue));
+			if (value == null || value.trim().isEmpty()) {
+				return defaultValue;
+			}
+			return "true".equalsIgnoreCase(value.trim());
+		}
+		catch (RuntimeException e) {
+			return defaultValue;
+		}
+	}
+
+	/**
+	 * @return true when the DrugReference resource type and the post-answer
+	 *         drug-safety validator are enabled (the master switch). Default
+	 *         {@code false} — additive and opt-in.
+	 */
+	public static boolean isDrugReferenceEnabled() {
+		return getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED,
+				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_ENABLED);
+	}
+
 	private ChartSearchAiUtils() {
 	}
 }

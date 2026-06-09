@@ -1,0 +1,87 @@
+{
+  "version": "1.0",
+  "source": "WHO Model List of Essential Medicines for Children (public domain)",
+  "description": "Pediatric drug reference seed data for chartsearchai. Each entry carries aliases for question-driven matching, ATC codes for order-driven matching, age-banded dosing for overdose checks, and interaction/contraindication rules for the post-LLM safety validator. Doses are seed values; expand per deployment.",
+  "entries": [
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "drugClass": "NSAID",
+      "aliases": ["ibuprofen", "brufen", "nurofen", "advil"],
+      "atcCodes": ["M01AE01"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 1, "mgPerKgMin": 5, "mgPerKgMax": 10, "maxDailyDoseMg": 0 },
+        { "minYears": 2, "maxYears": 11, "mgPerKgMin": 5, "mgPerKgMax": 10, "maxDailyDoseMg": 1200 },
+        { "minYears": 12, "maxYears": 120, "mgPerKgMin": 5, "mgPerKgMax": 10, "maxDailyDoseMg": 2400 }
+      ],
+      "interactions": [
+        { "token": "warfarin", "atc": "B01AA03", "note": "increased risk of GI bleeding" },
+        { "token": "aspirin", "atc": "B01AC06", "note": "additive GI and bleeding risk" }
+      ],
+      "contraindications": [
+        { "type": "allergy", "token": "nsaid", "note": "NSAID hypersensitivity" },
+        { "type": "allergy", "token": "ibuprofen", "note": "documented ibuprofen allergy" },
+        { "type": "condition", "token": "gi bleed", "note": "active gastrointestinal bleeding" },
+        { "type": "condition", "token": "peptic ulcer", "note": "active peptic ulcer disease" }
+      ],
+      "source": "WHO Model List of Essential Medicines for Children"
+    },
+    {
+      "id": "paracetamol",
+      "name": "Paracetamol",
+      "drugClass": "Analgesic/antipyretic",
+      "aliases": ["paracetamol", "acetaminophen", "panadol", "tylenol", "calpol"],
+      "atcCodes": ["N02BE01"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 11, "mgPerKgMin": 10, "mgPerKgMax": 15, "maxDailyDoseMg": 2000 },
+        { "minYears": 12, "maxYears": 120, "mgPerKgMin": 10, "mgPerKgMax": 15, "maxDailyDoseMg": 4000 }
+      ],
+      "interactions": [
+        { "token": "warfarin", "atc": "B01AA03", "note": "prolonged high-dose use may potentiate anticoagulant effect" }
+      ],
+      "contraindications": [
+        { "type": "allergy", "token": "paracetamol", "note": "documented paracetamol allergy" },
+        { "type": "condition", "token": "severe hepatic", "note": "severe hepatic impairment" }
+      ],
+      "source": "WHO Model List of Essential Medicines for Children"
+    },
+    {
+      "id": "amoxicillin",
+      "name": "Amoxicillin",
+      "drugClass": "Aminopenicillin antibiotic",
+      "aliases": ["amoxicillin", "amoxil"],
+      "atcCodes": ["J01CA04"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 11, "mgPerKgMin": 20, "mgPerKgMax": 40, "maxDailyDoseMg": 1500 },
+        { "minYears": 12, "maxYears": 120, "mgPerKgMin": 20, "mgPerKgMax": 40, "maxDailyDoseMg": 3000 }
+      ],
+      "interactions": [
+        { "token": "methotrexate", "atc": "L01BA01", "note": "reduced methotrexate clearance, increased toxicity" }
+      ],
+      "contraindications": [
+        { "type": "allergy", "token": "penicillin", "note": "penicillin-class hypersensitivity" },
+        { "type": "allergy", "token": "amoxicillin", "note": "documented amoxicillin allergy" }
+      ],
+      "source": "WHO Model List of Essential Medicines for Children"
+    },
+    {
+      "id": "gentamicin",
+      "name": "Gentamicin",
+      "drugClass": "Aminoglycoside antibiotic",
+      "aliases": ["gentamicin"],
+      "atcCodes": ["J01GB03"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 11, "mgPerKgMin": 5, "mgPerKgMax": 7.5, "maxDailyDoseMg": 360 },
+        { "minYears": 12, "maxYears": 120, "mgPerKgMin": 5, "mgPerKgMax": 7.5, "maxDailyDoseMg": 480 }
+      ],
+      "interactions": [
+        { "token": "furosemide", "atc": "C03CA01", "note": "additive ototoxicity and nephrotoxicity" }
+      ],
+      "contraindications": [
+        { "type": "allergy", "token": "aminoglycoside", "note": "aminoglycoside hypersensitivity" },
+        { "type": "condition", "token": "renal impairment", "note": "significant renal impairment (dose adjustment required)" }
+      ],
+      "source": "WHO Model List of Essential Medicines for Children"
+    }
+  ]
+}

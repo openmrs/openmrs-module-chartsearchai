@@ -389,8 +389,6 @@ public class ChartSearchAiConstants {
 	 *  When absent, the dataset bundled on the module classpath is used. */
 	public static final String GP_DRUG_REFERENCE_DATA_FILE_PATH = "chartsearchai.drugReference.dataFilePath";
 
-	public static final String DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH = "chartsearchai/drug-reference.json";
-
 	/** Selects the drug-reference data adapter: {@code json} (the curated default) or {@code atc}
 	 *  (consume a WHO ATC classification export by pointing dataFilePath at it). See ADR Decision 24. */
 	public static final String GP_DRUG_REFERENCE_SOURCE_FORMAT = "chartsearchai.drugReference.sourceFormat";

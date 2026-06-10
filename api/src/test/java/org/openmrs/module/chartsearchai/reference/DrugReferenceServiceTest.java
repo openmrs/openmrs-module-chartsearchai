@@ -96,4 +96,18 @@ public class DrugReferenceServiceTest {
 		// Age unknown -> no band (so dosing is never surfaced without an age).
 		assertNull(ibuprofen.bandForAge(null));
 	}
+
+	@Test
+	public void delegatesToTheConfiguredSource() {
+		// The service loads from its DrugReferenceSource (the format GP selects which one).
+		// Inject a source via the seam and confirm getAll() returns exactly its entries.
+		DrugReference entry = new DrugReference();
+		entry.setId("test-drug");
+		entry.setName("Test Drug");
+		entry.setAliases(Collections.singletonList("test drug"));
+		DrugReferenceService svc = new DrugReferenceService();
+		svc.setSource(() -> Collections.singletonList(entry));
+		assertEquals(1, svc.getAll().size());
+		assertEquals("test-drug", svc.getAll().get(0).getId());
+	}
 }

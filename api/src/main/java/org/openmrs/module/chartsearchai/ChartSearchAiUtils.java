@@ -612,6 +612,22 @@ public class ChartSearchAiUtils {
 	}
 
 	/**
+	 * Reads a string global property, failing safe to {@code defaultValue} when the
+	 * value is unset/blank or no admin service is available (context not started, or a
+	 * unit test). The string counterpart of {@link #getBooleanGlobalProperty}.
+	 */
+	public static String getStringGlobalProperty(String property, String defaultValue) {
+		try {
+			String value = org.openmrs.api.context.Context.getAdministrationService()
+					.getGlobalProperty(property, defaultValue);
+			return (value == null || value.trim().isEmpty()) ? defaultValue : value.trim();
+		}
+		catch (RuntimeException e) {
+			return defaultValue;
+		}
+	}
+
+	/**
 	 * @return true when the DrugReference resource type and the post-answer
 	 *         drug-safety validator are enabled (the master switch). Default
 	 *         {@code false} — additive and opt-in.

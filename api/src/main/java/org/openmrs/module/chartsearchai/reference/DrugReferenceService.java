@@ -9,10 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -22,35 +18,28 @@ import java.util.Set;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 /**
- * Loads and indexes the drug-reference dataset. The dataset is resolved from the
- * path in {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH} (relative
- * to the OpenMRS application data directory); if that file is absent or
- * unreadable — including when no OpenMRS context is available — it falls back to
- * the dataset bundled on the classpath at {@code /chartsearchai/drug-reference.json}
- * so the module ships with working defaults.
+ * Loads and indexes the drug-reference dataset. The data <em>layer</em> is
+ * pluggable: the active {@link DrugReferenceSource} is selected by
+ * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_SOURCE_FORMAT}
+ * ({@code json} = the curated {@link JsonDrugReferenceSource}, {@code atc} = the
+ * authoritative {@link AtcDrugReferenceSource}); both resolve their file from
+ * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH}. This lets the
+ * feature consume authoritative datasets by pointing at them, rather than
+ * hand-maintaining a chartsearchai-specific file. See ADR Decision 24.
  *
- * <p>Loading is lazy and cached: the first lookup triggers a parse, and the result
- * is held for the life of the bean. Editing the on-disk JSON therefore requires a
- * module restart (documented as a follow-up; a reindex task can come later).
+ * <p>Loading is lazy and cached: the first lookup triggers a load, and the result
+ * is held for the life of the bean. Editing the dataset — or switching the source
+ * format — therefore requires a module restart.
  */
 @Service("chartSearchAi.drugReferenceService")
 public class DrugReferenceService {
 
-	private static final Logger log = LoggerFactory.getLogger(DrugReferenceService.class);
-
-	static final String CLASSPATH_DEFAULT = "/chartsearchai/drug-reference.json";
-
-	private static final ObjectMapper MAPPER = new ObjectMapper();
-
 	private volatile List<DrugReference> entries;
+
+	private DrugReferenceSource source;
 
 	/**
 	 * @return all loaded reference entries (never null; empty when nothing could be loaded).
@@ -143,81 +132,36 @@ public class DrugReferenceService {
 			if (entries != null) {
 				return;
 			}
-			entries = Collections.unmodifiableList(load());
-		}
-	}
-
-	private List<DrugReference> load() {
-		// Prefer the operator-configured file in the application data directory.
-		String configuredPath = null;
-		try {
-			configuredPath = org.openmrs.api.context.Context.getAdministrationService()
-					.getGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
-							ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH);
-		}
-		catch (RuntimeException e) {
-			// No admin service (e.g. context not started, or a unit test) -> classpath default below.
-			log.debug("No OpenMRS context for drug-reference path; using bundled default", e);
-		}
-
-		if (configuredPath != null && !configuredPath.trim().isEmpty()) {
-			try {
-				String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath.trim(),
-						ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH);
-				try (InputStream in = new FileInputStream(new File(resolved))) {
-					List<DrugReference> loaded = parse(in);
-					log.info("Loaded {} drug-reference entries from {}", loaded.size(), resolved);
-					return loaded;
-				}
-			}
-			catch (IllegalStateException e) {
-				// File not configured/found/path-invalid -> fall back to the bundled default.
-				log.info("Drug-reference file '{}' not available ({}); using bundled default",
-						configuredPath, e.getMessage());
-			}
-			catch (IOException e) {
-				log.warn("Failed to read drug-reference file '{}'; using bundled default", configuredPath, e);
-			}
-		}
-
-		try (InputStream in = DrugReferenceService.class.getResourceAsStream(CLASSPATH_DEFAULT)) {
-			if (in == null) {
-				log.warn("Bundled drug-reference dataset {} not found on classpath; running empty",
-						CLASSPATH_DEFAULT);
-				return Collections.emptyList();
-			}
-			List<DrugReference> loaded = parse(in);
-			log.info("Loaded {} drug-reference entries from bundled default {}",
-					loaded.size(), CLASSPATH_DEFAULT);
-			return loaded;
-		}
-		catch (IOException e) {
-			log.error("Failed to parse bundled drug-reference dataset; running empty", e);
-			return Collections.emptyList();
+			entries = Collections.unmodifiableList(source().load());
 		}
 	}
 
 	/**
-	 * Parse a dataset stream into reference entries. Package-private and static so
-	 * tests can exercise the real parser against the real dataset.
+	 * @return the active source. The {@code sourceFormat} GP selects the adapter;
+	 *         any value other than {@code atc} (including the unset/no-context case)
+	 *         defaults to the curated JSON source.
 	 */
-	static List<DrugReference> parse(InputStream in) throws IOException {
-		Dataset dataset = MAPPER.readValue(in, Dataset.class);
-		if (dataset == null || dataset.entries == null) {
-			return Collections.emptyList();
+	private DrugReferenceSource source() {
+		if (source != null) {
+			return source;
 		}
-		return dataset.entries;
+		String format = ChartSearchAiUtils.getStringGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT,
+				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
+		if (ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC.equalsIgnoreCase(format)) {
+			return new AtcDrugReferenceSource();
+		}
+		return new JsonDrugReferenceSource();
 	}
 
-	/** Test seam: inject a known entry set, bypassing file/classpath loading. */
+	/** Test seam: inject a known source, bypassing the format GP. */
+	void setSource(DrugReferenceSource source) {
+		this.source = source;
+	}
+
+	/** Test seam: inject a known entry set, bypassing source loading. */
 	void setEntries(List<DrugReference> entries) {
 		this.entries = entries == null ? Collections.<DrugReference> emptyList()
 				: Collections.unmodifiableList(new ArrayList<DrugReference>(entries));
-	}
-
-	@JsonIgnoreProperties(ignoreUnknown = true)
-	private static class Dataset {
-
-		public List<DrugReference> entries;
 	}
 }

@@ -391,6 +391,15 @@ public class ChartSearchAiConstants {
 
 	public static final String DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH = "chartsearchai/drug-reference.json";
 
+	/** Selects the drug-reference data adapter: {@code json} (the curated default) or {@code atc}
+	 *  (consume a WHO ATC classification export by pointing dataFilePath at it). See ADR Decision 24. */
+	public static final String GP_DRUG_REFERENCE_SOURCE_FORMAT = "chartsearchai.drugReference.sourceFormat";
+
+	public static final String DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT = "json";
+
+	/** Value of {@link #GP_DRUG_REFERENCE_SOURCE_FORMAT} that selects the ATC classification source. */
+	public static final String DRUG_REFERENCE_SOURCE_ATC = "atc";
+
 	/** Patient-driven injection: inject reference entries that match an active order's ATC code. */
 	public static final String GP_DRUG_REFERENCE_INJECT_FROM_ORDERS = "chartsearchai.drugReference.injectFromOrders";
 

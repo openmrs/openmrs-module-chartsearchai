@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -46,6 +47,26 @@ public class AtcDrugReferenceSourceTest {
 		// The sample has 6 level-5 substances; the group rows (M01A, M01AE, …) are NOT entries.
 		assertEquals(6, all.size(), "only 7-char level-5 ATC codes become drug entries");
 		assertTrue(all.stream().allMatch(r -> r.getId().length() == AtcDrugReferenceSource.SUBSTANCE_CODE_LENGTH));
+	}
+
+	@Test
+	public void parsesLowercaseAtcCodesByNormalising() throws IOException {
+		// RxNorm/ATC crosswalk exports are not always upper case; a lowercase code must be parsed
+		// (normalised to upper case), not silently dropped, leaving the whole dataset empty.
+		String lower = "m01ae\tPropionic acid derivatives\nm01ae01\tIbuprofen\n";
+		List<DrugReference> all = AtcDrugReferenceSource.parse(
+				new java.io.ByteArrayInputStream(lower.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+		DrugReference ibuprofen = byCode(all, "M01AE01");
+		assertNotNull(ibuprofen, "a lowercase ATC code must be parsed (normalised), not dropped");
+		assertTrue(ibuprofen.getAtcCodes().contains("M01AE01"));
+		assertEquals("Propionic acid derivatives", ibuprofen.getDrugClass());
+	}
+
+	@Test
+	public void ignoresSevenCharTokensThatAreNotValidAtcCodes() throws IOException {
+		// The sample includes "ABCDEFG" — 7 chars but not a valid ATC level-5 code. It must NOT
+		// become a drug entry (a non-ATC/malformed file should degrade to clean output, not bogus drugs).
+		assertNull(byCode(parseSample(), "ABCDEFG"), "a 7-char non-ATC token must not be emitted as a drug");
 	}
 
 	@Test

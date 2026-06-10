@@ -47,21 +47,14 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 
 	@Override
 	public List<DrugReference> load() {
-		// Prefer the operator-configured file in the application data directory.
-		String configuredPath = null;
-		try {
-			configuredPath = org.openmrs.api.context.Context.getAdministrationService()
-					.getGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
-							ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH);
-		}
-		catch (RuntimeException e) {
-			// No admin service (e.g. context not started, or a unit test) -> classpath default below.
-			log.debug("No OpenMRS context for drug-reference path; using bundled default", e);
-		}
+		// Prefer the operator-configured file in the application data directory. The fail-safe
+		// read returns "" when unset/blank or no context is available -> classpath default below.
+		String configuredPath = ChartSearchAiUtils.getStringGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, "");
 
-		if (configuredPath != null && !configuredPath.trim().isEmpty()) {
+		if (!configuredPath.isEmpty()) {
 			try {
-				String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath.trim(),
+				String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath,
 						ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH);
 				try (InputStream in = new FileInputStream(new File(resolved))) {
 					List<DrugReference> loaded = parse(in);

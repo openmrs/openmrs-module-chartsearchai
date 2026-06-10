@@ -15,3 +15,4 @@ J01CA04	Amoxicillin
 J01G	Aminoglycoside antibacterials
 J01GB	Other aminoglycosides
 J01GB03	Gentamicin
+ABCDEFG	Not a valid ATC level-5 code (7 chars, wrong shape) - must be ignored

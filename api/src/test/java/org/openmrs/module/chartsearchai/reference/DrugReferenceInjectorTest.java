@@ -105,4 +105,29 @@ public class DrugReferenceInjectorTest {
 				.anyMatch(m -> "ibuprofen".equals(m.getResourceUuid())),
 				"active-order ATC should inject the matching reference even when the question is silent");
 	}
+
+	@Test
+	public void rendersAtcClassificationEntryWithNoRuleSections() {
+		// An ATC-sourced entry carries class + ATC code but no dosing/interaction/contraindication
+		// rules; the injected line must render cleanly (class + ATC) with none of the rule sections.
+		DrugReference atc = new DrugReference();
+		atc.setId("M01AE01");
+		atc.setName("Ibuprofen");
+		atc.setAliases(Collections.singletonList("ibuprofen"));
+		atc.setAtcCodes(Collections.singletonList("M01AE01"));
+		atc.setDrugClass("Propionic acid derivatives");
+		DrugReferenceService svc = new DrugReferenceService();
+		svc.setEntries(Collections.singletonList(atc));
+		DrugReferenceInjector inj = new DrugReferenceInjector();
+		inj.setDrugReferenceService(svc);
+
+		PatientChart result = inj.injectRecords(oneRecordChart(), context(5, null), "what is the ibuprofen dose?");
+		String injected = result.getMappings().get(1).getText();
+		assertTrue(injected.contains("Drug reference — Ibuprofen"));
+		assertTrue(injected.contains("Propionic acid derivatives"));
+		assertTrue(injected.contains("ATC M01AE01"));
+		assertFalse(injected.contains("Dosing for ages"), "ATC entry has no age bands -> no dosing line");
+		assertFalse(injected.contains("Contraindicated with:"), "ATC entry has no contraindication rules");
+		assertFalse(injected.contains("Interactions:"), "ATC entry has no interaction rules");
+	}
 }

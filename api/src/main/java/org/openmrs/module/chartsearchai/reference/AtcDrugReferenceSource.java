@@ -60,22 +60,21 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 	/** Parent-group code lengths to try, longest first: level 4 (5), level 3 (4), level 2 (3). */
 	private static final int[] PARENT_LENGTHS = { 5, 4, 3 };
 
+	/** A level-5 ATC code: one letter, two digits, two letters, two digits (e.g. {@code M01AE01}).
+	 *  Guards against a non-ATC or malformed file turning any 7-character first token into a drug. */
+	private static final java.util.regex.Pattern ATC_LEVEL5 = java.util.regex.Pattern.compile("[A-Z]\\d{2}[A-Z]{2}\\d{2}");
+
 	@Override
 	public List<DrugReference> load() {
-		String configuredPath = null;
-		try {
-			configuredPath = org.openmrs.api.context.Context.getAdministrationService()
-					.getGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, "");
-		}
-		catch (RuntimeException e) {
-			log.debug("No OpenMRS context for ATC drug-reference path; loading empty", e);
-		}
-		if (configuredPath == null || configuredPath.trim().isEmpty()) {
+		// Fail-safe read returns "" when unset/blank or no context is available -> run empty.
+		String configuredPath = ChartSearchAiUtils.getStringGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, "");
+		if (configuredPath.isEmpty()) {
 			log.info("ATC drug-reference source selected but no dataset path is configured; running empty");
 			return Collections.emptyList();
 		}
 		try {
-			String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath.trim(),
+			String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath,
 					ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH);
 			try (InputStream in = new FileInputStream(new File(resolved))) {
 				List<DrugReference> loaded = parse(in);
@@ -113,7 +112,9 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 				if (parts.length < 2) {
 					continue;
 				}
-				String code = parts[0].trim();
+				// Normalise the code to upper case: ATC export formats (e.g. RxNorm/ATC crosswalks)
+				// are not all upper case, and the rest of the pipeline compares ATC codes upper-cased.
+				String code = parts[0].trim().toUpperCase(Locale.ROOT);
 				String name = parts[1].trim();
 				if (!code.isEmpty() && !name.isEmpty()) {
 					names.put(code, name);
@@ -122,11 +123,17 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 		}
 		List<DrugReference> out = new ArrayList<DrugReference>();
 		for (Map.Entry<String, String> entry : names.entrySet()) {
-			if (entry.getKey().length() == SUBSTANCE_CODE_LENGTH) {
+			if (isLevel5Substance(entry.getKey())) {
 				out.add(toEntry(entry.getKey(), entry.getValue(), names));
 			}
 		}
 		return out;
+	}
+
+	/** @return true when {@code code} is a valid level-5 ATC substance code. A non-ATC or malformed
+	 *          file's 7-character first tokens are rejected here rather than emitted as bogus drugs. */
+	private static boolean isLevel5Substance(String code) {
+		return code.length() == SUBSTANCE_CODE_LENGTH && ATC_LEVEL5.matcher(code).matches();
 	}
 
 	private static DrugReference toEntry(String code, String name, Map<String, String> names) {

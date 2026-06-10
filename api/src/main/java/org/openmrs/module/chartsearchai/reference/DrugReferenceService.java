@@ -84,8 +84,8 @@ public class DrugReferenceService {
 		Set<String> atc = context.getActiveDrugAtcCodes();
 		List<DrugReference> out = new ArrayList<DrugReference>();
 		for (DrugReference ref : getAll()) {
-			for (String code : ref.getAtcCodes()) {
-				if (code != null && atc.contains(code.trim().toUpperCase(Locale.ROOT))) {
+			for (String code : ref.normalizedAtcCodes()) {
+				if (atc.contains(code)) {
 					out.add(ref);
 					break;
 				}

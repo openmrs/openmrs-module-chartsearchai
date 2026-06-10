@@ -1642,7 +1642,7 @@ The overdose check parses `(drug, mg, frequency)` from the free-text answer. To 
 
 ## Decision 24: Drug-reference as a pluggable consumer of authoritative datasets
 
-**Status: Proposed** (June 2026) — direction agreed; implementation pending. Extends [Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation).
+**Status: Accepted** (June 2026) — implemented. Extends [Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation).
 
 ### Context
 
@@ -1700,11 +1700,16 @@ So pointing at WHO ATC delivers **class-based contraindication/interaction reaso
 - **−** WHO ATC/DDD bulk data carries use-terms (not a no-strings-open CSV); an RxNorm↔ATC crosswalk may be the practical source.
 - **−** Class-based allergy matching needs the recorded allergy to resolve to a class: free-text "NSAID" matches directly, but a coded allergen needs a class mapping that must come from the consumed dataset (not the OpenMRS dictionary, per constraint 1) — an edge for the ATC adapter to handle.
 
-### Implementation sketch (pending)
+### Implementation
 
-- `DrugReferenceSource` interface; `JsonDrugReferenceSource` (current bespoke schema, retained); `AtcDrugReferenceSource` (WHO ATC / RxNorm-ATC crosswalk → classes).
-- GP `chartsearchai.drugReference.sourceFormat` (e.g. `json` | `atc`) alongside the existing `dataFilePath`.
-- Class-level contraindication / interaction matching in `DrugSafetyValidator`, keyed on ATC class rather than per-drug rules.
+- `DrugReferenceSource` interface; `JsonDrugReferenceSource` (the bespoke schema, retained as one adapter + bundled fallback); `AtcDrugReferenceSource` (WHO ATC / RxNorm-ATC crosswalk → one classification entry per level-5 substance, `drugClass` derived from the nearest parent group present in the dataset).
+- GP `chartsearchai.drugReference.sourceFormat` (`json` | `atc`) alongside the existing `dataFilePath`.
+- **Class-level contraindication / interaction matching in `DrugSafetyValidator`**, keyed on ATC class rather than per-drug rules, so a rule-less classification source still produces safety reasoning:
+  - **Contraindication** — fires when a recorded allergy resolves (by name) to the drug the answer recommends (a direct allergy that the rule-less source would otherwise miss) **or** to a drug sharing its ATC class (cross-reactivity). Deduplicated per resolved allergen, so several aliases of one allergy warn once.
+  - **Interaction** — fires when the answer's drug shares an ATC class with an active order (additive effects / duplicate therapy), skipping an order that is the *same* drug (restating existing therapy is not a duplicate).
+  - Both are **additive** to the rule-based checks and reuse the existing `warnOnContraindications` / `warnOnInteractions` toggles.
+- **"Same class" = ATC level-4 (chemical subgroup, the 5-character prefix `M01AE`), not level-3.** Level 4 groups structurally-related drugs (ibuprofen/naproxen) with the fewest false positives; level 3 (`M01A` = all NSAIDs) fans out far more broadly with no curated data to justify it. This is the project's standing anti-false-positive stance (the dose-parser hardening existed for the same reason) applied to class breadth.
+- **Documented boundary (unchanged from the matrix above):** ATC's tree does not capture cross-*branch* cross-reactivity — aspirin `N02BA01` (salicylates) is a different ATC branch from ibuprofen `M01AE01` (propionic NSAIDs), so an ibuprofen allergy does **not** flag aspirin by class alone. That linkage needs a curated cross-reactivity dataset, not classification, and is asserted as a boundary test (`classContraindicationNotRaisedAcrossDifferentAtcBranch`).
 
 ## Known limitations
 

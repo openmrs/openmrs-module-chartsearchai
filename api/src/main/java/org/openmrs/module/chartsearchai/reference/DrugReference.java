@@ -10,8 +10,10 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -88,6 +90,23 @@ public class DrugReference {
 
 	public void setAtcCodes(List<String> atcCodes) {
 		this.atcCodes = atcCodes != null ? atcCodes : Collections.<String> emptyList();
+	}
+
+	/**
+	 * @return this entry's ATC codes trimmed, upper-cased ({@link Locale#ROOT}) and de-duplicated,
+	 *         with blank/null entries dropped — the canonical normalisation for comparing ATC codes.
+	 *         Shared by the order-driven matcher ({@link DrugReferenceService#findByActiveOrders}) and
+	 *         the class-based safety checks ({@link DrugSafetyValidator}) so both decide "same ATC
+	 *         code" identically; like {@link #formatNumber} this keeps one rule in one place.
+	 */
+	public Set<String> normalizedAtcCodes() {
+		Set<String> out = new LinkedHashSet<String>();
+		for (String code : atcCodes) {
+			if (code != null && !code.trim().isEmpty()) {
+				out.add(code.trim().toUpperCase(Locale.ROOT));
+			}
+		}
+		return out;
 	}
 
 	public List<AgeBand> getAgeBands() {

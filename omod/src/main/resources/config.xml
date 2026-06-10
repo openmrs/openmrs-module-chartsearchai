@@ -261,7 +261,7 @@
 	<globalProperty>
 		<property>chartsearchai.drugReference.sourceFormat</property>
 		<defaultValue>json</defaultValue>
-		<description>Selects the drug-reference data adapter (ADR Decision 24). "json" (default) reads the curated chartsearchai drug-reference.json — the only format carrying dosing/interaction/contraindication rules, with a bundled classpath fallback. "atc" consumes a WHO ATC classification export (a &lt;atcCode&gt;&lt;whitespace&gt;&lt;name&gt; per-line file, all levels) into one classification entry per level-5 substance, deriving each drug's class from its parent group; ATC carries classification only (no dosing/interaction/contraindication rules), so point chartsearchai.drugReference.dataFilePath at your ATC file. Any value other than "atc" is treated as "json". Default: json.</description>
+		<description>Selects the drug-reference data adapter (ADR Decision 24). "json" (default) reads the curated chartsearchai drug-reference.json — the only format carrying dosing/interaction/contraindication rules, with a bundled classpath fallback. "atc" consumes a WHO ATC classification export (a &lt;atcCode&gt;&lt;whitespace&gt;&lt;name&gt; per-line file, all levels) into one classification entry per level-5 substance, deriving each drug's class from its parent group; ATC carries classification only (no per-entry dosing/interaction/contraindication rules), but the post-answer validator still derives class-based contraindication and interaction warnings from the ATC codes (see chartsearchai.drugSafety.warnOnContraindications/.warnOnInteractions). Point chartsearchai.drugReference.dataFilePath at your ATC file. Any value other than "atc" is treated as "json". Default: json.</description>
 	</globalProperty>
 
 	<globalProperty>
@@ -291,13 +291,13 @@
 	<globalProperty>
 		<property>chartsearchai.drugSafety.warnOnInteractions</property>
 		<defaultValue>true</defaultValue>
-		<description>When true, the validator cross-references each drug named in the answer against the patient's active drug orders and flags known interactions from the reference dataset. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
+		<description>When true, the validator cross-references each drug named in the answer against the patient's active drug orders and flags interactions: both hand-authored rules from the reference dataset and an active order in the same ATC level-4 subgroup (duplicate therapy), the latter requiring only ATC codes so it works with the rule-less atc source. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
 	</globalProperty>
 
 	<globalProperty>
 		<property>chartsearchai.drugSafety.warnOnContraindications</property>
 		<defaultValue>true</defaultValue>
-		<description>When true, the validator cross-references each drug named in the answer against the patient's active allergies and conditions and flags contraindications from the reference dataset. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
+		<description>When true, the validator cross-references each drug named in the answer against the patient's active allergies and conditions and flags contraindications: both hand-authored rules from the reference dataset and a recorded allergy to the same drug or one in the same ATC level-4 subgroup (cross-reactivity), the latter requiring only ATC codes so it works with the rule-less atc source. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
 	</globalProperty>
 
 	<!-- AOP -->

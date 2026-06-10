@@ -10,8 +10,10 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,13 +35,27 @@ import org.springframework.stereotype.Service;
  * <ul>
  *   <li><b>Overdose</b> — a daily dose parsed from the answer exceeds the
  *       reference {@code maxDailyDoseMg} for the patient's age band.</li>
- *   <li><b>Interactions</b> — the drug interacts with one of the patient's active orders.</li>
- *   <li><b>Contraindications</b> — the drug is contraindicated by an active allergy or condition.</li>
+ *   <li><b>Interactions</b> — the drug interacts with one of the patient's active orders,
+ *       either by a hand-authored rule OR by sharing an ATC chemical subgroup with an
+ *       active order (duplicate-therapy reasoning).</li>
+ *   <li><b>Contraindications</b> — the drug is contraindicated by an active allergy or
+ *       condition, either by a hand-authored rule OR by being the same drug as — or sharing
+ *       an ATC chemical subgroup with — a recorded allergy (cross-reactivity reasoning).</li>
  * </ul>
  *
+ * <p>The rule-based checks fire on the entry's own curated {@code interactions}/
+ * {@code contraindications}; the <em>class-based</em> checks need only ATC codes, so they
+ * are the mechanism by which an authoritative classification source ({@link AtcDrugReferenceSource},
+ * which carries no rules) still produces safety reasoning. "Same class" means a shared ATC
+ * level-4 chemical subgroup ({@link #ATC_CLASS_PREFIX_LENGTH}), e.g. ibuprofen {@code M01AE01}
+ * and naproxen {@code M01AE02} both {@code M01AE}. ATC's tree does not capture cross-branch
+ * pharmacological cross-reactivity (aspirin {@code N02BA01} vs ibuprofen {@code M01AE01}); that
+ * needs curated data, not classification. See ADR Decision 24.
+ *
  * <p>Conservative by design: overdose is flagged only when a daily total can be
- * computed AND it exceeds a published maximum, so a sufficient-chart answer with
- * no reference need produces no warnings (the no-false-positive case).
+ * computed AND it exceeds a published maximum; class-based interactions skip an active order
+ * that is the <em>same</em> drug (restating existing therapy is not a duplicate). A
+ * sufficient-chart answer with no reference need produces no warnings (the no-false-positive case).
  */
 @Service("chartSearchAi.drugSafetyValidator")
 public class DrugSafetyValidator {
@@ -76,6 +92,12 @@ public class DrugSafetyValidator {
 	/** How far before/after a dose a drug alias may sit and still own that dose; bounds attribution
 	 *  so a dose far from any drug name is ignored. */
 	private static final int MAX_ALIAS_TO_DOSE_DISTANCE = 120;
+
+	/** "Same ATC class" for class-based reasoning means a shared level-4 (chemical subgroup) prefix —
+	 *  the first 5 characters of a level-5 substance code (M01AE01 -> M01AE). Level 4 is the conservative
+	 *  granularity: it groups structurally-related drugs (ibuprofen/naproxen, both M01AE) without fanning
+	 *  out across an entire broad group (level 3 M01A = all NSAIDs), keeping false positives lowest. */
+	static final int ATC_CLASS_PREFIX_LENGTH = 5;
 
 	@Autowired
 	private DrugReferenceService drugReferenceService;
@@ -126,9 +148,11 @@ public class DrugSafetyValidator {
 			}
 			if (warnContra) {
 				addContraindications(warnings, ref, context);
+				addClassContraindications(warnings, ref, context);
 			}
 			if (warnInteractions) {
 				addInteractions(warnings, ref, context);
+				addClassInteractions(warnings, ref, context);
 			}
 			if (warnDose) {
 				addOverdose(warnings, ref, context, lower, all);
@@ -176,6 +200,110 @@ public class DrugSafetyValidator {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(), detail));
 			}
 		}
+	}
+
+	/**
+	 * Class-based contraindication reasoning (needs only ATC codes, so it works for an
+	 * authoritative classification source that carries no rules). For the drug {@code ref}
+	 * named in the answer, each recorded allergy token is resolved to a reference drug; a
+	 * warning fires when that allergen <em>is</em> {@code ref} (a recorded allergy to the very
+	 * drug recommended) or shares {@code ref}'s ATC level-4 subgroup (cross-reactivity).
+	 * Deduplicated per resolved allergen so several aliases of one allergy warn once.
+	 */
+	private void addClassContraindications(List<SafetyWarning> warnings, DrugReference ref,
+			PatientClinicalContext context) {
+		if (context == null) {
+			return;
+		}
+		Set<String> refClasses = atcClasses(ref);
+		if (refClasses.isEmpty()) {
+			return;
+		}
+		Set<DrugReference> seenAllergens = new LinkedHashSet<DrugReference>();
+		for (String allergyToken : context.getAllergyTokens()) {
+			DrugReference allergen = drugReferenceService.lookupByToken(allergyToken);
+			if (allergen == null || !seenAllergens.add(allergen)) {
+				continue;
+			}
+			if (allergen == ref) {
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.getName(),
+						"the patient has a recorded allergy to " + ref.getName()));
+				continue;
+			}
+			String shared = sharedClass(refClasses, allergen);
+			if (shared != null) {
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.getName(),
+						"same ATC class (" + shared + ") as the patient's allergy to " + allergen.getName()
+								+ " — possible cross-reactivity"));
+			}
+		}
+	}
+
+	/**
+	 * Class-based interaction reasoning: warns when the drug {@code ref} named in the answer shares
+	 * an ATC level-4 subgroup with one of the patient's active orders (additive effects / duplicate
+	 * therapy). An order that is the <em>same</em> drug as {@code ref} (a shared exact ATC code) is
+	 * skipped — restating existing therapy is not a duplicate. Active orders carry ATC codes (the
+	 * builder maps them), so this matches on codes directly and names the order from the dataset.
+	 */
+	private void addClassInteractions(List<SafetyWarning> warnings, DrugReference ref,
+			PatientClinicalContext context) {
+		if (context == null) {
+			return;
+		}
+		Set<String> refClasses = atcClasses(ref);
+		if (refClasses.isEmpty()) {
+			return;
+		}
+		Set<String> refCodes = ref.normalizedAtcCodes();
+		for (String orderCode : context.getActiveDrugAtcCodes()) {
+			if (orderCode.length() < ATC_CLASS_PREFIX_LENGTH) {
+				continue;
+			}
+			String orderClass = orderCode.substring(0, ATC_CLASS_PREFIX_LENGTH);
+			if (!refClasses.contains(orderClass) || refCodes.contains(orderCode)) {
+				continue;
+			}
+			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(),
+					"same ATC class (" + orderClass + ") as active order " + displayNameForAtcCode(orderCode)
+							+ " — possible duplicate therapy"));
+		}
+	}
+
+	/** @return the ATC level-4 subgroup prefixes of {@code ref}'s codes; codes shorter than the
+	 *          prefix length contribute no class. */
+	private static Set<String> atcClasses(DrugReference ref) {
+		Set<String> out = new LinkedHashSet<String>();
+		for (String code : ref.normalizedAtcCodes()) {
+			if (code.length() >= ATC_CLASS_PREFIX_LENGTH) {
+				out.add(code.substring(0, ATC_CLASS_PREFIX_LENGTH));
+			}
+		}
+		return out;
+	}
+
+	/** @return the ATC level-4 subgroup {@code other} shares with {@code refClasses}, or null when none. */
+	private static String sharedClass(Set<String> refClasses, DrugReference other) {
+		for (String code : other.normalizedAtcCodes()) {
+			if (code.length() >= ATC_CLASS_PREFIX_LENGTH) {
+				String cls = code.substring(0, ATC_CLASS_PREFIX_LENGTH);
+				if (refClasses.contains(cls)) {
+					return cls;
+				}
+			}
+		}
+		return null;
+	}
+
+	/** @return the display name of the reference drug carrying {@code upperCode}, or the bare code
+	 *          when the active order's substance is not present in the loaded dataset. */
+	private String displayNameForAtcCode(String upperCode) {
+		for (DrugReference ref : drugReferenceService.getAll()) {
+			if (ref.normalizedAtcCodes().contains(upperCode)) {
+				return ref.getName();
+			}
+		}
+		return upperCode;
 	}
 
 	private void addOverdose(List<SafetyWarning> warnings, DrugReference ref,

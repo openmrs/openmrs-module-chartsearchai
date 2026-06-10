@@ -109,6 +109,28 @@ public class DrugReference {
 		return out;
 	}
 
+	/** An ATC level-4 (chemical subgroup) code is the {@value #ATC_SUBGROUP_PREFIX_LENGTH}-character
+	 *  prefix of a level-5 substance code ({@code M01AE01} -> {@code M01AE}). Two drugs sharing a
+	 *  subgroup are structurally related (ibuprofen/naproxen, both {@code M01AE}). */
+	public static final int ATC_SUBGROUP_PREFIX_LENGTH = 5;
+
+	/**
+	 * @return this entry's ATC level-4 chemical subgroups — the {@link #ATC_SUBGROUP_PREFIX_LENGTH}-char
+	 *         prefixes of its {@link #normalizedAtcCodes()} (codes shorter than that contribute none).
+	 *         Two entries are in the same ATC class iff their subgroup sets intersect. This is the one
+	 *         shared definition used by both the order-relevance scoping ({@code DrugReferenceInjector})
+	 *         and the class-based safety checks ({@code DrugSafetyValidator}).
+	 */
+	public Set<String> atcSubgroups() {
+		Set<String> out = new LinkedHashSet<String>();
+		for (String code : normalizedAtcCodes()) {
+			if (code.length() >= ATC_SUBGROUP_PREFIX_LENGTH) {
+				out.add(code.substring(0, ATC_SUBGROUP_PREFIX_LENGTH));
+			}
+		}
+		return out;
+	}
+
 	public List<AgeBand> getAgeBands() {
 		return ageBands;
 	}

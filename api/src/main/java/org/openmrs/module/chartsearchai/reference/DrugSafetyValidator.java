@@ -47,7 +47,7 @@ import org.springframework.stereotype.Service;
  * {@code contraindications}; the <em>class-based</em> checks need only ATC codes, so they
  * are the mechanism by which an authoritative classification source ({@link AtcDrugReferenceSource},
  * which carries no rules) still produces safety reasoning. "Same class" means a shared ATC
- * level-4 chemical subgroup ({@link #ATC_CLASS_PREFIX_LENGTH}), e.g. ibuprofen {@code M01AE01}
+ * level-4 chemical subgroup ({@link DrugReference#ATC_SUBGROUP_PREFIX_LENGTH}), e.g. ibuprofen {@code M01AE01}
  * and naproxen {@code M01AE02} both {@code M01AE}. ATC's tree does not capture cross-branch
  * pharmacological cross-reactivity (aspirin {@code N02BA01} vs ibuprofen {@code M01AE01}); that
  * needs curated data, not classification. See ADR Decision 24.
@@ -92,12 +92,6 @@ public class DrugSafetyValidator {
 	/** How far before/after a dose a drug alias may sit and still own that dose; bounds attribution
 	 *  so a dose far from any drug name is ignored. */
 	private static final int MAX_ALIAS_TO_DOSE_DISTANCE = 120;
-
-	/** "Same ATC class" for class-based reasoning means a shared level-4 (chemical subgroup) prefix —
-	 *  the first 5 characters of a level-5 substance code (M01AE01 -> M01AE). Level 4 is the conservative
-	 *  granularity: it groups structurally-related drugs (ibuprofen/naproxen, both M01AE) without fanning
-	 *  out across an entire broad group (level 3 M01A = all NSAIDs), keeping false positives lowest. */
-	static final int ATC_CLASS_PREFIX_LENGTH = 5;
 
 	@Autowired
 	private DrugReferenceService drugReferenceService;
@@ -215,7 +209,7 @@ public class DrugSafetyValidator {
 		if (context == null) {
 			return;
 		}
-		Set<String> refClasses = atcClasses(ref);
+		Set<String> refClasses = ref.atcSubgroups();
 		if (refClasses.isEmpty()) {
 			return;
 		}
@@ -251,16 +245,16 @@ public class DrugSafetyValidator {
 		if (context == null) {
 			return;
 		}
-		Set<String> refClasses = atcClasses(ref);
+		Set<String> refClasses = ref.atcSubgroups();
 		if (refClasses.isEmpty()) {
 			return;
 		}
 		Set<String> refCodes = ref.normalizedAtcCodes();
 		for (String orderCode : context.getActiveDrugAtcCodes()) {
-			if (orderCode.length() < ATC_CLASS_PREFIX_LENGTH) {
+			if (orderCode.length() < DrugReference.ATC_SUBGROUP_PREFIX_LENGTH) {
 				continue;
 			}
-			String orderClass = orderCode.substring(0, ATC_CLASS_PREFIX_LENGTH);
+			String orderClass = orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH);
 			if (!refClasses.contains(orderClass) || refCodes.contains(orderCode)) {
 				continue;
 			}
@@ -270,26 +264,11 @@ public class DrugSafetyValidator {
 		}
 	}
 
-	/** @return the ATC level-4 subgroup prefixes of {@code ref}'s codes; codes shorter than the
-	 *          prefix length contribute no class. */
-	private static Set<String> atcClasses(DrugReference ref) {
-		Set<String> out = new LinkedHashSet<String>();
-		for (String code : ref.normalizedAtcCodes()) {
-			if (code.length() >= ATC_CLASS_PREFIX_LENGTH) {
-				out.add(code.substring(0, ATC_CLASS_PREFIX_LENGTH));
-			}
-		}
-		return out;
-	}
-
 	/** @return the ATC level-4 subgroup {@code other} shares with {@code refClasses}, or null when none. */
 	private static String sharedClass(Set<String> refClasses, DrugReference other) {
-		for (String code : other.normalizedAtcCodes()) {
-			if (code.length() >= ATC_CLASS_PREFIX_LENGTH) {
-				String cls = code.substring(0, ATC_CLASS_PREFIX_LENGTH);
-				if (refClasses.contains(cls)) {
-					return cls;
-				}
+		for (String cls : other.atcSubgroups()) {
+			if (refClasses.contains(cls)) {
+				return cls;
 			}
 		}
 		return null;

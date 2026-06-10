@@ -267,7 +267,7 @@
 	<globalProperty>
 		<property>chartsearchai.drugReference.injectFromOrders</property>
 		<defaultValue>true</defaultValue>
-		<description>Patient-driven injection: when true, a reference entry whose ATC code matches one of the patient's active drug orders is injected into the chart even if the question does not mention the drug. Requires chartsearchai.drugReference.enabled. Orders without an ATC concept mapping cannot trigger this path; question-driven injection (injectFromQuery) still works via aliases. Default: true.</description>
+		<description>Patient-driven injection: when true, an active drug order's reference is injected into the chart — but only when the question is about a specific drug clinically related to that order (sharing an ATC level-4 subgroup — a duplicate-therapy / cross-reactivity concern). An order unrelated to the asked drug, or a question that names no drug at all, does not inject an order reference: the model still sees the active-order records in the chart, and the safety validator reads active orders directly, so neither the answer's medication awareness nor the safety checks depend on this injection. Requires chartsearchai.drugReference.enabled. Orders without an ATC concept mapping cannot trigger this path; question-driven injection (injectFromQuery) still works via aliases. Default: true.</description>
 	</globalProperty>
 
 	<globalProperty>

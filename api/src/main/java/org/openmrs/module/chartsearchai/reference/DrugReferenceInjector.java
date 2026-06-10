@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -101,15 +102,29 @@ public class DrugReferenceInjector {
 				chart.getFocusIndices());
 	}
 
-	/** Deduplicated union of question-driven and patient-driven matches, query matches first. */
+	/**
+	 * Deduplicated union of question-driven and patient-driven matches, query matches first.
+	 *
+	 * <p>Order-driven injection is <em>relevance-scoped</em>: an active-order reference is injected only
+	 * when the question is about a specific drug clinically related to that order (sharing an ATC
+	 * chemical subgroup — a real duplicate-therapy / cross-reactivity concern). An active medication
+	 * unrelated to the asked-about drug — or a question that names no drug at all — is not injected: it
+	 * would be noise that helps the clinician in no way. The model still sees the active-order records
+	 * in the chart, and the safety validator reads active orders directly, so neither the answer's
+	 * medication awareness nor the safety chips depend on this injection.
+	 */
 	List<DrugReference> matchingEntries(PatientClinicalContext context, String question) {
 		Map<String, DrugReference> byId = new LinkedHashMap<String, DrugReference>();
+
+		// The reference drugs the question itself names — drives question-driven injection AND scopes
+		// the order-driven injection below, so it is computed regardless of the injectFromQuery toggle.
+		List<DrugReference> questionDrugs = drugReferenceService.findByQuery(question);
 
 		boolean fromQuery = ChartSearchAiUtils.getBooleanGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_INJECT_FROM_QUERY,
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_INJECT_FROM_QUERY);
 		if (fromQuery) {
-			for (DrugReference ref : drugReferenceService.findByQuery(question)) {
+			for (DrugReference ref : questionDrugs) {
 				byId.put(ref.getId(), ref);
 			}
 		}
@@ -119,11 +134,32 @@ public class DrugReferenceInjector {
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_INJECT_FROM_ORDERS);
 		if (fromOrders && context != null) {
 			for (DrugReference ref : drugReferenceService.findByActiveOrders(context)) {
-				byId.put(ref.getId(), ref);
+				// Only when the question names a drug this active order is clinically related to. A
+				// question naming no drug has no relevance anchor, so nothing is injected here
+				// (relatedToAny returns false for an empty questionDrugs).
+				if (relatedToAny(ref, questionDrugs)) {
+					byId.put(ref.getId(), ref);
+				}
 			}
 		}
 
 		return new ArrayList<DrugReference>(byId.values());
+	}
+
+	/** @return true when {@code order} shares an ATC level-4 subgroup with any of {@code questionDrugs}
+	 *          — a genuine class relationship (duplicate therapy / cross-reactivity) that makes the
+	 *          active-order reference relevant to the question. An order with no ATC codes is unrelated. */
+	private static boolean relatedToAny(DrugReference order, List<DrugReference> questionDrugs) {
+		Set<String> orderSubgroups = order.atcSubgroups();
+		if (orderSubgroups.isEmpty()) {
+			return false;
+		}
+		for (DrugReference q : questionDrugs) {
+			if (!java.util.Collections.disjoint(orderSubgroups, q.atcSubgroups())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

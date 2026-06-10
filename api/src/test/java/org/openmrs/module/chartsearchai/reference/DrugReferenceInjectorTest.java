@@ -11,10 +11,14 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,6 +41,24 @@ public class DrugReferenceInjectorTest {
 		DrugReferenceInjector injector = new DrugReferenceInjector();
 		injector.setDrugReferenceService(new DrugReferenceService());
 		return injector;
+	}
+
+	/** Injector backed by the real WHO ATC sample (parsed by the real source), which — unlike the
+	 *  bundled JSON — contains two drugs in the same ATC subgroup (ibuprofen/naproxen, both M01AE),
+	 *  needed to exercise the "related active order" path. */
+	private DrugReferenceInjector atcInjector() throws IOException {
+		DrugReferenceService svc = new DrugReferenceService();
+		try (InputStream in = getClass().getClassLoader().getResourceAsStream("atc/atc-sample.tsv")) {
+			assertNotNull(in, "ATC sample resource should be on the test classpath");
+			svc.setEntries(AtcDrugReferenceSource.parse(in));
+		}
+		DrugReferenceInjector injector = new DrugReferenceInjector();
+		injector.setDrugReferenceService(svc);
+		return injector;
+	}
+
+	private Set<String> set(String... values) {
+		return new LinkedHashSet<String>(Arrays.asList(values));
 	}
 
 	private PatientChart oneRecordChart() {
@@ -95,15 +117,40 @@ public class DrugReferenceInjectorTest {
 	}
 
 	@Test
-	public void orderDrivenInjectionMatchesByAtc() {
-		Set<String> atc = new LinkedHashSet<String>();
-		atc.add("M01AE01");
-		// Question does not mention the drug; the active-order ATC drives the match.
+	public void silentQuestionDoesNotInjectActiveOrders() {
+		// A question that names no specific drug has no relevance anchor, so active-order references are
+		// NOT injected — an active medication is noise for such a question. (The model still sees the
+		// active-order records in the chart, and the safety validator reads active orders directly.)
+		PatientChart chart = oneRecordChart();
+		PatientChart result = injector().injectRecords(chart, context(5, set("M01AE01")), "summarise the plan");
+		assertSame(chart, result,
+				"a question naming no specific drug must not inject active-order references");
+	}
+
+	@Test
+	public void unrelatedActiveOrderIsNotInjectedForADrugSpecificQuestion() {
+		// The question is about gentamicin (J01GB); the active order is ibuprofen (M01AE) — a different
+		// ATC class. The unrelated active-order reference must NOT be injected: it is noise for this
+		// question and helps the clinician in no way.
 		PatientChart result = injector().injectRecords(oneRecordChart(),
-				context(5, atc), "summarise the plan");
-		assertTrue(result.getMappings().stream()
-				.anyMatch(m -> "ibuprofen".equals(m.getResourceUuid())),
-				"active-order ATC should inject the matching reference even when the question is silent");
+				context(40, set("M01AE01")), "is gentamicin safe to prescribe?");
+		assertTrue(result.getText().contains("Drug reference — Gentamicin"),
+				"the question's own drug should still be injected");
+		assertFalse(result.getText().contains("Drug reference — Ibuprofen"),
+				"an active order unrelated to the question's drug must not be injected");
+	}
+
+	@Test
+	public void relatedActiveOrderIsStillInjectedForADrugSpecificQuestion() throws IOException {
+		// The question is about naproxen (M01AE02); the active order is ibuprofen (M01AE01) — the same
+		// ATC subgroup M01AE. That active order IS relevant (duplicate-therapy concern), so its
+		// reference is still injected.
+		PatientChart result = atcInjector().injectRecords(oneRecordChart(),
+				context(40, set("M01AE01")), "is naproxen safe to prescribe?");
+		assertTrue(result.getText().contains("Drug reference — Naproxen"),
+				"the question's own drug should be injected");
+		assertTrue(result.getText().contains("Drug reference — Ibuprofen"),
+				"an active order in the same ATC subgroup as the question's drug should be injected");
 	}
 
 	@Test

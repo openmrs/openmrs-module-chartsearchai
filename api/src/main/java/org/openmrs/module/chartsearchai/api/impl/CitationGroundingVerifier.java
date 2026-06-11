@@ -62,6 +62,18 @@ import org.springframework.stereotype.Service;
  * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer;
  * references beyond the cap keep their Tier-1 verdict.
  *
+ * <p><strong>Lazy Tier-1 under entailment.</strong> Because the Tier-2 verdict overrides Tier-1
+ * wherever it lands, running the cosine pass eagerly for every reference would spend a full
+ * embedding-model forward pass per record and per sentence — the dominant grounding cost on
+ * CPU-only servers — on verdicts that are then discarded. So when entailment is enabled, Tier-1
+ * embeds run only where they still decide something: choosing the claim sentence when more than
+ * one candidate cites the record (the statement must be the cosine-best match, identical to the
+ * eager path), and supplying the fallback verdict for references whose Tier-2 check produced none
+ * (cap overflow, engine failure) — computed lazily, after Tier-2. A list-style answer where each
+ * line cites its own record runs no Tier-1 embeds at all. A consequence pinned in tests: a
+ * broken or absent Tier-1 embedding model no longer blocks Tier-2 verdicts for unambiguous
+ * claim sentences — previously it silently downgraded every citation to "unverified".
+ *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"
  * — which renders as unverified, exactly as if grounding were disabled.
@@ -188,14 +200,16 @@ public class CitationGroundingVerifier {
 	 * {@code chartsearchai.grounding.entailment.enabled}. Package-private so unit
 	 * tests can exercise the grounding logic without an OpenMRS context.
 	 *
-	 * <p>When {@code entailmentEnabled}, every reference Tier-1 could evaluate is
-	 * confirmed by a Tier-2 LLM entailment verdict that is authoritative
+	 * <p>When {@code entailmentEnabled}, every reference with a resolvable claim sentence and
+	 * record text is confirmed by a Tier-2 LLM entailment verdict that is authoritative
 	 * (cosine errs in both directions, and the dangerous error — a high-overlap
 	 * but unsupported citation — is exactly the case Tier-1 cannot self-detect,
 	 * so the LLM must see Tier-1 passes too, not only failures). They are confirmed in a batched
 	 * call ({@link LlmProvider#entailsBatch}), capped at
 	 * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer; references
 	 * beyond the cap keep their Tier-1 verdict (but see the clause-scoped exception below).
+	 * Tier-1's own cosine verdict is computed lazily in this mode — see the class javadoc's
+	 * "Lazy Tier-1 under entailment" section.
 	 *
 	 * <p>When {@code clauseScoped}, a sentence citing multiple records is split so each citation is
 	 * checked against the answer text up to and including its own {@code [N]} marker, not the whole
@@ -229,10 +243,20 @@ public class CitationGroundingVerifier {
 		Map<Integer, float[]> sentenceVectors = new HashMap<Integer, float[]>();
 		GroundingStats stats = new GroundingStats();
 
-		// Pass 1: Tier-1 (cosine) for every reference, collecting the claim/record pairs Tier-2
-		// should confirm — up to the per-answer cap. Tier-2 runs on Tier-1 passes AND failures:
-		// the dangerous case (high cosine but unsupported, e.g. a family-history flip) is a Tier-1
-		// pass, so confirming only failures would miss it.
+		// Pass 1: claim selection (and, where still needed, Tier-1 cosine) for every reference,
+		// collecting the claim/record pairs Tier-2 should confirm — up to the per-answer cap.
+		// Tier-2 runs on Tier-1 passes AND failures: the dangerous case (high cosine but
+		// unsupported, e.g. a family-history flip) is a Tier-1 pass, so confirming only failures
+		// would miss it.
+		//
+		// When entailment is enabled, Tier-1's cosine verdict is computed LAZILY (Pass 3): the
+		// authoritative Tier-2 verdict overrides it wherever Tier-2 reaches one, so the eager
+		// cosine work — a full embedding-model forward pass per record and per sentence, the
+		// dominant grounding cost on CPU-only servers — would be discarded for exactly the
+		// references it ran for. Eager Tier-1 here is needed only to CHOOSE the claim sentence
+		// when the choice is ambiguous (more than one candidate); the common list-answer case
+		// (every citation has exactly one citing sentence) selects deterministically and runs
+		// no embeds at all.
 		int entailmentBudget = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
 		int cappedCount = 0;
 		Tier1Result[] tier1Results = new Tier1Result[references.size()];
@@ -249,12 +273,17 @@ public class CitationGroundingVerifier {
 		List<String> isolateStatements = new ArrayList<String>();
 		for (int i = 0; i < references.size(); i++) {
 			RecordReference reference = references.get(i);
-			Tier1Result tier1 = verdictTier1(reference.getIndex(), textByIndex, sentences,
-					floor, recordVectors, sentenceVectors, embedder, stats);
+			Tier1Result tier1 = entailmentEnabled
+					? selectClaim(reference.getIndex(), textByIndex, sentences,
+							floor, recordVectors, sentenceVectors, embedder, stats)
+					: verdictTier1(reference.getIndex(), textByIndex, sentences,
+							floor, recordVectors, sentenceVectors, embedder, stats);
 			tier1Results[i] = tier1;
-			// Tier-2 candidate: only meaningful when Tier-1 reached a definite verdict and we have
-			// a concrete claim sentence to fact-check against the record.
-			if (entailmentEnabled && tier1.verdict != null && tier1.bestSentence != null
+			// Tier-2 candidate: needs a concrete claim sentence to fact-check against the record.
+			// Candidacy deliberately does NOT require a Tier-1 verdict: for an unambiguous claim
+			// sentence the verdict is deferred (and may never be needed), and a broken Tier-1
+			// embedder must not block the authoritative Tier-2 check it has no part in.
+			if (entailmentEnabled && tier1.bestSentence != null
 					&& tier1.recordText != null) {
 				if (entailmentBudget > 0) {
 					entailmentBudget--;
@@ -296,6 +325,17 @@ public class CitationGroundingVerifier {
 					? verdict.get(0) : null;
 		}
 
+		// Lazy Tier-1: references whose cosine verdict was deferred at claim-selection time get it
+		// computed now, but ONLY where Tier-2 did not reach a verdict (cap overflow, engine failure,
+		// unparseable reply) — everywhere else the eager cosine would have been overridden and its
+		// embedding cost (the dominant grounding cost on CPU) wasted.
+		for (int i = 0; i < references.size(); i++) {
+			if (tier2Verdict[i] == null && tier1Results[i].deferred) {
+				tier1Results[i] = cosineVerdict(tier1Results[i], floor, references.get(i).getIndex(),
+						sentences, recordVectors, sentenceVectors, embedder, stats);
+			}
+		}
+
 		// Pass 2: assemble — Tier-2 is authoritative when it reached a verdict, else keep Tier-1.
 		List<RecordReference> annotated = new ArrayList<RecordReference>(references.size());
 		for (int i = 0; i < references.size(); i++) {
@@ -321,6 +361,94 @@ public class CitationGroundingVerifier {
 					stats.embedFailures, references.size(), stats.firstError);
 		}
 		return annotated;
+	}
+
+	/**
+	 * Claim selection for entailment-enabled grounding: identifies the claim sentence Tier-2 will
+	 * fact-check for one cited index, running Tier-1 embeds ONLY when the choice is ambiguous.
+	 * The common case — exactly one candidate sentence (a list-style answer where each line cites
+	 * its own record, or a clause under clause-scope) — selects deterministically with no
+	 * embedding work, and the cosine verdict is DEFERRED ({@link Tier1Result#deferred}): it is
+	 * computed lazily by {@link #cosineVerdict} only if Tier-2 fails to produce a verdict.
+	 * With several candidates the eager cosine argmax runs exactly as {@link #verdictTier1}
+	 * would, so the chosen statement is byte-identical to the eager path's; the verdict then
+	 * comes for free and is not deferred. Never throws: a selection-embedding failure yields a
+	 * {@code null}-verdict, no-claim result (no Tier-2 candidate), mirroring the eager path.
+	 */
+	private Tier1Result selectClaim(int index, Map<Integer, String> textByIndex,
+			List<Sentence> sentences, double floor,
+			Map<Integer, float[]> recordVectors, Map<Integer, float[]> sentenceVectors,
+			TextEmbedder embedder, GroundingStats stats) {
+		String recordText = textByIndex.get(index);
+		if (recordText == null || recordText.trim().isEmpty()) {
+			return new Tier1Result(null, null, null, false); // nothing to compare against
+		}
+		// Candidate claim sentences: the ones citing this index inline; when none does
+		// (citations-array-only), every sentence is a candidate — same fallback as the
+		// eager path, so the selected statement cannot differ from it.
+		List<Integer> candidates = new ArrayList<Integer>();
+		for (int s = 0; s < sentences.size(); s++) {
+			if (sentences.get(s).cites(index)) {
+				candidates.add(Integer.valueOf(s));
+			}
+		}
+		if (candidates.isEmpty()) {
+			for (int s = 0; s < sentences.size(); s++) {
+				candidates.add(Integer.valueOf(s));
+			}
+		}
+		if (candidates.isEmpty()) {
+			return new Tier1Result(null, null, recordText, false); // no sentences (empty answer)
+		}
+		if (candidates.size() == 1) {
+			int only = candidates.get(0).intValue();
+			Sentence claim = sentences.get(only);
+			return new Tier1Result(null, claim.text, recordText, claim.isolate, only, true);
+		}
+		try {
+			float[] recordVector = embedRecord(index, recordText, recordVectors, embedder);
+			double best = -Double.MAX_VALUE;
+			int bestIdx = -1;
+			for (Integer candidate : candidates) {
+				int s = candidate.intValue();
+				double sim = similarity(recordVector, s, sentences, sentenceVectors, embedder);
+				if (sim > best) {
+					best = sim;
+					bestIdx = s;
+				}
+			}
+			Sentence claim = sentences.get(bestIdx);
+			return new Tier1Result(Boolean.valueOf(best >= floor), claim.text, recordText,
+					claim.isolate, bestIdx, false);
+		}
+		catch (RuntimeException e) {
+			stats.recordFailure(e);
+			return new Tier1Result(null, null, recordText, false);
+		}
+	}
+
+	/**
+	 * Lazily computes the deferred Tier-1 cosine verdict for a reference whose Tier-2 check
+	 * produced no verdict (cap overflow, engine failure, unparseable reply). Reuses the per-call
+	 * record/sentence vector caches, so the work and the result are exactly what the eager path
+	 * would have produced for the same (record, claim sentence) pair. Never throws: an embedding
+	 * failure degrades to a {@code null} ("could not verify") verdict.
+	 */
+	private Tier1Result cosineVerdict(Tier1Result selected, double floor, int index,
+			List<Sentence> sentences, Map<Integer, float[]> recordVectors,
+			Map<Integer, float[]> sentenceVectors, TextEmbedder embedder, GroundingStats stats) {
+		try {
+			float[] recordVector = embedRecord(index, selected.recordText, recordVectors, embedder);
+			double sim = similarity(recordVector, selected.bestSentenceIdx, sentences,
+					sentenceVectors, embedder);
+			return new Tier1Result(Boolean.valueOf(sim >= floor), selected.bestSentence,
+					selected.recordText, selected.isolate, selected.bestSentenceIdx, false);
+		}
+		catch (RuntimeException e) {
+			stats.recordFailure(e);
+			return new Tier1Result(null, selected.bestSentence, selected.recordText,
+					selected.isolate, selected.bestSentenceIdx, false);
+		}
 	}
 
 	/**
@@ -429,11 +557,27 @@ public class CitationGroundingVerifier {
 		 *  clause-scope, so it must be Tier-2 verified in its own call rather than co-batched. */
 		final boolean isolate;
 
+		/** Index of {@link #bestSentence} in the verify-call's sentence list, or -1 when there is
+		 *  none — lets the lazy cosine pass reuse the per-call sentence-vector cache. */
+		final int bestSentenceIdx;
+
+		/** True when the Tier-1 cosine verdict was deferred at claim-selection time (entailment
+		 *  mode, unambiguous claim sentence) and must be computed lazily by
+		 *  {@link #cosineVerdict} if Tier-2 yields no verdict for the reference. */
+		final boolean deferred;
+
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate) {
+			this(verdict, bestSentence, recordText, isolate, -1, false);
+		}
+
+		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate,
+				int bestSentenceIdx, boolean deferred) {
 			this.verdict = verdict;
 			this.bestSentence = bestSentence;
 			this.recordText = recordText;
 			this.isolate = isolate;
+			this.bestSentenceIdx = bestSentenceIdx;
+			this.deferred = deferred;
 		}
 	}
 

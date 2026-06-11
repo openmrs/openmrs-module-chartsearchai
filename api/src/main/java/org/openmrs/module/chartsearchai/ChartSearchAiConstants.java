@@ -325,13 +325,16 @@ public class ChartSearchAiConstants {
 
 	/**
 	 * When {@code true} (and {@link #GP_GROUNDING_ENABLED} is also on), the
-	 * Tier-1 cosine verdict is confirmed by a Tier-2 entailment check: a short
-	 * yes/no LLM call asking whether the cited record actually supports the
-	 * answer sentence. This is what catches high-overlap-but-false citations
+	 * cited references are confirmed by a Tier-2 entailment check: a yes/no LLM
+	 * judgement of whether each cited record actually supports the answer
+	 * sentence citing it. This is what catches high-overlap-but-false citations
 	 * ("patient has X [5]" where record 5 says a relative had X, or the record
-	 * negates X) that cosine similarity cannot separate. Costs one extra LLM
-	 * call per cited reference, so it is a separate opt-in from the cheap
-	 * Tier-1 pass. Default {@code false}. See {@code CitationGroundingVerifier}.
+	 * negates X) that cosine similarity cannot separate. An answer's citations
+	 * are verified in one batched LLM call (capped per answer; clause-scoped
+	 * compound-sentence citations get single-pair calls), and the Tier-1 cosine
+	 * verdict is computed lazily only where Tier-2 yields none, so the marginal
+	 * cost is one LLM round-trip per answer. Still a separate opt-in from the
+	 * cheap Tier-1 pass. Default {@code false}. See {@code CitationGroundingVerifier}.
 	 */
 	public static final String GP_GROUNDING_ENTAILMENT_ENABLED = "chartsearchai.grounding.entailment.enabled";
 

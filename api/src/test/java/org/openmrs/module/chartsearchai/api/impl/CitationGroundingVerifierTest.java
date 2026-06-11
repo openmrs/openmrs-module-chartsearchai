@@ -51,12 +51,16 @@ public class CitationGroundingVerifierTest {
 
 		private final Map<String, float[]> vectors = new HashMap<String, float[]>();
 
+		/** Number of embed() invocations — lets tests pin how much Tier-1 embedding work ran. */
+		int embedCalls;
+
 		void register(String text, float[] vector) {
 			vectors.put(text, vector);
 		}
 
 		@Override
 		public float[] embed(String text) {
+			embedCalls++;
 			float[] v = vectors.get(text);
 			return v != null ? v : new float[] { 0f, 0f };
 		}
@@ -599,6 +603,114 @@ public class CitationGroundingVerifierTest {
 		assertEquals(Boolean.FALSE, out.get(0).getGrounded(), "[1]: isolate Tier-2 NO overrides the Tier-1 pass");
 		assertEquals(Boolean.FALSE, out.get(1).getGrounded(), "[2]: isolate Tier-2 NO overrides the Tier-1 pass");
 		assertEquals(2, llm.batches, "each compound-sentence citation is verified in its own single-pair call");
+	}
+
+	// ---- Lazy Tier-1: no embedding work when Tier-2 is authoritative and the claim
+	// sentence is unambiguous (CPU-latency fix for the grounding tail) ----
+
+	@Test
+	public void tier2_singleCitingSentences_runNoTier1EmbedsWhenTier2Succeeds() {
+		// THE grounding-tail latency fix: a list-style answer where every citation has exactly one
+		// citing sentence needs no Tier-1 cosine at all — the claim statement is that sentence by
+		// definition (argmax over a single candidate), and Tier-2's verdict overrides Tier-1 anyway.
+		// On a CPU-only server each embed is a full BERT forward pass (~0.3-1s on e5-base), and a
+		// 9-citation answer was paying ~14-18 of them per query for verdicts that were then
+		// discarded. Statements must remain byte-identical to the eager path.
+		String answer = "Has diabetes [1]. Has hypertension [2].";
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "type 2 diabetes"), mapping(2, "essential hypertension")),
+				FLOOR, TIER2_ON);
+
+		assertEquals(0, embeddings.embedCalls,
+				"single-citing-sentence citations must not embed when Tier-2 yields verdicts");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+		assertEquals(1, llm.batches, "still one batched Tier-2 call");
+		assertEquals(Arrays.asList("Has diabetes .", "Has hypertension ."),
+				llm.statementsPerCall.get(0),
+				"Tier-2 statements must be the stripped citing sentences, unchanged by laziness");
+	}
+
+	@Test
+	public void tier2_brokenEmbedder_singleCitingSentenceStillGetsTier2Verdict() {
+		// Deliberate behavior improvement pinned as spec: Tier-2 candidacy for an unambiguous
+		// claim sentence no longer depends on the Tier-1 embedder being healthy. Previously a
+		// broken/absent embedding model silently downgraded ALL grounding to "unverified" even
+		// though the authoritative Tier-2 LLM was available; now the LLM verdict still lands.
+		EmbeddingProvider throwing = new EmbeddingProvider() {
+
+			@Override
+			public float[] embed(String text) {
+				throw new RuntimeException("ONNX session unavailable");
+			}
+
+			@Override
+			public int getDimensions() {
+				return 2;
+			}
+		};
+		verifier.setEmbeddingProvider(throwing);
+		llm.verdict = Boolean.FALSE;
+
+		List<RecordReference> result = verifier.verify("Patient has cancer [3].",
+				new ArrayList<RecordReference>(Arrays.asList(reference(3))),
+				Arrays.asList(mapping(3, "grandmother had cancer")), FLOOR, TIER2_ON);
+
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"Tier-2 verdict must land even when the Tier-1 embedder is broken");
+	}
+
+	@Test
+	public void tier2_multiCitingSentences_bestStatementStillChosenByCosine() {
+		// When MORE than one sentence cites the same record, the claim statement is still the
+		// best-matching sentence by cosine — the selection embeds must still run so the Tier-2
+		// statement is identical to the eager path's choice.
+		String answer = "An unrelated remark [1]. Type 2 diabetes is active [1].";
+		embeddings.register("An unrelated remark [1].", AXIS_B);
+		embeddings.register("Type 2 diabetes is active [1].", AXIS_A);
+		embeddings.register("type 2 diabetes", AXIS_A);
+		llm.verdict = Boolean.TRUE;
+
+		verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1))),
+				Arrays.asList(mapping(1, "type 2 diabetes")), FLOOR, TIER2_ON);
+
+		assertTrue(embeddings.embedCalls > 0,
+				"ambiguous claim selection still requires Tier-1 embeds");
+		assertEquals(Arrays.asList("Type 2 diabetes is active ."), llm.statementsPerCall.get(0),
+				"the cosine-best citing sentence must be the Tier-2 statement");
+	}
+
+	@Test
+	public void tier2_batchFailure_lazyTier1VerdictMatchesEagerCosine() {
+		// When Tier-2 cannot verify (engine failure), the Tier-1 cosine verdict must be computed
+		// lazily and match what the eager path would have produced: registered on-topic pair ->
+		// TRUE, unregistered pair (cosine 0) -> FALSE.
+		StubLlmProvider throwing = new StubLlmProvider(null) {
+
+			@Override
+			public List<Boolean> entailsBatch(List<String> sources, List<String> statements) {
+				throw new RuntimeException("llama-server timed out");
+			}
+		};
+		verifier.setLlmProvider(throwing);
+		String answer = "Has diabetes [1]. Has asthma [2].";
+		embeddings.register("Has diabetes [1].", AXIS_A);
+		embeddings.register("type 2 diabetes", AXIS_A); // [1] on-topic -> TRUE
+		// [2]'s sentence and record left unregistered -> cosine 0 -> FALSE
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "type 2 diabetes"), mapping(2, "mild asthma")),
+				FLOOR, TIER2_ON);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"lazy Tier-1 fallback must reproduce the eager cosine pass");
+		assertEquals(Boolean.FALSE, result.get(1).getGrounded(),
+				"lazy Tier-1 fallback must reproduce the eager cosine fail");
 	}
 
 	/** Index of the first {@code entailsBatch} call whose statement list contains {@code statement}

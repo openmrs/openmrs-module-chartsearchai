@@ -664,6 +664,53 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
+	public void tier2_absentEmbedder_singleCitingSentenceStillGetsTier2Verdict() {
+		// The "absent" half of the broken-or-absent claim: a deployment with NO Tier-1 embedding
+		// model configured at all (e.g. lucene-only querystore, no ONNX files) must still get
+		// authoritative Tier-2 verdicts for unambiguous claim sentences. resolveEmbedder() returns
+		// null in that deployment shape; the lazy path must never touch it when Tier-2 succeeds.
+		verifier.setEmbeddingProvider(null);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify("Has hypertension [1].",
+				new ArrayList<RecordReference>(Arrays.asList(reference(1))),
+				Arrays.asList(mapping(1, "essential hypertension")), FLOOR, TIER2_ON);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"Tier-2 verdict must land even with no Tier-1 embedding model configured");
+	}
+
+	@Test
+	public void clauseScoped_isolateCitations_fallBackToLazyTier1OnEngineFailure() {
+		// The deferred x isolate combination: clause-scoped compound-sentence citations are
+		// single-candidate clauses (deferred), verified in isolate single-pair Tier-2 calls. When
+		// the engine fails, each must lazily get the Tier-1 cosine verdict of its OWN clause —
+		// [1]'s registered clause/record pair -> TRUE, [2]'s unregistered pair -> FALSE.
+		StubLlmProvider throwing = new StubLlmProvider(null) {
+
+			@Override
+			public List<Boolean> entailsBatch(List<String> sources, List<String> statements) {
+				throw new RuntimeException("llama-server timed out");
+			}
+		};
+		verifier.setLlmProvider(throwing);
+		String answer = "Has diabetes [1] and hypertension [2].";
+		embeddings.register("Has diabetes [1]", AXIS_A);   // [1]'s clause (cumulative prefix)
+		embeddings.register("type 2 diabetes", AXIS_A);    // [1]'s record -> cosine 1 -> TRUE
+		// [2]'s clause "Has diabetes [1] and hypertension [2]" and record left unregistered -> FALSE
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "type 2 diabetes"), mapping(2, "essential hypertension")),
+				FLOOR, TIER2_ON, true);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"[1]: lazy Tier-1 must score the clause's own registered pair");
+		assertEquals(Boolean.FALSE, result.get(1).getGrounded(),
+				"[2]: lazy Tier-1 must score the clause's own unregistered pair");
+	}
+
+	@Test
 	public void tier2_multiCitingSentences_bestStatementStillChosenByCosine() {
 		// When MORE than one sentence cites the same record, the claim statement is still the
 		// best-matching sentence by cosine — the selection embeds must still run so the Tier-2

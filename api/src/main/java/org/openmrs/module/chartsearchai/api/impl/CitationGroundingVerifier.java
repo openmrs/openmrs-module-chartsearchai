@@ -39,7 +39,9 @@ import org.springframework.stereotype.Service;
  * semantic-overlap check: embed each cited record and the answer sentence(s)
  * that reference it, and require their cosine similarity to clear a tunable
  * floor ({@code chartsearchai.grounding.minCosine}). Below the floor, the
- * citation is annotated {@code grounded=false} so the UI can flag it.
+ * citation is annotated {@code grounded=false} so the UI can flag it. (When
+ * Tier-2 entailment is enabled, this cosine pass runs lazily — see "Lazy
+ * Tier-1 under entailment" below.)
  *
  * <p><strong>Scope and limits.</strong> This is intentionally an annotate-only,
  * non-destructive pass: it never rewrites the answer prose or drops citations,
@@ -249,7 +251,8 @@ public class CitationGroundingVerifier {
 		// unsupported, e.g. a family-history flip) is a Tier-1 pass, so confirming only failures
 		// would miss it.
 		//
-		// When entailment is enabled, Tier-1's cosine verdict is computed LAZILY (Pass 3): the
+		// When entailment is enabled, Tier-1's cosine verdict is computed LAZILY (the "Lazy
+		// Tier-1" block below, after the Tier-2 calls and before Pass 2): the
 		// authoritative Tier-2 verdict overrides it wherever Tier-2 reaches one, so the eager
 		// cosine work — a full embedding-model forward pass per record and per sentence, the
 		// dominant grounding cost on CPU-only servers — would be discarded for exactly the

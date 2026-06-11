@@ -230,7 +230,7 @@
 	<globalProperty>
 		<property>chartsearchai.grounding.entailment.enabled</property>
 		<defaultValue>false</defaultValue>
-		<description>When true (and chartsearchai.grounding.enabled is also on), the Tier-1 cosine verdict is confirmed by a Tier-2 entailment check: a yes/no LLM judgement of whether the cited record actually supports the answer sentence. This catches high-overlap-but-false citations ("patient has X [5]" where record 5 says a relative had X, or the record negates X) that cosine similarity cannot separate. An answer's citations are verified in a batched LLM call (capped per answer; see chartsearchai.grounding.clauseScoped for when a compound sentence's citations are instead verified individually), so it is a separate opt-in from the cheap Tier-1 pass. Default: false.</description>
+		<description>When true (and chartsearchai.grounding.enabled is also on), every cited record is confirmed by a Tier-2 entailment check: a yes/no LLM judgement of whether the record actually supports the answer sentence citing it. This catches high-overlap-but-false citations ("patient has X [5]" where record 5 says a relative had X, or the record negates X) that cosine similarity cannot separate. An answer's citations are verified in a batched LLM call (capped per answer; see chartsearchai.grounding.clauseScoped for when a compound sentence's citations are instead verified individually). The Tier-1 cosine pass is computed lazily in this mode — only for citations where the LLM check produced no verdict — so entailment grounding works even when no Tier-1 embedding model is configured. Default: false.</description>
 	</globalProperty>
 
 	<globalProperty>

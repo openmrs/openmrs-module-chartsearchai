@@ -30,8 +30,8 @@ import org.springframework.stereotype.Service;
  * after the answer is generated and <em>annotates</em> it with {@link SafetyWarning}s.
  * It never rewrites or blocks the answer — the clinician decides.
  *
- * <p>For every reference drug named in the answer it checks three things against
- * the patient's clinical context and the reference table:
+ * <p>For every reference drug the question asks about or the answer names, it checks three
+ * things against the patient's clinical context and the reference table:
  * <ul>
  *   <li><b>Overdose</b> — a daily dose parsed from the answer exceeds the
  *       reference {@code maxDailyDoseMg} for the patient's age band.</li>
@@ -55,7 +55,7 @@ import org.springframework.stereotype.Service;
  * <p>Conservative by design: overdose is flagged only when a daily total can be
  * computed AND it exceeds a published maximum; class-based interactions skip an active order
  * that is the <em>same</em> drug (restating existing therapy is not a duplicate). A
- * sufficient-chart answer with no reference need produces no warnings (the no-false-positive case).
+ * question or answer that names no reference drug produces no warnings (the no-false-positive case).
  */
 @Service("chartSearchAi.drugSafetyValidator")
 public class DrugSafetyValidator {
@@ -102,31 +102,43 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Production entry point: validates an answer for a patient when the feature
-	 * and the validator are both enabled. Reads the patient's clinical context.
-	 * Returns an empty list when disabled or nothing is flagged — never null.
+	 * Production entry point: validates an answer for a patient when the feature and the validator
+	 * are both enabled. {@code question} is the clinician's query — the safety check covers the drug
+	 * the question asks about even when the answer never names it (see the 3-arg seam). Reads the
+	 * patient's clinical context. Returns an empty list when disabled or nothing is flagged — never null.
 	 */
-	public List<SafetyWarning> validate(String answer, Patient patient) {
-		if (answer == null || !ChartSearchAiUtils.isDrugReferenceEnabled()
+	public List<SafetyWarning> validate(String answer, String question, Patient patient) {
+		if (!ChartSearchAiUtils.isDrugReferenceEnabled()
 				|| !ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
 			return new ArrayList<SafetyWarning>();
 		}
 		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-		return validate(answer, context);
+		return validate(answer, question, context);
 	}
 
 	/**
-	 * Pure validation over an explicit clinical context — no OpenMRS context read —
-	 * so the parsing/matching logic is unit-testable. Honours the per-check toggles.
+	 * Answer-only overload retained for callers/tests with no question in hand; equivalent to
+	 * passing a {@code null} question (no question-driven coverage).
 	 */
 	List<SafetyWarning> validate(String answer, PatientClinicalContext context) {
+		return validate(answer, null, context);
+	}
+
+	/**
+	 * Pure validation over an explicit clinical context — no OpenMRS context read — so the
+	 * parsing/matching logic is unit-testable. Honours the per-check toggles.
+	 *
+	 * <p>The drugs checked are the union of those the QUESTION resolves to (via the same
+	 * {@link DrugReferenceService#findByQuery} the injector uses, so the two never drift) and those
+	 * NAMED IN THE ANSWER text. Keying off the question — not only the answer — decouples the safety
+	 * net from the LLM's word choice: a contraindication for the asked-about drug fires even when the
+	 * answer phrases it by class ("an NSAID allergy") and never writes the drug name. Overdose still
+	 * reads the dose from the answer, so a question-only drug with no stated dose yields no overdose.
+	 */
+	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext context) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
-		if (answer == null || answer.trim().isEmpty()) {
-			return warnings;
-		}
-		String lower = answer.toLowerCase(Locale.ROOT);
 
 		boolean warnDose = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_DOSE_EXCESS);
@@ -135,11 +147,16 @@ public class DrugSafetyValidator {
 		boolean warnContra = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS);
 
+		String lower = answer == null ? "" : answer.toLowerCase(Locale.ROOT);
 		List<DrugReference> all = drugReferenceService.getAll();
-		for (DrugReference ref : all) {
-			if (!ref.matchesText(lower)) {
-				continue;
-			}
+
+		// Drugs in play = those the QUESTION resolves to UNION those the ANSWER names — both via the same
+		// DrugReferenceService.findByQuery the injector uses, so question/answer/injector matching can
+		// never drift, and identity-dedup holds (findByQuery resolves against the shared getAll() cache).
+		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(drugReferenceService.findByQuery(question));
+		inPlay.addAll(drugReferenceService.findByQuery(answer));
+
+		for (DrugReference ref : inPlay) {
 			if (warnContra) {
 				addContraindications(warnings, ref, context);
 				addClassContraindications(warnings, ref, context);
@@ -199,9 +216,9 @@ public class DrugSafetyValidator {
 	/**
 	 * Class-based contraindication reasoning (needs only ATC codes, so it works for an
 	 * authoritative classification source that carries no rules). For the drug {@code ref}
-	 * named in the answer, each recorded allergy token is resolved to a reference drug; a
+	 * being checked, each recorded allergy token is resolved to a reference drug; a
 	 * warning fires when that allergen <em>is</em> {@code ref} (a recorded allergy to the very
-	 * drug recommended) or shares {@code ref}'s ATC level-4 subgroup (cross-reactivity).
+	 * drug being checked) or shares {@code ref}'s ATC level-4 subgroup (cross-reactivity).
 	 * Deduplicated per resolved allergen so several aliases of one allergy warn once.
 	 */
 	private void addClassContraindications(List<SafetyWarning> warnings, DrugReference ref,
@@ -234,7 +251,7 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Class-based interaction reasoning: warns when the drug {@code ref} named in the answer shares
+	 * Class-based interaction reasoning: warns when the drug {@code ref} being checked shares
 	 * an ATC level-4 subgroup with one of the patient's active orders (additive effects / duplicate
 	 * therapy). An order that is the <em>same</em> drug as {@code ref} (a shared exact ATC code) is
 	 * skipped — restating existing therapy is not a duplicate. Active orders carry ATC codes (the

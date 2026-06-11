@@ -1,6 +1,6 @@
 {
   "dataset": "drug-safety-v1",
-  "description": "Post-LLM drug-safety validator eval cases. Each case feeds a simulated answer plus a patient clinical context to the real DrugSafetyValidator and asserts the warning types raised. Model-free: it exercises the deterministic post-check, not the LLM. The 'question' field documents the clinical intent for future LLM-level evals.",
+  "description": "Post-LLM drug-safety validator eval cases. Each case feeds a simulated answer plus a patient clinical context to the real DrugSafetyValidator and asserts the warning types raised. Model-free: it exercises the deterministic post-check, not the LLM. The 'question' field is fed to the validator, which is question-aware: it checks the drug the question asks about, not only the drug the answer names.",
   "cases": [
     {
       "id": "dosing-overdose-flag",
@@ -51,6 +51,16 @@
       "allergies": ["nsaid"],
       "conditions": [],
       "expectWarningTypes": []
+    },
+    {
+      "id": "contraindication-from-question-when-answer-omits-drug",
+      "question": "Is ibuprofen contraindicated for this patient?",
+      "answer": "The patient has a documented NSAID hypersensitivity on file.",
+      "ageYears": 40,
+      "activeDrugs": [],
+      "allergies": ["nsaid"],
+      "conditions": [],
+      "expectWarningTypes": ["contraindication"]
     }
   ]
 }

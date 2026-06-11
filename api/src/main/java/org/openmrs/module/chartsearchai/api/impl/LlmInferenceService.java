@@ -157,7 +157,7 @@ public class LlmInferenceService implements ChartSearchService {
 					extractCitedReferences(response.getAnswer(), response.getCitations(),
 							chart.getMappings()),
 					chart.getMappings());
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), patient);
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question, patient);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings);
@@ -320,7 +320,7 @@ public class LlmInferenceService implements ChartSearchService {
 					chart.getMappings());
 			groundMs = System.currentTimeMillis() - groundStart;
 
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), patient);
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question, patient);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings);

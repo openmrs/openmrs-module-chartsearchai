@@ -80,7 +80,7 @@ public class DrugSafetyEvalTest {
 				toSet(c.activeDrugs), Collections.<String> emptySet(),
 				toSet(c.allergies), toSet(c.conditions));
 
-		List<SafetyWarning> warnings = validator.validate(c.answer, ctx);
+		List<SafetyWarning> warnings = validator.validate(c.answer, c.question, ctx);
 		Set<String> types = new HashSet<String>();
 		for (SafetyWarning w : warnings) {
 			types.add(w.getType());

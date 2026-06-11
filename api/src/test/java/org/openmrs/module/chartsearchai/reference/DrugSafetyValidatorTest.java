@@ -25,11 +25,12 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
- * Realizes the draft PR's drug-safety eval cases as real-pipeline tests: each runs
- * the production {@link DrugSafetyValidator#validate(String, PatientClinicalContext)}
- * over the real bundled dataset with a hand-built clinical context (the value-object
- * input shape the production builder produces). Per-check toggles fall back to their
- * {@code true} defaults with no OpenMRS context, matching production defaults.
+ * Realizes the draft PR's drug-safety eval cases as real-pipeline tests: each runs the production
+ * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)} (or the answer-only
+ * {@link DrugSafetyValidator#validate(String, PatientClinicalContext)} overload, which delegates with
+ * a null question) over the real bundled dataset with a hand-built clinical context (the value-object
+ * input shape the production builder produces). Per-check toggles fall back to their {@code true}
+ * defaults with no OpenMRS context, matching production defaults.
  */
 public class DrugSafetyValidatorTest {
 
@@ -249,6 +250,65 @@ public class DrugSafetyValidatorTest {
 				ctx(40, null, set("ibuprofen"), null));
 		assertTrue(has(warnings, SafetyWarning.TYPE_CONTRAINDICATION, "ibuprofen"),
 				"an ibuprofen allergy must flag an ibuprofen recommendation");
+	}
+
+	@Test
+	public void contraindicationFiresWhenQuestionNamesDrugButAnswerDoesNot() throws IOException {
+		// Reliability fix: the clinician asks about ibuprofen and the patient has a recorded ibuprofen
+		// allergy, but the LLM's answer phrases it by class ("an NSAID allergy") and NEVER writes
+		// "ibuprofen". The safety net must still fire — it keys off the QUESTION (findByQuery), not only
+		// the answer's word choice. Pre-fix, the answer named no drug, so nothing was checked.
+		List<SafetyWarning> warnings = atcValidator().validate(
+				"The patient has an allergy to NSAID (drug allergen).",
+				"Is ibuprofen contraindicated for her?",
+				ctx(40, null, set("ibuprofen"), null));
+		assertTrue(has(warnings, SafetyWarning.TYPE_CONTRAINDICATION, "ibuprofen"),
+				"a contraindication for the asked-about drug must fire even when the answer never names it");
+	}
+
+	@Test
+	public void contraindicationFiresFromQuestionEvenWhenAnswerIsEmpty() throws IOException {
+		// Extreme of the decoupling: the LLM produced no usable answer text, but the clinician asked
+		// about a drug the patient is allergic to. The question-driven check must still fire (the old
+		// answer-only guard that returned early on an empty answer is deliberately gone).
+		List<SafetyWarning> warnings = atcValidator().validate(
+				"",
+				"Is ibuprofen safe for her?",
+				ctx(40, null, set("ibuprofen"), null));
+		assertTrue(has(warnings, SafetyWarning.TYPE_CONTRAINDICATION, "ibuprofen"),
+				"a contraindication for the asked-about drug must fire even when the answer is empty");
+	}
+
+	@Test
+	public void questionDrivenCheckRespectsAtcBranchBoundaryNoFalsePositive() throws IOException {
+		// The question-driven path must be as class-correct as the answer-driven one — it must not
+		// warn for ANY drug merely named in the question. Aspirin (N02BA01, salicylates) is a DIFFERENT
+		// ATC branch from ibuprofen (M01AE01), so asking about it with an ibuprofen allergy must NOT warn.
+		// Aspirin enters only via the question here (the answer names no resolvable drug).
+		List<SafetyWarning> warnings = atcValidator().validate(
+				"The patient has an allergy to NSAID (drug allergen).",
+				"Is acetylsalicylic acid a good option for her?",
+				ctx(40, null, set("ibuprofen"), null));
+		assertFalse(has(warnings, SafetyWarning.TYPE_CONTRAINDICATION, "acetylsalicylic"),
+				"the question-driven path must not link aspirin to an ibuprofen allergy across ATC branches");
+	}
+
+	@Test
+	public void drugInBothQuestionAndAnswerWarnsOnlyOnce() throws IOException {
+		// A drug named in BOTH the question and the answer must be checked once, not twice. The
+		// question∪answer union dedups by identity, which holds only because findByQuery resolves
+		// against the shared getAll() cache; this pins that contract so a future findByQuery that
+		// returned copies (breaking dedup) would fail here rather than silently double-warn.
+		List<SafetyWarning> warnings = atcValidator().validate(
+				"Ibuprofen 200 mg as needed.",
+				"Is ibuprofen safe for her?",
+				ctx(40, null, set("ibuprofen"), null));
+		long contra = warnings.stream()
+				.filter(w -> w.getType().equals(SafetyWarning.TYPE_CONTRAINDICATION)
+						&& w.getDrug().equalsIgnoreCase("ibuprofen"))
+				.count();
+		assertEquals(1, contra,
+				"a drug named in both question and answer must produce one contraindication, not two");
 	}
 
 	@Test

@@ -284,6 +284,23 @@ public class LlmInferenceServiceTest {
 		PatientChart chart = new PatientChart("records", mappings);
 
 		LlmInferenceService service = new LlmInferenceService();
+		service.setDrugReferenceInjector(new org.openmrs.module.chartsearchai.reference.DrugReferenceInjector() {
+
+			@Override
+			public org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart inject(
+					org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart,
+					org.openmrs.Patient patient, String question) {
+				return chart;
+			}
+		});
+		service.setDrugSafetyValidator(new org.openmrs.module.chartsearchai.reference.DrugSafetyValidator() {
+
+			@Override
+			public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
+					String answer, String question, org.openmrs.Patient patient) {
+				return java.util.Collections.emptyList();
+			}
+		});
 		service.setChartBuildingStrategy(new ChartBuildingStrategy() {
 
 			@Override

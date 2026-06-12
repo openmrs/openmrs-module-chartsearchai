@@ -22,6 +22,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -50,6 +51,24 @@ public class LlmInferenceServiceCitationWiringTest {
 		service = new TestableService();
 		service.setChartBuildingStrategy(new StubStrategy());
 		service.setLlmProvider(new StubProvider());
+		// their searchStreaming injects drug-reference records unconditionally; pass through
+		service.setDrugReferenceInjector(new DrugReferenceInjector() {
+
+			@Override
+			public org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart inject(
+					org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart,
+					org.openmrs.Patient patient, String question) {
+				return chart;
+			}
+		});
+		service.setDrugSafetyValidator(new org.openmrs.module.chartsearchai.reference.DrugSafetyValidator() {
+
+			@Override
+			public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
+					String answer, String question, org.openmrs.Patient patient) {
+				return java.util.Collections.emptyList();
+			}
+		});
 	}
 
 	private static Patient patient() {

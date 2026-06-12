@@ -375,6 +375,27 @@ public class ChartSearchAiConstants {
 
 	public static final boolean DEFAULT_GROUNDING_ASYNC = false;
 
+	/**
+	 * When {@code > 0}, the {@code reasoning} scratchpad in the chart-answer schema is capped at
+	 * this many characters via a grammar-enforced {@code maxLength} — bounding the dominant
+	 * decode cost on CPU-only servers (the model otherwise thinks for 3–27s before any answer
+	 * token). The answer itself is never capped. {@code 0} (default) leaves the schema exactly
+	 * as before. Because truncating the model's chain of thought can change its answers, any
+	 * non-zero value must first clear the 32-cell answer-quality gold standard
+	 * ({@code eval/drift-metric/metric_gold.standalone.json}): mean F1, abstention accuracy and
+	 * off-topic-citation count must not regress versus the uncapped baseline.
+	 *
+	 * <p><strong>Measured negative result (2026-06-12), Gemma 4 E2B at 400 chars:</strong>
+	 * meanF1 0.464&rarr;0.428, abstention 1.00&rarr;0.91 (a false citation on an absent-topic
+	 * cell), off-topic citations 41&rarr;47 — the gate failed on all three axes, so NO certified
+	 * value exists for E2B. The mechanism is structural: a binding cap cuts the chain of thought
+	 * mid-derivation and the answer degrades; a non-binding cap saves nothing. Do not enable
+	 * without a fresh gate run for the specific model and value.
+	 */
+	public static final String GP_LLM_REASONING_MAX_CHARS = "chartsearchai.llm.reasoningMaxChars";
+
+	public static final int DEFAULT_LLM_REASONING_MAX_CHARS = 0;
+
 	// Resource type identifiers used in embeddings and citations
 	public static final String RESOURCE_TYPE_OBS = "obs";
 

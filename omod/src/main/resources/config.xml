@@ -108,6 +108,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.llm.reasoningMaxChars</property>
+		<defaultValue>0</defaultValue>
+		<description>When greater than 0, caps the model's "reasoning" scratchpad at this many characters via a grammar-enforced maxLength in the chart-answer schema. The reasoning phase is the dominant decode cost on CPU-only servers (3-27 seconds of thinking before any answer text); capping it bounds that cost. The answer itself is never capped. 0 (default) leaves the schema exactly as before. IMPORTANT: truncating the model's chain of thought can change its answers — only enable a value that has cleared the 32-cell answer-quality gold standard (eval/drift-metric/metric_gold.standalone.json) with no regression in mean F1, abstention accuracy, or off-topic citations versus the uncapped baseline. Measured 2026-06-12: Gemma 4 E2B at 400 FAILED that gate on all three axes (meanF1 0.464 to 0.428, abstention 1.00 to 0.91, off-topic citations 41 to 47) — no certified value exists; leave at 0 unless a fresh gate run for your model and value passes.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.rateLimitPerMinute</property>
 		<defaultValue>10</defaultValue>
 		<description>Maximum number of AI chart search queries a single user can make per minute. Set to 0 to disable rate limiting.</description>

@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 import javax.servlet.http.HttpServletResponse;
@@ -33,6 +34,7 @@ import org.openmrs.api.context.ContextAuthenticationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
@@ -268,7 +270,15 @@ public class ChartSearchAiRestController {
 	 *   <li>{@code thinking} — a chunk of the model's reasoning (chain-of-thought), emitted
 	 *       before the answer; render distinctly (e.g. a collapsible panel), not as the answer</li>
 	 *   <li>{@code token} — a chunk of the answer text</li>
-	 *   <li>{@code done} — final JSON with answer, references, and disclaimer</li>
+	 *   <li>{@code references} — the answer's citations the moment the answer is complete,
+	 *       before grounding verdicts exist; render as unverified until verdicts arrive</li>
+	 *   <li>{@code done} — final JSON with answer, references, questionId, and disclaimer.
+	 *       With async grounding off (the default) the references carry their grounding
+	 *       verdicts; with {@code chartsearchai.grounding.async=true} they do not yet</li>
+	 *   <li>{@code grounded} — only with async grounding: the references re-sent with their
+	 *       grounding verdicts attached, after the Tier-2 verification tail completes; carries
+	 *       the same {@code questionId} as {@code done}. Clients must keep consuming the stream
+	 *       after {@code done} to receive it</li>
 	 *   <li>{@code error} — an error message if something goes wrong</li>
 	 * </ul>
 	 */
@@ -359,54 +369,110 @@ public class ChartSearchAiRestController {
 		String searchMode = !"false".equalsIgnoreCase(preFilterProp.trim())
 				? "pre-filter" : "full-chart";
 
+		streamAnswer(out, patient, sanitizedQuestion, user, searchMode, isAsyncGroundingActive());
+	}
+
+	/**
+	 * Whether the streaming endpoint should emit {@code done} before the grounding pass and
+	 * deliver verdicts in a trailing {@code grounded} event. Only meaningful when grounding
+	 * itself is on — with grounding disabled there is no tail to move off the response path.
+	 * Resolved here (not in {@link #streamAnswer}) so the orchestration stays free of
+	 * {@code Context} reads and unit-testable.
+	 */
+	private static boolean isAsyncGroundingActive() {
+		return ChartSearchAiUtils.isGroundingAsyncEnabled() && ChartSearchAiUtils.isGroundingEnabled();
+	}
+
+	/**
+	 * The SSE orchestration for one streaming search: runs the service call with the token /
+	 * thinking / references channels wired to the output stream, then emits the terminal events.
+	 *
+	 * <p>With {@code asyncGrounding} off, the classic shape: one {@code done} event after the
+	 * service returns, carrying the grounded references. With it on, {@code done} is emitted the
+	 * moment the answer is complete (references without verdicts, audit row already saved so
+	 * {@code questionId} is present) and a trailing {@code grounded} event delivers the
+	 * verdict-annotated references once verification finishes — the user's perceived completion
+	 * no longer waits out the grounding tail. If the service returns without ever surfacing an
+	 * ungrounded answer (a cache hit returns an already-final answer), the classic {@code done}
+	 * is emitted instead and no {@code grounded} event follows.</p>
+	 *
+	 * <p>Package-private and free of {@code Context} reads so event-order behavior is unit-tested
+	 * directly (see {@code ChartSearchAiStreamEventOrderTest}); {@code searchStream} resolves all
+	 * configuration before delegating here.</p>
+	 */
+	void streamAnswer(final OutputStream out, Patient patient, String sanitizedQuestion, User user,
+			String searchMode, boolean asyncGrounding) {
 		try {
 			long startTime = System.currentTimeMillis();
 
-			// Three channels: "token" carries the answer; "thinking" carries the model's reasoning
+			// Carries the early-done state from the consumer (fired mid-call) to the post-return
+			// code: [0] = the saved questionId (null if audit failed), and whether done was sent
+			// is tracked by earlyDoneSent. Single-element arrays because the consumer lambda needs
+			// effectively-final capture.
+			final String[] earlyQuestionId = new String[1];
+			final boolean[] earlyDoneSent = new boolean[1];
+
+			// Async grounding: the moment the (not yet grounding-verified) answer exists, persist
+			// the audit row and emit "done" — the user's perceived completion no longer waits out
+			// the grounding tail. The audit's responseTimeMs deliberately measures to THIS point
+			// (what the user experienced); the [timing] service log still carries groundMs.
+			// Serialization + write failures unwind like any mid-stream disconnect, via the same
+			// RuntimeException(IOException) shape writeSseEventOrThrow uses.
+			Consumer<ChartAnswer> ungroundedConsumer = !asyncGrounding ? ungrounded -> { }
+					: ungrounded -> {
+						if (earlyDoneSent[0]) {
+							// Interface contract is at-most-once; stay idempotent anyway — a
+							// duplicate done would corrupt every client's completion handling.
+							log.warn("Ungrounded-answer consumer fired more than once; ignoring");
+							return;
+						}
+						earlyQuestionId[0] = saveAuditLog(user, patient, sanitizedQuestion,
+								ungrounded, searchMode, System.currentTimeMillis() - startTime);
+						try {
+							writeSseEvent(out, "done",
+									doneEventJson(ungrounded, earlyQuestionId[0]));
+						}
+						catch (IOException e) {
+							log.debug("Client disconnected during streaming (done)");
+							throw new RuntimeException("Client disconnected", e);
+						}
+						earlyDoneSent[0] = true;
+					};
+
+			// Four channels: "token" carries the answer; "thinking" carries the model's reasoning
 			// (chain-of-thought), emitted first so the UI can show live progress and the rationale
 			// instead of a dead spinner; "references" carries the answer's citations the moment the
 			// answer is done — BEFORE the grounding pass — so the UI can render clickable citations
-			// immediately and not wait on Tier-2 verification. The final "done" event re-sends the
-			// same references with their grounding verdicts attached. The frontend must render
-			// "thinking" distinctly (e.g. a collapsible panel), never as the answer; until "done"
-			// arrives it must show "references" citations as unverified. All unwind on client
+			// immediately and not wait on Tier-2 verification. The terminal events re-send the
+			// references with grounding verdicts attached: in the classic shape on "done", or — when
+			// async grounding is active — on a trailing "grounded" event after an early "done". The
+			// frontend must render "thinking" distinctly (e.g. a collapsible panel), never as the
+			// answer; citations must show as unverified until verdicts arrive. All unwind on client
 			// disconnect via writeSseEventOrThrow.
 			ChartAnswer chartAnswer = chartSearchService.searchStreaming(
 					patient, sanitizedQuestion,
 					token -> writeSseEventOrThrow(out, "token", token),
 					reasoning -> writeSseEventOrThrow(out, "thinking", reasoning),
-					citations -> sendReferencesEvent(out, citations));
+					citations -> sendReferencesEvent(out, citations),
+					ungroundedConsumer);
 
-			long responseTimeMs = System.currentTimeMillis() - startTime;
-
-			ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
-			auditLog.setUser(user);
-			auditLog.setPatient(patient);
-			auditLog.setQuestion(sanitizedQuestion);
-			auditLog.setAnswer(chartAnswer.getAnswer());
-			auditLog.setReferenceCount(chartAnswer.getReferences().size());
-			auditLog.setSearchMode(searchMode);
-			auditLog.setResponseTimeMs(responseTimeMs);
-			auditLog.setInputTokens(chartAnswer.getInputTokens() > 0 ? chartAnswer.getInputTokens() : null);
-			auditLog.setOutputTokens(chartAnswer.getOutputTokens() > 0 ? chartAnswer.getOutputTokens() : null);
-			auditLog.setDateCreated(new Date());
-			try {
-				auditLogService.saveAuditLog(auditLog);
+			if (!earlyDoneSent[0]) {
+				// Classic shape: async off, or the service returned an already-final answer (cache
+				// hit) without surfacing an ungrounded stage — audit and emit the single done.
+				String questionId = saveAuditLog(user, patient, sanitizedQuestion, chartAnswer,
+						searchMode, System.currentTimeMillis() - startTime);
+				writeSseEvent(out, "done", doneEventJson(chartAnswer, questionId));
+			} else {
+				// done already went out before grounding; deliver the verdicts in the trailing
+				// "grounded" event. Same reference serialization as done, so the client can
+				// replace its reference list wholesale; questionId correlates the two events.
+				Map<String, Object> groundedData = new HashMap<String, Object>();
+				groundedData.put("references", serializeReferences(chartAnswer.getReferences()));
+				if (earlyQuestionId[0] != null) {
+					groundedData.put("questionId", earlyQuestionId[0]);
+				}
+				writeSseEvent(out, "grounded", new ObjectMapper().writeValueAsString(groundedData));
 			}
-			catch (Exception e2) {
-				log.warn("Failed to save audit log for streaming query", e2);
-			}
-
-			Map<String, Object> doneData = new HashMap<String, Object>();
-			doneData.put("answer", chartAnswer.getAnswer());
-			doneData.put("disclaimer", DISCLAIMER);
-
-			doneData.put("references", serializeReferences(chartAnswer.getReferences()));
-			if (auditLog.getAuditLogId() != null) {
-				doneData.put("questionId", String.valueOf(auditLog.getAuditLogId()));
-			}
-
-			writeSseEvent(out, "done", new ObjectMapper().writeValueAsString(doneData));
 		}
 		catch (ChartTooLargeException e) {
 			log.warn("Chart too large for LLM context during streaming for patient [id={}]: {}",
@@ -452,6 +518,57 @@ public class ChartSearchAiRestController {
 		catch (IOException e) {
 			log.debug("Could not flush SSE stream, client likely disconnected");
 		}
+	}
+
+	/**
+	 * Persists the audit row for a streaming answer and returns its id as the client-facing
+	 * {@code questionId}, or {@code null} when the save failed — audit failures are logged and
+	 * never break the response, exactly as before the async-grounding split. Shared by the
+	 * classic post-return path and the async early-{@code done} path so both emit identical
+	 * audit rows and {@code done} payloads.
+	 */
+	private String saveAuditLog(User user, Patient patient, String question, ChartAnswer answer,
+			String searchMode, long responseTimeMs) {
+		ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
+		auditLog.setUser(user);
+		auditLog.setPatient(patient);
+		auditLog.setQuestion(question);
+		auditLog.setAnswer(answer.getAnswer());
+		auditLog.setReferenceCount(answer.getReferences().size());
+		auditLog.setSearchMode(searchMode);
+		auditLog.setResponseTimeMs(responseTimeMs);
+		auditLog.setInputTokens(answer.getInputTokens() > 0 ? answer.getInputTokens() : null);
+		auditLog.setOutputTokens(answer.getOutputTokens() > 0 ? answer.getOutputTokens() : null);
+		auditLog.setDateCreated(new Date());
+		try {
+			auditLogService.saveAuditLog(auditLog);
+		}
+		catch (Exception e) {
+			log.warn("Failed to save audit log for streaming query", e);
+		}
+		return auditLog.getAuditLogId() != null ? String.valueOf(auditLog.getAuditLogId()) : null;
+	}
+
+	/** Serializes the {@code done} event payload: answer, disclaimer, references, questionId. */
+	private String doneEventJson(ChartAnswer answer, String questionId) throws IOException {
+		Map<String, Object> doneData = new HashMap<String, Object>();
+		doneData.put("answer", answer.getAnswer());
+		doneData.put("disclaimer", DISCLAIMER);
+		doneData.put("references", serializeReferences(answer.getReferences()));
+		if (questionId != null) {
+			doneData.put("questionId", questionId);
+		}
+		return new ObjectMapper().writeValueAsString(doneData);
+	}
+
+	/** Test seam: production wires {@link ChartSearchService} via {@code Autowired}. */
+	void setChartSearchService(ChartSearchService chartSearchService) {
+		this.chartSearchService = chartSearchService;
+	}
+
+	/** Test seam: production wires {@link AuditLogService} via {@code Autowired}. */
+	void setAuditLogService(AuditLogService auditLogService) {
+		this.auditLogService = auditLogService;
 	}
 
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)

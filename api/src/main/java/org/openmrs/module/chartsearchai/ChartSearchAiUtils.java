@@ -544,6 +544,25 @@ public class ChartSearchAiUtils {
 	}
 
 	/**
+	 * @return true when async grounding is enabled via
+	 *         {@link ChartSearchAiConstants#GP_GROUNDING_ASYNC} — the streaming endpoint then
+	 *         emits {@code done} before the grounding pass and delivers verdicts in a trailing
+	 *         {@code grounded} event. Fails safe to {@code false} (classic single grounded
+	 *         {@code done}) when no admin service is available.
+	 */
+	public static boolean isGroundingAsyncEnabled() {
+		try {
+			String value = org.openmrs.api.context.Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_GROUNDING_ASYNC,
+							String.valueOf(ChartSearchAiConstants.DEFAULT_GROUNDING_ASYNC));
+			return "true".equalsIgnoreCase(value.trim());
+		}
+		catch (RuntimeException e) {
+			return ChartSearchAiConstants.DEFAULT_GROUNDING_ASYNC;
+		}
+	}
+
+	/**
 	 * @return the cosine floor below which a citation is treated as ungrounded,
 	 *         read from {@link ChartSearchAiConstants#GP_GROUNDING_MIN_COSINE},
 	 *         falling back to {@link ChartSearchAiConstants#DEFAULT_GROUNDING_MIN_COSINE}

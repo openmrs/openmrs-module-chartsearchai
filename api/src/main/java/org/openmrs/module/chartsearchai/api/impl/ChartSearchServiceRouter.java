@@ -89,6 +89,15 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 	public ChartAnswer searchStreaming(Patient patient, String question,
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 			Consumer<List<RecordReference>> citationsConsumer) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer,
+				citationsConsumer, ungrounded -> { });
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 		int ttlMinutes = getCacheTtlMinutes();
 
 		if (ttlMinutes > 0) {
@@ -99,20 +108,28 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 				// Cache hit: the answer is returned instantly with no LLM call, so there is no
 				// live reasoning to stream — only replay the cached answer. Its references are
 				// already grounded, so also surface them on the citations channel for protocol
-				// parity with the live path.
+				// parity with the live path. The ungrounded-answer consumer is deliberately NOT
+				// fired: its contract is "an answer exists whose grounding is still pending",
+				// and a cached answer is already final — the caller treats the return value as
+				// the single result (see the interface javadoc).
 				tokenConsumer.accept(cached.getAnswer());
 				citationsConsumer.accept(cached.getReferences());
 				return cached;
 			}
 
 			ChartAnswer answer = llmService.searchStreaming(patient, question, tokenConsumer,
-					reasoningConsumer, citationsConsumer);
+					reasoningConsumer, citationsConsumer, ungroundedAnswerConsumer);
 			putCache(cacheKey, answer);
 			return answer;
 		}
 
 		return llmService.searchStreaming(patient, question, tokenConsumer, reasoningConsumer,
-				citationsConsumer);
+				citationsConsumer, ungroundedAnswerConsumer);
+	}
+
+	/** Test seam: production wires the inference service via {@link Autowired}. */
+	void setLlmService(ChartSearchService llmService) {
+		this.llmService = llmService;
 	}
 
 	@Override

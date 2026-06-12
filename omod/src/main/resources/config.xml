@@ -234,6 +234,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.grounding.async</property>
+		<defaultValue>false</defaultValue>
+		<description>When true (and chartsearchai.grounding.enabled is also on), the streaming search endpoint emits its terminal "done" event as soon as the answer is complete — its references carry no grounding verdicts yet — and delivers the verdicts afterwards in a trailing "grounded" SSE event. On CPU-only deployments the grounding pass adds seconds of Tier-2 LLM work after the answer is already readable; enabling this moves that tail off the user's perceived completion time. Clients must keep consuming the SSE stream after "done" and apply the "grounded" event's verdicts when it arrives (citations render as unverified until then). The blocking /search endpoint is unaffected and always returns final verdicts. Default: false (the classic single "done" carrying final verdicts).</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.grounding.clauseScoped</property>
 		<defaultValue>false</defaultValue>
 		<description>When true, citation grounding is clause-scoped: in a sentence that cites multiple records, each citation is checked against the answer text up to and including its own [N] marker, rather than the whole compound sentence. This grounds a citation that supports its own clause but not a later clause cited by a different record — e.g. "Hearing Loss was noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an active condition) does not support the "provisional diagnosis" clause that [91] backs. The clause is the cumulative prefix through the marker, so it keeps the sentence subject when the subject precedes the first marker (the normal case) and still flags family-history/negation flips in later clauses. Default: false (sentence-scoped). Only affects which text a citation is verified against; never changes the answer or which records are cited.</description>

@@ -186,6 +186,12 @@ public class LlmInferenceService implements ChartSearchService {
 		return ChartSearchAiUtils.isQueryStoreEnabled();
 	}
 
+	/** Test seam wrapping {@link ChartSearchAiUtils#isGroundingEnabled()}; production
+	 *  delegates, tests override to exercise the grounding path without an OpenMRS context. */
+	protected boolean resolveGroundingEnabled() {
+		return ChartSearchAiUtils.isGroundingEnabled();
+	}
+
 	/**
 	 * Pure-logic decision for whether the current pipeline mode produces a
 	 * question-independent chart prefix that warmup can usefully prime. Warmup
@@ -239,6 +245,15 @@ public class LlmInferenceService implements ChartSearchService {
 	public ChartAnswer searchStreaming(Patient patient, String question,
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 			Consumer<List<RecordReference>> citationsConsumer) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer,
+				citationsConsumer, ungrounded -> { });
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 		// LOG FORMAT — stable contract: same field set as search() with op=searchStreaming
 		// in the log tag, plus groundMs (Tier-2 grounding is now timed separately so the tail is
 		// visible). Streaming is the path the frontend actually uses by default, so this is what
@@ -269,6 +284,14 @@ public class LlmInferenceService implements ChartSearchService {
 			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
 					response.getCitations(), chart.getMappings());
 			citationsConsumer.accept(cited);
+
+			// The answer is complete: hand the whole (not yet grounding-verified) result to the
+			// caller before the grounding pass, so the REST layer can finish the user-visible
+			// response (emit "done", persist the audit row) without waiting out the Tier-2 tail.
+			// Fires regardless of whether grounding is enabled — see the interface contract.
+			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
+					response.getInputTokens(), response.getOutputTokens(),
+					response.getCachedTokens()));
 
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
@@ -313,7 +336,7 @@ public class LlmInferenceService implements ChartSearchService {
 	 */
 	private List<RecordReference> groundReferences(String answer, List<RecordReference> references,
 			List<RecordMapping> mappings) {
-		if (references == null || references.isEmpty() || !ChartSearchAiUtils.isGroundingEnabled()) {
+		if (references == null || references.isEmpty() || !resolveGroundingEnabled()) {
 			return references;
 		}
 		return citationGroundingVerifier.verify(answer, references, mappings);

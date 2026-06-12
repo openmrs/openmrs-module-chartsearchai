@@ -80,6 +80,41 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * Streaming variant that additionally hands the caller the <em>complete but not yet
+	 * grounding-verified</em> answer the moment it exists, via {@code ungroundedAnswerConsumer} —
+	 * the seam that lets the REST layer finish the user-visible response (emit its {@code done}
+	 * event, persist the audit row) without waiting out the citation-grounding tail, which on
+	 * CPU-only deployments adds seconds of Tier-2 LLM work after the answer is already readable.
+	 *
+	 * <p>The consumer contract:</p>
+	 * <ul>
+	 *   <li>It fires at most ONCE, after the answer and its citation references are final but
+	 *       before grounding verification runs; the references it carries have {@code null}
+	 *       verdicts.</li>
+	 *   <li>It fires on the live inference path regardless of whether grounding is enabled —
+	 *       its meaning is "the answer is complete", not "grounding will follow".</li>
+	 *   <li>It does NOT fire when the implementation returns an answer that is already final —
+	 *       e.g. a cached answer, whose verdicts were attached when it was first computed. A
+	 *       caller that emitted nothing from the consumer must therefore fall back to treating
+	 *       the returned {@link ChartAnswer} as the single, final result.</li>
+	 * </ul>
+	 *
+	 * <p>This overload is deliberately abstract, not a default: every implementation —
+	 * especially delegating wrappers like the caching router — must decide explicitly how to
+	 * route the consumer. A defaulted implementation that silently dropped it would re-create
+	 * the consumer-loss bug class that the citations channel hit before (see the history on the
+	 * five-arg overload).</p>
+	 *
+	 * @param ungroundedAnswerConsumer called at most once with the complete answer whose
+	 *        references carry no grounding verdicts yet; not called for already-final answers
+	 * @return the complete answer with grounded source references, exactly as the five-arg
+	 *         overload returns
+	 */
+	ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer,
+			Consumer<String> reasoningConsumer, Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer);
+
+	/**
 	 * Pre-warm any patient-specific caches (serialized chart, LLM prompt cache) so the
 	 * first real query on this patient does not pay cold-start cost. Implementations
 	 * that don't support warmup may return immediately. Callers should treat this as

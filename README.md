@@ -468,8 +468,11 @@ SSE events:
 
 | Event | Description |
 |-------|-------------|
+| `thinking` | A chunk of the model's reasoning, emitted before the answer; render distinctly (e.g. a collapsible panel), never as the answer |
 | `token` | A chunk of the answer text as it is generated |
-| `done` | Final JSON with the complete answer, references (sorted most recent first, with `index`, `resourceType`, `resourceUuid`, `date`), `questionId`, and disclaimer |
+| `references` | The answer's citations the moment the answer is complete — before grounding verdicts exist; render as unverified until verdicts arrive |
+| `done` | Final JSON with the complete answer, references (sorted most recent first, with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`), `questionId`, and disclaimer. With `chartsearchai.grounding.async=true`, `done` is emitted as soon as the answer is complete and its references carry no verdicts yet |
+| `grounded` | Only with `chartsearchai.grounding.async=true`: the references re-sent with their grounding verdicts (`grounded` true/false/null) once Tier-2 verification completes, with the same `questionId`. Keep consuming the stream after `done` to receive it |
 | `error` | Error message if something goes wrong |
 
 ### Warmup

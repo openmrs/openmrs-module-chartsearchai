@@ -360,6 +360,21 @@ public class ChartSearchAiConstants {
 	 */
 	public static final int GROUNDING_ENTAILMENT_MAX_CHECKS = 16;
 
+	/**
+	 * When {@code true} (and {@link #GP_GROUNDING_ENABLED} is also on), the streaming endpoint
+	 * emits its terminal {@code done} event as soon as the answer is complete — references
+	 * without verdicts — and delivers the grounding verdicts afterwards in a trailing
+	 * {@code grounded} SSE event. On CPU-only deployments the grounding pass adds seconds of
+	 * Tier-2 LLM work after the answer is already readable; this moves that tail off the user's
+	 * perceived completion. Clients must keep consuming the stream after {@code done} and apply
+	 * the {@code grounded} event's verdicts when it arrives (citations render as unverified until
+	 * then). The blocking {@code /search} endpoint is unaffected — its single response always
+	 * carries final verdicts. Default {@code false} (classic single grounded {@code done}).
+	 */
+	public static final String GP_GROUNDING_ASYNC = "chartsearchai.grounding.async";
+
+	public static final boolean DEFAULT_GROUNDING_ASYNC = false;
+
 	// Resource type identifiers used in embeddings and citations
 	public static final String RESOURCE_TYPE_OBS = "obs";
 

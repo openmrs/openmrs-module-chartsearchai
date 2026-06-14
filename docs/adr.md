@@ -1711,6 +1711,47 @@ So pointing at WHO ATC delivers **class-based contraindication/interaction reaso
 - **"Same class" = ATC level-4 (chemical subgroup, the 5-character prefix `M01AE`), not level-3.** Level 4 groups structurally-related drugs (ibuprofen/naproxen) with the fewest false positives; level 3 (`M01A` = all NSAIDs) fans out far more broadly with no curated data to justify it. This is the project's standing anti-false-positive stance (the dose-parser hardening existed for the same reason) applied to class breadth.
 - **Documented boundary (unchanged from the matrix above):** ATC's tree does not capture cross-*branch* cross-reactivity — aspirin `N02BA01` (salicylates) is a different ATC branch from ibuprofen `M01AE01` (propionic NSAIDs), so an ibuprofen allergy does **not** flag aspirin by class alone. That linkage needs a curated cross-reactivity dataset, not classification, and is asserted as a boundary test (`classContraindicationNotRaisedAcrossDifferentAtcBranch`).
 
+## Decision 25: Citation grounding (Tier-1 cosine + Tier-2 entailment)
+
+**Status: Accepted** (June 2026) — implemented, opt-in / default-off.
+
+### Context
+
+The LLM cites records by number (`[N]`), and the REST layer already validates that every `[N]` maps to a real record in the retrieved set. That index check is necessary but not sufficient: it confirms the citation *points at something real*, not that the pointed-at record *actually supports the claim*. The dangerous failure is a real, retrieved record cited for a claim it does not back — a blood-pressure record cited for a diabetes statement, or "the patient has X [5]" where record 5 says a *relative* had X (or negates X). A small local model produces these confidently, and a citation that survives index validation looks trustworthy in the UI.
+
+### Decision
+
+Add an opt-in post-answer grounding pass (`chartsearchai.grounding.enabled`, default `false`) that verifies each citation against the record it points to and annotates the reference with a `grounded` verdict (`true` / `false` / `null` when unchecked). It is **advisory only** — it never rewrites, reorders, or blocks the answer, and never changes which records are cited; the per-citation `grounded` verdict lets clients surface unverified citations distinctly, and the clinician decides. Verification is two-tier, each tier independently toggleable:
+
+1. **Tier-1 (cosine, `chartsearchai.grounding.minCosine`, default `0.40`)** — the cited record's text must be semantically close to the answer sentence that cites it. Cheap (an embedding cosine, no extra LLM call), and catches grossly off-topic citations. It cannot catch subtle subject/negation flips, where the record and sentence share most of their vocabulary.
+2. **Tier-2 (entailment, `chartsearchai.grounding.entailment.enabled`, default `false`)** — a yes/no LLM judgement of whether the record entails the sentence. This separates high-overlap-but-false citations that cosine cannot. An answer's citations are verified in a **single batched LLM call** (capped per answer) so Tier-2 costs one extra round-trip, not one per citation.
+
+### Grounding unit: the rendered chart line, clause-scoped
+
+Two refinements make the verdict match what the citation actually claims:
+
+- **Ground against the rendered chart line (date + body), not the bare record text** — the model sees dated chart lines, so the verifier compares against the same surface.
+- **Clause-scoping (`chartsearchai.grounding.clauseScoped`, default `false`, sentence-scoped)** — in a sentence citing multiple records, each citation is checked against the cumulative answer prefix *up to and including its own `[N]` marker* rather than the whole compound sentence. This flags a citation that supports its own clause but not a *later* clause cited by a different record — e.g. "Hearing Loss was noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an active condition) does not back the "provisional diagnosis" clause that [91] supports. The prefix keeps the sentence subject (which normally precedes the first marker), so it still flags family-history/negation flips in later clauses. It is left off by default because per-pair Tier-2 batching is not yet fully independent (shortening an earlier cite's statement can flip a later cite's verdict — tracked separately).
+
+### Cost shaping
+
+The grounding pass is pure overhead on the user's critical path, and on CPU-only servers the Tier-2 LLM call adds seconds *after* the answer is already readable. Two mechanisms keep it from regressing perceived latency:
+
+- **Lazy Tier-1** — when Tier-2 entailment is on, the Tier-1 cosine is computed only for citations where the LLM check produced no verdict. Tier-2 is authoritative where it spoke, so the embedding work (and any embedding-model requirement) is skipped for those citations — grounding then works even with no Tier-1 embedding model configured.
+- **Async grounding (`chartsearchai.grounding.async`, default `false`, streaming only)** — the SSE `done` event is emitted as soon as the answer is complete (its references carrying no verdicts yet), and the verdicts arrive afterward in a trailing `grounded` event. The Tier-2 tail moves off the user's perceived completion time; clients keep consuming the stream after `done` and apply verdicts when they land. The blocking `/search` endpoint is unaffected and always returns final verdicts.
+
+### Model-dependent cosine floor
+
+`minCosine` is **not** a universal constant — it tracks the embedding model's score-spread geometry. `0.40` suits a wide-spread model like all-MiniLM-L6-v2 but is far too low for e5, whose grounded pairs sit much higher; on an e5/querystore deployment the floor must be ~`0.82`. When `chartsearchai.querystore.enabled=true` the verifier **reuses querystore's own e5 embedding provider** rather than loading a second model, so the floor must match that model. This is the same per-model-tuning stance as the retrieval pipeline (see [Decision 19](#decision-19-retain-all-minilm-l6-v2-as-the-embedding-model) / [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path)).
+
+### Trade-offs
+
+- **+** Catches the dangerous "real record, wrong claim" citation that index validation structurally cannot — the cosine tier for free, the entailment tier for the subtle subject/negation flips that matter clinically.
+- **+** Advisory and additive: default-off, never alters the answer, degrades to "unchecked" rather than failing.
+- **−** Tier-2 adds one batched LLM round-trip; on CPU-only servers that is seconds of latency, mitigated but not eliminated by async + lazy Tier-1.
+- **−** The cosine floor is a per-model tuning knob, not a constant — a model swap without re-tuning `minCosine` silently mis-grounds.
+- **−** Clause-scoped grounding is correct in principle but coupled to per-pair Tier-2 independence, so it ships off by default behind a measure-first gate.
+
 ## Known limitations
 
 - **Counting questions**: LLMs are unreliable at precise counting tasks (e.g., "how many weight records in the last 10 years?"). The model may undercount or overcount even when all relevant records are provided. Larger, more capable models perform better at counting but are still not perfectly reliable. This is a fundamental limitation of LLM inference, not a retrieval issue. Questions that require exact counts are better suited to structured queries.

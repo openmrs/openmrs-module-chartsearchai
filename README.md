@@ -246,7 +246,22 @@ These settings apply when `chartsearchai.retrieval.pipeline` is `embedding` (the
 | `chartsearchai.llm.idleTimeoutMinutes` | `30` | *(Local engine only)* Minutes of inactivity after which the embedded llama-server is stopped to free RAM. It is automatically restarted on the next query. Set to `0` to keep it running indefinitely |
 | `chartsearchai.llm.serverPort` | `18085` | *(Local engine only)* Port for the embedded llama-server. Change if the default conflicts with another service |
 | `chartsearchai.llm.contextSize` | `32768` | *(Local engine only)* Context window size in tokens for the embedded llama-server. The system prompt + serialized chart + question must fit within this. Larger values let bigger charts pass through full-chart mode but increase the KV cache memory footprint roughly linearly. Increase if you see "Patient chart exceeds the LLM context window" (HTTP 413) and have headroom for a larger KV cache; reduce on memory-constrained hardware |
+| `chartsearchai.llm.reasoningMaxChars` | `0` | Caps the model's reasoning scratchpad at this many characters (via a grammar-enforced `maxLength` in the chart-answer schema) when greater than `0`; the answer itself is never capped. The reasoning phase is the dominant decode cost on CPU-only servers (a measured 3–27 seconds of "thinking" before any answer text), so bounding it bounds that cost. `0` (default) leaves the schema unchanged. **Caution:** truncating the chain of thought can change answers — only enable a value that has cleared the answer-quality gold standard (`eval/drift-metric/`) with no regression in mean F1, abstention accuracy, or off-topic citations versus the uncapped baseline. Gemma 4 E2B at `400` failed that gate on all three axes (measured 2026-06-12); no certified value exists, so leave at `0` unless a fresh gate run for your model and value passes |
 | `chartsearchai.warmupEnabled` | `true` | When `true`, opening a patient chart triggers a background warmup that primes the LLM prompt cache (system prompt + serialized chart) so the first AI query on that patient skips the full prefill cost. No-op when `chartsearchai.llm.engine` is `remote` (remote providers manage their own caching) and when `chartsearchai.embedding.preFilter` is `true` (the prompt prefix varies per query, so a chart-only warmup cannot be reused) |
+
+#### Citation grounding *(optional, off by default)*
+
+After the LLM answers, each citation can be verified against the record it points to — catching the dangerous case of a real record cited for a claim it does not actually support (index validation alone only confirms `[N]` maps to a retrieved record, not that the record supports the claim). Two tiers, both opt-in and non-blocking: grounding only annotates which citations could be confirmed, never rewrites or blocks the answer. See [Citation grounding](#citation-grounding) under Query behavior for what the verdicts mean and [ADR Decision 25](docs/adr.md#decision-25-citation-grounding-tier-1-cosine--tier-2-entailment) for the design.
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `chartsearchai.grounding.enabled` | `false` | Master switch. When `true`, every cited record is checked for grounding after the answer is produced; citations that fail are flagged as unverified. The answer is never blocked or rewritten |
+| `chartsearchai.grounding.minCosine` | `0.40` | Tier-1 floor: minimum cosine similarity between a cited record's text and the answer sentence that cites it. Catches grossly off-topic citations, not subtle subject/negation flips. Model-dependent — `0.40` suits all-MiniLM-L6-v2 but is far too low for e5; set ~`0.82` on an e5/querystore deployment (the verifier reuses querystore's embedder when `chartsearchai.querystore.enabled=true`). Must be between 0 and 1 |
+| `chartsearchai.grounding.entailment.enabled` | `false` | Tier-2: confirm each citation with a yes/no LLM entailment judgement of whether the record actually supports the sentence citing it. Catches high-overlap-but-false citations (the record says a *relative* had X, or negates X) that cosine cannot separate. Verified in a batched LLM call. Tier-1 cosine is computed lazily in this mode, so Tier-2 works even when no embedding model is configured. Requires `chartsearchai.grounding.enabled` |
+| `chartsearchai.grounding.async` | `false` | *(Streaming only)* Emit the `done` event as soon as the answer is complete (references unverified) and deliver verdicts afterward in a trailing `grounded` event — moving the Tier-2 tail off the user's perceived completion time. Clients must keep consuming the SSE stream after `done`. The blocking `/search` endpoint is unaffected and always returns final verdicts. Requires `chartsearchai.grounding.enabled`. See [Streaming search (SSE)](#streaming-search-sse) |
+| `chartsearchai.grounding.clauseScoped` | `false` | When `true`, a citation in a sentence that cites multiple records is checked against the answer text up to and including its own `[N]` marker, rather than the whole compound sentence — flagging a citation that supports its own clause but not a later clause cited by a different record. Only affects which text a citation is verified against; never changes the answer or which records are cited |
+
+The Tier-2 (`entailment`) and `async` checks require `chartsearchai.grounding.enabled`.
 
 #### Drug reference & safety *(optional, off by default)*
 
@@ -437,6 +452,15 @@ Questions with numeric recency constraints are automatically detected and honore
 
 Questions are checked against common prompt injection patterns (e.g., "ignore previous instructions", "you are now", "system prompt:") and rejected with HTTP 400 if matched. This is a defense-in-depth measure — the primary protection is the structured-output constraint (`response_format: json_schema`, sent by both engines and shared via `ChartAnswerResponseFormat`; the local llama-server enforces it via a derived GBNF grammar internally, and remote OpenAI-compat providers enforce it server-side) that forces LLM output into a fixed `{answer, citations}` shape regardless of prompt content. Normal clinical questions containing words like "ignore" or "instructions" in non-adversarial contexts (e.g., "What instructions were given at discharge?") are not affected.
 
+### Citation grounding
+
+When `chartsearchai.grounding.enabled` is `true` (off by default), every citation the LLM emits is verified against the record it points to *after* the answer is produced. Index validation already confirms each `[N]` maps to a real retrieved record; grounding adds the harder check — does that record actually support the claim it is cited for? Verification is two-tier:
+
+- **Tier-1 (cosine)** — the cited record's text must be semantically close (cosine ≥ `chartsearchai.grounding.minCosine`) to the answer sentence that cites it. This catches grossly off-topic citations (a blood-pressure record cited for a diabetes claim) cheaply, with no extra LLM call.
+- **Tier-2 (entailment)** — with `chartsearchai.grounding.entailment.enabled=true`, a yes/no LLM judgement confirms the record actually entails the sentence. This catches high-overlap-but-false citations that cosine cannot separate — e.g. "the patient has X [5]" where record 5 says a *relative* had X, or negates X. Citations are verified in a single batched LLM call, and Tier-1 cosine is computed lazily in this mode (only where the LLM produced no verdict), so Tier-2 works even when no embedding model is configured.
+
+Each reference in the response carries a `grounded` verdict (`true` / `false` / `null` when not checked), which clients should surface by rendering any citation whose verdict is `false` or `null` as unverified. Grounding never rewrites or blocks the answer — it only annotates which citations could be confirmed. The cosine floor is embedding-model-dependent (≈`0.40` for all-MiniLM-L6-v2, ≈`0.82` for e5); on a querystore deployment the verifier reuses querystore's e5 embedder. On CPU-only servers the Tier-2 pass adds seconds after the answer is already readable, so `chartsearchai.grounding.async=true` moves it into a trailing `grounded` SSE event (see [Streaming search (SSE)](#streaming-search-sse)). See [ADR Decision 25](docs/adr.md#decision-25-citation-grounding-tier-1-cosine--tier-2-entailment) for the design rationale.
+
 ### Drug-reference injection & safety validation
 
 When `chartsearchai.drugReference.enabled` is `true` (off by default), two additive stages run around the answer:
@@ -468,14 +492,16 @@ Response:
   "disclaimer": "This response is AI-generated and may not be accurate...",
   "questionId": "42",
   "references": [
-    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15" },
-    { "index": 1, "resourceType": "order", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10" }
+    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15", "grounded": null },
+    { "index": 1, "resourceType": "order", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10", "grounded": null }
   ],
   "safetyWarnings": []
 }
 ```
 
 `questionId` is a string identifier for this query, used to submit feedback (see below). It is omitted if audit logging fails.
+
+Each reference carries a `grounded` field — `true` / `false` once [citation grounding](#citation-grounding) has verified it, or `null` when grounding is disabled (the default, shown above) or did not check that citation.
 
 `safetyWarnings` is an array of non-blocking drug-safety advisories (each `{ type, drug, detail }`, where `type` is `overdose` / `interaction` / `contraindication`). The key is always present and empty unless the optional drug-reference feature is enabled and something was flagged (see [Drug-reference injection & safety validation](#drug-reference-injection--safety-validation)).
 

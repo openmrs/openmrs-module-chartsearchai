@@ -271,6 +271,50 @@ public class LocalLlmEngineTest {
 	}
 
 	@Test
+	public void kvQueryAction_disabledYieldsNone() {
+		// KV persistence off (no slot-save-path or no seed) -> the query path must do nothing
+		// special, regardless of RAM/disk state. This preserves the pre-feature behavior exactly.
+		assertEquals(LocalLlmEngine.KvQueryAction.NONE,
+				LocalLlmEngine.kvQueryAction(false, false, false));
+		assertEquals(LocalLlmEngine.KvQueryAction.NONE,
+				LocalLlmEngine.kvQueryAction(false, false, true));
+		assertEquals(LocalLlmEngine.KvQueryAction.NONE,
+				LocalLlmEngine.kvQueryAction(false, true, true));
+	}
+
+	@Test
+	public void kvQueryAction_ramResidentYieldsNone_soWarmRepeatsAndAlternatingPatientsNeverReRestore() {
+		// The chart's prefix was already loaded into this server's RAM prompt-cache pool earlier
+		// this lifetime (a prior warmup/query). llama-server's cache_prompt will reuse it, so a
+		// disk restore would be pure wasted I/O — and on an alternating-patient workload where both
+		// charts fit the RAM pool, restoring on every switch would REGRESS the warm 0.6-0.8s path.
+		// Must be NONE even when a disk file also exists.
+		assertEquals(LocalLlmEngine.KvQueryAction.NONE,
+				LocalLlmEngine.kvQueryAction(true, true, false));
+		assertEquals(LocalLlmEngine.KvQueryAction.NONE,
+				LocalLlmEngine.kvQueryAction(true, true, true));
+	}
+
+	@Test
+	public void kvQueryAction_coldRamButDiskHitYieldsRestore() {
+		// The exact gap this feature closes: the RAM pool is cold for this chart (e.g. after a
+		// server restart / idle-unload, or warmup never fired) but its prefilled KV is on disk.
+		// Restore (tens of ms) instead of a full chart re-prefill (tens of seconds on a GPU-less host).
+		assertEquals(LocalLlmEngine.KvQueryAction.RESTORE,
+				LocalLlmEngine.kvQueryAction(true, false, true));
+	}
+
+	@Test
+	public void kvQueryAction_coldEverywhereYieldsPrefillAndSave() {
+		// First-ever visit (or a chart that changed, hashing to a new file): nothing to restore, so
+		// the query prefills as before — but its KV must then be PERSISTED so the next visit (even
+		// after a restart) restores it instead of re-paying the prefill. Without the save, a cold
+		// query without a preceding warmup would throw its expensive prefill away (the observed gap).
+		assertEquals(LocalLlmEngine.KvQueryAction.PREFILL_AND_SAVE,
+				LocalLlmEngine.kvQueryAction(true, false, false));
+	}
+
+	@Test
 	public void purgeKvScopeEntries_shouldDeleteOnlyOtherFilesOfSameScope() throws Exception {
 		java.io.File dir = java.nio.file.Files.createTempDirectory("kvscope-test").toFile();
 		try {

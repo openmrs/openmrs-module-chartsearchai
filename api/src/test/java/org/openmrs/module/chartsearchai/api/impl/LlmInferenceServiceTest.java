@@ -310,9 +310,13 @@ public class LlmInferenceServiceTest {
 		});
 		service.setLlmProvider(new LlmProvider() {
 
+			// Production now calls the scope-aware 6-arg overload (it passes the patient UUID so the
+			// local engine can restore/persist the patient's prefilled chart KV). Override that one;
+			// the scope is irrelevant to this citations-channel assertion, so it is ignored.
 			@Override
 			public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
-					String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
+					String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+					String cacheScope) {
 				tokenConsumer.accept("Finding A [1] and finding B [2].");
 				return new LlmResponse("Finding A [1] and finding B [2].", Arrays.asList(1, 2));
 			}

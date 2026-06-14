@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
@@ -155,6 +156,52 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 		assertFalse(provider.warmupCalled,
 				"with preFilter on, provider.warmup must NOT fire — the regression a refactor "
 				+ "that bypasses shouldRunWarmup would re-introduce");
+	}
+
+	// ---- query-path KV cache scope (same chart-stability gate as warmup) ----
+
+	@Test
+	public void kvCacheScopeFor_returnsPatientUuid_whenChartStable() {
+		// preFilter off => chart bytes are question-independent => a per-patient KV entry matches the
+		// next query, so the streaming query path must scope its restore/save to this patient's UUID.
+		strategy.usePreFilterStub = false;
+		service.queryStoreEnabledStub = false;
+
+		assertEquals("uuid-1", service.kvCacheScopeFor(patient(1)),
+				"a stable chart prefix must scope query-path KV to the patient UUID so the engine can "
+				+ "restore/persist this patient's prefilled chart");
+	}
+
+	@Test
+	public void kvCacheScopeFor_returnsPatientUuid_whenQuerystoreEnabledEvenWithPreFilterOn() {
+		// querystore full-chart mode keeps the records section byte-identical across queries, so the
+		// scope is viable even though preFilter is on — mirrors shouldRunWarmup's inverse gate.
+		strategy.usePreFilterStub = true;
+		service.queryStoreEnabledStub = true;
+
+		assertEquals("uuid-1", service.kvCacheScopeFor(patient(1)));
+	}
+
+	@Test
+	public void kvCacheScopeFor_returnsNull_whenChartPrefixVariesPerQuery() {
+		// preFilter on + querystore off => the record set varies per question => a per-patient KV
+		// entry would never match the next query, so the engine must do no disk KV work (null scope).
+		strategy.usePreFilterStub = true;
+		service.queryStoreEnabledStub = false;
+
+		assertNull(service.kvCacheScopeFor(patient(1)),
+				"an unstable chart prefix must yield a null scope so the query path skips disk KV");
+	}
+
+	@Test
+	public void kvCacheScopeFor_returnsNull_forNullPatientOrUuid() {
+		strategy.usePreFilterStub = false; // chart would otherwise be stable; isolate the null guards
+		assertNull(service.kvCacheScopeFor(null), "no patient => no scope");
+		Patient noUuid = new Patient();
+		noUuid.setPatientId(99);
+		noUuid.setUuid(null); // BaseOpenmrsObject auto-assigns a UUID, so null it explicitly
+		assertNull(service.kvCacheScopeFor(noUuid),
+				"a patient without a UUID cannot key a KV entry, so the scope must be null");
 	}
 
 	/**

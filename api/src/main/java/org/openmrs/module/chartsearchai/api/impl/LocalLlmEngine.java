@@ -26,8 +26,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -112,6 +114,16 @@ public class LocalLlmEngine implements LlmEngine {
 
 	private int serverPort;
 
+	/** The KV-cache keys whose chart prefix has been loaded into THIS server process's RAM
+	 *  prompt-cache pool (by a warmup or query) since it last started. llama-server's
+	 *  {@code cache_prompt} pool retains many prefixes at once, so a key present here will be
+	 *  reused from RAM without a disk restore; a key absent here (a fresh process after a restart /
+	 *  idle-unload, or one the pool evicted) is the only case where a disk restore avoids a full
+	 *  re-prefill. Tracking residency this way keeps the warm and alternating-patient paths free of
+	 *  any extra disk I/O. Mutated only under the instance monitor (all callers are synchronized);
+	 *  cleared on {@link #stopServer()} because the RAM pool dies with the process. */
+	private final Set<String> ramResidentKeys = new HashSet<>();
+
 	private HttpClient httpClient;
 
 	private final ScheduledExecutorService idleTimer = Executors.newSingleThreadScheduledExecutor(
@@ -186,7 +198,35 @@ public class LocalLlmEngine implements LlmEngine {
 	@Override
 	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer) {
+		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer, null, null);
+	}
+
+	@Override
+	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
+			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed) {
 		ensureServerRunning();
+
+		// Disk-persisted KV cache on the QUERY path (mirrors what warmup already does, see
+		// #warmup). The seed is the question-INDEPENDENT prefix, so warmup-saved and query-saved
+		// entries share one filename per patient+chart and the restored KV is byte-for-byte what a
+		// fresh prefill would produce — answer quality is unchanged; cache_prompt then re-prefills
+		// only the cheap focus-hint + question tail. The decision is gated so the warm and
+		// alternating-patient paths (the chart already resident in this process's RAM prompt-cache
+		// pool) do NO extra disk I/O — only a genuinely cold chart with a disk hit restores.
+		String cacheDir = loadedSlotSavePath;
+		String cacheKey = (cacheDir != null && cacheSeed != null)
+				? kvCacheKey(cacheScope, systemPrompt, cacheSeed,
+						modelDiscriminator(loadedModelPath, loadedContextSize))
+				: null;
+		boolean ramResident = cacheKey != null && ramResidentKeys.contains(cacheKey);
+		boolean fileExists = cacheKey != null && !ramResident && new File(cacheDir, cacheKey).isFile();
+		KvQueryAction action = kvQueryAction(cacheKey != null, ramResident, fileExists);
+		boolean restored = false;
+		if (action == KvQueryAction.RESTORE && restoreSlot(cacheKey, timeoutSeconds)) {
+			restored = true;
+			ramResidentKeys.add(cacheKey);
+			log.warn("Query restored KV cache from disk: {}", cacheKey);
+		}
 
 		String requestBody = buildRequestBody(systemPrompt, userMessage, true);
 
@@ -217,6 +257,17 @@ public class LocalLlmEngine implements LlmEngine {
 
 			InferenceResult result = LlmResponseParser.parseStreamingResponse(
 					response.body(), tokenConsumer, log);
+
+			// The chart prefix is now resident in the RAM pool. If this was a genuinely cold prefill
+			// (not resident, not restored), persist it so the next visit — even after a restart —
+			// restores from disk instead of re-paying the prefill; replace the patient's prior entry
+			// and apply the global cap, exactly as warmup does.
+			if (cacheKey != null) {
+				ramResidentKeys.add(cacheKey);
+				if (!ramResident && !restored) {
+					persistKvEntry(cacheKey, cacheScope, cacheDir, timeoutSeconds);
+				}
+			}
 			resetIdleTimer();
 			return result;
 		}
@@ -227,6 +278,33 @@ public class LocalLlmEngine implements LlmEngine {
 			Thread.currentThread().interrupt();
 			throw new APIException("Local llama-server call was interrupted", e);
 		}
+	}
+
+	/**
+	 * The disk-KV action a query should take, given whether KV persistence is active for this call
+	 * ({@code kvEnabled}: a slot-save-path is configured and a cache seed was supplied), whether the
+	 * chart's prefix is already resident in this process's RAM prompt-cache pool ({@code ramResident}),
+	 * and whether a persisted entry exists on disk ({@code fileExists}). Pure so the policy is unit
+	 * tested without a live server.
+	 *
+	 * <ul>
+	 *   <li>{@code NONE} — KV off, OR the chart is RAM-resident: {@code cache_prompt} reuses it with
+	 *       zero disk I/O. Returning RESTORE here would regress the warm / alternating-patient paths.</li>
+	 *   <li>{@code RESTORE} — RAM-cold but a disk entry exists: load it (tens of ms) to skip a full
+	 *       re-prefill (tens of seconds on a GPU-less host). This is the gap the feature closes.</li>
+	 *   <li>{@code PREFILL_AND_SAVE} — cold everywhere: prefill as before, then persist so the next
+	 *       visit (even after a restart) is fast.</li>
+	 * </ul>
+	 */
+	enum KvQueryAction {
+		NONE, RESTORE, PREFILL_AND_SAVE
+	}
+
+	static KvQueryAction kvQueryAction(boolean kvEnabled, boolean ramResident, boolean fileExists) {
+		if (!kvEnabled || ramResident) {
+			return KvQueryAction.NONE;
+		}
+		return fileExists ? KvQueryAction.RESTORE : KvQueryAction.PREFILL_AND_SAVE;
 	}
 
 	@Override
@@ -258,6 +336,9 @@ public class LocalLlmEngine implements LlmEngine {
 		if (cacheKey != null && new File(cacheDir, cacheKey).isFile()
 				&& restoreSlot(cacheKey, timeoutSeconds)) {
 			log.warn("Warmup restored KV cache from disk: {}", cacheKey);
+			// Record residency so a query right after this warmup reuses the RAM pool rather than
+			// redundantly restoring from disk again.
+			ramResidentKeys.add(cacheKey);
 			resetIdleTimer();
 			return;
 		}
@@ -289,14 +370,13 @@ public class LocalLlmEngine implements LlmEngine {
 			// the cached-token count is the only direct evidence the warmup primed the KV.
 			log.warn("Warmup primed KV cache: {} input ({} cached)",
 					result.getInputTokens(), result.getCachedTokens());
-			// Persist the freshly prefilled KV so the next visit to this patient (even after a
-			// server restart or an eviction by another patient's query) restores it from disk
-			// instead of paying the full prefill again. Drop this patient's previous entry first
-			// (a changed chart hashes to a new filename) so a stale version is never left behind,
-			// then apply the global count cap.
-			if (cacheKey != null && saveSlot(cacheKey, timeoutSeconds)) {
-				purgeKvScopeEntries(new File(cacheDir), cacheScope, cacheKey);
-				evictOldestKvEntries(new File(cacheDir), getKvCacheMaxEntries());
+			// The chart prefix is now resident in this process's RAM prompt-cache pool (so a query
+			// right after this warmup reuses it directly, no disk restore), and is persisted to disk
+			// so the next visit is fast even after a server restart or an eviction by another
+			// patient's query.
+			if (cacheKey != null) {
+				ramResidentKeys.add(cacheKey);
+				persistKvEntry(cacheKey, cacheScope, cacheDir, timeoutSeconds);
 			}
 			resetIdleTimer();
 		}
@@ -467,6 +547,20 @@ public class LocalLlmEngine implements LlmEngine {
 
 	private boolean saveSlot(String filename, int timeoutSeconds) {
 		return slotAction("save", filename, timeoutSeconds);
+	}
+
+	/**
+	 * Persists the current slot's KV under {@code cacheKey}, then drops this scope's superseded
+	 * entries (a changed chart hashes to a new filename, so its old file would otherwise orphan) and
+	 * applies the global count cap. Shared by {@link #warmup} and the streaming query path so both
+	 * persist identically. No-op when the save itself fails. Caller guarantees KV persistence is
+	 * active ({@code cacheKey} and {@code cacheDir} non-null).
+	 */
+	private void persistKvEntry(String cacheKey, String cacheScope, String cacheDir, int timeoutSeconds) {
+		if (saveSlot(cacheKey, timeoutSeconds)) {
+			purgeKvScopeEntries(new File(cacheDir), cacheScope, cacheKey);
+			evictOldestKvEntries(new File(cacheDir), getKvCacheMaxEntries());
+		}
 	}
 
 	/** The effective KV-cache directory, or null when disk KV persistence is disabled. Read on the
@@ -675,6 +769,12 @@ public class LocalLlmEngine implements LlmEngine {
 	}
 
 	private void startServer(String modelPath) {
+		// A freshly launched llama-server starts with an EMPTY RAM prompt-cache pool, so no chart is
+		// resident. Clear here (not only in stopServer): when the server process is killed externally
+		// or crashes, ensureServerRunning restarts it WITHOUT going through stopServer, and a stale
+		// residency record would make a cold query wrongly skip the disk restore and re-prefill.
+		ramResidentKeys.clear();
+
 		String serverBinaryPath = LlamaServerBinary.resolve();
 		serverPort = getServerPort();
 
@@ -801,6 +901,10 @@ public class LocalLlmEngine implements LlmEngine {
 			loadedContextSize = -1;
 			loadedKvCacheDir = null;
 			loadedSlotSavePath = null;
+			// The RAM prompt-cache pool dies with the process, so its residency record must too —
+			// otherwise the next process would wrongly believe a chart is RAM-resident and skip the
+			// disk restore that now actually avoids a re-prefill.
+			ramResidentKeys.clear();
 		}
 		httpClient = null;
 	}

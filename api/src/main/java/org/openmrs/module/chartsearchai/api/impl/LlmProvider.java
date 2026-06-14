@@ -153,8 +153,26 @@ public class LlmProvider {
 	 */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
+		return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer, reasoningConsumer, null);
+	}
+
+	/**
+	 * KV-scope-aware variant of {@link #searchStreaming(String, List, String, Consumer, Consumer)}.
+	 * When {@code cacheScope} is non-null (the pipeline mode produces a question-independent chart
+	 * prefix — see {@code LlmInferenceService.shouldRunWarmup}), the engine may restore this
+	 * patient's prefilled chart KV from disk instead of re-prefilling, and persist a fresh cold
+	 * prefill, so a query arriving cold (server restart, prompt-cache overflow, or warmup never
+	 * fired) does not re-pay the full prefill. The KV filename is keyed on the question-INDEPENDENT
+	 * prefix {@code buildUserMessage(numberedRecords, "")} — the exact bytes {@link #warmup} sends —
+	 * so warmup-saved and query-saved entries share one file per patient+chart. A null scope sends a
+	 * null seed, which makes the engine skip all disk KV work (behavior identical to the 5-arg form).
+	 */
+	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, String cacheScope) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question);
+		// The KV seed must be the question-independent prefix so it matches the warmup key exactly.
+		String cacheSeed = cacheScope == null ? null : buildUserMessage(numberedRecords, "");
 		int timeoutSeconds = getTimeoutSeconds();
 
 		// Extract the "answer" value (shown to the clinician) and the "reasoning" value (the
@@ -167,7 +185,7 @@ public class LlmProvider {
 		};
 
 		LlmEngine.InferenceResult result = getActiveEngine().inferStreaming(
-				systemPrompt, userMessage, timeoutSeconds, tee);
+				systemPrompt, userMessage, timeoutSeconds, tee, cacheScope, cacheSeed);
 
 		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
 				result.getCachedTokens());

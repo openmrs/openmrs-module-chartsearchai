@@ -249,6 +249,26 @@ public class LlmInferenceService implements ChartSearchService {
 		return !preFilterEnabled || queryStoreEnabled;
 	}
 
+	/**
+	 * The KV-cache scope (patient UUID) to pass on the streaming query path so the local engine can
+	 * restore this patient's prefilled chart from disk when the prompt cache is cold and persist a
+	 * fresh cold prefill — or {@code null} when the engine must do no disk KV work. Gated by the SAME
+	 * chart-byte-stability condition as {@link #shouldRunWarmup}: only when the chart prefix is
+	 * question-independent does a per-patient KV entry match the next query. (Whether to PROACTIVELY
+	 * warm is a separate toggle; query-path restore is a pure latency win whenever the chart is
+	 * stable, so it is intentionally NOT gated on {@code chartsearchai.warmup.enabled} — operators
+	 * disable on-disk KV entirely via {@code chartsearchai.llm.kvCacheDir=off}.)
+	 */
+	String kvCacheScopeFor(Patient patient) {
+		if (patient == null || patient.getUuid() == null) {
+			return null;
+		}
+		if (!shouldRunWarmup(chartBuildingStrategy.usePreFilter(), resolveQueryStoreEnabled())) {
+			return null;
+		}
+		return patient.getUuid();
+	}
+
 	List<ChartEmbedding> findSimilar(Patient patient, String question) {
 		return chartBuildingStrategy.findSimilar(patient, question);
 	}
@@ -297,7 +317,7 @@ public class LlmInferenceService implements ChartSearchService {
 			long llmStart = System.currentTimeMillis();
 			LlmResponse response = llmProvider.searchStreaming(
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
-					reasoningConsumer);
+					reasoningConsumer, kvCacheScopeFor(patient));
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();

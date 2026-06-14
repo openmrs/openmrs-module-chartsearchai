@@ -540,4 +540,113 @@ public class LlmProviderTest {
 		assertNull(out.get(1));
 	}
 
+	// ---- query-path KV-cache scoping (TTFT: restore a patient's prefilled chart from disk) ----
+
+	/**
+	 * Captures the engine arguments of one {@code inferStreaming} call so the provider's
+	 * KV-scope plumbing can be asserted without a live llama-server.
+	 */
+	private static final class CapturingEngine implements LlmEngine {
+
+		String capturedSystem;
+
+		String capturedUserMessage;
+
+		String capturedScope;
+
+		String capturedSeed;
+
+		@Override
+		public InferenceResult inferStreaming(String systemPrompt, String userMessage,
+				int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed) {
+			this.capturedSystem = systemPrompt;
+			this.capturedUserMessage = userMessage;
+			this.capturedScope = cacheScope;
+			this.capturedSeed = cacheSeed;
+			return new InferenceResult("{\"reasoning\": \"r\", \"answer\": \"a\", \"citations\": []}", 1, 1, 0);
+		}
+
+		@Override
+		public InferenceResult infer(String s, String u, int t) {
+			throw new AssertionError("streaming test must not call infer");
+		}
+
+		@Override
+		public InferenceResult inferStreaming(String s, String u, int t, Consumer<String> c) {
+			throw new AssertionError("the scope-aware 6-arg overload must be used so KV scoping reaches the engine");
+		}
+
+		@Override
+		public void warmup(String s, String u, int t) {
+		}
+
+		@Override
+		public void close() {
+		}
+
+		@Override
+		public void shutdown() {
+		}
+	}
+
+	private static LlmProvider providerWith(final CapturingEngine engine) {
+		return new LlmProvider() {
+
+			@Override
+			LlmEngine getActiveEngine() {
+				return engine;
+			}
+
+			@Override
+			protected String getSystemPrompt() {
+				return "SYS";
+			}
+
+			@Override
+			protected int getTimeoutSeconds() {
+				return 30;
+			}
+		};
+	}
+
+	@Test
+	public void searchStreaming_scopeAware_forwardsScopeAndQuestionIndependentSeedToEngine() {
+		CapturingEngine engine = new CapturingEngine();
+		LlmProvider provider = providerWith(engine);
+		String records = "1. [2024-01-01] BP 120/80\n2. [2024-02-02] HbA1c 7.1%";
+		List<Integer> focus = Arrays.asList(1, 2);
+
+		provider.searchStreaming(records, focus, "Is the patient diabetic?",
+				tok -> { }, reason -> { }, "patient-uuid-42");
+
+		assertEquals("patient-uuid-42", engine.capturedScope,
+				"the patient UUID must reach the engine as the KV cache scope so the query path can "
+				+ "restore/persist this patient's prefilled chart");
+		assertEquals(LlmProvider.buildUserMessage(records, focus, "Is the patient diabetic?"),
+				engine.capturedUserMessage,
+				"the engine must still receive the full focus-hinted question prompt");
+		// The KV filename seed MUST be the question-independent prefix — identical bytes to what
+		// warmup() sends — or a warmup-saved file would hash to a different name and never be found
+		// by the query. This is the core key-match invariant the whole feature relies on.
+		assertEquals(LlmProvider.buildUserMessage(records, ""), engine.capturedSeed,
+				"the query-path KV seed must equal the warmup user message (question-independent), "
+				+ "so warmup-saved and query-saved entries share one filename per patient+chart");
+	}
+
+	@Test
+	public void searchStreaming_scopeAware_nullScopeSendsNoSeed_soUnstablePipelinesNeverPersistKv() {
+		// When the caller passes a null scope (the pipeline mode makes the chart prefix
+		// question-dependent), the engine must receive a null seed and therefore do no disk KV ops.
+		CapturingEngine engine = new CapturingEngine();
+		LlmProvider provider = providerWith(engine);
+
+		provider.searchStreaming("1. x", Arrays.<Integer>asList(), "q",
+				tok -> { }, reason -> { }, null);
+
+		assertNull(engine.capturedScope, "a null scope must pass through unchanged");
+		assertNull(engine.capturedSeed,
+				"with no scope there is no patient to key on, so the seed must be null and the engine "
+				+ "must skip all disk KV restore/save");
+	}
+
 }

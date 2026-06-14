@@ -61,6 +61,29 @@ public interface LlmEngine {
 			Consumer<String> tokenConsumer);
 
 	/**
+	 * As {@link #inferStreaming(String, String, int, Consumer)} but participates in the on-disk KV
+	 * cache: an engine that persists prefilled chart KV can RESTORE this patient's chart from disk
+	 * (I/O-bound, tens of ms) instead of re-running the full prompt prefill (CPU-bound, tens of
+	 * seconds on a GPU-less host) when the in-memory prompt cache is cold for it — and SAVE a fresh
+	 * cold prefill so the next visit (even after a server restart) is fast. This closes the gap where
+	 * KV restore/save happened only in {@link #warmup}, so a query arriving cold (restart, RAM-cache
+	 * overflow, or warmup never fired/finished) re-paid the full prefill even with the KV on disk.
+	 *
+	 * <p>{@code cacheSeed} is the question-INDEPENDENT prompt prefix (the same bytes a warmup sends:
+	 * system + records, no question) used to derive the on-disk filename, so a warmup-saved entry and
+	 * a query-saved entry share one file per patient+chart and the question's trailing bytes never
+	 * change the key. {@code cacheScope} groups a subject's entries (e.g. the patient UUID). When
+	 * either is null, or the engine does not persist KV, this degrades to the plain 4-arg form.
+	 *
+	 * @param cacheScope a stable per-subject key for grouping persisted entries, or null to disable
+	 * @param cacheSeed the question-independent prompt prefix to key the entry on, or null to disable
+	 */
+	default InferenceResult inferStreaming(String systemPrompt, String userMessage, int timeoutSeconds,
+			Consumer<String> tokenConsumer, String cacheScope, String cacheSeed) {
+		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer);
+	}
+
+	/**
 	 * Prime the engine's prompt cache with the given prefix. Implementations that
 	 * don't benefit from warmup (e.g. remote APIs that manage their own caching)
 	 * should return false from {@link #supportsWarmup} so callers can skip the

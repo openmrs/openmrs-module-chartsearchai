@@ -126,6 +126,13 @@ public class LlmInferenceServiceCitationWiringTest {
 			return new PatientChart("8. Tuberculosis\n9. CD4 988.0", mappings,
 					Collections.<Integer>emptyList());
 		}
+
+		// searchStreaming now reads the pipeline mode (via the same gate as warmup) to decide the
+		// query-path KV cache scope; without a Context this stub must answer directly.
+		@Override
+		boolean usePreFilter() {
+			return false;
+		}
 	}
 
 	/** Cites [8] inline but lists only [9] in the structured citations array. */
@@ -141,9 +148,11 @@ public class LlmInferenceServiceCitationWiringTest {
 			return canned();
 		}
 
+		// Production calls the scope-aware 6-arg overload; scope is irrelevant to this wiring test.
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
-				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
+				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				String cacheScope) {
 			return canned();
 		}
 	}

@@ -22,10 +22,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.aop.AfterReturningAdvice;
 
 /**
- * AOP advice that triggers embedding indexing after encounters are saved, voided, or unvoided.
- * On save, does an incremental index of the encounter. On void/unvoid, does a full patient
- * re-index to remove orphaned embeddings from voided encounters.
- * Only active when {@code chartsearchai.embedding.preFilter} is {@code true}.
+ * AOP advice that, after encounters are saved, voided, or unvoided, invalidates the patient's
+ * cached answers and (when embedding indexing is active) re-indexes their embeddings. On save,
+ * does an incremental index of the encounter; on void/unvoid, a full patient re-index to remove
+ * orphaned embeddings from voided encounters.
+ *
+ * <p>Embedding indexing runs only when {@code chartsearchai.embedding.preFilter} is {@code true}
+ * and querystore is not the active backend. Answer-cache invalidation is independent of both — it
+ * runs whenever the cache is on ({@code chartsearchai.cacheTtlMinutes > 0}), regardless of
+ * retrieval backend, so an edit never leaves a stale cached answer. See {@link IndexingHelper}.</p>
  *
  * <p>Registered in config.xml as advice on {@code org.openmrs.api.EncounterService}.</p>
  */
@@ -39,37 +44,51 @@ public class EncounterIndexingAdvice implements AfterReturningAdvice {
 	@Override
 	public void afterReturning(Object returnValue, Method method, Object[] args, Object target) {
 		String methodName = method.getName();
+		boolean isSave = "saveEncounter".equals(methodName);
 
-		if (!"saveEncounter".equals(methodName) && !REINDEX_METHODS.contains(methodName)) {
+		if (!isSave && !REINDEX_METHODS.contains(methodName)) {
 			return;
 		}
 
-		if (IndexingHelper.isDisabledByQueryStore()) {
+		// Indexing is gated by querystore/preFilter; the answer cache must be invalidated on every
+		// write regardless of backend (see IndexingHelper.invalidateAnswerCache).
+		boolean indexingActive = !IndexingHelper.isDisabledByQueryStore()
+				&& IndexingHelper.isPreFilterEnabled();
+		boolean cacheActive = IndexingHelper.isAnswerCacheEnabled();
+		if (!indexingActive && !cacheActive) {
 			return;
 		}
 
-		if (!IndexingHelper.isPreFilterEnabled()) {
-			return;
-		}
-
-		if ("saveEncounter".equals(methodName) && returnValue instanceof Encounter) {
+		if (isSave) {
+			if (!(returnValue instanceof Encounter)) {
+				return;
+			}
 			Encounter encounter = (Encounter) returnValue;
-			try {
-				EmbeddingIndexer indexer = Context.getRegisteredComponent(
-						"embeddingIndexer", EmbeddingIndexer.class);
-				indexer.indexEncounter(encounter);
+			Patient patient = encounter.getPatient();
+			if (cacheActive) {
+				IndexingHelper.invalidateAnswerCache(patient);
 			}
-			catch (Exception e) {
-				log.error("Failed to index encounter [id={}]", encounter.getEncounterId(), e);
+			if (indexingActive) {
+				try {
+					EmbeddingIndexer indexer = Context.getRegisteredComponent(
+							"embeddingIndexer", EmbeddingIndexer.class);
+					indexer.indexEncounter(encounter);
+				}
+				catch (Exception e) {
+					log.error("Failed to index encounter [id={}]", encounter.getEncounterId(), e);
+				}
+				IndexingHelper.reindexOtherPipelines(patient);
 			}
-			IndexingHelper.reindexOtherPipelines(encounter.getPatient());
-		} else if (REINDEX_METHODS.contains(methodName)) {
-			// Patient extraction lives inside this arm because the saveEncounter arm above derives
-			// the patient from the returned Encounter directly. Hoisting it out of both branches
-			// would cost a redundant `Encounter.getPatient()` call on every saveEncounter
-			// path — Hibernate proxy resolution we don't need to pay twice.
+		} else {
+			// void/unvoid/purge: the patient comes from the args, not a returned Encounter.
 			Patient patient = getPatientFromArgs(returnValue, args);
-			if (patient != null) {
+			if (patient == null) {
+				return;
+			}
+			if (cacheActive) {
+				IndexingHelper.invalidateAnswerCache(patient);
+			}
+			if (indexingActive) {
 				try {
 					EmbeddingIndexer indexer = Context.getRegisteredComponent(
 							"embeddingIndexer", EmbeddingIndexer.class);

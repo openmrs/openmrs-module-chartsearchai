@@ -163,6 +163,96 @@ public class ChartSearchServiceRouterTest {
 		return router;
 	}
 
+	// ---- chart-write cache invalidation ----
+
+	/** Counts how many times the delegate's {@code search} actually runs, so a cache hit
+	 *  (no delegate call) is distinguishable from a miss (one delegate call). */
+	private static class CountingDelegate implements org.openmrs.module.chartsearchai.api.ChartSearchService {
+
+		int searchCalls;
+
+		@Override
+		public ChartAnswer search(Patient patient, String question) {
+			searchCalls++;
+			return new ChartAnswer("answer for " + patient.getUuid() + "/" + question,
+					java.util.Collections.<RecordReference>emptyList());
+		}
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				java.util.function.Consumer<String> tokenConsumer) {
+			return search(patient, question);
+		}
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				java.util.function.Consumer<String> tokenConsumer,
+				java.util.function.Consumer<String> reasoningConsumer,
+				java.util.function.Consumer<java.util.List<RecordReference>> citationsConsumer,
+				java.util.function.Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+			return search(patient, question);
+		}
+
+		@Override
+		public void warmup(Patient patient) {
+		}
+	}
+
+	@Test
+	public void invalidatePatient_evictsOnlyThatPatientsEntriesViaRealSearchPath() {
+		CountingDelegate delegate = new CountingDelegate();
+		StubRouter router = new StubRouter();
+		router.cacheTtlMinutes = 60;
+		router.setLlmService(delegate);
+
+		// Three distinct cache entries: p1/qA, p1/qB, p2/qA — all misses.
+		router.search(patient("p1"), "qA");
+		router.search(patient("p1"), "qB");
+		router.search(patient("p2"), "qA");
+		assertEquals(3, delegate.searchCalls, "first request for each key must miss and hit the delegate");
+
+		// Re-running the same requests must be served from cache (no new delegate calls).
+		router.search(patient("p1"), "qA");
+		router.search(patient("p2"), "qA");
+		assertEquals(3, delegate.searchCalls, "repeated identical requests must be cache hits");
+
+		router.invalidatePatient("p1");
+
+		// p1's entries must now recompute; p2's entry must still be cached.
+		router.search(patient("p1"), "qA");
+		router.search(patient("p1"), "qB");
+		router.search(patient("p2"), "qA");
+		assertEquals(5, delegate.searchCalls,
+				"invalidatePatient(p1) must evict both p1 entries (2 recomputes) and leave p2 cached (0)");
+	}
+
+	@Test
+	public void invalidatePatient_isNoOpForUnknownPatientAndNullUuid() {
+		CountingDelegate delegate = new CountingDelegate();
+		StubRouter router = new StubRouter();
+		router.cacheTtlMinutes = 60;
+		router.setLlmService(delegate);
+
+		router.search(patient("p1"), "qA");
+		assertEquals(1, delegate.searchCalls);
+
+		router.invalidatePatient("does-not-exist");
+		router.invalidatePatient(null);
+
+		router.search(patient("p1"), "qA");
+		assertEquals(1, delegate.searchCalls,
+				"invalidating an unrelated/null patient must not evict p1's cached answer");
+	}
+
+	@Test
+	public void isCacheEnabled_reflectsTtl() {
+		StubRouter router = new StubRouter();
+		router.cacheTtlMinutes = 0;
+		org.junit.jupiter.api.Assertions.assertFalse(router.isCacheEnabled(), "ttl=0 means caching is off");
+		router.cacheTtlMinutes = 1;
+		org.junit.jupiter.api.Assertions.assertTrue(router.isCacheEnabled(), "ttl>0 means caching is on");
+	}
+
 	@Test
 	public void searchStreaming_passThroughForwardsUngroundedConsumer() {
 		StubDelegate delegate = new StubDelegate();

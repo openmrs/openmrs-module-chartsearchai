@@ -27,13 +27,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.aop.AfterReturningAdvice;
 
 /**
- * AOP advice that triggers a full patient re-index when conditions, diagnoses, allergies,
- * or orders are modified outside of encounter saves. Also handles patient merges by
- * re-indexing the preferred patient and deleting the non-preferred patient's embeddings.
- * Complements the {@link EncounterIndexingAdvice} which handles the more common encounter path.
+ * AOP advice that, when conditions, diagnoses, allergies, orders, programs, medication dispenses,
+ * or patient demographics ({@code savePatient}) are modified outside of encounter saves,
+ * invalidates the patient's cached answers and (when embedding indexing is active) triggers a full
+ * patient re-index. Also handles patient merges by invalidating both patients' cached answers and,
+ * when indexing is active, re-indexing the preferred patient and deleting the non-preferred
+ * patient's embeddings. Complements the {@link EncounterIndexingAdvice} which handles the more
+ * common encounter path.
  *
- * <p>Only active when {@code chartsearchai.embedding.preFilter} is {@code true}. Registered
- * in config.xml as advice on {@code ConditionService}, {@code DiagnosisService},
+ * <p>Embedding indexing runs only when {@code chartsearchai.embedding.preFilter} is {@code true}
+ * and querystore is not the active backend. Answer-cache invalidation is independent of both — it
+ * runs whenever the cache is on ({@code chartsearchai.cacheTtlMinutes > 0}), regardless of
+ * retrieval backend, so an edit never leaves a stale cached answer. See {@link IndexingHelper}.</p>
+ *
+ * <p>Registered in config.xml as advice on {@code ConditionService}, {@code DiagnosisService},
  * {@code PatientService}, {@code OrderService}, {@code ProgramWorkflowService},
  * and {@code MedicationDispenseService}.</p>
  */
@@ -62,64 +69,89 @@ public class PatientDataIndexingAdvice implements AfterReturningAdvice {
 			Arrays.asList("saveMedicationDispense", "voidMedicationDispense",
 					"unvoidMedicationDispense", "deleteMedicationDispense"));
 
+	// Patient demographics (age from birthdate, and sex — see PatientChartSerializer) are part of the
+	// serialized chart the LLM cites, so a demographic edit must invalidate cached answers. A
+	// name-only edit over-invalidates harmlessly (the name is not serialized). Scoped to savePatient:
+	// mergePatients is handled separately above, and void/unvoid/purgePatient are rare admin ops on
+	// patients that are not normally queried (and would also mis-trigger a reindex of a gone patient
+	// on the preFilter path) — left to the TTL backstop rather than expanding the shared indexing trigger.
+	private static final Set<String> PATIENT_METHODS = new HashSet<String>(
+			Arrays.asList("savePatient"));
+
 	@Override
 	public void afterReturning(Object returnValue, Method method, Object[] args, Object target) {
 		String methodName = method.getName();
 
-		if (IndexingHelper.isDisabledByQueryStore()) {
+		// Indexing is gated by querystore/preFilter; the answer cache must be invalidated on every
+		// write regardless of backend (see IndexingHelper.invalidateAnswerCache). Patient extraction
+		// stays below both checks so the all-off hot path skips the Hibernate proxy resolution
+		// extractPatient can trigger (Condition.getPatient(), Order.getPatient(), etc.).
+		boolean indexingActive = !IndexingHelper.isDisabledByQueryStore()
+				&& IndexingHelper.isPreFilterEnabled();
+		boolean cacheActive = IndexingHelper.isAnswerCacheEnabled();
+		if (!indexingActive && !cacheActive) {
 			return;
 		}
 
-		if (!IndexingHelper.isPreFilterEnabled()) {
-			return;
-		}
-
-		// Patient extraction lives below the GP check so the default preFilter=false hot
-		// path skips the Hibernate proxy resolution extractPatient can trigger
-		// (Condition.getPatient(), Order.getPatient(), etc.).
 		boolean isMerge = "mergePatients".equals(methodName);
-		Patient patient = isMerge ? null : extractPatient(methodName, args);
-		if (!isMerge && patient == null) {
-			return;
-		}
-
 		if (isMerge) {
-			handleMergePatients(args);
+			handleMergePatients(args, indexingActive, cacheActive);
 			return;
 		}
 
-		try {
-			EmbeddingIndexer indexer = Context.getRegisteredComponent(
-					"embeddingIndexer", EmbeddingIndexer.class);
-			indexer.indexPatient(patient);
-		}
-		catch (Exception e) {
-			log.error("Failed to re-index patient [id={}] after {} call",
-					patient.getPatientId(), methodName, e);
+		Patient patient = extractPatient(methodName, args);
+		if (patient == null) {
+			return;
 		}
 
-		IndexingHelper.reindexOtherPipelines(patient);
+		if (cacheActive) {
+			IndexingHelper.invalidateAnswerCache(patient);
+		}
+
+		if (indexingActive) {
+			try {
+				EmbeddingIndexer indexer = Context.getRegisteredComponent(
+						"embeddingIndexer", EmbeddingIndexer.class);
+				indexer.indexPatient(patient);
+			}
+			catch (Exception e) {
+				log.error("Failed to re-index patient [id={}] after {} call",
+						patient.getPatientId(), methodName, e);
+			}
+
+			IndexingHelper.reindexOtherPipelines(patient);
+		}
 	}
 
-	private void handleMergePatients(Object[] args) {
+	private void handleMergePatients(Object[] args, boolean indexingActive, boolean cacheActive) {
 		if (args.length < 2 || !(args[0] instanceof Patient) || !(args[1] instanceof Patient)) {
 			return;
 		}
 		Patient preferred = (Patient) args[0];
 		Patient notPreferred = (Patient) args[1];
-		try {
-			EmbeddingIndexer indexer = Context.getRegisteredComponent(
-					"embeddingIndexer", EmbeddingIndexer.class);
-			indexer.indexPatient(preferred);
-			indexer.deletePatientEmbeddings(notPreferred);
-		}
-		catch (Exception e) {
-			log.error("Failed to re-index after mergePatients [preferred={}, notPreferred={}]",
-					preferred.getPatientId(), notPreferred.getPatientId(), e);
+
+		// A merge changes the preferred patient's chart and retires the non-preferred one, so any
+		// cached answers for either are now stale.
+		if (cacheActive) {
+			IndexingHelper.invalidateAnswerCache(preferred);
+			IndexingHelper.invalidateAnswerCache(notPreferred);
 		}
 
-		IndexingHelper.reindexOtherPipelines(preferred);
-		IndexingHelper.deleteOtherPipelineIndexes(notPreferred);
+		if (indexingActive) {
+			try {
+				EmbeddingIndexer indexer = Context.getRegisteredComponent(
+						"embeddingIndexer", EmbeddingIndexer.class);
+				indexer.indexPatient(preferred);
+				indexer.deletePatientEmbeddings(notPreferred);
+			}
+			catch (Exception e) {
+				log.error("Failed to re-index after mergePatients [preferred={}, notPreferred={}]",
+						preferred.getPatientId(), notPreferred.getPatientId(), e);
+			}
+
+			IndexingHelper.reindexOtherPipelines(preferred);
+			IndexingHelper.deleteOtherPipelineIndexes(notPreferred);
+		}
 	}
 
 	Patient extractPatient(String methodName, Object[] args) {
@@ -140,6 +172,8 @@ public class PatientDataIndexingAdvice implements AfterReturningAdvice {
 		} else if (MEDICATION_DISPENSE_METHODS.contains(methodName) && args.length > 0
 				&& args[0] instanceof MedicationDispense) {
 			return ((MedicationDispense) args[0]).getPatient();
+		} else if (PATIENT_METHODS.contains(methodName) && args.length > 0 && args[0] instanceof Patient) {
+			return (Patient) args[0];
 		}
 		return null;
 	}

@@ -57,6 +57,17 @@ public class PatientDataIndexingAdviceTest {
 	}
 
 	@Test
+	public void extractPatient_shouldExtractPatientArgOnSavePatient() {
+		// Demographics (age from birthdate, and sex) are part of the serialized chart the LLM cites, so
+		// a savePatient must invalidate cached answers — otherwise "how old is this patient?" goes stale
+		// after a birthdate correction. PatientService is already advised; this is the extraction case.
+		Patient patient = new Patient(7);
+
+		Patient result = advice.extractPatient("savePatient", new Object[] { patient });
+		assertEquals(patient, result);
+	}
+
+	@Test
 	public void extractPatient_shouldExtractFromAllergyOnSaveAllergy() {
 		Patient patient = new Patient(3);
 		Allergy allergy = new Allergy(patient, null, null, null, null);

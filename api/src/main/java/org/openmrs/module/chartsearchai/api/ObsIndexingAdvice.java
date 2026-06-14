@@ -22,8 +22,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.aop.AfterReturningAdvice;
 
 /**
- * AOP advice that triggers a full patient re-index when observations are saved, voided,
- * unvoided, or purged directly (outside of an encounter save).
+ * AOP advice that, when observations are saved, voided, unvoided, or purged directly (outside of
+ * an encounter save), invalidates the patient's cached answers and (when embedding indexing is
+ * active) triggers a full patient re-index. Cache invalidation is independent of the
+ * preFilter/querystore gating that governs indexing — see {@link IndexingHelper}.
  *
  * <p>Registered in config.xml as advice on {@code org.openmrs.api.ObsService}.</p>
  */
@@ -40,31 +42,37 @@ public class ObsIndexingAdvice implements AfterReturningAdvice {
 			return;
 		}
 
-		if (IndexingHelper.isDisabledByQueryStore()) {
+		// Indexing is gated by querystore/preFilter; the answer cache must be invalidated on every
+		// write regardless of backend (see IndexingHelper.invalidateAnswerCache). Patient extraction
+		// stays below both checks so the all-off hot path skips Obs.getPerson()'s proxy resolution.
+		boolean indexingActive = !IndexingHelper.isDisabledByQueryStore()
+				&& IndexingHelper.isPreFilterEnabled();
+		boolean cacheActive = IndexingHelper.isAnswerCacheEnabled();
+		if (!indexingActive && !cacheActive) {
 			return;
 		}
 
-		if (!IndexingHelper.isPreFilterEnabled()) {
-			return;
-		}
-
-		// Patient extraction lives below the GP check so the default preFilter=false hot
-		// path skips Obs.getPerson()'s Hibernate proxy resolution.
 		Patient patient = getPatientFromArgs(returnValue, args);
 		if (patient == null) {
 			return;
 		}
 
-		try {
-			EmbeddingIndexer indexer = Context.getRegisteredComponent(
-					"embeddingIndexer", EmbeddingIndexer.class);
-			indexer.indexPatient(patient);
-		}
-		catch (Exception e) {
-			log.error("Failed to re-index patient after {} call", method.getName(), e);
+		if (cacheActive) {
+			IndexingHelper.invalidateAnswerCache(patient);
 		}
 
-		IndexingHelper.reindexOtherPipelines(patient);
+		if (indexingActive) {
+			try {
+				EmbeddingIndexer indexer = Context.getRegisteredComponent(
+						"embeddingIndexer", EmbeddingIndexer.class);
+				indexer.indexPatient(patient);
+			}
+			catch (Exception e) {
+				log.error("Failed to re-index patient after {} call", method.getName(), e);
+			}
+
+			IndexingHelper.reindexOtherPipelines(patient);
+		}
 	}
 
 	Patient getPatientFromArgs(Object returnValue, Object[] args) {

@@ -132,6 +132,41 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		this.llmService = llmService;
 	}
 
+	/**
+	 * Whether the answer cache is currently active (TTL &gt; 0). Lets the AOP write-advice decide,
+	 * without resolving the affected patient, whether a chart write needs to invalidate anything —
+	 * preserving the hot path when caching is off.
+	 */
+	@Override
+	public boolean isCacheEnabled() {
+		return getCacheTtlMinutes() > 0;
+	}
+
+	/**
+	 * Evicts all cached answers for one patient — every question, and every entry regardless of the
+	 * pipeline/grounding configuration that was active when it was cached. Called from the AOP advice
+	 * the moment any of that patient's chart data is written, so a repeated identical question after
+	 * an edit recomputes against the new chart instead of serving a stale cached answer — this is
+	 * what makes the cache safe to leave on.
+	 *
+	 * <p>The cache key is {@code patientUuid + "::" + ...} (see {@link #buildCacheKey}), so every
+	 * entry for the patient shares the {@code patientUuid + "::"} prefix. A no-op for a null UUID or
+	 * a patient with nothing cached.</p>
+	 */
+	@Override
+	public synchronized void invalidatePatient(String patientUuid) {
+		if (patientUuid == null) {
+			return;
+		}
+		String prefix = patientUuid + "::";
+		int before = cache.size();
+		cache.keySet().removeIf(key -> key.startsWith(prefix));
+		if (log.isDebugEnabled() && cache.size() != before) {
+			log.debug("Invalidated {} cached answer(s) for patient [uuid={}] after a chart write",
+					before - cache.size(), patientUuid);
+		}
+	}
+
 	@Override
 	public void warmup(Patient patient) {
 		llmService.warmup(patient);

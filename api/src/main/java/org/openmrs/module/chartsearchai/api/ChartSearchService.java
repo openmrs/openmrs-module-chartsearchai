@@ -127,6 +127,29 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * Whether this service keeps an answer cache that is currently active. Only the caching router
+	 * returns {@code true}; a plain inference service has no cache. Lets the write-side AOP indexing
+	 * advice decide whether a chart write needs to invalidate anything <em>before</em> resolving the
+	 * affected patient, so the cache-off hot path skips that work. Default: no cache.
+	 *
+	 * @return {@code true} if a repeated identical query may currently be served from cache
+	 */
+	default boolean isCacheEnabled() {
+		return false;
+	}
+
+	/**
+	 * Evict any cached answers for one patient after their chart changes, so a repeated identical
+	 * question recomputes against the new chart instead of serving a stale answer. A no-op for
+	 * implementations without a cache. Called from the AOP write advice on every chart write,
+	 * regardless of which retrieval backend is active.
+	 *
+	 * @param patientUuid the uuid of the patient whose cached answers to drop
+	 */
+	default void invalidatePatient(String patientUuid) {
+	}
+
+	/**
 	 * An answer to a chart search question with source citations.
 	 */
 	class ChartAnswer {

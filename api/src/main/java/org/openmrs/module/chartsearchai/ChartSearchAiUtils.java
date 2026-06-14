@@ -563,6 +563,25 @@ public class ChartSearchAiUtils {
 	}
 
 	/**
+	 * @return the grammar-enforced character cap for the chart-answer {@code reasoning}
+	 *         scratchpad, from {@link ChartSearchAiConstants#GP_LLM_REASONING_MAX_CHARS};
+	 *         {@code 0} = uncapped. Fails safe to {@code 0} (uncapped — today's behavior) on a
+	 *         missing admin service, an unparseable value, or a negative value.
+	 */
+	public static int getReasoningMaxChars() {
+		try {
+			String value = org.openmrs.api.context.Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_LLM_REASONING_MAX_CHARS,
+							String.valueOf(ChartSearchAiConstants.DEFAULT_LLM_REASONING_MAX_CHARS));
+			int parsed = Integer.parseInt(value.trim());
+			return Math.max(parsed, 0);
+		}
+		catch (RuntimeException e) {
+			return ChartSearchAiConstants.DEFAULT_LLM_REASONING_MAX_CHARS;
+		}
+	}
+
+	/**
 	 * @return the cosine floor below which a citation is treated as ungrounded,
 	 *         read from {@link ChartSearchAiConstants#GP_GROUNDING_MIN_COSINE},
 	 *         falling back to {@link ChartSearchAiConstants#DEFAULT_GROUNDING_MIN_COSINE}

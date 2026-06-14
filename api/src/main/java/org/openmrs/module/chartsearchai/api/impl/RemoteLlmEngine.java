@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -185,7 +186,8 @@ public class RemoteLlmEngine implements LlmEngine {
 		}
 
 		root.set("response_format",
-				responseFormat != null ? responseFormat : ChartAnswerResponseFormat.build(MAPPER));
+				responseFormat != null ? responseFormat
+						: ChartAnswerResponseFormat.build(MAPPER, resolveReasoningMaxChars()));
 		root.set("messages", ChatMessages.systemAndUser(MAPPER, systemPrompt, userMessage));
 
 		try {
@@ -199,6 +201,12 @@ public class RemoteLlmEngine implements LlmEngine {
 	InferenceResult parseResponse(String responseBody) throws IOException {
 		return LlmResponseParser.parseResponse(responseBody, log);
 	}
+
+	/** Test seam wrapping {@link ChartSearchAiUtils#getReasoningMaxChars()} (fail-safe 0). */
+	int resolveReasoningMaxChars() {
+		return ChartSearchAiUtils.getReasoningMaxChars();
+	}
+
 
 	InferenceResult parseStreamingResponse(InputStream inputStream,
 			Consumer<String> tokenConsumer) throws IOException {

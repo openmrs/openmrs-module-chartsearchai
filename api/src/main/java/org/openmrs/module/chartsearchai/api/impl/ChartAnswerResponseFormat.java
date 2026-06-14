@@ -33,8 +33,27 @@ final class ChartAnswerResponseFormat {
 	}
 
 	static ObjectNode build(ObjectMapper mapper) {
+		return build(mapper, 0);
+	}
+
+	/**
+	 * As {@link #build(ObjectMapper)} but with an optional grammar-enforced length cap on the
+	 * {@code reasoning} scratchpad ({@code maxChars > 0}; {@code 0} = uncapped, byte-identical
+	 * to the classic schema). The reasoning field is the dominant decode cost on CPU-only
+	 * servers — the model thinks for 3–27s before any answer token — and {@code maxLength}
+	 * compiles into the GBNF grammar (verified against the bundled llama-server: the cut is
+	 * exact). The {@code answer} is NEVER capped: it is the clinical content, and the system
+	 * prompt requires complete enumeration. Gated by
+	 * {@code chartsearchai.llm.reasoningMaxChars} (default 0) and certified by the 32-cell
+	 * answer-quality gold standard in {@code eval/drift-metric/} before any deployment enables
+	 * it.
+	 */
+	static ObjectNode build(ObjectMapper mapper, int reasoningMaxChars) {
 		ObjectNode reasoningProp = mapper.createObjectNode();
 		reasoningProp.put("type", "string");
+		if (reasoningMaxChars > 0) {
+			reasoningProp.put("maxLength", reasoningMaxChars);
+		}
 
 		ObjectNode answerProp = mapper.createObjectNode();
 		answerProp.put("type", "string");

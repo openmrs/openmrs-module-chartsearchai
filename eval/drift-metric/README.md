@@ -75,3 +75,23 @@ instrumentation; not committed).
   large heart-cell drift counts; it is explicit and adjustable (edit the gold, re-score). F1 and
   abstention are far less sensitive to it than the raw drift count.
 - Gold is fixed to these 32 cells; new patients/queries need fresh adjudication.
+
+## Measured results on the standalone gold (2026-06-12)
+
+Baseline (Gemma 4 E2B, full-chart, `metric_gold.standalone.json`): **meanF1 0.464 ·
+abstention 1.00 (11/11) · off-topic citations 41** — reproduced bit-identically across two
+captures (zero run-to-run noise on this protocol; greedy decode + warm prompt cache).
+
+Two reasoning-length experiments were run through this gate with thresholds locked in
+advance (no regression on any axis; ≥15% output-token reduction to be worth shipping).
+Both failed, through opposite mechanisms:
+
+| arm | meanF1 | abstention | drift | out tokens | verdict |
+|---|---|---|---|---|---|
+| baseline | 0.464 | 1.00 | 41 | 6,448 | — |
+| grammar truncation (`reasoningMaxChars=400`, PR #45) | 0.428 | 0.91 | 47 | 6,408 | FAIL: cut mid-derivation → unsafe citations appear (incl. a false citation on an absent cell); no net token saving |
+| prompt-shaped brevity ("at most two short sentences" in the system prompt) | 0.410 | 1.00 | 19 | 3,957 | FAIL: recall collapse — clean but INCOMPLETE answers (drift improves, on-topic records go missing), violating the complete-enumeration safety property |
+
+Conclusion: E2B needs its full reasoning scratchpad to enumerate completely. Shortening it
+— by force or by instruction — trades one safety property for another. Do not revisit
+without a different model or a mechanism that preserves completeness.

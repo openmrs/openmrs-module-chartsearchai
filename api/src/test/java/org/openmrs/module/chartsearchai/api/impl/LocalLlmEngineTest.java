@@ -32,6 +32,33 @@ public class LocalLlmEngineTest {
 	private final LocalLlmEngine engine = new LocalLlmEngine();
 
 	@Test
+	public void buildRequestBody_appliesReasoningCapFromConfiguration() throws IOException {
+		LocalLlmEngine capped = new LocalLlmEngine() {
+
+			@Override
+			int resolveReasoningMaxChars() {
+				return 400;
+			}
+		};
+		String body = capped.buildRequestBody("sys", "usr", false);
+		JsonNode props = MAPPER.readTree(body).get("response_format").get("json_schema")
+				.get("schema").get("properties");
+		assertEquals(400, props.get("reasoning").get("maxLength").asInt(),
+				"the configured reasoning cap must reach the request schema");
+		assertTrue(props.get("answer").get("maxLength") == null, "answer is never capped");
+	}
+
+	@Test
+	public void buildRequestBody_omitsReasoningCapByDefault() throws IOException {
+		// No OpenMRS context in this test -> the GP resolver fails safe to 0 -> no maxLength.
+		String body = engine.buildRequestBody("sys", "usr", false);
+		JsonNode reasoning = MAPPER.readTree(body).get("response_format").get("json_schema")
+				.get("schema").get("properties").get("reasoning");
+		assertTrue(reasoning.get("maxLength") == null,
+				"default (cap=0 / no context) must leave the schema uncapped");
+	}
+
+	@Test
 	public void buildRequestBody_shouldUseJsonSchemaStrictMode() throws IOException {
 		String body = engine.buildRequestBody("system prompt", "user message", false);
 		JsonNode root = MAPPER.readTree(body);

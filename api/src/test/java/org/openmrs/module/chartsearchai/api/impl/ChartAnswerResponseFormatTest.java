@@ -52,4 +52,27 @@ public class ChartAnswerResponseFormatTest {
 		assertTrue(required.contains("answer"), "answer must be required");
 		assertTrue(required.contains("citations"), "citations must be required");
 	}
+
+	@Test
+	public void build_withReasoningCap_addsMaxLengthToReasoningOnly() {
+		// The reasoning scratchpad is the dominant decode cost on CPU-only servers (3-27s of
+		// thinking before any answer token). A grammar-enforced maxLength bounds it; the probe
+		// against the bundled llama-server confirmed json_schema maxLength is enforced exactly.
+		// The ANSWER must never be capped — it is the clinical content.
+		JsonNode props = ChartAnswerResponseFormat.build(new ObjectMapper(), 400)
+				.get("json_schema").get("schema").get("properties");
+		assertEquals(400, props.get("reasoning").get("maxLength").asInt(),
+				"the cap must land on the reasoning property");
+		assertTrue(props.get("answer").get("maxLength") == null,
+				"the answer must never be length-capped");
+	}
+
+	@Test
+	public void build_withZeroCap_matchesUncappedSchema() {
+		// 0 = disabled (the GP default): the schema must be byte-identical to the classic one so
+		// existing deployments see no behavior change whatsoever.
+		assertEquals(ChartAnswerResponseFormat.build(new ObjectMapper()),
+				ChartAnswerResponseFormat.build(new ObjectMapper(), 0),
+				"cap=0 must produce the exact uncapped schema");
+	}
 }

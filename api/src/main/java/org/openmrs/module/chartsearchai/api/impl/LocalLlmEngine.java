@@ -492,7 +492,12 @@ public class LocalLlmEngine implements LlmEngine {
 	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
 			int maxTokens) {
 		return buildRequestBody(systemPrompt, userMessage, stream, maxTokens,
-				ChartAnswerResponseFormat.build(MAPPER));
+				ChartAnswerResponseFormat.build(MAPPER, resolveReasoningMaxChars()));
+	}
+
+	/** Test seam wrapping {@link ChartSearchAiUtils#getReasoningMaxChars()} (fail-safe 0). */
+	int resolveReasoningMaxChars() {
+		return ChartSearchAiUtils.getReasoningMaxChars();
 	}
 
 	/**

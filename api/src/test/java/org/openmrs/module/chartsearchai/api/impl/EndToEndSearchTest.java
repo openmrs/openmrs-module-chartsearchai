@@ -164,17 +164,21 @@ public class EndToEndSearchTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
-	 * Swaps the {@code embeddingProvider} field on both the service and the
-	 * indexer so that the real ONNX model is used for both query embedding
-	 * and patient indexing. Returns the original providers for restoration.
+	 * Swaps the {@code embeddingProvider} field on the retrieval pipeline and the
+	 * indexer so that the real ONNX model is used for both query embedding and
+	 * patient indexing. Returns the original providers for restoration.
+	 *
+	 * <p>Query embedding moved out of {@link LlmInferenceService} into
+	 * {@link ChartBuildingStrategy} (which {@code service.findSimilar} now delegates
+	 * to), so the provider is swapped there rather than on the service.</p>
 	 */
 	private Object[] swapEmbeddingProviders(Object realProvider) throws Exception {
-		Object serviceTarget = unwrapProxy(service);
-		java.lang.reflect.Field serviceField =
-				LlmInferenceService.class.getDeclaredField("embeddingProvider");
-		serviceField.setAccessible(true);
-		Object originalServiceProvider = serviceField.get(serviceTarget);
-		serviceField.set(serviceTarget, realProvider);
+		Object strategyTarget = chartBuildingStrategyTarget();
+		java.lang.reflect.Field strategyField =
+				ChartBuildingStrategy.class.getDeclaredField("embeddingProvider");
+		strategyField.setAccessible(true);
+		Object originalStrategyProvider = strategyField.get(strategyTarget);
+		strategyField.set(strategyTarget, realProvider);
 
 		Object indexerTarget = unwrapProxy(embeddingIndexer);
 		java.lang.reflect.Field indexerField =
@@ -183,21 +187,34 @@ public class EndToEndSearchTest extends BaseModuleContextSensitiveTest {
 		Object originalIndexerProvider = indexerField.get(indexerTarget);
 		indexerField.set(indexerTarget, realProvider);
 
-		return new Object[] { originalServiceProvider, originalIndexerProvider };
+		return new Object[] { originalStrategyProvider, originalIndexerProvider };
 	}
 
 	private void restoreEmbeddingProviders(Object[] originals) throws Exception {
-		Object serviceTarget = unwrapProxy(service);
-		java.lang.reflect.Field serviceField =
-				LlmInferenceService.class.getDeclaredField("embeddingProvider");
-		serviceField.setAccessible(true);
-		serviceField.set(serviceTarget, originals[0]);
+		Object strategyTarget = chartBuildingStrategyTarget();
+		java.lang.reflect.Field strategyField =
+				ChartBuildingStrategy.class.getDeclaredField("embeddingProvider");
+		strategyField.setAccessible(true);
+		strategyField.set(strategyTarget, originals[0]);
 
 		Object indexerTarget = unwrapProxy(embeddingIndexer);
 		java.lang.reflect.Field indexerField =
 				EmbeddingIndexer.class.getDeclaredField("embeddingProvider");
 		indexerField.setAccessible(true);
 		indexerField.set(indexerTarget, originals[1]);
+	}
+
+	/**
+	 * Resolves the real {@link ChartBuildingStrategy} bean that {@code service}
+	 * delegates retrieval to, unwrapping AOP proxies so reflective field writes
+	 * land on the actual target the production search path uses.
+	 */
+	private Object chartBuildingStrategyTarget() throws Exception {
+		Object serviceTarget = unwrapProxy(service);
+		java.lang.reflect.Field strategyRef =
+				LlmInferenceService.class.getDeclaredField("chartBuildingStrategy");
+		strategyRef.setAccessible(true);
+		return unwrapProxy(strategyRef.get(serviceTarget));
 	}
 
 	/**

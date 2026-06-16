@@ -157,8 +157,11 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 	 * Removes the "Chart Search AI - Embedding Backfill" scheduled task left behind by
 	 * pre-querystore versions. Its task class ({@code EmbeddingIndexTask}) was deleted when
 	 * chartsearchai stopped maintaining its own embedding store, so an upgraded deployment would
-	 * otherwise keep a {@link TaskDefinition} pointing at a class that no longer loads. Idempotent:
-	 * a no-op on fresh installs.
+	 * otherwise keep a {@link TaskDefinition} pointing at a class that no longer loads.
+	 *
+	 * <p>Idempotent and best-effort: a no-op on fresh installs, and if the scheduler cannot remove
+	 * the task (e.g. a JobRunr job left stuck in a {@code DELETED} state), it logs a WARN and leaves
+	 * the harmless task in place rather than failing module startup.
 	 */
 	void removeLegacyBackfillTask() {
 		SchedulerService schedulerService = Context.getSchedulerService();
@@ -167,19 +170,22 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 			return;
 		}
 		try {
-			schedulerService.shutdownTask(existing);
-		}
-		catch (Exception e) {
-			// A non-running task (the backfill never auto-started) can throw here; deletion below
-			// still proceeds. Logged at debug because it is expected on the common path.
-			log.debug("Legacy backfill task was not running at shutdown", e);
-		}
-		try {
+			// deleteTask both stops the task and removes its definition. Do NOT call shutdownTask
+			// first: on the platform-2.9 JobRunr scheduler, deleteTask internally shuts the task
+			// down, so a prior shutdownTask leaves the underlying job already DELETED and the
+			// internal shutdown then throws IllegalJobStateChangeException (DELETED -> DELETED),
+			// aborting the delete and leaving the legacy task behind.
 			schedulerService.deleteTask(existing.getId());
 			log.info("Removed legacy embedding backfill task (its EmbeddingIndexTask class no longer exists)");
 		}
 		catch (Exception e) {
-			log.error("Failed to delete legacy embedding backfill task", e);
+			// Non-fatal: the leftover task is harmless (it cannot run — its class is gone), so a
+			// failed auto-removal must not noise up startup with an ERROR/stack. WARN with an
+			// actionable next step. (Platform-2.9's JobRunr scheduler can leave a job stuck in a
+			// DELETED state that deleteTask cannot re-delete; the task can be removed by hand.)
+			log.warn("Could not auto-remove the legacy '{}' scheduled task (its EmbeddingIndexTask "
+					+ "class no longer exists). It is harmless and cannot run; delete it manually from "
+					+ "Manage Scheduler if desired. Cause: {}", LEGACY_BACKFILL_TASK_NAME, e.toString());
 		}
 	}
 

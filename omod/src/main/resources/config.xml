@@ -14,11 +14,8 @@
 
 	<require_modules>
 		<require_module version="2.44.0">org.openmrs.module.webservices.rest</require_module>
+		<require_module version="1.0.0-SNAPSHOT">org.openmrs.module.querystore</require_module>
 	</require_modules>
-
-	<aware_of_modules>
-		<aware_of_module>org.openmrs.module.querystore</aware_of_module>
-	</aware_of_modules>
 
 	<!-- Module Activator -->
 	<activator>org.openmrs.module.chartsearchai.ChartSearchAiModuleActivator</activator>
@@ -157,8 +154,8 @@
 
 	<globalProperty>
 		<property>chartsearchai.querystore.enabled</property>
-		<defaultValue>false</defaultValue>
-		<description>Master switch for the querystore-backed retrieval path. When true, chartsearchai delegates retrieval to openmrs-module-querystore — getPatientChart when chartsearchai.embedding.preFilter is false (the recommended shape for full-chart LLM reasoning), or searchByPatient with top-K when preFilter is true — and bypasses chartsearchai's own embedding pipelines. Requires the querystore module to be installed; if absent, the flag-on path degrades to an empty chart. Default: false. NOTE — chartsearchai no longer maintains its own embedding/Lucene/Elasticsearch indices on data changes (querystore owns retrieval-index freshness via core events). Any pre-existing legacy indices from older versions are no longer kept up to date, so the legacy preFilter pipelines (used only when this flag is false) operate on a progressively stale snapshot. See chartsearchai.querystore.topK for the result cap.</description>
+		<defaultValue>true</defaultValue>
+		<description>Master switch for the querystore-backed retrieval path. When true (the default), chartsearchai delegates retrieval to openmrs-module-querystore — getPatientChart when chartsearchai.embedding.preFilter is false (the recommended shape for full-chart LLM reasoning), or searchByPatient with top-K when preFilter is true — and bypasses chartsearchai's own embedding pipelines. querystore is a required module (see require_modules), so it is always present. Set to false only to fall back to chartsearchai's legacy in-module embedding pipelines (deprecated and slated for removal); those no longer keep their indices fresh on data changes (querystore owns retrieval-index freshness via core events), so a legacy fallback operates on a progressively stale snapshot. See chartsearchai.querystore.topK for the result cap.</description>
 	</globalProperty>
 
 	<globalProperty>

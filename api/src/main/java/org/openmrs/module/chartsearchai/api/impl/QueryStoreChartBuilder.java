@@ -30,10 +30,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Bridge to the querystore module's read API. Resolves the service lazily via
- * {@link Context#getService(Class)} so chartsearchai still starts when the
- * querystore omod isn't installed — lookup failure surfaces as an empty chart,
- * same outcome as a search returning no hits.
+ * Bridge to the querystore module's read API. querystore is a required module, so it is present at
+ * runtime; the service is still resolved lazily via {@link Context#getService(Class)} (rather than
+ * injected) as defense-in-depth — a resolution failure degrades to an empty chart, the same outcome
+ * as a search returning no hits, instead of breaking chart assembly.
  *
  * <p>Always fetches the full patient chart via
  * {@link QueryStoreService#getPatientChart(String)} so the chart bytes sent to
@@ -112,8 +112,9 @@ class QueryStoreChartBuilder {
 			// querystore.enabled=true silently produces empty-chart LLM responses if this
 			// fires. Operators need this to surface, with an actionable next step.
 			log.warn("chartsearchai.querystore.enabled=true but QueryStoreService is unavailable — "
-					+ "install openmrs-module-querystore or set chartsearchai.querystore.enabled=false. "
-					+ "Returning empty chart.");
+					+ "querystore is a required module, so this indicates a querystore startup failure; "
+					+ "check the querystore module, or set chartsearchai.querystore.enabled=false to use "
+					+ "the legacy fallback. Returning empty chart.");
 			log.info("[timing] querystoreBuild patient={} mode={} hits=0 focusHits=0 rpcMs=0 serializeMs=0 totalMs={} outcome=unavailable",
 					patient.getPatientId(), mode, System.currentTimeMillis() - buildStart);
 			return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());

@@ -126,9 +126,9 @@ public class CitationGroundingVerifier {
 	 * chartsearchai's own {@link EmbeddingProvider} when querystore is absent,
 	 * disabled, or its provider can't be resolved. Never throws.
 	 *
-	 * <p>querystore is a {@code provided}-scope (optional) dependency, so its
-	 * {@code EmbeddingProvider} type may be absent at runtime — the
-	 * {@code LinkageError} catch covers {@code NoClassDefFoundError}, mirroring
+	 * <p>querystore is a {@code provided}-scope dependency (compiled against, not bundled). It is
+	 * now a required module, so it should be present at runtime, but the {@code LinkageError} catch
+	 * (covering {@code NoClassDefFoundError}) is kept as defense-in-depth, mirroring
 	 * {@code QueryStoreChartBuilder}'s guard.
 	 */
 	TextEmbedder resolveEmbedder() {

@@ -482,6 +482,11 @@ public class ChartSearchAiUtils {
 	}
 
 	public static boolean isQueryStoreEnabled() {
+		// config.xml defaults this GP to "true" (querystore is the default, required backend). The
+		// "false" fallback here is deliberately conservative for the rare GP-absent case (the row is
+		// normally inserted at module install): when the stored value is unknown, prefer the legacy
+		// in-module path that still exists. Flip this to "true" (or drop the method) once Phase 2
+		// removes the legacy fallback.
 		String value = org.openmrs.api.context.Context.getAdministrationService()
 				.getGlobalProperty(GP_QUERYSTORE_ENABLED, "false");
 		return "true".equalsIgnoreCase(value.trim());

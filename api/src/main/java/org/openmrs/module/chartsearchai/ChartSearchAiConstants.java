@@ -15,25 +15,9 @@ public class ChartSearchAiConstants {
 
 	public static final String PRIV_VIEW_AUDIT_LOGS = "View AI Audit Logs";
 
-	public static final String GP_EMBEDDING_MODEL_FILE_PATH = "chartsearchai.embedding.modelFilePath";
-
-	/**
-	 * Optional: path to a separate query-encoder model for dual-encoder
-	 * architectures (e.g. MedCPT). When set, queries are embedded with
-	 * this model while records use the standard model. When not set,
-	 * the standard model is used for both (single-encoder mode).
-	 */
-	public static final String GP_EMBEDDING_QUERY_MODEL_FILE_PATH = "chartsearchai.embedding.queryModelFilePath";
-
 	public static final String GP_LLM_MODEL_FILE_PATH = "chartsearchai.llm.modelFilePath";
 
 	public static final String GP_EMBEDDING_PRE_FILTER = "chartsearchai.embedding.preFilter";
-
-	public static final String GP_EMBEDDING_VOCAB_FILE_PATH = "chartsearchai.embedding.vocabFilePath";
-
-	public static final String GP_EMBEDDING_MAX_SEQUENCE_LENGTH = "chartsearchai.embedding.maxSequenceLength";
-
-	public static final int DEFAULT_MAX_SEQUENCE_LENGTH = 512;
 
 	public static final int ADAPTIVE_MIN_RECORDS = 2;
 

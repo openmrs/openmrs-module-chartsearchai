@@ -21,7 +21,4 @@
 		</property>
 	</bean>
 
-	<!-- Override the ONNX embedding provider with a stub for tests -->
-	<bean id="chartSearchAi.embeddingProvider" class="org.openmrs.module.chartsearchai.embedding.StubEmbeddingProvider" primary="true" />
-
 </beans>

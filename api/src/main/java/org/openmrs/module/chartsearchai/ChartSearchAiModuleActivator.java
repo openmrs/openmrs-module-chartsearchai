@@ -19,7 +19,6 @@ import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.chartsearchai.api.AuditLogPurgeTask;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
-import org.openmrs.module.chartsearchai.embedding.OnnxEmbeddingProvider;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
 
@@ -71,16 +70,6 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 		catch (Exception e) {
 			log.warn("Error closing LLM provider", e);
 		}
-		try {
-			OnnxEmbeddingProvider embeddingProvider = Context.getRegisteredComponent(
-					"chartSearchAi.embeddingProvider", OnnxEmbeddingProvider.class);
-			if (embeddingProvider != null) {
-				embeddingProvider.close();
-			}
-		}
-		catch (Exception e) {
-			log.warn("Error closing ONNX embedding provider", e);
-		}
 		log.info("Chart Search AI Module stopped");
 	}
 
@@ -93,16 +82,8 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 		if (!isRemote) {
 			validateModelFile(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH, "LLM");
 		}
-
-		String preFilter = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
-		if (!"false".equalsIgnoreCase(preFilter.trim())) {
-			validateModelFile(ChartSearchAiConstants.GP_EMBEDDING_MODEL_FILE_PATH,
-					"ONNX embedding");
-			validateModelFile(ChartSearchAiConstants.GP_EMBEDDING_VOCAB_FILE_PATH,
-					"WordPiece vocabulary");
-		}
-
+		// chartsearchai no longer owns an embedding model — grounding embeds via querystore's
+		// provider (#51), so there is no ONNX model/vocab to validate here.
 	}
 
 	private void validateModelFile(String globalProperty, String label) {

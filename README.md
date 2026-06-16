@@ -9,7 +9,7 @@ For project background, community discussion, and roadmap, see the [wiki project
 The standalone download above includes the backend module, frontend ESM, and the following AI models — ready to run:
 
 - **LLM**: [Gemma 4 E4B Instruct (Q4_K_M)](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) — ~5 GB, the module's default model, for answering clinical questions. (A larger Gemma 4 26B MoE bundle can be built via the workflow's `gguf_model_url` input.)
-- **Retrieval + embedding**: the [querystore module](https://github.com/openmrs/openmrs-module-querystore) with [e5-base-v2](https://huggingface.co/intfloat/e5-base-v2) (~440 MB ONNX) — the recommended hybrid retrieval path, pre-enabled (`chartsearchai.querystore.enabled=true`, Lucene backend). The module's own optional pre-filter embedder (all-MiniLM-L6-v2) is not bundled; see the `chartsearchai.embedding.modelFilePath` property description if you enable `chartsearchai.embedding.preFilter`.
+- **Retrieval + embedding**: the [querystore module](https://github.com/openmrs/openmrs-module-querystore) with [e5-base-v2](https://huggingface.co/intfloat/e5-base-v2) (~440 MB ONNX) — the retrieval path, pre-enabled (`chartsearchai.querystore.enabled=true`, Lucene backend). chartsearchai no longer ships its own embedder; retrieval and citation grounding both use querystore's model.
 
 > **Before running the download, see [Standalone platform notes](#standalone-platform-notes)** — in particular the **Windows JDK requirement** (the local embedder won't load on an old or Oracle JDK).
 
@@ -22,7 +22,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [Setup](#setup)
   - [1. Build](#1-build)
   - [2. Download the LLM model](#2-download-the-llm-model-local-mode-only)
-  - [3. Download the embedding model](#3-download-the-embedding-model-optional-two-variants)
+  - [3. Download the embedding model](#3-download-the-embedding-model-optional)
   - [4. Install](#4-install)
   - [5. Configure](#5-configure)
   - [6. Grant privileges](#6-grant-privileges)
@@ -142,20 +142,18 @@ Swapping the served model from E4B to E2B cut cold-query latency by ~3× on this
 
 Gemma 4 26B MoE is recommended for production deployments because it follows the system prompt rules (never infer, cite every record, complete enumeration on list queries) reliably without needing reasoning as a safety scaffold. Smaller models work but trade off either safety or list completeness depending on the query. The MoE architecture activates only ~3.8B parameters per token, so per-token speed is comparable to a 4B dense model despite the 26B total size.
 
-### 3. Download the embedding model *(optional, two variants)*
+### 3. Download the embedding model *(optional)*
 
-The embedder is only needed when retrieval is pre-filtered. Two configurations use it, with different model choices for different architectural reasons:
+The embedding model belongs to querystore — chartsearchai no longer ships its own. It is used both for querystore's retrieval index and for chartsearchai's citation grounding (the verifier embeds with the same model that built the index).
 
-**Querystore-backed retrieval (recommended)** — set `chartsearchai.querystore.enabled=true`. The querystore module handles retrieval; the LLM filters the top-K it returns. See [Querystore deployment](#querystore-deployment-recommended) below for the global properties this path expects and [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for the model rationale. The LLM is still required (see [step 2](#2-download-the-llm-model-local-mode-only) or use a remote engine). Download `intfloat/e5-base-v2` (~440MB):
+**Querystore-backed retrieval (recommended, default)** — `chartsearchai.querystore.enabled=true`. The querystore module handles retrieval; the LLM filters the top-K it returns. See [Querystore deployment](#querystore-deployment-recommended) below for the global properties this path expects and [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for the model rationale. The LLM is still required (see [step 2](#2-download-the-llm-model-local-mode-only) or use a remote engine). Download `intfloat/e5-base-v2` (~440MB):
 
 - ONNX model: https://huggingface.co/Xenova/e5-base-v2/resolve/main/onnx/model.onnx *(self-contained — see [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this source over the canonical `intfloat/e5-base-v2`)*
 - Vocab: https://huggingface.co/Xenova/e5-base-v2/resolve/main/vocab.txt
 
 Place both at `<openmrs-application-data-directory>/querystore/` and wire the global properties documented in [Querystore deployment](#querystore-deployment-recommended) below.
 
-**Chartsearchai-side pre-filter pipeline (legacy)** — set `chartsearchai.embedding.preFilter=true` and `chartsearchai.querystore.enabled=false` (querystore is now the default, so you must explicitly disable it to use this legacy path). This pipeline runs chartsearchai's own adaptive filtering stage (similarity ratio, gap detection, z-score gates) whose thresholds are tuned for `all-MiniLM-L6-v2`'s score-distribution geometry. Download both `model.onnx` and `vocab.txt` (~90MB total) from https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2 and place them at `<openmrs-application-data-directory>/chartsearchai/`. See [ADR Decision 19](docs/adr.md#decision-19-retain-all-minilm-l6-v2-as-the-embedding-model) for why this pipeline retains L6-v2 and [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why the querystore path doesn't.
-
-The default — full chart, no retrieval pre-filtering — uses neither embedder and needs no download.
+> chartsearchai's own embedding/Lucene/Elasticsearch pre-filter pipelines were removed in the querystore migration (#51); querystore is now the only retrieval and grounding embedder. Setting `chartsearchai.querystore.enabled=false` no longer runs an in-module pipeline — it serves the full patient chart unranked.
 
 ### 4. Install
 
@@ -202,7 +200,7 @@ When `chartsearchai.querystore.enabled=true`, chartsearchai delegates retrieval 
 **Deployment checklist:**
 
 1. LLM available — local GGUF ([step 2](#2-download-the-llm-model-local-mode-only)) or remote engine.
-2. e5-base-v2 ONNX + vocab placed at `<openmrs-application-data-directory>/querystore/` ([step 3](#3-download-the-embedding-model-optional-two-variants)).
+2. e5-base-v2 ONNX + vocab placed at `<openmrs-application-data-directory>/querystore/` ([step 3](#3-download-the-embedding-model-optional)).
 3. Global properties set per the table below.
 4. Indexing is lazy on first chart access — no backfill task needed.
 

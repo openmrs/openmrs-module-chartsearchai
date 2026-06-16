@@ -427,11 +427,33 @@ branch, so Phase 2 deletes it whole. What shipped:
   allergies", 0 citations — no hallucination). `[timing] querystoreBuild patient=27 mode=fullChart
   hits=266 outcome=ok` proves the querystore path executed; `cachedTokens=10854/10866` confirms KV reuse.
 
-**Phase 3 — Delete ONNX + the embedding provider (gated on the grounding-fallback decision).**
-Remove `OnnxEmbeddingProvider`, `WordPieceTokenizer`, `EmbeddingProvider`, the embedding-only parts
-of `QueryPreprocessor`, and the bundled ONNX model resource — **after** deciding whether
-`CitationGroundingVerifier` keeps chartsearchai's embedder as a grounding fallback (it currently
-does; that fallback is the only remaining reason ONNX stays). Big artifact-size win.
+**Phase 3 — Delete ONNX + the embedding provider. (✅ DONE.)** Decision: **drop** chartsearchai's
+ONNX grounding fallback. `CitationGroundingVerifier.resolveEmbedder()` now returns querystore's
+embedder (the same e5 model that built the index) or `null` — and the verifier already degrades a
+`null` Tier-1 embedder to Tier-2-only (the authoritative pass). Since querystore is required and its
+`querystore.embedding.dispatcher` is the normal path (the Phase-2 smoke already showed grounding ran
+through it, not the fallback), removing the fallback changes behavior only in the rare
+querystore-embedder-unavailable edge — to the same graceful degradation that already existed. What
+shipped:
+- Removed the `@Autowired EmbeddingProvider` + `setEmbeddingProvider` seam + the fallback branch and
+  `isQueryStoreEnabled()` gate from `CitationGroundingVerifier`.
+- Deleted the `embedding/` package: `EmbeddingProvider`, `OnnxEmbeddingProvider`
+  (`@Component("chartSearchAi.embeddingProvider")`), `WordPieceTokenizer`.
+- Activator: dropped the ONNX `close()` from `stopped()` and the ONNX model/vocab validation from
+  `validateConfiguration()` (resolves the deferred Phase-2 harden item).
+- Removed the ONNX constants/config GPs (`embedding.modelFilePath`, `queryModelFilePath`,
+  `vocabFilePath`, `maxSequenceLength`) and the **`onnxruntime` pom dependency**. Kept the LLM model
+  path + all grounding GPs (updated `grounding.minCosine` to drop the stale all-MiniLM advice).
+- Tests: deleted the 5 ONNX/embedding probe tests + the dead `StubEmbeddingProvider` helper + the
+  dead `TestDatasetHelper` model-locating fields; **refactored `CitationGroundingVerifierTest`** to
+  inject via a `resolveEmbedder()`→`TextEmbedder` seam (all 32 tests preserved). Removing the obsolete
+  `chartSearchAi.embeddingProvider` bean from `TestingApplicationContext.xml` was required — leaving
+  it pointed Spring at the deleted stub and failed the whole context (126 errors, caught by the build).
+- **Verified**: `mvn -pl api test` → 565 run, 0 failures, 34 skipped; clean omod **shrank 75.7 MB →
+  36.1 MB (−52%)** with no onnxruntime or chartsearchai embedding classes. Standalone smoke
+  (agnes-adams): both modules `started:true`, grounding returned **30 citations all grounded=true**
+  via querystore's e5 embedder (zero "embedding provider unavailable" warnings — the fallback was
+  never needed). `QueryPreprocessor` was left intact (its query-prep helpers are still used).
 
 **Phase 4 — Drop the embedding store.** Remove `ChartEmbedding`, its Hibernate
 mapping, the embeddings liquibase table, and the embedding DAO methods.

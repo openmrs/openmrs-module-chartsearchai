@@ -20,7 +20,6 @@ import java.util.regex.Pattern;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
-import org.openmrs.module.chartsearchai.embedding.EmbeddingProvider;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,15 +95,7 @@ public class CitationGroundingVerifier {
 	private static final Pattern SENTENCE_SPLIT = Pattern.compile("(?<=[.!?])\\s+|[\\r\\n]+");
 
 	@Autowired
-	private EmbeddingProvider embeddingProvider;
-
-	@Autowired
 	private LlmProvider llmProvider;
-
-	/** Test seam: production wires {@link EmbeddingProvider} via {@link Autowired}. */
-	void setEmbeddingProvider(EmbeddingProvider embeddingProvider) {
-		this.embeddingProvider = embeddingProvider;
-	}
 
 	/** Test seam: production wires {@link LlmProvider} via {@link Autowired}. */
 	void setLlmProvider(LlmProvider llmProvider) {
@@ -118,36 +109,36 @@ public class CitationGroundingVerifier {
 	}
 
 	/**
-	 * Resolves the embedding provider for a grounding run. When querystore is the
-	 * retrieval backend ({@code chartsearchai.querystore.enabled=true}), grounding
-	 * reuses querystore's configured provider (the same e5/ONNX model that built
-	 * the index) so the verifier embeds with the same model as retrieval — and so
-	 * no separate chartsearchai embedding model has to be installed. Falls back to
-	 * chartsearchai's own {@link EmbeddingProvider} when querystore is absent,
-	 * disabled, or its provider can't be resolved. Never throws.
+	 * Resolves the embedding provider for a grounding run: querystore's configured provider
+	 * (the same e5/ONNX model that built the index), so the verifier embeds with the same model
+	 * as retrieval and no separate chartsearchai embedding model has to be installed. Returns
+	 * {@code null} when querystore's provider can't be resolved — Tier-1 cosine checks are then
+	 * skipped and Tier-2 entailment (the authoritative pass) still applies. Never throws.
 	 *
-	 * <p>querystore is a {@code provided}-scope dependency (compiled against, not bundled). It is
-	 * now a required module, so it should be present at runtime, but the {@code LinkageError} catch
-	 * (covering {@code NoClassDefFoundError}) is kept as defense-in-depth, mirroring
-	 * {@code QueryStoreChartBuilder}'s guard.
+	 * <p>chartsearchai's own ONNX embedding provider was removed in the querystore migration (#51);
+	 * querystore is now the only grounding embedder. querystore is a {@code provided}-scope
+	 * dependency (compiled against, not bundled) and a required module, so it should be present at
+	 * runtime; the {@code LinkageError} catch (covering {@code NoClassDefFoundError}) is kept as
+	 * defense-in-depth, mirroring {@code QueryStoreChartBuilder}'s guard.
+	 *
+	 * <p>Overridable as a test seam (matching the {@code resolveX()} pattern elsewhere) so tests can
+	 * inject a deterministic {@link TextEmbedder} without an OpenMRS context.
 	 */
 	TextEmbedder resolveEmbedder() {
 		try {
-			if (ChartSearchAiUtils.isQueryStoreEnabled()) {
-				org.openmrs.module.querystore.embedding.EmbeddingProvider qs =
-						org.openmrs.api.context.Context.getRegisteredComponent(
-								"querystore.embedding.dispatcher",
-								org.openmrs.module.querystore.embedding.EmbeddingProvider.class);
-				if (qs != null) {
-					return qs::embed;
-				}
+			org.openmrs.module.querystore.embedding.EmbeddingProvider qs =
+					org.openmrs.api.context.Context.getRegisteredComponent(
+							"querystore.embedding.dispatcher",
+							org.openmrs.module.querystore.embedding.EmbeddingProvider.class);
+			if (qs != null) {
+				return qs::embed;
 			}
 		}
 		catch (RuntimeException | LinkageError e) {
-			log.warn("Grounding: querystore embedding provider unavailable ({}); "
-					+ "falling back to chartsearchai's own embedding model", e.toString());
+			log.warn("Grounding: querystore embedding provider unavailable ({}); Tier-1 cosine "
+					+ "checks will be skipped (Tier-2 entailment still applies).", e.toString());
 		}
-		return embeddingProvider == null ? null : embeddingProvider::embed;
+		return null;
 	}
 
 	/** Accumulates embedding failures across a run so they are logged once, not per citation. */
@@ -357,10 +348,9 @@ public class CitationGroundingVerifier {
 		// misconfigured/absent embedding model, which would otherwise spam the log once
 		// per citation and bury the root cause.
 		if (stats.embedFailures > 0) {
-			log.warn("Citation grounding: could not verify {} of {} citation(s) — embedding provider "
-					+ "failed ({}); those citations are left unverified. If querystore is the backend, "
-					+ "ensure its embedding model is configured; otherwise set "
-					+ "chartsearchai.embedding.modelFilePath.",
+			log.warn("Citation grounding: could not verify {} of {} citation(s) — querystore's embedding "
+					+ "provider failed ({}); those citations are left unverified (Tier-2 entailment still "
+					+ "applies). Ensure querystore's embedding model is configured.",
 					stats.embedFailures, references.size(), stats.firstError);
 		}
 		return annotated;

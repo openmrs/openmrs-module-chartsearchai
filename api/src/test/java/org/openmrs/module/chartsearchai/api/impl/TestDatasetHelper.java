@@ -26,18 +26,6 @@ import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.Serialize
  */
 final class TestDatasetHelper {
 
-	static final String MODEL_DIR = System.getProperty(
-			"chartsearchai.embedding.model.dir", "../models/all-MiniLM-L6-v2");
-
-	static final String MODEL_PATH = MODEL_DIR + "/model.onnx";
-
-	static final String VOCAB_PATH = MODEL_DIR + "/vocab.txt";
-
-	static boolean modelFilesExist() {
-		return new java.io.File(MODEL_PATH).exists()
-				&& new java.io.File(VOCAB_PATH).exists();
-	}
-
 	// Full 153-record dataset from a real 16-year-old Male patient chart.
 	static final String[] FULL_PATIENT_DATASET = {
 			/* [  1] */ "Medication prescription: (2026-03-18) Drug order: Azithromycin. Dose: 2.0 Tablet) Intravenous Every six hours. Duration: 5 Days. Quantity: 4.0 Tablet). As needed (subject to heart attack). Dosing: Take after eating. Action: REVISE. Urgency: ROUTINE. Reason: Spectrum",

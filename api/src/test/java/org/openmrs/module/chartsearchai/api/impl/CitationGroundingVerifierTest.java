@@ -25,14 +25,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
-import org.openmrs.module.chartsearchai.embedding.EmbeddingProvider;
+import org.openmrs.module.chartsearchai.api.impl.CitationGroundingVerifier.TextEmbedder;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
- * Unit tests for {@link CitationGroundingVerifier}. Uses a deterministic stub
- * {@link EmbeddingProvider} (each registered phrase maps to a fixed unit
- * vector) and a stub {@link LlmProvider} (programmed yes/no verdicts) so both
- * tiers of grounding are exercised without ONNX, an LLM, or an OpenMRS context.
+ * Unit tests for {@link CitationGroundingVerifier}. Injects a deterministic stub
+ * {@link TextEmbedder} via an overridden {@link CitationGroundingVerifier#resolveEmbedder()}
+ * (each registered phrase maps to a fixed unit vector) and a stub {@link LlmProvider}
+ * (programmed yes/no verdicts) so both tiers of grounding are exercised without an
+ * embedding model, an LLM, or an OpenMRS context.
  */
 public class CitationGroundingVerifierTest {
 
@@ -47,7 +48,7 @@ public class CitationGroundingVerifierTest {
 	 * is just the dot product of their (unit) vectors. Unregistered text gets a
 	 * zero vector, which yields cosine 0 against everything — i.e. "no overlap".
 	 */
-	private static class StubEmbeddingProvider implements EmbeddingProvider {
+	private static class StubEmbedder implements TextEmbedder {
 
 		private final Map<String, float[]> vectors = new HashMap<String, float[]>();
 
@@ -64,10 +65,25 @@ public class CitationGroundingVerifierTest {
 			float[] v = vectors.get(text);
 			return v != null ? v : new float[] { 0f, 0f };
 		}
+	}
+
+	/**
+	 * Verifier subclass that injects a test {@link TextEmbedder} through the
+	 * {@link CitationGroundingVerifier#resolveEmbedder()} seam (production resolves querystore's
+	 * provider via the OpenMRS context). A {@code null} embedder models a deployment with no
+	 * Tier-1 embedding model — resolveEmbedder() returns null and Tier-1 cosine checks are skipped.
+	 */
+	private static class TestableVerifier extends CitationGroundingVerifier {
+
+		private TextEmbedder embedder;
+
+		void setEmbedder(TextEmbedder embedder) {
+			this.embedder = embedder;
+		}
 
 		@Override
-		public int getDimensions() {
-			return 2;
+		TextEmbedder resolveEmbedder() {
+			return embedder;
 		}
 	}
 
@@ -107,11 +123,11 @@ public class CitationGroundingVerifierTest {
 		}
 	}
 
-	private StubEmbeddingProvider embeddings;
+	private StubEmbedder embeddings;
 
 	private StubLlmProvider llm;
 
-	private CitationGroundingVerifier verifier;
+	private TestableVerifier verifier;
 
 	private static final float[] AXIS_A = { 1f, 0f };
 
@@ -119,10 +135,10 @@ public class CitationGroundingVerifierTest {
 
 	@BeforeEach
 	public void setUp() {
-		embeddings = new StubEmbeddingProvider();
+		embeddings = new StubEmbedder();
 		llm = new StubLlmProvider(null);
-		verifier = new CitationGroundingVerifier();
-		verifier.setEmbeddingProvider(embeddings);
+		verifier = new TestableVerifier();
+		verifier.setEmbedder(embeddings);
 		verifier.setLlmProvider(llm);
 	}
 
@@ -232,19 +248,10 @@ public class CitationGroundingVerifierTest {
 
 	@Test
 	public void verify_embeddingFailureDegradesToUnverified() {
-		EmbeddingProvider throwing = new EmbeddingProvider() {
-
-			@Override
-			public float[] embed(String text) {
-				throw new RuntimeException("ONNX session unavailable");
-			}
-
-			@Override
-			public int getDimensions() {
-				return 2;
-			}
+		TextEmbedder throwing = text -> {
+			throw new RuntimeException("ONNX session unavailable");
 		};
-		verifier.setEmbeddingProvider(throwing);
+		verifier.setEmbedder(throwing);
 
 		List<RecordReference> result = verifier.verify("Patient has diabetes [1].",
 				new ArrayList<RecordReference>(Arrays.asList(reference(1))),
@@ -640,19 +647,10 @@ public class CitationGroundingVerifierTest {
 		// claim sentence no longer depends on the Tier-1 embedder being healthy. Previously a
 		// broken/absent embedding model silently downgraded ALL grounding to "unverified" even
 		// though the authoritative Tier-2 LLM was available; now the LLM verdict still lands.
-		EmbeddingProvider throwing = new EmbeddingProvider() {
-
-			@Override
-			public float[] embed(String text) {
-				throw new RuntimeException("ONNX session unavailable");
-			}
-
-			@Override
-			public int getDimensions() {
-				return 2;
-			}
+		TextEmbedder throwing = text -> {
+			throw new RuntimeException("ONNX session unavailable");
 		};
-		verifier.setEmbeddingProvider(throwing);
+		verifier.setEmbedder(throwing);
 		llm.verdict = Boolean.FALSE;
 
 		List<RecordReference> result = verifier.verify("Patient has cancer [3].",
@@ -669,7 +667,7 @@ public class CitationGroundingVerifierTest {
 		// model configured at all (e.g. lucene-only querystore, no ONNX files) must still get
 		// authoritative Tier-2 verdicts for unambiguous claim sentences. resolveEmbedder() returns
 		// null in that deployment shape; the lazy path must never touch it when Tier-2 succeeds.
-		verifier.setEmbeddingProvider(null);
+		verifier.setEmbedder(null);
 		llm.verdict = Boolean.TRUE;
 
 		List<RecordReference> result = verifier.verify("Has hypertension [1].",

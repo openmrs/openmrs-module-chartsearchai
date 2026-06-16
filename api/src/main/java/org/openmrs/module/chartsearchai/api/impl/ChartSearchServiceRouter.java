@@ -181,16 +181,13 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 	}
 
 	protected String buildCacheKey(Patient patient, String question) {
+		// Retrieval GPs that change what the LLM sees, post-querystore-migration (#51): preFilter
+		// toggles the focus-hint pass, querystore.enabled switches retrieval vs. plain full chart,
+		// and querystore.topK sizes the focus hint. The legacy embedding/Lucene/ES pipeline-tuning
+		// GPs were removed with that pipeline, so they no longer belong in the key.
 		String preFilter = gp(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
-		String pipeline = gp(ChartSearchAiConstants.GP_RETRIEVAL_PIPELINE,
-				ChartSearchAiConstants.PIPELINE_EMBEDDING);
-		String topK = gp(ChartSearchAiConstants.GP_EMBEDDING_TOP_K, "");
-		String similarityRatio = gp(ChartSearchAiConstants.GP_EMBEDDING_SIMILARITY_RATIO, "");
-		String keywordWeight = gp(ChartSearchAiConstants.GP_EMBEDDING_KEYWORD_WEIGHT, "");
-		String scoreGapMultiplier = gp(ChartSearchAiConstants.GP_EMBEDDING_SCORE_GAP_MULTIPLIER, "");
-		String minScoreGap = gp(ChartSearchAiConstants.GP_EMBEDDING_MIN_SCORE_GAP, "");
-		String gapValidationCosine = gp(
-				ChartSearchAiConstants.GP_EMBEDDING_GAP_VALIDATION_COSINE_THRESHOLD, "");
+		String queryStoreEnabled = gp(ChartSearchAiConstants.GP_QUERYSTORE_ENABLED, "");
+		String queryStoreTopK = gp(ChartSearchAiConstants.GP_QUERYSTORE_TOP_K, "");
 		// Grounding GPs change the answer's per-citation `grounded` verdict, so
 		// they must be part of the key — otherwise toggling grounding (or its
 		// floor / entailment flag) while caching is on would serve answers whose
@@ -199,13 +196,8 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		String groundingMinCosine = gp(ChartSearchAiConstants.GP_GROUNDING_MIN_COSINE, "");
 		String groundingEntailment = gp(ChartSearchAiConstants.GP_GROUNDING_ENTAILMENT_ENABLED, "");
 		return patient.getUuid() + "::" + preFilter.trim().toLowerCase()
-				+ "::" + pipeline.trim().toLowerCase()
-				+ "::" + topK.trim()
-				+ "::" + similarityRatio.trim()
-				+ "::" + keywordWeight.trim()
-				+ "::" + scoreGapMultiplier.trim()
-				+ "::" + minScoreGap.trim()
-				+ "::" + gapValidationCosine.trim()
+				+ "::" + queryStoreEnabled.trim().toLowerCase()
+				+ "::" + queryStoreTopK.trim()
 				+ "::" + grounding.trim().toLowerCase()
 				+ "::" + groundingMinCosine.trim()
 				+ "::" + groundingEntailment.trim().toLowerCase()

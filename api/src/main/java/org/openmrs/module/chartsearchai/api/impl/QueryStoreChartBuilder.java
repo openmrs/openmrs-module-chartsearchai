@@ -113,8 +113,8 @@ class QueryStoreChartBuilder {
 			// fires. Operators need this to surface, with an actionable next step.
 			log.warn("chartsearchai.querystore.enabled=true but QueryStoreService is unavailable — "
 					+ "querystore is a required module, so this indicates a querystore startup failure; "
-					+ "check the querystore module, or set chartsearchai.querystore.enabled=false to use "
-					+ "the legacy fallback. Returning empty chart.");
+					+ "check the querystore module, or set chartsearchai.querystore.enabled=false to serve "
+					+ "the full patient chart unranked instead of an empty one. Returning empty chart.");
 			log.info("[timing] querystoreBuild patient={} mode={} hits=0 focusHits=0 rpcMs=0 serializeMs=0 totalMs={} outcome=unavailable",
 					patient.getPatientId(), mode, System.currentTimeMillis() - buildStart);
 			return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());

@@ -66,14 +66,15 @@ public class ChartSearchServiceRouterTest {
 	/**
 	 * Sanity check that the harness actually detects key changes — guards against a regression
 	 * where the key stops varying at all, which would make every grounding assertion below pass
-	 * vacuously.
+	 * vacuously. Uses {@code querystore.topK}, a retrieval GP that changes the focus-hint ranking
+	 * the LLM sees and so must be folded into the key.
 	 */
 	@Test
 	public void buildCacheKey_changesWhenANonGroundingGpChanges() {
 		StubRouter router = new StubRouter();
 		Patient p = patient("p1");
 		String before = router.buildCacheKey(p, "q");
-		router.gps.put(ChartSearchAiConstants.GP_EMBEDDING_TOP_K, "30");
+		router.gps.put(ChartSearchAiConstants.GP_QUERYSTORE_TOP_K, "30");
 		assertNotEquals(before, router.buildCacheKey(p, "q"));
 	}
 

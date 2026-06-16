@@ -385,18 +385,53 @@ freshness. What actually shipped:
   cache (cache hit 0.05s → recompute 5.94s after a write) — the AOP-on-write path the unit harness
   can't cover. chartsearchai no longer writes its own indices; querystore owns freshness via core events.
 
-**Phase 2 — Collapse the router.** Make `buildChart()` querystore-only; delete
-`buildChartWith{Embeddings,Lucene,Elasticsearch,Hybrid}`, the pipeline-selection
-predicates, the noise-profile cache, and `HybridRetriever`/`LuceneIndexer`/
-`ElasticsearchIndexer`/`EmbeddingIndexer`/`IndexingHelper`. Remove the
-`chartsearchai.querystore.enabled` GP itself (querystore is now unconditional)
-and the retrieval-pipeline / ES-connection GPs.
+**Phase 2 — Collapse the router + delete the whole legacy retrieval stack. (✅ DONE.)**
+The doc's original Phase 2/3 split (indexers in 2, scoring pipeline + eval tests in 3) was
+**not independently compilable**: the eval/regression tests reference *both* the indexers and
+`RetrievalQuery`/`PipelineConfig`, so deleting only the indexers leaves the test tree broken.
+The legacy retrieval stack is one connected blob reachable solely through `buildChart()`'s legacy
+branch, so Phase 2 deletes it whole. What shipped:
+- `ChartBuildingStrategy.buildChart()` collapsed to `queryStoreChartBuilder.build()` (querystore
+  enabled) or a plain unranked full-chart serialize (disabled) — the legacy
+  `buildChartWith{Embeddings,Lucene,Elasticsearch,Hybrid}`, filter/findSimilar methods,
+  pipeline-selection predicates, and noise-profile cache are gone.
+- **Deleted 18 classes**: `EmbeddingIndexer`, `LuceneIndexer`, `ElasticsearchIndexer`,
+  `HybridRetriever`, `ElasticsearchQueryBuilder`, `RetrievalQuery`, `EmbeddingRankingPipeline`,
+  `SimilarityAndScoringEngine`, `ScoreStatistics`, `ScoredEmbedding`, `ConceptNameReranker`,
+  `ConceptKeywordMatching`, `CoherenceFilters`, `RankingPipelineGates`, `RefinementPaths`,
+  `PipelineConfig`, `ConceptRescueAndFilter`, `ModelNoiseProfile`.
+- Stripped `LlmInferenceService`'s legacy static delegators + `FindSimilarResult` (kept the
+  `QueryPreprocessor` delegators); slimmed `PipelineSettings` to `usePreFilter` + `getQueryStoreTopK`;
+  dropped the ES/Lucene `close()` from the activator; deleted `ChartSearchAiUtils.usesLuceneIndex`.
+- Reworked `ChartSearchServiceRouter.buildCacheKey` to fold the querystore GPs (preFilter,
+  querystore.enabled, querystore.topK) + grounding GPs instead of the removed embedding-tuning GPs.
+- Removed the retrieval-pipeline + embedding-tuning + ES/RRF/kNN constants + their config.xml GPs,
+  and the Lucene/Elasticsearch pom dependencies. **Kept** the `chartsearchai.querystore.enabled`
+  GP (grounding + cache key still read it; `false` now means unranked full chart).
+- **Deleted 8 legacy test files** (`Elasticsearch/Embedding/HybridRetriever` indexer tests,
+  `ElasticsearchKnnFallbackTest`, `EndToEndSearchTest`, `RetrievalQualityEvalTest`,
+  `EnrichedRetrievalEvalTest` (the 485-case harness), `LlmInferenceServiceEvalTest`); surgically
+  pared `LlmInferenceServiceTest` (84→38 methods) and `TestDatasetHelper`. The querystore-backed
+  replacements (`QueryStoreRetrievalParityEvalTest`/`QueryStoreContentParityEvalTest`) live on the
+  `phase0-evals` branch.
+- **Verified (in-process)**: `mvn -pl api test` → 575 run, 0 failures, 35 skipped; clean `mvn install`
+  packages the `.omod` with **no orphaned bytecode** for the deleted classes (a stale-`.class`
+  packaging bug caught by inspecting the omod — an incremental build had shipped the `@Component`
+  indexers, which would `NoClassDefFoundError` at Spring scan now that Lucene/ES are off the classpath).
+- **Verified (standalone smoke, 2026-06-17, agnes-adams/patient 27, 267 records, local E2B engine)**:
+  deployed the Phase 2 omod + cleared lib-cache; both `chartsearchai` and `querystore` report
+  `started:true` (the slimmed Spring context initializes with the legacy beans gone — no
+  `NoClassDefFoundError`/bean-wiring failure); deployed jar has **0** legacy classes. A real
+  `POST /chartsearchai/search` returned a citation-grounded answer (14+ conditions, 29 references) and,
+  on a follow-up, correctly answered absent data ("records do not contain information regarding
+  allergies", 0 citations — no hallucination). `[timing] querystoreBuild patient=27 mode=fullChart
+  hits=266 outcome=ok` proves the querystore path executed; `cachedTokens=10854/10866` confirms KV reuse.
 
-**Phase 3 — Delete the embedding pipeline + ONNX (gated on §3 parity).** Remove
-`RetrievalQuery` and all ranking/scoring/concept-filter classes, `OnnxEmbeddingProvider`,
-`WordPieceTokenizer`, `EmbeddingProvider`, `ModelNoiseProfile`, `PipelineConfig`,
-the embedding-only parts of `QueryPreprocessor`, the bundled ONNX model resource,
-and the obsolete eval tests. Big artifact-size win.
+**Phase 3 — Delete ONNX + the embedding provider (gated on the grounding-fallback decision).**
+Remove `OnnxEmbeddingProvider`, `WordPieceTokenizer`, `EmbeddingProvider`, the embedding-only parts
+of `QueryPreprocessor`, and the bundled ONNX model resource — **after** deciding whether
+`CitationGroundingVerifier` keeps chartsearchai's embedder as a grounding fallback (it currently
+does; that fallback is the only remaining reason ONNX stays). Big artifact-size win.
 
 **Phase 4 — Drop the embedding store.** Remove `ChartEmbedding`, its Hibernate
 mapping, the embeddings liquibase table, and the embedding DAO methods.
@@ -427,9 +462,12 @@ commands — become obsolete and would otherwise misdirect future work).
 
 Run before each phase's PR (per CLAUDE.md):
 - `mvn -q test` (full suite).
-- Phase 0–2: the cross-query regression tests (`enriched_*` in
-  `LlmInferenceServiceTest`) + the eval harness, default (L6-v2) **and**
-  `-Dchartsearchai.eval.model=medcpt`, while those still exist.
-- Phase 3+: the new querystore-backed eval harness must meet the recorded
-  Phase-0 parity bar — verify the returned records, not just counts.
+- Phase 0–1 (historical): the cross-query regression tests (`enriched_*` in
+  `LlmInferenceServiceTest`) + the legacy eval harness (`EnrichedRetrievalEvalTest`),
+  default (L6-v2) **and** `-Dchartsearchai.eval.model=medcpt`. **Removed in Phase 2**
+  along with the embedding pipeline they exercised — do not expect them to exist.
+- Phase 2+: the querystore-backed eval harness (`QueryStoreRetrievalParityEvalTest` /
+  `QueryStoreContentParityEvalTest`, currently on the `phase0-evals` branch) must meet the
+  recorded Phase-0 parity bar — verify the returned records, not just counts. CLAUDE.md's
+  embedding-pipeline/eval-tuning rules become obsolete here and are pruned in Phase 5.
 - End-to-end smoke on the standalone testbed against `agnes-adams`.

@@ -17,7 +17,6 @@ import org.openmrs.module.BaseModuleActivator;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.chartsearchai.api.AuditLogPurgeTask;
-import org.openmrs.module.chartsearchai.api.ElasticsearchIndexer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.module.chartsearchai.embedding.OnnxEmbeddingProvider;
@@ -81,27 +80,6 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 		}
 		catch (Exception e) {
 			log.warn("Error closing ONNX embedding provider", e);
-		}
-		try {
-			ElasticsearchIndexer esIndexer = Context.getRegisteredComponent(
-					"elasticsearchIndexer", ElasticsearchIndexer.class);
-			if (esIndexer != null) {
-				esIndexer.close();
-			}
-		}
-		catch (Exception e) {
-			log.warn("Error closing Elasticsearch indexer", e);
-		}
-		try {
-			org.openmrs.module.chartsearchai.api.LuceneIndexer luceneIndexer =
-					Context.getRegisteredComponent("luceneIndexer",
-							org.openmrs.module.chartsearchai.api.LuceneIndexer.class);
-			if (luceneIndexer != null) {
-				luceneIndexer.close();
-			}
-		}
-		catch (Exception e) {
-			log.warn("Error closing Lucene indexer", e);
 		}
 		log.info("Chart Search AI Module stopped");
 	}

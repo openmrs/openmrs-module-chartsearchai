@@ -65,13 +65,7 @@
 	<globalProperty>
 		<property>chartsearchai.embedding.preFilter</property>
 		<defaultValue>false</defaultValue>
-		<description>When true, uses embedding similarity to pre-filter patient records to the most relevant ones before sending to the LLM. Embeddings are indexed on first patient access, but chartsearchai no longer refreshes them when the chart changes — for retrieval that stays current with edits, use the querystore-backed path (chartsearchai.querystore.enabled). Set to true to enable embedding-based filtering. Default: false — the LLM needs the full chart for negative reasoning ("there are no records of X"), which a similarity pre-filter cannot reliably support.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.retrieval.pipeline</property>
-		<defaultValue>embedding</defaultValue>
-		<description>Selects the retrieval pipeline used to pre-filter patient records before sending them to the LLM. Options: "embedding" (default) uses vector similarity via an ONNX model with custom scoring; "lucene" uses Apache Lucene BM25 text search; "hybrid" combines Lucene BM25 and embedding kNN search using Reciprocal Rank Fusion (RRF) — same quality as the Elasticsearch pipeline but with no external services required; "elasticsearch" uses Elasticsearch hybrid search combining BM25 text and kNN vector search via RRF (requires Elasticsearch 8.14+ configured in OpenMRS). All require chartsearchai.embedding.preFilter to be true. Records are indexed automatically on first access. Changing this setting takes effect on the next query.</description>
+		<description>When true, the querystore retrieval path additionally ranks the patient's records by similarity to the question (querystore.searchByPatient) and passes a short "focus hint" — the top chartsearchai.querystore.topK record indices — to the LLM. The full chart is always sent regardless, so the hint biases attention without removing records the LLM needs for negative reasoning ("there are no records of X"). Default: false. Changing this setting takes effect on the next query.</description>
 	</globalProperty>
 
 	<globalProperty>
@@ -147,69 +141,21 @@
 	</globalProperty>
 
 	<globalProperty>
-		<property>chartsearchai.embedding.topK</property>
-		<defaultValue>10</defaultValue>
-		<description>Maximum number of records to retrieve via embedding similarity when pre-filtering is enabled. Lower values produce more focused LLM responses; higher values provide more context but may reduce reasoning quality. Default: 10.</description>
-	</globalProperty>
-
-	<globalProperty>
 		<property>chartsearchai.querystore.enabled</property>
 		<defaultValue>true</defaultValue>
-		<description>Master switch for the querystore-backed retrieval path. When true (the default), chartsearchai delegates retrieval to openmrs-module-querystore — getPatientChart when chartsearchai.embedding.preFilter is false (the recommended shape for full-chart LLM reasoning), or searchByPatient with top-K when preFilter is true — and bypasses chartsearchai's own embedding pipelines. querystore is a required module (see require_modules), so it is always present. Set to false only to fall back to chartsearchai's legacy in-module embedding pipelines (deprecated and slated for removal); those no longer keep their indices fresh on data changes (querystore owns retrieval-index freshness via core events), so a legacy fallback operates on a progressively stale snapshot. See chartsearchai.querystore.topK for the result cap.</description>
+		<description>Master switch for the querystore-backed retrieval path. When true (the default), chartsearchai delegates retrieval to openmrs-module-querystore — getPatientChart when chartsearchai.embedding.preFilter is false (the recommended shape for full-chart LLM reasoning), or additionally searchByPatient with top-K to compute a focus hint when preFilter is true. querystore is a required module (see require_modules), so it is always present. Set to false only to skip retrieval entirely and send the full patient chart unranked (no focus hint); chartsearchai's own embedding/Lucene/Elasticsearch pipelines were removed in the querystore migration. See chartsearchai.querystore.topK for the focus-hint result cap.</description>
 	</globalProperty>
 
 	<globalProperty>
 		<property>chartsearchai.querystore.topK</property>
 		<defaultValue>30</defaultValue>
-		<description>Number of top results to request from the querystore when chartsearchai.querystore.enabled is true. Separate from chartsearchai.embedding.topK so the querystore path can be tuned independently of the legacy pipelines. Default: 30.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.embedding.similarityRatio</property>
-		<defaultValue>0.80</defaultValue>
-		<description>Minimum similarity score as a fraction of the top result's score. Records scoring below this ratio are excluded even if within the topK limit. For example, 0.80 means a record must have at least 80% of the best match's similarity score. Lower values include more records; higher values are more selective. Must be between 0 and 1. Default: 0.80.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.embedding.scoreGapMultiplier</property>
-		<defaultValue>2.5</defaultValue>
-		<description>Controls adaptive topK by detecting natural cluster boundaries in similarity scores. When the gap between consecutive scores exceeds this multiplier times the running average gap, the cluster boundary is found and lower-scoring records are excluded. Higher values (e.g. 3.0) are more permissive (include more records); lower values (e.g. 2.0) are more aggressive at cutting. Set to a very large value (e.g. 999) to effectively disable gap detection and rely solely on the similarity ratio threshold. Default: 2.5.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.embedding.keywordWeight</property>
-		<defaultValue>0.3</defaultValue>
-		<description>Additive keyword bonus weight in the hybrid retrieval formula: finalScore = semanticScore + weight * keywordScore. Keyword overlap can only increase the score, never decrease it. Set to 0 to disable keyword matching. Default: 0.3.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.embedding.typeBoostFactor</property>
-		<defaultValue>1.0</defaultValue>
-		<description>Score multiplier applied to records whose resource type matches the query intent (e.g., drug orders when the query is about medications). Set to 1.0 to disable type boosting (default). Values like 1.2-1.5 provide moderate boosting. Must be between 1.0 and 3.0. Default: 1.0.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.embedding.queryPrefix</property>
-		<defaultValue></defaultValue>
-		<description>Prefix prepended to the user query before embedding. Leave empty for models like all-MiniLM-L6-v2 that were not trained with instruction prefixes. Set to "search_query: " or "Represent this sentence for searching relevant passages: " for models that support instruction-aware queries (e.g., BGE). Default: empty.</description>
+		<description>Number of top results to request from querystore.searchByPatient when chartsearchai.querystore.enabled and chartsearchai.embedding.preFilter are both true, used to build the LLM focus hint. Default: 30.</description>
 	</globalProperty>
 
 	<globalProperty>
 		<property>chartsearchai.embedding.maxSequenceLength</property>
 		<defaultValue>256</defaultValue>
 		<description>Maximum WordPiece token sequence length for embedding input. Increase when using models that support longer contexts (e.g., 512 for BGE models). Must be between 32 and 8192. Default: 256.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.embedding.minScoreGap</property>
-		<defaultValue>0.10</defaultValue>
-		<description>Minimum absolute gap between consecutive similarity scores required for the adaptive cutoff detector to trigger. Prevents premature cutting when a relatively large gap (compared to a tight cluster's running average) is still small in absolute terms. Only applies when gap detection is active via chartsearchai.embedding.scoreGapMultiplier. Default: 0.10.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.embedding.gapValidationCosineThreshold</property>
-		<defaultValue>0.47</defaultValue>
-		<description>Cosine similarity threshold for validating whether a gap in the score distribution is intra-topic (e.g. different vital sign types in the same broad category) or inter-topic (a real relevance boundary). When the average cosine between records just above and below the gap meets or exceeds this threshold, the gap is considered intra-topic and the second-pass cut is skipped. Lower values are more permissive (more gaps treated as intra-topic); higher values are more aggressive at cutting. Must be between 0 and 1. Default: 0.47.</description>
 	</globalProperty>
 
 	<globalProperty>

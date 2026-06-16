@@ -142,20 +142,20 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 	}
 
 	@Test
-	public void warmup_shouldSkipAllSideEffects_whenPreFilterEnabled() {
-		// preFilter is the sole chart-byte-stability gate after the Decision 15 dispatch
-		// change — when on, chart bytes vary per question regardless of whether querystore
-		// is wired, so warmup primes a prefix no real query will reuse. The companion
-		// _whenQuerystoreEnabledAndPreFilterDisabled test above locks the inverse claim.
+	public void warmup_shouldFire_whenPreFilterEnabledAndQueryStoreDisabled() {
+		// Post-#51: with querystore disabled, buildChart serializes the full patient chart unranked
+		// regardless of preFilter (the legacy inline-filtering path that once varied per question
+		// was removed). So this config now produces a stable chart prefix and warmup must fire —
+		// pre-#51 this was the one mode where warmup was correctly skipped.
 		strategy.usePreFilterStub = true;
+		service.queryStoreEnabledStub = false;
 
 		service.warmup(patient(1));
 
-		assertFalse(strategy.buildChartCalled,
-				"with preFilter on, chart-build must be skipped — chart bytes vary per question");
-		assertFalse(provider.warmupCalled,
-				"with preFilter on, provider.warmup must NOT fire — the regression a refactor "
-				+ "that bypasses shouldRunWarmup would re-introduce");
+		assertTrue(strategy.buildChartCalled,
+				"querystore-disabled now serializes the full chart unranked; warmup must build it");
+		assertTrue(provider.warmupCalled,
+				"querystore-disabled produces a stable chart prefix post-#51; provider.warmup must fire");
 	}
 
 	// ---- query-path KV cache scope (same chart-stability gate as warmup) ----
@@ -183,14 +183,15 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 	}
 
 	@Test
-	public void kvCacheScopeFor_returnsNull_whenChartPrefixVariesPerQuery() {
-		// preFilter on + querystore off => the record set varies per question => a per-patient KV
-		// entry would never match the next query, so the engine must do no disk KV work (null scope).
+	public void kvCacheScopeFor_returnsPatientUuid_whenPreFilterOnAndQueryStoreDisabled() {
+		// Post-#51: querystore disabled serializes the full chart unranked regardless of preFilter,
+		// so the prefix is question-independent and a per-patient KV entry matches the next query.
+		// Pre-#51 this returned null because the legacy inline-filtering record set varied per query.
 		strategy.usePreFilterStub = true;
 		service.queryStoreEnabledStub = false;
 
-		assertNull(service.kvCacheScopeFor(patient(1)),
-				"an unstable chart prefix must yield a null scope so the query path skips disk KV");
+		assertEquals("uuid-1", service.kvCacheScopeFor(patient(1)),
+				"querystore-disabled now yields a stable chart prefix; query-path KV must scope to the UUID");
 	}
 
 	@Test

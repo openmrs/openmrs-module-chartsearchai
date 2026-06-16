@@ -53,23 +53,6 @@ public class ChartSearchAiUtilsTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void usesLuceneIndex_shouldReturnTrueForLuceneAndHybrid() {
-		assertTrue(ChartSearchAiUtils.usesLuceneIndex("lucene"));
-		assertTrue(ChartSearchAiUtils.usesLuceneIndex("LUCENE"));
-		assertTrue(ChartSearchAiUtils.usesLuceneIndex("hybrid"));
-		assertTrue(ChartSearchAiUtils.usesLuceneIndex("HYBRID"));
-		assertTrue(ChartSearchAiUtils.usesLuceneIndex("  hybrid  "));
-	}
-
-	@Test
-	public void usesLuceneIndex_shouldReturnFalseForOtherPipelines() {
-		assertFalse(ChartSearchAiUtils.usesLuceneIndex("embedding"));
-		assertFalse(ChartSearchAiUtils.usesLuceneIndex("elasticsearch"));
-		assertFalse(ChartSearchAiUtils.usesLuceneIndex(""));
-		assertFalse(ChartSearchAiUtils.usesLuceneIndex(null));
-	}
-
-	@Test
 	public void resolveModelPath_shouldResolveValidRelativePathWhenFileExists() throws IOException {
 		String appDataDir = OpenmrsUtil.getApplicationDataDirectory();
 		File subDir = new File(appDataDir, "chartsearchai");
@@ -143,11 +126,10 @@ public class ChartSearchAiUtilsTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void buildPrefixedText_threeArg_shouldMatch_twoArgOnHintInjectedBody() {
-		// Invariant the EmbeddingIndexer relies on: embedding (computed
-		// from hint-injected body via 2-arg buildPrefixedText) and stored
-		// text_content (hint-injected body) are referentially consistent —
-		// keyword scoring re-prefixes text_content and gets the same
-		// string the embedding was computed from.
+		// Invariant: the 3-arg buildPrefixedText (resourceType + body + hints)
+		// produces the same string as the 2-arg form applied to the
+		// hint-injected body, so any consumer that re-prefixes a stored
+		// hint-injected body gets back the exact string originally built.
 		String body = "Finding — Pulse: 72";
 		java.util.List<String> hints = Arrays.asList("Vital signs");
 		String hintInjected = ChartSearchAiUtils.injectCategoryHints(body, hints);

@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -19,7 +18,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * Unit tests for {@link LlmInferenceService#shouldRunWarmup}, the pure-logic
- * decision for whether the current pipeline mode produces a chart prefix that
+ * decision for whether the current retrieval mode produces a chart prefix that
  * warmup can usefully prime.
  *
  * <p>The helper only decides chart-byte-stability semantics. The operational
@@ -28,19 +27,20 @@ import org.junit.jupiter.params.provider.CsvSource;
  * circuit before the GP-reading gates this helper decides on. The call-site
  * wiring is locked by {@link LlmInferenceServiceWarmupIntegrationTest}.
  *
- * <p>Focus-hint dispatch update: with the focus-hint contract,
- * {@code preFilter=true, queryStore=true} now produces a stable chart prefix
- * (full chart) plus a small trailing focus hint, so warmup is viable there too.
- * The single remaining unstable mode is preFilter+legacy (no querystore).
+ * <p>Post-#51: the legacy embedding/Lucene/Elasticsearch pipelines that once
+ * produced a per-query chart prefix (preFilter=true without querystore) were
+ * removed, so every retrieval mode now produces a question-independent chart
+ * prefix and warmup is viable in all of them.
  */
 public class LlmInferenceServiceWarmupTest {
 
 	@Test
-	public void shouldRunWarmup_shouldReturnFalse_whenPreFilterEnabledWithoutQueryStore() {
-		// Legacy preFilter dispatch (embedding/lucene/elasticsearch, no querystore) still picks
-		// question-dependent records inline. Chart varies per query → warmup can't help.
-		assertFalse(LlmInferenceService.shouldRunWarmup(true, false),
-				"preFilter without querystore goes through the legacy filter pipeline; chart bytes vary");
+	public void shouldRunWarmup_shouldReturnTrue_whenPreFilterEnabledWithoutQueryStore() {
+		// querystore off (any preFilter): buildChart now returns chartSerializer.serialize(patient)
+		// — the full chart, byte-identical across questions. The legacy inline-filtering path that
+		// once made this vary per query was removed in #51, so warmup is now viable here too.
+		assertTrue(LlmInferenceService.shouldRunWarmup(true, false),
+				"querystore-disabled now serializes the full chart unranked; chart bytes are stable per patient");
 	}
 
 	@Test
@@ -73,22 +73,22 @@ public class LlmInferenceServiceWarmupTest {
 	}
 
 	/**
-	 * Exhaustive truth table — all 2² = 4 combinations. Expected =
-	 * {@code !preFilterEnabled || queryStoreEnabled}; the only mode that still produces
-	 * question-dependent chart bytes is {@code preFilter=true, queryStore=false} (the
-	 * legacy embedding/lucene/elasticsearch dispatch).
+	 * Exhaustive truth table — all 2² = 4 combinations. Every retrieval mode produces a
+	 * question-independent chart prefix post-#51 (the legacy inline-filtering dispatch that
+	 * once varied for {@code preFilter=true, queryStore=false} was removed), so warmup is
+	 * always viable.
 	 */
 	@ParameterizedTest(name = "[{index}] preFilter={0} queryStore={1} → {2}")
 	@CsvSource({
-			"false, false, true",   // full-chart, legacy serializer — original happy path
-			"false, true,  true",   // full-chart via Decision 15 getPatientChart
-			"true,  false, false",  // legacy preFilter dispatch — chart varies per query
-			"true,  true,  true",   // focus-hint preFilter — chart is full + stable, hint at end
+			"false, false, true",   // querystore off, full-chart serialize — original happy path
+			"false, true,  true",   // querystore on, full-chart via Decision 15 getPatientChart
+			"true,  false, true",   // querystore off, full-chart serialize (legacy filtering removed)
+			"true,  true,  true",   // querystore on, focus-hint preFilter — chart full + stable, hint at end
 	})
 	public void shouldRunWarmup_exhaustiveTruthTable(boolean preFilterEnabled,
 			boolean queryStoreEnabled, boolean expected) {
 		assertEquals(expected,
 				LlmInferenceService.shouldRunWarmup(preFilterEnabled, queryStoreEnabled),
-				"truth-table row failed; expected = !preFilter || queryStore");
+				"truth-table row failed; every retrieval mode is warmup-viable post-#51");
 	}
 }

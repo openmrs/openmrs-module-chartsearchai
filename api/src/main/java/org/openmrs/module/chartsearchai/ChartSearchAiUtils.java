@@ -14,8 +14,6 @@ import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.COHERENCE_
 import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.COHERENCE_REFERENCE_N;
 import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.COHERENCE_SAME_TOPIC_FLOOR;
 import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.GP_QUERYSTORE_ENABLED;
-import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.PIPELINE_HYBRID;
-import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.PIPELINE_LUCENE;
 import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY;
 import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.RESOURCE_TYPE_CONDITION;
 import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.RESOURCE_TYPE_DIAGNOSIS;
@@ -177,9 +175,6 @@ public class ChartSearchAiUtils {
 	 * the original body by scanning for the first occurrence of a known
 	 * record-body pattern (em-dash for Obs, "Condition:", "Diagnosis:",
 	 * etc.) and taking the " / " boundary just before it.
-	 *
-	 * <p>Used by {@link org.openmrs.module.chartsearchai.embedding.ModelNoiseProfile}
-	 * to compute stable noise statistics unaffected by enrichment.</p>
 	 *
 	 * @param text the potentially hint-enriched text
 	 * @return the original body without hint prefixes, or the input
@@ -467,26 +462,12 @@ public class ChartSearchAiUtils {
 		return keep;
 	}
 
-	/**
-	 * Returns true if the given pipeline value uses a Lucene index
-	 * (either the pure Lucene pipeline or the hybrid pipeline that
-	 * combines Lucene BM25 with embedding kNN).
-	 */
-	public static boolean usesLuceneIndex(String pipeline) {
-		if (pipeline == null) {
-			return false;
-		}
-		String trimmed = pipeline.trim();
-		return PIPELINE_LUCENE.equalsIgnoreCase(trimmed)
-				|| PIPELINE_HYBRID.equalsIgnoreCase(trimmed);
-	}
-
 	public static boolean isQueryStoreEnabled() {
 		// config.xml defaults this GP to "true" (querystore is the default, required backend). The
 		// "false" fallback here is deliberately conservative for the rare GP-absent case (the row is
-		// normally inserted at module install): when the stored value is unknown, prefer the legacy
-		// in-module path that still exists. Flip this to "true" (or drop the method) once Phase 2
-		// removes the legacy fallback.
+		// normally inserted at module install): when the stored value is unknown, the chart builder
+		// serializes the full patient chart unranked. The legacy embedding/Lucene/ES retrieval
+		// pipeline this toggle once switched between was removed in the querystore migration (#51).
 		String value = org.openmrs.api.context.Context.getAdministrationService()
 				.getGlobalProperty(GP_QUERYSTORE_ENABLED, "false");
 		return "true".equalsIgnoreCase(value.trim());

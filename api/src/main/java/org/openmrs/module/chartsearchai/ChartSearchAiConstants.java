@@ -31,30 +31,6 @@ public class ChartSearchAiConstants {
 
 	public static final String GP_EMBEDDING_VOCAB_FILE_PATH = "chartsearchai.embedding.vocabFilePath";
 
-	public static final String GP_EMBEDDING_TOP_K = "chartsearchai.embedding.topK";
-
-	public static final int DEFAULT_RETRIEVAL_TOP_K = 10;
-
-	public static final String GP_EMBEDDING_SIMILARITY_RATIO = "chartsearchai.embedding.similarityRatio";
-
-	public static final double DEFAULT_SIMILARITY_RATIO = 0.80;
-
-	public static final String GP_EMBEDDING_SCORE_GAP_MULTIPLIER = "chartsearchai.embedding.scoreGapMultiplier";
-
-	public static final double DEFAULT_SCORE_GAP_MULTIPLIER = 2.5;
-
-	public static final String GP_EMBEDDING_KEYWORD_WEIGHT = "chartsearchai.embedding.keywordWeight";
-
-	public static final double DEFAULT_KEYWORD_WEIGHT = 0.3;
-
-	public static final String GP_EMBEDDING_TYPE_BOOST_FACTOR = "chartsearchai.embedding.typeBoostFactor";
-
-	public static final double DEFAULT_TYPE_BOOST_FACTOR = 1.0;
-
-	public static final String GP_EMBEDDING_QUERY_PREFIX = "chartsearchai.embedding.queryPrefix";
-
-	public static final String DEFAULT_QUERY_EMBEDDING_PREFIX = "";
-
 	public static final String GP_EMBEDDING_MAX_SEQUENCE_LENGTH = "chartsearchai.embedding.maxSequenceLength";
 
 	public static final int DEFAULT_MAX_SEQUENCE_LENGTH = 512;
@@ -74,17 +50,6 @@ public class ChartSearchAiConstants {
 	 * activate. Below this threshold, the score distribution has too
 	 * few data points for the z-score to be statistically meaningful. */
 	public static final int MIN_RECORDS_FOR_Z_SCORE = 30;
-
-	public static final String GP_EMBEDDING_MIN_SCORE_GAP = "chartsearchai.embedding.minScoreGap";
-
-	/**
-	 * Minimum absolute gap between consecutive scores required for the adaptive
-	 * cutoff detector to trigger. Prevents premature cutting when a relatively
-	 * large gap (compared to a tight cluster's running average) is still small
-	 * in absolute terms — e.g. a 0.07 gap inside a cluster that spans from
-	 * 0.60 down to 0.30 should not be treated as a relevance boundary.
-	 */
-	public static final double DEFAULT_MIN_SCORE_GAP = 0.10;
 
 	/** Absolute coherence floor below which a candidate is a true outlier.
 	 * If a candidate flagged for removal by the coherence gap detector has
@@ -172,68 +137,13 @@ public class ChartSearchAiConstants {
 	 * is not called for n&lt;4 (too few pairwise comparisons). */
 	public static final int COHERENCE_REFERENCE_N = 5;
 
-
-	public static final String GP_EMBEDDING_GAP_VALIDATION_COSINE_THRESHOLD =
-			"chartsearchai.embedding.gapValidationCosineThreshold";
-
-	/** Cosine similarity threshold for validating whether a gap in the
-	 * score distribution is intra-topic (records on both sides belong to
-	 * the same broad topic, e.g. different vital sign types) or
-	 * inter-topic (a real relevance boundary). When the average cosine
-	 * between the records just above and below the gap meets or exceeds
-	 * this threshold, the gap is considered intra-topic and the second-pass
-	 * cut is skipped. Value of 0.47 was determined empirically: medical
-	 * records within the same broad category (all vitals) typically have
-	 * inter-record cosine >= 0.47, while cross-category pairs (vital vs
-	 * encounter note or condition) are typically below. */
-	public static final double DEFAULT_GAP_VALIDATION_COSINE_THRESHOLD = 0.47;
-
-	public static final String GP_RETRIEVAL_PIPELINE = "chartsearchai.retrieval.pipeline";
-
-	public static final String PIPELINE_EMBEDDING = "embedding";
-
-	public static final String PIPELINE_LUCENE = "lucene";
-
-	public static final String PIPELINE_ELASTICSEARCH = "elasticsearch";
-
-	public static final String PIPELINE_HYBRID = "hybrid";
-
 	public static final String GP_QUERYSTORE_ENABLED = "chartsearchai.querystore.enabled";
 
-	/** Separate from {@link #GP_EMBEDDING_TOP_K} so the querystore path
-	 *  can be tuned independently of the legacy pipelines. */
+	/** Number of top results the querystore retrieval path requests for the
+	 *  focus-hint pass; tunes that path independently of any default. */
 	public static final String GP_QUERYSTORE_TOP_K = "chartsearchai.querystore.topK";
 
 	public static final int DEFAULT_QUERYSTORE_TOP_K = 30;
-
-	/** Fetch multiplier for the Elasticsearch pipeline. The ES pipeline
-	 * requests {@code topK * ES_FETCH_MULTIPLIER} results from the search
-	 * engine, then passes all of them through the filter pipeline. This
-	 * gives keyword rescue enough candidates to find all matching records
-	 * — without it, RRF's fixed window would limit keyword rescue to
-	 * only the top-K results, missing records that the embedding pipeline
-	 * (which scores ALL records) would find. */
-	public static final int ES_FETCH_MULTIPLIER = 10;
-
-	/** RRF window size — number of top results from each retriever
-	 * considered during rank fusion. Matches the Elasticsearch pipeline's
-	 * setting so both pipelines produce comparable results. */
-	public static final int RRF_RANK_WINDOW_SIZE = 100;
-
-	/** RRF rank constant (k) — controls how quickly lower-ranked results
-	 * lose influence: score = 1 / (k + rank). Higher k produces more
-	 * uniform weighting across ranks. */
-	public static final int RRF_RANK_CONSTANT = 60;
-
-	/** Minimum cosine similarity for kNN results to be considered relevant.
-	 * Uses the same value as {@link #ABSOLUTE_SIMILARITY_FLOOR}
-	 * so both pipelines use the same relevance bar. */
-	public static final double KNN_MIN_SIMILARITY = ABSOLUTE_SIMILARITY_FLOOR;
-
-	/** Z-score threshold for the kNN fallback gate. When BM25 returns no
-	 * keyword matches, kNN results must score this many standard deviations
-	 * above the mean of all patient scores to be considered relevant. */
-	public static final double KNN_FALLBACK_Z_SCORE = 2.5;
 
 	public static final String GP_AUDIT_LOG_RETENTION_DAYS = "chartsearchai.auditLogRetentionDays";
 

@@ -35,8 +35,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Loads and serializes all clinical records for a patient. Provides a single point for
- * record iteration logic shared by {@code PatientChartSerializer} and
- * {@code EmbeddingIndexer}.
+ * record iteration logic used by {@code PatientChartSerializer}.
  *
  * <p>Each record's {@code date} field is the <b>record timestamp</b> — the
  * most clinically relevant date for sorting and citation purposes (e.g.

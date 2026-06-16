@@ -21,32 +21,24 @@ import org.openmrs.MedicationDispense;
 import org.openmrs.Order;
 import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
-import org.openmrs.api.context.Context;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.aop.AfterReturningAdvice;
 
 /**
- * AOP advice that, when conditions, diagnoses, allergies, orders, programs, medication dispenses,
- * or patient demographics ({@code savePatient}) are modified outside of encounter saves,
- * invalidates the patient's cached answers and (when embedding indexing is active) triggers a full
- * patient re-index. Also handles patient merges by invalidating both patients' cached answers and,
- * when indexing is active, re-indexing the preferred patient and deleting the non-preferred
- * patient's embeddings. Complements the {@link EncounterIndexingAdvice} which handles the more
- * common encounter path.
+ * AOP advice that invalidates a patient's cached answers when their conditions, diagnoses,
+ * allergies, orders, programs, medication dispenses, or demographics ({@code savePatient}) change
+ * outside of encounter saves, and on patient merges (both the preferred and non-preferred patient).
  *
- * <p>Embedding indexing runs only when {@code chartsearchai.embedding.preFilter} is {@code true}
- * and querystore is not the active backend. Answer-cache invalidation is independent of both — it
- * runs whenever the cache is on ({@code chartsearchai.cacheTtlMinutes > 0}), regardless of
- * retrieval backend, so an edit never leaves a stale cached answer. See {@link IndexingHelper}.</p>
+ * <p>Backend-independent: it runs whenever the answer cache is on
+ * ({@code chartsearchai.cacheTtlMinutes > 0}) so an edit never leaves a stale cached answer.
+ * Retrieval-index freshness is owned by querystore (via core's #6084 service events), not by
+ * chartsearchai — this advice no longer triggers any embedding/Lucene/Elasticsearch re-index.
+ * Complements {@link EncounterIndexingAdvice} (the encounter path).
  *
  * <p>Registered in config.xml as advice on {@code ConditionService}, {@code DiagnosisService},
- * {@code PatientService}, {@code OrderService}, {@code ProgramWorkflowService},
- * and {@code MedicationDispenseService}.</p>
+ * {@code PatientService}, {@code OrderService}, {@code ProgramWorkflowService}, and
+ * {@code MedicationDispenseService}.</p>
  */
 public class PatientDataIndexingAdvice implements AfterReturningAdvice {
-
-	private static final Logger log = LoggerFactory.getLogger(PatientDataIndexingAdvice.class);
 
 	private static final Set<String> CONDITION_METHODS = new HashSet<String>(
 			Arrays.asList("saveCondition", "voidCondition", "unvoidCondition", "purgeCondition"));
@@ -72,86 +64,61 @@ public class PatientDataIndexingAdvice implements AfterReturningAdvice {
 	// Patient demographics (age from birthdate, and sex — see PatientChartSerializer) are part of the
 	// serialized chart the LLM cites, so a demographic edit must invalidate cached answers. A
 	// name-only edit over-invalidates harmlessly (the name is not serialized). Scoped to savePatient:
-	// mergePatients is handled separately above, and void/unvoid/purgePatient are rare admin ops on
-	// patients that are not normally queried (and would also mis-trigger a reindex of a gone patient
-	// on the preFilter path) — left to the TTL backstop rather than expanding the shared indexing trigger.
+	// mergePatients is handled separately, and void/unvoid/purgePatient are rare admin ops on patients
+	// that are not normally queried — left to the TTL backstop.
 	private static final Set<String> PATIENT_METHODS = new HashSet<String>(
 			Arrays.asList("savePatient"));
+
+	/** Union of every write method this advice acts on (plus mergePatients), used as the first,
+	 *  cheapest gate. The advisor fires afterReturning on <em>every</em> method of the advised
+	 *  services (ConditionService, OrderService, PatientService, …), including hot reads like
+	 *  {@code getPatient}; this name check lets those skip the answer-cache lookup and patient
+	 *  resolution entirely. Built from the per-type sets so it never diverges from them. */
+	private static final Set<String> ALL_WRITE_METHODS = new HashSet<String>();
+
+	static {
+		ALL_WRITE_METHODS.addAll(CONDITION_METHODS);
+		ALL_WRITE_METHODS.addAll(DIAGNOSIS_METHODS);
+		ALL_WRITE_METHODS.addAll(ALLERGY_METHODS);
+		ALL_WRITE_METHODS.addAll(ORDER_METHODS);
+		ALL_WRITE_METHODS.addAll(PROGRAM_METHODS);
+		ALL_WRITE_METHODS.addAll(MEDICATION_DISPENSE_METHODS);
+		ALL_WRITE_METHODS.addAll(PATIENT_METHODS);
+		ALL_WRITE_METHODS.add("mergePatients");
+	}
 
 	@Override
 	public void afterReturning(Object returnValue, Method method, Object[] args, Object target) {
 		String methodName = method.getName();
-
-		// Indexing is gated by querystore/preFilter; the answer cache must be invalidated on every
-		// write regardless of backend (see IndexingHelper.invalidateAnswerCache). Patient extraction
-		// stays below both checks so the all-off hot path skips the Hibernate proxy resolution
-		// extractPatient can trigger (Condition.getPatient(), Order.getPatient(), etc.).
-		boolean indexingActive = !IndexingHelper.isDisabledByQueryStore()
-				&& IndexingHelper.isPreFilterEnabled();
-		boolean cacheActive = IndexingHelper.isAnswerCacheEnabled();
-		if (!indexingActive && !cacheActive) {
+		// Cheapest gate first: skip reads (the advisor fires on every service method) before the
+		// answer-cache lookup and before any Hibernate proxy resolution extractPatient can trigger
+		// (Condition.getPatient(), Order.getPatient(), etc.).
+		if (!ALL_WRITE_METHODS.contains(methodName)) {
+			return;
+		}
+		if (!IndexingHelper.isAnswerCacheEnabled()) {
 			return;
 		}
 
-		boolean isMerge = "mergePatients".equals(methodName);
-		if (isMerge) {
-			handleMergePatients(args, indexingActive, cacheActive);
+		if ("mergePatients".equals(methodName)) {
+			handleMergePatients(args);
 			return;
 		}
 
 		Patient patient = extractPatient(methodName, args);
-		if (patient == null) {
-			return;
-		}
-
-		if (cacheActive) {
+		if (patient != null) {
 			IndexingHelper.invalidateAnswerCache(patient);
-		}
-
-		if (indexingActive) {
-			try {
-				EmbeddingIndexer indexer = Context.getRegisteredComponent(
-						"embeddingIndexer", EmbeddingIndexer.class);
-				indexer.indexPatient(patient);
-			}
-			catch (Exception e) {
-				log.error("Failed to re-index patient [id={}] after {} call",
-						patient.getPatientId(), methodName, e);
-			}
-
-			IndexingHelper.reindexOtherPipelines(patient);
 		}
 	}
 
-	private void handleMergePatients(Object[] args, boolean indexingActive, boolean cacheActive) {
+	private void handleMergePatients(Object[] args) {
+		// A merge changes the preferred patient's chart and retires the non-preferred one, so any
+		// cached answers for either are now stale.
 		if (args.length < 2 || !(args[0] instanceof Patient) || !(args[1] instanceof Patient)) {
 			return;
 		}
-		Patient preferred = (Patient) args[0];
-		Patient notPreferred = (Patient) args[1];
-
-		// A merge changes the preferred patient's chart and retires the non-preferred one, so any
-		// cached answers for either are now stale.
-		if (cacheActive) {
-			IndexingHelper.invalidateAnswerCache(preferred);
-			IndexingHelper.invalidateAnswerCache(notPreferred);
-		}
-
-		if (indexingActive) {
-			try {
-				EmbeddingIndexer indexer = Context.getRegisteredComponent(
-						"embeddingIndexer", EmbeddingIndexer.class);
-				indexer.indexPatient(preferred);
-				indexer.deletePatientEmbeddings(notPreferred);
-			}
-			catch (Exception e) {
-				log.error("Failed to re-index after mergePatients [preferred={}, notPreferred={}]",
-						preferred.getPatientId(), notPreferred.getPatientId(), e);
-			}
-
-			IndexingHelper.reindexOtherPipelines(preferred);
-			IndexingHelper.deleteOtherPipelineIndexes(notPreferred);
-		}
+		IndexingHelper.invalidateAnswerCache((Patient) args[0]);
+		IndexingHelper.invalidateAnswerCache((Patient) args[1]);
 	}
 
 	Patient extractPatient(String methodName, Object[] args) {

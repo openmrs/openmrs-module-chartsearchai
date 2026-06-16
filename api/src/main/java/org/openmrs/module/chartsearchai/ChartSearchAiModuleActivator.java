@@ -17,7 +17,6 @@ import org.openmrs.module.BaseModuleActivator;
 import org.openmrs.module.DaemonToken;
 import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.chartsearchai.api.AuditLogPurgeTask;
-import org.openmrs.module.chartsearchai.api.EmbeddingIndexTask;
 import org.openmrs.module.chartsearchai.api.ElasticsearchIndexer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
@@ -32,9 +31,13 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 
 	private static final Logger log = LoggerFactory.getLogger(ChartSearchAiModuleActivator.class);
 
-	private static final String TASK_NAME = "Chart Search AI - Embedding Backfill";
-
 	private static final String PURGE_TASK_NAME = "Chart Search AI - Audit Log Purge";
+
+	/** Name of the scheduled task registered by pre-querystore versions, whose task class
+	 *  ({@code EmbeddingIndexTask}) no longer exists. Removed on startup so upgraded deployments do
+	 *  not retain a TaskDefinition pointing at a deleted class. Package-private so the activator's
+	 *  test references the same literal. */
+	static final String LEGACY_BACKFILL_TASK_NAME = "Chart Search AI - Embedding Backfill";
 
 	private static final long DAILY_INTERVAL_SECONDS = 86400L;
 
@@ -53,7 +56,7 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 	public void started() {
 		log.info("Chart Search AI Module started");
 		validateConfiguration();
-		registerBackfillTask();
+		removeLegacyBackfillTask();
 		registerAuditLogPurgeTask();
 	}
 
@@ -150,31 +153,33 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 		}
 	}
 
-	private void registerBackfillTask() {
+	/**
+	 * Removes the "Chart Search AI - Embedding Backfill" scheduled task left behind by
+	 * pre-querystore versions. Its task class ({@code EmbeddingIndexTask}) was deleted when
+	 * chartsearchai stopped maintaining its own embedding store, so an upgraded deployment would
+	 * otherwise keep a {@link TaskDefinition} pointing at a class that no longer loads. Idempotent:
+	 * a no-op on fresh installs.
+	 */
+	void removeLegacyBackfillTask() {
 		SchedulerService schedulerService = Context.getSchedulerService();
-
-		TaskDefinition existing = schedulerService.getTaskByName(TASK_NAME);
-		if (existing != null) {
-			log.debug("Embedding backfill task already registered");
+		TaskDefinition existing = schedulerService.getTaskByName(LEGACY_BACKFILL_TASK_NAME);
+		if (existing == null) {
 			return;
 		}
-
-		TaskDefinition task = new TaskDefinition();
-		task.setName(TASK_NAME);
-		task.setDescription("Indexes patients that do not yet have embeddings. "
-				+ "Handles initial population when the module is installed on a system "
-				+ "with existing patient data. Only runs when embedding pre-filter is enabled. "
-				+ "Can be disabled from the scheduler UI once backfill is complete.");
-		task.setTaskClass(EmbeddingIndexTask.class.getName());
-		task.setRepeatInterval(0L);
-		task.setStartOnStartup(false);
-
 		try {
-			schedulerService.saveTaskDefinition(task);
-			log.info("Registered embedding backfill task");
+			schedulerService.shutdownTask(existing);
 		}
 		catch (Exception e) {
-			log.error("Failed to register embedding backfill task", e);
+			// A non-running task (the backfill never auto-started) can throw here; deletion below
+			// still proceeds. Logged at debug because it is expected on the common path.
+			log.debug("Legacy backfill task was not running at shutdown", e);
+		}
+		try {
+			schedulerService.deleteTask(existing.getId());
+			log.info("Removed legacy embedding backfill task (its EmbeddingIndexTask class no longer exists)");
+		}
+		catch (Exception e) {
+			log.error("Failed to delete legacy embedding backfill task", e);
 		}
 	}
 

@@ -18,62 +18,39 @@ import org.openmrs.Obs;
 import org.openmrs.Patient;
 import org.openmrs.Person;
 import org.openmrs.api.context.Context;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.aop.AfterReturningAdvice;
 
 /**
- * AOP advice that, when observations are saved, voided, unvoided, or purged directly (outside of
- * an encounter save), invalidates the patient's cached answers and (when embedding indexing is
- * active) triggers a full patient re-index. Cache invalidation is independent of the
- * preFilter/querystore gating that governs indexing — see {@link IndexingHelper}.
+ * AOP advice that invalidates a patient's cached answers when observations are saved, voided,
+ * unvoided, or purged directly (outside of an encounter save).
+ *
+ * <p>Backend-independent: it runs whenever the answer cache is on
+ * ({@code chartsearchai.cacheTtlMinutes > 0}) so an edit never leaves a stale cached answer.
+ * Retrieval-index freshness is owned by querystore (via core's #6084 service events), not by
+ * chartsearchai — this advice no longer triggers any embedding/Lucene/Elasticsearch re-index.
  *
  * <p>Registered in config.xml as advice on {@code org.openmrs.api.ObsService}.</p>
  */
 public class ObsIndexingAdvice implements AfterReturningAdvice {
 
-	private static final Logger log = LoggerFactory.getLogger(ObsIndexingAdvice.class);
-
-	private static final Set<String> REINDEX_METHODS = new HashSet<String>(
+	private static final Set<String> WRITE_METHODS = new HashSet<String>(
 			Arrays.asList("saveObs", "voidObs", "unvoidObs", "purgeObs"));
 
 	@Override
 	public void afterReturning(Object returnValue, Method method, Object[] args, Object target) {
-		if (!REINDEX_METHODS.contains(method.getName())) {
+		if (!WRITE_METHODS.contains(method.getName())) {
 			return;
 		}
-
-		// Indexing is gated by querystore/preFilter; the answer cache must be invalidated on every
-		// write regardless of backend (see IndexingHelper.invalidateAnswerCache). Patient extraction
-		// stays below both checks so the all-off hot path skips Obs.getPerson()'s proxy resolution
-		// and the patient-by-id lookup getPatientFromArgs may otherwise perform.
-		boolean indexingActive = !IndexingHelper.isDisabledByQueryStore()
-				&& IndexingHelper.isPreFilterEnabled();
-		boolean cacheActive = IndexingHelper.isAnswerCacheEnabled();
-		if (!indexingActive && !cacheActive) {
+		// Answer cache off → nothing to do. Checked before resolving the affected patient so the
+		// default cache-off hot path skips Obs.getPerson()'s proxy resolution and the patient-by-id
+		// lookup getPatientFromArgs may otherwise perform.
+		if (!IndexingHelper.isAnswerCacheEnabled()) {
 			return;
 		}
 
 		Patient patient = getPatientFromArgs(returnValue, args);
-		if (patient == null) {
-			return;
-		}
-
-		if (cacheActive) {
+		if (patient != null) {
 			IndexingHelper.invalidateAnswerCache(patient);
-		}
-
-		if (indexingActive) {
-			try {
-				EmbeddingIndexer indexer = Context.getRegisteredComponent(
-						"embeddingIndexer", EmbeddingIndexer.class);
-				indexer.indexPatient(patient);
-			}
-			catch (Exception e) {
-				log.error("Failed to re-index patient after {} call", method.getName(), e);
-			}
-
-			IndexingHelper.reindexOtherPipelines(patient);
 		}
 	}
 

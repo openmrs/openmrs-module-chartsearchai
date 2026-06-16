@@ -68,7 +68,7 @@
 	<globalProperty>
 		<property>chartsearchai.embedding.preFilter</property>
 		<defaultValue>false</defaultValue>
-		<description>When true, uses embedding similarity to pre-filter patient records to the most relevant ones before sending to the LLM. Embeddings are indexed on first patient access and kept up to date automatically. Set to true to enable embedding-based filtering. Default: false — the LLM needs the full chart for negative reasoning ("there are no records of X"), which a similarity pre-filter cannot reliably support.</description>
+		<description>When true, uses embedding similarity to pre-filter patient records to the most relevant ones before sending to the LLM. Embeddings are indexed on first patient access, but chartsearchai no longer refreshes them when the chart changes — for retrieval that stays current with edits, use the querystore-backed path (chartsearchai.querystore.enabled). Set to true to enable embedding-based filtering. Default: false — the LLM needs the full chart for negative reasoning ("there are no records of X"), which a similarity pre-filter cannot reliably support.</description>
 	</globalProperty>
 
 	<globalProperty>
@@ -158,7 +158,7 @@
 	<globalProperty>
 		<property>chartsearchai.querystore.enabled</property>
 		<defaultValue>false</defaultValue>
-		<description>Master switch for the querystore-backed retrieval path. When true, chartsearchai delegates retrieval to openmrs-module-querystore — getPatientChart when chartsearchai.embedding.preFilter is false (the recommended shape for full-chart LLM reasoning), or searchByPatient with top-K when preFilter is true — and bypasses chartsearchai's own embedding pipelines. Requires the querystore module to be installed; if absent, the flag-on path degrades to an empty chart. Also suppresses chartsearchai's AOP indexing and the EmbeddingIndexTask backfill to avoid double-indexing. Default: false. NOTE — flipping this from false to true does not refresh pre-existing Lucene/Elasticsearch/MySQL embedding indices, which then stop receiving updates; flipping back exposes a stale snapshot. Treat the off→on transition as one-way for any deployment that previously ran the embedding pipelines, or re-run EmbeddingIndexTask after disabling. See chartsearchai.querystore.topK for the result cap.</description>
+		<description>Master switch for the querystore-backed retrieval path. When true, chartsearchai delegates retrieval to openmrs-module-querystore — getPatientChart when chartsearchai.embedding.preFilter is false (the recommended shape for full-chart LLM reasoning), or searchByPatient with top-K when preFilter is true — and bypasses chartsearchai's own embedding pipelines. Requires the querystore module to be installed; if absent, the flag-on path degrades to an empty chart. Default: false. NOTE — chartsearchai no longer maintains its own embedding/Lucene/Elasticsearch indices on data changes (querystore owns retrieval-index freshness via core events). Any pre-existing legacy indices from older versions are no longer kept up to date, so the legacy preFilter pipelines (used only when this flag is false) operate on a progressively stale snapshot. See chartsearchai.querystore.topK for the result cap.</description>
 	</globalProperty>
 
 	<globalProperty>

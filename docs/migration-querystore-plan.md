@@ -433,8 +433,26 @@ of `QueryPreprocessor`, and the bundled ONNX model resource — **after** decidi
 `CitationGroundingVerifier` keeps chartsearchai's embedder as a grounding fallback (it currently
 does; that fallback is the only remaining reason ONNX stays). Big artifact-size win.
 
-**Phase 4 — Drop the embedding store.** Remove `ChartEmbedding`, its Hibernate
-mapping, the embeddings liquibase table, and the embedding DAO methods.
+**Phase 4 — Drop the embedding store. (✅ DONE.)** The `ChartEmbedding` store went fully dead
+once Phase 2 deleted its only readers/writers (the indexers + retrieval pipeline). Removed:
+- `model/ChartEmbedding.java` + `ChartEmbedding.hbm.xml`; the `ChartEmbedding.hbm.xml` entry in
+  `config.xml` `<mappingFiles>` **and** in the test `chartsearchai-hibernate.cfg.xml` (the latter
+  would otherwise fail the test Hibernate session factory — caught before the build).
+- The 6 dead embedding methods from `ChartSearchAiDAO` + `HibernateChartSearchAiDAO`
+  (`saveChartEmbedding`, `getByResource`, `getByPatient`, `deleteByPatient`,
+  `replacePatientEmbeddings`, `getIndexedPatientIds`) — all had zero callers post-Phase-2.
+- The `chartsearchai-001` liquibase changeset (the `chartsearchai_embedding` table + FK/index/unique
+  constraint). Deleted outright rather than adding a `dropTable` (no production deployments; the
+  module is unreleased `1.0.0-SNAPSHOT`, matching the liquibase.xml pre-production "consolidate, don't
+  append" header policy). Existing dev DBs keep a harmless orphaned empty table; liquibase doesn't
+  error on a removed changeset.
+- Tests: deleted `ChartEmbeddingTest`; pared `HibernateChartSearchAiDAOTest` 20→11 (removed the 9
+  embedding tests + `createEmbedding` helper + UUID constants, kept all audit/query-count tests).
+- Kept the audit-log store entirely (`ChartSearchAuditLog` + `chartsearchai-002`).
+- **Verified**: `mvn -pl api test` → 562 run, 0 failures, 35 skipped (the context-sensitive
+  `HibernateChartSearchAiDAOTest` brings up a real Hibernate session factory without the
+  `ChartEmbedding` mapping); clean `mvn install` packages the `.omod` with no `ChartEmbedding`
+  class/hbm and no embedding-table reference in the bundled config.xml/liquibase.xml.
 
 **Phase 5 — Cleanup.** Relocate `SerializedRecord`; remove `PatientRecordLoader`
 + all `*TextSerializer`s; trim `PatientChartSerializer` to the kept rendering

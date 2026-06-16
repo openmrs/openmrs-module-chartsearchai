@@ -14,30 +14,13 @@ import java.util.List;
 
 import org.openmrs.Patient;
 import org.openmrs.User;
-import org.openmrs.module.chartsearchai.model.ChartEmbedding;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 
 public interface ChartSearchAiDAO {
 
-	ChartEmbedding saveChartEmbedding(ChartEmbedding chartEmbedding);
-
-	ChartEmbedding getByResource(String resourceType, String resourceUuid);
-
-	List<ChartEmbedding> getByPatient(Patient patient);
-
-	void deleteByPatient(Patient patient);
-
-	/**
-	 * Atomically replaces all embeddings for a patient: deletes existing
-	 * embeddings and inserts the new ones within a single transaction.
-	 */
-	void replacePatientEmbeddings(Patient patient, List<ChartEmbedding> embeddings);
-
 	ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog);
 
 	ChartSearchAuditLog getAuditLog(Integer auditLogId);
-
-	List<Integer> getIndexedPatientIds();
 
 	List<ChartSearchAuditLog> getAuditLogs(Patient patient, User user, Date fromDate, Date toDate,
 			Integer startIndex, Integer limit);

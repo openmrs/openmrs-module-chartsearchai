@@ -17,65 +17,15 @@ import org.hibernate.SessionFactory;
 import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
-import org.openmrs.module.chartsearchai.model.ChartEmbedding;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 
 	@Autowired
 	private SessionFactory sessionFactory;
-
-	@Override
-	public ChartEmbedding saveChartEmbedding(ChartEmbedding chartEmbedding) {
-		sessionFactory.getCurrentSession().saveOrUpdate(chartEmbedding);
-		return chartEmbedding;
-	}
-
-	@Override
-	@SuppressWarnings("unchecked")
-	public ChartEmbedding getByResource(String resourceType, String resourceUuid) {
-		List<ChartEmbedding> results = sessionFactory.getCurrentSession()
-				.createQuery("from ChartEmbedding where resourceType = :type and resourceUuid = :uuid")
-				.setParameter("type", resourceType)
-				.setParameter("uuid", resourceUuid)
-				.list();
-		return results.isEmpty() ? null : results.get(0);
-	}
-
-	@Override
-	@SuppressWarnings("unchecked")
-	public List<ChartEmbedding> getByPatient(Patient patient) {
-		return sessionFactory.getCurrentSession()
-				.createQuery("from ChartEmbedding where patient = :patient order by dateCreated desc")
-				.setParameter("patient", patient)
-				.list();
-	}
-
-	@Override
-	public void deleteByPatient(Patient patient) {
-		sessionFactory.getCurrentSession()
-				.createQuery("delete from ChartEmbedding where patient = :patient")
-				.setParameter("patient", patient)
-				.executeUpdate();
-	}
-
-	@Override
-	@Transactional
-	public void replacePatientEmbeddings(Patient patient, List<ChartEmbedding> embeddings) {
-		deleteByPatient(patient);
-		int batchSize = 50;
-		for (int i = 0; i < embeddings.size(); i++) {
-			sessionFactory.getCurrentSession().saveOrUpdate(embeddings.get(i));
-			if ((i + 1) % batchSize == 0) {
-				sessionFactory.getCurrentSession().flush();
-				sessionFactory.getCurrentSession().clear();
-			}
-		}
-	}
 
 	@Override
 	public ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog) {
@@ -87,14 +37,6 @@ public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 	public ChartSearchAuditLog getAuditLog(Integer auditLogId) {
 		return (ChartSearchAuditLog) sessionFactory.getCurrentSession()
 				.get(ChartSearchAuditLog.class, auditLogId);
-	}
-
-	@Override
-	@SuppressWarnings("unchecked")
-	public List<Integer> getIndexedPatientIds() {
-		return sessionFactory.getCurrentSession()
-				.createQuery("select distinct patient.patientId from ChartEmbedding")
-				.list();
 	}
 
 	@Override

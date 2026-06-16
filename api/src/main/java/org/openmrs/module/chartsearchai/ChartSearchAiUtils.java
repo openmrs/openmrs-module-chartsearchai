@@ -139,12 +139,11 @@ public class ChartSearchAiUtils {
 
 	/**
 	 * Prepends category hints to the body text without adding a structural
-	 * prefix. Used to enrich {@code ChartEmbedding.textContent} so downstream
-	 * consumers (keyword scoring, concept-name extraction) see the same
-	 * hint-augmented text that was used for embedding. The 2-arg
+	 * prefix. Used to enrich a record's serialized text so any consumer that
+	 * re-prefixes the hint-augmented body gets a consistent string. The 2-arg
 	 * {@link #buildPrefixedText(String, String)} called on hint-injected body
 	 * produces the same prefixed text as the 3-arg overload called on the
-	 * raw body with hints — so embeddings and keyword text stay consistent.
+	 * raw body with hints.
 	 *
 	 * <p>Empty or null hints return the body unchanged.</p>
 	 *

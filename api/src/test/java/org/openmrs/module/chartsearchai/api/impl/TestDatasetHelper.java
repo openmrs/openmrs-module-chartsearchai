@@ -787,11 +787,11 @@ final class TestDatasetHelper {
 
 	/**
 	 * Strips the dataset-format prefix and optional date to recover the raw
-	 * serializer output that production stores as
-	 * {@link org.openmrs.module.chartsearchai.model.ChartEmbedding#getTextContent()}.
+	 * serializer output (the record's {@code text} as produced by the
+	 * {@code *TextSerializer}s).
 	 *
 	 * <p>Dataset format: {@code "Clinical observation: (2025-10-30) Test — Weight (kg): 94.0 kg"}
-	 * <br>Production textContent: {@code "Test — Weight (kg): 94.0 kg"}
+	 * <br>Production text: {@code "Test — Weight (kg): 94.0 kg"}
 	 */
 	static String stripDatasetPrefixAndDate(String datasetText) {
 		String text = datasetText;

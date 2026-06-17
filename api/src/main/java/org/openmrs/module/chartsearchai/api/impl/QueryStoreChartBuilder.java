@@ -20,7 +20,7 @@ import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
-import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord;
+import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.openmrs.module.querystore.api.QueryStoreService;
 import org.openmrs.module.querystore.model.QueryDocument;
@@ -108,13 +108,12 @@ class QueryStoreChartBuilder {
 			// LinkageError covers NoClassDefFoundError when the querystore-api jar
 			// is absent at runtime — the QueryStoreService.class literal forces
 			// JVM linkage, which APIException doesn't catch.
-			// WARN (not INFO): default org.openmrs.* log level is WARN, and a misconfigured
-			// querystore.enabled=true silently produces empty-chart LLM responses if this
-			// fires. Operators need this to surface, with an actionable next step.
-			log.warn("chartsearchai.querystore.enabled=true but QueryStoreService is unavailable — "
-					+ "querystore is a required module, so this indicates a querystore startup failure; "
-					+ "check the querystore module, or set chartsearchai.querystore.enabled=false to serve "
-					+ "the full patient chart unranked instead of an empty one. Returning empty chart.");
+			// WARN (not INFO): default org.openmrs.* log level is WARN, and an unavailable
+			// QueryStoreService silently produces empty-chart LLM responses if this fires.
+			// Operators need this to surface, with an actionable next step.
+			log.warn("QueryStoreService is unavailable — querystore is a required module, so this "
+					+ "indicates a querystore startup failure; check the querystore module. "
+					+ "Returning empty chart.");
 			log.info("[timing] querystoreBuild patient={} mode={} hits=0 focusHits=0 rpcMs=0 serializeMs=0 totalMs={} outcome=unavailable",
 					patient.getPatientId(), mode, System.currentTimeMillis() - buildStart);
 			return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());

@@ -136,19 +136,13 @@
 	<globalProperty>
 		<property>chartsearchai.warmupEnabled</property>
 		<defaultValue>true</defaultValue>
-		<description>When true (default), opening a patient chart triggers a background warmup that primes the LLM prompt cache (system prompt + serialized chart) so the first AI query on that patient skips full prefill cost. The warmup serializes the chart and sends an empty-query prefill request to the local llama-server. Has no effect when chartsearchai.llm.engine is "remote" (remote providers manage their own caching) or when chartsearchai.embedding.preFilter is true (the prompt prefix varies per query, so a chart-only warmup cannot be reused). Set to false to disable.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.querystore.enabled</property>
-		<defaultValue>true</defaultValue>
-		<description>Master switch for the querystore-backed retrieval path. When true (the default), chartsearchai delegates retrieval to openmrs-module-querystore — getPatientChart when chartsearchai.embedding.preFilter is false (the recommended shape for full-chart LLM reasoning), or additionally searchByPatient with top-K to compute a focus hint when preFilter is true. querystore is a required module (see require_modules), so it is always present. Set to false only to skip retrieval entirely and send the full patient chart unranked (no focus hint); chartsearchai's own embedding/Lucene/Elasticsearch pipelines were removed in the querystore migration. See chartsearchai.querystore.topK for the focus-hint result cap.</description>
+		<description>When true (default), opening a patient chart triggers a background warmup that primes the LLM prompt cache (system prompt + serialized chart) so the first AI query on that patient skips full prefill cost. The warmup serializes the chart and sends an empty-query prefill request to the local llama-server. Warmup is viable in every querystore retrieval mode (with chartsearchai.embedding.preFilter on, the focus hint is a small trailing payload that doesn't break the chart-prefix cache match). Has no effect when chartsearchai.llm.engine is "remote" (remote providers manage their own caching). Set to false to disable.</description>
 	</globalProperty>
 
 	<globalProperty>
 		<property>chartsearchai.querystore.topK</property>
 		<defaultValue>30</defaultValue>
-		<description>Number of top results to request from querystore.searchByPatient when chartsearchai.querystore.enabled and chartsearchai.embedding.preFilter are both true, used to build the LLM focus hint. Default: 30.</description>
+		<description>Number of top results to request from querystore.searchByPatient when chartsearchai.embedding.preFilter is true, used to build the LLM focus hint. Default: 30.</description>
 	</globalProperty>
 
 	<globalProperty>

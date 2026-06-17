@@ -16,10 +16,8 @@ import java.util.List;
 import java.util.Set;
 
 import org.openmrs.Patient;
-import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord;
 import org.openmrs.module.chartsearchai.util.ConceptNameUtil;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,29 +28,14 @@ import org.springframework.stereotype.Component;
  *
  * <p>This class adds record timestamps as parenthetical citation labels
  * (e.g. {@code "(2024-01-15)"}) before each record's text. These timestamps
- * are <em>not</em> part of the embedding text produced by
- * {@link ClinicalTextSerializer} — they are metadata for the LLM to reason
- * about chronology. See {@link ClinicalTextSerializer} for the full date
- * handling policy.
+ * are metadata for the LLM to reason about chronology, prepended to the
+ * record text supplied by the caller (querystore's serialized documents).
  */
 @Component
 public class PatientChartSerializer {
 
 	/** querystore's resource type for the patient demographics document (see its PatientRecordSerializer). */
 	private static final String PATIENT_RESOURCE_TYPE = "patient";
-
-	@Autowired
-	private PatientRecordLoader recordLoader;
-
-	/**
-	 * Serialize all clinical records for a patient into numbered text lines.
-	 *
-	 * @param patient the patient whose chart to serialize
-	 * @return the serialized chart with numbered records and index mapping
-	 */
-	public PatientChart serialize(Patient patient) {
-		return serialize(patient, recordLoader.loadAll(patient));
-	}
 
 	/**
 	 * Serialize a pre-filtered list of records into numbered text lines.

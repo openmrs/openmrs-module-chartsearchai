@@ -182,11 +182,10 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 
 	protected String buildCacheKey(Patient patient, String question) {
 		// Retrieval GPs that change what the LLM sees, post-querystore-migration (#51): preFilter
-		// toggles the focus-hint pass, querystore.enabled switches retrieval vs. plain full chart,
-		// and querystore.topK sizes the focus hint. The legacy embedding/Lucene/ES pipeline-tuning
-		// GPs were removed with that pipeline, so they no longer belong in the key.
+		// toggles the focus-hint pass and querystore.topK sizes the focus hint. The legacy
+		// embedding/Lucene/ES pipeline-tuning GPs were removed with that pipeline, so they no
+		// longer belong in the key.
 		String preFilter = gp(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
-		String queryStoreEnabled = gp(ChartSearchAiConstants.GP_QUERYSTORE_ENABLED, "");
 		String queryStoreTopK = gp(ChartSearchAiConstants.GP_QUERYSTORE_TOP_K, "");
 		// Grounding GPs change the answer's per-citation `grounded` verdict, so
 		// they must be part of the key — otherwise toggling grounding (or its
@@ -196,7 +195,6 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		String groundingMinCosine = gp(ChartSearchAiConstants.GP_GROUNDING_MIN_COSINE, "");
 		String groundingEntailment = gp(ChartSearchAiConstants.GP_GROUNDING_ENTAILMENT_ENABLED, "");
 		return patient.getUuid() + "::" + preFilter.trim().toLowerCase()
-				+ "::" + queryStoreEnabled.trim().toLowerCase()
 				+ "::" + queryStoreTopK.trim()
 				+ "::" + grounding.trim().toLowerCase()
 				+ "::" + groundingMinCosine.trim()

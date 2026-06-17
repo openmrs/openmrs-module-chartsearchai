@@ -150,11 +150,6 @@ public class LlmInferenceServiceAsyncGroundingTest {
 		}
 
 		@Override
-		protected boolean resolveQueryStoreEnabled() {
-			return false;
-		}
-
-		@Override
 		protected boolean resolveGroundingEnabled() {
 			return groundingEnabled;
 		}

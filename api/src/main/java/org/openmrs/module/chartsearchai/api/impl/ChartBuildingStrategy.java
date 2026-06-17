@@ -10,43 +10,29 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import org.openmrs.Patient;
-import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 /**
- * Assembles the {@link PatientChart} for a patient query. Retrieval is delegated
- * to the querystore module via {@link QueryStoreChartBuilder}; the legacy
- * embedding/Lucene/Elasticsearch/hybrid pipelines were removed in the querystore
- * migration (issue #51). When {@code chartsearchai.querystore.enabled=false} the
- * builder degrades to a plain full-chart serialize (no relevance ranking) — there
- * is no longer an in-process retrieval fallback. The containing
- * {@link LlmInferenceService} delegates here for chart assembly and otherwise
- * focuses on the LLM call and citation handling.
+ * Assembles the {@link PatientChart} for a patient query by delegating to the querystore
+ * module via {@link QueryStoreChartBuilder}. querystore is a required module and the only
+ * retrieval path — the legacy embedding/Lucene/Elasticsearch pipelines and the in-process
+ * full-chart fallback were removed in the querystore migration (issue #51). If querystore is
+ * unavailable at runtime, {@link QueryStoreChartBuilder} degrades to an empty chart rather
+ * than failing chart assembly. The containing {@link LlmInferenceService} delegates here for
+ * chart assembly and otherwise focuses on the LLM call and citation handling.
  */
 @Service("chartSearchAi.chartBuildingStrategy")
 class ChartBuildingStrategy {
-
-	@Autowired
-	private PatientChartSerializer chartSerializer;
 
 	@Autowired
 	@Qualifier("chartSearchAi.queryStoreChartBuilder")
 	private QueryStoreChartBuilder queryStoreChartBuilder;
 
 	PatientChart buildChart(Patient patient, String question) {
-		if (ChartSearchAiUtils.isQueryStoreEnabled()) {
-			return queryStoreChartBuilder.build(patient, question);
-		}
-
-		// querystore disabled: no in-process retrieval pipeline remains, so serialize the
-		// full patient chart unranked. The pre-Decision-15 ChartCache that amortized this
-		// per-request serialize was removed once querystore became the supported full-chart
-		// path; the AOP-driven answer-cache invalidation still covers freshness.
-		return chartSerializer.serialize(patient);
+		return queryStoreChartBuilder.build(patient, question);
 	}
 
 	boolean usePreFilter() {

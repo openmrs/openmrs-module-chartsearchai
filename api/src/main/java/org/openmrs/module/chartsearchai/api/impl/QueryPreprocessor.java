@@ -30,12 +30,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Normalizes a raw user question into the inputs the retrieval pipeline
- * consumes: a stopword-stripped form, content terms for keyword matching,
- * a recency cap, and the final embedding-input string. {@link
- * #prepareEmbeddingInput(String, String)} is the canonical entry point and
- * must be used by both production code and tests so they exercise the
- * same composition.
+ * Normalizes a raw user question into the inputs the querystore focus-hint pass
+ * consumes: a stopword-stripped form ({@link #stripQueryStopwords}), content terms
+ * for keyword matching, and a recency cap.
  */
 final class QueryPreprocessor {
 
@@ -212,27 +209,6 @@ final class QueryPreprocessor {
 	}
 
 	/**
-	 * Builds the query string used for embedding by stripping stopwords
-	 * from the normalized query. This removes filler words like "any" or
-	 * "does" that dilute the embedding signal, while keeping all
-	 * non-stopword tokens (including short terms like numbers).
-	 * Falls back to the full normalized query when all words are stopwords.
-	 */
-	static String buildEmbeddingQuery(String normalizedQuery) {
-		String[] words = normalizedQuery.split("\\s+");
-		StringBuilder sb = new StringBuilder();
-		for (String w : words) {
-			if (!QUERY_STOPWORDS.contains(w.toLowerCase())) {
-				if (sb.length() > 0) {
-					sb.append(" ");
-				}
-				sb.append(w);
-			}
-		}
-		return sb.length() > 0 ? sb.toString() : normalizedQuery;
-	}
-
-	/**
 	 * Extracts content terms from the normalized query for keyword matching.
 	 * Returns lowercased terms with length >= 2 (single-letter terms are too
 	 * ambiguous to be useful for keyword overlap scoring).
@@ -248,19 +224,4 @@ final class QueryPreprocessor {
 		return terms.toArray(new String[0]);
 	}
 
-	/**
-	 * Prepares the full embedding input string from a raw question.
-	 * This is the production pipeline: strip stopwords, build the
-	 * embedding query, and prepend the query prefix. Both production
-	 * code and tests should use this method to ensure consistency.
-	 *
-	 * @param question the raw user question (e.g. "any cancer?")
-	 * @param queryPrefix the prefix to prepend (e.g. "" or "search_query: ")
-	 * @return the text to pass to the embedding provider
-	 */
-	static String prepareEmbeddingInput(String question, String queryPrefix) {
-		String normalized = stripQueryStopwords(question);
-		String embeddingQuery = buildEmbeddingQuery(normalized);
-		return queryPrefix + embeddingQuery;
-	}
 }

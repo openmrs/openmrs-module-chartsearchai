@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
-import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord;
+import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 
 /**
  * Shared helpers for tests that use the {@code FULL_PATIENT_DATASET} test
@@ -798,8 +798,7 @@ final class TestDatasetHelper {
 
 	/**
 	 * Infers resource type from the serialized text prefix, matching the
-	 * resource types assigned by
-	 * {@link org.openmrs.module.chartsearchai.serializer.PatientRecordLoader}.
+	 * resource-type prefixes querystore's serializers assign.
 	 */
 	static String inferResourceType(String text) {
 		if (text.startsWith("Medication prescription:")

@@ -144,10 +144,8 @@ public class LlmInferenceService implements ChartSearchService {
 
 	@Override
 	public void warmup(Patient patient) {
-		// Two operational kill switches first, each as its own early-return so neither
-		// downstream call (usePreFilter — GP read; resolveQueryStoreEnabled — GP read) is
-		// evaluated when warmup is fundamentally impossible. Pre-slice these were implicit
-		// in the if-chain; the extracted helper would otherwise evaluate them eagerly.
+		// Two operational kill switches first, each as its own early-return so the downstream
+		// usePreFilter() GP read is not evaluated when warmup is fundamentally impossible.
 		if (!resolveWarmupEnabled()) {
 			return;
 		}
@@ -156,11 +154,9 @@ public class LlmInferenceService implements ChartSearchService {
 		}
 		// Chart-byte-stability gate — the single warmup-viability decision point. Post-#51 every
 		// retrieval mode yields a question-independent chart prefix, so this currently always
-		// proceeds; it is retained (and fed the GP reads) so a future per-query mode can re-gate
-		// here rather than at this call site. See shouldRunWarmup.
-		if (!shouldRunWarmup(
-				chartBuildingStrategy.usePreFilter(),
-				resolveQueryStoreEnabled())) {
+		// proceeds; it is retained (and fed the preFilter GP read) so a future per-query mode can
+		// re-gate here rather than at this call site. See shouldRunWarmup.
+		if (!shouldRunWarmup(chartBuildingStrategy.usePreFilter())) {
 			return;
 		}
 		PatientChart chart = chartBuildingStrategy.buildChart(patient, "");
@@ -174,12 +170,6 @@ public class LlmInferenceService implements ChartSearchService {
 	 *  tests override to control the gate without an OpenMRS context. */
 	protected boolean resolveWarmupEnabled() {
 		return isWarmupEnabled();
-	}
-
-	/** Test seam wrapping {@link ChartSearchAiUtils#isQueryStoreEnabled()}; production
-	 *  delegates, tests override to control the gate without an OpenMRS context. */
-	protected boolean resolveQueryStoreEnabled() {
-		return ChartSearchAiUtils.isQueryStoreEnabled();
 	}
 
 	/** Test seam wrapping {@link ChartSearchAiUtils#isGroundingEnabled()}; production
@@ -197,29 +187,23 @@ public class LlmInferenceService implements ChartSearchService {
 	 * {@link #warmup(Patient)} call site instead, so this helper focuses
 	 * narrowly on chart-byte-stability semantics.
 	 *
-	 * <p>Since the querystore migration (#51) removed the legacy embedding/Lucene/
-	 * Elasticsearch pipelines, every retrieval mode now produces a question-independent
-	 * chart prefix, so warmup is viable in all of them:
+	 * <p>Since the querystore migration (#51) made querystore the only retrieval path, every
+	 * mode now produces a question-independent chart prefix, so warmup is always viable:
 	 * <ul>
-	 *   <li>querystore enabled, {@code preFilter=false} — {@link QueryStoreChartBuilder}
-	 *       returns the patient's full chart via {@code getPatientChart}; bytes are a
-	 *       function of the patient only.</li>
-	 *   <li>querystore enabled, {@code preFilter=true} — full chart plus a small trailing
-	 *       "Records ranked by similarity to the query: ..." focus hint. The records
-	 *       section (the bulk of the prompt) is byte-identical across queries; the hint
-	 *       and the question vary only at the very end, where they don't break
-	 *       llama-server's prefix-cache match.</li>
-	 *   <li>querystore disabled (any {@code preFilter}) — {@link ChartBuildingStrategy}
-	 *       serializes the full patient chart unranked; no per-query variation at all
-	 *       (the legacy inline-filtering path that once varied here was removed in #51).</li>
+	 *   <li>{@code preFilter=false} — {@link QueryStoreChartBuilder} returns the patient's full
+	 *       chart via {@code getPatientChart}; bytes are a function of the patient only.</li>
+	 *   <li>{@code preFilter=true} — full chart plus a small trailing "Records ranked by
+	 *       similarity to the query: ..." focus hint. The records section (the bulk of the prompt)
+	 *       is byte-identical across queries; the hint and the question vary only at the very end,
+	 *       where they don't break llama-server's prefix-cache match.</li>
 	 * </ul>
 	 *
-	 * <p>The parameters are retained as the contract for this single decision point: if a
-	 * future retrieval mode reintroduces a per-query chart prefix, gate it here (and in
+	 * <p>The {@code preFilter} parameter is retained as the contract for this single decision
+	 * point: if a future retrieval mode reintroduces a per-query chart prefix, gate it here (and in
 	 * {@link LlmInferenceServiceWarmupTest}) rather than at the {@code warmup()} call site,
 	 * which would split the decision across two places.
 	 */
-	static boolean shouldRunWarmup(boolean preFilterEnabled, boolean queryStoreEnabled) {
+	static boolean shouldRunWarmup(boolean preFilterEnabled) {
 		return true;
 	}
 
@@ -237,7 +221,7 @@ public class LlmInferenceService implements ChartSearchService {
 		if (patient == null || patient.getUuid() == null) {
 			return null;
 		}
-		if (!shouldRunWarmup(chartBuildingStrategy.usePreFilter(), resolveQueryStoreEnabled())) {
+		if (!shouldRunWarmup(chartBuildingStrategy.usePreFilter())) {
 			return null;
 		}
 		return patient.getUuid();

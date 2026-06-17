@@ -31,11 +31,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * <p>The companion {@code LlmInferenceServiceWarmupTest} covers the pure-logic
  * helper in isolation. This test locks the WIRING: that {@code warmup()} actually
  * uses the helper to gate the {@code chartBuildingStrategy.buildChart} +
- * {@code llmProvider.warmup} calls. Without this, a future refactor could add
- * a 5th gate inline (instead of extending the helper) or bypass the helper
- * entirely — the truth-table test would still pass, but the call-site behavior
- * would silently regress to the original bug (warmup running on the querystore
- * path with empty chart bytes).
+ * {@code llmProvider.warmup} calls, and that the operational kill switches
+ * short-circuit before the gate. Without this, a future refactor could bypass the
+ * helper or evaluate the kill switches in the wrong order and the helper-only test
+ * would still pass while the call-site behavior silently regressed.
  */
 public class LlmInferenceServiceWarmupIntegrationTest {
 
@@ -57,9 +56,8 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 		service = new TestableLlmInferenceService();
 		service.setChartBuildingStrategy(strategy);
 		service.setLlmProvider(provider);
-		// Default-true so individual tests just flip the gate they want to exercise.
+		// Default-favorable so individual tests just flip the gate they want to exercise.
 		service.warmupEnabledStub = true;
-		service.queryStoreEnabledStub = false;
 		provider.supportsWarmupStub = true;
 		strategy.usePreFilterStub = false;
 	}
@@ -77,28 +75,6 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 		assertTrue(provider.warmupCalled,
 				"warmup must invoke llmProvider.warmup with the chart bytes; missing this call "
 				+ "would silently leave the cache cold for the next real query");
-	}
-
-	@Test
-	public void warmup_shouldFire_whenQuerystoreEnabledAndPreFilterDisabled() {
-		// After the Decision 15 dispatch change, querystore's full-chart mode
-		// (preFilter=false, queryStore=true) routes to getPatientChart and produces
-		// question-independent chart bytes. Warmup must fire here — pre-Decision-15 it
-		// was skipped because the chart varied per question via searchByPatient. This
-		// test locks the new wiring claim: a refactor that re-introduces a queryStore-
-		// dependent skip would re-disable warmup in the exact configuration where it
-		// now helps the most (large charts, repeated questions).
-		service.queryStoreEnabledStub = true;
-		strategy.usePreFilterStub = false;
-
-		service.warmup(patient(1));
-
-		assertTrue(strategy.buildChartCalled,
-				"with querystore enabled and preFilter disabled, the chart-build must fire — "
-				+ "getPatientChart returns a question-independent chart and warmup primes it");
-		assertTrue(provider.warmupCalled,
-				"with querystore enabled and preFilter disabled, provider.warmup must fire — "
-				+ "this is the Decision 15 warmup unlock");
 	}
 
 	@Test
@@ -132,40 +108,36 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 		assertFalse(strategy.buildChartCalled);
 		assertFalse(provider.warmupCalled);
 		// Short-circuit semantic, parallel to the warmupEnabled=false case: a remote-engine
-		// deployment must not waste GP reads (usePreFilter, resolveQueryStoreEnabled) on
-		// every chart open just to discover the engine doesn't support warmup. Without
-		// this assertion, a future refactor that pulled supportsWarmup into shouldRunWarmup
-		// as an eager arg would silently regress the short-circuit.
+		// deployment must not waste the usePreFilter GP read on every chart open just to
+		// discover the engine doesn't support warmup. Without this assertion, a future refactor
+		// that pulled supportsWarmup into shouldRunWarmup as an eager arg would silently regress
+		// the short-circuit.
 		assertEquals(0, strategy.usePreFilterCalls,
 				"supportsWarmup=false must short-circuit before the usePreFilter GP read — "
 				+ "remote-engine deployments shouldn't pay this cost on every chart open");
 	}
 
 	@Test
-	public void warmup_shouldFire_whenPreFilterEnabledAndQueryStoreDisabled() {
-		// Post-#51: with querystore disabled, buildChart serializes the full patient chart unranked
-		// regardless of preFilter (the legacy inline-filtering path that once varied per question
-		// was removed). So this config now produces a stable chart prefix and warmup must fire —
-		// pre-#51 this was the one mode where warmup was correctly skipped.
+	public void warmup_shouldFire_whenPreFilterEnabled() {
+		// preFilter is the only remaining retrieval dimension post-#51. Its focus hint is a small
+		// trailing payload; the chart prefix stays question-independent, so warmup must still fire.
 		strategy.usePreFilterStub = true;
-		service.queryStoreEnabledStub = false;
 
 		service.warmup(patient(1));
 
 		assertTrue(strategy.buildChartCalled,
-				"querystore-disabled now serializes the full chart unranked; warmup must build it");
+				"preFilter on still yields a stable chart prefix; warmup must build it");
 		assertTrue(provider.warmupCalled,
-				"querystore-disabled produces a stable chart prefix post-#51; provider.warmup must fire");
+				"preFilter on still yields a stable chart prefix; provider.warmup must fire");
 	}
 
 	// ---- query-path KV cache scope (same chart-stability gate as warmup) ----
 
 	@Test
-	public void kvCacheScopeFor_returnsPatientUuid_whenChartStable() {
-		// preFilter off => chart bytes are question-independent => a per-patient KV entry matches the
+	public void kvCacheScopeFor_returnsPatientUuid_whenPreFilterOff() {
+		// preFilter off => full chart, question-independent => a per-patient KV entry matches the
 		// next query, so the streaming query path must scope its restore/save to this patient's UUID.
 		strategy.usePreFilterStub = false;
-		service.queryStoreEnabledStub = false;
 
 		assertEquals("uuid-1", service.kvCacheScopeFor(patient(1)),
 				"a stable chart prefix must scope query-path KV to the patient UUID so the engine can "
@@ -173,25 +145,12 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 	}
 
 	@Test
-	public void kvCacheScopeFor_returnsPatientUuid_whenQuerystoreEnabledEvenWithPreFilterOn() {
-		// querystore full-chart mode keeps the records section byte-identical across queries, so the
-		// scope is viable even though preFilter is on — mirrors shouldRunWarmup's inverse gate.
+	public void kvCacheScopeFor_returnsPatientUuid_whenPreFilterOn() {
+		// preFilter on keeps the records section byte-identical across queries (the focus hint is a
+		// small trailing payload), so the scope is still viable.
 		strategy.usePreFilterStub = true;
-		service.queryStoreEnabledStub = true;
 
 		assertEquals("uuid-1", service.kvCacheScopeFor(patient(1)));
-	}
-
-	@Test
-	public void kvCacheScopeFor_returnsPatientUuid_whenPreFilterOnAndQueryStoreDisabled() {
-		// Post-#51: querystore disabled serializes the full chart unranked regardless of preFilter,
-		// so the prefix is question-independent and a per-patient KV entry matches the next query.
-		// Pre-#51 this returned null because the legacy inline-filtering record set varied per query.
-		strategy.usePreFilterStub = true;
-		service.queryStoreEnabledStub = false;
-
-		assertEquals("uuid-1", service.kvCacheScopeFor(patient(1)),
-				"querystore-disabled now yields a stable chart prefix; query-path KV must scope to the UUID");
 	}
 
 	@Test
@@ -213,16 +172,9 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 
 		boolean warmupEnabledStub;
 
-		boolean queryStoreEnabledStub;
-
 		@Override
 		protected boolean resolveWarmupEnabled() {
 			return warmupEnabledStub;
-		}
-
-		@Override
-		protected boolean resolveQueryStoreEnabled() {
-			return queryStoreEnabledStub;
 		}
 	}
 

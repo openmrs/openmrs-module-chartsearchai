@@ -109,11 +109,6 @@ public class LlmInferenceServiceCitationWiringTest {
 		protected boolean resolveWarmupEnabled() {
 			return false;
 		}
-
-		@Override
-		protected boolean resolveQueryStoreEnabled() {
-			return false;
-		}
 	}
 
 	private static final class StubStrategy extends ChartBuildingStrategy {

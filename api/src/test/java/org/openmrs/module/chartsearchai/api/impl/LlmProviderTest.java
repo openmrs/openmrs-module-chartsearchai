@@ -54,10 +54,9 @@ public class LlmProviderTest {
 
 	@Test
 	public void defaultSystemPrompt_shouldDescribeRecordOrderingAccurately() {
-		// PatientRecordLoader sorts records by date descending (nullsLast) and
-		// nothing else — there is no per-type grouping pass. The prompt must
-		// describe this accurately so the LLM's mental model of the input
-		// matches the actual structure.
+		// The default prompt tells the LLM records appear most-recent-first; this test pins
+		// that wording so the LLM's mental model matches the chart's ordering (records reach
+		// the LLM in querystore's chart order — date descending).
 		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("most recent first"),
 				"System prompt must describe records as sorted most recent first");
 		assertFalse(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("grouped by type"),

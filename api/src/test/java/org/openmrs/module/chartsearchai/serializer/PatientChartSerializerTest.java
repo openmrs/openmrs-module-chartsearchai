@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
-import org.openmrs.module.chartsearchai.serializer.PatientRecordLoader.SerializedRecord;
+import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 
 /**

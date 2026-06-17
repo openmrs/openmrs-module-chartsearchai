@@ -429,8 +429,8 @@ public class LlmInferenceServiceTest {
 	@Test
 	public void stripCategoryHints_shouldStripHintsFromTestOrderText() {
 		// stripCategoryHints had "Lab order: " instead of "Test order: "
-		// in its patterns — Test orders are serialized as "Test order:"
-		// by OrderTextSerializer, so hint stripping must recognize that.
+		// in its patterns — Test orders are serialized with a "Test order:"
+		// prefix, so hint stripping must recognize that.
 		String enriched = "Laboratory tests / Test order: CBC. Action: NEW. Urgency: STAT";
 		String stripped = ChartSearchAiUtils.stripCategoryHints(enriched);
 		assertEquals("Test order: CBC. Action: NEW. Urgency: STAT", stripped);

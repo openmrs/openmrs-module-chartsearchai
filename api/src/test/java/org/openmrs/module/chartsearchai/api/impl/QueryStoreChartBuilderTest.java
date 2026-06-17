@@ -10,6 +10,8 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -273,6 +275,96 @@ public class QueryStoreChartBuilderTest {
 				"full chart must still be returned when the focus-hint RPC throws");
 		assertEquals(0, chart.getFocusIndices().size(),
 				"focus indices must be empty when searchByPatient fails — no hint rendered");
+	}
+
+	@Test
+	public void build_shouldRenderPanelMembership_whenChartDocCarriesObsGroupMetadata() {
+		// End-to-end panel-grouping wiring (issue #51, ADR Decision 6): querystore indexes each
+		// group-obs member as an atomic doc carrying obs_group_uuid + obs_group_concept_name in
+		// METADATA (never in the stored text, to keep citations clean). The consumer is responsible
+		// for clustering. This locks the full production path — getPatientChart docs ->
+		// toSerializedRecords (must read the metadata) -> PatientChartSerializer (must render the
+		// panel label) — so the LLM can see which atomic obs belong to the same panel. Before this
+		// fix toSerializedRecords dropped doc.getMetadata() entirely and the membership was invisible.
+		QueryDocument sodium = new QueryDocument();
+		sodium.setResourceType("Obs");
+		sodium.setResourceUuid("obs-na");
+		sodium.setText("Sodium: 140 mmol/L");
+		sodium.putMetadata("obs_group_uuid", "grp-bmp-1");
+		sodium.putMetadata("obs_group_concept_name", "Basic metabolic panel");
+		QueryDocument potassium = new QueryDocument();
+		potassium.setResourceType("Obs");
+		potassium.setResourceUuid("obs-k");
+		potassium.setText("Potassium: 4.0 mmol/L");
+		potassium.putMetadata("obs_group_uuid", "grp-bmp-1");
+		potassium.putMetadata("obs_group_concept_name", "Basic metabolic panel");
+		QueryDocument standalone = new QueryDocument();
+		standalone.setResourceType("Obs");
+		standalone.setResourceUuid("obs-temp");
+		standalone.setText("Temperature: 36.7 C");
+		// no obs_group metadata -> not a panel member
+		queryStore.stubChart = new ArrayList<>();
+		queryStore.stubChart.add(sodium);
+		queryStore.stubChart.add(potassium);
+		queryStore.stubChart.add(standalone);
+
+		builder.usePreFilter = false;
+		PatientChart chart = builder.build(patient(1), "what were the metabolic panel results?");
+
+		String text = chart.getText();
+		assertTrue(text.contains("Sodium: 140 mmol/L (part of: Basic metabolic panel)"),
+				"a group-obs member must render its group label so the LLM can cluster it; chart was:\n" + text);
+		assertTrue(text.contains("Potassium: 4.0 mmol/L (part of: Basic metabolic panel)"),
+				"every member of the group must carry the same label; chart was:\n" + text);
+		assertFalse(text.contains("Temperature: 36.7 C (part of:"),
+				"a non-grouped obs must NOT get a group label; chart was:\n" + text);
+	}
+
+	@Test
+	public void build_shouldNotRenderPanelLabel_whenGroupUuidPresentButConceptNameAbsent() {
+		// ObsRecordSerializer.putGroupFields always sets obs_group_uuid for a member but only sets
+		// obs_group_concept_name when the parent concept has a non-empty preferred name. With a uuid
+		// but no name there is no human/LLM-meaningful label to show, so the suffix must be omitted
+		// rather than leaking a raw uuid or an empty "(part of panel: )" into the prompt.
+		QueryDocument member = new QueryDocument();
+		member.setResourceType("Obs");
+		member.setResourceUuid("obs-x");
+		member.setText("Glucose: 90 mg/dL");
+		member.putMetadata("obs_group_uuid", "grp-unnamed");
+		queryStore.stubChart = new ArrayList<>();
+		queryStore.stubChart.add(member);
+
+		builder.usePreFilter = false;
+		PatientChart chart = builder.build(patient(1), "glucose?");
+
+		assertTrue(chart.getText().contains("Glucose: 90 mg/dL"),
+				"the obs body must still render; chart was:\n" + chart.getText());
+		assertFalse(chart.getText().contains("part of:"),
+				"no concept name -> no group suffix; chart was:\n" + chart.getText());
+	}
+
+	@Test
+	public void build_shouldNotRenderPanelLabel_whenConceptNameIsBlank() {
+		// Defensive: metadataString() must treat a blank/whitespace metadata value as absent, so a
+		// malformed upstream obs_group_concept_name can't leak an empty "(part of: )" into the prompt.
+		// querystore itself never writes a blank name (putGroupFields guards on !name.isEmpty()), so
+		// this exercises the guard on a value only a malformed producer could emit.
+		QueryDocument member = new QueryDocument();
+		member.setResourceType("Obs");
+		member.setResourceUuid("obs-y");
+		member.setText("Creatinine: 1.0 mg/dL");
+		member.putMetadata("obs_group_uuid", "grp-blank-name");
+		member.putMetadata("obs_group_concept_name", "   ");
+		queryStore.stubChart = new ArrayList<>();
+		queryStore.stubChart.add(member);
+
+		builder.usePreFilter = false;
+		PatientChart chart = builder.build(patient(1), "creatinine?");
+
+		assertTrue(chart.getText().contains("Creatinine: 1.0 mg/dL"),
+				"the obs body must still render; chart was:\n" + chart.getText());
+		assertFalse(chart.getText().contains("part of:"),
+				"a blank concept name must be treated as absent — no group suffix; chart was:\n" + chart.getText());
 	}
 
 	@Test

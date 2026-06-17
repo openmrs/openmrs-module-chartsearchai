@@ -32,18 +32,41 @@ public class SerializedRecord {
 
 	private final List<String> categoryHints;
 
+	/**
+	 * The UUID of the obs group this record belongs to, or {@code null} if it is not a
+	 * group-obs member. querystore indexes each group-obs member as an atomic document and
+	 * carries the parent's UUID in metadata (ADR Decision 6: the group name is never in the
+	 * stored text; consumers cluster atomic hits by this UUID). Carried here so the consumer
+	 * layer can surface panel membership to the LLM.
+	 */
+	private final String obsGroupUuid;
+
+	/**
+	 * The preferred concept name of the obs group (e.g. {@code "Basic metabolic panel"}), or
+	 * {@code null} when this record is not a group member or the parent concept has no
+	 * preferred name. Used as the human-readable panel label rendered for the LLM.
+	 */
+	private final String obsGroupConceptName;
+
 	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date) {
 		this(resourceType, resourceUuid, text, date, Collections.<String>emptyList());
 	}
 
 	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date,
 			List<String> categoryHints) {
+		this(resourceType, resourceUuid, text, date, categoryHints, null, null);
+	}
+
+	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date,
+			List<String> categoryHints, String obsGroupUuid, String obsGroupConceptName) {
 		this.resourceType = resourceType;
 		this.resourceUuid = resourceUuid;
 		this.text = text;
 		this.date = date;
 		this.categoryHints = categoryHints != null
 				? categoryHints : Collections.<String>emptyList();
+		this.obsGroupUuid = obsGroupUuid;
+		this.obsGroupConceptName = obsGroupConceptName;
 	}
 
 	public String getResourceType() {
@@ -69,5 +92,21 @@ public class SerializedRecord {
 	 */
 	public List<String> getCategoryHints() {
 		return categoryHints;
+	}
+
+	/**
+	 * @return the UUID of the obs group this record belongs to, or {@code null} if it is not a
+	 *         group-obs member. This is the authoritative panel-membership flag.
+	 */
+	public String getObsGroupUuid() {
+		return obsGroupUuid;
+	}
+
+	/**
+	 * @return the preferred concept name of the obs group (the panel label), or {@code null}
+	 *         when this record is not a group member or the parent concept has no preferred name.
+	 */
+	public String getObsGroupConceptName() {
+		return obsGroupConceptName;
 	}
 }

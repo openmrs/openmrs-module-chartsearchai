@@ -92,6 +92,51 @@ public class PatientChartSerializerTest {
 	}
 
 	@Test
+	public void serialize_rendersPanelLabel_forGroupObsMemberAndMatchesMappingText() {
+		// A group-obs member (obs_group_uuid + obs_group_concept_name carried on the SerializedRecord)
+		// must render its panel label inline so the LLM can cluster members of the same panel. The
+		// label must also be part of the RecordMapping text, because the grounding verifier compares
+		// cited records against exactly what the LLM saw — if the label were in the chart line but not
+		// the mapping text, a citation that mentions the panel would look unsupported.
+		SerializedRecord member = new SerializedRecord("obs", "obs-na", "Sodium: 140 mmol/L", null,
+				java.util.Collections.<String>emptyList(), "grp-bmp-1", "Basic metabolic panel");
+
+		PatientChart chart = new PatientChartSerializer().serialize(null, Arrays.asList(member));
+
+		assertTrue(chart.getText().contains("[1] Sodium: 140 mmol/L (part of: Basic metabolic panel)"),
+				"group-obs member must render the group label inline; chart was:\n" + chart.getText());
+		assertEquals("Sodium: 140 mmol/L (part of: Basic metabolic panel)",
+				chart.getMappings().get(0).getText(),
+				"mapping text must include the group label so the grounding verifier's view matches the LLM's");
+	}
+
+	@Test
+	public void serialize_omitsGroupLabel_forNonGroupObs() {
+		// A plain obs (no obs_group_uuid) must not get a group suffix.
+		SerializedRecord plain = new SerializedRecord("obs", "obs-temp", "Temperature: 36.7 C", null);
+
+		PatientChart chart = new PatientChartSerializer().serialize(null, Arrays.asList(plain));
+
+		assertFalse(chart.getText().contains("part of:"),
+				"a non-grouped obs must not render a group label; chart was:\n" + chart.getText());
+		assertEquals("Temperature: 36.7 C", chart.getMappings().get(0).getText());
+	}
+
+	@Test
+	public void serialize_omitsGroupLabel_whenGroupUuidPresentButNameAbsent() {
+		// uuid present but concept name absent (parent concept had no preferred name) -> nothing
+		// LLM-meaningful to show, so no suffix and no empty "(part of: )".
+		SerializedRecord member = new SerializedRecord("obs", "obs-x", "Glucose: 90 mg/dL", null,
+				java.util.Collections.<String>emptyList(), "grp-unnamed", null);
+
+		PatientChart chart = new PatientChartSerializer().serialize(null, Arrays.asList(member));
+
+		assertFalse(chart.getText().contains("part of:"),
+				"no concept name -> no group suffix; chart was:\n" + chart.getText());
+		assertEquals("Glucose: 90 mg/dL", chart.getMappings().get(0).getText());
+	}
+
+	@Test
 	public void serialize_addsDemographicsHeader_whenNoPatientRecordPresent() {
 		// Fallback: PatientRecordSerializer skips a nameless patient, yielding no querystore "patient"
 		// document, so the computed header stays the only demographics source and must still be emitted.

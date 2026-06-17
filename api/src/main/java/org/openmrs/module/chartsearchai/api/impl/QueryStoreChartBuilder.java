@@ -22,6 +22,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
+import org.openmrs.module.querystore.QueryStoreConstants;
 import org.openmrs.module.querystore.api.QueryStoreService;
 import org.openmrs.module.querystore.model.QueryDocument;
 import org.slf4j.Logger;
@@ -205,10 +206,32 @@ class QueryStoreChartBuilder {
 				continue;
 			}
 			String text = doc.getText() == null ? "" : doc.getText();
+			// Carry the obs-group metadata (a lab panel, a vital-signs set, etc.) through so the
+			// serializer can surface group membership to the LLM. querystore stores the group identity
+			// ONLY in metadata, never in the doc text (ADR Decision 6: keeps citations clean, no sibling
+			// duplication), and makes clustering the consumer's responsibility. Dropping it here is
+			// exactly what made group membership invisible to the LLM.
 			out.add(new SerializedRecord(doc.getResourceType(), doc.getResourceUuid(),
-					text, DateFormatUtil.toLegacyDate(doc.getDate())));
+					text, DateFormatUtil.toLegacyDate(doc.getDate()), Collections.<String>emptyList(),
+					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_UUID),
+					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_CONCEPT_NAME)));
 		}
 		return out;
+	}
+
+	/** Reads a metadata value as a trimmed String, or {@code null} when absent or blank.
+	 *  querystore stores these values as Strings (see ObsRecordSerializer.putGroupFields); the
+	 *  defensive toString()/blank handling keeps a malformed upstream value from leaking an empty
+	 *  or non-string token into the LLM prompt. Relies on {@link QueryDocument#getMetadata()} being
+	 *  contractually non-null (it returns an unmodifiable view of a field initialized to an empty
+	 *  map) — a regression making it nullable would NPE here and degrade the whole chart to empty. */
+	private static String metadataString(QueryDocument doc, String key) {
+		Object value = doc.getMetadata().get(key);
+		if (value == null) {
+			return null;
+		}
+		String s = value.toString().trim();
+		return s.isEmpty() ? null : s;
 	}
 
 	/** Seam for tests: production resolves via the OpenMRS context. */

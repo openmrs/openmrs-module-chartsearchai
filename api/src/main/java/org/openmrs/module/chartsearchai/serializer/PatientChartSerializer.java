@@ -30,6 +30,10 @@ import org.springframework.stereotype.Component;
  * (e.g. {@code "(2024-01-15)"}) before each record's text. These timestamps
  * are metadata for the LLM to reason about chronology, prepended to the
  * record text supplied by the caller (querystore's serialized documents).
+ *
+ * <p>It also appends an obs-group label (e.g. {@code "(part of: Basic metabolic panel)"})
+ * after the body of any record that carries obs-group metadata, so the LLM can cluster
+ * the atomic members of a lab panel / vital-signs set — see {@link #appendGroupMembership}.
  */
 @Component
 public class PatientChartSerializer {
@@ -92,6 +96,10 @@ public class PatientChartSerializer {
 				rendered.append("(").append(DateFormatUtil.formatDate(record.getDate())).append(") ");
 			}
 			rendered.append(ConceptNameUtil.stripSynonyms(record.getText()));
+			// Surface obs-group (e.g. lab-panel / vital-signs-set) membership inline so the LLM can
+			// cluster atomic members of the same group. querystore carries the group identity only in
+			// metadata, never in the doc text (ADR Decision 6), and leaves clustering to the consumer.
+			appendGroupMembership(rendered, record);
 			// Age is the one demographic that must be computed live: baking it into querystore's
 			// indexed patient record would go stale as the patient ages (the index carries only
 			// birthdate). Merge the current age into that same citable line so "how old is the
@@ -113,6 +121,26 @@ public class PatientChartSerializer {
 
 		return new PatientChart(sb.toString(), Collections.unmodifiableList(mappings),
 				Collections.unmodifiableList(focusIndices));
+	}
+
+	/**
+	 * Appends the obs-group label so co-grouped atomic records (a lab panel, a vital-signs set, an
+	 * exam) are clusterable by the LLM. The group's concept name carries the clinical term verbatim
+	 * (e.g. {@code "Basic metabolic panel"}, {@code "Vital signs"}) — we deliberately do not inject a
+	 * fixed word like "panel", since OpenMRS models these uniformly as obs groups and the grouping is
+	 * not always a lab panel. {@link SerializedRecord#getObsGroupUuid()} is the authoritative
+	 * membership flag; the concept name is the label. No-op when the record is not a group member or
+	 * the group concept has no preferred name (nothing LLM-meaningful to show).
+	 */
+	private static void appendGroupMembership(StringBuilder rendered, SerializedRecord record) {
+		if (record == null || record.getObsGroupUuid() == null) {
+			return;
+		}
+		String groupName = record.getObsGroupConceptName() == null
+				? "" : record.getObsGroupConceptName().trim();
+		if (!groupName.isEmpty()) {
+			rendered.append(" (part of: ").append(groupName).append(")");
+		}
 	}
 
 	/**
@@ -255,7 +283,8 @@ public class PatientChartSerializer {
 
 		/**
 		 * The exact per-record content the LLM saw in the chart line for this
-		 * index — the date parenthetical (if any) plus the synonym-stripped body,
+		 * index — the date parenthetical (if any), the synonym-stripped body, and
+		 * (for an obs-group member) the trailing {@code "(part of: <group>)"} label,
 		 * i.e. everything after the {@code "[N] "} prefix. The citation grounding
 		 * verifier compares cited records against this so its view matches the
 		 * model's (including the date the model may cite). May be {@code null}

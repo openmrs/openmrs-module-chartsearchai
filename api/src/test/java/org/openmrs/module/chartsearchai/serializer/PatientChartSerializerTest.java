@@ -206,8 +206,14 @@ public class PatientChartSerializerTest {
 		SerializedRecord obs = new SerializedRecord("obs", "u1", "CD4 Count: 988.0 cells/mmL", d);
 		SerializedRecord vital = new SerializedRecord("obs", "u2", "Respiratory Rate: 18.0 breaths/min", d);
 		SerializedRecord coded = new SerializedRecord("diagnosis", "u3", "Diagnosis: E11.0 type 2 diabetes", d);
+		// Lookahead-guard cases: a ".0" that is part of a longer decimal or a multi-dot version must NOT be
+		// touched — dropping it would SILENTLY corrupt the value ("11.05" -> "115", "0.05" -> "05").
+		SerializedRecord multiDecimal = new SerializedRecord("obs", "u4", "Serum creatinine: 11.05 mg/dL", d);
+		SerializedRecord lowDecimal = new SerializedRecord("obs", "u5", "Vitamin level: 0.05 mg/dL", d);
+		SerializedRecord version = new SerializedRecord("obs", "u6", "Assay reagent lot 1.0.0", d);
 
-		PatientChart chart = new PatientChartSerializer().serialize(null, Arrays.asList(obs, vital, coded));
+		PatientChart chart = new PatientChartSerializer().serialize(null,
+				Arrays.asList(obs, vital, coded, multiDecimal, lowDecimal, version));
 		String text = chart.getText();
 
 		// Standalone numeric ".0" trimmed (value identical) on both the chart line and the mapping text.
@@ -215,8 +221,15 @@ public class PatientChartSerializerTest {
 		assertTrue(text.contains("Respiratory Rate: 18 breaths/min"), "vital .0 trimmed; chart:\n" + text);
 		assertFalse(text.contains("988.0") || text.contains("18.0"), "no trailing .0 left on numeric values");
 		assertEquals("(" + date + ") CD4 Count: 988 cells/mmL", chart.getMappings().get(0).getText());
-		// Safety: a ".0" inside a code must NOT be trimmed — "E11.0" -> "E11" would change the diagnosis.
+		// Safety (lookbehind): a ".0" inside a code must NOT be trimmed — "E11.0" -> "E11" changes the diagnosis.
 		assertTrue(text.contains("E11.0 type 2 diabetes"),
 				"a .0 embedded in a code must be preserved; chart:\n" + text);
+		// Safety (lookahead): a ".0" inside a longer decimal or a version must NOT be trimmed.
+		assertTrue(text.contains("Serum creatinine: 11.05 mg/dL"),
+				"a multi-decimal value must be preserved (11.05 must not become 115); chart:\n" + text);
+		assertTrue(text.contains("Vitamin level: 0.05 mg/dL"),
+				"a sub-1 multi-decimal value must be preserved (0.05 must not become 05); chart:\n" + text);
+		assertTrue(text.contains("Assay reagent lot 1.0.0"),
+				"a dotted version must be preserved; chart:\n" + text);
 	}
 }

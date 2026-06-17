@@ -2,19 +2,21 @@
 
 Tracks GitHub issue [#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51).
 
-> **Status (2026-06-16):** Phase 0 (de-risk/measure), **Phase 0.5** (platform align,
-> [#52](https://github.com/openmrs/openmrs-module-chartsearchai/pull/52)), and **Phase 1**
-> (stop writing the duplicate store,
-> [#53](https://github.com/openmrs/openmrs-module-chartsearchai/pull/53) +
-> [#54](https://github.com/openmrs/openmrs-module-chartsearchai/pull/54) JobRunr fix) are
-> **merged**. Phases 2–5 remain. Each deletion is gated on querystore demonstrably covering the
-> layer being removed, validated against chartsearchai's eval dataset *before* the component is
-> deleted.
+> **Status (2026-06-17): migration COMPLETE.** All phases merged:
+> Phase 0/0.5/1 ([#52](https://github.com/openmrs/openmrs-module-chartsearchai/pull/52),
+> [#53](https://github.com/openmrs/openmrs-module-chartsearchai/pull/53)/[#54](https://github.com/openmrs/openmrs-module-chartsearchai/pull/54)),
+> **Phase 2** querystore-only retrieval + legacy stack deleted ([#57](https://github.com/openmrs/openmrs-module-chartsearchai/pull/57)),
+> **Phase 3** ONNX embedding subsystem deleted ([#58](https://github.com/openmrs/openmrs-module-chartsearchai/pull/58)),
+> **Phase 4** `ChartEmbedding` store deleted ([#59](https://github.com/openmrs/openmrs-module-chartsearchai/pull/59)),
+> **Phase 5a** querystore-only collapse + record-loading layer + `querystore.enabled` GP removed
+> ([#60](https://github.com/openmrs/openmrs-module-chartsearchai/pull/60)), and **Phase 5b** this
+> doc/README/CLAUDE.md reconciliation. chartsearchai is now a pure querystore consumer + LLM /
+> grounding / drug-reference / audit layer, with no in-process retrieval, embedding, store, or toggle.
 >
-> The Phase 0 eval harness (`QueryStoreRetrievalParityEvalTest`,
-> `QueryStoreContentParityEvalTest`) and the `RelevanceCutoff` prototype that produced §3a–§3f
-> live on the `phase0-evals` branch — measurement scaffolding, not yet on `main`
-> (`RelevanceCutoff` is unwired until a later phase uses it).
+> §1–§3 below are the **original plan and Phase-0 measurements**, kept as the historical record of
+> what was removed and why; §4 has the as-shipped per-phase outcome. The Phase-0 eval harness
+> (`QueryStoreRetrievalParityEvalTest`, `QueryStoreContentParityEvalTest`) and the `RelevanceCutoff`
+> prototype remain on the `phase0-evals` branch (measurement scaffolding, not on `main`).
 
 ## 1. Where we already are
 

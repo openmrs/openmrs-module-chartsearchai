@@ -26,6 +26,17 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  */
 final class TestDatasetHelper {
 
+	/** Filesystem location of the all-MiniLM-L6-v2 ONNX model + vocab used by the opt-in
+	 *  querystore retrieval-parity eval ({@code QueryStoreRetrievalParityEvalTest}) to stand up
+	 *  querystore's embedder. Override via {@code -Dchartsearchai.embedding.model.dir=...}; the
+	 *  eval skips when the files are absent, so normal builds don't need the model. */
+	static final String MODEL_DIR = System.getProperty(
+			"chartsearchai.embedding.model.dir", "../models/all-MiniLM-L6-v2");
+
+	static final String MODEL_PATH = MODEL_DIR + "/model.onnx";
+
+	static final String VOCAB_PATH = MODEL_DIR + "/vocab.txt";
+
 	// Full 153-record dataset from a real 16-year-old Male patient chart.
 	static final String[] FULL_PATIENT_DATASET = {
 			/* [  1] */ "Medication prescription: (2026-03-18) Drug order: Azithromycin. Dose: 2.0 Tablet) Intravenous Every six hours. Duration: 5 Days. Quantity: 4.0 Tablet). As needed (subject to heart attack). Dosing: Take after eating. Action: REVISE. Urgency: ROUTINE. Reason: Spectrum",

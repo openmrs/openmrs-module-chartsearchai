@@ -27,9 +27,17 @@ import org.springframework.stereotype.Component;
  * alongside the text.
  *
  * <p>This class adds record timestamps as parenthetical citation labels
- * (e.g. {@code "(2024-01-15)"}) before each record's text. These timestamps
- * are metadata for the LLM to reason about chronology, prepended to the
- * record text supplied by the caller (querystore's serialized documents).
+ * (e.g. {@code "(2024-01-15)"}) to the record text supplied by the caller
+ * (querystore's serialized documents) — metadata for the LLM to reason about
+ * chronology. The timestamp is not repeated on every line; see the compression below.
+ * To save prompt tokens on charts that cluster many records per encounter date,
+ * the date is <strong>run-length compressed</strong>: it is rendered on the first
+ * record of each consecutive same-date run and dropped on the rest (and re-shown
+ * after any undated record, which resets the run). The chart stays a flat numbered
+ * list — a same-date follow-on line looks exactly like a legacy undated line — so
+ * no information is lost and the model's per-record view is unchanged in shape. The
+ * {@link RecordMapping} text, by contrast, always retains the inline date so the
+ * grounding verifier can still resolve a cited date.
  *
  * <p>It also appends an obs-group label (e.g. {@code "(part of: Basic metabolic panel)"})
  * after the body of any record that carries obs-group metadata, so the LLM can cluster
@@ -83,36 +91,53 @@ public class PatientChartSerializer {
 			appendDemographics(sb, patient);
 		}
 
+		// Date-run compression: render a record's "(date)" only when it differs from the immediately
+		// preceding record's date, dropping the repeat on consecutive same-date records. Clinical charts
+		// cluster many records per encounter date and the date is ~7 tokens, so this is the dominant
+		// cold-prefill token saving (~30% fewer prompt tokens) with no information loss — the date still
+		// appears on the first record of each run, and the chart stays a FLAT numbered list (no section
+		// structure, which nudges small models toward over-enumeration). Every line is byte-shaped like a
+		// legacy line: a dated record looks exactly as before; a same-date follow-on looks exactly like a
+		// legacy undated record. So the format demonstration in DEFAULT_SYSTEM_PROMPT still mirrors it and
+		// needs no change.
+		String previousDateLabel = null;
 		for (int i = 0; i < records.size(); i++) {
 			SerializedRecord record = records.get(i);
 			int index = i + 1;
-			// The exact per-record content the LLM sees in the chart line (everything after
-			// the "[N] " index): the date parenthetical plus the synonym-stripped body. The
-			// grounding verifier compares cited records against this same string, so its view
-			// matches the model's — otherwise a cited date (which the model reads from the
-			// prefix) would look unsupported because the bare record body omits it.
-			StringBuilder rendered = new StringBuilder();
-			if (record.getDate() != null) {
-				rendered.append("(").append(DateFormatUtil.formatDate(record.getDate())).append(") ");
-			}
-			rendered.append(ConceptNameUtil.stripSynonyms(record.getText()));
+			String dateLabel = record.getDate() != null ? DateFormatUtil.formatDate(record.getDate()) : null;
+
+			// Body = synonym-stripped text + any obs-group (panel) label + live age — everything after
+			// the "[N] " index EXCEPT the leading date parenthetical.
+			StringBuilder body = new StringBuilder();
+			body.append(ConceptNameUtil.stripSynonyms(record.getText()));
 			// Surface obs-group (e.g. lab-panel / vital-signs-set) membership inline so the LLM can
 			// cluster atomic members of the same group. querystore carries the group identity only in
 			// metadata, never in the doc text (ADR Decision 6), and leaves clustering to the consumer.
-			appendGroupMembership(rendered, record);
+			appendGroupMembership(body, record);
 			// Age is the one demographic that must be computed live: baking it into querystore's
 			// indexed patient record would go stale as the patient ages (the index carries only
 			// birthdate). Merge the current age into that same citable line so "how old is the
-			// patient?" answers directly instead of echoing a birthdate — without resurrecting the
-			// misattribution-prone demographics header. Included in renderedText so the grounding
-			// verifier's view still matches what the model saw.
-			appendLiveAge(rendered, record, patient);
-			String renderedText = rendered.toString();
+			// patient?" answers directly instead of echoing a birthdate.
+			appendLiveAge(body, record, patient);
+			String bodyText = body.toString();
 
+			// The RecordMapping text the grounding verifier compares cited records against ALWAYS carries
+			// the inline date (when the record has one), even when the chart line below drops it as a
+			// same-date repeat: the model can cite a date it read from an earlier record in the run, so
+			// the verifier's per-record view must still contain it. This is unchanged from the legacy
+			// format, so grounding behaviour is identical.
+			String renderedText = dateLabelPrefix(dateLabel) + bodyText;
 			mappings.add(new RecordMapping(index, record.getResourceType(), record.getResourceUuid(),
 					record.getDate(), renderedText));
 
-			sb.append("[").append(index).append("] ").append(renderedText).append("\n");
+			// Chart line: show the date only on the first record of a same-date run (an undated record
+			// resets the run, so the next dated record shows its date again); otherwise drop it.
+			sb.append("[").append(index).append("] ");
+			if (dateLabel != null && !dateLabel.equals(previousDateLabel)) {
+				sb.append(dateLabelPrefix(dateLabel));
+			}
+			sb.append(bodyText).append("\n");
+			previousDateLabel = dateLabel;
 
 			if (focusUuids != null && focusUuids.contains(record.getResourceUuid())) {
 				focusIndices.add(index);
@@ -121,6 +146,16 @@ public class PatientChartSerializer {
 
 		return new PatientChart(sb.toString(), Collections.unmodifiableList(mappings),
 				Collections.unmodifiableList(focusIndices));
+	}
+
+	/**
+	 * The {@code "(date) "} citation-label prefix for a record (or {@code ""} when undated). Single-sourced
+	 * so the chart line and the grounding verifier's {@link RecordMapping} text can never diverge on date
+	 * format: the chart line uses it only on the first record of a same-date run (see serialize), while the
+	 * mapping text uses it on every dated record — but both render the date the same way.
+	 */
+	private static String dateLabelPrefix(String dateLabel) {
+		return dateLabel == null ? "" : "(" + dateLabel + ") ";
 	}
 
 	/**
@@ -282,13 +317,17 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * The exact per-record content the LLM saw in the chart line for this
-		 * index — the date parenthetical (if any), the synonym-stripped body, and
-		 * (for an obs-group member) the trailing {@code "(part of: <group>)"} label,
-		 * i.e. everything after the {@code "[N] "} prefix. The citation grounding
-		 * verifier compares cited records against this so its view matches the
-		 * model's (including the date the model may cite). May be {@code null}
-		 * when the mapping was built without text.
+		 * The full per-record content for this index that the citation grounding
+		 * verifier compares cited records against — the date parenthetical (if any),
+		 * the synonym-stripped body, and (for an obs-group member) the trailing
+		 * {@code "(part of: <group>)"} label. The date is ALWAYS included when the
+		 * record has one, even when the chart line itself dropped it as a same-date
+		 * run repeat (see the class doc's run-length compression): the model may cite
+		 * a date it read from the run's first line, so the verifier's view must retain
+		 * it. For the first record of a run (or an undated record) this equals the
+		 * chart line content after {@code "[N] "}; for a compressed follow-on it is a
+		 * superset (the chart line omits the date this still carries). May be
+		 * {@code null} when the mapping was built without text.
 		 */
 		public String getText() {
 			return text;

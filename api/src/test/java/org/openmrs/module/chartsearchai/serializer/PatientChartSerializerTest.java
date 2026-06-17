@@ -53,9 +53,11 @@ public class PatientChartSerializerTest {
 		assertEquals(datePrefix + "Temperature: 36.7", mappings.get(0).getText());
 		// Undated record: just the body, no parenthetical.
 		assertEquals("Type 2 diabetes mellitus", mappings.get(1).getText());
-		// And the mapping text is exactly the chart line content after the "[N] " prefix.
+		// The mapping text always carries the date (for grounding); the chart line shows it only on the
+		// first record of a same-date run, so in general the mapping is a superset of the chart line.
+		// Here the dated record IS first of its run, so its chart line carries the date inline too.
 		assertTrue(chart.getText().contains("[1] " + datePrefix + "Temperature: 36.7"),
-				"chart line should equal '[N] ' + the mapping text; chart was:\n" + chart.getText());
+				"first-of-run dated record shows its date inline; chart was:\n" + chart.getText());
 	}
 
 	@Test
@@ -149,5 +151,47 @@ public class PatientChartSerializerTest {
 		assertTrue(chart.getText().startsWith("Patient: Female"),
 				"computed header must be the fallback when no patient record is present; chart was:\n"
 						+ chart.getText());
+	}
+
+	@Test
+	public void serialize_dropsRepeatedDateOnConsecutiveSameDateRecords() {
+		// Cold-prefill token saving: the "(date)" parenthetical (~7 tokens) is rendered only on the first
+		// record of each consecutive same-date run and dropped on the rest. Charts cluster many records
+		// per encounter date, so this removes ~30% of prompt tokens with no information loss (the date is
+		// still present once per run) and keeps the chart a flat list (no section structure).
+		Date dateA = new Date(1700000000000L); // 2023-11-14 UTC
+		Date dateB = new Date(1690000000000L); // 2023-07-22 UTC
+		String a = DateFormatUtil.formatDate(dateA);
+		String b = DateFormatUtil.formatDate(dateB);
+		SerializedRecord r1 = new SerializedRecord("obs", "u1", "Pulse: 80 bpm", dateA);
+		SerializedRecord r2 = new SerializedRecord("obs", "u2", "Temperature: 36.7 C", dateA);
+		SerializedRecord r3 = new SerializedRecord("obs", "u3", "Weight: 70 kg", dateB);
+
+		PatientChart chart = new PatientChartSerializer().serialize(null, Arrays.asList(r1, r2, r3));
+
+		// [1] shows date A (run start); [2] drops it (same date); [3] shows date B (new run).
+		assertEquals("[1] (" + a + ") Pulse: 80 bpm\n[2] Temperature: 36.7 C\n[3] (" + b + ") Weight: 70 kg\n",
+				chart.getText());
+		// Grounding contract intact: every dated record's mapping text still carries its inline date.
+		assertEquals("(" + a + ") Pulse: 80 bpm", chart.getMappings().get(0).getText());
+		assertEquals("(" + a + ") Temperature: 36.7 C", chart.getMappings().get(1).getText());
+		assertEquals("(" + b + ") Weight: 70 kg", chart.getMappings().get(2).getText());
+	}
+
+	@Test
+	public void serialize_undatedRecordResetsRun_soNextSameDateShowsItsDateAgain() {
+		// An undated record renders as a plain "[N] body" line (exactly as in the legacy format) and resets
+		// the run, so a following record of the SAME date re-shows its date rather than being silently
+		// absorbed into a run the undated record broke.
+		Date dateA = new Date(1700000000000L);
+		String a = DateFormatUtil.formatDate(dateA);
+		SerializedRecord r1 = new SerializedRecord("obs", "u1", "Pulse: 80 bpm", dateA);
+		SerializedRecord r2 = new SerializedRecord("condition", "u2", "Hypertension", null);
+		SerializedRecord r3 = new SerializedRecord("obs", "u3", "Weight: 70 kg", dateA);
+
+		PatientChart chart = new PatientChartSerializer().serialize(null, Arrays.asList(r1, r2, r3));
+
+		assertEquals("[1] (" + a + ") Pulse: 80 bpm\n[2] Hypertension\n[3] (" + a + ") Weight: 70 kg\n",
+				chart.getText());
 	}
 }

@@ -18,7 +18,7 @@
 - Follow test-driven development: for every bug fix or new feature, first write a failing test that defines the expected behavior, then write production code to make it pass. Write the strictest assertion — if it doesn't fail, tighten it until it does.
 - Always create a plan before writing code. Read the relevant code, outline the approach, then implement.
 - Never commit code with known regressions. When a change fixes one case but breaks another, the root cause is usually in shared infrastructure, not the individual call site — diagnose the shared problem before patching stages.
-- Retrieval is owned by openmrs-module-querystore (issue #51). chartsearchai no longer has an in-process embedding/Lucene/Elasticsearch pipeline, scoring/ranking code, an embedding store, or a retrieval eval harness — do not reintroduce them. Retrieval changes belong in the querystore module; here, the querystore-backed parity evals (`QueryStoreRetrievalParityEvalTest` / `QueryStoreContentParityEvalTest`) are the retrieval gate.
+- Retrieval is owned by openmrs-module-querystore (issue #51). chartsearchai no longer has an in-process embedding/Lucene/Elasticsearch pipeline, scoring/ranking code, an embedding store, or a retrieval eval harness — do not reintroduce them. Retrieval changes *and retrieval-quality evaluation* belong in the querystore module (it owns the index and the e5-base-v2 embedder), not here.
 
 # API surface rules — do not bypass these methods
 

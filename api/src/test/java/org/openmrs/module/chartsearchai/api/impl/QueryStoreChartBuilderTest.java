@@ -314,7 +314,9 @@ public class QueryStoreChartBuilderTest {
 		String text = chart.getText();
 		assertTrue(text.contains("Sodium: 140 mmol/L (part of: Basic metabolic panel)"),
 				"a group-obs member must render its group label so the LLM can cluster it; chart was:\n" + text);
-		assertTrue(text.contains("Potassium: 4.0 mmol/L (part of: Basic metabolic panel)"),
+		// "4.0" -> "4": the serializer trims OpenMRS's value-lossless trailing-zero formatting; the group
+		// label (what this test actually pins) is unaffected.
+		assertTrue(text.contains("Potassium: 4 mmol/L (part of: Basic metabolic panel)"),
 				"every member of the group must carry the same label; chart was:\n" + text);
 		assertFalse(text.contains("Temperature: 36.7 C (part of:"),
 				"a non-grouped obs must NOT get a group label; chart was:\n" + text);
@@ -361,7 +363,8 @@ public class QueryStoreChartBuilderTest {
 		builder.usePreFilter = false;
 		PatientChart chart = builder.build(patient(1), "creatinine?");
 
-		assertTrue(chart.getText().contains("Creatinine: 1.0 mg/dL"),
+		// "1.0" -> "1": value-lossless trailing-zero trim; the obs body still renders, which is the point.
+		assertTrue(chart.getText().contains("Creatinine: 1 mg/dL"),
 				"the obs body must still render; chart was:\n" + chart.getText());
 		assertFalse(chart.getText().contains("part of:"),
 				"a blank concept name must be treated as absent — no group suffix; chart was:\n" + chart.getText());

@@ -194,4 +194,29 @@ public class PatientChartSerializerTest {
 		assertEquals("[1] (" + a + ") Pulse: 80 bpm\n[2] Hypertension\n[3] (" + a + ") Weight: 70 kg\n",
 				chart.getText());
 	}
+
+	@Test
+	public void serialize_trimsTrailingZeroDecimalFromNumericValues_butNotFromCodes() {
+		// Token saving: OpenMRS formats whole-number obs values as "988.0" — the trailing ".0" is
+		// formatting noise, not precision, so dropping it is value-lossless. Scoped to STANDALONE numeric
+		// values: a ".0" embedded in a code/version (e.g. an ICD-10 diagnosis "E11.0", where "E11" is a
+		// DIFFERENT diagnosis) must be preserved, or the trim would silently corrupt clinical meaning.
+		Date d = new Date(1700000000000L);
+		String date = DateFormatUtil.formatDate(d);
+		SerializedRecord obs = new SerializedRecord("obs", "u1", "CD4 Count: 988.0 cells/mmL", d);
+		SerializedRecord vital = new SerializedRecord("obs", "u2", "Respiratory Rate: 18.0 breaths/min", d);
+		SerializedRecord coded = new SerializedRecord("diagnosis", "u3", "Diagnosis: E11.0 type 2 diabetes", d);
+
+		PatientChart chart = new PatientChartSerializer().serialize(null, Arrays.asList(obs, vital, coded));
+		String text = chart.getText();
+
+		// Standalone numeric ".0" trimmed (value identical) on both the chart line and the mapping text.
+		assertTrue(text.contains("CD4 Count: 988 cells/mmL"), "pure-numeric .0 trimmed; chart:\n" + text);
+		assertTrue(text.contains("Respiratory Rate: 18 breaths/min"), "vital .0 trimmed; chart:\n" + text);
+		assertFalse(text.contains("988.0") || text.contains("18.0"), "no trailing .0 left on numeric values");
+		assertEquals("(" + date + ") CD4 Count: 988 cells/mmL", chart.getMappings().get(0).getText());
+		// Safety: a ".0" inside a code must NOT be trimmed — "E11.0" -> "E11" would change the diagnosis.
+		assertTrue(text.contains("E11.0 type 2 diabetes"),
+				"a .0 embedded in a code must be preserved; chart:\n" + text);
+	}
 }

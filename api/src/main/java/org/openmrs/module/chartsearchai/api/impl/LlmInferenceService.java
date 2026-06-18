@@ -53,6 +53,10 @@ public class LlmInferenceService implements ChartSearchService {
 
 	private static final Logger log = LoggerFactory.getLogger(LlmInferenceService.class);
 
+	/** Sink for the progressive-reasoning preview pass's answer tokens: the preview's answer is never
+	 *  shown — only its reasoning surfaces, and only the full-chart pass is committed. */
+	private static final Consumer<String> DISCARD_TOKENS = token -> { };
+
 	@Autowired
 	private LlmProvider llmProvider;
 
@@ -227,6 +231,52 @@ public class LlmInferenceService implements ChartSearchService {
 		return patient.getUuid();
 	}
 
+	/** Test seam wrapping {@link PipelineSettings#progressiveReasoningEnabled()}; production
+	 *  delegates, tests override to exercise the preview path without an OpenMRS context. */
+	protected boolean resolveProgressiveReasoningEnabled() {
+		return PipelineSettings.progressiveReasoningEnabled();
+	}
+
+	/**
+	 * Progressive reasoning (stage 1): when {@code chartsearchai.progressiveReasoning.enabled}, run a
+	 * fast LLM pass over ONLY the querystore top-K focused chart and stream its reasoning to the
+	 * {@code reasoningConsumer} ("thinking" channel), ahead of the unchanged full-chart answer. The
+	 * focused chart is a few hundred tokens vs the full chart's several thousand, so on a GPU-less
+	 * host its prefill — and thus time-to-first-reasoning — is far smaller. Quality is unaffected:
+	 * the preview's answer tokens are discarded ({@link #DISCARD_TOKENS}); only the full-chart pass
+	 * (run by the caller after this) is committed; and the preview uses a {@code null} KV scope so it
+	 * does no on-disk KV I/O and never writes the patient's persisted full-chart KV entry. (It does
+	 * occupy llama-server's single slot, so the full pass that follows restores the full-chart KV
+	 * from disk rather than reusing warm RAM — keep {@code chartsearchai.llm.kvCacheDir} enabled.)
+	 * A preview failure is
+	 * swallowed — the full-chart answer is authoritative and must never be blocked by this optional
+	 * speed-up. Returns the elapsed wall time (the {@code previewMs} timing field), or 0 when the
+	 * gate is off or the focused chart has no records.
+	 */
+	private long maybeEmitPreliminaryReasoning(Patient patient, String question,
+			Consumer<String> reasoningConsumer) {
+		long start = System.currentTimeMillis();
+		try {
+			if (!resolveProgressiveReasoningEnabled()) {
+				return 0L;
+			}
+			PatientChart focused = chartBuildingStrategy.buildFocusedChart(patient, question);
+			if (focused != null && !focused.getMappings().isEmpty()) {
+				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
+						DISCARD_TOKENS, reasoningConsumer, null);
+			}
+		}
+		catch (RuntimeException e) {
+			// The preview is an optional speed-up; if anything fails (including reading the gate GP
+			// when no OpenMRS context is available) skip it. The full-chart answer is authoritative
+			// and must never be blocked by it.
+			log.warn("Preliminary reasoning skipped for patient [id={}]: {}",
+					patient == null ? null : patient.getPatientId(), e.getMessage());
+			return 0L;
+		}
+		return System.currentTimeMillis() - start;
+	}
+
 	@Override
 	public ChartAnswer searchStreaming(Patient patient, String question,
 			Consumer<String> tokenConsumer) {
@@ -253,11 +303,13 @@ public class LlmInferenceService implements ChartSearchService {
 			Consumer<List<RecordReference>> citationsConsumer,
 			Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 		// LOG FORMAT — stable contract: same field set as search() with op=searchStreaming
-		// in the log tag, plus groundMs (Tier-2 grounding is now timed separately so the tail is
-		// visible). Streaming is the path the frontend actually uses by default, so this is what
-		// demo operators see in their logs. try/finally so exceptions still emit a timing line.
+		// in the log tag, plus previewMs (progressive-reasoning preview pass) and groundMs (Tier-2
+		// grounding, timed separately so the tail is visible). Streaming is the path the frontend
+		// actually uses by default, so this is what demo operators see in their logs. try/finally
+		// so exceptions still emit a timing line.
 		long buildStart = System.currentTimeMillis();
 		long buildMs = 0;
+		long previewMs = 0;
 		long llmMs = 0;
 		long groundMs = 0;
 		long inputTokens = 0;
@@ -267,6 +319,12 @@ public class LlmInferenceService implements ChartSearchService {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
 			chart = drugReferenceInjector.inject(chart, patient, question);
 			buildMs = System.currentTimeMillis() - buildStart;
+
+			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
+			// the thinking channel before the full-chart answer prefills. No-op (returns 0) when the
+			// gate is off. Runs after the full chart is built so the patient's querystore index is
+			// already warm when the preview's searchByPatient runs (a cold patient pays it once).
+			previewMs = maybeEmitPreliminaryReasoning(patient, question, reasoningConsumer);
 
 			long llmStart = System.currentTimeMillis();
 			LlmResponse response = llmProvider.searchStreaming(
@@ -305,9 +363,9 @@ public class LlmInferenceService implements ChartSearchService {
 			return answer;
 		}
 		finally {
-			log.info("[timing] searchStreaming patient={} chartBuildMs={} llmMs={} groundMs={} totalMs={} inputTokens={} cachedTokens={} outcome={}",
+			log.info("[timing] searchStreaming patient={} chartBuildMs={} previewMs={} llmMs={} groundMs={} totalMs={} inputTokens={} cachedTokens={} outcome={}",
 					patient == null ? null : patient.getPatientId(),
-					buildMs, llmMs, groundMs, buildMs + llmMs + groundMs,
+					buildMs, previewMs, llmMs, groundMs, buildMs + previewMs + llmMs + groundMs,
 					inputTokens, cachedTokens, outcome);
 		}
 	}

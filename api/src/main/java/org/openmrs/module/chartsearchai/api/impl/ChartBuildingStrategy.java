@@ -35,6 +35,16 @@ class ChartBuildingStrategy {
 		return queryStoreChartBuilder.build(patient, question);
 	}
 
+	/**
+	 * Builds a small "focused" chart of only the querystore top-K records most relevant to the
+	 * question, for the progressive-reasoning preview pass. Unlike {@link #buildChart}, this is
+	 * query-dependent and is never the committed answer's context — see
+	 * {@code LlmInferenceService.maybeEmitPreliminaryReasoning}.
+	 */
+	PatientChart buildFocusedChart(Patient patient, String question) {
+		return queryStoreChartBuilder.buildFocused(patient, question);
+	}
+
 	boolean usePreFilter() {
 		return PipelineSettings.usePreFilter();
 	}

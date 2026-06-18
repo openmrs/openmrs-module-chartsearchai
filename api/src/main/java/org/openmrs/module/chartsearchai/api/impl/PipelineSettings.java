@@ -40,8 +40,28 @@ final class PipelineSettings {
 	}
 
 	static int getQueryStoreTopK() {
-		String value = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_QUERYSTORE_TOP_K);
+		return readPositiveInt(ChartSearchAiConstants.GP_QUERYSTORE_TOP_K,
+				ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K, "queryStoreTopK");
+	}
+
+	static boolean progressiveReasoningEnabled() {
+		String mode = Context.getAdministrationService().getGlobalProperty(
+				ChartSearchAiConstants.GP_PROGRESSIVE_REASONING_ENABLED,
+				String.valueOf(ChartSearchAiConstants.DEFAULT_PROGRESSIVE_REASONING_ENABLED));
+		return "true".equalsIgnoreCase(mode.trim());
+	}
+
+	static int getProgressiveReasoningTopK() {
+		return readPositiveInt(ChartSearchAiConstants.GP_PROGRESSIVE_REASONING_TOP_K,
+				ChartSearchAiConstants.DEFAULT_PROGRESSIVE_REASONING_TOP_K, "progressiveReasoningTopK");
+	}
+
+	/** Reads a strictly-positive integer global property, or returns {@code defaultValue} when the
+	 *  property is unset, blank, non-numeric, or not positive. A non-numeric value is logged at WARN
+	 *  ({@code label} names the setting). The parse/validation contract lives here so the two topK
+	 *  getters (querystore focus-hint and progressive-reasoning preview) cannot drift apart. */
+	private static int readPositiveInt(String gpKey, int defaultValue, String label) {
+		String value = Context.getAdministrationService().getGlobalProperty(gpKey);
 		if (value != null && !value.trim().isEmpty()) {
 			try {
 				int parsed = Integer.parseInt(value.trim());
@@ -50,9 +70,9 @@ final class PipelineSettings {
 				}
 			}
 			catch (NumberFormatException e) {
-				log.warn("Invalid queryStoreTopK value '{}', using default", value);
+				log.warn("Invalid {} value '{}', using default", label, value);
 			}
 		}
-		return ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K;
+		return defaultValue;
 	}
 }

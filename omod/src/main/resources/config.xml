@@ -152,6 +152,18 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.progressiveReasoning.enabled</property>
+		<defaultValue>false</defaultValue>
+		<description>When true, a streaming AI query first streams a fast "preliminary" reasoning pass over only the top chartsearchai.progressiveReasoning.topK querystore records (a few hundred tokens) to the thinking channel, ahead of the unchanged full-chart answer. On a GPU-less host the full chart is a multi-thousand-token prefill (tens of seconds to minutes to the first token); the focused preview prefills in a second or two, so the clinician sees reasoning almost immediately. The committed answer is still the full-chart call (the preview's answer is discarded), so response quality is unchanged. Default: false (opt-in): the two passes share llama-server's single slot, trading a marginally longer time-to-final-answer for a much shorter time-to-first-reasoning. Affects only the streaming search endpoint.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.progressiveReasoning.topK</property>
+		<defaultValue>15</defaultValue>
+		<description>Number of top querystore records the progressive-reasoning preview pass reasons over (see chartsearchai.progressiveReasoning.enabled). Smaller = faster preview prefill but less context for the preliminary reasoning; the committed full-chart answer is unaffected. Kept separate from chartsearchai.querystore.topK so the two can be tuned independently. Default: 15.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.grounding.enabled</property>
 		<defaultValue>false</defaultValue>
 		<description>When true, every cited record is checked for grounding after the LLM answers: the record's text must be semantically close enough to the answer sentence(s) that cite it, otherwise the citation is flagged as unverified. Index validation alone (does [N] map to a real retrieved record?) cannot catch the dangerous case of a real record cited for a claim it does not actually support. Default: false (opt-in).</description>

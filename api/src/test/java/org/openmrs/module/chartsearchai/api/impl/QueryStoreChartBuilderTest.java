@@ -454,6 +454,90 @@ public class QueryStoreChartBuilderTest {
 				"second surviving record should be valid2 (Obs obs-1)");
 	}
 
+	// ---- buildFocused: the progressive-reasoning preview's focused top-K chart ----
+	// buildFocused is the query-dependent variant used ONLY by the preview pass: the
+	// searchByPatient top-K hits ARE the chart (small prefill), and it never fetches the full
+	// chart. These pin that contract plus the guards and the focus-RPC failure degradation.
+
+	@Test
+	public void buildFocused_shouldReturnSearchHitsAsTheChart_andNotFetchFullChart() {
+		QueryDocument hit1 = new QueryDocument();
+		hit1.setResourceType("Condition");
+		hit1.setResourceUuid("cond-1");
+		hit1.setText("Hypertension");
+		QueryDocument hit2 = new QueryDocument();
+		hit2.setResourceType("Obs");
+		hit2.setResourceUuid("obs-1");
+		hit2.setText("Systolic blood pressure: 140 mmHg");
+		queryStore.stubHits = new ArrayList<>();
+		queryStore.stubHits.add(hit1);
+		queryStore.stubHits.add(hit2);
+
+		PatientChart chart = builder.buildFocused(patient(1), "blood pressure?");
+
+		assertEquals(2, chart.getMappings().size(),
+				"the focused chart IS the searchByPatient top-K hits, serialized as records");
+		assertEquals("cond-1", chart.getMappings().get(0).getResourceUuid(),
+				"order preserved from the ranked hits");
+		assertEquals("obs-1", chart.getMappings().get(1).getResourceUuid());
+		assertEquals(1, queryStore.searchByPatientCalls,
+				"buildFocused ranks the focused set via searchByPatient");
+		assertEquals(0, queryStore.getPatientChartCalls,
+				"buildFocused must NOT fetch the full chart — keeping the prefix small is the whole "
+						+ "point of the preview pass");
+	}
+
+	@Test
+	public void buildFocused_shouldRequestProgressiveTopK_notQueryStoreTopK() {
+		// The preview's focused-set size is its OWN knob (progressiveReasoning.topK), independent of
+		// the focus-hint size (querystore.topK=10 here). A regression that reused the wrong knob would
+		// silently change preview cost/quality without any other test failing.
+		builder.progressiveTopK = 7;
+
+		builder.buildFocused(patient(1), "any infections?");
+
+		assertEquals(7, queryStore.lastSearchTopK,
+				"buildFocused must size the focused set by progressiveReasoning.topK, not querystore.topK");
+	}
+
+	@Test
+	public void buildFocused_shouldReturnEmptyChartAndSkipSearch_whenQuestionBlankOrNull() {
+		assertEquals(0, builder.buildFocused(patient(1), "   ").getMappings().size(),
+				"a blank question has no ranking signal — empty focused chart, no preview");
+		assertEquals(0, builder.buildFocused(patient(1), null).getMappings().size(),
+				"a null question must not NPE — empty focused chart");
+		assertEquals(0, queryStore.searchByPatientCalls,
+				"blank/null question must short-circuit before spending a searchByPatient RPC");
+	}
+
+	@Test
+	public void buildFocused_shouldReturnEmptyChartAndSkipSearch_whenPatientOrUuidIsNull() {
+		assertEquals(0, builder.buildFocused(null, "q").getMappings().size(),
+				"null patient must not NPE — empty focused chart");
+		Patient noUuid = new Patient();
+		noUuid.setPatientId(99);
+		noUuid.setUuid(null);
+		assertEquals(0, builder.buildFocused(noUuid, "q").getMappings().size(),
+				"a patient without a uuid cannot be ranked — empty focused chart");
+		assertEquals(0, queryStore.searchByPatientCalls,
+				"missing patient/uuid must short-circuit before any querystore RPC");
+	}
+
+	@Test
+	public void buildFocused_shouldReturnEmptyChart_whenSearchByPatientThrows() {
+		// A focus-RPC failure must degrade to an empty focused chart (the caller treats that as
+		// "no preview") and NEVER propagate — the authoritative full-chart answer must not be
+		// blocked by the optional preview pass.
+		queryStore.throwOnSearch = true;
+
+		PatientChart chart = builder.buildFocused(patient(1), "any allergies?");
+
+		assertEquals(0, chart.getMappings().size(),
+				"a focus-RPC failure degrades to an empty focused chart, not a propagated throw");
+		assertEquals(1, queryStore.searchByPatientCalls,
+				"the failure happened inside searchByPatient — it was reached, then swallowed");
+	}
+
 	/**
 	 * Subclass that bypasses {@code Context.getService} so this test runs without
 	 * a live OpenMRS context. The {@code resolve*} overrides are the seam — every
@@ -472,6 +556,8 @@ public class QueryStoreChartBuilderTest {
 
 		boolean dedupGroupLabels = false;
 
+		int progressiveTopK = 5;
+
 		TestableQueryStoreChartBuilder(QueryStoreService stub) {
 			this.stub = stub;
 		}
@@ -484,6 +570,11 @@ public class QueryStoreChartBuilderTest {
 		@Override
 		protected int resolveQueryStoreTopK() {
 			return 10;
+		}
+
+		@Override
+		protected int resolveProgressiveReasoningTopK() {
+			return progressiveTopK;
 		}
 
 		@Override
@@ -503,6 +594,8 @@ public class QueryStoreChartBuilderTest {
 
 		int getPatientChartCalls = 0;
 
+		int lastSearchTopK = -1;
+
 		List<QueryDocument> stubHits = new ArrayList<QueryDocument>();
 
 		List<QueryDocument> stubChart = new ArrayList<QueryDocument>();
@@ -518,6 +611,7 @@ public class QueryStoreChartBuilderTest {
 		@Override
 		public List<QueryDocument> searchByPatient(String patientUuid, String question, int topK) {
 			searchByPatientCalls++;
+			lastSearchTopK = topK;
 			if (throwOnSearch) {
 				throw new RuntimeException("simulated focus-hint RPC failure");
 			}

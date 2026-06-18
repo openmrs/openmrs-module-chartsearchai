@@ -171,6 +171,64 @@ class QueryStoreChartBuilder {
 		return chart;
 	}
 
+	/**
+	 * Builds a focused chart of only the top-K querystore records most relevant to {@code question},
+	 * for the progressive-reasoning preview pass. Uses the SAME relevance ranking the preFilter focus
+	 * hint uses ({@link QueryStoreService#searchByPatient}), but here the K records ARE the chart (a
+	 * few hundred tokens) rather than a hint over the full chart — so the preview's prefill is small.
+	 * Returns an empty chart on a null/blank question, missing patient, unavailable querystore, or an
+	 * empty hit list; the caller treats an empty focused chart as "no preview".
+	 */
+	PatientChart buildFocused(Patient patient, String question) {
+		long buildStart = System.currentTimeMillis();
+		// Every exit emits a [timing] querystoreFocusedBuild line (outcome=skipped|unavailable|error|ok),
+		// matching build()'s contract so a dashboard grepping outcome= doesn't undercount focused-build
+		// failures.
+		if (patient == null || patient.getUuid() == null || question == null || question.trim().isEmpty()) {
+			log.info("[timing] querystoreFocusedBuild patient={} hits=0 rpcMs=0 serializeMs=0 totalMs={} outcome=skipped",
+					patient == null ? null : patient.getPatientId(), System.currentTimeMillis() - buildStart);
+			return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());
+		}
+
+		QueryStoreService queryStore;
+		try {
+			queryStore = resolveQueryStoreService();
+		}
+		catch (APIException | LinkageError e) {
+			// The full-chart build() runs first on the same request and logs the actionable
+			// "check the querystore module" remediation; here we only record the outcome for parity.
+			log.info("[timing] querystoreFocusedBuild patient={} hits=0 rpcMs=0 serializeMs=0 totalMs={} outcome=unavailable",
+					patient.getPatientId(), System.currentTimeMillis() - buildStart);
+			return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());
+		}
+
+		long rpcStart = System.currentTimeMillis();
+		List<QueryDocument> hits;
+		try {
+			String preprocessedQuestion = QueryPreprocessor.stripQueryStopwords(question);
+			hits = queryStore.searchByPatient(patient.getUuid(), preprocessedQuestion,
+					resolveProgressiveReasoningTopK());
+		}
+		catch (RuntimeException e) {
+			log.warn("QueryStore.searchByPatient failed for focused build [uuid={}] — returning empty focused chart",
+					patient.getUuid(), e);
+			log.info("[timing] querystoreFocusedBuild patient={} hits=0 rpcMs={} serializeMs=0 totalMs={} outcome=error errorClass={}",
+					patient.getPatientId(), System.currentTimeMillis() - rpcStart,
+					System.currentTimeMillis() - buildStart, e.getClass().getSimpleName());
+			return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());
+		}
+		long rpcMs = System.currentTimeMillis() - rpcStart;
+
+		List<SerializedRecord> records = toSerializedRecords(hits);
+		long serializeStart = System.currentTimeMillis();
+		PatientChart chart = chartSerializer.serialize(patient, records);
+		long serializeMs = System.currentTimeMillis() - serializeStart;
+		log.info("[timing] querystoreFocusedBuild patient={} hits={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
+				patient.getPatientId(), records.size(), rpcMs, serializeMs,
+				System.currentTimeMillis() - buildStart);
+		return chart;
+	}
+
 	/** Collects {@code resource_uuid}s from a hit list, skipping nulls and malformed docs.
 	 *  These uuids are mapped to 1-based chart indices in {@code PatientChartSerializer.serialize}
 	 *  to render the LLM-facing focus hint. */
@@ -242,6 +300,11 @@ class QueryStoreChartBuilder {
 	/** Seam for tests: production reads the global property. */
 	protected int resolveQueryStoreTopK() {
 		return PipelineSettings.getQueryStoreTopK();
+	}
+
+	/** Seam for tests: production reads the global property. */
+	protected int resolveProgressiveReasoningTopK() {
+		return PipelineSettings.getProgressiveReasoningTopK();
 	}
 
 	/** Seam for tests: production reads the global property. */

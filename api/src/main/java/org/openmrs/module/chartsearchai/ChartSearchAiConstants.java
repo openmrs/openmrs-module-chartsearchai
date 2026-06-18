@@ -111,6 +111,31 @@ public class ChartSearchAiConstants {
 	public static final String GP_WARMUP_ENABLED = "chartsearchai.warmupEnabled";
 
 	/**
+	 * When {@code true}, a streaming query first runs a fast "preview" reasoning pass over only the
+	 * querystore top-K query-relevant records and streams that reasoning to the thinking channel,
+	 * ahead of the unchanged full-chart answer. The focused chart is a few hundred tokens versus the
+	 * full chart's several thousand, so on a GPU-less host its prefill — and thus
+	 * time-to-first-reasoning — is far smaller. The committed answer is still the full-chart call
+	 * (the preview answer is discarded), so response quality is unchanged. Default {@code false}
+	 * (opt-in): the two passes serialize on llama-server's single slot, so it trades a marginally
+	 * longer time-to-final-answer for a much shorter time-to-first-reasoning. See
+	 * {@code LlmInferenceService.maybeEmitPreliminaryReasoning}.
+	 */
+	public static final String GP_PROGRESSIVE_REASONING_ENABLED = "chartsearchai.progressiveReasoning.enabled";
+
+	public static final boolean DEFAULT_PROGRESSIVE_REASONING_ENABLED = false;
+
+	/**
+	 * Number of top-ranked querystore records the progressive-reasoning preview pass reasons over.
+	 * Smaller = faster preview prefill but less context for the preliminary reasoning; the committed
+	 * full-chart answer is unaffected either way. Kept distinct from {@link #GP_QUERYSTORE_TOP_K}
+	 * (the focus-hint size) so the two can be tuned independently.
+	 */
+	public static final String GP_PROGRESSIVE_REASONING_TOP_K = "chartsearchai.progressiveReasoning.topK";
+
+	public static final int DEFAULT_PROGRESSIVE_REASONING_TOP_K = 15;
+
+	/**
 	 * When {@code true}, every cited record is checked for grounding after the
 	 * LLM answers: the record's text must be semantically close enough to the
 	 * answer sentence(s) that cite it, otherwise the citation is flagged as

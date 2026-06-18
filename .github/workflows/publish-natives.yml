@@ -40,7 +40,15 @@ jobs:
             # We ship only the binary (no sibling libs), so don't link OpenSSL - it
             # isn't needed for local inference and libssl.so.3/libcrypto.so.3 would be
             # missing on minimal hosts. (Matches every other leg; see the Windows x64 note.)
-            cmake_extra: '-DLLAMA_OPENSSL=OFF'
+            # Pin a portable x86-64 ISA baseline instead of GGML_NATIVE's default (-march=native),
+            # which tunes the binary to THIS Intel runner's CPU (incl. AVX-512). That published
+            # binary then risks SIGILL on hosts lacking those extensions - e.g. the AMD EPYC Milan
+            # demo box is AVX2-only (no AVX-512). AVX2+FMA+F16C (~x86-64-v3 sans AVX-512) is the
+            # practical floor for any host that can run a local LLM and is what the demo already
+            # uses, so this is portability/safety, not a perf change. Mirrors the ARM legs pinning
+            # armv8.2-a. (For peak-per-host later: GGML_BACKEND_DL + GGML_CPU_ALL_VARIANTS, but that
+            # ships multiple .so variants and breaks the single-self-contained-binary assumption.)
+            cmake_extra: '-DLLAMA_OPENSSL=OFF -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON'
           - os: ubuntu-22.04-arm
             platform: Linux
             arch: aarch64
@@ -63,9 +71,13 @@ jobs:
             #   GGML_OPENMP=OFF            - drop vcomp140.dll (matches the Windows ARM64 leg)
             #   CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded - static CRT, drop msvcp140 /
             #                                vcruntime140 / vcruntime140_1
+            #   GGML_NATIVE=OFF + AVX/AVX2/FMA/F16C - pin a portable x86-64 baseline instead of
+            #                                -march=native, which would tune the .exe to this Intel
+            #                                runner (incl. AVX-512) and risk SIGILL on AVX2-only or
+            #                                AMD hosts. Same baseline as the Linux x86_64 leg.
             # Result: imports only in-box Windows DLLs (kernel32, advapi32, ws2_32,
             # crypt32, and the Win10/11 UCRT api-ms-win-crt-*). Verified with objdump.
-            cmake_extra: '-DLLAMA_OPENSSL=OFF -DGGML_OPENMP=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded'
+            cmake_extra: '-DLLAMA_OPENSSL=OFF -DGGML_OPENMP=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON'
           - os: windows-2022
             platform: Windows
             arch: aarch64

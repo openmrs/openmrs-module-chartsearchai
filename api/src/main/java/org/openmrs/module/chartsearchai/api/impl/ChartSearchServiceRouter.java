@@ -98,6 +98,16 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 			Consumer<List<RecordReference>> citationsConsumer,
 			Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+		// No separate preliminary channel: route preview reasoning (if any) to the reasoning channel.
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+				ungroundedAnswerConsumer, reasoningConsumer);
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer) {
 		int ttlMinutes = getCacheTtlMinutes();
 
 		if (ttlMinutes > 0) {
@@ -118,13 +128,14 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 			}
 
 			ChartAnswer answer = llmService.searchStreaming(patient, question, tokenConsumer,
-					reasoningConsumer, citationsConsumer, ungroundedAnswerConsumer);
+					reasoningConsumer, citationsConsumer, ungroundedAnswerConsumer,
+					preliminaryReasoningConsumer);
 			putCache(cacheKey, answer);
 			return answer;
 		}
 
 		return llmService.searchStreaming(patient, question, tokenConsumer, reasoningConsumer,
-				citationsConsumer, ungroundedAnswerConsumer);
+				citationsConsumer, ungroundedAnswerConsumer, preliminaryReasoningConsumer);
 	}
 
 	/** Test seam: production wires the inference service via {@link Autowired}. */

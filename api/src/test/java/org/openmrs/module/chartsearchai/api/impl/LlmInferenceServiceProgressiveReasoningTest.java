@@ -159,6 +159,30 @@ public class LlmInferenceServiceProgressiveReasoningTest {
 		assertEquals("FULL-ANSWER [8]", answer.getAnswer());
 	}
 
+	@Test
+	public void searchStreaming_routesPreviewToPreliminaryChannel_onThe7ArgOverload() {
+		// The 7-arg overload splits preview reasoning onto its own "preliminary" channel so the UI can
+		// render it as provisional and REPLACE it when the committed full-chart reasoning arrives —
+		// the fix for a wrong preview misleading the clinician. The 6-arg overload (above) keeps the
+		// merged-into-thinking behavior.
+		service.progressiveEnabled = true;
+		List<String> preliminary = new ArrayList<String>();
+
+		ChartAnswer answer = service.searchStreaming(patient(), "any infections?",
+				answerTokens::add, reasonings::add, citations -> { }, ungrounded -> { },
+				preliminary::add);
+
+		assertEquals(Collections.singletonList("PREVIEW-REASONING"), preliminary,
+				"preview reasoning must go to the dedicated preliminary channel, separate from the "
+						+ "reasoning channel");
+		assertEquals(Collections.singletonList("FULL-REASONING"), reasonings,
+				"the committed full-chart reasoning stays on the reasoning channel — NOT merged with "
+						+ "the preview");
+		assertEquals(Collections.singletonList("FULL-ANSWER"), answerTokens,
+				"the preview answer is still discarded; only the full-chart answer reaches the clinician");
+		assertEquals("FULL-ANSWER [8]", answer.getAnswer());
+	}
+
 	/** Context-free service: GP-backed resolvers overridden so no OpenMRS Context is needed. */
 	private final class TestableService extends LlmInferenceService {
 

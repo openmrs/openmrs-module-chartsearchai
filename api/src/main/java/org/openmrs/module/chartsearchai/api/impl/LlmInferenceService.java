@@ -302,6 +302,17 @@ public class LlmInferenceService implements ChartSearchService {
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 			Consumer<List<RecordReference>> citationsConsumer,
 			Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+		// No separate preliminary channel requested: route the progressive-reasoning preview (if any)
+		// to the reasoning channel, exactly as before the preliminary channel existed.
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+				ungroundedAnswerConsumer, reasoningConsumer);
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer) {
 		// LOG FORMAT — stable contract: same field set as search() with op=searchStreaming
 		// in the log tag, plus previewMs (progressive-reasoning preview pass) and groundMs (Tier-2
 		// grounding, timed separately so the tail is visible). Streaming is the path the frontend
@@ -324,7 +335,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// the thinking channel before the full-chart answer prefills. No-op (returns 0) when the
 			// gate is off. Runs after the full chart is built so the patient's querystore index is
 			// already warm when the preview's searchByPatient runs (a cold patient pays it once).
-			previewMs = maybeEmitPreliminaryReasoning(patient, question, reasoningConsumer);
+			previewMs = maybeEmitPreliminaryReasoning(patient, question, preliminaryReasoningConsumer);
 
 			long llmStart = System.currentTimeMillis();
 			LlmResponse response = llmProvider.searchStreaming(

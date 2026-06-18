@@ -269,6 +269,11 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>SSE event types:</p>
 	 * <ul>
+	 *   <li>{@code preliminary} — only with {@code chartsearchai.progressiveReasoning.enabled}: a
+	 *       chunk of the fast PREVIEW reasoning over the focused top-K chart, streamed before the
+	 *       full-chart answer. Render as provisional ("preliminary, verifying…") and REPLACE it when
+	 *       the first {@code thinking} (or {@code token}) event arrives — the preview can be wrong
+	 *       until the committed full-chart pass corrects it</li>
 	 *   <li>{@code thinking} — a chunk of the model's reasoning (chain-of-thought), emitted
 	 *       before the answer; render distinctly (e.g. a collapsible panel), not as the answer</li>
 	 *   <li>{@code token} — a chunk of the answer text</li>
@@ -441,9 +446,11 @@ public class ChartSearchAiRestController {
 						earlyDoneSent[0] = true;
 					};
 
-			// Four channels: "token" carries the answer; "thinking" carries the model's reasoning
-			// (chain-of-thought), emitted first so the UI can show live progress and the rationale
-			// instead of a dead spinner; "references" carries the answer's citations the moment the
+			// Five channels: "token" carries the answer; "thinking" carries the committed full-chart
+			// reasoning (chain-of-thought), emitted first so the UI can show live progress and the
+			// rationale instead of a dead spinner; "preliminary" carries the optional progressive
+			// preview reasoning (only when progressiveReasoning.enabled) — streamed ahead of, and to
+			// be REPLACED by, "thinking"; "references" carries the answer's citations the moment the
 			// answer is done — BEFORE the grounding pass — so the UI can render clickable citations
 			// immediately and not wait on Tier-2 verification. The terminal events re-send the
 			// references with grounding verdicts attached: in the classic shape on "done", or — when
@@ -456,7 +463,8 @@ public class ChartSearchAiRestController {
 					token -> writeSseEventOrThrow(out, "token", token),
 					reasoning -> writeSseEventOrThrow(out, "thinking", reasoning),
 					citations -> sendReferencesEvent(out, citations),
-					ungroundedConsumer);
+					ungroundedConsumer,
+					preliminary -> writeSseEventOrThrow(out, "preliminary", preliminary));
 
 			if (!earlyDoneSent[0]) {
 				// Classic shape: async off, or the service returned an already-final answer (cache

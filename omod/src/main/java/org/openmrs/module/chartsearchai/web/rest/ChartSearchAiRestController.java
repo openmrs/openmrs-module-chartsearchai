@@ -271,9 +271,9 @@ public class ChartSearchAiRestController {
 	 * <ul>
 	 *   <li>{@code preliminary} — only with {@code chartsearchai.progressiveReasoning.enabled}: a
 	 *       chunk of the fast PREVIEW reasoning over the focused top-K chart, streamed before the
-	 *       full-chart answer. Render as provisional ("preliminary, verifying…") and REPLACE it when
-	 *       the first {@code thinking} (or {@code token}) event arrives — the preview can be wrong
-	 *       until the committed full-chart pass corrects it</li>
+	 *       full-chart answer. Render as provisional (clearly an in-progress preview, not the answer)
+	 *       and REPLACE it when the first {@code thinking} (or {@code token}) event arrives — the
+	 *       preview can be wrong until the committed full-chart pass corrects it</li>
 	 *   <li>{@code thinking} — a chunk of the model's reasoning (chain-of-thought), emitted
 	 *       before the answer; render distinctly (e.g. a collapsible panel), not as the answer</li>
 	 *   <li>{@code token} — a chunk of the answer text</li>

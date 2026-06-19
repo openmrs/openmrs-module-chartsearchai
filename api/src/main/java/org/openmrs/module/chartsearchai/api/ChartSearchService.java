@@ -118,8 +118,9 @@ public interface ChartSearchService {
 	/**
 	 * Streaming variant that additionally routes the progressive-reasoning PREVIEW pass's reasoning
 	 * to {@code preliminaryReasoningConsumer} — a separate channel from {@code reasoningConsumer} —
-	 * so a caller can render it as provisional ("preliminary, verifying…") and replace it the moment
-	 * the committed full-chart reasoning begins arriving on {@code reasoningConsumer}. Only fires when
+	 * so a caller can render it as provisional (clearly an in-progress preview, not the answer) and
+	 * replace it the moment the committed full-chart reasoning begins arriving on
+	 * {@code reasoningConsumer}. Only fires when
 	 * {@code chartsearchai.progressiveReasoning.enabled} is on (otherwise the preliminary channel is
 	 * never called and this behaves exactly like the six-arg overload).
 	 *

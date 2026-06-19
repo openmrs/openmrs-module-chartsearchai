@@ -291,4 +291,51 @@ public class ChartSearchServiceRouterTest {
 		assertEquals(Boolean.TRUE, hit.getReferences().get(0).getGrounded(),
 				"the cached answer keeps its verdicts");
 	}
+
+	// ---- progressive-reasoning preliminary channel (7-arg searchStreaming) ----
+
+	/** Delegate that overrides the 7-arg to echo the preliminary consumer, so a test can prove the
+	 *  router threads it through to the inference service rather than dropping it — the consumer-loss
+	 *  bug class the abstract 6-arg overload exists to prevent. */
+	private static class SevenArgDelegate extends StubDelegate {
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				java.util.function.Consumer<String> tokenConsumer,
+				java.util.function.Consumer<String> reasoningConsumer,
+				java.util.function.Consumer<java.util.List<RecordReference>> citationsConsumer,
+				java.util.function.Consumer<ChartAnswer> ungroundedAnswerConsumer,
+				java.util.function.Consumer<String> preliminaryReasoningConsumer) {
+			preliminaryReasoningConsumer.accept("PREVIEW");
+			return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+					ungroundedAnswerConsumer);
+		}
+	}
+
+	@Test
+	public void searchStreaming_passThroughForwardsPreliminaryConsumer() {
+		SevenArgDelegate delegate = new SevenArgDelegate();
+		StubRouter router = routerWith(delegate, 0);
+		java.util.List<String> preliminary = new java.util.ArrayList<String>();
+
+		router.searchStreaming(patient("p1"), "tb?", t -> { }, r -> { }, c -> { }, a -> { }, preliminary::add);
+
+		assertEquals(java.util.Collections.singletonList("PREVIEW"), preliminary,
+				"the uncached path must thread the preliminary consumer to the delegate's 7-arg — dropping "
+				+ "it would silently lose preview separation in production (controller -> router -> service)");
+	}
+
+	@Test
+	public void searchStreaming_cacheHitDoesNotFirePreliminaryConsumer() {
+		SevenArgDelegate delegate = new SevenArgDelegate();
+		StubRouter router = routerWith(delegate, 5);
+		java.util.List<String> preliminary = new java.util.ArrayList<String>();
+
+		router.searchStreaming(patient("p1"), "tb?", t -> { }, r -> { }, c -> { }, a -> { }, preliminary::add);
+		assertEquals(1, preliminary.size(), "first call misses — the preview pass runs and fires preliminary");
+
+		router.searchStreaming(patient("p1"), "tb?", t -> { }, r -> { }, c -> { }, a -> { }, preliminary::add);
+		assertEquals(1, preliminary.size(),
+				"a cache hit replays the final answer with no preview pass — preliminary must NOT fire again");
+	}
 }

@@ -239,8 +239,9 @@ public class LlmInferenceService implements ChartSearchService {
 
 	/**
 	 * Progressive reasoning (stage 1): when {@code chartsearchai.progressiveReasoning.enabled}, run a
-	 * fast LLM pass over ONLY the querystore top-K focused chart and stream its reasoning to the
-	 * {@code reasoningConsumer} ("thinking" channel), ahead of the unchanged full-chart answer. The
+	 * fast LLM pass over ONLY the querystore top-K focused chart and stream its reasoning to
+	 * {@code previewReasoningConsumer} — the dedicated preliminary channel on the 7-arg path (or the
+	 * reasoning channel via the 6-arg overload) — ahead of the unchanged full-chart answer. The
 	 * focused chart is a few hundred tokens vs the full chart's several thousand, so on a GPU-less
 	 * host its prefill — and thus time-to-first-reasoning — is far smaller. Quality is unaffected:
 	 * the preview's answer tokens are discarded ({@link #DISCARD_TOKENS}); only the full-chart pass
@@ -254,7 +255,7 @@ public class LlmInferenceService implements ChartSearchService {
 	 * gate is off or the focused chart has no records.
 	 */
 	private long maybeEmitPreliminaryReasoning(Patient patient, String question,
-			Consumer<String> reasoningConsumer) {
+			Consumer<String> previewReasoningConsumer) {
 		long start = System.currentTimeMillis();
 		try {
 			if (!resolveProgressiveReasoningEnabled()) {
@@ -263,7 +264,7 @@ public class LlmInferenceService implements ChartSearchService {
 			PatientChart focused = chartBuildingStrategy.buildFocusedChart(patient, question);
 			if (focused != null && !focused.getMappings().isEmpty()) {
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
-						DISCARD_TOKENS, reasoningConsumer, null);
+						DISCARD_TOKENS, previewReasoningConsumer, null);
 			}
 		}
 		catch (RuntimeException e) {
@@ -332,7 +333,7 @@ public class LlmInferenceService implements ChartSearchService {
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
-			// the thinking channel before the full-chart answer prefills. No-op (returns 0) when the
+			// the preliminary channel before the full-chart answer prefills. No-op (returns 0) when the
 			// gate is off. Runs after the full chart is built so the patient's querystore index is
 			// already warm when the preview's searchByPatient runs (a cold patient pays it once).
 			previewMs = maybeEmitPreliminaryReasoning(patient, question, preliminaryReasoningConsumer);

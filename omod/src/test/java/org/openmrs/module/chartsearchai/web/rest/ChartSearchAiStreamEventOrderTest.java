@@ -240,6 +240,37 @@ public class ChartSearchAiStreamEventOrderTest {
 						Boolean.TRUE)));
 	}
 
+	@Test
+	public void streamAnswer_emitsPreliminaryEvent_whenServiceStreamsPreviewReasoning() throws Exception {
+		controller.setChartSearchService(new PreliminaryStubService());
+
+		controller.streamAnswer(out, patient(), "any infections?", user(), "full-chart", true);
+
+		List<String> types = eventTypes();
+		assertTrue(types.contains("preliminary"),
+				"the controller must surface progressive preview reasoning on a 'preliminary' SSE event, "
+						+ "distinct from 'thinking', so the UI can render it provisionally");
+		assertEquals("Quick look: [8] mentions TB.", eventOfType("preliminary").data);
+		assertTrue(types.indexOf("preliminary") < types.indexOf("token"),
+				"the preview must arrive before the committed answer token");
+	}
+
+	/** Preview-path stub: emits a preliminary reasoning chunk on the 7-arg's preliminary channel
+	 *  before the committed answer, to exercise the controller's "preliminary" SSE wiring. */
+	private static class PreliminaryStubService extends LiveStubService {
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				Consumer<List<RecordReference>> citationsConsumer,
+				Consumer<ChartAnswer> ungroundedAnswerConsumer,
+				Consumer<String> preliminaryReasoningConsumer) {
+			preliminaryReasoningConsumer.accept("Quick look: [8] mentions TB.");
+			return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+					ungroundedAnswerConsumer);
+		}
+	}
+
 	/** Live-path stub: streams a token, fires citations + the ungrounded answer, returns grounded. */
 	private static class LiveStubService implements ChartSearchService {
 

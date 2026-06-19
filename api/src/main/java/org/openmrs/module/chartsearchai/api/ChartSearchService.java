@@ -130,6 +130,11 @@ public interface ChartSearchService {
 	 * the preliminary channel explicitly, the same discipline the six-arg overload's abstractness
 	 * enforces for the ungrounded-answer channel.
 	 *
+	 * <p><strong>Override discipline:</strong> an implementation whose six-arg overload delegates
+	 * <em>up</em> to this seven-arg (as the inference service and the caching router do) MUST also
+	 * override this seven-arg — relying on this default while the six-arg delegates up would recurse
+	 * (default → six-arg → this default → …).
+	 *
 	 * @param preliminaryReasoningConsumer called with each preview-reasoning fragment; never called
 	 *        when progressive reasoning is off or no relevant records are found
 	 */

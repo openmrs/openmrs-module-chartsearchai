@@ -183,6 +183,11 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		llmService.warmup(patient);
 	}
 
+	@Override
+	public void warmup(Patient patient, boolean pin) {
+		llmService.warmup(patient, pin);
+	}
+
 	/**
 	 * Test seam: resolves a global property. Overridable so {@link #buildCacheKey} can be unit-tested
 	 * (which GPs are folded into the key) without standing up an OpenMRS context.

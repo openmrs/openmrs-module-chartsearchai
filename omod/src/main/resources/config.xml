@@ -36,6 +36,11 @@
 		<description>Allows viewing the audit log of AI chart search queries</description>
 	</privilege>
 
+	<privilege>
+		<name>Manage AI Prewarm</name>
+		<description>Allows triggering and monitoring the bulk KV-prewarm bootstrap (a system operation that pre-fills every patient's chart KV cache)</description>
+	</privilege>
+
 	<!-- Global Properties -->
 	<globalProperty>
 		<property>chartsearchai.llm.engine</property>
@@ -112,7 +117,31 @@
 	<globalProperty>
 		<property>chartsearchai.llm.kvCacheMaxEntries</property>
 		<defaultValue>16</defaultValue>
-		<description>Maximum number of persisted KV-cache files to keep in chartsearchai.llm.kvCacheDir. The oldest (by last-modified time) are evicted once this many exist, bounding disk use. Only consulted when the cache directory is configured.</description>
+		<description>Maximum number of persisted KV-cache files to keep in chartsearchai.llm.kvCacheDir. The oldest (by last-modified time) are evicted once this many exist, bounding disk use. Only consulted when the cache directory is configured. Note: entries pinned by the prewarm bootstrap (chartsearchai.prewarm.enabled) are EXEMPT from this cap — see chartsearchai.llm.kvCache.maxPinnedEntries.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.llm.kvCache.maxPinnedEntries</property>
+		<defaultValue>0</defaultValue>
+		<description>Upper bound on the number of PINNED KV entries the prewarm bootstrap may create. Pinned entries are exempt from chartsearchai.llm.kvCacheMaxEntries (the LRU cap), so a deployment with disk for every patient keeps them all warm. 0 (default) = unlimited. When set greater than 0 and reached, the sweep logs once and stops pinning further entries; it never silently evicts already-pinned ones. Each file is large (tens to a few hundred MB), so bound this on hosts without disk for the whole patient population.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.prewarm.enabled</property>
+		<defaultValue>false</defaultValue>
+		<description>Master switch for the bulk KV-prewarm bootstrap: the POST /chartsearchai/prewarm and GET /chartsearchai/prewarmstatus endpoints and the background sweep that pre-fills and pins every patient's chart KV cache so a first query on a never-opened patient is still warm. Default false (opt-in): a full-database sweep prefills every patient (tens of seconds each) on the single inference slot and grows the on-disk pinned corpus (bound it with chartsearchai.llm.kvCache.maxPinnedEntries). The per-patient chart-open warmup (chartsearchai.warmupEnabled) is independent of this flag. Only meaningful when chartsearchai.llm.engine is "local". Note: a pinned entry becomes stale when that patient's chart changes; the next query for them re-prefills and re-saves it as an ordinary (unpinned, LRU-capped) entry, so the pinned corpus erodes as charts change — re-run the sweep periodically to refresh it.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.prewarm.autostart</property>
+		<defaultValue>false</defaultValue>
+		<description>When true (and chartsearchai.prewarm.enabled is on), the prewarm sweep resumes/starts on module startup from its persisted cursor — the analog of querystore.bootstrap.autostart. Default false.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.prewarm.throttleMs</property>
+		<defaultValue>500</defaultValue>
+		<description>Milliseconds the prewarm sweep pauses between patients so the single inference slot is not monopolised and live clinician warmup/query traffic can interleave. Default 500.</description>
 	</globalProperty>
 
 	<globalProperty>

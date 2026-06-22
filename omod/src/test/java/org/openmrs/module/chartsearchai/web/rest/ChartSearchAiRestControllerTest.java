@@ -269,6 +269,29 @@ public class ChartSearchAiRestControllerTest {
 		assertEquals("Insufficient privileges", errorOf(response));
 	}
 
+	/**
+	 * The prewarm endpoint implements only the full-database ("all") sweep. A request for any other
+	 * scope must be rejected with 400 rather than silently running an "all" sweep (which would surprise
+	 * the caller with an expensive full-DB prefill). Driven as a POJO: the privilege check is satisfied
+	 * via a UserContext that grants the privilege, and the bad-scope branch returns before touching the
+	 * (unset) autowired service. The happy path is verified end-to-end against a live server.
+	 */
+	@Test
+	public void prewarm_shouldReturn400ForUnsupportedScope() {
+		Context.setUserContext(new UserContext(null) {
+
+			@Override
+			public boolean hasPrivilege(String privilege) {
+				return true;
+			}
+		});
+		Map<String, String> body = new HashMap<String, String>();
+		body.put("scope", "queue");
+		ResponseEntity<Object> response = new ChartSearchAiRestController().prewarm(body);
+		assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+		assertEquals("Unsupported scope 'queue'. Only 'all' is supported.", errorOf(response));
+	}
+
 	@Test
 	public void handleBadRequest_shouldReturn400() {
 		ResponseEntity<Object> response = new ChartSearchAiRestController()

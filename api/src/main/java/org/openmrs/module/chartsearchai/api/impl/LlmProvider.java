@@ -610,10 +610,19 @@ public class LlmProvider {
 	 * changed chart replaces the subject's stale entry rather than orphaning it.
 	 */
 	public void warmup(String numberedRecords, String cacheScope) {
+		warmup(numberedRecords, cacheScope, false);
+	}
+
+	/**
+	 * Pinning variant of {@link #warmup(String, String)}. When {@code pin} is true, the saved KV entry
+	 * is exempt from the LRU cap so it survives as part of the prewarm-bootstrap corpus. Used by the
+	 * background prewarm sweep; the chart-open path uses {@code pin=false}.
+	 */
+	public void warmup(String numberedRecords, String cacheScope, boolean pin) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, "");
 		int timeoutSeconds = getTimeoutSeconds();
-		getActiveEngine().warmup(systemPrompt, userMessage, timeoutSeconds, cacheScope);
+		getActiveEngine().warmup(systemPrompt, userMessage, timeoutSeconds, cacheScope, pin);
 	}
 
 	/**

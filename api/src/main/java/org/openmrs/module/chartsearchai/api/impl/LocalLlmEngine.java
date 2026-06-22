@@ -315,6 +315,12 @@ public class LocalLlmEngine implements LlmEngine {
 	@Override
 	public synchronized void warmup(String systemPrompt, String userMessage, int timeoutSeconds,
 			String cacheScope) {
+		warmup(systemPrompt, userMessage, timeoutSeconds, cacheScope, false);
+	}
+
+	@Override
+	public synchronized void warmup(String systemPrompt, String userMessage, int timeoutSeconds,
+			String cacheScope, boolean pin) {
 		ensureServerRunning();
 
 		// Disk-persisted KV cache (on by default). When enabled, a patient's prefilled chart KV is
@@ -336,6 +342,11 @@ public class LocalLlmEngine implements LlmEngine {
 		if (cacheKey != null && new File(cacheDir, cacheKey).isFile()
 				&& restoreSlot(cacheKey, timeoutSeconds)) {
 			log.warn("Warmup restored KV cache from disk: {}", cacheKey);
+			// A prewarm pass over a patient already prefilled by an earlier query finds the .bin on
+			// disk and only needs to pin it (no re-prefill) so it joins the durable corpus.
+			if (pin) {
+				writePinMarker(new File(cacheDir), cacheKey);
+			}
 			// Record residency so a query right after this warmup reuses the RAM pool rather than
 			// redundantly restoring from disk again.
 			ramResidentKeys.add(cacheKey);
@@ -376,7 +387,7 @@ public class LocalLlmEngine implements LlmEngine {
 			// patient's query.
 			if (cacheKey != null) {
 				ramResidentKeys.add(cacheKey);
-				persistKvEntry(cacheKey, cacheScope, cacheDir, timeoutSeconds);
+				persistKvEntry(cacheKey, cacheScope, cacheDir, timeoutSeconds, pin);
 			}
 			resetIdleTimer();
 		}
@@ -486,16 +497,50 @@ public class LocalLlmEngine implements LlmEngine {
 			if (!f.delete()) {
 				log.warn("Could not delete superseded KV-cache file {}", f);
 			}
+			// A superseded entry may carry a prewarm pin marker; delete it too, or it would pin a
+			// .bin that no longer exists (and skew the pinned-corpus accounting).
+			File pin = new File(dir, f.getName() + PIN_SUFFIX);
+			if (pin.exists() && !pin.delete()) {
+				log.warn("Could not delete orphaned KV pin marker {}", pin);
+			}
+		}
+	}
+
+	/** Suffix of the zero-byte sidecar that marks a {@code .bin} as pinned (exempt from the LRU cap).
+	 *  Written by the prewarm bootstrap so a host with disk for every patient keeps a durable,
+	 *  uncapped warm corpus, while ad-hoc warmup/query entries stay under {@code kvCacheMaxEntries}. */
+	static final String PIN_SUFFIX = ".pin";
+
+	/** Marks {@code cacheKey} as pinned by writing its zero-byte sidecar, so {@link #evictOldestKvEntries}
+	 *  never reclaims it. Idempotent; a write failure is logged and left non-fatal (the entry simply
+	 *  stays subject to the cap). */
+	static void writePinMarker(File dir, String cacheKey) {
+		File pin = new File(dir, cacheKey + PIN_SUFFIX);
+		if (pin.exists()) {
+			return;
+		}
+		try {
+			java.nio.file.Files.write(pin.toPath(), new byte[0]);
+		}
+		catch (IOException e) {
+			log.warn("Could not write KV pin marker {}: {}", pin, e.getMessage());
 		}
 	}
 
 	/**
-	 * Keeps at most {@code maxEntries} {@code .bin} files in {@code dir}, deleting the oldest (by
-	 * last-modified time) first. Each persisted KV file is large (proportional to the chart's token
-	 * count), so this bounds disk use. Non-{@code .bin} files are never touched.
+	 * Keeps at most {@code maxEntries} <em>unpinned</em> {@code .bin} files in {@code dir}, deleting
+	 * the oldest (by last-modified time) first. Each persisted KV file is large (proportional to the
+	 * chart's token count), so this bounds disk use for the ad-hoc warmup/query pool. Pinned entries
+	 * (a {@code <name>.pin} sidecar exists) are the prewarm bootstrap's durable corpus — they are
+	 * neither counted toward {@code maxEntries} nor evicted, so the cap never reclaims them.
+	 * Non-{@code .bin} files (including the {@code .pin} sidecars themselves) are never touched.
 	 */
 	static void evictOldestKvEntries(File dir, int maxEntries) {
-		File[] files = dir.listFiles((d, name) -> name.endsWith(".bin"));
+		// Pinned entries (a <name>.pin sidecar exists) are the prewarm bootstrap's durable corpus:
+		// excluded from the candidate list so they are neither counted toward the cap nor deleted.
+		// The cap therefore governs only the ad-hoc (chart-open warmup + query-save) pool.
+		File[] files = dir.listFiles((d, name) ->
+				name.endsWith(".bin") && !new File(d, name + PIN_SUFFIX).exists());
 		if (files == null || files.length <= maxEntries) {
 			return;
 		}
@@ -557,8 +602,22 @@ public class LocalLlmEngine implements LlmEngine {
 	 * active ({@code cacheKey} and {@code cacheDir} non-null).
 	 */
 	private void persistKvEntry(String cacheKey, String cacheScope, String cacheDir, int timeoutSeconds) {
+		persistKvEntry(cacheKey, cacheScope, cacheDir, timeoutSeconds, false);
+	}
+
+	/**
+	 * As {@link #persistKvEntry(String, String, String, int)} but, when {@code pin} is true, marks the
+	 * saved entry as pinned (prewarm-bootstrap corpus) BEFORE the cap is applied, so it is exempt from
+	 * eviction. The pin write precedes {@link #evictOldestKvEntries} so the just-saved entry cannot be
+	 * reclaimed by the same call.
+	 */
+	private void persistKvEntry(String cacheKey, String cacheScope, String cacheDir, int timeoutSeconds,
+			boolean pin) {
 		if (saveSlot(cacheKey, timeoutSeconds)) {
 			purgeKvScopeEntries(new File(cacheDir), cacheScope, cacheKey);
+			if (pin) {
+				writePinMarker(new File(cacheDir), cacheKey);
+			}
 			evictOldestKvEntries(new File(cacheDir), getKvCacheMaxEntries());
 		}
 	}

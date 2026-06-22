@@ -15,6 +15,12 @@ public class ChartSearchAiConstants {
 
 	public static final String PRIV_VIEW_AUDIT_LOGS = "View AI Audit Logs";
 
+	/** Admin/system privilege for the bulk KV-prewarm bootstrap endpoints (trigger + status). Distinct
+	 *  from the per-patient {@link #PRIV_QUERY_PATIENT_DATA} clinician action because a sweep prefills
+	 *  every patient's chart and monopolises the single inference slot — a system operation, not a
+	 *  clinical one. */
+	public static final String PRIV_MANAGE_PREWARM = "Manage AI Prewarm";
+
 	public static final String GP_LLM_MODEL_FILE_PATH = "chartsearchai.llm.modelFilePath";
 
 	public static final String GP_EMBEDDING_PRE_FILTER = "chartsearchai.embedding.preFilter";
@@ -92,11 +98,25 @@ public class ChartSearchAiConstants {
 	 * Maximum number of persisted KV-cache files to retain in {@link #GP_LLM_KV_CACHE_DIR}. Each
 	 * file is large (tens to a few hundred MB, proportional to the chart's token count), so the
 	 * oldest entries are evicted (by last-modified time) once this many exist. Only consulted when
-	 * the cache directory is configured.
+	 * the cache directory is configured. Entries pinned by the prewarm bootstrap
+	 * ({@link #GP_PREWARM_ENABLED}) are EXEMPT from this cap — they are neither counted nor evicted;
+	 * bound them separately with {@link #GP_LLM_KV_CACHE_MAX_PINNED_ENTRIES}.
 	 */
 	public static final String GP_LLM_KV_CACHE_MAX_ENTRIES = "chartsearchai.llm.kvCacheMaxEntries";
 
 	public static final int DEFAULT_LLM_KV_CACHE_MAX_ENTRIES = 16;
+
+	/**
+	 * Upper bound on the number of <em>pinned</em> KV entries the prewarm bootstrap may create
+	 * ({@code 0} = unlimited, the default). Pinned entries are exempt from {@link #GP_LLM_KV_CACHE_MAX_ENTRIES}
+	 * (the LRU cap), so a deployment with disk for every patient keeps them all warm. This is the
+	 * safety valve for hosts that want a prewarm corpus but still bound its disk footprint: when set
+	 * {@code > 0} and reached, the sweep logs once and stops pinning further entries (it never
+	 * silently evicts already-pinned ones). Only consulted by the prewarm sweep.
+	 */
+	public static final String GP_LLM_KV_CACHE_MAX_PINNED_ENTRIES = "chartsearchai.llm.kvCache.maxPinnedEntries";
+
+	public static final int DEFAULT_LLM_KV_CACHE_MAX_PINNED_ENTRIES = 0;
 
 	public static final String GP_RATE_LIMIT_PER_MINUTE = "chartsearchai.rateLimitPerMinute";
 
@@ -109,6 +129,34 @@ public class ChartSearchAiConstants {
 	public static final int DEFAULT_CACHE_MAX_SIZE = 100;
 
 	public static final String GP_WARMUP_ENABLED = "chartsearchai.warmupEnabled";
+
+	/**
+	 * Master switch for the bulk KV-prewarm bootstrap (the {@code /prewarm} + {@code /prewarmstatus}
+	 * endpoints and the background sweep). Default {@code false}: the feature is opt-in because a
+	 * full-database sweep prefills every patient (10–20s each) on the single inference slot and grows
+	 * the on-disk pinned KV corpus without bound (see {@link #GP_LLM_KV_CACHE_MAX_PINNED_ENTRIES}).
+	 * The per-patient chart-open warmup is unaffected by this flag.
+	 */
+	public static final String GP_PREWARM_ENABLED = "chartsearchai.prewarm.enabled";
+
+	public static final boolean DEFAULT_PREWARM_ENABLED = false;
+
+	/**
+	 * When {@code true} (and {@link #GP_PREWARM_ENABLED} is on), the prewarm sweep resumes/starts on
+	 * module startup from its persisted cursor — the analog of {@code querystore.bootstrap.autostart}.
+	 * Default {@code false}.
+	 */
+	public static final String GP_PREWARM_AUTOSTART = "chartsearchai.prewarm.autostart";
+
+	public static final boolean DEFAULT_PREWARM_AUTOSTART = false;
+
+	/**
+	 * Milliseconds the prewarm sweep pauses between patients, so the single inference slot is not
+	 * monopolised and live clinician warmup/query traffic can interleave. Default {@code 500}.
+	 */
+	public static final String GP_PREWARM_THROTTLE_MS = "chartsearchai.prewarm.throttleMs";
+
+	public static final long DEFAULT_PREWARM_THROTTLE_MS = 500L;
 
 	/**
 	 * When {@code true}, a streaming query first runs a fast "preview" reasoning pass over only the

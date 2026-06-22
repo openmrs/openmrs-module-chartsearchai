@@ -18,6 +18,7 @@ import org.openmrs.module.DaemonToken;
 import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.chartsearchai.api.AuditLogPurgeTask;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider;
+import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
@@ -47,6 +48,37 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 		}
 		catch (APIException e) {
 			log.warn("Could not propagate DaemonToken to WarmupExecutor", e);
+		}
+		PrewarmBootstrapService prewarm = null;
+		try {
+			prewarm = Context.getRegisteredComponent(
+					"chartSearchAi.prewarmBootstrapService", PrewarmBootstrapService.class);
+			prewarm.setDaemonToken(token);
+		}
+		catch (APIException e) {
+			log.warn("Could not propagate DaemonToken to PrewarmBootstrapService", e);
+		}
+		// Autostart is best-effort and MUST NOT break module startup: it reads a GP and launches a
+		// background sweep, either of which could throw if invoked before services are fully ready.
+		// Kept in its own broad catch (separate from token propagation above) so a failure here never
+		// prevents the token from being set or the module from starting.
+		if (prewarm != null) {
+			try {
+				maybeAutostartPrewarm(prewarm);
+			}
+			catch (Exception e) {
+				log.warn("Prewarm autostart failed (module startup continues)", e);
+			}
+		}
+	}
+
+	/** Resumes/starts the prewarm sweep on startup when chartsearchai.prewarm.autostart is true (the
+	 *  enabled gate is enforced inside {@link PrewarmBootstrapService#trigger}). */
+	private void maybeAutostartPrewarm(PrewarmBootstrapService prewarm) {
+		boolean autostart = ChartSearchAiUtils.getBooleanGlobalProperty(
+				ChartSearchAiConstants.GP_PREWARM_AUTOSTART, ChartSearchAiConstants.DEFAULT_PREWARM_AUTOSTART);
+		if (autostart) {
+			prewarm.trigger(PrewarmBootstrapService.SCOPE_ALL, "start");
 		}
 	}
 

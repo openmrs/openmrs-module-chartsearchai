@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.web.rest;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -42,6 +43,8 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
+import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
+import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
@@ -116,6 +119,10 @@ public class ChartSearchAiRestController {
 	@Autowired
 	@Qualifier("chartSearchAi.warmupExecutor")
 	private WarmupExecutor warmupExecutor;
+
+	@Autowired
+	@Qualifier("chartSearchAi.prewarmBootstrapService")
+	private PrewarmBootstrapService prewarmBootstrapService;
 
 	@RequestMapping(value = "/search", method = RequestMethod.POST)
 	@ResponseBody
@@ -256,6 +263,44 @@ public class ChartSearchAiRestController {
 
 		warmupExecutor.submit(resolved.patient);
 		return new ResponseEntity<Object>(HttpStatus.ACCEPTED);
+	}
+
+	/**
+	 * Trigger (or steer) the background prewarm bootstrap: a resumable sweep that pre-fills and pins
+	 * every patient's chart KV cache, so a first query on a patient never opened this process is still
+	 * warm. Body (all optional): {@code {"scope":"all","action":"start|restart|stop"}}. Returns
+	 * 202 Accepted with the current status snapshot; the sweep runs on a background daemon thread.
+	 * Requires the {@code Manage AI Prewarm} privilege (a system operation, not a clinical one), and
+	 * is gated by {@code chartsearchai.prewarm.enabled}.
+	 */
+	@RequestMapping(value = "/prewarm", method = RequestMethod.POST)
+	@ResponseBody
+	public ResponseEntity<Object> prewarm(@RequestBody(required = false) Map<String, String> body) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_MANAGE_PREWARM);
+		Map<String, String> b = body == null ? Collections.<String, String> emptyMap() : body;
+		String scope = b.get("scope");
+		// Only the full-database sweep is implemented. Reject any other scope explicitly rather than
+		// silently running an "all" sweep — passing e.g. scope=queue must not surprise the caller with
+		// a full-DB prefill. ("all" and blank both mean all.)
+		if (scope != null && !scope.trim().isEmpty()
+				&& !PrewarmBootstrapService.SCOPE_ALL.equalsIgnoreCase(scope.trim())) {
+			return new ResponseEntity<Object>(
+					errorResponse("Unsupported scope '" + scope + "'. Only 'all' is supported."),
+					HttpStatus.BAD_REQUEST);
+		}
+		PrewarmStatus status = prewarmBootstrapService.trigger(scope, b.get("action"));
+		return new ResponseEntity<Object>(status.toMap(), HttpStatus.ACCEPTED);
+	}
+
+	/**
+	 * Current prewarm-bootstrap status: run state, scope, totals, the resume cursor, and the on-disk
+	 * pinned-entry count. Requires the {@code Manage AI Prewarm} privilege.
+	 */
+	@RequestMapping(value = "/prewarmstatus", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> prewarmStatus() {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_MANAGE_PREWARM);
+		return new ResponseEntity<Object>(prewarmBootstrapService.getStatus().toMap(), HttpStatus.OK);
 	}
 
 	/**

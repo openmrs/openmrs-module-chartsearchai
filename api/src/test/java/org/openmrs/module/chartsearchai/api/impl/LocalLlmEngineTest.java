@@ -413,6 +413,91 @@ public class LocalLlmEngineTest {
 		}
 	}
 
+	@Test
+	public void evictOldestKvEntries_shouldNeverEvictPinnedEntries() throws Exception {
+		// A pinned entry (a <name>.pin sidecar exists) is the prewarm bootstrap's durable corpus:
+		// it must be exempt from the LRU cap entirely — neither counted toward the limit nor deleted —
+		// so a deployment with disk for every patient keeps them all warm regardless of how small the
+		// cap is. The cap continues to govern only the ad-hoc (chart-open warmup + query-save) pool.
+		java.io.File dir = java.nio.file.Files.createTempDirectory("kvcache-pin").toFile();
+		try {
+			java.io.File pinned = newFile(dir, "pinA.bin", 1_000L);
+			newFile(dir, "pinA.bin.pin", 1_000L);
+			java.io.File pinnedOldest = newFile(dir, "pinB.bin", 500L);
+			newFile(dir, "pinB.bin.pin", 500L);
+			java.io.File adhocOld = newFile(dir, "x.bin", 2_000L);
+			java.io.File adhocMid = newFile(dir, "y.bin", 3_000L);
+			java.io.File adhocNew = newFile(dir, "z.bin", 4_000L);
+
+			// Cap of 1 applied to the UNPINNED pool only: the two oldest unpinned go, the newest stays.
+			LocalLlmEngine.evictOldestKvEntries(dir, 1);
+
+			assertTrue(pinned.exists(), "a pinned entry must never be evicted");
+			assertTrue(pinnedOldest.exists(),
+					"a pinned entry must never be evicted, even when it is the oldest file overall");
+			assertFalse(adhocOld.exists(), "the oldest unpinned entry over the cap must be evicted");
+			assertFalse(adhocMid.exists(), "unpinned entries over the cap must be evicted");
+			assertTrue(adhocNew.exists(), "the newest unpinned entry must be kept under the cap");
+		}
+		finally {
+			for (java.io.File f : dir.listFiles()) {
+				f.delete();
+			}
+			dir.delete();
+		}
+	}
+
+	@Test
+	public void purgeKvScopeEntries_shouldAlsoDeleteThePinSidecarOfSupersededEntries() throws Exception {
+		// When a pinned patient's chart changes, the new prefill hashes to a new filename and the old
+		// .bin is purged; its orphaned .pin sidecar must go with it, or it would pin a file that no
+		// longer exists and skew the pinned-corpus accounting.
+		java.io.File dir = java.nio.file.Files.createTempDirectory("kvscope-pin").toFile();
+		try {
+			java.io.File keep = newFile(dir, "pA-newhash.bin", 3_000L);
+			java.io.File keepPin = newFile(dir, "pA-newhash.bin.pin", 3_000L);
+			java.io.File stale = newFile(dir, "pA-oldhash.bin", 1_000L);
+			java.io.File stalePin = newFile(dir, "pA-oldhash.bin.pin", 1_000L);
+
+			LocalLlmEngine.purgeKvScopeEntries(dir, "pA", "pA-newhash.bin");
+
+			assertTrue(keep.exists(), "the patient's current entry must be kept");
+			assertTrue(keepPin.exists(), "the current entry's pin marker must be kept");
+			assertFalse(stale.exists(), "the patient's superseded entry must be deleted");
+			assertFalse(stalePin.exists(),
+					"the superseded entry's orphaned pin marker must also be deleted");
+		}
+		finally {
+			for (java.io.File f : dir.listFiles()) {
+				f.delete();
+			}
+			dir.delete();
+		}
+	}
+
+	@Test
+	public void writePinMarker_shouldCreateTheSidecarAndBeIdempotent() throws Exception {
+		java.io.File dir = java.nio.file.Files.createTempDirectory("kvpin-write").toFile();
+		try {
+			java.io.File bin = newFile(dir, "pX-hash.bin", 1_000L);
+			java.io.File pin = new java.io.File(dir, "pX-hash.bin" + LocalLlmEngine.PIN_SUFFIX);
+			assertFalse(pin.exists(), "precondition: no marker yet");
+
+			LocalLlmEngine.writePinMarker(dir, "pX-hash.bin");
+			assertTrue(pin.exists(), "the pin sidecar must be created for the given key");
+
+			// Idempotent: a second call on an already-pinned entry is a no-op and must not throw.
+			LocalLlmEngine.writePinMarker(dir, "pX-hash.bin");
+			assertTrue(pin.exists() && bin.exists(), "re-pinning leaves both the marker and the .bin intact");
+		}
+		finally {
+			for (java.io.File f : dir.listFiles()) {
+				f.delete();
+			}
+			dir.delete();
+		}
+	}
+
 	private static java.io.File newFile(java.io.File dir, String name, long lastModified) throws IOException {
 		java.io.File f = new java.io.File(dir, name);
 		java.nio.file.Files.write(f.toPath(), new byte[] { 1 });

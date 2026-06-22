@@ -109,6 +109,21 @@ public interface LlmEngine {
 	}
 
 	/**
+	 * As {@link #warmup(String, String, int, String)} but, when {@code pin} is true, asks an engine
+	 * that persists KV to disk to mark the saved entry as <em>pinned</em>: exempt from the LRU cap
+	 * ({@code kvCacheMaxEntries}), so the prewarm bootstrap can build a durable warm corpus for every
+	 * patient on hosts with the disk for it, without the ad-hoc warmup/query pool evicting it. The
+	 * default ignores {@code pin} and delegates to the 4-arg form, so engines that don't persist KV
+	 * (and existing callers/tests) are unaffected.
+	 *
+	 * @param pin true to exempt the saved entry from cap-based eviction
+	 */
+	default void warmup(String systemPrompt, String userMessage, int timeoutSeconds, String cacheScope,
+			boolean pin) {
+		warmup(systemPrompt, userMessage, timeoutSeconds, cacheScope);
+	}
+
+	/**
 	 * Whether this engine benefits from a warmup call. Used by callers to decide
 	 * whether to pay any pre-warmup work (chart serialization, etc.).
 	 */

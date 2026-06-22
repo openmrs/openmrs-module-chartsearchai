@@ -232,6 +232,14 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 			warmupCalled = true;
 		}
 
+		// The prewarm bootstrap warms via the pinning overload (pin=true exempts the entry from the
+		// LRU cap). Production's warmup(Patient, pin) routes here, so the fake must cover it too —
+		// otherwise it falls through to the real LlmProvider, which reads GPs off a missing context.
+		@Override
+		public void warmup(String numberedRecords, String cacheScope, boolean pin) {
+			warmupCalled = true;
+		}
+
 		@Override
 		public boolean supportsWarmup() {
 			supportsWarmupCalls++;

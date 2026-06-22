@@ -148,6 +148,11 @@ public class LlmInferenceService implements ChartSearchService {
 
 	@Override
 	public void warmup(Patient patient) {
+		warmup(patient, false);
+	}
+
+	@Override
+	public void warmup(Patient patient, boolean pin) {
 		// Two operational kill switches first, each as its own early-return so the downstream
 		// usePreFilter() GP read is not evaluated when warmup is fundamentally impossible.
 		if (!resolveWarmupEnabled()) {
@@ -166,8 +171,10 @@ public class LlmInferenceService implements ChartSearchService {
 		PatientChart chart = chartBuildingStrategy.buildChart(patient, "");
 		// Pass the patient UUID as the KV-cache scope so the local engine can replace this patient's
 		// stale on-disk entry when their chart changes, instead of leaving an orphan per chart version.
+		// pin=true (prewarm bootstrap) exempts the saved entry from the LRU cap so it joins the durable
+		// warm corpus; the chart-open path passes pin=false.
 		llmProvider.warmup(chartTextOrPlaceholder(chart),
-				patient == null ? null : patient.getUuid());
+				patient == null ? null : patient.getUuid(), pin);
 	}
 
 	/** Test seam wrapping the static {@link #isWarmupEnabled()}; production delegates,

@@ -158,6 +158,20 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * As {@link #warmup(Patient)} but, when {@code pin} is true, marks the persisted KV entry as
+	 * pinned — exempt from the LRU cap ({@code kvCacheMaxEntries}) — so the prewarm bootstrap can
+	 * build a durable warm corpus that the ad-hoc chart-open/query pool will not evict. The default
+	 * ignores {@code pin} and delegates to {@link #warmup(Patient)} for implementations that don't
+	 * persist KV.
+	 *
+	 * @param patient the patient whose chart to warm up
+	 * @param pin true to exempt the saved entry from cap-based eviction (prewarm-bootstrap corpus)
+	 */
+	default void warmup(Patient patient, boolean pin) {
+		warmup(patient);
+	}
+
+	/**
 	 * Whether this service keeps an answer cache that is currently active. Only the caching router
 	 * returns {@code true}; a plain inference service has no cache. Lets the write-side AOP indexing
 	 * advice decide whether a chart write needs to invalidate anything <em>before</em> resolving the

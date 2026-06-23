@@ -476,6 +476,31 @@ public class LocalLlmEngineTest {
 	}
 
 	@Test
+	public void hasPinnedEntry_shouldDetectAScopesPinnedSidecar() throws Exception {
+		// Membership check used by the per-edit auto-refresh: does this patient (scope) have any pinned
+		// entry? True only when a <scope>-<hash>.bin.pin sidecar exists; a bare .bin (unpinned) is not a
+		// corpus member, and a different scope sharing a leading substring must not match.
+		java.io.File dir = java.nio.file.Files.createTempDirectory("kvpin-has").toFile();
+		try {
+			newFile(dir, "pA-hash.bin", 1_000L);
+			newFile(dir, "pA-hash.bin.pin", 1_000L);
+			newFile(dir, "pB-hash.bin", 1_000L); // unpinned: .bin only, no sidecar
+
+			assertTrue(LocalLlmEngine.hasPinnedEntry(dir, "pA"), "pA has a pinned sidecar");
+			assertFalse(LocalLlmEngine.hasPinnedEntry(dir, "pB"), "pB is unpinned (no sidecar)");
+			assertFalse(LocalLlmEngine.hasPinnedEntry(dir, "pC"), "pC has no entry at all");
+			assertFalse(LocalLlmEngine.hasPinnedEntry(dir, "p"),
+					"a scope that is only a leading substring of pA/pB must not match");
+		}
+		finally {
+			for (java.io.File f : dir.listFiles()) {
+				f.delete();
+			}
+			dir.delete();
+		}
+	}
+
+	@Test
 	public void writePinMarker_shouldCreateTheSidecarAndBeIdempotent() throws Exception {
 		java.io.File dir = java.nio.file.Files.createTempDirectory("kvpin-write").toFile();
 		try {

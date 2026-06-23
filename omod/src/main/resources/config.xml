@@ -145,6 +145,18 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.prewarm.refreshOnEdit</property>
+		<defaultValue>false</defaultValue>
+		<description>When true, a chart edit to a patient who is already in the pinned prewarm corpus schedules a single-patient re-pin (a debounced background warmup) so the durable corpus stays fresh without a manual re-sweep. Patients not already pinned are left to the reactive chart-open warmup, so the corpus does not grow here. Default false; only meaningful with chartsearchai.llm.engine=local and a pinned corpus. Independent of chartsearchai.prewarm.enabled — the bulk sweep and the per-edit refresh can be run separately.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.prewarm.refreshDebounceMs</property>
+		<defaultValue>5000</defaultValue>
+		<description>Quiet window (milliseconds) a per-edit re-pin waits before firing, coalescing a burst of writes to one patient (e.g. an encounter save that writes many obs) into a single re-pin. Default 5000. Only consulted when chartsearchai.prewarm.refreshOnEdit is true.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.llm.reasoningMaxChars</property>
 		<defaultValue>0</defaultValue>
 		<description>When greater than 0, caps the model's "reasoning" scratchpad at this many characters via a grammar-enforced maxLength in the chart-answer schema. The reasoning phase is the dominant decode cost on CPU-only servers (3-27 seconds of thinking before any answer text); capping it bounds that cost. The answer itself is never capped. 0 (default) leaves the schema exactly as before. IMPORTANT: truncating the model's chain of thought can change its answers — only enable a value that has cleared the 32-cell answer-quality gold standard (eval/drift-metric/metric_gold.standalone.json) with no regression in mean F1, abstention accuracy, or off-topic citations versus the uncapped baseline. Measured 2026-06-12: Gemma 4 E2B at 400 FAILED that gate on all three axes (meanF1 0.464 to 0.428, abstention 1.00 to 0.91, off-topic citations 41 to 47) — no certified value exists; leave at 0 unless a fresh gate run for your model and value passes.</description>
@@ -277,46 +289,8 @@
 		<description>When true, the validator cross-references each drug named in the answer against the patient's active allergies and conditions and flags contraindications: both hand-authored rules from the reference dataset and a recorded allergy to the same drug or one in the same ATC level-4 subgroup (cross-reactivity), the latter requiring only ATC codes so it works with the rule-less atc source. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
 	</globalProperty>
 
-	<!-- AOP -->
-	<advice>
-		<point>org.openmrs.api.EncounterService</point>
-		<class>org.openmrs.module.chartsearchai.api.EncounterIndexingAdvice</class>
-	</advice>
-
-	<advice>
-		<point>org.openmrs.api.ObsService</point>
-		<class>org.openmrs.module.chartsearchai.api.ObsIndexingAdvice</class>
-	</advice>
-
-	<advice>
-		<point>org.openmrs.api.ConditionService</point>
-		<class>org.openmrs.module.chartsearchai.api.PatientDataIndexingAdvice</class>
-	</advice>
-
-	<advice>
-		<point>org.openmrs.api.DiagnosisService</point>
-		<class>org.openmrs.module.chartsearchai.api.PatientDataIndexingAdvice</class>
-	</advice>
-
-	<advice>
-		<point>org.openmrs.api.PatientService</point>
-		<class>org.openmrs.module.chartsearchai.api.PatientDataIndexingAdvice</class>
-	</advice>
-
-	<advice>
-		<point>org.openmrs.api.OrderService</point>
-		<class>org.openmrs.module.chartsearchai.api.PatientDataIndexingAdvice</class>
-	</advice>
-
-	<advice>
-		<point>org.openmrs.api.ProgramWorkflowService</point>
-		<class>org.openmrs.module.chartsearchai.api.PatientDataIndexingAdvice</class>
-	</advice>
-
-	<advice>
-		<point>org.openmrs.api.MedicationDispenseService</point>
-		<class>org.openmrs.module.chartsearchai.api.PatientDataIndexingAdvice</class>
-	</advice>
+	<!-- Chart-write detection is via core #6084 service events (ChartSearchEventListener),
+	     not AOP advice — see that class. -->
 
 	<!-- Internationalization -->
 	<messages>

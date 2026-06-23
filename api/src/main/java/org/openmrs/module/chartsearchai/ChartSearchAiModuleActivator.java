@@ -19,6 +19,7 @@ import org.openmrs.module.DaemonTokenAware;
 import org.openmrs.module.chartsearchai.api.AuditLogPurgeTask;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
+import org.openmrs.module.chartsearchai.api.impl.PrewarmRefreshExecutor;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.scheduler.TaskDefinition;
@@ -48,6 +49,13 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 		}
 		catch (APIException e) {
 			log.warn("Could not propagate DaemonToken to WarmupExecutor", e);
+		}
+		try {
+			Context.getRegisteredComponent("chartSearchAi.prewarmRefreshExecutor",
+					PrewarmRefreshExecutor.class).setDaemonToken(token);
+		}
+		catch (APIException e) {
+			log.warn("Could not propagate DaemonToken to PrewarmRefreshExecutor", e);
 		}
 		PrewarmBootstrapService prewarm = null;
 		try {
@@ -101,6 +109,13 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 		}
 		catch (Exception e) {
 			log.warn("Error closing LLM provider", e);
+		}
+		try {
+			Context.getRegisteredComponent("chartSearchAi.prewarmRefreshExecutor",
+					PrewarmRefreshExecutor.class).shutdown();
+		}
+		catch (Exception e) {
+			log.warn("Error shutting down prewarm refresh executor", e);
 		}
 		log.info("Chart Search AI Module stopped");
 	}

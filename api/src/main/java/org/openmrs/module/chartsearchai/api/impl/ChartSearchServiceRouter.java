@@ -155,10 +155,11 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 
 	/**
 	 * Evicts all cached answers for one patient — every question, and every entry regardless of the
-	 * pipeline/grounding configuration that was active when it was cached. Called from the AOP advice
-	 * the moment any of that patient's chart data is written, so a repeated identical question after
-	 * an edit recomputes against the new chart instead of serving a stale cached answer — this is
-	 * what makes the cache safe to leave on.
+	 * pipeline/grounding configuration that was active when it was cached. Called (via
+	 * {@code IndexingHelper.onChartWrite}) when a core #6084 service event reports any of that
+	 * patient's chart data was written, so a repeated identical question after an edit recomputes
+	 * against the new chart instead of serving a stale cached answer — this is what makes the cache
+	 * safe to leave on.
 	 *
 	 * <p>The cache key is {@code patientUuid + "::" + ...} (see {@link #buildCacheKey}), so every
 	 * entry for the patient shares the {@code patientUuid + "::"} prefix. A no-op for a null UUID or

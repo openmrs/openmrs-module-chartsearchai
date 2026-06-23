@@ -511,6 +511,24 @@ public class LocalLlmEngine implements LlmEngine {
 	 *  uncapped warm corpus, while ad-hoc warmup/query entries stay under {@code kvCacheMaxEntries}. */
 	static final String PIN_SUFFIX = ".pin";
 
+	/** True when {@code scope} (e.g. a patient UUID) has at least one pinned entry — a
+	 *  {@code <scope>-<hash>.bin.pin} sidecar — in {@code dir}. Used by the per-edit auto-refresh to
+	 *  re-pin only patients already in the durable corpus. Matches by the same sanitized
+	 *  {@code <scope>-} prefix as {@link #kvCacheKey}/{@link #purgeKvScopeEntries}, so a scope that is
+	 *  merely a leading substring of another does not match. */
+	static boolean hasPinnedEntry(File dir, String scope) {
+		if (dir == null || !dir.isDirectory()) {
+			return false;
+		}
+		String prefix = sanitizeScope(scope);
+		if (prefix.isEmpty()) {
+			return false;
+		}
+		String match = prefix + "-";
+		File[] pins = dir.listFiles((d, name) -> name.startsWith(match) && name.endsWith(".bin" + PIN_SUFFIX));
+		return pins != null && pins.length > 0;
+	}
+
 	/** Marks {@code cacheKey} as pinned by writing its zero-byte sidecar, so {@link #evictOldestKvEntries}
 	 *  never reclaims it. Idempotent; a write failure is logged and left non-fatal (the entry simply
 	 *  stays subject to the cap). */

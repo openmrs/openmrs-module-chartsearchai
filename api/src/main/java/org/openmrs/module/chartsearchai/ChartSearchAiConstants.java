@@ -159,6 +159,27 @@ public class ChartSearchAiConstants {
 	public static final long DEFAULT_PREWARM_THROTTLE_MS = 500L;
 
 	/**
+	 * When {@code true}, a chart edit to a patient who is <em>already in the pinned prewarm corpus</em>
+	 * schedules a single-patient re-pin (a debounced background {@code warmup(patient, true)}), so the
+	 * durable corpus stays fresh without a manual re-sweep. Patients not already pinned are untouched
+	 * (the reactive chart-open warmup covers them). Default {@code false}; only meaningful with
+	 * {@code engine=local} and a pinned corpus. Independent of {@link #GP_PREWARM_ENABLED}: the bulk
+	 * sweep and the per-edit refresh can be run separately.
+	 */
+	public static final String GP_PREWARM_REFRESH_ON_EDIT = "chartsearchai.prewarm.refreshOnEdit";
+
+	public static final boolean DEFAULT_PREWARM_REFRESH_ON_EDIT = false;
+
+	/**
+	 * Quiet window (milliseconds) a per-edit re-pin waits before firing, coalescing a burst of writes
+	 * to one patient (e.g. an encounter save that writes many obs) into a single re-pin. Default
+	 * {@code 5000}.
+	 */
+	public static final String GP_PREWARM_REFRESH_DEBOUNCE_MS = "chartsearchai.prewarm.refreshDebounceMs";
+
+	public static final long DEFAULT_PREWARM_REFRESH_DEBOUNCE_MS = 5000L;
+
+	/**
 	 * When {@code true}, a streaming query first runs a fast "preview" reasoning pass over only the
 	 * querystore top-K query-relevant records and streams that reasoning to the thinking channel,
 	 * ahead of the unchanged full-chart answer. The focused chart is a few hundred tokens versus the

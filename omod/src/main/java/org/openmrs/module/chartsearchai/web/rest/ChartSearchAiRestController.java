@@ -9,8 +9,17 @@
  */
 package org.openmrs.module.chartsearchai.web.rest;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -18,12 +27,14 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpServletResponseWrapper;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.openmrs.Patient;
@@ -32,23 +43,22 @@ import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
-import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
-import org.openmrs.module.chartsearchai.util.DateFormatUtil;
-import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
-import org.openmrs.module.chartsearchai.api.AuditLogService;
+import org.openmrs.module.chartsearchai.api.ChatService;
+import org.openmrs.module.chartsearchai.api.ChatService.ChatTurnResult;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
-import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
-import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
-import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
+import org.openmrs.module.chartsearchai.api.impl.ResponseBlock;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
-import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.model.ChatMessage;
+import org.openmrs.module.chartsearchai.model.ChatSession;
+import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -64,10 +74,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * REST endpoint for AI-powered chart search.
+ * REST endpoints for persisted, patient-scoped clinical chat relayed through
+ * med-agent-hub.
  *
  * <pre>
- * POST /ws/rest/v1/chartsearchai/search
+ * POST /ws/rest/v1/chartsearchai/chat
  * {
  *   "patient": "patient-uuid-here",
  *   "question": "What medications is this patient on?"
@@ -80,12 +91,58 @@ public class ChartSearchAiRestController {
 
 	private static final Logger log = LoggerFactory.getLogger(ChartSearchAiRestController.class);
 
+	private static final ObjectMapper MAPPER = new ObjectMapper();
+
 	private static final int MAX_QUESTION_LENGTH = 1000;
 
 	private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]");
 
 	private static String formatDate(Date date) {
 		return date != null ? DateFormatUtil.formatDate(date) : null;
+	}
+
+	/**
+	 * Serialize a list of {@link ResponseBlock} into the JSON-Map shape used
+	 * by both the {@code /chat} sync response and the SSE {@code done} event.
+	 * Keeps wire format identical across the two surfaces so the SPA only
+	 * implements one parser.
+	 */
+	private static List<Map<String, Object>> blocksToJson(List<ResponseBlock> blocks) {
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		if (blocks == null) {
+			return out;
+		}
+		for (ResponseBlock block : blocks) {
+			Map<String, Object> blockMap = new LinkedHashMap<String, Object>();
+			blockMap.put("kind", block.getKind());
+			if (block.getTitle() != null) {
+				blockMap.put("title", block.getTitle());
+			}
+			List<Map<String, Object>> columns = new ArrayList<Map<String, Object>>();
+			for (ResponseBlock.Column c : block.getColumns()) {
+				Map<String, Object> col = new LinkedHashMap<String, Object>();
+				col.put("key", c.getKey());
+				col.put("label", c.getLabel());
+				columns.add(col);
+			}
+			blockMap.put("columns", columns);
+			List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+			for (ResponseBlock.Row row : block.getRows()) {
+				Map<String, Object> cellsMap = new LinkedHashMap<String, Object>();
+				for (Map.Entry<String, ResponseBlock.Cell> entry : row.getCells().entrySet()) {
+					Map<String, Object> cellMap = new LinkedHashMap<String, Object>();
+					cellMap.put("text", entry.getValue().getText());
+					cellMap.put("refs", entry.getValue().getRefs());
+					cellsMap.put(entry.getKey(), cellMap);
+				}
+				Map<String, Object> rowMap = new LinkedHashMap<String, Object>();
+				rowMap.put("cells", cellsMap);
+				rows.add(rowMap);
+			}
+			blockMap.put("rows", rows);
+			out.add(blockMap);
+		}
+		return out;
 	}
 
 	// Defense-in-depth: catches common prompt injection phrases. This is a blocklist
@@ -105,10 +162,6 @@ public class ChartSearchAiRestController {
 			+ "the patient's medical records.";
 
 	@Autowired
-	@Qualifier("chartSearchAi.chartSearchServiceRouter")
-	private ChartSearchService chartSearchService;
-
-	@Autowired
 	@Qualifier("chartSearchAi.patientAccessCheck")
 	private PatientAccessCheck patientAccessCheck;
 
@@ -117,515 +170,31 @@ public class ChartSearchAiRestController {
 	private AuditLogService auditLogService;
 
 	@Autowired
-	@Qualifier("chartSearchAi.warmupExecutor")
-	private WarmupExecutor warmupExecutor;
+	@Qualifier("chartSearchAi.chatService")
+	private ChatService chatService;
 
 	@Autowired
-	@Qualifier("chartSearchAi.prewarmBootstrapService")
-	private PrewarmBootstrapService prewarmBootstrapService;
+	@Qualifier("chartSearchAi.hubProfileService")
+	private org.openmrs.module.chartsearchai.api.impl.HubProfileService hubProfileService;
 
-	@RequestMapping(value = "/search", method = RequestMethod.POST)
+	/**
+	 * Relay med-agent-hub's authoritative product-profile metadata. ChartSearchAI does not merge,
+	 * curate, or reinterpret the list; profile labels, availability, capabilities, and the default
+	 * marker all come from the hub.
+	 */
+	@RequestMapping(value = "/models", method = RequestMethod.GET)
 	@ResponseBody
-	public ResponseEntity<Object> search(@RequestBody Map<String, String> body) {
+	public ResponseEntity<Object> listModels() {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
-
-		String patientUuid = body.get("patient");
-		String question = body.get("question");
-
-		PatientResolution resolved = resolvePatient(patientUuid);
-		if (resolved.hasError()) {
-			return new ResponseEntity<Object>(
-					errorResponse(resolved.errorMessage), resolved.errorStatus);
-		}
-		Patient patient = resolved.patient;
-
-		if (question == null || question.trim().isEmpty()) {
-			return new ResponseEntity<Object>(
-					errorResponse("question is required"), HttpStatus.BAD_REQUEST);
-		}
-		if (question.length() > MAX_QUESTION_LENGTH) {
-			return new ResponseEntity<Object>(
-					errorResponse("question exceeds maximum length of "
-							+ MAX_QUESTION_LENGTH + " characters"),
-					HttpStatus.BAD_REQUEST);
-		}
-
-		question = CONTROL_CHARS.matcher(question).replaceAll("");
-		if (question.trim().isEmpty()) {
-			return new ResponseEntity<Object>(
-					errorResponse("question is required"), HttpStatus.BAD_REQUEST);
-		}
-
-		String sanitizationError = validateQuestion(question);
-		if (sanitizationError != null) {
-			return new ResponseEntity<Object>(
-					errorResponse(sanitizationError), HttpStatus.BAD_REQUEST);
-		}
-
-		User user = Context.getAuthenticatedUser();
-
-		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
-		if (rateLimitError != null) {
-			return rateLimitError;
-		}
-
-		String preFilter = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
-		boolean preFilterEnabled = !"false".equalsIgnoreCase(preFilter.trim());
-
-		ChartAnswer chartAnswer;
-		long responseTimeMs;
 		try {
-			long startTime = System.currentTimeMillis();
-			chartAnswer = chartSearchService.search(patient, question);
-			responseTimeMs = System.currentTimeMillis() - startTime;
+			return new ResponseEntity<Object>(hubProfileService.listProfiles(), HttpStatus.OK);
 		}
-		catch (ChartTooLargeException e) {
-			log.warn("Chart too large for LLM context for patient [id={}]: {}",
-					patient.getPatientId(), e.getMessage());
+		catch (Exception e) {
+			log.warn("Failed to list hub profiles: {}", e.getMessage());
 			return new ResponseEntity<Object>(
-					errorResponse("This patient's chart is too large to process. "
-							+ "Contact your administrator to increase the LLM context size."),
-					HttpStatus.PAYLOAD_TOO_LARGE);
-		}
-		catch (IllegalStateException e) {
-			log.error("Chart search configuration error", e);
-			return new ResponseEntity<Object>(
-					errorResponse("Chart search is not properly configured. Contact your administrator."),
+					errorResponse("Hub profile discovery is unavailable."),
 					HttpStatus.SERVICE_UNAVAILABLE);
 		}
-		catch (Exception e) {
-			log.error("Chart search failed for patient [id={}]", patient.getPatientId(), e);
-			return new ResponseEntity<Object>(
-					errorResponse("Chart search failed. Please try again or contact your administrator."),
-					HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-
-		ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
-		auditLog.setUser(user);
-		auditLog.setPatient(patient);
-		auditLog.setQuestion(question);
-		auditLog.setAnswer(chartAnswer.getAnswer());
-		auditLog.setReferenceCount(chartAnswer.getReferences().size());
-		auditLog.setSearchMode(preFilterEnabled ? "pre-filter" : "full-chart");
-		auditLog.setResponseTimeMs(responseTimeMs);
-		auditLog.setInputTokens(chartAnswer.getInputTokens() > 0 ? chartAnswer.getInputTokens() : null);
-		auditLog.setOutputTokens(chartAnswer.getOutputTokens() > 0 ? chartAnswer.getOutputTokens() : null);
-		auditLog.setDateCreated(new Date());
-		try {
-			auditLogService.saveAuditLog(auditLog);
-		}
-		catch (Exception e) {
-			log.warn("Failed to save audit log for search query", e);
-		}
-
-		Map<String, Object> response = new HashMap<String, Object>();
-		response.put("answer", chartAnswer.getAnswer());
-		response.put("disclaimer", DISCLAIMER);
-
-		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
-		for (RecordReference ref : chartAnswer.getReferences()) {
-			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
-			refMap.put("index", ref.getIndex());
-			refMap.put("resourceType", ref.getResourceType());
-			refMap.put("resourceUuid", ref.getResourceUuid());
-			refMap.put("date", formatDate(ref.getDate()));
-			// null when grounding is disabled or could not run — clients must
-			// render null as "unverified", never as "verified".
-			refMap.put("grounded", ref.getGrounded());
-			refs.add(refMap);
-		}
-		response.put("references", refs);
-		response.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
-		if (auditLog.getAuditLogId() != null) {
-			response.put("questionId", String.valueOf(auditLog.getAuditLogId()));
-		}
-
-		return new ResponseEntity<Object>(response, HttpStatus.OK);
-	}
-
-	/**
-	 * Pre-warm the LLM prompt cache for a patient's chart. Called by the frontend
-	 * when a patient chart is opened, so the first AI query on that patient does
-	 * not pay full prefill cost. Returns 202 Accepted immediately; the warmup runs
-	 * on a background daemon thread.
-	 */
-	@RequestMapping(value = "/warmup", method = RequestMethod.POST)
-	@ResponseBody
-	public ResponseEntity<Object> warmup(@RequestBody Map<String, String> body) {
-		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
-
-		PatientResolution resolved = resolvePatient(body.get("patient"));
-		if (resolved.hasError()) {
-			return new ResponseEntity<Object>(
-					errorResponse(resolved.errorMessage), resolved.errorStatus);
-		}
-
-		warmupExecutor.submit(resolved.patient);
-		return new ResponseEntity<Object>(HttpStatus.ACCEPTED);
-	}
-
-	/**
-	 * Trigger (or steer) the background prewarm bootstrap: a resumable sweep that pre-fills and pins
-	 * every patient's chart KV cache, so a first query on a patient never opened this process is still
-	 * warm. Body (all optional): {@code {"scope":"all","action":"start|restart|stop"}}. Returns
-	 * 202 Accepted with the current status snapshot; the sweep runs on a background daemon thread.
-	 * Requires the {@code Manage AI Prewarm} privilege (a system operation, not a clinical one), and
-	 * is gated by {@code chartsearchai.prewarm.enabled}.
-	 */
-	@RequestMapping(value = "/prewarm", method = RequestMethod.POST)
-	@ResponseBody
-	public ResponseEntity<Object> prewarm(@RequestBody(required = false) Map<String, String> body) {
-		Context.requirePrivilege(ChartSearchAiConstants.PRIV_MANAGE_PREWARM);
-		Map<String, String> b = body == null ? Collections.<String, String> emptyMap() : body;
-		String scope = b.get("scope");
-		// Only the full-database sweep is implemented. Reject any other scope explicitly rather than
-		// silently running an "all" sweep — passing e.g. scope=queue must not surprise the caller with
-		// a full-DB prefill. ("all" and blank both mean all.)
-		if (scope != null && !scope.trim().isEmpty()
-				&& !PrewarmBootstrapService.SCOPE_ALL.equalsIgnoreCase(scope.trim())) {
-			return new ResponseEntity<Object>(
-					errorResponse("Unsupported scope '" + scope + "'. Only 'all' is supported."),
-					HttpStatus.BAD_REQUEST);
-		}
-		PrewarmStatus status = prewarmBootstrapService.trigger(scope, b.get("action"));
-		return new ResponseEntity<Object>(status.toMap(), HttpStatus.ACCEPTED);
-	}
-
-	/**
-	 * Current prewarm-bootstrap status: run state, scope, totals, the resume cursor, and the on-disk
-	 * pinned-entry count. Requires the {@code Manage AI Prewarm} privilege.
-	 */
-	@RequestMapping(value = "/prewarmstatus", method = RequestMethod.GET)
-	@ResponseBody
-	public ResponseEntity<Object> prewarmStatus() {
-		Context.requirePrivilege(ChartSearchAiConstants.PRIV_MANAGE_PREWARM);
-		return new ResponseEntity<Object>(prewarmBootstrapService.getStatus().toMap(), HttpStatus.OK);
-	}
-
-	/**
-	 * Streaming search endpoint using Server-Sent Events. Streams tokens as they are
-	 * generated by the LLM, then sends references and disclaimer as a final "done" event.
-	 *
-	 * <p>Writes SSE events directly to the response output stream in the request
-	 * thread. This avoids the need for {@code SseEmitter}, background threads,
-	 * async servlet support, and proxy privileges — the authenticated user's
-	 * session is naturally available throughout the request.</p>
-	 *
-	 * <p>SSE event types:</p>
-	 * <ul>
-	 *   <li>{@code preliminary} — only with {@code chartsearchai.progressiveReasoning.enabled}: a
-	 *       chunk of the fast PREVIEW reasoning over the focused top-K chart, streamed before the
-	 *       full-chart answer. Render as provisional (clearly an in-progress preview, not the answer)
-	 *       and REPLACE it when the first {@code thinking} (or {@code token}) event arrives — the
-	 *       preview can be wrong until the committed full-chart pass corrects it</li>
-	 *   <li>{@code thinking} — a chunk of the model's reasoning (chain-of-thought), emitted
-	 *       before the answer; render distinctly (e.g. a collapsible panel), not as the answer</li>
-	 *   <li>{@code token} — a chunk of the answer text</li>
-	 *   <li>{@code references} — the answer's citations the moment the answer is complete,
-	 *       before grounding verdicts exist; render as unverified until verdicts arrive</li>
-	 *   <li>{@code done} — final JSON with answer, references, questionId, and disclaimer.
-	 *       With async grounding off (the default) the references carry their grounding
-	 *       verdicts; with {@code chartsearchai.grounding.async=true} they do not yet</li>
-	 *   <li>{@code grounded} — only with async grounding: the references re-sent with their
-	 *       grounding verdicts attached, after the Tier-2 verification tail completes; carries
-	 *       the same {@code questionId} as {@code done}. Clients must keep consuming the stream
-	 *       after {@code done} to receive it</li>
-	 *   <li>{@code error} — an error message if something goes wrong</li>
-	 * </ul>
-	 */
-	@RequestMapping(value = "/search/stream", method = RequestMethod.POST)
-	public void searchStream(@RequestBody Map<String, String> body,
-			HttpServletResponse response) throws IOException {
-		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
-
-		String patientUuid = body.get("patient");
-		String question = body.get("question");
-
-		if (patientUuid == null || patientUuid.trim().isEmpty()) {
-			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "patient is required");
-			return;
-		}
-		if (question == null || question.trim().isEmpty()) {
-			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "question is required");
-			return;
-		}
-		if (question.length() > MAX_QUESTION_LENGTH) {
-			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST,
-					"question exceeds maximum length of " + MAX_QUESTION_LENGTH + " characters");
-			return;
-		}
-
-		String sanitizedQuestion = CONTROL_CHARS.matcher(question).replaceAll("");
-		if (sanitizedQuestion.trim().isEmpty()) {
-			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "question is required");
-			return;
-		}
-
-		String sanitizationError = validateQuestion(sanitizedQuestion);
-		if (sanitizationError != null) {
-			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, sanitizationError);
-			return;
-		}
-
-		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
-		if (patient == null) {
-			writeJsonError(response, HttpServletResponse.SC_NOT_FOUND, "Patient not found");
-			return;
-		}
-
-		User user = Context.getAuthenticatedUser();
-
-		if (!patientAccessCheck.canAccess(user, patient)) {
-			writeJsonError(response, HttpServletResponse.SC_FORBIDDEN,
-					"You do not have access to this patient's chart");
-			return;
-		}
-
-		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
-		if (rateLimitError != null) {
-			writeJsonError(response, 429, "Rate limit exceeded");
-			return;
-		}
-
-		// All validation passed — start SSE streaming.
-		// Unwrap any response wrappers (e.g. Spring's ContentCachingResponseWrapper
-		// from ShallowEtagHeaderFilter) that buffer the entire body, which would
-		// prevent SSE tokens from streaming to the client in real time.
-		HttpServletResponse unwrapped = response;
-		while (unwrapped instanceof HttpServletResponseWrapper) {
-			javax.servlet.ServletResponse inner =
-					((HttpServletResponseWrapper) unwrapped).getResponse();
-			if (inner instanceof HttpServletResponse) {
-				unwrapped = (HttpServletResponse) inner;
-			} else {
-				break;
-			}
-		}
-
-		response.setContentType("text/event-stream");
-		response.setCharacterEncoding("UTF-8");
-		response.setHeader("Cache-Control", "no-cache");
-		response.setHeader("X-Accel-Buffering", "no");
-		response.setHeader("Connection", "keep-alive");
-		// Disable Tomcat's response buffer so tokens stream immediately
-		// instead of accumulating in the default 8KB buffer.
-		unwrapped.setBufferSize(0);
-
-		final OutputStream out = unwrapped.getOutputStream();
-		// Commit the response headers now so chunked transfer starts
-		unwrapped.flushBuffer();
-
-		String preFilterProp = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
-		String searchMode = !"false".equalsIgnoreCase(preFilterProp.trim())
-				? "pre-filter" : "full-chart";
-
-		streamAnswer(out, patient, sanitizedQuestion, user, searchMode, isAsyncGroundingActive());
-	}
-
-	/**
-	 * Whether the streaming endpoint should emit {@code done} before the grounding pass and
-	 * deliver verdicts in a trailing {@code grounded} event. Only meaningful when grounding
-	 * itself is on — with grounding disabled there is no tail to move off the response path.
-	 * Resolved here (not in {@link #streamAnswer}) so the orchestration stays free of
-	 * {@code Context} reads and unit-testable.
-	 */
-	private static boolean isAsyncGroundingActive() {
-		return ChartSearchAiUtils.isGroundingAsyncEnabled() && ChartSearchAiUtils.isGroundingEnabled();
-	}
-
-	/**
-	 * The SSE orchestration for one streaming search: runs the service call with the token /
-	 * thinking / references channels wired to the output stream, then emits the terminal events.
-	 *
-	 * <p>With {@code asyncGrounding} off, the classic shape: one {@code done} event after the
-	 * service returns, carrying the grounded references. With it on, {@code done} is emitted the
-	 * moment the answer is complete (references without verdicts, audit row already saved so
-	 * {@code questionId} is present) and a trailing {@code grounded} event delivers the
-	 * verdict-annotated references once verification finishes — the user's perceived completion
-	 * no longer waits out the grounding tail. If the service returns without ever surfacing an
-	 * ungrounded answer (a cache hit returns an already-final answer), the classic {@code done}
-	 * is emitted instead and no {@code grounded} event follows.</p>
-	 *
-	 * <p>Package-private and free of {@code Context} reads so event-order behavior is unit-tested
-	 * directly (see {@code ChartSearchAiStreamEventOrderTest}); {@code searchStream} resolves all
-	 * configuration before delegating here.</p>
-	 */
-	void streamAnswer(final OutputStream out, Patient patient, String sanitizedQuestion, User user,
-			String searchMode, boolean asyncGrounding) {
-		try {
-			long startTime = System.currentTimeMillis();
-
-			// Carries the early-done state from the consumer (fired mid-call) to the post-return
-			// code: [0] = the saved questionId (null if audit failed), and whether done was sent
-			// is tracked by earlyDoneSent. Single-element arrays because the consumer lambda needs
-			// effectively-final capture.
-			final String[] earlyQuestionId = new String[1];
-			final boolean[] earlyDoneSent = new boolean[1];
-
-			// Async grounding: the moment the (not yet grounding-verified) answer exists, persist
-			// the audit row and emit "done" — the user's perceived completion no longer waits out
-			// the grounding tail. The audit's responseTimeMs deliberately measures to THIS point
-			// (what the user experienced); the [timing] service log still carries groundMs.
-			// Serialization + write failures unwind like any mid-stream disconnect, via the same
-			// RuntimeException(IOException) shape writeSseEventOrThrow uses.
-			Consumer<ChartAnswer> ungroundedConsumer = !asyncGrounding ? ungrounded -> { }
-					: ungrounded -> {
-						if (earlyDoneSent[0]) {
-							// Interface contract is at-most-once; stay idempotent anyway — a
-							// duplicate done would corrupt every client's completion handling.
-							log.warn("Ungrounded-answer consumer fired more than once; ignoring");
-							return;
-						}
-						earlyQuestionId[0] = saveAuditLog(user, patient, sanitizedQuestion,
-								ungrounded, searchMode, System.currentTimeMillis() - startTime);
-						try {
-							writeSseEvent(out, "done",
-									doneEventJson(ungrounded, earlyQuestionId[0]));
-						}
-						catch (IOException e) {
-							log.debug("Client disconnected during streaming (done)");
-							throw new RuntimeException("Client disconnected", e);
-						}
-						earlyDoneSent[0] = true;
-					};
-
-			// Five channels: "token" carries the answer; "thinking" carries the committed full-chart
-			// reasoning (chain-of-thought), emitted first so the UI can show live progress and the
-			// rationale instead of a dead spinner; "preliminary" carries the optional progressive
-			// preview reasoning (only when progressiveReasoning.enabled) — streamed ahead of, and to
-			// be REPLACED by, "thinking"; "references" carries the answer's citations the moment the
-			// answer is done — BEFORE the grounding pass — so the UI can render clickable citations
-			// immediately and not wait on Tier-2 verification. The terminal events re-send the
-			// references with grounding verdicts attached: in the classic shape on "done", or — when
-			// async grounding is active — on a trailing "grounded" event after an early "done". The
-			// frontend must render "thinking" distinctly (e.g. a collapsible panel), never as the
-			// answer; citations must show as unverified until verdicts arrive. All unwind on client
-			// disconnect via writeSseEventOrThrow.
-			ChartAnswer chartAnswer = chartSearchService.searchStreaming(
-					patient, sanitizedQuestion,
-					token -> writeSseEventOrThrow(out, "token", token),
-					reasoning -> writeSseEventOrThrow(out, "thinking", reasoning),
-					citations -> sendReferencesEvent(out, citations),
-					ungroundedConsumer,
-					preliminary -> writeSseEventOrThrow(out, "preliminary", preliminary));
-
-			if (!earlyDoneSent[0]) {
-				// Classic shape: async off, or the service returned an already-final answer (cache
-				// hit) without surfacing an ungrounded stage — audit and emit the single done.
-				String questionId = saveAuditLog(user, patient, sanitizedQuestion, chartAnswer,
-						searchMode, System.currentTimeMillis() - startTime);
-				writeSseEvent(out, "done", doneEventJson(chartAnswer, questionId));
-			} else {
-				// done already went out before grounding; deliver the verdicts in the trailing
-				// "grounded" event. Same reference serialization as done, so the client can
-				// replace its reference list wholesale; questionId correlates the two events.
-				Map<String, Object> groundedData = new HashMap<String, Object>();
-				groundedData.put("references", serializeReferences(chartAnswer.getReferences()));
-				groundedData.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
-				if (earlyQuestionId[0] != null) {
-					groundedData.put("questionId", earlyQuestionId[0]);
-				}
-				writeSseEvent(out, "grounded", new ObjectMapper().writeValueAsString(groundedData));
-			}
-		}
-		catch (ChartTooLargeException e) {
-			log.warn("Chart too large for LLM context during streaming for patient [id={}]: {}",
-					patient.getPatientId(), e.getMessage());
-			try {
-				writeSseEvent(out, "error",
-						"This patient's chart is too large to process. "
-								+ "Contact your administrator to increase the LLM context size.");
-			}
-			catch (IOException ioe) {
-				log.debug("Could not send too-large error event, client likely disconnected");
-			}
-		}
-		catch (IllegalStateException e) {
-			log.error("Chart search configuration error during streaming", e);
-			try {
-				writeSseEvent(out, "error",
-						"Chart search is not properly configured. Contact your administrator.");
-			}
-			catch (IOException ioe) {
-				log.debug("Could not send config error event, client likely disconnected");
-			}
-		}
-		catch (Exception e) {
-			if (e.getCause() instanceof IOException) {
-				log.debug("Streaming ended due to client disconnect");
-			} else {
-				log.error("Chart search streaming failed for patient [id={}]",
-						patient.getPatientId(), e);
-				try {
-					writeSseEvent(out, "error",
-							"Chart search failed. Please try again or contact your administrator.");
-				}
-				catch (IOException ioe) {
-					log.debug("Could not send error event, client likely disconnected");
-				}
-			}
-		}
-
-		try {
-			out.flush();
-		}
-		catch (IOException e) {
-			log.debug("Could not flush SSE stream, client likely disconnected");
-		}
-	}
-
-	/**
-	 * Persists the audit row for a streaming answer and returns its id as the client-facing
-	 * {@code questionId}, or {@code null} when the save failed — audit failures are logged and
-	 * never break the response, exactly as before the async-grounding split. Shared by the
-	 * classic post-return path and the async early-{@code done} path so both emit identical
-	 * audit rows and {@code done} payloads.
-	 */
-	private String saveAuditLog(User user, Patient patient, String question, ChartAnswer answer,
-			String searchMode, long responseTimeMs) {
-		ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
-		auditLog.setUser(user);
-		auditLog.setPatient(patient);
-		auditLog.setQuestion(question);
-		auditLog.setAnswer(answer.getAnswer());
-		auditLog.setReferenceCount(answer.getReferences().size());
-		auditLog.setSearchMode(searchMode);
-		auditLog.setResponseTimeMs(responseTimeMs);
-		auditLog.setInputTokens(answer.getInputTokens() > 0 ? answer.getInputTokens() : null);
-		auditLog.setOutputTokens(answer.getOutputTokens() > 0 ? answer.getOutputTokens() : null);
-		auditLog.setDateCreated(new Date());
-		try {
-			auditLogService.saveAuditLog(auditLog);
-		}
-		catch (Exception e) {
-			log.warn("Failed to save audit log for streaming query", e);
-		}
-		return auditLog.getAuditLogId() != null ? String.valueOf(auditLog.getAuditLogId()) : null;
-	}
-
-	/** Serializes the {@code done} event payload: answer, disclaimer, references, questionId. */
-	private String doneEventJson(ChartAnswer answer, String questionId) throws IOException {
-		Map<String, Object> doneData = new HashMap<String, Object>();
-		doneData.put("answer", answer.getAnswer());
-		doneData.put("disclaimer", DISCLAIMER);
-		doneData.put("references", serializeReferences(answer.getReferences()));
-		doneData.put("safetyWarnings", serializeSafetyWarnings(answer.getSafetyWarnings()));
-		if (questionId != null) {
-			doneData.put("questionId", questionId);
-		}
-		return new ObjectMapper().writeValueAsString(doneData);
-	}
-
-	/** Test seam: production wires {@link ChartSearchService} via {@code Autowired}. */
-	void setChartSearchService(ChartSearchService chartSearchService) {
-		this.chartSearchService = chartSearchService;
-	}
-
-	/** Test seam: production wires {@link AuditLogService} via {@code Autowired}. */
-	void setAuditLogService(AuditLogService auditLogService) {
-		this.auditLogService = auditLogService;
 	}
 
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)
@@ -723,6 +292,448 @@ public class ChartSearchAiRestController {
 		Map<String, Object> response = new HashMap<String, Object>();
 		response.put("success", true);
 		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	// ============================================================================
+	// Patient-scoped chat endpoints. These maintain a per-(patient, user)
+	// ChatSession that carries prior turns into each hub request. Persistence is
+	// handled by {@link ChatService}.
+	// ============================================================================
+
+	/**
+	 * Streaming chat turn. Reuses the (patient, user) session if {@code session}
+	 * is provided AND resolves to an active session; otherwise opens-or-loads the
+	 * latest active session for the user. Surfaces the session uuid via the
+	 * {@code X-ChartSearchAi-Session} response header before the SSE stream opens
+	 * so the client can pin subsequent posts to the same conversation.
+	 *
+	 * <pre>
+	 * POST /ws/rest/v1/chartsearchai/chat/stream
+	 * { "patient": "uuid", "session": "uuid?" , "question": "..." }
+	 * </pre>
+	 */
+	@RequestMapping(value = "/chat/stream", method = RequestMethod.POST)
+	public void chatStream(@RequestBody Map<String, String> body,
+			HttpServletResponse response) throws IOException {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		String patientUuid = body.get("patient");
+		String sessionUuid = body.get("session");
+		String question = body.get("question");
+
+		if (patientUuid == null || patientUuid.trim().isEmpty()) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "patient is required");
+			return;
+		}
+		if (question == null || question.trim().isEmpty()) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "question is required");
+			return;
+		}
+		if (question.length() > MAX_QUESTION_LENGTH) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST,
+					"question exceeds maximum length of " + MAX_QUESTION_LENGTH + " characters");
+			return;
+		}
+
+		String sanitizedQuestion = CONTROL_CHARS.matcher(question).replaceAll("");
+		if (sanitizedQuestion.trim().isEmpty()) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "question is required");
+			return;
+		}
+		String sanitizationError = validateQuestion(sanitizedQuestion);
+		if (sanitizationError != null) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, sanitizationError);
+			return;
+		}
+
+		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
+		if (patient == null) {
+			writeJsonError(response, HttpServletResponse.SC_NOT_FOUND, "Patient not found");
+			return;
+		}
+
+		User user = Context.getAuthenticatedUser();
+		if (!patientAccessCheck.canAccess(user, patient)) {
+			writeJsonError(response, HttpServletResponse.SC_FORBIDDEN,
+					"You do not have access to this patient's chart");
+			return;
+		}
+
+		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
+		if (rateLimitError != null) {
+			writeJsonError(response, 429, "Rate limit exceeded");
+			return;
+		}
+
+		// Resolve the requested hub profile before opening the stream.
+		HubRequest hubRequest;
+		try {
+			hubRequest = resolveHubRequest(body);
+		}
+		catch (IllegalArgumentException e) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+			return;
+		}
+
+		try {
+			ChatSession session = resolveOrOpenSession(patient, sessionUuid);
+
+			// Unwrap any response wrappers that buffer the body (kills SSE liveness).
+			HttpServletResponse unwrapped = response;
+			while (unwrapped instanceof HttpServletResponseWrapper) {
+				javax.servlet.ServletResponse inner =
+						((HttpServletResponseWrapper) unwrapped).getResponse();
+				if (inner instanceof HttpServletResponse) {
+					unwrapped = (HttpServletResponse) inner;
+				}
+				else {
+					break;
+				}
+			}
+
+			response.setContentType("text/event-stream");
+			response.setCharacterEncoding("UTF-8");
+			response.setHeader("Cache-Control", "no-cache");
+			response.setHeader("X-Accel-Buffering", "no");
+			response.setHeader("Connection", "keep-alive");
+			// Surface the session uuid before the stream opens so the client can pin
+			// subsequent posts to this conversation.
+			response.setHeader("X-ChartSearchAi-Session", session.getUuid());
+			unwrapped.setBufferSize(0);
+
+			final OutputStream out = unwrapped.getOutputStream();
+			unwrapped.flushBuffer();
+
+			try {
+				streamHubStagedChat(out, session, patientUuid, sanitizedQuestion, hubRequest);
+				return;
+			}
+			catch (ChartTooLargeException e) {
+				log.warn("Chart too large for chat streaming for patient [id={}]: {}",
+						patient.getPatientId(), e.getMessage());
+				try {
+					writeSseEvent(out, "error",
+							"This patient's chart is too large to process. "
+									+ "Contact your administrator to increase the LLM context size.");
+				}
+				catch (IOException ioe) {
+					log.debug("Could not send too-large error event, client likely disconnected");
+				}
+			}
+			catch (IllegalStateException e) {
+				log.error("Chat configuration error during streaming", e);
+				try {
+					writeSseEvent(out, "error",
+							"Chart search is not properly configured. Contact your administrator.");
+				}
+				catch (IOException ioe) {
+					log.debug("Could not send config error event, client likely disconnected");
+				}
+			}
+			catch (Exception e) {
+				if (e.getCause() instanceof IOException) {
+					log.debug("Chat streaming ended due to client disconnect");
+				}
+				else {
+					log.error("Chat streaming failed for patient [id={}]", patient.getPatientId(), e);
+					try {
+						writeSseEvent(out, "error",
+								"Chart search failed. Please try again or contact your administrator.");
+					}
+					catch (IOException ioe) {
+						log.debug("Could not send error event, client likely disconnected");
+					}
+				}
+			}
+
+			try {
+				out.flush();
+			}
+			catch (IOException e) {
+				log.debug("Could not flush chat SSE stream, client likely disconnected");
+			}
+		}
+		catch (Exception e) {
+			// Failure before the SSE stream opened. Return JSON rather than a servlet HTML page.
+			if (!response.isCommitted()) {
+				log.error("Chat stream setup failed for patient [id={}]", patient.getPatientId(), e);
+				writeJsonError(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+						"Chart search failed. Please try again or contact your administrator.");
+			}
+			else {
+				log.error("Chat stream failed after response commit for patient [id={}]", patient.getPatientId(), e);
+			}
+		}
+	}
+
+	/**
+	 * Synchronous chat (non-streaming) — convenience for callers that don't need
+	 * SSE. Same persistence semantics as {@link #chatStream}; the session uuid is
+	 * returned in the JSON body (no SSE header).
+	 */
+	@RequestMapping(value = "/chat", method = RequestMethod.POST)
+	@ResponseBody
+	public ResponseEntity<Object> chat(@RequestBody Map<String, String> body) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		String patientUuid = body.get("patient");
+		String sessionUuid = body.get("session");
+		String question = body.get("question");
+
+		PatientResolution resolved = resolvePatient(patientUuid);
+		if (resolved.hasError()) {
+			return new ResponseEntity<Object>(
+					errorResponse(resolved.errorMessage), resolved.errorStatus);
+		}
+		Patient patient = resolved.patient;
+
+		if (question == null || question.trim().isEmpty()) {
+			return new ResponseEntity<Object>(
+					errorResponse("question is required"), HttpStatus.BAD_REQUEST);
+		}
+		if (question.length() > MAX_QUESTION_LENGTH) {
+			return new ResponseEntity<Object>(
+					errorResponse("question exceeds maximum length of "
+							+ MAX_QUESTION_LENGTH + " characters"),
+					HttpStatus.BAD_REQUEST);
+		}
+		question = CONTROL_CHARS.matcher(question).replaceAll("");
+		if (question.trim().isEmpty()) {
+			return new ResponseEntity<Object>(
+					errorResponse("question is required"), HttpStatus.BAD_REQUEST);
+		}
+		String sanitizationError = validateQuestion(question);
+		if (sanitizationError != null) {
+			return new ResponseEntity<Object>(
+					errorResponse(sanitizationError), HttpStatus.BAD_REQUEST);
+		}
+
+		User user = Context.getAuthenticatedUser();
+		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
+		if (rateLimitError != null) {
+			return rateLimitError;
+		}
+
+		ChatSession session;
+		try {
+			session = resolveOrOpenSession(patient, sessionUuid);
+		}
+		catch (Exception e) {
+			log.error("Chat session/chart resolution failed for patient [id={}]", patient.getPatientId(), e);
+			return new ResponseEntity<Object>(
+					errorResponse("Chart search failed. Please try again or contact your administrator."),
+					HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+
+		// A caller may select a profile for this request; the configured hub endpoint is fixed.
+		String answeredModel;
+		HubRequest hubRequest;
+		try {
+			hubRequest = resolveHubRequest(body);
+			answeredModel = hubRequest.profileId;
+		}
+		catch (IllegalArgumentException e) {
+			return new ResponseEntity<Object>(errorResponse(e.getMessage()), HttpStatus.BAD_REQUEST);
+		}
+
+		ChatTurnResult result;
+		try {
+			// Synchronous callers drain the same hub engine the product streams.
+			long hubCallStart = System.nanoTime();
+			Map<String, Object> wire = hubRelayCompletionWire(session, patientUuid, question, hubRequest);
+			long responseTimeMs = (System.nanoTime() - hubCallStart) / 1_000_000;
+			result = chatService.persistHubStagedAnswer(session, question, wire, responseTimeMs);
+		}
+		catch (ChartTooLargeException e) {
+			log.warn("Chart too large for chat for patient [id={}]: {}",
+					patient.getPatientId(), e.getMessage());
+			return new ResponseEntity<Object>(
+					errorResponse("This patient's chart is too large to process. "
+							+ "Contact your administrator to increase the LLM context size."),
+					HttpStatus.PAYLOAD_TOO_LARGE);
+		}
+		catch (Exception e) {
+			log.error("Chat failed for patient [id={}]", patient.getPatientId(), e);
+			return new ResponseEntity<Object>(
+					errorResponse("Chart search failed. Please try again or contact your administrator."),
+					HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+
+		ChartAnswer answer = result.getAnswer();
+		Map<String, Object> response = new LinkedHashMap<String, Object>();
+		response.put("answer", answer.getAnswer());
+		response.put("disclaimer", DISCLAIMER);
+
+		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
+		for (RecordReference ref : answer.getReferences()) {
+			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
+			refMap.put("index", ref.getIndex());
+			refMap.put("resourceType", ref.getResourceType());
+			refMap.put("resourceUuid", ref.getResourceUuid());
+			refMap.put("date", formatDate(ref.getDate()));
+			refs.add(refMap);
+		}
+		response.put("references", refs);
+		response.put("blocks", blocksToJson(answer.getBlocks()));
+		if (answer.getConfidence() != null) {
+			response.put("confidence", answer.getConfidence());
+		}
+		if (answer.getAnswerValidation() != null) {
+			response.put("answerValidation", answer.getAnswerValidation());
+		}
+		if (!answer.getSafetyWarnings().isEmpty()) {
+			response.put("safetyWarnings", answer.getSafetyWarnings());
+		}
+		response.put("session", result.getSessionUuid());
+		response.put("messageId", result.getAssistantMessageUuid());
+		response.put("model", answeredModel);
+
+		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	/**
+	 * Close the current active session for the (patient, user) pair and open
+	 * a fresh one. Returns the new session uuid + empty messages.
+	 */
+	@RequestMapping(value = "/chat/new", method = RequestMethod.POST)
+	@ResponseBody
+	public ResponseEntity<Object> chatNew(@RequestBody Map<String, String> body) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		PatientResolution resolved = resolvePatient(body.get("patient"));
+		if (resolved.hasError()) {
+			return new ResponseEntity<Object>(
+					errorResponse(resolved.errorMessage), resolved.errorStatus);
+		}
+
+		ChatSession session = chatService.closeAndStartNew(resolved.patient);
+		Map<String, Object> response = new LinkedHashMap<String, Object>();
+		response.put("session", session.getUuid());
+		response.put("messages", new ArrayList<Map<String, Object>>());
+		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	/**
+	 * Hydrate the SPA on mount: returns the current (patient, user) session
+	 * (creating one if none exists) and its prior messages in chronological
+	 * order. Empty {@code messages[]} on a freshly-created session.
+	 */
+	@RequestMapping(value = "/chat", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> chatHistory(
+			@RequestParam(value = "patient") String patientUuid) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		PatientResolution resolved = resolvePatient(patientUuid);
+		if (resolved.hasError()) {
+			return new ResponseEntity<Object>(
+					errorResponse(resolved.errorMessage), resolved.errorStatus);
+		}
+
+		ChatSession session = chatService.openOrLoadActiveSession(resolved.patient);
+		List<ChatMessage> messages = chatService.getMessages(session);
+
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		ObjectMapper hydrateMapper = new ObjectMapper();
+		for (ChatMessage m : messages) {
+			Map<String, Object> entry = new LinkedHashMap<String, Object>();
+			entry.put("messageId", m.getUuid());
+			entry.put("role", m.getRole());
+
+			// Assistant rows persist a JSON envelope ({answer, blocks}); user
+			// rows are plaintext. Parse JSON when present, surface prose +
+			// blocks separately so the SPA can rehydrate the same view it
+			// had during streaming. Legacy plaintext rows fall through
+			// with blocks=[].
+			if (ChatMessage.ROLE_ASSISTANT.equals(m.getRole())) {
+					String stored = m.getContent();
+					String prose = stored;
+					List<Object> blocks = new ArrayList<Object>();
+					List<Object> references = new ArrayList<Object>();
+					List<Object> safetyWarnings = new ArrayList<Object>();
+					Map<String, Object> confidence = null;
+					Map<String, Object> answerValidation = null;
+					Map<String, Object> inDepth = null;
+					if (stored != null && stored.trim().startsWith("{")) {
+						try {
+							com.fasterxml.jackson.databind.JsonNode root =
+									hydrateMapper.readTree(stored);
+						com.fasterxml.jackson.databind.JsonNode answerNode = root.get("answer");
+						if (answerNode != null && answerNode.isTextual()) {
+							prose = answerNode.asText();
+						}
+						com.fasterxml.jackson.databind.JsonNode blocksNode = root.get("blocks");
+						if (blocksNode != null && blocksNode.isArray()) {
+							blocks = hydrateMapper.convertValue(blocksNode, List.class);
+						}
+						com.fasterxml.jackson.databind.JsonNode refsNode = root.get("references");
+						if (refsNode != null && refsNode.isArray()) {
+							references = hydrateMapper.convertValue(refsNode, List.class);
+						}
+						com.fasterxml.jackson.databind.JsonNode safetyWarningsNode = root.get("safetyWarnings");
+						if (safetyWarningsNode != null && safetyWarningsNode.isArray()) {
+							safetyWarnings = hydrateMapper.convertValue(safetyWarningsNode, List.class);
+						}
+						com.fasterxml.jackson.databind.JsonNode confNode = root.get("confidence");
+							if (confNode != null && confNode.isObject()) {
+								confidence = hydrateMapper.convertValue(confNode, Map.class);
+							}
+							com.fasterxml.jackson.databind.JsonNode answerValidationNode = root.get("answerValidation");
+							if (answerValidationNode != null && answerValidationNode.isObject()) {
+								answerValidation = hydrateMapper.convertValue(answerValidationNode, Map.class);
+							}
+							com.fasterxml.jackson.databind.JsonNode inDepthNode = root.get("inDepth");
+							if (inDepthNode != null && inDepthNode.isObject()) {
+								inDepth = hydrateMapper.convertValue(inDepthNode, Map.class);
+							}
+						}
+						catch (IOException ignored) {
+							// Treat as plaintext.
+					}
+				}
+				entry.put("content", prose);
+				entry.put("blocks", blocks);
+				entry.put("references", references);
+					if (!safetyWarnings.isEmpty()) {
+						entry.put("safetyWarnings", safetyWarnings);
+					}
+					if (confidence != null) {
+						entry.put("confidence", confidence);
+					}
+					if (answerValidation != null) {
+						entry.put("answerValidation", answerValidation);
+					}
+					if (inDepth != null) {
+						entry.put("inDepth", inDepth);
+					}
+				} else {
+				entry.put("content", m.getContent());
+			}
+
+			entry.put("createdAt", m.getCreatedAt() != null ? m.getCreatedAt().getTime() : null);
+			out.add(entry);
+		}
+
+		Map<String, Object> response = new LinkedHashMap<String, Object>();
+		response.put("session", session.getUuid());
+		response.put("messages", out);
+		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	/**
+	 * Look up an existing session by uuid (loadByUuid); fall back to
+	 * openOrLoadActive when the uuid is missing or stale (e.g. expired).
+	 * Always returns a non-null session.
+	 */
+	private ChatSession resolveOrOpenSession(Patient patient, String sessionUuid) {
+		if (sessionUuid != null && !sessionUuid.trim().isEmpty()) {
+			ChatSession existing = chatService.loadByUuid(sessionUuid.trim());
+			if (existing != null && patient.equals(existing.getPatient())
+					&& ChatSession.STATUS_ACTIVE.equals(existing.getStatus())) {
+				return existing;
+			}
+		}
+		return chatService.openOrLoadActiveSession(patient);
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)
@@ -897,65 +908,242 @@ public class ChartSearchAiRestController {
 		return null;
 	}
 
-	/**
-	 * Serializes references to the SSE wire shape shared by the early {@code references} event
-	 * (grounding verdicts not yet attached) and the final {@code done} event (grounded).
-	 * {@code grounded} is null when grounding is disabled or could not run — clients must render
-	 * null as "unverified", never as "verified".
-	 */
-	private List<Map<String, Object>> serializeReferences(List<RecordReference> references) {
-		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
-		for (RecordReference ref : references) {
-			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
-			refMap.put("index", ref.getIndex());
-			refMap.put("resourceType", ref.getResourceType());
-			refMap.put("resourceUuid", ref.getResourceUuid());
-			refMap.put("date", formatDate(ref.getDate()));
-			refMap.put("grounded", ref.getGrounded());
-			refs.add(refMap);
+	private void streamHubStagedChat(OutputStream out, ChatSession session, String patientUuid,
+			String question, HubRequest hubRequest) throws IOException {
+		List<ChatMessage> priorTurns = chatService.priorTurnsForRelay(session);
+		String requestJson = hubRelayRequestJson(hubRequest.profileId, patientUuid, priorTurns, question, true);
+		HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+				.uri(URI.create(hubRequest.endpointUrl))
+				.version(HttpClient.Version.HTTP_1_1)
+				.timeout(Duration.ofSeconds(300))
+				.header("Content-Type", "application/json")
+				.header("Accept", "text/event-stream")
+				.POST(HttpRequest.BodyPublishers.ofByteArray(
+						requestJson.getBytes(StandardCharsets.UTF_8)));
+		String apiKey = runtimeApiKey();
+		if (apiKey != null && !apiKey.trim().isEmpty()) {
+			requestBuilder.header("Authorization", "Bearer " + apiKey.trim());
 		}
-		return refs;
-	}
-
-	/**
-	 * Emits the {@code references} SSE event carrying the answer's citations before the grounding
-	 * pass completes, so the UI can render clickable citations without waiting on Tier-2
-	 * verification. A serialization failure is non-fatal — the final {@code done} event re-sends the
-	 * references with verdicts — but a client disconnect during the write unwinds the stream like the
-	 * other channels (via {@link #writeSseEventOrThrow}).
-	 */
-	/**
-	 * Serializes the post-answer drug-safety advisories to the wire shape rendered as chips below the
-	 * answer. Empty list when the drug-reference feature is off or nothing was flagged. The key is
-	 * always present (possibly empty) so the frontend can branch on length without a null check.
-	 */
-	private List<Map<String, Object>> serializeSafetyWarnings(List<SafetyWarning> warnings) {
-		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
-		if (warnings == null) {
-			return out;
-		}
-		for (SafetyWarning warning : warnings) {
-			Map<String, Object> map = new LinkedHashMap<String, Object>();
-			map.put("type", warning.getType());
-			map.put("drug", warning.getDrug());
-			map.put("detail", warning.getDetail());
-			out.add(map);
-		}
-		return out;
-	}
-
-	private void sendReferencesEvent(OutputStream out, List<RecordReference> references) {
-		String json;
+		long hubCallStart = System.nanoTime();
+		HttpResponse<InputStream> hubResponse;
 		try {
-			Map<String, Object> data = new HashMap<String, Object>();
-			data.put("references", serializeReferences(references));
-			json = new ObjectMapper().writeValueAsString(data);
+			hubResponse = HttpClient.newHttpClient().send(requestBuilder.build(),
+					HttpResponse.BodyHandlers.ofInputStream());
 		}
-		catch (IOException e) {
-			log.warn("Could not serialize early references event; the final done event still carries them", e);
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new IOException("Hub staged stream interrupted", e);
+		}
+		if (hubResponse.statusCode() < 200 || hubResponse.statusCode() >= 300) {
+			String body = new String(hubResponse.body().readAllBytes(), StandardCharsets.UTF_8);
+			log.warn("Hub staged stream returned HTTP {}: {}", hubResponse.statusCode(), body);
+			writeSseEvent(out, "error", "Hub staged stream failed: HTTP " + hubResponse.statusCode());
 			return;
 		}
-		writeSseEventOrThrow(out, "references", json);
+
+		final String[] assistantMessageUuid = new String[1];
+		final boolean[] doneSeen = new boolean[1];
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+				hubResponse.body(), StandardCharsets.UTF_8))) {
+			String event = "";
+			StringBuilder data = new StringBuilder();
+			String line;
+			while ((line = reader.readLine()) != null) {
+				if (line.isEmpty()) {
+					handleHubStagedEvent(out, session, question, hubRequest.profileId,
+							assistantMessageUuid, doneSeen, event, data.toString(), hubCallStart);
+					event = "";
+					data.setLength(0);
+				} else if (line.startsWith("event:")) {
+					event = line.substring("event:".length()).trim();
+				} else if (line.startsWith("data:")) {
+					if (data.length() > 0) {
+						data.append('\n');
+					}
+					String raw = line.substring("data:".length());
+					data.append(raw.startsWith(" ") ? raw.substring(1) : raw);
+				} else if (line.startsWith(":")) {
+					// Hub heartbeat during a stalled leg — forward it so a browser disconnect is
+					// detected here (Client disconnected -> propagates -> closes the hub connection
+					// -> frees its router slot) instead of only on the next real event.
+					writeSseCommentOrThrow(out);
+				}
+			}
+			if (data.length() > 0) {
+				handleHubStagedEvent(out, session, question, hubRequest.profileId,
+						assistantMessageUuid, doneSeen, event, data.toString(), hubCallStart);
+			}
+		}
+		if (!doneSeen[0]) {
+			writeSseEvent(out, "error", "Hub staged stream ended before final response.");
+		}
+	}
+
+	/**
+	 * One blocking hub call for the sync {@code POST /chat} adapter. Returns the hub's answer wire;
+	 * the caller owns persistence.
+	 */
+	@SuppressWarnings("unchecked")
+	private Map<String, Object> hubRelayCompletionWire(ChatSession session, String patientUuid, String question,
+			HubRequest hubRequest) throws IOException {
+		List<ChatMessage> priorTurns = chatService.priorTurnsForRelay(session);
+		String requestJson = hubRelayRequestJson(hubRequest.profileId, patientUuid, priorTurns, question, false);
+		HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+				.uri(URI.create(hubRequest.endpointUrl))
+				.version(HttpClient.Version.HTTP_1_1)
+				.timeout(Duration.ofSeconds(300))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofByteArray(
+						requestJson.getBytes(StandardCharsets.UTF_8)));
+		String apiKey = runtimeApiKey();
+		if (apiKey != null && !apiKey.trim().isEmpty()) {
+			requestBuilder.header("Authorization", "Bearer " + apiKey.trim());
+		}
+		HttpResponse<String> hubResponse;
+		try {
+			hubResponse = HttpClient.newHttpClient().send(requestBuilder.build(),
+					HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new IOException("Hub relay interrupted", e);
+		}
+		if (hubResponse.statusCode() < 200 || hubResponse.statusCode() >= 300) {
+			throw new IOException("Hub relay failed: HTTP " + hubResponse.statusCode()
+					+ ": " + hubResponse.body());
+		}
+		Map<String, Object> completion = MAPPER.readValue(hubResponse.body(),
+				new TypeReference<Map<String, Object>>() {});
+		List<Object> choices = (List<Object>) completion.get("choices");
+		if (choices == null || choices.isEmpty()) {
+			throw new IOException("Hub relay returned no choices.");
+		}
+		Map<String, Object> message = (Map<String, Object>) ((Map<String, Object>) choices.get(0)).get("message");
+		String content = message == null ? null : (String) message.get("content");
+		if (content == null || content.isEmpty()) {
+			throw new IOException("Hub relay returned an empty answer.");
+		}
+		return MAPPER.readValue(content, new TypeReference<Map<String, Object>>() {});
+	}
+
+	@SuppressWarnings("unchecked")
+	private void handleHubStagedEvent(OutputStream out, ChatSession session, String question,
+			String model, String[] assistantMessageUuid, boolean[] doneSeen, String event,
+			String data, long hubCallStart) throws IOException {
+		if (event == null || event.isEmpty() || data == null || data.isEmpty()) {
+			return;
+		}
+		if ("error".equals(event)) {
+			doneSeen[0] = true;
+			writeSseEvent(out, event, data);
+			return;
+		}
+		Map<String, Object> payload = MAPPER.readValue(data,
+				new TypeReference<Map<String, Object>>() {});
+		if ("answer_done".equals(event)) {
+			long responseTimeMs = (System.nanoTime() - hubCallStart) / 1_000_000;
+			ChatTurnResult result = chatService.persistHubStagedAnswer(session, question, payload, responseTimeMs);
+			assistantMessageUuid[0] = result.getAssistantMessageUuid();
+			writeHubPayload(out, event, payload, result.getSessionUuid(), assistantMessageUuid[0], model);
+			return;
+		}
+		if ("answer_validation".equals(event)) {
+			ChatTurnResult result = chatService.updateHubStagedMessage(
+					session, assistantMessageUuid[0], payload);
+			writeHubPayload(out, event, payload, result.getSessionUuid(), assistantMessageUuid[0], model);
+			return;
+		}
+		if ("indepth_pending".equals(event)) {
+			payload.put("messageId", assistantMessageUuid[0]);
+			writeSseEvent(out, event, MAPPER.writeValueAsString(payload));
+			return;
+		}
+		if ("indepth_done".equals(event) || "indepth_error".equals(event)) {
+			Map<String, Object> update = new LinkedHashMap<String, Object>();
+			update.put("inDepth", payload);
+			if (assistantMessageUuid[0] != null) {
+				chatService.updateHubStagedMessage(session, assistantMessageUuid[0], update);
+			}
+			payload.put("messageId", assistantMessageUuid[0]);
+			writeSseEvent(out, event, MAPPER.writeValueAsString(payload));
+			return;
+		}
+		if ("done".equals(event)) {
+			doneSeen[0] = true;
+			ChatTurnResult result;
+			if (assistantMessageUuid[0] == null) {
+				long responseTimeMs = (System.nanoTime() - hubCallStart) / 1_000_000;
+				result = chatService.persistHubStagedAnswer(session, question, payload, responseTimeMs);
+				assistantMessageUuid[0] = result.getAssistantMessageUuid();
+			} else {
+				result = chatService.updateHubStagedMessage(session, assistantMessageUuid[0], payload);
+			}
+			writeHubPayload(out, event, payload, result.getSessionUuid(), assistantMessageUuid[0], model);
+			return;
+		}
+		writeSseEvent(out, event, data);
+	}
+
+	private void writeHubPayload(OutputStream out, String event, Map<String, Object> payload,
+			String sessionUuid, String assistantMessageUuid, String model) throws IOException {
+		payload.put("session", sessionUuid);
+		payload.put("messageId", assistantMessageUuid);
+		payload.put("model", model);
+		payload.put("disclaimer", DISCLAIMER);
+		writeSseEvent(out, event, MAPPER.writeValueAsString(payload));
+	}
+
+	private String hubRelayRequestJson(String model, String patientUuid, List<ChatMessage> priorTurns,
+			String question, boolean stream) throws IOException {
+		Map<String, Object> root = new LinkedHashMap<String, Object>();
+		root.put("model", model);
+		root.put("stream", stream);
+		root.put("patient", patientUuid);
+		List<Map<String, Object>> messages = new ArrayList<Map<String, Object>>();
+		// Prior turns: prose-only (priorTurnsForRelay's contract — never the raw stored JSON
+		// envelope), chronological, excluding the current turn. The hub owns the chart and the
+		// system prompt; it inserts both itself, so the relay sends conversation content only.
+		if (priorTurns != null) {
+			for (ChatMessage prior : priorTurns) {
+				Map<String, Object> turn = new LinkedHashMap<String, Object>();
+				turn.put("role", prior.getRole());
+				turn.put("content", prior.getContent());
+				messages.add(turn);
+			}
+		}
+		Map<String, Object> user = new LinkedHashMap<String, Object>();
+		user.put("role", "user");
+		user.put("content", question);
+		messages.add(user);
+		root.put("messages", messages);
+		root.put("response_format", chartAnswerResponseFormat());
+		return MAPPER.writeValueAsString(root);
+	}
+
+	private Map<String, Object> chartAnswerResponseFormat() {
+		Map<String, Object> root = new LinkedHashMap<String, Object>();
+		root.put("type", "json_schema");
+		Map<String, Object> jsonSchema = new LinkedHashMap<String, Object>();
+		jsonSchema.put("name", "chart_answer");
+		Map<String, Object> schema = new LinkedHashMap<String, Object>();
+		schema.put("type", "object");
+		Map<String, Object> properties = new LinkedHashMap<String, Object>();
+		properties.put("answer", Collections.singletonMap("type", "string"));
+		Map<String, Object> citations = new LinkedHashMap<String, Object>();
+		citations.put("type", "array");
+		citations.put("items", Collections.singletonMap("type", "integer"));
+		properties.put("citations", citations);
+		properties.put("blocks", Collections.singletonMap("type", "array"));
+		schema.put("properties", properties);
+		schema.put("required", java.util.Arrays.asList("answer", "citations", "blocks"));
+		jsonSchema.put("schema", schema);
+		root.put("json_schema", jsonSchema);
+		return root;
+	}
+
+	private String runtimeApiKey() {
+		Properties props = Context.getRuntimeProperties();
+		return props == null ? null : props.getProperty(ChartSearchAiConstants.RP_HUB_API_KEY);
 	}
 
 	private void writeSseEvent(OutputStream out, String event, String data) throws IOException {
@@ -970,16 +1158,19 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Writes an SSE event, converting a client-disconnect {@link IOException} into the
-	 * {@link RuntimeException} the streaming loop unwinds on. Shared by the answer ({@code token})
-	 * and reasoning ({@code thinking}) channels so both handle a mid-stream disconnect identically.
+	 * Forwards a hub SSE heartbeat/comment line to the browser and converts a write failure into
+	 * the {@link RuntimeException} the streaming loop unwinds on. A stalled leg (long answer/
+	 * review/in-depth call) otherwise gives the relay NO opportunity to notice a browser disconnect
+	 * until the hub's next real event — this write on every heartbeat is what makes a mid-leg abort
+	 * actually free the router slot promptly instead of blocking for the rest of the leg.
 	 */
-	private void writeSseEventOrThrow(OutputStream out, String event, String data) {
+	private void writeSseCommentOrThrow(OutputStream out) {
 		try {
-			writeSseEvent(out, event, data);
+			out.write(": hb\n\n".getBytes(StandardCharsets.UTF_8));
+			out.flush();
 		}
 		catch (IOException e) {
-			log.debug("Client disconnected during streaming ({})", event);
+			log.debug("Client disconnected during a hub staged heartbeat");
 			throw new RuntimeException("Client disconnected", e);
 		}
 	}
@@ -996,5 +1187,41 @@ public class ChartSearchAiRestController {
 		Map<String, String> error = new HashMap<String, String>();
 		error.put("error", message);
 		return error;
+	}
+
+	/**
+	 * The configured hub endpoint and profile that will answer a chat request.
+	 */
+	private static final class HubRequest {
+
+		private final String endpointUrl;
+
+		private final String profileId;
+
+		HubRequest(String endpointUrl, String profileId) {
+			this.endpointUrl = endpointUrl;
+			this.profileId = profileId;
+		}
+	}
+
+	/**
+	 * Resolve one fixed hub endpoint plus a request-selected profile. Clients cannot override the
+	 * endpoint or compose stages; they may only choose a hub-advertised profile id.
+	 */
+	private HubRequest resolveHubRequest(Map<String, String> body) {
+		String endpointUrl = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL);
+		String requestedProfile = body == null ? null : body.get("profile");
+		if (requestedProfile == null || requestedProfile.trim().isEmpty()) {
+			requestedProfile = Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_HUB_PROFILE_ID);
+		}
+		if (endpointUrl == null || endpointUrl.trim().isEmpty()) {
+			throw new IllegalArgumentException("med-agent-hub endpoint is not configured.");
+		}
+		if (requestedProfile == null || requestedProfile.trim().isEmpty()) {
+			throw new IllegalArgumentException("med-agent-hub profile is required.");
+		}
+		return new HubRequest(endpointUrl.trim(), requestedProfile.trim());
 	}
 }

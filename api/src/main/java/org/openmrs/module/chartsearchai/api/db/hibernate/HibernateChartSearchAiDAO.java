@@ -18,6 +18,7 @@ import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
+import org.openmrs.module.chartsearchai.model.ChatMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
@@ -68,6 +69,15 @@ public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 
 	@Override
 	public int deleteAuditLogsBefore(Date before) {
+		// A surviving chat_message may still reference an audit row that aged out
+		// (chat retention is independent of audit retention). Detach those links
+		// first so deleting the audit rows can't trip the audit_log_id foreign
+		// key — the application-level equivalent of ON DELETE SET NULL.
+		sessionFactory.getCurrentSession()
+				.createQuery("update ChatMessage set auditLog = null "
+						+ "where auditLog in (from ChartSearchAuditLog where dateCreated < :before)")
+				.setParameter("before", before)
+				.executeUpdate();
 		return sessionFactory.getCurrentSession()
 				.createQuery("delete from ChartSearchAuditLog where dateCreated < :before")
 				.setParameter("before", before)

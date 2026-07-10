@@ -2,6 +2,12 @@
 
 This document captures the architectural decisions made for the Chart Search AI module, including alternatives evaluated and the reasoning behind the chosen approaches.
 
+> **Current implementation note (2026-07):** several early decisions below describe an embedded
+> `LocalLlmEngine`, in-module prompt assembly, Java-side citation grounding, and `/warmup`. The current
+> hub-relay implementation keeps chartsearchai as the OpenMRS session/persistence/UI relay and sends chat
+> turns to a configured OpenAI-compatible endpoint such as med-agent-hub. Treat older local-engine
+> decisions as historical unless a later decision explicitly reintroduces them.
+
 ## Table of Contents
 
 - [Problem Statement](#problem-statement)
@@ -830,7 +836,7 @@ Requires the `View AI Audit Logs` privilege. All query parameters are optional. 
   1. **Structured-output constraint (primary defense)**: Both engines send `response_format: {"type": "json_schema", "strict": true, ...}` declaring the exact `{answer: string, citations: int[]}` shape — extracted into the shared `ChartAnswerResponseFormat` helper. The local llama-server enforces it by deriving a GBNF grammar from the schema internally. Remote OpenAI-compatible providers enforce it server-side; this is also what Anthropic's OpenAI-compat endpoint requires (it rejects the older `json_object` form with HTTP 400). Either way, the LLM cannot emit arbitrary text — even if a prompt injection manipulates the model's reasoning it cannot produce system information, execute instructions, or output anything outside the declared shape. This is the primary defense because it operates at the output level regardless of what the model "wants" to say.
   2. **Input regex filter**: Questions are checked against a regex pattern that rejects common prompt injection phrases (e.g., "ignore previous instructions", "you are now", "system prompt:"). Rejected questions return a 400 error without reaching the LLM.
 - **AI disclaimer**: Every response includes a disclaimer stating the output is AI-generated and not a substitute for clinical judgment.
-- **Answer caching**: An in-memory LRU cache (`ChartSearchServiceRouter`) stores recent answers keyed by `patientUuid::preFilter::pipeline::topK::similarityRatio::keywordWeight::scoreGapMultiplier::minScoreGap::gapValidationCosine::grounding::groundingMinCosine::groundingEntailment::question`. The cache key includes all retrieval **and grounding** parameters so that changing any tuning setting (including a grounding flag, which changes a citation's `grounded` verdict) correctly invalidates cached results. Configurable TTL via `chartsearchai.cacheTtlMinutes` (default 0 = disabled). When enabled, identical queries with the same parameters within the TTL window return the cached answer without invoking the LLM. The cache uses an access-ordered `LinkedHashMap` with a fixed maximum size, automatically evicting the least-recently-used entry when the size limit is exceeded. Expired entries are cleaned up periodically (every 10 cache puts) rather than on every access, to avoid scanning the entire cache on each insertion. **Chart-write invalidation**: a chart write to a patient (obs, encounter, order, condition, diagnosis, allergy, program, medication dispense, patient demographics, merge) evicts that patient's cached answers via `ChartSearchServiceRouter.invalidatePatient`. Chart writes are detected through core #6084 service events (`ChartSearchEventListener` → `IndexingHelper.onChartWrite`), which replaced the former per-service AOP advice — see [Decision 26](#decision-26-chart-write-detection-via-core-service-events). This eviction is independent of the preFilter/querystore gating that governs embedding indexing, so a repeated identical question after an edit recomputes against the new chart rather than serving a stale answer — this is what makes the cache safe to enable. It is a backstop, not a guarantee for every path: writes that bypass the OpenMRS service layer (direct DAO, SQL load) do not publish these events, so the TTL must stay finite as the catch-all for those.
+- **Answer caching**: An in-memory LRU cache (`ChartSearchServiceRouter`) stores recent answers keyed by `patientUuid::preFilter::pipeline::topK::similarityRatio::keywordWeight::scoreGapMultiplier::minScoreGap::gapValidationCosine::grounding::groundingMinCosine::groundingEntailment::question`. The cache key includes all retrieval **and grounding** parameters so that changing any tuning setting (including a grounding flag, which changes a citation's `grounded` verdict) correctly invalidates cached results. Configurable TTL via `chartsearchai.cacheTtlMinutes` (default 0 = disabled). When enabled, identical queries with the same parameters within the TTL window return the cached answer without invoking the LLM. The cache uses an access-ordered `LinkedHashMap` with a fixed maximum size, automatically evicting the least-recently-used entry when the size limit is exceeded. Expired entries are cleaned up periodically (every 10 cache puts) rather than on every access, to avoid scanning the entire cache on each insertion. **Chart-write invalidation**: the AOP indexing advice (`ObsIndexingAdvice`, `EncounterIndexingAdvice`, `PatientDataIndexingAdvice`) also evicts a patient's cached answers on every write to their chart (obs, encounter, order, condition, diagnosis, allergy, program, medication dispense, patient demographics, merge) via `ChartSearchServiceRouter.invalidatePatient`. This eviction is independent of the preFilter/querystore gating that governs embedding indexing, so a repeated identical question after an edit recomputes against the new chart rather than serving a stale answer — this is what makes the cache safe to enable. It is a backstop, not a guarantee for every path: writes that bypass the OpenMRS service layer (direct DAO, SQL load, querystore outbox replay) do not fire the advice, so the TTL must stay finite as the catch-all for those.
 - **Serialized chart sourcing**: Querystore's `getPatientChart(patientUuid)` (querystore Decision 15) is the supported full-chart shape when `chartsearchai.querystore.enabled=true` (default). The read store keeps per-type indices current via the events-first sync pipeline, so the chart returns at index-read latency without round-tripping core or maintaining a parallel serialization cache. The legacy `chartsearchai.querystore.enabled=false` + `chartsearchai.embedding.preFilter=false` configuration falls back to `chartSerializer.serialize(patient)` per request — the 300–500 ms of OpenMRS DB roundtrips and Hibernate work are paid on every call, which is the migration's accepted operational cost on the legacy path. The pre-Decision-15 in-memory `ChartCache` that amortized this cost was removed once querystore became the supported full-chart shape; the AOP-driven invalidation overhead exceeded the savings on a per-call serialize. The LLM-side prompt-prefix cache (KV cache reuse on llama-server, provider-managed caching on remote) is unaffected and continues to shave prefill cost on follow-up queries against the same patient.
 - **Rate limiting**: Configurable per-user rate limit (`chartsearchai.rateLimitPerMinute`, default 10). Set to 0 to disable.
 - **Database audit logging**: Every query is recorded in the `chartsearchai_audit_log` table with:
@@ -1751,143 +1757,6 @@ The grounding pass is pure overhead on the user's critical path, and on CPU-only
 - **−** Tier-2 adds one batched LLM round-trip; on CPU-only servers that is seconds of latency, mitigated but not eliminated by async + lazy Tier-1.
 - **−** The cosine floor is a per-model tuning knob, not a constant — a model swap without re-tuning `minCosine` silently mis-grounds.
 - **−** Clause-scoped grounding is correct in principle but coupled to per-pair Tier-2 independence, so it ships off by default behind a measure-first gate.
-
-## Decision 26: Chart-write detection via core service events
-
-**Status: Accepted** (June 2026) — implemented. Supersedes the per-service AOP-advice mechanism (the `*IndexingAdvice` classes) used for chart-write detection, including the "Chart-write invalidation" path in the "Answer caching" note above.
-
-### Context
-
-chartsearchai reacts to a chart write in two ways: it invalidates the patient's cached answers (so an edit never serves a stale cached answer — see "Answer caching"), and, when the prewarm corpus is enabled, it re-pins that patient's KV cache. Historically both rode three `AfterReturningAdvice` classes (`ObsIndexingAdvice`, `EncounterIndexingAdvice`, `PatientDataIndexingAdvice`) registered as AOP `<advice>` on eight core services. Querystore, meanwhile, already keeps its retrieval index fresh by subscribing to core's #6084 `*ServiceEvent`s — so the module ecosystem had two different write-detection mechanisms.
-
-### Decision
-
-Replace the three advice classes and their eight `<advice>` blocks with a single Spring `@EventListener` bean, `ChartSearchEventListener`, that consumes core's `Save/Void/Unvoid/PurgeServiceEvent`s — the same mechanism querystore uses. Each event carries the written entity; the listener resolves the affected patient(s) and dispatches to the unchanged `IndexingHelper.onChartWrite`, which fans out to answer-cache invalidation and (when enabled) the prewarm re-pin.
-
-### Why move off AOP
-
-- **No method-name matching.** The advice matched write methods by name (`saveObs`, `voidObs`, `discontinueOrder`, …) per service — a list that silently rots when core renames or adds a write method. The events are entity-typed, so a new write path is caught automatically.
-- **Writes only.** The `afterReturning` advice fired on *every* method of the advised services (including hot getters) and filtered by name; the events fire only on actual save/void/unvoid/purge, so there is no read traffic to filter.
-- **One mechanism.** Aligns chartsearchai with querystore instead of maintaining a parallel detection path.
-- **Broader coverage.** Allergy writes go through `AllergyService`, which the old advice (scoped to `PatientService` et al.) only caught via `PatientService`'s delegating methods; the global #6084 advice intercepts them directly.
-
-No platform-floor change: core 2.9 + querystore are already required, so the event classes are already on the classpath.
-
-### Behaviour parity
-
-Clinical types (obs, encounter, condition, diagnosis, allergy, order, patient program, medication dispense) are handled on any operation. A bare `Patient` is handled on **save only** (demographics) — void/unvoid/purge of a patient stays out of scope, left to the cache TTL backstop, exactly as before. Patient merge emits no event, but `mergePatients` ends by saving a `PersonMergeLog`, which arrives as `SaveServiceEvent<PersonMergeLog>` and dispatches both winner and loser.
-
-### Transaction semantics
-
-The handlers run **synchronously inside the originating transaction** (session open, so `getPatient()` navigations resolve). Unlike querystore — which must defer its heavy embed+index after commit to avoid indexing rolled-back data — chartsearchai's work here is cheap and idempotent: an in-memory answer-cache eviction, and *scheduling* a debounced re-pin whose actual prefill already runs later on a daemon thread. A rolled-back write therefore costs at most a harmless cache miss or one redundant, debounced re-pin, so no after-commit dispatch is needed.
-
-### What this does and does not fix
-
-This buys decoupling, robustness against method-name drift, and consistency with querystore. It does **not** widen coverage to non-service writes: core's #6084 advice is itself service-layer AOP, so direct DAO writes and SQL-dump loads still publish no event — the same gap the advice had. The finite cache TTL and the manual prewarm re-sweep / querystore reindex remain the backstops for those paths.
-
-### Trade-offs
-
-- **+** Entity-typed detection that cannot drift with core method renames; fires only on writes; one mechanism shared with querystore; catches direct `AllergyService` writes the old advice missed.
-- **+** Net code reduction — three advice classes + 34 tests + eight `<advice>` blocks replaced by one bean + seven parity tests.
-- **−** Synchronous in-transaction handlers run on the clinical thread; kept safe by the cheap-gate-first / idempotent / best-effort-swallow design, but a future heavier reaction would need after-commit deferral like querystore's.
-- **−** No coverage of non-service writes (unchanged from AOP); the TTL must stay finite.
-- **−** Verified by parity unit tests + live end-to-end checks; no in-memory CI test asserts the core events fire (querystore proves that generic wiring on the same core).
-
-## Decision 27: Drug-safety parity follow-through — weight-aware dosing, curated cross-reactivity groups, prose warnings
-
-**Status: Accepted** (July 2026) — implemented. Extends [Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation) and [Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets).
-
-### Context
-
-The drug-reference feature adapted its knowledge-base data from the
-[anichiti/openmrs_chatbot](https://github.com/anichiti/openmrs_chatbot) project (see
-[drug-knowledge-base-comparison.md](drug-knowledge-base-comparison.md)). A functional
-gap analysis of that origin identified exactly three capabilities that both survive
-chartsearchai's constraints (local-only, knowledge-as-data-not-code, warnings-never-blocks,
-single pipeline) and add real safety value — everything else there was either already
-ported in stronger form, display-only/broken at the source, or constraint-violating
-(dose *recommendation*, live RxNorm/openFDA/RxClass APIs, excipient matching).
-
-1. **Weight-aware per-dose overdose validation.** The validator compared the answer's
-   daily total against the absolute `maxDailyDoseMg` only; the dataset's `mgPerKgMin/Max`
-   values were rendered for the LLM but never enforced. For a small patient, a
-   per-administration dose can be far above the per-kg ceiling while the daily total stays
-   under the absolute one — and bands that publish mg/kg dosing with *no* daily maximum
-   (ibuprofen 0–1y) previously supported no overdose check at all.
-2. **Cross-branch cross-reactivity.** Decision 24 documented the boundary honestly: ATC's
-   tree cannot link aspirin (`N02BA01`, salicylates) to an ibuprofen (`M01AE01`) allergy —
-   "that linkage needs curated data, not classification."
-3. **Prose warnings.** The origin's `major_warnings` (Reye-syndrome-type cautions) were
-   deliberately dropped in Decision 23 because they carry no matchable token; that also
-   meant the LLM had no citable source for them.
-
-### Decision
-
-Three additive, data-driven extensions:
-
-1. **Weight-aware per-dose check** (`DrugSafetyValidator`). `PatientClinicalContext` gains
-   the patient's most recent weight (kg), read by the builder from the concept configured in
-   `chartsearchai.drugSafety.weightConceptUuid` (default: the reference CIEL "Weight (kg)"
-   concept 5089; the `none` sentinel turns the arm off — a *blanked* GP reads back as null,
-   indistinguishable from absent via the privilege-free reader, so blank falls back to the
-   default like every other GP) and only when newer than
-   `chartsearchai.drugSafety.weightMaxAgeDays` (default 90 — a stale, typically lower,
-   pediatric weight would over-report mg/kg, the false-positive direction this feature never
-   takes). When a weight is known, a per-administration dose above the age band's
-   `mgPerKgMax` × weight is flagged. Both overdose arms consume the **same** clause-scoped,
-   alias-anchored, limit-cue-guarded attribution walk (refactored into one shared
-   `attributedDoses` pass), so a dose counts for either arm under identical conditions.
-   **One warning per drug: the published daily ceiling wins when both arms trip.**
-2. **Curated cross-reactivity groups** (`cross-reactivity-groups.json`, GP
-   `chartsearchai.drugReference.crossReactivityGroupsFilePath`, bundled fallback). A group
-   is a named drug family expressed as ATC code *prefixes* (any level, so data chooses the
-   breadth); membership = any of a drug's ATC codes starts with any prefix. Loaded
-   **independently of the entry source** — deliberately not a `DrugReferenceSource` — so the
-   rule-less `atc` format gains cross-branch family reasoning from the same file. The
-   validator's class-based contraindication and interaction checks fall back to a shared
-   group **only when no ATC subgroup is shared** (most-specific-match-wins; a
-   subgroup+group double-match warns once), and the injector's order-relevance scoping
-   accepts group-related orders. The bundled seed is minimal — one NSAID group spanning
-   `M01AE` + `N02BA`, exactly the branches Decision 24 named — expand per deployment.
-   The Decision 24 boundary tests remain true as written: they assert ATC **alone** does
-   not cross branches, and the test seam pins a groups-free dataset; the new tests assert
-   both sides (without the data: unlinked; with it: linked).
-3. **Prose `warnings` on entries.** An optional free-text list rendered verbatim into the
-   injected, citable reference record (between dosing and contraindications). Display-only
-   by design: no matchable token, so the deterministic validator never fires on it —
-   enforceable facts stay in the structured rule fields. This restores the origin's
-   Reye-syndrome-type content as something the LLM can ground and cite, without weakening
-   the validator's no-false-positive stance.
-
-### What remains deliberately unported
-
-- **Dose recommendation** (calculate a dose from weight+age): turns a validator into
-  prescribing decision support — a different liability class and the opposite of the
-  warnings-never-blocks posture. We validate the dose the answer states; we do not propose one.
-- **Live RxNorm / openFDA / RxClass APIs**: fails the local-only constraint; the curated
-  groups file is the offline, data-driven equivalent of the RxClass cross-reactivity lookup.
-- **Excipient / food-allergen matching**: needs per-product inactive-ingredient data that
-  neither OpenMRS nor any free local dataset carries, plus an allergen→excipient table that
-  would put clinical knowledge in code.
-
-### Trade-offs
-
-- **+** The per-kg arm catches small-patient overdoses the absolute ceiling cannot, and gives
-  bands without a published daily maximum their first overdose check; weight enters through
-  the same guarded, best-effort builder as every other patient read (missing/stale/misconfigured
-  weight degrades to the old behavior, never an error). The fetch-all-then-scan weight read is a
-  measured decision: ~2 ms/query at 500 obs on a real MariaDB (threshold 50 ms), so the
-  `mostRecentN=1` DB-side variant was rejected as unmeasurable win for real API risk.
-- **+** Cross-branch cross-reactivity with zero per-drug curation — one group line covers a
-  family, for both source formats, and the aspirin/ibuprofen case ships working out of the box.
-- **+** All three are data: operators extend the JSON files, no rebuild.
-- **−** Weight is assumed to be recorded in kilograms on the configured concept; a
-  pounds-valued concept would need a kg concept (or the `none` sentinel in the GP to
-  disable the arm — blanking it falls back to the default, like every GP).
-- **−** The bundled NSAID group is a deliberate minimal seed (two branches); real deployments
-  own the clinical breadth of their families, consistent with the no-medical-knowledge-in-code rule.
-- **−** Prose warnings are LLM-visible but not validator-enforced; a deployment wanting
-  enforcement must express the fact as a structured rule instead.
 
 ## Known limitations
 

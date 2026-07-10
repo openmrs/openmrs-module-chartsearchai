@@ -1,13 +1,16 @@
 # syntax=docker/dockerfile:1.7
 FROM openmrs/openmrs-reference-application-3-gateway:nightly
 
-# Bumps proxy_*_timeout for the chartsearchai search/stream endpoint above the
-# distro's default 300s, since LLM-backed responses can take longer. The grep
-# guards against silent drift if upstream renames or reformats the marker line.
+# Bumps proxy_*_timeout + disables buffering for the chartsearchai chat stream
+# endpoint above the distro's default 300s, since hub-backed staged responses can
+# take minutes.
+# Without a dedicated location, chat/stream falls into the catch-all
+# `location /openmrs` (300s, buffering on) and a slow turn is severed as a gateway
+# timeout. The greps guard against silent drift if upstream renames the marker.
 RUN set -eux; \
-    block='  location /openmrs/ws/rest/v1/chartsearchai/search/stream {\n    proxy_pass http://backend:8080;\n    proxy_buffering off;\n    proxy_read_timeout 600s;\n    proxy_send_timeout 600s;\n    add_header X-Accel-Buffering no always;\n  }\n\n  '; \
+    block='  location /openmrs/ws/rest/v1/chartsearchai/chat/stream {\n    proxy_pass http://backend:8080;\n    proxy_buffering off;\n    proxy_read_timeout 600s;\n    proxy_send_timeout 600s;\n    add_header X-Accel-Buffering no always;\n  }\n\n  '; \
     for f in /etc/nginx/conf-templates/default.conf.template \
              /etc/nginx/conf-templates/default-ssl.conf.template; do \
       sed -i "s|  location /openmrs {|${block}location /openmrs {|" "$f"; \
-      grep -q 'chartsearchai/search/stream' "$f"; \
+      grep -q 'chartsearchai/chat/stream' "$f"; \
     done

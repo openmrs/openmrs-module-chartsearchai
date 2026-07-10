@@ -14,7 +14,6 @@
 
 	<require_modules>
 		<require_module version="2.44.0">org.openmrs.module.webservices.rest</require_module>
-		<require_module version="1.0.0-SNAPSHOT">org.openmrs.module.querystore</require_module>
 	</require_modules>
 
 	<!-- Module Activator -->
@@ -23,6 +22,8 @@
 	<!-- Hibernate Mappings -->
 	<mappingFiles>
 		ChartSearchAuditLog.hbm.xml
+		ChatSession.hbm.xml
+		ChatMessage.hbm.xml
 	</mappingFiles>
 
 	<!-- Privileges -->
@@ -36,130 +37,17 @@
 		<description>Allows viewing the audit log of AI chart search queries</description>
 	</privilege>
 
-	<privilege>
-		<name>Manage AI Prewarm</name>
-		<description>Allows triggering and monitoring the bulk KV-prewarm bootstrap (a system operation that pre-fills every patient's chart KV cache)</description>
-	</privilege>
-
 	<!-- Global Properties -->
 	<globalProperty>
-		<property>chartsearchai.llm.engine</property>
-		<defaultValue>local</defaultValue>
-		<description>LLM inference engine. "local" (default) runs a GGUF model on the host via a bundled llama-server subprocess on the loopback interface — no external network calls, data stays on the server. "remote" calls an OpenAI-compatible chat completions API over the network — requires chartsearchai.llm.remote.endpointUrl, chartsearchai.llm.remote.apikey, and chartsearchai.llm.remote.modelName to be configured. Use "remote" for self-hosted GPU inference servers (vLLM, Ollama, text-generation-inference) or cloud-hosted models (OpenAI, Anthropic, Google AI).</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.remote.endpointUrl</property>
+		<property>chartsearchai.hub.endpointUrl</property>
 		<defaultValue></defaultValue>
-		<description>URL of the OpenAI-compatible chat completions endpoint. Required when chartsearchai.llm.engine is "remote". Examples: http://localhost:11434/v1/chat/completions (Ollama), http://gpu-server:8000/v1/chat/completions (vLLM), https://api.openai.com/v1/chat/completions (OpenAI), https://api.anthropic.com/v1/chat/completions (Anthropic), https://generativelanguage.googleapis.com/v1beta/openai/chat/completions (Google AI), https://openrouter.ai/api/v1/chat/completions (OpenRouter).</description>
+		<description>med-agent-hub chat-completions URL. ChartSearchAI sends every chat turn to this one service; model serving and orchestration remain behind the hub.</description>
 	</globalProperty>
 
 	<globalProperty>
-		<property>chartsearchai.llm.remote.modelName</property>
-		<defaultValue></defaultValue>
-		<description>Model name to request from the remote LLM endpoint. Required when chartsearchai.llm.engine is "remote". Examples: llama3.3 (Ollama), meta-llama/Llama-3.3-8B-Instruct (vLLM), gpt-4o (OpenAI), claude-opus-4-7 (Anthropic), gemini-2.5-pro (Google AI), anthropic/claude-opus-4.7 (OpenRouter).</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.modelFilePath</property>
-		<defaultValue>chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf</defaultValue>
-		<description>Relative path, including the filename, within the OpenMRS application data directory to the GGUF LLM model file used for inference. Example: chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf (resolves to &lt;application-data-directory&gt;/chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf). The recommended model is Gemma 4 E4B Instruct (Q4_K_M quantization, ~5GB). Download from https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF. Path traversal (e.g. "..") is not allowed.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.embedding.preFilter</property>
-		<defaultValue>false</defaultValue>
-		<description>When true, the querystore retrieval path additionally ranks the patient's records by similarity to the question (querystore.searchByPatient) and passes a short "focus hint" — the top chartsearchai.querystore.topK record indices — to the LLM. The full chart is always sent regardless, so the hint biases attention without removing records the LLM needs for negative reasoning ("there are no records of X"). Default: false. Changing this setting takes effect on the next query.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.serializer.dedupGroupLabels</property>
-		<defaultValue>false</defaultValue>
-		<description>When true, the chart serializer run-length de-dups the obs-group membership label: a group member renders " (part of: &lt;group&gt;)" only when its group differs from the immediately-preceding record's group, so the label is dropped on consecutive same-group members (a non-member or a different group resets the run) — exactly mirroring the date-run compression. Applies to ALL obs groups (lab panels, vital-signs sets, exam findings, etc.), not only lab panels. The grounding citation mapping always keeps the full label, so citation verification is unaffected. VERIFIED 2026-06-18 (real tokenizer measurement + clustering eval): the saving is only ~2% of prompt tokens, and it is SAFE ONLY ON LARGER MODELS — E4B clusters the de-duped members correctly, but the small E2B model suffers a clustering FAILURE (it returns a false "no results found" for an obs group whose members' labels were thinned). Therefore do NOT enable on E2B deployments; only worth enabling on E4B-or-larger, where ~2% is a minor prefill win. Default: false (legacy every-member labelling). Changing this setting takes effect on the next query.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.systemPrompt</property>
-		<defaultValue></defaultValue>
-		<description>Custom system prompt sent to the LLM before patient records and the question. If empty (the default), the module uses its built-in prompt — which is iterated on alongside the rest of the pipeline and is what the eval suite tests against. Set this only to override the built-in default for this deployment (e.g. to adjust tone, citation format, or add site-specific guidance).</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.timeoutSeconds</property>
-		<defaultValue>300</defaultValue>
-		<description>Maximum number of seconds to wait for the LLM to generate a response before timing out. Default 300s gives cold queries (model load + full-chart prefill + generation) headroom on CPU-only deployments. On GPU or remote-API setups, lower values are reasonable.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.idleTimeoutMinutes</property>
-		<defaultValue>30</defaultValue>
-		<description>Minutes of inactivity after which the local llama-server process is stopped to free RAM. The server is automatically restarted on the next query. Set to 0 to keep it running indefinitely. Only applies when chartsearchai.llm.engine is "local".</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.serverPort</property>
-		<defaultValue>18085</defaultValue>
-		<description>Port number for the embedded llama-server when chartsearchai.llm.engine is "local". Change if the default port conflicts with another service.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.contextSize</property>
-		<defaultValue>32768</defaultValue>
-		<description>Context window size in tokens for the embedded llama-server (local engine only). The full system prompt + serialized chart + question must fit within this. Larger values let bigger charts pass through full-chart mode but increase the KV cache memory footprint roughly linearly. Default 32768. Increase if you see "Patient chart exceeds the LLM context window" errors and have headroom for a larger KV cache; reduce on memory-constrained hardware. Only applies when chartsearchai.llm.engine is "local".</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.kvCacheDir</property>
-		<defaultValue></defaultValue>
-		<description>Directory where the local engine persists each patient's prefilled chart KV cache to disk (one file per distinct chart prefix), via llama-server's --slot-save-path. The warmup that fires on chart-open restores a patient's KV from disk (I/O-bound, tens of ms) instead of recomputing the full chart prefill (CPU-bound, tens of seconds to minutes on a GPU-less host) — turning the slow first query on a patient into a fast one, and surviving llama-server restarts and single-slot evictions that the in-RAM prompt cache does not. The restored KV is byte-for-byte what a fresh prefill produces, so answer quality is unchanged (verified: identical answers and citations on the standalone). The first-ever visit to a patient still pays one prefill (to create the file). ENABLED BY DEFAULT: an empty value resolves to &lt;appdata&gt;/chartsearchai/kvcache. Set an explicit path to relocate it onto faster or larger storage, or set it to "off" (or false/none/disabled) to turn the feature off — do that on hosts where the on-disk KV files (which contain the model's encoding of the patient chart) or their disk footprint are unwanted. Only applies when chartsearchai.llm.engine is "local". Each file is large (tens to a few hundred MB, proportional to the chart's token count) — see chartsearchai.llm.kvCacheMaxEntries for the disk cap, and prefer fast local storage.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.kvCacheMaxEntries</property>
-		<defaultValue>16</defaultValue>
-		<description>Maximum number of persisted KV-cache files to keep in chartsearchai.llm.kvCacheDir. The oldest (by last-modified time) are evicted once this many exist, bounding disk use. Only consulted when the cache directory is configured. Note: entries pinned by the prewarm bootstrap (chartsearchai.prewarm.enabled) are EXEMPT from this cap — see chartsearchai.llm.kvCache.maxPinnedEntries.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.kvCache.maxPinnedEntries</property>
-		<defaultValue>0</defaultValue>
-		<description>Upper bound on the number of PINNED KV entries the prewarm bootstrap may create. Pinned entries are exempt from chartsearchai.llm.kvCacheMaxEntries (the LRU cap), so a deployment with disk for every patient keeps them all warm. 0 (default) = unlimited. When set greater than 0 and reached, the sweep logs once and stops pinning further entries; it never silently evicts already-pinned ones. Each file is large (tens to a few hundred MB), so bound this on hosts without disk for the whole patient population.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.prewarm.enabled</property>
-		<defaultValue>false</defaultValue>
-		<description>Master switch for the bulk KV-prewarm bootstrap: the POST /chartsearchai/prewarm and GET /chartsearchai/prewarmstatus endpoints and the background sweep that pre-fills and pins every patient's chart KV cache so a first query on a never-opened patient is still warm. Default false (opt-in): a full-database sweep prefills every patient (tens of seconds each) on the single inference slot and grows the on-disk pinned corpus (bound it with chartsearchai.llm.kvCache.maxPinnedEntries). The per-patient chart-open warmup (chartsearchai.warmupEnabled) is independent of this flag. Only meaningful when chartsearchai.llm.engine is "local". Note: a pinned entry becomes stale when that patient's chart changes; the next query for them re-prefills and re-saves it as an ordinary (unpinned, LRU-capped) entry, so the pinned corpus erodes as charts change — re-run the sweep periodically to refresh it.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.prewarm.autostart</property>
-		<defaultValue>false</defaultValue>
-		<description>When true (and chartsearchai.prewarm.enabled is on), the prewarm sweep resumes/starts on module startup from its persisted cursor — the analog of querystore.bootstrap.autostart. Default false.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.prewarm.throttleMs</property>
-		<defaultValue>500</defaultValue>
-		<description>Milliseconds the prewarm sweep pauses between patients so the single inference slot is not monopolised and live clinician warmup/query traffic can interleave. Default 500.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.prewarm.refreshOnEdit</property>
-		<defaultValue>false</defaultValue>
-		<description>When true, a chart edit to a patient who is already in the pinned prewarm corpus schedules a single-patient re-pin (a debounced background warmup) so the durable corpus stays fresh without a manual re-sweep. Patients not already pinned are left to the reactive chart-open warmup, so the corpus does not grow here. Default false; only meaningful with chartsearchai.llm.engine=local and a pinned corpus. Independent of chartsearchai.prewarm.enabled — the bulk sweep and the per-edit refresh can be run separately.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.prewarm.refreshDebounceMs</property>
-		<defaultValue>5000</defaultValue>
-		<description>Quiet window (milliseconds) a per-edit re-pin waits before firing, coalescing a burst of writes to one patient (e.g. an encounter save that writes many obs) into a single re-pin. Default 5000. Only consulted when chartsearchai.prewarm.refreshOnEdit is true.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.llm.reasoningMaxChars</property>
-		<defaultValue>0</defaultValue>
-		<description>When greater than 0, caps the model's "reasoning" scratchpad at this many characters via a grammar-enforced maxLength in the chart-answer schema. The reasoning phase is the dominant decode cost on CPU-only servers (3-27 seconds of thinking before any answer text); capping it bounds that cost. The answer itself is never capped. 0 (default) leaves the schema exactly as before. IMPORTANT: truncating the model's chain of thought can change its answers — only enable a value that has cleared the 32-cell answer-quality gold standard (eval/drift-metric/metric_gold.standalone.json) with no regression in mean F1, abstention accuracy, or off-topic citations versus the uncapped baseline. Measured 2026-06-12: Gemma 4 E2B at 400 FAILED that gate on all three axes (meanF1 0.464 to 0.428, abstention 1.00 to 0.91, off-topic citations 41 to 47) — no certified value exists; leave at 0 unless a fresh gate run for your model and value passes.</description>
+		<property>chartsearchai.hub.profileId</property>
+		<defaultValue>single-e4b-checked</defaultValue>
+		<description>Fallback med-agent-hub product profile when a request does not provide a profile id. The ESM normally selects the hub-advertised default.</description>
 	</globalProperty>
 
 	<globalProperty>
@@ -173,142 +61,6 @@
 		<defaultValue>90</defaultValue>
 		<description>Number of days to retain AI chart search audit log entries. Entries older than this are automatically purged by a daily scheduled task. Set to 0 to disable purging and retain all logs indefinitely.</description>
 	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.cacheTtlMinutes</property>
-		<defaultValue>0</defaultValue>
-		<description>Number of minutes to cache AI chart search responses for identical patient and question combinations. Avoids redundant LLM calls. Set to 0 to disable caching (default).</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.warmupEnabled</property>
-		<defaultValue>true</defaultValue>
-		<description>When true (default), opening a patient chart triggers a background warmup that primes the LLM prompt cache (system prompt + serialized chart) so the first AI query on that patient skips full prefill cost. The warmup serializes the chart and sends an empty-query prefill request to the local llama-server. Warmup is viable in every querystore retrieval mode (with chartsearchai.embedding.preFilter on, the focus hint is a small trailing payload that doesn't break the chart-prefix cache match). Has no effect when chartsearchai.llm.engine is "remote" (remote providers manage their own caching). Set to false to disable.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.querystore.topK</property>
-		<defaultValue>30</defaultValue>
-		<description>Number of top results to request from querystore.searchByPatient when chartsearchai.embedding.preFilter is true, used to build the LLM focus hint. Default: 30.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.progressiveReasoning.enabled</property>
-		<defaultValue>false</defaultValue>
-		<description>When true, a streaming AI query first streams a fast "preliminary" reasoning pass over only the top chartsearchai.progressiveReasoning.topK querystore records (a few hundred tokens) to the thinking channel, ahead of the unchanged full-chart answer. On a GPU-less host the full chart is a multi-thousand-token prefill (tens of seconds to minutes to the first token); the focused preview prefills in a second or two, so the clinician sees reasoning almost immediately. The committed answer is still the full-chart call (the preview's answer is discarded), so response quality is unchanged. Default: false (opt-in): the two passes share llama-server's single slot, trading a marginally longer time-to-final-answer for a much shorter time-to-first-reasoning. Affects only the streaming search endpoint.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.progressiveReasoning.topK</property>
-		<defaultValue>15</defaultValue>
-		<description>Number of top querystore records the progressive-reasoning preview pass reasons over (see chartsearchai.progressiveReasoning.enabled). Smaller = faster preview prefill but less context for the preliminary reasoning; the committed full-chart answer is unaffected. Kept separate from chartsearchai.querystore.topK so the two can be tuned independently. Default: 15.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.grounding.enabled</property>
-		<defaultValue>false</defaultValue>
-		<description>When true, every cited record is checked for grounding after the LLM answers: the record's text must be semantically close enough to the answer sentence(s) that cite it, otherwise the citation is flagged as unverified. Index validation alone (does [N] map to a real retrieved record?) cannot catch the dangerous case of a real record cited for a claim it does not actually support. Default: false (opt-in).</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.grounding.minCosine</property>
-		<defaultValue>0.40</defaultValue>
-		<description>Minimum cosine similarity between a cited record's text and the answer sentence that cites it for the citation to count as grounded. This Tier-1 check catches grossly off-topic citations (a blood-pressure record cited for a diabetes claim), not subtle subject/negation flips ("patient has X" vs "mother had X") — those need the Tier-2 entailment pass. The right floor depends on querystore's embedding model (the verifier embeds with the same model that built the index): the default 0.40 suits a wide-spread model, but is far too low for e5 — set it to ~0.82 on an e5 querystore deployment. Must be between 0 and 1. Default: 0.40.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.grounding.entailment.enabled</property>
-		<defaultValue>false</defaultValue>
-		<description>When true (and chartsearchai.grounding.enabled is also on), every cited record is confirmed by a Tier-2 entailment check: a yes/no LLM judgement of whether the record actually supports the answer sentence citing it. This catches high-overlap-but-false citations ("patient has X [5]" where record 5 says a relative had X, or the record negates X) that cosine similarity cannot separate. An answer's citations are verified in a batched LLM call (capped per answer; see chartsearchai.grounding.clauseScoped for when a compound sentence's citations are instead verified individually). The Tier-1 cosine pass is computed lazily in this mode — only for citations where the LLM check produced no verdict — so entailment grounding works even when no Tier-1 embedding model is configured. Default: false.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.grounding.async</property>
-		<defaultValue>false</defaultValue>
-		<description>When true (and chartsearchai.grounding.enabled is also on), the streaming search endpoint emits its terminal "done" event as soon as the answer is complete — its references carry no grounding verdicts yet — and delivers the verdicts afterwards in a trailing "grounded" SSE event. On CPU-only deployments the grounding pass adds seconds of Tier-2 LLM work after the answer is already readable; enabling this moves that tail off the user's perceived completion time. Clients must keep consuming the SSE stream after "done" and apply the "grounded" event's verdicts when it arrives (citations render as unverified until then). The blocking /search endpoint is unaffected and always returns final verdicts. Default: false (the classic single "done" carrying final verdicts).</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.grounding.clauseScoped</property>
-		<defaultValue>false</defaultValue>
-		<description>When true, citation grounding is clause-scoped: in a sentence that cites multiple records, each citation is checked against the answer text up to and including its own [N] marker, rather than the whole compound sentence. This grounds a citation that supports its own clause but not a later clause cited by a different record — e.g. "Hearing Loss was noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an active condition) does not support the "provisional diagnosis" clause that [91] backs. The clause is the cumulative prefix through the marker, so it keeps the sentence subject when the subject precedes the first marker (the normal case) and still flags family-history/negation flips in later clauses. Default: false (sentence-scoped). Only affects which text a citation is verified against; never changes the answer or which records are cited.</description>
-	</globalProperty>
-
-	<!-- Drug reference + post-answer drug-safety validation (additive, opt-in) -->
-	<globalProperty>
-		<property>chartsearchai.drugReference.enabled</property>
-		<defaultValue>false</defaultValue>
-		<description>Master switch for the drug-reference feature: both the DrugReference resource type (Part 1, injected reference records the LLM can cite) and the post-answer DrugSafetyValidator (Part 2). When false (default), behavior is unchanged — no reference records are injected and no safety warnings are produced. The dataset is loaded from chartsearchai.drugReference.dataFilePath, falling back to the dataset bundled with the module. Default: false.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugReference.dataFilePath</property>
-		<defaultValue>chartsearchai/drug-reference.json</defaultValue>
-		<description>Relative path, including the filename, within the OpenMRS application data directory to the drug-reference dataset (resolves to &lt;application-data-directory&gt;/&lt;path&gt;). Interpreted per chartsearchai.drugReference.sourceFormat. For the default json format: when the file is absent or unreadable, the dataset bundled on the module classpath is used, so the feature works out of the box. For the atc format: point this at the WHO ATC export you obtained (there is no bundled ATC fallback). Path traversal (e.g. "..") is not allowed. Editing the file takes effect on the next module restart.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugReference.sourceFormat</property>
-		<defaultValue>json</defaultValue>
-		<description>Selects the drug-reference data adapter (ADR Decision 24). "json" (default) reads the curated chartsearchai drug-reference.json — the only format carrying dosing/interaction/contraindication rules, with a bundled classpath fallback. "atc" consumes a WHO ATC classification export (a &lt;atcCode&gt;&lt;whitespace&gt;&lt;name&gt; per-line file, all levels) into one classification entry per level-5 substance, deriving each drug's class from its parent group; ATC carries classification only (no per-entry dosing/interaction/contraindication rules), but the post-answer validator still derives class-based contraindication and interaction warnings from the ATC codes (see chartsearchai.drugSafety.warnOnContraindications/.warnOnInteractions). Point chartsearchai.drugReference.dataFilePath at your ATC file. Any value other than "atc" is treated as "json". Default: json.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugReference.crossReactivityGroupsFilePath</property>
-		<defaultValue>chartsearchai/cross-reactivity-groups.json</defaultValue>
-		<description>Relative path, including the filename, within the OpenMRS application data directory to the curated cross-reactivity groups dataset (resolves to &lt;application-data-directory&gt;/&lt;path&gt;). Loaded alongside EITHER source format: a group is a named drug family expressed as ATC code prefixes, carrying the cross-branch cross-reactivity knowledge that ATC's tree cannot express (e.g. aspirin N02BA01 and ibuprofen M01AE01 are different branches but one NSAID hypersensitivity family — the ADR Decision 24 boundary, closed by this data). When the file is absent or unreadable, the groups bundled on the module classpath are used (a minimal NSAID seed — expand per deployment). Path traversal (e.g. "..") is not allowed. Editing the file takes effect on the next module restart.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugReference.injectFromOrders</property>
-		<defaultValue>true</defaultValue>
-		<description>Patient-driven injection: when true, an active drug order's reference is injected into the chart — but only when the question is about a specific drug clinically related to that order (sharing an ATC level-4 subgroup or a curated cross-reactivity group — a duplicate-therapy / cross-reactivity concern). An order unrelated to the asked drug, or a question that names no drug at all, does not inject an order reference: the model still sees the active-order records in the chart, and the safety validator reads active orders directly, so neither the answer's medication awareness nor the safety checks depend on this injection. Requires chartsearchai.drugReference.enabled. Orders without an ATC concept mapping cannot trigger this path; question-driven injection (injectFromQuery) still works via aliases. Default: true.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugReference.injectFromQuery</property>
-		<defaultValue>true</defaultValue>
-		<description>Question-driven injection: when true, a reference entry whose alias appears in the clinician's query is injected into the chart. Requires chartsearchai.drugReference.enabled. Numeric dosing is rendered only when the patient's age falls in a published age band, so a pediatric maximum is never surfaced for an adult query; contraindication and interaction facts are rendered regardless of age. Default: true.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugSafety.validateAnswers</property>
-		<defaultValue>true</defaultValue>
-		<description>Enables the post-LLM DrugSafetyValidator, which runs after the answer is generated and annotates it with non-blocking safety warnings (it never rewrites or suppresses the answer). Requires chartsearchai.drugReference.enabled. The individual checks are toggled by chartsearchai.drugSafety.warnOnDoseExcess, .warnOnInteractions, and .warnOnContraindications. Default: true.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugSafety.warnOnDoseExcess</property>
-		<defaultValue>true</defaultValue>
-		<description>When true, the validator parses (drug, mg, frequency) from the answer and flags a daily dose that exceeds the reference maxDailyDoseMg for the patient's age band; additionally, when the patient's weight is known (see chartsearchai.drugSafety.weightConceptUuid), it flags a per-administration dose above the band's mgPerKgMax × weight — the only possible check for bands that publish mg/kg dosing with no daily maximum, and the tighter one for small patients. One warning per drug: the published daily ceiling wins when both trip. Conservative: a warning is raised only when a value can be computed AND it exceeds a published maximum, so a sufficient-chart answer with no reference dosing produces no warning. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugSafety.warnOnInteractions</property>
-		<defaultValue>true</defaultValue>
-		<description>When true, the validator cross-references each drug named in the answer against the patient's active drug orders and flags interactions: hand-authored rules from the reference dataset, an active order in the same ATC level-4 subgroup (duplicate therapy), or — failing that — an active order in the same curated cross-reactivity group (additive / duplicate-class therapy across ATC branches); the class checks require only ATC codes so they work with the rule-less atc source. One warning per order — the most specific match wins. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugSafety.warnOnContraindications</property>
-		<defaultValue>true</defaultValue>
-		<description>When true, the validator cross-references each drug named in the answer against the patient's active allergies and conditions and flags contraindications: hand-authored rules from the reference dataset, a recorded allergy to the same drug or one in the same ATC level-4 subgroup (cross-reactivity), or — failing that — an allergy to a drug in the same curated cross-reactivity group (cross-branch cross-reactivity, e.g. aspirin vs an ibuprofen allergy); the class checks require only ATC codes so they work with the rule-less atc source. One warning per allergen — the most specific match wins. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugSafety.weightConceptUuid</property>
-		<defaultValue>5089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</defaultValue>
-		<description>UUID of the kg-valued numeric concept holding the patient's weight observations, read (most recent, non-voided) to drive the weight-aware per-dose overdose check: a per-administration dose in the answer above the age band's mgPerKgMax × weight is flagged. The default is the reference (CIEL) "Weight (kg)" concept, 5089; point it at your dictionary's weight-in-kg concept if different. Set to "none" to disable the weight-aware arm (the absolute maxDailyDoseMg check still runs); a blank value falls back to the default, like every global property. The concept's values must be recorded in kilograms. Requires chartsearchai.drugSafety.warnOnDoseExcess.</description>
-	</globalProperty>
-
-	<globalProperty>
-		<property>chartsearchai.drugSafety.weightMaxAgeDays</property>
-		<defaultValue>90</defaultValue>
-		<description>Maximum age, in days, of the newest weight observation for it to drive the weight-aware per-dose overdose check. Pediatric weight changes quickly, and a stale (typically lower) weight would over-report mg/kg — a false positive, the direction the validator never takes — so an older weight simply disables the weight-aware arm for that query. Unparseable or non-positive values fall back to the default. Requires chartsearchai.drugSafety.warnOnDoseExcess. Default: 90.</description>
-	</globalProperty>
-
-	<!-- Chart-write detection is via core #6084 service events (ChartSearchEventListener),
-	     not AOP advice — see that class. -->
 
 	<!-- Internationalization -->
 	<messages>

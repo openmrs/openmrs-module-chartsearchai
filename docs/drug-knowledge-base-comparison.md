@@ -1,148 +1,145 @@
-# Drug knowledge base: chartsearchai vs. openmrs_chatbot
+# Drug knowledge base: the ChartSearchAI stack vs. openmrs_chatbot
 
-**Purpose.** chartsearchai's drug-reference feature adapted its knowledge-base
-*data* from the [anichiti/openmrs_chatbot](https://github.com/anichiti/openmrs_chatbot)
-project. This note records what was actually shared and — more importantly — how
-each project *uses* the knowledge base, so the lineage and the divergence are on
-the record rather than living only in chat history or memory.
+**Purpose.** The drug-reference feature adapted its knowledge-base *data* from the
+[anichiti/openmrs_chatbot](https://github.com/anichiti/openmrs_chatbot) project. This note records
+what was actually shared and — more importantly — how each project *uses* the knowledge base, so
+the lineage and the divergence are on the record rather than living only in chat history or memory.
 
-**Provenance.** Compared against `openmrs_chatbot` at commit `2e723f8`
-(2026-05-12, "Update README with final revisions"); chartsearchai as of 2026-06-10
-(PR #41 backend class-based safety + relevance-scoped injection; PR #17 frontend).
-File/line references below are to those revisions.
+**Where the feature lives now.** The drug-reference feature was originally built as a Java package
+inside this module (`org.openmrs.module.chartsearchai.reference`). Once ChartSearchAI became a thin
+relay to **med-agent-hub** (the hub owns retrieval, synthesis, grounding, and now drug safety), that
+package was deleted and the feature was **ported to the hub** — a single deterministic module,
+`med-agent-hub/server/drug_safety.py`. This document describes the feature as it exists in the hub;
+file references are to that module unless noted. (The Java originals are recoverable from this
+repo's git history at commit `65e3c08^` if the port's contract ever needs re-checking.)
+
+**Provenance.** Compared against `openmrs_chatbot` at commit `2e723f8` (2026-05-12); the
+ChartSearchAI-stack feature as ported to the hub (2026-07). File/line references are to those revisions.
 
 ---
 
 ## TL;DR
 
-Same KB **data schema** — we adapted their `drug_knowledge_base.json`. Everything
-about how the KB is *used* differs:
+Same KB **data schema** — we adapted their `drug_knowledge_base.json`. Everything about how the KB is
+*used* differs:
 
-- **openmrs_chatbot** is a standalone Python **multi-agent chatbot**. It classifies
-  each query by intent and routes it to *one* knowledge source: a deterministic
-  drug-JSON lookup, a **PDF RAG** store (Chroma), live **RxNorm/FDA** APIs, or the
-  OpenMRS DB — and it gates the LLM *off* for most intents ("pull from DB only").
-- **chartsearchai** is a Java **OpenMRS module** embedded in the chart-search
-  answer pipeline. *Every* query retrieves the patient chart (embeddings),
-  deterministically injects matching drug-reference records, generates one LLM
-  answer, then runs a deterministic **post-answer safety validator**.
+- **openmrs_chatbot** is a standalone Python **multi-agent chatbot**. It classifies each query by
+  intent and routes it to *one* knowledge source: a deterministic drug-JSON lookup, a **PDF RAG**
+  store (Chroma), live **RxNorm/FDA** APIs, or the OpenMRS DB — and it gates the LLM *off* for most
+  intents ("pull from DB only").
+- **The ChartSearchAI stack** (OpenMRS SPA → ChartSearchAI relay → med-agent-hub) runs a single path:
+  *every* query retrieves the patient chart from querystore, the hub deterministically injects
+  matching drug-reference records, generates one LLM answer, then runs a deterministic **post-answer
+  safety validator**.
 
 Two consequences worth highlighting up front:
-- Their RAG **does not index the drug KB** — it indexes clinical PDFs. The drug
-  JSON is read deterministically. (We don't RAG the drug KB either.)
-- Their **ATC codes are stored but never used in code**; ours drive class-based
-  safety reasoning (cross-reactivity, duplicate therapy) and a WHO-ATC source.
+- Their RAG **does not index the drug KB** — it indexes clinical PDFs. The drug JSON is read
+  deterministically. (We don't RAG the drug KB either.)
+- Their **ATC codes are stored but never used in code**; ours drive class-based safety reasoning
+  (cross-reactivity, duplicate therapy) and are consumable directly from a **WHO-ATC classification
+  export** as a pluggable source.
 
 ---
 
 ## 1. Shared: the KB data schema (the part that was copied)
 
-Their `data/drug_knowledge_base.json` entry shape is the ancestor of our
-`api/src/main/resources/chartsearchai/drug-reference.json`:
+Their `data/drug_knowledge_base.json` entry shape is the ancestor of our curated dataset,
+`med-agent-hub/server/drug_data/drug-reference.json`:
 
-| Field (openmrs_chatbot) | Field (chartsearchai) | Notes |
+| Field (openmrs_chatbot) | Field (ours) | Notes |
 |---|---|---|
 | `aliases` | `aliases` | free-text names for matching |
 | `atc_code` | `atcCodes` | ATC code(s) |
 | `category` | `drugClass` | drug class label |
 | `contraindications` | `contraindications` | we use a typed `{type, token, note}` rule shape |
 | `dosing.{child,adolescent}.mg_per_kg_range`, `max_daily_dose_mg` | `ageBands[].{mgPerKgMin,mgPerKgMax,maxDailyDoseMg}` | age-banded pediatric dosing |
-| `major_warnings` | `warnings` | carried over 2026-07 (Decision 27): free-text, rendered into the injected citable record; display-only |
-| `indications`, `precautions` | — | not carried over |
+| `indications`, `major_warnings`, `precautions` | — | not carried over |
 | — | `interactions[].{token, atc, note}` | our structured interaction rules |
 
-Deterministic alias resolution is also shared in spirit: their
-`KnowledgeLoader.find_drug()` (exact match on generic/name/alias) ≈ our
-`DrugReferenceService.findByQuery` / `lookupByToken`.
+Deterministic alias resolution is also shared in spirit: their `KnowledgeLoader.find_drug()` (exact
+match on generic/name/alias) ≈ our `DrugReferenceDataset.find_by_query` / `lookup_by_token`.
 
 ---
 
-## 2. Architecture & stack
+## 2. Two pluggable sources (curated JSON + WHO-ATC)
 
-| | openmrs_chatbot | chartsearchai |
-|---|---|---|
-| Language / form | Python standalone chatbot | Java OpenMRS module |
-| Integration | Separate service, talks to OpenMRS + APIs | Embedded in the chart-search answer pipeline |
-| LLM | Ollama (local), **gated off** for most intents | Local LLM generates every answer; deterministic validation around it |
-| Embeddings | `nomic-embed-text` (Ollama) over **clinical PDFs** | sentence/biomedical model over the **patient chart** (retrieval index) |
-| Drug-info sources | local JSON **+ live RxNorm + openFDA** | local **pluggable dataset only** (curated JSON or WHO ATC export) |
-| Control flow | intent classifier → branch to one source | single path: retrieve → inject → answer → validate |
+The hub's drug-reference layer is source-agnostic (the Python port of the Java `DrugReferenceSource`
+adapter, ADR Decision 24). One source is active at a time, selected deployment-wide:
+
+| Source | Selector | Path | What it provides |
+|---|---|---|---|
+| **Curated JSON** (default) | `DRUG_SAFETY_SOURCE_FORMAT=json` (or unset) | bundled `server/drug_data/drug-reference.json` | full rules: aliases, ATC codes, age-banded dosing, interactions, contraindications |
+| **WHO-ATC export** | `DRUG_SAFETY_SOURCE_FORMAT=atc` | operator-supplied via `DRUG_SAFETY_DATASET_PATH` | classification only: one entry per level-5 substance, `drugClass` from the nearest parent group; **no** per-entry rules |
+
+The ATC parser (`_load_atc_entries`) reads a `<atcCode><whitespace><name>` all-levels export, emits
+one entry per level-5 substance (a 7-char valid ATC code), and derives each substance's class from
+the nearest parent group **present in the same dataset** (level 4 → 3 → 2). It is fail-safe: a
+missing or unreadable dataset degrades to an empty list, so the feature stays an additive net that
+never breaks the answer path. There is no bundled ATC file — the operator points at the WHO ATC/DDD
+index (or an RxNorm/ATC crosswalk) they obtained.
 
 ---
 
 ## 3. How the drug KB is used
 
-Both projects read the structured drug KB **deterministically** (not via RAG).
-What they *do* with it diverges:
+Both projects read the structured drug KB **deterministically** (not via RAG). What they *do* with
+it diverges:
 
 **openmrs_chatbot** — on the `MEDICATION_QUERY` route only:
 - `agents/medication_controller.py` combines `KnowledgeLoader.find_drug()` +
-  `utils/dose_calculator.py` `DoseCalculator.calculate_dose(weight, age, drug)` to
-  compute a **recommended** pediatric dose.
-- `agents/mcp_agent.py` wraps that with **RxNorm** (brand→generic normalization),
-  **openFDA** (label data), and falls back to local JSON when the APIs are down.
-- `utils/warning_engine.py` is a **template message formatter** (doctor vs patient
-  wording) for allergy/vital/lab/milestone/vaccine alerts — it does *not* compute
-  the alert; detection happens in the agents.
+  `utils/dose_calculator.py` `DoseCalculator.calculate_dose(weight, age, drug)` to compute a
+  **recommended** pediatric dose.
+- `agents/mcp_agent.py` wraps that with **RxNorm** (brand→generic normalization), **openFDA** (label
+  data), and falls back to local JSON when the APIs are down.
+- `utils/warning_engine.py` is a **template message formatter** (doctor vs patient wording) — it does
+  *not* compute the alert; detection happens in the agents.
 
-**chartsearchai** — on every query:
-- `DrugReferenceInjector` injects matching reference entries into the serialized
-  chart as **numbered, citable records** the LLM grounds on (question-driven by
-  alias + order-driven by ATC, relevance-scoped — see ADR Decision 24). Dosing is
-  age-gated.
-- `DrugSafetyValidator` runs **after** the answer and *computes* the checks
-  deterministically: it parses the dose the answer states and flags **overdose**
-  vs the age-band maximum, flags **interactions** with active orders, and flags
-  **contraindications** against allergies/conditions — both hand-authored rules and
-  **ATC class** reasoning. Warnings render as non-blocking chips.
+**The hub** (`server/drug_safety.py`) — on every query, gated by the per-level `drug_safety` knob:
+- `inject_drug_references(...)` injects matching reference entries into the retrieved chart as
+  **numbered, citable records** the LLM grounds on (question-driven by alias + order-driven by ATC,
+  relevance-scoped — see ADR Decision 24). Dosing is age-gated.
+- `validate_answer(...)` runs **after** the answer and *computes* the checks deterministically: it
+  parses the dose the answer states and flags **overdose** vs the age-band maximum, flags
+  **interactions** with active orders, and flags **contraindications** against allergies/conditions —
+  both hand-authored rules (from the curated JSON) and **ATC class** reasoning (`atc_subgroups()`,
+  the level-4 prefix). Warnings ride the chat surfaces as non-blocking chips (`{type, drug, detail}`).
 
-Net: they **calculate** a recommended dose from the KB; we **validate** the dose the
-LLM stated. They **format** pre-detected warnings; we **detect** them.
+Net: they **calculate** a recommended dose from the KB; we **validate** the dose the LLM stated. They
+**format** pre-detected warnings; we **detect** them.
 
 ---
 
 ## 4. RAG indexes PDFs — not the drug JSON
 
-A point that's easy to get wrong: openmrs_chatbot's vector store
-(`vectorstore/chroma.py`, two Chroma collections `doctor_knowledge_base` /
-`patient_knowledge_base`, HNSW cosine) indexes **PDF documents** from
-`knowledge_base/doctor/` and `knowledge_base/patient/` — e.g.
-`WHO-MHP-HPS-EML-2023.03-eng.pdf` (WHO Essential Medicines List) and the CDC
-milestone checklist — chunked with `RecursiveCharacterTextSplitter`
-(1000/100), embedded via `nomic-embed-text`. `technical/init_kb.py` says so
-outright: *"index PDF documents… after adding PDF files to knowledge_base/."*
+A point that's easy to get wrong: openmrs_chatbot's vector store (`vectorstore/chroma.py`, two Chroma
+collections, HNSW cosine) indexes **PDF documents** — e.g. `WHO-MHP-HPS-EML-2023.03-eng.pdf` (WHO
+Essential Medicines List) and the CDC milestone checklist — chunked with
+`RecursiveCharacterTextSplitter` (1000/100), embedded via `nomic-embed-text`. The structured drug
+JSON is **never embedded**; it is reached only by deterministic `find_drug` + `DoseCalculator`.
 
-The structured drug JSON is **never embedded** (a `grep` for the JSON files across
-`vectorstore/` + `technical/` returns nothing). It is reached only by deterministic
-`find_drug` + `DoseCalculator`.
+Our stack doesn't RAG the drug KB either — drug matching is deterministic (alias + ATC). Our only
+semantic retrieval is over the **patient chart**, and it lives in **querystore** (the hub retrieves
+the chart from querystore per turn); we do not index reference PDFs at all.
 
-chartsearchai does not RAG the drug KB either — drug matching is deterministic
-(alias + ATC). Our only embeddings are over the **patient chart** for retrieval; we
-do not index reference PDFs at all.
-
-A nice parallel: their RAG ingests the **WHO Essential Medicines List as an
-unstructured PDF**; we consume a WHO artifact too — the **ATC classification** — but
-as **structured data** for deterministic class matching. Same provenance instinct,
-opposite mechanism.
+A nice parallel: their RAG ingests the **WHO Essential Medicines List as an unstructured PDF**; we
+consume a WHO artifact too — the **ATC classification** — but as **structured data** for
+deterministic class matching, either curated into our JSON or loaded directly from a WHO-ATC export
+(§2). Same provenance instinct, opposite mechanism.
 
 ---
 
 ## 5. ATC codes: dead data there, load-bearing here
 
-In openmrs_chatbot, `atc_code` is present in the JSON but **no `.py` file uses it**
-in logic (drug interactions come from the RxNorm API; "duplicate therapy" appears
-only as a printed checklist line in `agents/medication_response.py`, not computed).
+In openmrs_chatbot, `atc_code` is present in the JSON but **no `.py` file uses it** in logic (drug
+interactions come from the RxNorm API; "duplicate therapy" appears only as a printed checklist line,
+not computed).
 
-In chartsearchai the ATC codes are central: `DrugReference.atcSubgroups()` (ATC
-level-4 prefix) is the shared definition behind both the validator's **cross-
-reactivity** + **duplicate-therapy** checks and the injector's relevance scoping,
-and the `AtcDrugReferenceSource` consumes a WHO ATC export as a pluggable
-classification source (ADR Decision 24). Documented boundary: ATC's tree does not
-capture cross-*branch* cross-reactivity (aspirin `N02BA01` vs ibuprofen `M01AE01`),
-which needs curated data — **closed 2026-07 as data** by
-`cross-reactivity-groups.json` (curated ATC-prefix families loaded alongside either
-source; ADR Decision 27). This is the local, offline equivalent of the RxClass
-cross-reactivity lookup their allergy agent does via a live API.
+In our stack the ATC codes are central: `DrugReferenceEntry.atc_subgroups()` (ATC level-4, 5-char
+prefix) is the shared definition behind both the validator's **cross-reactivity** + **duplicate-
+therapy** checks and the injector's relevance scoping, and the WHO-ATC source (§2) consumes a WHO ATC
+export as a pluggable classification source. Documented boundary: ATC's tree does not capture
+cross-*branch* cross-reactivity (aspirin `N02BA01` vs ibuprofen `M01AE01`), which needs curated data —
+so an ATC-only deployment gets class-level warnings within a subgroup but not across branches.
 
 ---
 
@@ -164,30 +161,29 @@ query
  └─ allergy safety net: scan query+response → warning_engine template alert
 ```
 
-The drug KB and the PDF RAG are reached by **mutually exclusive intents**: a
-"what dose / is X safe?" question never touches the vector store, and a general
-question never touches the drug JSON.
+The drug KB and the PDF RAG are reached by **mutually exclusive intents**.
 
-### chartsearchai — single-path (`LlmInferenceService`)
+### The ChartSearchAI stack — single path (SPA → relay → hub)
 
 ```
 query
- ├─ retrieve patient-chart records (embeddings + hybrid scoring)
- ├─ DrugReferenceInjector: inject matching reference records (relevance-scoped)
+ ├─ hub retrieves the patient chart from querystore (whole chart per turn)
+ ├─ inject_drug_references: inject matching reference records (relevance-scoped)
  ├─ LLM generates ONE answer, citing chart + reference records
- ├─ grounding/verification pass over the citations
- └─ DrugSafetyValidator: deterministic overdose / interaction / contraindication
+ ├─ grounding/entailment pass over the citations
+ └─ validate_answer: deterministic overdose / interaction / contraindication
     (rule + ATC class) → non-blocking safety chips
 ```
 
-No intent router, no LLM gate, no external APIs: the LLM always answers over the
-chart, and the deterministic layers enrich (pre) and validate (post).
+No intent router, no LLM gate, no external APIs: the LLM always answers over the chart, and the
+deterministic layers enrich (pre) and validate (post). The whole feature is gated by the per-level
+`drug_safety` knob (default off).
 
 ---
 
 ## 7. Summary
 
-| Dimension | openmrs_chatbot | chartsearchai |
+| Dimension | openmrs_chatbot | ChartSearchAI stack (hub) |
 |---|---|---|
 | Drug KB schema | origin | adapted from it |
 | Drug KB access | deterministic `find_drug` + `DoseCalculator` | deterministic alias/ATC match |
@@ -198,38 +194,21 @@ chart, and the deterministic layers enrich (pre) and validate (post).
 | Warnings | template formatter (detection elsewhere) | deterministic detector → chips |
 | External APIs | RxNorm + openFDA | none (local pluggable dataset) |
 | Control flow | intent classifier → branch; LLM gated | single retrieve→inject→answer→validate |
-| Pluggable source | multiple JSON files + APIs | `DrugReferenceSource` adapter (JSON \| ATC), GP-selected |
+| Pluggable source | multiple JSON files + APIs | curated JSON **or** WHO-ATC export, `DRUG_SAFETY_SOURCE_FORMAT`-selected |
 
 ## 8. What we kept vs. changed
 
 - **Kept:** the KB data/schema and deterministic alias resolution.
-- **Changed / added (ours):** inject-as-citable-records integrated with the chart
-  citation + grounding pipeline; a deterministic post-answer validator (dose
-  parsing, interaction, contraindication); **ATC level-4 class reasoning**
-  (cross-reactivity + duplicate therapy); a **pluggable WHO-ATC source**;
-  relevance-scoped order injection. We use **no external drug APIs** and do **not**
-  RAG the drug KB.
-
-## 9. Parity follow-through (2026-07, ADR Decision 27)
-
-A functional gap analysis of the origin project identified the three capabilities that
-both survive chartsearchai's constraints and add value; all three now exist here, as data:
-
-- **Weight-aware per-dose overdose validation** — their `DoseCalculator`'s weight × mg/kg
-  arithmetic, recast from *calculating a recommended dose* (which we deliberately do not do)
-  into *validating the stated dose*: a fresh weight obs + the band's `mgPerKgMax` flag
-  per-administration excess the absolute daily ceiling cannot see.
-- **Curated cross-reactivity groups** — the offline equivalent of their live RxClass
-  cross-reactivity lookup (see §5).
-- **Prose `warnings`** — their `major_warnings` content (Reye-syndrome-type cautions),
-  rendered into the injected citable record; display-only, never validator-enforced.
-
-Deliberately still unported: dose *recommendation* (prescribing-CDS posture), live
-RxNorm/openFDA/RxClass APIs (local-only constraint), excipient/food-allergen matching
-(no local data; allergen→excipient table would be clinical knowledge in code).
+- **Changed / added (ours):** inject-as-citable-records integrated with the chart citation + grounding
+  pipeline; a deterministic post-answer validator (dose parsing, interaction, contraindication);
+  **ATC level-4 class reasoning** (cross-reactivity + duplicate therapy); a **pluggable WHO-ATC
+  source**; relevance-scoped order injection. We use **no external drug APIs** and do **not** RAG the
+  drug KB.
+- **Moved:** the whole feature now lives in **med-agent-hub** (`server/drug_safety.py`), ported from
+  the deleted chartsearchai Java `reference` package when ChartSearchAI became a thin hub relay.
 
 See ADR [Decision 23](adr.md#decision-23-drug-reference-injection--post-answer-drug-safety-validation)
-(the feature), [Decision 24](adr.md#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets)
-(pluggable consumer of authoritative datasets / the ATC class layer), and
-[Decision 27](adr.md#decision-27-drug-safety-parity-follow-through--weight-aware-dosing-curated-cross-reactivity-groups-prose-warnings)
-(this parity follow-through).
+(the feature) and [Decision 24](adr.md#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets)
+(pluggable consumer of authoritative datasets / the ATC class layer). These ADR entries record the
+original Java design; the hub port preserves their contract (verified by the hub's drug-safety parity
+tests, `med-agent-hub/tests/test_drug_safety*.py`).

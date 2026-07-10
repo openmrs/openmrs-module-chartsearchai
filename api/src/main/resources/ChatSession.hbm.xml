@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC
+		"-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+		"http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping package="org.openmrs.module.chartsearchai.model">
+
+	<class name="ChatSession" table="chartsearchai_chat_session">
+
+		<id name="sessionId" column="session_id" type="int">
+			<generator class="native"/>
+		</id>
+
+		<property name="uuid" column="uuid" type="string" length="38" not-null="true" unique="true"/>
+
+		<many-to-one name="patient" class="org.openmrs.Patient" column="patient_id" not-null="true"/>
+
+		<many-to-one name="user" class="org.openmrs.User" column="user_id" not-null="true"/>
+
+		<property name="startedAt" column="started_at" type="timestamp" not-null="true"/>
+
+		<property name="lastActivityAt" column="last_activity_at" type="timestamp" not-null="true"/>
+
+		<property name="endedAt" column="ended_at" type="timestamp"/>
+
+		<property name="title" column="title" type="string" length="200"/>
+
+		<property name="status" column="status" type="string" length="20" not-null="true"/>
+
+	</class>
+
+</hibernate-mapping>

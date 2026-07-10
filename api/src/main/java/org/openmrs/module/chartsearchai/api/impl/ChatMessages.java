@@ -20,17 +20,15 @@ final class ChatMessages {
 
 	static ArrayNode systemAndUser(ObjectMapper mapper, String system, String user) {
 		ArrayNode messages = mapper.createArrayNode();
-
-		ObjectNode systemMsg = mapper.createObjectNode();
-		systemMsg.put("role", "system");
-		systemMsg.put("content", system);
-		messages.add(systemMsg);
-
-		ObjectNode userMsg = mapper.createObjectNode();
-		userMsg.put("role", "user");
-		userMsg.put("content", user);
-		messages.add(userMsg);
-
+		appendMessage(messages, mapper, "system", system);
+		appendMessage(messages, mapper, "user", user);
 		return messages;
+	}
+
+	private static void appendMessage(ArrayNode messages, ObjectMapper mapper, String role, String content) {
+		ObjectNode node = mapper.createObjectNode();
+		node.put("role", role);
+		node.put("content", content);
+		messages.add(node);
 	}
 }

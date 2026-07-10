@@ -23,21 +23,6 @@ on:
         required: false
         default: 'openmrs-emr3'
         type: string
-      gguf_model_url:
-        description: 'Download URL for the GGUF model file'
-        required: false
-        default: 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf'
-        type: string
-      onnx_model_url:
-        description: 'Download URL for the ONNX model file'
-        required: false
-        default: ''   # MiniLM is only used by the non-default chartsearchai.embedding.preFilter pipeline; not bundled
-        type: string
-      vocab_url:
-        description: 'Download URL for the vocab.txt file'
-        required: false
-        default: ''
-        type: string
 
 concurrency:
   group: build-standalone
@@ -47,9 +32,6 @@ env:
   REFAPP_VERSION: ${{ inputs.refapp_version || '3.7.0-rc.2' }}
   OPENMRS_VERSION: ${{ inputs.openmrs_version || '2.9.0-SNAPSHOT' }}
   STANDALONE_BRANCH: ${{ inputs.standalone_branch || 'openmrs-emr3' }}
-  GGUF_MODEL_URL: ${{ inputs.gguf_model_url || 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf' }}
-  ONNX_MODEL_URL: ${{ inputs.onnx_model_url || '' }}
-  VOCAB_URL: ${{ inputs.vocab_url || '' }}
 
 jobs:
   build-standalone:
@@ -61,12 +43,8 @@ jobs:
     timeout-minutes: 150
 
     steps:
-      # Reclaim ~20GB of preinstalled toolchains we never use (Android SDK, .NET, Haskell,
-      # Swift, etc.). The standalone zip-assembly step holds the ~5GB GGUF + war + SPA + ~/.m2
-      # + node_modules + the output zip resident at once and was exhausting the runner disk
-      # ("No space left on device"); freeing these up front unblocks assembly and leaves the
-      # index-bake step room to copy + boot. Leaves /opt/hostedtoolcache (the JDK/Node this
-      # job actually uses) untouched.
+      # Reclaim preinstalled toolchains this build does not use. This leaves enough room for
+      # the OpenMRS distribution, optional Querystore index bake, and final artifact.
       - name: Free up runner disk space
         run: |
           echo "Disk before reclaim:"; df -h / | tail -1
@@ -132,29 +110,10 @@ jobs:
           yarn install
           yarn build
 
-      # Download AI model files if URLs are provided
-      - name: Download AI model files
+      # Provision only the optional Querystore context-source embedder. ChartSearchAI never
+      # bundles model-serving weights; med-agent-hub is configured separately.
+      - name: Download optional Querystore embedding model
         run: |
-          mkdir -p standalone/target/chartsearchai
-
-          if [ -n "$GGUF_MODEL_URL" ]; then
-            echo "Downloading GGUF model..."
-            curl -L -o "standalone/target/chartsearchai/$(basename "$GGUF_MODEL_URL")" \
-              "$GGUF_MODEL_URL"
-          fi
-
-          if [ -n "$ONNX_MODEL_URL" ]; then
-            echo "Downloading ONNX model..."
-            curl -L -o standalone/target/chartsearchai/model.onnx \
-              "$ONNX_MODEL_URL"
-          fi
-
-          if [ -n "$VOCAB_URL" ]; then
-            echo "Downloading vocab file..."
-            curl -L -o standalone/target/chartsearchai/vocab.txt \
-              "$VOCAB_URL"
-          fi
-
           # querystore embedding model: e5-base-v2 (ADR Decision 22). The Xenova mirror ships a
           # self-contained ONNX export; the canonical intfloat onnx/ uses external-data format
           # that breaks as a single-file download.
@@ -165,8 +124,8 @@ jobs:
           curl -L -o standalone/target/querystore/vocab.txt \
             "https://huggingface.co/intfloat/e5-base-v2/resolve/main/vocab.txt"
 
-          echo "AI model files:"
-          ls -lh standalone/target/chartsearchai/ standalone/target/querystore/ || echo "No model files downloaded"
+          echo "Querystore model files:"
+          ls -lh standalone/target/querystore/
 
       # Patch the standalone build to include chartsearchai
       - name: Configure standalone build for chartsearchai
@@ -182,16 +141,7 @@ jobs:
                                   <echo file="${project.build.directory}/openmrs3x/openmrs-distro.properties"\
                                         append="true" message="${line.separator}omod.chartsearchai=1.0.0-SNAPSHOT${line.separator}omod.querystore=1.0.0-SNAPSHOT${line.separator}"/>' pom-step-01.xml
 
-          # 3. Add chartsearchai model files to the assembly descriptor (if models were downloaded)
-          if [ -d "target/chartsearchai" ] && [ "$(ls -A target/chartsearchai 2>/dev/null)" ]; then
-            sed -i '/<\/fileSets>/i \
-              <fileSet>\
-                <directory>${project.build.directory}/chartsearchai</directory>\
-                <outputDirectory>${project.build.finalName}/appdata/chartsearchai</outputDirectory>\
-              </fileSet>' src/main/assembly/zip-standalone.xml
-          fi
-
-          # 4. Add the querystore embedding model to the assembly descriptor
+          # 3. Add the optional Querystore embedding model to the assembly descriptor
           if [ -d "target/querystore" ] && [ "$(ls -A target/querystore 2>/dev/null)" ]; then
             sed -i '/<\/fileSets>/i \
               <fileSet>\
@@ -200,13 +150,12 @@ jobs:
               </fileSet>' src/main/assembly/zip-standalone.xml
           fi
 
-          # 5. Pre-enable the querystore retrieval path in the bundled demo database.
+          # 4. Configure the optional Querystore module in the bundled demo database.
           #    Modules only create global properties that are missing, so rows present in the
           #    imported demo dump win over the module defaults on first start.
           {
             echo ""
             echo "INSERT INTO global_property (property, property_value, uuid) VALUES"
-            echo "('chartsearchai.querystore.enabled','true',UUID()),"
             echo "('querystore.backend','lucene',UUID()),"
             echo "('querystore.embedding.modelFilePath','querystore/e5_model.onnx',UUID()),"
             echo "('querystore.embedding.vocabFilePath','querystore/vocab.txt',UUID());"
@@ -336,7 +285,7 @@ jobs:
           unzip -p "$ZIP_FILE" "*/demodatabase.zip" > /tmp/demodb.zip
           GP_COUNT=$(unzip -p /tmp/demodb.zip "data/demo-db-${REFAPP_VERSION}.sql" | grep -c "querystore" || true)
           echo "querystore mentions in demo dump: $GP_COUNT"
-          [ "$GP_COUNT" -ge 4 ] || { echo "ERROR: querystore GPs missing from bundled demo DB"; exit 1; }
+          [ "$GP_COUNT" -ge 3 ] || { echo "ERROR: querystore GPs missing from bundled demo DB"; exit 1; }
 
       # GitHub always re-zips whatever upload-artifact is handed. Uploading the
       # standalone .zip directly therefore yields a zip-inside-a-zip that users
@@ -350,7 +299,7 @@ jobs:
           # Reclaim space before doubling the standalone on disk (the verify step
           # already ran against the zip, and nothing downstream needs these).
           rm -rf ~/.m2/repository "$GITHUB_WORKSPACE"/standalone/node_modules || true
-          rm -rf chartsearchai querystore || true
+          rm -rf querystore || true
           unzip -q "$ZIP" -d artifact
           rm -f "$ZIP"
           echo "Artifact tree (extracts in one step):"
@@ -367,9 +316,7 @@ jobs:
       # copy ONLY the generated appdata/querystore/lucene directory back into the pristine
       # artifact. The published tree is therefore byte-identical to a normal build plus
       # that one index directory — the user's first boot still imports the demo DB exactly
-      # as before, and the pre-seeded index's patient UUIDs match that bundled dump. The
-      # copy excludes the multi-GB *.gguf weights: indexing only needs the e5 embedder, and
-      # leaving the LLM out keeps the bake run well under the runner's memory ceiling.
+      # as before, and the pre-seeded index's patient UUIDs match that bundled dump.
       #
       # Intentionally fatal: a published download must be pre-indexed, or the build fails.
       - name: Bake querystore Lucene index into the demo appdata
@@ -392,12 +339,11 @@ jobs:
           AUTH="admin:Admin123"
           QS="$BASE/ws/rest/v1/querystore"
 
-          # Throwaway copy WITHOUT the GGUF weights (indexing never loads the LLM).
           # Guard both: without `set -e`, a failed rsync (e.g. out of space) or cd would otherwise
           # let the script run on in the wrong directory and fail downstream with a misleading
           # "heap bump no-op" instead of a clear staging error.
           mkdir -p "$GITHUB_WORKSPACE/bakerun"
-          rsync -a --exclude '*.gguf' "$PRISTINE/" "$BAKE/" \
+          rsync -a "$PRISTINE/" "$BAKE/" \
             || { echo "::error::failed to stage throwaway standalone copy under $BAKE (disk space?)"; exit 1; }
           cd "$BAKE" || { echo "::error::could not cd into throwaway copy $BAKE"; exit 1; }
           # Give the boot enough heap for full O3 + the e5 embedder (shipped default is 512m).
@@ -414,7 +360,6 @@ jobs:
             [ -n "${BOOT_PID:-}" ] && kill -TERM "$BOOT_PID" 2>/dev/null || true
             pkill -f 'org.openmrs.standalone.ApplicationController' 2>/dev/null || true
             pkill -f 'mariadbd' 2>/dev/null || true
-            pkill -f 'llama-server' 2>/dev/null || true
           }
           fail() {
             echo "::error::$1"

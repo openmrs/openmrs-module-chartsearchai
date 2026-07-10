@@ -5,13 +5,9 @@ RUN git clone --depth 1 https://github.com/openmrs/openmrs-module-chartsearchai.
 WORKDIR /build
 RUN mvn clean package -DskipTests -B
 
-# Build openmrs-module-querystore too. chartsearchai's omod declares
-# aware_of_module=org.openmrs.module.querystore so its OpenmrsClassLoader can
-# see QueryStoreService at runtime; that declaration is also load-bearing for
-# OpenMRS's module loader to use the initial-startup web-start path. Without
-# querystore actually present, the loader falls back to a deferred path that
-# registers servlet filters after Tomcat has finalised the /openmrs context —
-# crashing with IllegalStateException at chartsearchai's WebComponentRegistrar.
+# This demo distribution also includes Querystore as an optional context source
+# that a separately deployed med-agent-hub may use. ChartSearchAI itself neither
+# imports nor requires Querystore.
 FROM maven:3.9-eclipse-temurin-11 AS querystore-builder
 
 ARG CACHE_BUST
@@ -43,8 +39,8 @@ RUN set -eu; \
 # Copy the OpenMRS distribution from the official image
 FROM openmrs/openmrs-reference-application-3-backend:nightly AS openmrs-dist
 
-# Rebase onto Ubuntu (glibc 2.39) so the bundled llama-server binaries load
-# correctly. The official image uses Amazon Linux 2 (glibc 2.26) which is too old.
+# Rebase onto Ubuntu (glibc 2.39) so querystore's onnxruntime embedder loads correctly.
+# The official image uses Amazon Linux 2 (glibc 2.26), which is too old (GLIBC_2.27 not found).
 FROM eclipse-temurin:21-jre
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -64,7 +60,7 @@ COPY --from=openmrs-dist /usr/local/tomcat /usr/local/tomcat
 # `cp -r ${OMRS_DISTRO_CORE}/. webapps`, so overwriting openmrs_core/openmrs.war is sufficient.
 COPY --from=core-war /openmrs.war /openmrs/distribution/openmrs_core/openmrs.war
 
-# Add the chartsearchai module + the querystore module it is aware-of-bound to.
+# Add ChartSearchAI and the distribution's optional Querystore context source.
 COPY --from=chartsearchai-builder /build/omod/target/chartsearchai-*.omod /openmrs/distribution/openmrs_modules/
 COPY --from=querystore-builder /build/omod/target/querystore-*.omod /openmrs/distribution/openmrs_modules/
 COPY --chmod=755 backend-init.sh /usr/local/bin/backend-init.sh

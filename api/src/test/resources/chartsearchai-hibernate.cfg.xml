@@ -5,5 +5,7 @@
 <hibernate-configuration>
 	<session-factory>
 		<mapping resource="ChartSearchAuditLog.hbm.xml"/>
+		<mapping resource="ChatSession.hbm.xml"/>
+		<mapping resource="ChatMessage.hbm.xml"/>
 	</session-factory>
 </hibernate-configuration>

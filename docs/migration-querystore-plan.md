@@ -17,6 +17,10 @@ Tracks GitHub issue [#51](https://github.com/openmrs/openmrs-module-chartsearcha
 > what was removed and why; §4 has the as-shipped per-phase outcome. The Phase-0 eval harness
 > (`QueryStoreRetrievalParityEvalTest`, `QueryStoreContentParityEvalTest`) and the `RelevanceCutoff`
 > prototype remain on the `phase0-evals` branch (measurement scaffolding, not on `main`).
+>
+> **2026-07 note:** the subsequent hub-relay refactor also removed chartsearchai-owned chat
+> orchestration, local LLM process management, and the module warmup endpoint. References below to
+> those older surfaces are historical.
 
 ## 1. Where we already are
 

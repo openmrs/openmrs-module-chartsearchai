@@ -28,6 +28,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Consumer;
@@ -664,10 +665,52 @@ public class ChartSearchAiStreamingTest {
 			assertTrue(elapsedMs < 700, "relay must abort promptly on a mid-leg disconnect — took "
 					+ elapsedMs + "ms; 8 heartbeats * 150ms = 1200ms of missed opportunities to notice "
 					+ "means it only writes (and so only notices disconnects) on real events");
+
+			@SuppressWarnings("unchecked")
+			ArgumentCaptor<Map<String, Object>> update = ArgumentCaptor.forClass(Map.class);
+			verify(f.chatService).updateHubStagedMessage(
+					eq(f.session), eq("assistant-msg-uuid"), update.capture());
+			Map<String, Object> inDepth = (Map<String, Object>) update.getValue().get("inDepth");
+			assertEquals("failed", inDepth.get("status"));
+			assertEquals("In-Depth was interrupted.", inDepth.get("error"));
 		}
 		finally {
 			hub.stop(0);
 		}
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void chatHistory_rehydratesSafetyWarningsAndInterruptedInDepth() {
+		Fixture f = newFixture(true);
+		ChatMessage assistant = new ChatMessage();
+		assistant.setUuid("assistant-msg-uuid");
+		assistant.setRole(ChatMessage.ROLE_ASSISTANT);
+		assistant.setContent("{\"answer\":\"Use caution.\",\"references\":[],\"blocks\":[],"
+				+ "\"safetyWarnings\":[{\"type\":\"overdose\",\"drug\":\"Ibuprofen\","
+				+ "\"detail\":\"Dose exceeds the weight-based limit.\"}],"
+				+ "\"inDepth\":{\"status\":\"failed\",\"answer\":\"\","
+				+ "\"error\":\"In-Depth was interrupted.\"}}");
+		when(f.chatService.getMessages(f.session)).thenReturn(Collections.singletonList(assistant));
+
+		ResponseEntity<Object> response;
+		try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
+			ctx.when(() -> Context.requirePrivilege(
+					ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(inv -> null);
+			ctx.when(Context::getPatientService).thenReturn(f.patientService);
+			ctx.when(Context::getAdministrationService).thenReturn(f.adminService);
+			ctx.when(Context::getAuthenticatedUser).thenReturn(f.user);
+			response = f.controller.chatHistory("patient-uuid");
+		}
+
+		Map<String, Object> body = (Map<String, Object>) response.getBody();
+		List<Map<String, Object>> messages = (List<Map<String, Object>>) body.get("messages");
+		List<Map<String, Object>> warnings =
+				(List<Map<String, Object>>) messages.get(0).get("safetyWarnings");
+		assertEquals("Ibuprofen", warnings.get(0).get("drug"));
+		Map<String, Object> inDepth = (Map<String, Object>) messages.get(0).get("inDepth");
+		assertEquals("failed", inDepth.get("status"));
+		assertEquals("In-Depth was interrupted.", inDepth.get("error"));
 	}
 
 	/**

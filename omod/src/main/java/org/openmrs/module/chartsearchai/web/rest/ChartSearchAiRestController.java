@@ -974,6 +974,11 @@ public class ChartSearchAiRestController {
 						assistantMessageUuid, doneSeen, event, data.toString(), hubCallStart);
 			}
 		}
+		finally {
+			if (!doneSeen[0]) {
+				persistInterruptedInDepth(session, assistantMessageUuid[0]);
+			}
+		}
 		if (!doneSeen[0]) {
 			writeSseEvent(out, "error", "Hub staged stream ended before final response.");
 		}
@@ -1034,6 +1039,7 @@ public class ChartSearchAiRestController {
 			return;
 		}
 		if ("error".equals(event)) {
+			persistInterruptedInDepth(session, assistantMessageUuid[0]);
 			doneSeen[0] = true;
 			writeSseEvent(out, event, data);
 			return;
@@ -1082,6 +1088,25 @@ public class ChartSearchAiRestController {
 			return;
 		}
 		writeSseEvent(out, event, data);
+	}
+
+	private void persistInterruptedInDepth(ChatSession session, String assistantMessageUuid) {
+		if (assistantMessageUuid == null) {
+			return;
+		}
+		Map<String, Object> inDepth = new LinkedHashMap<String, Object>();
+		inDepth.put("status", "failed");
+		inDepth.put("answer", "");
+		inDepth.put("error", "In-Depth was interrupted.");
+		Map<String, Object> update = new LinkedHashMap<String, Object>();
+		update.put("inDepth", inDepth);
+		try {
+			chatService.updateHubStagedMessage(session, assistantMessageUuid, update);
+		}
+		catch (RuntimeException persistenceFailure) {
+			log.warn("Could not persist interrupted In-Depth state for assistant message {}",
+					assistantMessageUuid, persistenceFailure);
+		}
 	}
 
 	private void writeHubPayload(OutputStream out, String event, Map<String, Object> payload,

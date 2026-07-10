@@ -943,6 +943,7 @@ public class ChartSearchAiRestController {
 
 		final String[] assistantMessageUuid = new String[1];
 		final boolean[] doneSeen = new boolean[1];
+		final boolean[] inDepthTerminalSeen = new boolean[1];
 		try (BufferedReader reader = new BufferedReader(new InputStreamReader(
 				hubResponse.body(), StandardCharsets.UTF_8))) {
 			String event = "";
@@ -951,7 +952,8 @@ public class ChartSearchAiRestController {
 			while ((line = reader.readLine()) != null) {
 				if (line.isEmpty()) {
 					handleHubStagedEvent(out, session, question, hubRequest.profileId,
-							assistantMessageUuid, doneSeen, event, data.toString(), hubCallStart);
+								assistantMessageUuid, doneSeen, inDepthTerminalSeen,
+								event, data.toString(), hubCallStart);
 					event = "";
 					data.setLength(0);
 				} else if (line.startsWith("event:")) {
@@ -971,11 +973,12 @@ public class ChartSearchAiRestController {
 			}
 			if (data.length() > 0) {
 				handleHubStagedEvent(out, session, question, hubRequest.profileId,
-						assistantMessageUuid, doneSeen, event, data.toString(), hubCallStart);
+						assistantMessageUuid, doneSeen, inDepthTerminalSeen,
+						event, data.toString(), hubCallStart);
 			}
 		}
 		finally {
-			if (!doneSeen[0]) {
+			if (!doneSeen[0] && !inDepthTerminalSeen[0]) {
 				persistInterruptedInDepth(session, assistantMessageUuid[0]);
 			}
 		}
@@ -1033,7 +1036,8 @@ public class ChartSearchAiRestController {
 
 	@SuppressWarnings("unchecked")
 	private void handleHubStagedEvent(OutputStream out, ChatSession session, String question,
-			String model, String[] assistantMessageUuid, boolean[] doneSeen, String event,
+			String model, String[] assistantMessageUuid, boolean[] doneSeen,
+			boolean[] inDepthTerminalSeen, String event,
 			String data, long hubCallStart) throws IOException {
 		if (event == null || event.isEmpty() || data == null || data.isEmpty()) {
 			return;
@@ -1065,6 +1069,7 @@ public class ChartSearchAiRestController {
 			return;
 		}
 		if ("indepth_done".equals(event) || "indepth_error".equals(event)) {
+			inDepthTerminalSeen[0] = true;
 			Map<String, Object> update = new LinkedHashMap<String, Object>();
 			update.put("inDepth", payload);
 			if (assistantMessageUuid[0] != null) {

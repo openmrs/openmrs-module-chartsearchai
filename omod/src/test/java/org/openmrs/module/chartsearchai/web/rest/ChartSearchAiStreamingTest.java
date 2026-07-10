@@ -590,6 +590,61 @@ public class ChartSearchAiStreamingTest {
 		}
 	}
 
+	@Test
+	@SuppressWarnings("unchecked")
+	public void chatStream_eofAfterInDepthDone_preservesCompletedInDepth() throws Exception {
+		Fixture f = newFixture(true);
+		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		hub.createContext("/v1/chat/completions", exchange -> {
+			String sse = ""
+					+ "event: answer_done\n"
+					+ "data: {\"answer\":\"Ans.\",\"references\":[],\"blocks\":[],"
+					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
+					+ "event: indepth_done\n"
+					+ "data: {\"status\":\"complete\",\"answer\":\"Finished details.\"}\n\n";
+			byte[] bytes = sse.getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+			exchange.sendResponseHeaders(200, bytes.length);
+			try (OutputStream body = exchange.getResponseBody()) {
+				body.write(bytes);
+			}
+		});
+		hub.start();
+		String hubUrl = "http://127.0.0.1:" + hub.getAddress().getPort() + "/v1/chat/completions";
+		try {
+			Map<String, String> body = chatBody();
+			body.put("profile", "single-12b-checked");
+			configureHub(f, hubUrl);
+			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
+					.thenReturn(new ChatTurnResult(new ChartAnswer("Ans.", Collections.emptyList()),
+							"session-uuid", "assistant-msg-uuid"));
+			when(f.chatService.updateHubStagedMessage(eq(f.session), eq("assistant-msg-uuid"), any()))
+					.thenReturn(new ChatTurnResult(new ChartAnswer("Ans.", Collections.emptyList()),
+							"session-uuid", "assistant-msg-uuid"));
+
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
+				ctx.when(() -> Context.requirePrivilege(
+						ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(inv -> null);
+				ctx.when(Context::getPatientService).thenReturn(f.patientService);
+				ctx.when(Context::getAdministrationService).thenReturn(f.adminService);
+				ctx.when(Context::getAuthenticatedUser).thenReturn(f.user);
+				ctx.when(Context::getRuntimeProperties).thenReturn(new Properties());
+				f.controller.chatStream(body, response);
+			}
+
+			ArgumentCaptor<Map<String, Object>> update = ArgumentCaptor.forClass(Map.class);
+			verify(f.chatService, times(1)).updateHubStagedMessage(
+					eq(f.session), eq("assistant-msg-uuid"), update.capture());
+			Map<String, Object> inDepth = (Map<String, Object>) update.getValue().get("inDepth");
+			assertEquals("complete", inDepth.get("status"));
+			assertEquals("Finished details.", inDepth.get("answer"));
+		}
+		finally {
+			hub.stop(0);
+		}
+	}
+
 	/**
 	 * Gate 6: a mid-leg browser disconnect must be detected via a heartbeat-triggered write, not
 	 * only discovered on the NEXT real event. The hub answers fast, then goes quiet (as it would

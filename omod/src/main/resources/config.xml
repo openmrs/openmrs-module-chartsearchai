@@ -254,9 +254,15 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.drugReference.crossReactivityGroupsFilePath</property>
+		<defaultValue>chartsearchai/cross-reactivity-groups.json</defaultValue>
+		<description>Relative path, including the filename, within the OpenMRS application data directory to the curated cross-reactivity groups dataset (resolves to &lt;application-data-directory&gt;/&lt;path&gt;). Loaded alongside EITHER source format: a group is a named drug family expressed as ATC code prefixes, carrying the cross-branch cross-reactivity knowledge that ATC's tree cannot express (e.g. aspirin N02BA01 and ibuprofen M01AE01 are different branches but one NSAID hypersensitivity family — the ADR Decision 24 boundary, closed by this data). When the file is absent or unreadable, the groups bundled on the module classpath are used (a minimal NSAID seed — expand per deployment). Path traversal (e.g. "..") is not allowed. Editing the file takes effect on the next module restart.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.drugReference.injectFromOrders</property>
 		<defaultValue>true</defaultValue>
-		<description>Patient-driven injection: when true, an active drug order's reference is injected into the chart — but only when the question is about a specific drug clinically related to that order (sharing an ATC level-4 subgroup — a duplicate-therapy / cross-reactivity concern). An order unrelated to the asked drug, or a question that names no drug at all, does not inject an order reference: the model still sees the active-order records in the chart, and the safety validator reads active orders directly, so neither the answer's medication awareness nor the safety checks depend on this injection. Requires chartsearchai.drugReference.enabled. Orders without an ATC concept mapping cannot trigger this path; question-driven injection (injectFromQuery) still works via aliases. Default: true.</description>
+		<description>Patient-driven injection: when true, an active drug order's reference is injected into the chart — but only when the question is about a specific drug clinically related to that order (sharing an ATC level-4 subgroup or a curated cross-reactivity group — a duplicate-therapy / cross-reactivity concern). An order unrelated to the asked drug, or a question that names no drug at all, does not inject an order reference: the model still sees the active-order records in the chart, and the safety validator reads active orders directly, so neither the answer's medication awareness nor the safety checks depend on this injection. Requires chartsearchai.drugReference.enabled. Orders without an ATC concept mapping cannot trigger this path; question-driven injection (injectFromQuery) still works via aliases. Default: true.</description>
 	</globalProperty>
 
 	<globalProperty>
@@ -274,19 +280,31 @@
 	<globalProperty>
 		<property>chartsearchai.drugSafety.warnOnDoseExcess</property>
 		<defaultValue>true</defaultValue>
-		<description>When true, the validator parses (drug, mg, frequency) from the answer and flags a daily dose that exceeds the reference maxDailyDoseMg for the patient's age band. Conservative: a warning is raised only when a daily total can be computed AND it exceeds a published maximum, so a sufficient-chart answer with no reference dosing produces no warning. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
+		<description>When true, the validator parses (drug, mg, frequency) from the answer and flags a daily dose that exceeds the reference maxDailyDoseMg for the patient's age band; additionally, when the patient's weight is known (see chartsearchai.drugSafety.weightConceptUuid), it flags a per-administration dose above the band's mgPerKgMax × weight — the only possible check for bands that publish mg/kg dosing with no daily maximum, and the tighter one for small patients. One warning per drug: the published daily ceiling wins when both trip. Conservative: a warning is raised only when a value can be computed AND it exceeds a published maximum, so a sufficient-chart answer with no reference dosing produces no warning. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
 	</globalProperty>
 
 	<globalProperty>
 		<property>chartsearchai.drugSafety.warnOnInteractions</property>
 		<defaultValue>true</defaultValue>
-		<description>When true, the validator cross-references each drug named in the answer against the patient's active drug orders and flags interactions: both hand-authored rules from the reference dataset and an active order in the same ATC level-4 subgroup (duplicate therapy), the latter requiring only ATC codes so it works with the rule-less atc source. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
+		<description>When true, the validator cross-references each drug named in the answer against the patient's active drug orders and flags interactions: hand-authored rules from the reference dataset, an active order in the same ATC level-4 subgroup (duplicate therapy), or — failing that — an active order in the same curated cross-reactivity group (additive / duplicate-class therapy across ATC branches); the class checks require only ATC codes so they work with the rule-less atc source. One warning per order — the most specific match wins. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
 	</globalProperty>
 
 	<globalProperty>
 		<property>chartsearchai.drugSafety.warnOnContraindications</property>
 		<defaultValue>true</defaultValue>
-		<description>When true, the validator cross-references each drug named in the answer against the patient's active allergies and conditions and flags contraindications: both hand-authored rules from the reference dataset and a recorded allergy to the same drug or one in the same ATC level-4 subgroup (cross-reactivity), the latter requiring only ATC codes so it works with the rule-less atc source. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
+		<description>When true, the validator cross-references each drug named in the answer against the patient's active allergies and conditions and flags contraindications: hand-authored rules from the reference dataset, a recorded allergy to the same drug or one in the same ATC level-4 subgroup (cross-reactivity), or — failing that — an allergy to a drug in the same curated cross-reactivity group (cross-branch cross-reactivity, e.g. aspirin vs an ibuprofen allergy); the class checks require only ATC codes so they work with the rule-less atc source. One warning per allergen — the most specific match wins. Requires chartsearchai.drugSafety.validateAnswers. Default: true.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.drugSafety.weightConceptUuid</property>
+		<defaultValue>5089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</defaultValue>
+		<description>UUID of the kg-valued numeric concept holding the patient's weight observations, read (most recent, non-voided) to drive the weight-aware per-dose overdose check: a per-administration dose in the answer above the age band's mgPerKgMax × weight is flagged. The default is the reference (CIEL) "Weight (kg)" concept, 5089; point it at your dictionary's weight-in-kg concept if different. Set to "none" to disable the weight-aware arm (the absolute maxDailyDoseMg check still runs); a blank value falls back to the default, like every global property. The concept's values must be recorded in kilograms. Requires chartsearchai.drugSafety.warnOnDoseExcess.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.drugSafety.weightMaxAgeDays</property>
+		<defaultValue>90</defaultValue>
+		<description>Maximum age, in days, of the newest weight observation for it to drive the weight-aware per-dose overdose check. Pediatric weight changes quickly, and a stale (typically lower) weight would over-report mg/kg — a false positive, the direction the validator never takes — so an older weight simply disables the weight-aware arm for that query. Unparseable or non-positive values fall back to the default. Requires chartsearchai.drugSafety.warnOnDoseExcess. Default: 90.</description>
 	</globalProperty>
 
 	<!-- Chart-write detection is via core #6084 service events (ChartSearchEventListener),

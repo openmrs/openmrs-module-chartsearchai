@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,8 +29,8 @@ import org.springframework.stereotype.Service;
 /**
  * Part 1 of the drug-reference feature: injects matching {@link DrugReference}
  * entries into the serialized chart as additional numbered records the LLM can
- * cite, so it can ground reference facts (dosing, contraindications,
- * interactions) the same way it grounds chart records.
+ * cite, so it can ground reference facts (dosing, prose warnings,
+ * contraindications, interactions) the same way it grounds chart records.
  *
  * <p>Injection is appended <em>after</em> the retrieved chart records, continuing
  * the citation numbering, and carries the {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE}
@@ -62,14 +63,23 @@ public class DrugReferenceInjector {
 	 * Production entry point: injects reference records into {@code chart} for the
 	 * given patient and question when the feature is enabled. Reads the patient's
 	 * clinical context (active orders) for patient-driven matching. Returns the
-	 * chart unchanged when the feature is off or nothing matches.
+	 * chart unchanged when the feature is off or nothing matches. Fails safe: the
+	 * injection is an additive enrichment, so any unexpected error degrades to the
+	 * unmodified chart rather than failing the query.
 	 */
 	public PatientChart inject(PatientChart chart, Patient patient, String question) {
-		if (chart == null || !ChartSearchAiUtils.isDrugReferenceEnabled()) {
+		try {
+			if (chart == null || !ChartSearchAiUtils.isDrugReferenceEnabled()) {
+				return chart;
+			}
+			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+			return injectRecords(chart, context, question);
+		}
+		catch (RuntimeException e) {
+			log.warn("Drug-reference injection failed; leaving the chart unmodified — the answer path is never broken",
+					e);
 			return chart;
 		}
-		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-		return injectRecords(chart, context, question);
 	}
 
 	/**
@@ -98,7 +108,7 @@ public class DrugReferenceInjector {
 
 		log.debug("Injected {} drug-reference record(s) into chart for question '{}'",
 				matched.size(), question);
-		return new PatientChart(text.toString(), java.util.Collections.unmodifiableList(mappings),
+		return new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
 	}
 
@@ -107,11 +117,12 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>Order-driven injection is <em>relevance-scoped</em>: an active-order reference is injected only
 	 * when the question is about a specific drug clinically related to that order (sharing an ATC
-	 * chemical subgroup — a real duplicate-therapy / cross-reactivity concern). An active medication
-	 * unrelated to the asked-about drug — or a question that names no drug at all — is not injected: it
-	 * would be noise that helps the clinician in no way. The model still sees the active-order records
-	 * in the chart, and the safety validator reads active orders directly, so neither the answer's
-	 * medication awareness nor the safety chips depend on this injection.
+	 * chemical subgroup or a curated cross-reactivity group — a real duplicate-therapy /
+	 * cross-reactivity concern). An active medication unrelated to the asked-about drug — or a
+	 * question that names no drug at all — is not injected: it would be noise that helps the
+	 * clinician in no way. The model still sees the active-order records in the chart, and the
+	 * safety validator reads active orders directly, so neither the answer's medication awareness
+	 * nor the safety chips depend on this injection.
 	 */
 	List<DrugReference> matchingEntries(PatientClinicalContext context, String question) {
 		Map<String, DrugReference> byId = new LinkedHashMap<String, DrugReference>();
@@ -133,11 +144,12 @@ public class DrugReferenceInjector {
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_INJECT_FROM_ORDERS,
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_INJECT_FROM_ORDERS);
 		if (fromOrders && context != null) {
+			List<CrossReactivityGroup> groups = drugReferenceService.getCrossReactivityGroups();
 			for (DrugReference ref : drugReferenceService.findByActiveOrders(context)) {
 				// Only when the question names a drug this active order is clinically related to. A
 				// question naming no drug has no relevance anchor, so nothing is injected here
 				// (relatedToAny returns false for an empty questionDrugs).
-				if (relatedToAny(ref, questionDrugs)) {
+				if (relatedToAny(ref, questionDrugs, groups)) {
 					byId.put(ref.getId(), ref);
 				}
 			}
@@ -146,16 +158,20 @@ public class DrugReferenceInjector {
 		return new ArrayList<DrugReference>(byId.values());
 	}
 
-	/** @return true when {@code order} shares an ATC level-4 subgroup with any of {@code questionDrugs}
-	 *          — a genuine class relationship (duplicate therapy / cross-reactivity) that makes the
-	 *          active-order reference relevant to the question. An order with no ATC codes is unrelated. */
-	private static boolean relatedToAny(DrugReference order, List<DrugReference> questionDrugs) {
+	/** @return true when {@code order} shares an ATC level-4 subgroup — or, failing that, a curated
+	 *          cross-reactivity group — with any of {@code questionDrugs}: a genuine class/family
+	 *          relationship (duplicate therapy / cross-reactivity) that makes the active-order
+	 *          reference relevant to the question. An order with no ATC codes is unrelated. */
+	private static boolean relatedToAny(DrugReference order, List<DrugReference> questionDrugs,
+			List<CrossReactivityGroup> groups) {
 		Set<String> orderSubgroups = order.atcSubgroups();
-		if (orderSubgroups.isEmpty()) {
+		List<CrossReactivityGroup> orderGroups = CrossReactivityGroup.groupsOf(order, groups);
+		if (orderSubgroups.isEmpty() && orderGroups.isEmpty()) {
 			return false;
 		}
 		for (DrugReference q : questionDrugs) {
-			if (!java.util.Collections.disjoint(orderSubgroups, q.atcSubgroups())) {
+			if (!Collections.disjoint(orderSubgroups, q.atcSubgroups())
+					|| CrossReactivityGroup.sharedGroup(orderGroups, q) != null) {
 				return true;
 			}
 		}
@@ -164,8 +180,8 @@ public class DrugReferenceInjector {
 
 	/**
 	 * Renders one reference entry into the citable line the LLM sees. Numeric dosing
-	 * is included only when an age band matches {@code age}; contraindications and
-	 * interactions are always rendered.
+	 * is included only when an age band matches {@code age}; prose warnings,
+	 * contraindications and interactions are always rendered.
 	 */
 	static String render(DrugReference ref, Integer age) {
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
@@ -173,11 +189,14 @@ public class DrugReferenceInjector {
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {
 			paren.append(ref.getDrugClass());
 		}
-		if (!ref.getAtcCodes().isEmpty()) {
+		// Normalized (not raw) codes: null/blank elements in an operator-authored file must not
+		// leak a literal "null" into the record the LLM cites.
+		Set<String> atcCodes = ref.normalizedAtcCodes();
+		if (!atcCodes.isEmpty()) {
 			if (paren.length() > 0) {
 				paren.append("; ");
 			}
-			paren.append("ATC ").append(String.join(", ", ref.getAtcCodes()));
+			paren.append("ATC ").append(String.join(", ", atcCodes));
 		}
 		if (paren.length() > 0) {
 			sb.append(" (").append(paren).append(")");
@@ -197,26 +216,49 @@ public class DrugReferenceInjector {
 			sb.append(".");
 		}
 
-		if (!ref.getContraindications().isEmpty()) {
-			List<String> notes = new ArrayList<String>();
-			for (DrugReference.Contraindication c : ref.getContraindications()) {
-				notes.add(c.getNote() != null ? c.getNote() : c.getToken());
-			}
-			sb.append(" Contraindicated with: ").append(String.join("; ", notes)).append(".");
+		// The dataset is operator-editable: a null/blank element in any section must degrade to
+		// "skip that element" — never a thrown exception (which would fail the whole query) and
+		// never a literal "null" in the record the LLM cites.
+		List<String> warningLines = new ArrayList<String>();
+		for (String warning : ref.getWarnings()) {
+			addIfPresent(warningLines, warning);
+		}
+		if (!warningLines.isEmpty()) {
+			sb.append(" Warnings: ").append(String.join("; ", warningLines)).append(".");
 		}
 
-		if (!ref.getInteractions().isEmpty()) {
-			List<String> notes = new ArrayList<String>();
-			for (DrugReference.Interaction i : ref.getInteractions()) {
-				String label = i.getToken() != null ? i.getToken() : i.getAtc();
-				notes.add(i.getNote() != null ? label + " (" + i.getNote() + ")" : label);
+		List<String> contraindicationNotes = new ArrayList<String>();
+		for (DrugReference.Contraindication c : ref.getContraindications()) {
+			addIfPresent(contraindicationNotes, ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()));
+		}
+		if (!contraindicationNotes.isEmpty()) {
+			sb.append(" Contraindicated with: ").append(String.join("; ", contraindicationNotes)).append(".");
+		}
+
+		List<String> interactionNotes = new ArrayList<String>();
+		for (DrugReference.Interaction i : ref.getInteractions()) {
+			String label = ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
+			String note = ChartSearchAiUtils.firstNonBlank(i.getNote());
+			if (label != null) {
+				addIfPresent(interactionNotes, note != null ? label + " (" + note + ")" : label);
+			} else {
+				addIfPresent(interactionNotes, note);
 			}
-			sb.append(" Interactions: ").append(String.join("; ", notes)).append(".");
+		}
+		if (!interactionNotes.isEmpty()) {
+			sb.append(" Interactions: ").append(String.join("; ", interactionNotes)).append(".");
 		}
 
 		if (ref.getSource() != null && !ref.getSource().isEmpty()) {
 			sb.append(" Source: ").append(ref.getSource()).append(".");
 		}
 		return sb.toString();
+	}
+
+	/** Adds {@code value} to {@code out} only when it is non-null and non-blank. */
+	private static void addIfPresent(List<String> out, String value) {
+		if (!ChartSearchAiUtils.isBlank(value)) {
+			out.add(value.trim());
+		}
 	}
 }

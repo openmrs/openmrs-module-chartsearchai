@@ -408,16 +408,8 @@ public class ChartSearchAiUtils {
 	 *         missing admin service, an unparseable value, or a negative value.
 	 */
 	public static int getReasoningMaxChars() {
-		try {
-			String value = org.openmrs.api.context.Context.getAdministrationService()
-					.getGlobalProperty(ChartSearchAiConstants.GP_LLM_REASONING_MAX_CHARS,
-							String.valueOf(ChartSearchAiConstants.DEFAULT_LLM_REASONING_MAX_CHARS));
-			int parsed = Integer.parseInt(value.trim());
-			return Math.max(parsed, 0);
-		}
-		catch (RuntimeException e) {
-			return ChartSearchAiConstants.DEFAULT_LLM_REASONING_MAX_CHARS;
-		}
+		return Math.max(getIntGlobalProperty(ChartSearchAiConstants.GP_LLM_REASONING_MAX_CHARS,
+				ChartSearchAiConstants.DEFAULT_LLM_REASONING_MAX_CHARS), 0);
 	}
 
 	/**
@@ -483,6 +475,43 @@ public class ChartSearchAiUtils {
 		catch (RuntimeException e) {
 			return defaultValue;
 		}
+	}
+
+	/**
+	 * Reads an integer global property, failing safe to {@code defaultValue} when the value is
+	 * unset/blank/unparseable or no admin service is available. The int counterpart of
+	 * {@link #getBooleanGlobalProperty}.
+	 */
+	public static int getIntGlobalProperty(String property, int defaultValue) {
+		try {
+			String value = org.openmrs.api.context.Context.getAdministrationService()
+					.getGlobalProperty(property, String.valueOf(defaultValue));
+			if (value == null || value.trim().isEmpty()) {
+				return defaultValue;
+			}
+			return Integer.parseInt(value.trim());
+		}
+		catch (RuntimeException e) {
+			return defaultValue;
+		}
+	}
+
+	/** @return true when {@code value} is null or contains only whitespace — the one blank-string
+	 *          predicate shared by the drug-reference parse boundaries and renderers. */
+	public static boolean isBlank(String value) {
+		return value == null || value.trim().isEmpty();
+	}
+
+	/** @return the first non-blank of {@code values} (as given, untrimmed), or null when none —
+	 *          the one note-or-token / label coalescer shared by the drug-reference renderer and
+	 *          validator so blank-vs-null handling cannot drift between them. */
+	public static String firstNonBlank(String... values) {
+		for (String value : values) {
+			if (!isBlank(value)) {
+				return value;
+			}
+		}
+		return null;
 	}
 
 	/**

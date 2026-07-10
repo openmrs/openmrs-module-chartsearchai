@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -45,6 +46,8 @@ public class DrugReference {
 	private List<String> atcCodes = Collections.emptyList();
 
 	private List<AgeBand> ageBands = Collections.emptyList();
+
+	private List<String> warnings = Collections.emptyList();
 
 	private List<Interaction> interactions = Collections.emptyList();
 
@@ -100,13 +103,31 @@ public class DrugReference {
 	 *         code" identically; like {@link #formatNumber} this keeps one rule in one place.
 	 */
 	public Set<String> normalizedAtcCodes() {
+		return normalizeAtcTokens(atcCodes);
+	}
+
+	/**
+	 * The one normalisation for ATC tokens — entry codes here, group prefixes in
+	 * {@link CrossReactivityGroup#normalizedAtcPrefixes()}, and the patient's active-order codes in
+	 * {@link PatientClinicalContext}: trim, upper-case ({@link Locale#ROOT}), drop null/blank,
+	 * de-duplicate. One shared definition so every ATC comparison compares like with like; if two
+	 * sides normalized differently, class and cross-reactivity matching would silently stop matching.
+	 */
+	static Set<String> normalizeAtcTokens(Collection<String> tokens) {
 		Set<String> out = new LinkedHashSet<String>();
-		for (String code : atcCodes) {
-			if (code != null && !code.trim().isEmpty()) {
-				out.add(code.trim().toUpperCase(Locale.ROOT));
+		for (String token : tokens) {
+			String normalized = normalizeAtcToken(token);
+			if (normalized != null) {
+				out.add(normalized);
 			}
 		}
 		return out;
+	}
+
+	/** Single-token counterpart of {@link #normalizeAtcTokens}: the trimmed, upper-cased
+	 *  ({@link Locale#ROOT}) form of {@code token}, or {@code null} when blank. */
+	static String normalizeAtcToken(String token) {
+		return token == null || token.trim().isEmpty() ? null : token.trim().toUpperCase(Locale.ROOT);
 	}
 
 	/** An ATC level-4 (chemical subgroup) code is the {@value #ATC_SUBGROUP_PREFIX_LENGTH}-character
@@ -137,6 +158,20 @@ public class DrugReference {
 
 	public void setAgeBands(List<AgeBand> ageBands) {
 		this.ageBands = ageBands != null ? ageBands : Collections.<AgeBand> emptyList();
+	}
+
+	/**
+	 * @return free-text prose warnings (e.g. a Reye-syndrome caution) rendered verbatim into the
+	 *         injected, citable reference record for the LLM to ground on. Display-only: they carry
+	 *         no matchable token, so the deterministic validator never fires on them — enforceable
+	 *         facts belong in {@link #getContraindications()}/{@link #getInteractions()}/age bands.
+	 */
+	public List<String> getWarnings() {
+		return warnings;
+	}
+
+	public void setWarnings(List<String> warnings) {
+		this.warnings = warnings != null ? warnings : Collections.<String> emptyList();
 	}
 
 	public List<Interaction> getInteractions() {
@@ -225,9 +260,10 @@ public class DrugReference {
 	}
 
 	/**
-	 * An age-banded dosing rule. {@code maxDailyDoseMg} of 0 means "no safe
-	 * pediatric maximum is published for this band" — the validator treats a 0
-	 * ceiling as "do not surface a numeric dose" rather than "unlimited".
+	 * An age-banded dosing rule. {@code maxDailyDoseMg} of 0 means "no published daily maximum
+	 * for this band" — never "unlimited": the renderer omits the daily figure (and says so), the
+	 * validator's daily arm stays silent for the band, and the weight-aware per-dose arm still
+	 * runs when {@code mgPerKgMax} is set and a fresh weight is on record.
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class AgeBand {

@@ -75,6 +75,20 @@ public class DrugReferenceServiceTest {
 	}
 
 	@Test
+	public void findByActiveOrdersNormalizesCaseAndWhitespaceOfOrderCodes() {
+		// Active-order ATC codes come from operator-entered concept mappings, so they arrive in
+		// arbitrary case/padding. Both sides of the comparison must normalize by the one shared
+		// rule (DrugReference.normalizeAtcTokens) — this pins the order side against drift.
+		Set<String> atc = new LinkedHashSet<String>();
+		atc.add("  m01ae01 ");
+		PatientClinicalContext ctx = new PatientClinicalContext(40, Collections.<String> emptySet(),
+				atc, Collections.<String> emptySet(), Collections.<String> emptySet());
+		List<DrugReference> hits = service().findByActiveOrders(ctx);
+		assertTrue(hits.stream().anyMatch(r -> "ibuprofen".equals(r.getId())),
+				"a lower-cased, whitespace-padded order code must still resolve to ibuprofen");
+	}
+
+	@Test
 	public void lookupByTokenResolvesAlias() {
 		DrugReference ref = service().lookupByToken("advil");
 		assertNotNull(ref);

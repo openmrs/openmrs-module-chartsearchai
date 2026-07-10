@@ -319,6 +319,12 @@ public class ChartSearchAiConstants {
 	/** Value of {@link #GP_DRUG_REFERENCE_SOURCE_FORMAT} that selects the ATC classification source. */
 	public static final String DRUG_REFERENCE_SOURCE_ATC = "atc";
 
+	/** Path (relative to the OpenMRS application data directory) to the curated cross-reactivity
+	 *  groups dataset, loaded alongside EITHER source format. When absent, the groups bundled on
+	 *  the module classpath are used. Closes the ADR Decision 24 cross-branch boundary as data. */
+	public static final String GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH =
+			"chartsearchai.drugReference.crossReactivityGroupsFilePath";
+
 	/** Patient-driven injection: inject reference entries that match an active order's ATC code. */
 	public static final String GP_DRUG_REFERENCE_INJECT_FROM_ORDERS = "chartsearchai.drugReference.injectFromOrders";
 
@@ -349,6 +355,30 @@ public class ChartSearchAiConstants {
 			"chartsearchai.drugSafety.warnOnContraindications";
 
 	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS = true;
+
+	/** Concept UUID (a kg-valued numeric concept) used to read the patient's most recent weight for
+	 *  the weight-aware per-dose overdose check. The value {@link #DRUG_SAFETY_WEIGHT_CONCEPT_DISABLED}
+	 *  disables the weight-aware arm; blank/absent falls back to the default like every other GP
+	 *  (OpenMRS normalizes a blanked GP value to null, so blank cannot mean "off"). Default: the
+	 *  reference (CIEL) "Weight (kg)" concept, 5089 — CIEL identifiers are the concept id padded
+	 *  with 'A' to the standard 36-character uuid length (live-verified against a real CIEL
+	 *  dictionary). */
+	public static final String GP_DRUG_SAFETY_WEIGHT_CONCEPT_UUID = "chartsearchai.drugSafety.weightConceptUuid";
+
+	public static final String DEFAULT_DRUG_SAFETY_WEIGHT_CONCEPT_UUID =
+			"5089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+	/** Sentinel value of {@link #GP_DRUG_SAFETY_WEIGHT_CONCEPT_UUID} that disables the weight-aware
+	 *  arm (case-insensitive). An explicit sentinel — not blank — because a blanked GP reads back as
+	 *  null and is indistinguishable from an absent one without a privilege-gated object read. */
+	public static final String DRUG_SAFETY_WEIGHT_CONCEPT_DISABLED = "none";
+
+	/** Maximum age, in days, of a weight observation for it to drive the per-dose overdose check —
+	 *  pediatric weight changes fast, and a stale (lower) weight would over-report mg/kg (a false
+	 *  positive, the direction this feature never takes). */
+	public static final String GP_DRUG_SAFETY_WEIGHT_MAX_AGE_DAYS = "chartsearchai.drugSafety.weightMaxAgeDays";
+
+	public static final int DEFAULT_DRUG_SAFETY_WEIGHT_MAX_AGE_DAYS = 90;
 
 	/**
 	 * When {@code > 0}, the {@code reasoning} scratchpad in the chart-answer schema is capped at

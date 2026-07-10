@@ -11,14 +11,9 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -35,9 +30,7 @@ import org.junit.jupiter.api.Test;
 public class DrugSafetyValidatorTest {
 
 	private DrugSafetyValidator validator() {
-		DrugSafetyValidator validator = new DrugSafetyValidator();
-		validator.setDrugReferenceService(new DrugReferenceService());
-		return validator;
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
 	}
 
 	/**
@@ -47,60 +40,28 @@ public class DrugSafetyValidatorTest {
 	 * class layer exists for.
 	 */
 	private DrugSafetyValidator atcValidator() throws IOException {
-		DrugReferenceService svc = new DrugReferenceService();
-		try (InputStream in = getClass().getClassLoader().getResourceAsStream("atc/atc-sample.tsv")) {
-			assertNotNull(in, "ATC sample resource should be on the test classpath");
-			svc.setEntries(AtcDrugReferenceSource.parse(in));
-		}
-		DrugSafetyValidator validator = new DrugSafetyValidator();
-		validator.setDrugReferenceService(svc);
-		return validator;
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.atcService(false));
 	}
 
 	private PatientClinicalContext withActiveAtc(Integer age, Set<String> activeAtcCodes) {
-		return new PatientClinicalContext(age, Collections.<String> emptySet(), activeAtcCodes,
-				Collections.<String> emptySet(), Collections.<String> emptySet());
+		return DrugReferenceTestSupport.ctx(age, null, null, activeAtcCodes, null, null);
 	}
 
 	private boolean detailContains(List<SafetyWarning> warnings, String type, String drug, String... needles) {
-		for (SafetyWarning w : warnings) {
-			if (!w.getType().equals(type) || !w.getDrug().equalsIgnoreCase(drug)) {
-				continue;
-			}
-			boolean all = true;
-			for (String needle : needles) {
-				if (!w.getDetail().toLowerCase().contains(needle.toLowerCase())) {
-					all = false;
-					break;
-				}
-			}
-			if (all) {
-				return true;
-			}
-		}
-		return false;
+		return DrugReferenceTestSupport.detailContains(warnings, type, drug, needles);
 	}
 
 	private PatientClinicalContext ctx(Integer age, Set<String> drugs, Set<String> allergies,
 			Set<String> conditions) {
-		return new PatientClinicalContext(age,
-				drugs == null ? Collections.<String> emptySet() : drugs,
-				Collections.<String> emptySet(),
-				allergies == null ? Collections.<String> emptySet() : allergies,
-				conditions == null ? Collections.<String> emptySet() : conditions);
+		return DrugReferenceTestSupport.ctx(age, null, drugs, null, allergies, conditions);
 	}
 
 	private boolean has(List<SafetyWarning> warnings, String type, String drugContains) {
-		for (SafetyWarning w : warnings) {
-			if (w.getType().equals(type) && w.getDrug().toLowerCase().contains(drugContains.toLowerCase())) {
-				return true;
-			}
-		}
-		return false;
+		return DrugReferenceTestSupport.has(warnings, type, drugContains);
 	}
 
 	private Set<String> set(String... values) {
-		return new HashSet<String>(Arrays.asList(values));
+		return DrugReferenceTestSupport.set(values);
 	}
 
 	@Test

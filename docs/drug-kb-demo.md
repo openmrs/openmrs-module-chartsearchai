@@ -305,12 +305,13 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 
 | Field | Type | Read by | Purpose / notes |
 |-------|------|---------|-----------------|
-| `id` | string | injection | Stable identifier; surfaced as the citation's `resourceUuid` (e.g. `naproxen`). Keep unique. |
-| `name` | string | injection, validator | Display name shown in the injected reference and in `safetyWarnings[].drug`. |
+| `id` | string | injection | **Required** — an entry with a blank `id` is dropped at load (it has no stable citation `resourceUuid`). Keep unique (e.g. `naproxen`). |
+| `name` | string | injection, validator | **Required** — an entry with a blank `name` is dropped at load (it would render a null display name). Shown in the injected reference and in `safetyWarnings[].drug`. |
 | `drugClass` | string | injection | Human-readable class label rendered in the reference text (e.g. "NSAID"). Informational only — class **logic** uses `atcCodes`, not this. |
 | `aliases` | string[] | injection, validator | Lowercase names matched **whole-word, case-insensitive** against the question and the answer ("advil" matches "is advil safe?"; "amox" won't spuriously match). Drives question-driven injection and which drug a warning is attributed to. |
 | `atcCodes` | string[] | injection, validator | WHO-ATC codes. Used two ways: **exact code** → order-driven injection / interaction match against an active order's ATC; **level-4 prefix** (`M01AE01` → `M01AE`) → the class-based cross-reactivity & duplicate-therapy checks. Two drugs are "same class" iff their level-4 subgroups intersect. |
 | `ageBands` | object[] | injection, overdose | Age-banded dosing (below). The band whose range contains the patient's age is selected; **no matching band → no numeric dosing rendered and no overdose check** (this is the age-gating that stops a pediatric max being shown for an adult). |
+| `warnings` | string[] | injection | Optional free-text prose warnings (e.g. a Reye-syndrome caution) rendered verbatim into the injected, citable record so the LLM can ground and cite them. **Display-only** — no matchable token, so the validator never fires on them; enforceable facts belong in the rule fields. |
 | `interactions` | object[] | interaction warning | Drug–drug interaction rules (below). |
 | `contraindications` | object[] | contraindication warning | Allergy/condition rules (below). |
 | `source` | string | injection | Provenance string rendered in the reference text. |
@@ -320,8 +321,8 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | Field | Type | Purpose / notes |
 |-------|------|-----------------|
 | `minYears`, `maxYears` | number | Inclusive age range (years) the band applies to. |
-| `mgPerKgMin`, `mgPerKgMax` | number | Per-dose mg/kg range rendered in the reference text. |
-| `maxDailyDoseMg` | number | Daily maximum for the overdose check. **`0` is a sentinel meaning "no published maximum"** — dosing is still rendered but no overdose warning fires for that band. The overdose parser reads the literal unit `mg` only (grams are not flagged). |
+| `mgPerKgMin`, `mgPerKgMax` | number | Per-dose mg/kg range rendered in the reference text. `mgPerKgMax` also drives the **weight-aware per-dose overdose check**: with a fresh weight on record (see the `weightConceptUuid` / `weightMaxAgeDays` GPs), a per-administration dose above `mgPerKgMax` × weight is flagged. |
+| `maxDailyDoseMg` | number | Daily maximum for the overdose check. **`0` is a sentinel meaning "no published maximum"** — dosing is still rendered and the daily arm stays silent for that band, though the weight-aware per-dose arm still runs when `mgPerKgMax` is set. The overdose parser reads the literal unit `mg` only (grams are not flagged). |
 
 **`interactions[]` object**
 
@@ -344,6 +345,46 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 > cross-reactivity and duplicate-therapy warnings from ATC class membership — which is how the
 > rule-less `atc` source format produces warnings at all.
 
+## Cross-reactivity groups file schema
+
+A second, independent data file (`chartsearchai.drugReference.crossReactivityGroupsFilePath`,
+bundled fallback `cross-reactivity-groups.json`) loaded alongside **either** source format. It
+carries the cross-*branch* family knowledge ATC's tree cannot express (ADR Decision 27). The
+top-level file is `{ "version": ..., "description": ..., "groups": [ ... ] }`.
+
+**`groups[]` object**
+
+| Field | Type | Purpose / notes |
+|-------|------|-----------------|
+| `name` | string | Family name shown in the warning (e.g. `NSAID`). |
+| `note` | string | Informational — documents why the group exists; not rendered in warnings. |
+| `atcPrefixes` | string[] | ATC code prefixes, **any level** (`M01AE`, `N02BA`, or broader like `M01A`) — the data chooses each family's breadth. A drug is a member when any of its `atcCodes` starts with any prefix. |
+
+Two drugs sharing a group — but **no** ATC level-4 subgroup (the more specific match always
+wins, one warning per fact) — raise cross-reactivity contraindications against allergies and
+additive / duplicate-class interaction warnings against active orders, and make an active order
+relevant enough for its reference to be injected on a related question. The bundled seed is one
+NSAID group spanning `M01AE` + `N02BA` (the aspirin↔ibuprofen case) — expand per deployment.
+Editing the file takes effect on the next module restart (same lazy-cache contract as the
+entry dataset).
+
+> **Not exercised by this demo's seed (Decision 27 additions).** The cheat-sheet below predates
+> the weight-aware per-dose check and the cross-branch group path, and the seed gives Margaret
+> neither a weight obs nor an `N02BA`-mapped order — so neither new mechanism fires here (both
+> are pinned by `evals/drug-reference/drug-safety-eval.json` and the context tests). To see them
+> live: record a recent Weight (kg) obs for the patient and ask a per-dose question (e.g.
+> *"Can she take ibuprofen 600 mg every 8 hours?"* — flags once the stated dose exceeds
+> `mgPerKgMax` × weight; note the overdose arms read the dose from the **answer**, so use the
+> "repeat back the proposed order" phrasing from the [overdose caveat](#overdose-caveat) on a
+> clean patient), and map the Aspirin concept to ATC `N02BA01` for the cross-branch group chip.
+> The committed `atc_drugkb.sql` maps only the J01CA/J01GB antibiotics, but the long-lived
+> :8081 instance **already carries** an `N02BA01` mapping on Aspirin — live-verified 2026-07-10:
+> the ibuprofen query there shows an extra *"same cross-reactivity group (NSAID) as active order
+> N02BA01 — possible additive or duplicate-class therapy"* chip (the bare code appears because
+> no KB entry carries `N02BA01`). Both Decision-27 paths were live-verified end-to-end that day
+> (weight arm: `~1000 mg exceeds the 15 mg/kg per-dose maximum (~750 mg) … weight 50 kg`,
+> driven by the bundled CIEL default with no GP row).
+
 ---
 
 ## Query cheat-sheet
@@ -353,7 +394,7 @@ query surfaces only the warnings for the drug named.
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|
-| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication (ibuprofen allergy, GI bleed, peptic ulcer), "recorded allergy to Ibuprofen", interaction (warfarin, aspirin) |
+| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication (ibuprofen allergy, GI bleed, peptic ulcer), "recorded allergy to Ibuprofen", interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), a "same cross-reactivity group (NSAID)" interaction |
 | *Is amoxicillin safe for this patient?* | injected `amoxicillin`; contraindication (penicillin-class), interaction (methotrexate), **duplicate therapy J01CA** (Ampicillin) |
 | *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "recorded allergy to Paracetamol", interaction (warfarin) |
 | *Is gentamicin appropriate for this patient?* | injected `gentamicin`; contraindication (aminoglycoside allergy, renal impairment), interaction (furosemide), **duplicate therapy J01GB** (Amikacin) |

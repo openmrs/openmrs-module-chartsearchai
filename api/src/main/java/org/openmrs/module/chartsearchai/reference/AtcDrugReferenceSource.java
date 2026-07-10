@@ -44,7 +44,8 @@ import org.slf4j.LoggerFactory;
  * order that shares a drug's ATC level-4 subgroup), which is what turns this rule-less
  * classification into safety warnings. ATC's tree does not capture cross-<em>branch</em>
  * pharmacological cross-reactivity (e.g. aspirin {@code N02BA01} vs ibuprofen
- * {@code M01AE01}), so that linkage needs curated data, not ATC. See ADR Decision 24.
+ * {@code M01AE01}); that linkage is curated data — the {@link CrossReactivityGroup}s
+ * loaded alongside this source (ADR Decision 27), not ATC itself. See ADR Decision 24.
  *
  * <p>Unlike {@link JsonDrugReferenceSource} there is no bundled classpath fallback:
  * the operator points {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH}
@@ -113,11 +114,12 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 				if (parts.length < 2) {
 					continue;
 				}
-				// Normalise the code to upper case: ATC export formats (e.g. RxNorm/ATC crosswalks)
-				// are not all upper case, and the rest of the pipeline compares ATC codes upper-cased.
-				String code = parts[0].trim().toUpperCase(Locale.ROOT);
+				// Normalise the code by the one shared ATC rule: export formats (e.g. RxNorm/ATC
+				// crosswalks) are not all upper case, and the rest of the pipeline compares
+				// ATC codes in normalized form.
+				String code = DrugReference.normalizeAtcToken(parts[0]);
 				String name = parts[1].trim();
-				if (!code.isEmpty() && !name.isEmpty()) {
+				if (code != null && !name.isEmpty()) {
 					names.put(code, name);
 				}
 			}

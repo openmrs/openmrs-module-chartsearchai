@@ -1793,6 +1793,102 @@ This buys decoupling, robustness against method-name drift, and consistency with
 - **−** No coverage of non-service writes (unchanged from AOP); the TTL must stay finite.
 - **−** Verified by parity unit tests + live end-to-end checks; no in-memory CI test asserts the core events fire (querystore proves that generic wiring on the same core).
 
+## Decision 27: Drug-safety parity follow-through — weight-aware dosing, curated cross-reactivity groups, prose warnings
+
+**Status: Accepted** (July 2026) — implemented. Extends [Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation) and [Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets).
+
+### Context
+
+The drug-reference feature adapted its knowledge-base data from the
+[anichiti/openmrs_chatbot](https://github.com/anichiti/openmrs_chatbot) project (see
+[drug-knowledge-base-comparison.md](drug-knowledge-base-comparison.md)). A functional
+gap analysis of that origin identified exactly three capabilities that both survive
+chartsearchai's constraints (local-only, knowledge-as-data-not-code, warnings-never-blocks,
+single pipeline) and add real safety value — everything else there was either already
+ported in stronger form, display-only/broken at the source, or constraint-violating
+(dose *recommendation*, live RxNorm/openFDA/RxClass APIs, excipient matching).
+
+1. **Weight-aware per-dose overdose validation.** The validator compared the answer's
+   daily total against the absolute `maxDailyDoseMg` only; the dataset's `mgPerKgMin/Max`
+   values were rendered for the LLM but never enforced. For a small patient, a
+   per-administration dose can be far above the per-kg ceiling while the daily total stays
+   under the absolute one — and bands that publish mg/kg dosing with *no* daily maximum
+   (ibuprofen 0–1y) previously supported no overdose check at all.
+2. **Cross-branch cross-reactivity.** Decision 24 documented the boundary honestly: ATC's
+   tree cannot link aspirin (`N02BA01`, salicylates) to an ibuprofen (`M01AE01`) allergy —
+   "that linkage needs curated data, not classification."
+3. **Prose warnings.** The origin's `major_warnings` (Reye-syndrome-type cautions) were
+   deliberately dropped in Decision 23 because they carry no matchable token; that also
+   meant the LLM had no citable source for them.
+
+### Decision
+
+Three additive, data-driven extensions:
+
+1. **Weight-aware per-dose check** (`DrugSafetyValidator`). `PatientClinicalContext` gains
+   the patient's most recent weight (kg), read by the builder from the concept configured in
+   `chartsearchai.drugSafety.weightConceptUuid` (default: the reference CIEL "Weight (kg)"
+   concept 5089; the `none` sentinel turns the arm off — a *blanked* GP reads back as null,
+   indistinguishable from absent via the privilege-free reader, so blank falls back to the
+   default like every other GP) and only when newer than
+   `chartsearchai.drugSafety.weightMaxAgeDays` (default 90 — a stale, typically lower,
+   pediatric weight would over-report mg/kg, the false-positive direction this feature never
+   takes). When a weight is known, a per-administration dose above the age band's
+   `mgPerKgMax` × weight is flagged. Both overdose arms consume the **same** clause-scoped,
+   alias-anchored, limit-cue-guarded attribution walk (refactored into one shared
+   `attributedDoses` pass), so a dose counts for either arm under identical conditions.
+   **One warning per drug: the published daily ceiling wins when both arms trip.**
+2. **Curated cross-reactivity groups** (`cross-reactivity-groups.json`, GP
+   `chartsearchai.drugReference.crossReactivityGroupsFilePath`, bundled fallback). A group
+   is a named drug family expressed as ATC code *prefixes* (any level, so data chooses the
+   breadth); membership = any of a drug's ATC codes starts with any prefix. Loaded
+   **independently of the entry source** — deliberately not a `DrugReferenceSource` — so the
+   rule-less `atc` format gains cross-branch family reasoning from the same file. The
+   validator's class-based contraindication and interaction checks fall back to a shared
+   group **only when no ATC subgroup is shared** (most-specific-match-wins; a
+   subgroup+group double-match warns once), and the injector's order-relevance scoping
+   accepts group-related orders. The bundled seed is minimal — one NSAID group spanning
+   `M01AE` + `N02BA`, exactly the branches Decision 24 named — expand per deployment.
+   The Decision 24 boundary tests remain true as written: they assert ATC **alone** does
+   not cross branches, and the test seam pins a groups-free dataset; the new tests assert
+   both sides (without the data: unlinked; with it: linked).
+3. **Prose `warnings` on entries.** An optional free-text list rendered verbatim into the
+   injected, citable reference record (between dosing and contraindications). Display-only
+   by design: no matchable token, so the deterministic validator never fires on it —
+   enforceable facts stay in the structured rule fields. This restores the origin's
+   Reye-syndrome-type content as something the LLM can ground and cite, without weakening
+   the validator's no-false-positive stance.
+
+### What remains deliberately unported
+
+- **Dose recommendation** (calculate a dose from weight+age): turns a validator into
+  prescribing decision support — a different liability class and the opposite of the
+  warnings-never-blocks posture. We validate the dose the answer states; we do not propose one.
+- **Live RxNorm / openFDA / RxClass APIs**: fails the local-only constraint; the curated
+  groups file is the offline, data-driven equivalent of the RxClass cross-reactivity lookup.
+- **Excipient / food-allergen matching**: needs per-product inactive-ingredient data that
+  neither OpenMRS nor any free local dataset carries, plus an allergen→excipient table that
+  would put clinical knowledge in code.
+
+### Trade-offs
+
+- **+** The per-kg arm catches small-patient overdoses the absolute ceiling cannot, and gives
+  bands without a published daily maximum their first overdose check; weight enters through
+  the same guarded, best-effort builder as every other patient read (missing/stale/misconfigured
+  weight degrades to the old behavior, never an error). The fetch-all-then-scan weight read is a
+  measured decision: ~2 ms/query at 500 obs on a real MariaDB (threshold 50 ms), so the
+  `mostRecentN=1` DB-side variant was rejected as unmeasurable win for real API risk.
+- **+** Cross-branch cross-reactivity with zero per-drug curation — one group line covers a
+  family, for both source formats, and the aspirin/ibuprofen case ships working out of the box.
+- **+** All three are data: operators extend the JSON files, no rebuild.
+- **−** Weight is assumed to be recorded in kilograms on the configured concept; a
+  pounds-valued concept would need a kg concept (or the `none` sentinel in the GP to
+  disable the arm — blanking it falls back to the default, like every GP).
+- **−** The bundled NSAID group is a deliberate minimal seed (two branches); real deployments
+  own the clinical breadth of their families, consistent with the no-medical-knowledge-in-code rule.
+- **−** Prose warnings are LLM-visible but not validator-enforced; a deployment wanting
+  enforcement must express the fact as a structured rule instead.
+
 ## Known limitations
 
 - **Counting questions**: LLMs are unreliable at precise counting tasks (e.g., "how many weight records in the last 10 years?"). The model may undercount or overcount even when all relevant records are provided. Larger, more capable models perform better at counting but are still not perfectly reliable. This is a fundamental limitation of LLM inference, not a retrieval issue. Questions that require exact counts are better suited to structured queries.

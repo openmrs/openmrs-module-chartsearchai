@@ -76,8 +76,8 @@ public class DrugSafetyEvalTest {
 		DrugSafetyValidator validator = new DrugSafetyValidator();
 		validator.setDrugReferenceService(new DrugReferenceService());
 
-		PatientClinicalContext ctx = new PatientClinicalContext(c.ageYears,
-				toSet(c.activeDrugs), Collections.<String> emptySet(),
+		PatientClinicalContext ctx = new PatientClinicalContext(c.ageYears, c.weightKg,
+				toSet(c.activeDrugs), toSet(c.activeDrugAtcCodes),
 				toSet(c.allergies), toSet(c.conditions));
 
 		List<SafetyWarning> warnings = validator.validate(c.answer, c.question, ctx);
@@ -117,7 +117,11 @@ public class DrugSafetyEvalTest {
 
 		public Integer ageYears;
 
+		public Double weightKg;
+
 		public List<String> activeDrugs;
+
+		public List<String> activeDrugAtcCodes;
 
 		public List<String> allergies;
 

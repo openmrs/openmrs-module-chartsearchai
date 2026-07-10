@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.scheduler.SchedulerService;
-import org.openmrs.scheduler.TaskDefinition;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -32,15 +31,21 @@ public class ChartSearchAiModuleActivatorTest extends BaseModuleContextSensitive
 		ChartSearchAiModuleActivator activator = new ChartSearchAiModuleActivator();
 
 		// Simulate an upgraded deployment: a pre-querystore version persisted this task, whose class
-		// (EmbeddingIndexTask) no longer exists. saveTaskDefinition only persists the row — it does
-		// not instantiate the class — so a now-deleted class name is fine to seed.
-		TaskDefinition legacy = new TaskDefinition();
-		legacy.setName(LEGACY_BACKFILL_TASK_NAME);
-		legacy.setDescription("Leftover backfill task from a pre-querystore version");
-		legacy.setTaskClass("org.openmrs.module.chartsearchai.api.EmbeddingIndexTask");
-		legacy.setStartOnStartup(false);
-		legacy.setRepeatInterval(0L);
-		scheduler.saveTaskDefinition(legacy);
+		// (EmbeddingIndexTask) no longer exists. Core's TaskDefinition validator now refuses to SAVE a
+		// definition whose class cannot be loaded, so the leftover row is seeded the way it actually
+		// comes to exist — as a plain DB row written by an old module version, which no validator ever
+		// re-runs on. (saveTaskDefinition can no longer construct this precondition.)
+		Context.getAdministrationService().executeSQL(
+				"INSERT INTO scheduler_task_config (name, description, schedulable_class, "
+						+ "repeat_interval, start_on_startup, started, created_by, date_created, uuid) "
+						+ "VALUES ('" + LEGACY_BACKFILL_TASK_NAME + "', "
+						+ "'Leftover backfill task from a pre-querystore version', "
+						+ "'org.openmrs.module.chartsearchai.api.EmbeddingIndexTask', "
+						+ "0, false, false, 1, '2020-01-01 00:00:00', "
+						+ "'aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb')",
+				false);
+		Context.flushSession();
+		Context.clearSession();
 		assertNotNull(scheduler.getTaskByName(LEGACY_BACKFILL_TASK_NAME),
 				"precondition: legacy task should be registered");
 

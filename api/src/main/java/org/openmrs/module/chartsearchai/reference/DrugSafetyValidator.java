@@ -34,13 +34,20 @@ import org.springframework.stereotype.Service;
  * things against the patient's clinical context and the reference table:
  * <ul>
  *   <li><b>Overdose</b> — a daily dose parsed from the answer exceeds the
- *       reference {@code maxDailyDoseMg} for the patient's age band.</li>
- *   <li><b>Interactions</b> — the drug interacts with one of the patient's active orders,
- *       either by a hand-authored rule OR by sharing an ATC chemical subgroup with an
- *       active order (duplicate-therapy reasoning).</li>
+ *       reference {@code maxDailyDoseMg} for the patient's age band; or, when the patient's
+ *       weight is known, a per-administration dose exceeds the band's {@code mgPerKgMax} ×
+ *       weight (the only possible check for bands publishing mg/kg dosing with no daily
+ *       maximum, and the tighter one for small patients). One warning per drug — the
+ *       published daily ceiling wins when both arms trip.</li>
+ *   <li><b>Interactions</b> — the drug interacts with one of the patient's active orders:
+ *       by a hand-authored rule, by sharing an ATC chemical subgroup with an active order
+ *       (duplicate-therapy reasoning), or — failing that — by sharing a curated
+ *       {@link CrossReactivityGroup} (cross-branch family overlap).</li>
  *   <li><b>Contraindications</b> — the drug is contraindicated by an active allergy or
- *       condition, either by a hand-authored rule OR by being the same drug as — or sharing
- *       an ATC chemical subgroup with — a recorded allergy (cross-reactivity reasoning).</li>
+ *       condition: by a hand-authored rule, by being the same drug as — or sharing an ATC
+ *       chemical subgroup with — a recorded allergy (cross-reactivity reasoning), or —
+ *       failing both — by sharing a curated {@link CrossReactivityGroup} with the allergy
+ *       (cross-branch cross-reactivity).</li>
  * </ul>
  *
  * <p>The rule-based checks fire on the entry's own curated {@code interactions}/
@@ -50,12 +57,16 @@ import org.springframework.stereotype.Service;
  * level-4 chemical subgroup ({@link DrugReference#ATC_SUBGROUP_PREFIX_LENGTH}), e.g. ibuprofen {@code M01AE01}
  * and naproxen {@code M01AE02} both {@code M01AE}. ATC's tree does not capture cross-branch
  * pharmacological cross-reactivity (aspirin {@code N02BA01} vs ibuprofen {@code M01AE01}); that
- * needs curated data, not classification. See ADR Decision 24.
+ * linkage is carried as curated data — {@link CrossReactivityGroup}s loaded alongside either
+ * source — and both class checks fall back to it when no ATC subgroup is shared, so the family
+ * reasoning stays data-driven end to end. See ADR Decision 24.
  *
- * <p>Conservative by design: overdose is flagged only when a daily total can be
- * computed AND it exceeds a published maximum; class-based interactions skip an active order
- * that is the <em>same</em> drug (restating existing therapy is not a duplicate). A
- * question or answer that names no reference drug produces no warnings (the no-false-positive case).
+ * <p>Conservative by design: overdose is flagged only when a value can be computed AND it
+ * exceeds a published maximum — a daily total over {@code maxDailyDoseMg}, or (only with a
+ * fresh recorded weight) a per-administration dose over {@code mgPerKgMax} × weight; class-based
+ * interactions skip an active order that is the <em>same</em> drug (restating existing therapy
+ * is not a duplicate). A question or answer that names no reference drug produces no warnings
+ * (the no-false-positive case).
  */
 @Service("chartSearchAi.drugSafetyValidator")
 public class DrugSafetyValidator {
@@ -105,17 +116,26 @@ public class DrugSafetyValidator {
 	 * Production entry point: validates an answer for a patient when the feature and the validator
 	 * are both enabled. {@code question} is the clinician's query — the safety check covers the drug
 	 * the question asks about even when the answer never names it (see the 3-arg seam). Reads the
-	 * patient's clinical context. Returns an empty list when disabled or nothing is flagged — never null.
+	 * patient's clinical context. Returns an empty list when disabled or nothing is flagged — never
+	 * null. Fails safe: the validator is an additive net that runs after the answer is produced, so
+	 * any unexpected error degrades to "no warnings" rather than failing a query whose answer
+	 * already exists.
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient) {
-		if (!ChartSearchAiUtils.isDrugReferenceEnabled()
-				|| !ChartSearchAiUtils.getBooleanGlobalProperty(
-						ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
-						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
+		try {
+			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
+					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
+							ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
+							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
+				return new ArrayList<SafetyWarning>();
+			}
+			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+			return validate(answer, question, context);
+		}
+		catch (RuntimeException e) {
+			log.warn("Drug-safety validation failed; returning no warnings — the answer path is never broken", e);
 			return new ArrayList<SafetyWarning>();
 		}
-		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-		return validate(answer, question, context);
 	}
 
 	/**
@@ -192,7 +212,8 @@ public class DrugSafetyValidator {
 			}
 			if (hit) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.getName(),
-						"contraindicated by " + against + ": " + noteOrToken(c.getNote(), c.getToken())));
+						"contraindicated by " + against + ": "
+								+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
 			}
 		}
 	}
@@ -204,7 +225,9 @@ public class DrugSafetyValidator {
 		}
 		for (DrugReference.Interaction i : ref.getInteractions()) {
 			if (context.hasActiveDrug(i.getToken(), i.getAtc())) {
-				String detail = "interacts with active order " + (i.getToken() != null ? i.getToken() : i.getAtc());
+				// A matched rule has a non-blank token or ATC, so the coalesce never yields null.
+				String detail = "interacts with active order "
+						+ ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
 				if (i.getNote() != null && !i.getNote().isEmpty()) {
 					detail += " — " + i.getNote();
 				}
@@ -218,8 +241,11 @@ public class DrugSafetyValidator {
 	 * authoritative classification source that carries no rules). For the drug {@code ref}
 	 * being checked, each recorded allergy token is resolved to a reference drug; a
 	 * warning fires when that allergen <em>is</em> {@code ref} (a recorded allergy to the very
-	 * drug being checked) or shares {@code ref}'s ATC level-4 subgroup (cross-reactivity).
-	 * Deduplicated per resolved allergen so several aliases of one allergy warn once.
+	 * drug being checked), shares {@code ref}'s ATC level-4 subgroup (cross-reactivity), or —
+	 * failing both — shares a curated {@link CrossReactivityGroup} (cross-<em>branch</em>
+	 * cross-reactivity, e.g. aspirin vs an ibuprofen allergy, which ATC's tree cannot express).
+	 * One warning per resolved allergen: the most specific match wins, and several aliases of
+	 * one allergy warn once.
 	 */
 	private void addClassContraindications(List<SafetyWarning> warnings, DrugReference ref,
 			PatientClinicalContext context) {
@@ -227,7 +253,9 @@ public class DrugSafetyValidator {
 			return;
 		}
 		Set<String> refClasses = ref.atcSubgroups();
-		if (refClasses.isEmpty()) {
+		List<CrossReactivityGroup> refGroups = CrossReactivityGroup.groupsOf(ref,
+				drugReferenceService.getCrossReactivityGroups());
+		if (refClasses.isEmpty() && refGroups.isEmpty()) {
 			return;
 		}
 		Set<DrugReference> seenAllergens = new LinkedHashSet<DrugReference>();
@@ -246,6 +274,13 @@ public class DrugSafetyValidator {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.getName(),
 						"same ATC class (" + shared + ") as the patient's allergy to " + allergen.getName()
 								+ " — possible cross-reactivity"));
+				continue;
+			}
+			CrossReactivityGroup group = CrossReactivityGroup.sharedGroup(refGroups, allergen);
+			if (group != null) {
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.getName(),
+						"same cross-reactivity group (" + group.getName() + ") as the patient's allergy to "
+								+ allergen.getName() + " — possible cross-reactivity"));
 			}
 		}
 	}
@@ -253,9 +288,12 @@ public class DrugSafetyValidator {
 	/**
 	 * Class-based interaction reasoning: warns when the drug {@code ref} being checked shares
 	 * an ATC level-4 subgroup with one of the patient's active orders (additive effects / duplicate
-	 * therapy). An order that is the <em>same</em> drug as {@code ref} (a shared exact ATC code) is
-	 * skipped — restating existing therapy is not a duplicate. Active orders carry ATC codes (the
-	 * builder maps them), so this matches on codes directly and names the order from the dataset.
+	 * therapy) or — failing that — a curated {@link CrossReactivityGroup} (a cross-branch family
+	 * overlap, e.g. ibuprofen recommended over an active aspirin order). An order that is the
+	 * <em>same</em> drug as {@code ref} (a shared exact ATC code) is skipped — restating existing
+	 * therapy is not a duplicate. Active orders carry ATC codes (the builder maps them), so this
+	 * matches on codes directly and names the order from the dataset; the most specific match wins,
+	 * so a subgroup + group double-match warns once.
 	 */
 	private void addClassInteractions(List<SafetyWarning> warnings, DrugReference ref,
 			PatientClinicalContext context) {
@@ -263,21 +301,31 @@ public class DrugSafetyValidator {
 			return;
 		}
 		Set<String> refClasses = ref.atcSubgroups();
-		if (refClasses.isEmpty()) {
+		List<CrossReactivityGroup> refGroups = CrossReactivityGroup.groupsOf(ref,
+				drugReferenceService.getCrossReactivityGroups());
+		if (refClasses.isEmpty() && refGroups.isEmpty()) {
 			return;
 		}
 		Set<String> refCodes = ref.normalizedAtcCodes();
 		for (String orderCode : context.getActiveDrugAtcCodes()) {
-			if (orderCode.length() < DrugReference.ATC_SUBGROUP_PREFIX_LENGTH) {
+			if (refCodes.contains(orderCode)) {
+				// Restating existing therapy is not a duplicate.
 				continue;
 			}
-			String orderClass = orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH);
-			if (!refClasses.contains(orderClass) || refCodes.contains(orderCode)) {
+			if (orderCode.length() >= DrugReference.ATC_SUBGROUP_PREFIX_LENGTH && refClasses
+					.contains(orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH))) {
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(),
+						"same ATC class (" + orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH)
+								+ ") as active order " + displayNameForAtcCode(orderCode)
+								+ " — possible duplicate therapy"));
 				continue;
 			}
-			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(),
-					"same ATC class (" + orderClass + ") as active order " + displayNameForAtcCode(orderCode)
-							+ " — possible duplicate therapy"));
+			CrossReactivityGroup group = CrossReactivityGroup.sharedGroupForCode(refGroups, orderCode);
+			if (group != null) {
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(),
+						"same cross-reactivity group (" + group.getName() + ") as active order "
+								+ displayNameForAtcCode(orderCode) + " — possible additive or duplicate-class therapy"));
+			}
 		}
 	}
 
@@ -306,36 +354,61 @@ public class DrugSafetyValidator {
 			PatientClinicalContext context, String lowerAnswer, List<DrugReference> allEntries) {
 		Integer age = context != null ? context.getAgeYears() : null;
 		DrugReference.AgeBand band = ref.bandForAge(age);
-		if (band == null || band.getMaxDailyDoseMg() <= 0) {
+		if (band == null) {
 			return;
 		}
-		Double dailyMg = parseDailyDoseMg(lowerAnswer, ref, allEntries);
-		if (dailyMg != null && dailyMg > band.getMaxDailyDoseMg()) {
+		Double weightKg = context != null ? context.getWeightKg() : null;
+		boolean dailyArm = band.getMaxDailyDoseMg() > 0;
+		boolean weightArm = weightKg != null && weightKg > 0 && band.getMgPerKgMax() > 0;
+		if (!dailyArm && !weightArm) {
+			return;
+		}
+		// One attribution walk feeds whichever arms apply.
+		List<AttributedDose> doses = attributedDoses(lowerAnswer, ref, allEntries);
+		if (dailyArm) {
+			Double dailyMg = parseDailyDoseMg(doses);
+			if (dailyMg != null && dailyMg > band.getMaxDailyDoseMg()) {
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, ref.getName(),
+						"stated dose ~" + DrugReference.formatNumber(dailyMg) + " mg/day exceeds the "
+								+ DrugReference.formatNumber(band.getMaxDailyDoseMg()) + " mg/day maximum for ages "
+								+ band.getMinYears() + "-" + band.getMaxYears()));
+				// One warning per drug: the published daily ceiling is the stronger statement,
+				// so the per-dose arm below is not stacked on top of it.
+				return;
+			}
+		}
+		if (!weightArm) {
+			return;
+		}
+		Double perDoseMg = parseMaxPerDoseMg(doses);
+		double perDoseLimitMg = band.getMgPerKgMax() * weightKg;
+		if (perDoseMg != null && perDoseMg > perDoseLimitMg) {
 			warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, ref.getName(),
-					"stated dose ~" + DrugReference.formatNumber(dailyMg) + " mg/day exceeds the "
-							+ DrugReference.formatNumber(band.getMaxDailyDoseMg()) + " mg/day maximum for ages "
-							+ band.getMinYears() + "-" + band.getMaxYears()));
+					"stated dose ~" + DrugReference.formatNumber(perDoseMg) + " mg exceeds the "
+							+ DrugReference.formatNumber(band.getMgPerKgMax()) + " mg/kg per-dose maximum (~"
+							+ DrugReference.formatNumber(perDoseLimitMg) + " mg) for the patient's weight "
+							+ DrugReference.formatNumber(weightKg) + " kg (ages " + band.getMinYears() + "-"
+							+ band.getMaxYears() + ")"));
 		}
 	}
 
 	/**
-	 * Parses the largest plausible daily dose (mg) the answer states <em>for {@code ref}</em>.
-	 *
-	 * <p>Attribution is clause-scoped and alias-anchored so one drug is never charged with another's
-	 * dose: the answer is split into clauses, and within each clause that names {@code ref} a
-	 * {@code N mg} value counts only when (a) it is not introduced by a limit cue — "maximum", "up
-	 * to", … make it a ceiling, not a prescribed dose — and (b) {@code ref}'s alias is the nearest
-	 * drug name to it (no other entry's alias sits strictly closer). The frequency is read from the
-	 * same clause, so a frequency stated for a different drug in a neighbouring sentence is never
-	 * applied. When a dose is found without a frequency, frequency 1 is assumed (conservative — it
-	 * cannot over-report a daily total).
+	 * The one clause-scoped, alias-anchored attribution walk both overdose arms consume, so a dose
+	 * counts for the daily and the per-dose check under exactly the same conditions. One drug is
+	 * never charged with another's dose: the answer is split into clauses, and within each clause
+	 * that names {@code ref} a {@code N mg} value counts only when (a) it is not introduced by a
+	 * limit cue — "maximum", "up to", … make it a ceiling, not a prescribed dose — and (b)
+	 * {@code ref}'s alias is the nearest drug name to it (no other entry's alias sits strictly
+	 * closer). The frequency is read from the same clause, so a frequency stated for a different
+	 * drug in a neighbouring sentence is never applied.
 	 *
 	 * <p>Known limitation (v1): only the literal unit {@code mg} is recognised; doses written in
 	 * grams ("1 g"), "mgs", or "milligrams" are not parsed and will not be flagged. That is the
 	 * conservative (miss, never false-positive) direction.
 	 */
-	static Double parseDailyDoseMg(String lowerAnswer, DrugReference ref, List<DrugReference> allEntries) {
-		Double best = null;
+	private static List<AttributedDose> attributedDoses(String lowerAnswer, DrugReference ref,
+			List<DrugReference> allEntries) {
+		List<AttributedDose> out = new ArrayList<AttributedDose>();
 		for (String clause : CLAUSE_DELIMITER.split(lowerAnswer)) {
 			if (!ref.matchesText(clause)) {
 				continue;
@@ -353,11 +426,51 @@ public class DrugSafetyValidator {
 				catch (NumberFormatException e) {
 					continue;
 				}
-				int freq = frequencyPerDay(clause);
-				double daily = perDose * (freq > 0 ? freq : 1);
-				if (best == null || daily > best) {
-					best = daily;
-				}
+				out.add(new AttributedDose(perDose, frequencyPerDay(clause)));
+			}
+		}
+		return out;
+	}
+
+	/** One dose statement attributed to a drug: per-administration mg + the clause's stated
+	 *  doses-per-day ({@code 0} = no frequency stated). */
+	private static final class AttributedDose {
+
+		final double perDoseMg;
+
+		final int frequencyPerDay;
+
+		AttributedDose(double perDoseMg, int frequencyPerDay) {
+			this.perDoseMg = perDoseMg;
+			this.frequencyPerDay = frequencyPerDay;
+		}
+	}
+
+	/**
+	 * @return the largest plausible daily dose (mg) among the attributed doses. When a dose is
+	 *         found without a frequency, frequency 1 is assumed (conservative — it cannot
+	 *         over-report a daily total). Null when nothing was attributed.
+	 */
+	private static Double parseDailyDoseMg(List<AttributedDose> doses) {
+		Double best = null;
+		for (AttributedDose dose : doses) {
+			double daily = dose.perDoseMg * (dose.frequencyPerDay > 0 ? dose.frequencyPerDay : 1);
+			if (best == null || daily > best) {
+				best = daily;
+			}
+		}
+		return best;
+	}
+
+	/**
+	 * @return the largest per-administration dose (mg) among the attributed doses (the limit-cue
+	 *         and nearest-alias guards already applied by the walk). Null when nothing was attributed.
+	 */
+	private static Double parseMaxPerDoseMg(List<AttributedDose> doses) {
+		Double best = null;
+		for (AttributedDose dose : doses) {
+			if (best == null || dose.perDoseMg > best) {
+				best = dose.perDoseMg;
 			}
 		}
 		return best;
@@ -444,9 +557,5 @@ public class DrugSafetyValidator {
 
 	private static boolean toggle(String property, boolean defaultValue) {
 		return ChartSearchAiUtils.getBooleanGlobalProperty(property, defaultValue);
-	}
-
-	private static String noteOrToken(String note, String token) {
-		return note != null && !note.isEmpty() ? note : token;
 	}
 }

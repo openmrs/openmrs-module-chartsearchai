@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -18,9 +19,12 @@ import org.openmrs.ConceptMap;
 import org.openmrs.ConceptName;
 import org.openmrs.Condition;
 import org.openmrs.DrugOrder;
+import org.openmrs.Obs;
 import org.openmrs.Order;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,18 +43,21 @@ final class PatientClinicalContextBuilder {
 
 	private static final Logger log = LoggerFactory.getLogger(PatientClinicalContextBuilder.class);
 
+	private static final long MILLIS_PER_DAY = 24L * 60 * 60 * 1000;
+
 	private PatientClinicalContextBuilder() {
 	}
 
 	static PatientClinicalContext build(Patient patient) {
 		Integer age = null;
+		Double weightKg = null;
 		Set<String> drugNames = new LinkedHashSet<String>();
 		Set<String> atcCodes = new LinkedHashSet<String>();
 		Set<String> allergyTokens = new LinkedHashSet<String>();
 		Set<String> conditionTokens = new LinkedHashSet<String>();
 
 		if (patient == null) {
-			return new PatientClinicalContext(null, drugNames, atcCodes, allergyTokens, conditionTokens);
+			return new PatientClinicalContext(null, null, drugNames, atcCodes, allergyTokens, conditionTokens);
 		}
 
 		try {
@@ -58,6 +65,14 @@ final class PatientClinicalContextBuilder {
 		}
 		catch (RuntimeException e) {
 			log.debug("Could not read patient age for drug-reference context", e);
+		}
+
+		// Most recent (fresh) weight in kg -> weight-aware per-dose overdose check.
+		try {
+			weightKg = latestWeightKg(patient);
+		}
+		catch (RuntimeException e) {
+			log.debug("Could not read patient weight for drug-reference context", e);
 		}
 
 		// Active drug orders -> names + ATC codes (for interaction checks and order-driven injection).
@@ -106,7 +121,56 @@ final class PatientClinicalContextBuilder {
 			log.debug("Could not read conditions for drug-reference context", e);
 		}
 
-		return new PatientClinicalContext(age, drugNames, atcCodes, allergyTokens, conditionTokens);
+		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens);
+	}
+
+	/**
+	 * @return the patient's most recent weight in kg, or {@code null} when none is recorded, the
+	 *         newest one is older than {@code chartsearchai.drugSafety.weightMaxAgeDays} (a stale —
+	 *         typically lower — pediatric weight would over-report mg/kg, the false-positive
+	 *         direction this feature never takes), the weight concept GP is set to the
+	 *         {@code none} sentinel (the operator opt-out — a blanked GP reads back as null and so
+	 *         falls back to the default, like every other GP), or the configured concept does not
+	 *         exist in this dictionary.
+	 *
+	 * <p>Fetch-all-then-scan is a MEASURED decision, not an oversight: on a real MariaDB the full
+	 * fetch costs ~2 ms per query even at 500 weight obs (~0.2 ms at a realistic 50) — noise
+	 * against a multi-second answer — so the {@code getObservations(..., mostRecentN=1, ...)}
+	 * 12-arg overload is not worth its API-surface risk (measured 2026-07-10, threshold 50 ms).
+	 */
+	private static Double latestWeightKg(Patient patient) {
+		String conceptUuid = ChartSearchAiUtils.getStringGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_WEIGHT_CONCEPT_UUID,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WEIGHT_CONCEPT_UUID).trim();
+		if (ChartSearchAiConstants.DRUG_SAFETY_WEIGHT_CONCEPT_DISABLED.equalsIgnoreCase(conceptUuid)) {
+			return null;
+		}
+		Concept weightConcept = Context.getConceptService().getConceptByUuid(conceptUuid);
+		if (weightConcept == null) {
+			log.debug("Weight concept {} not found; skipping weight for drug-reference context", conceptUuid);
+			return null;
+		}
+		Date cutoff = new Date(System.currentTimeMillis() - maxWeightAgeDays() * MILLIS_PER_DAY);
+		Obs latest = null;
+		for (Obs obs : Context.getObsService().getObservationsByPersonAndConcept(patient, weightConcept)) {
+			if (obs.getValueNumeric() == null || obs.getValueNumeric() <= 0 || obs.getObsDatetime() == null
+					|| obs.getObsDatetime().before(cutoff)) {
+				continue;
+			}
+			if (latest == null || obs.getObsDatetime().after(latest.getObsDatetime())) {
+				latest = obs;
+			}
+		}
+		return latest == null ? null : latest.getValueNumeric();
+	}
+
+	/** @return the weight-freshness window in days; an unparseable or non-positive GP value falls
+	 *          back to the default rather than silently admitting stale weights. */
+	private static long maxWeightAgeDays() {
+		int parsed = ChartSearchAiUtils.getIntGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_WEIGHT_MAX_AGE_DAYS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WEIGHT_MAX_AGE_DAYS);
+		return parsed > 0 ? parsed : ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WEIGHT_MAX_AGE_DAYS;
 	}
 
 	private static void addDrugName(Set<String> names, DrugOrder drugOrder) {

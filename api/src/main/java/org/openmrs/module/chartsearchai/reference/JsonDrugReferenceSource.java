@@ -9,10 +9,9 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -31,7 +30,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * OpenMRS application data directory); when that file is absent or unreadable —
  * including when no OpenMRS context is available — it falls back to the dataset
  * bundled on the module classpath at {@code /chartsearchai/drug-reference.json},
- * so the module ships with working defaults.
+ * so the module ships with working defaults (the shared
+ * {@link ReferenceDataFiles} resolution).
  *
  * <p>This is the curated/hand-authored source. For authoritative datasets
  * (e.g. WHO ATC) see {@link AtcDrugReferenceSource}; the source is chosen by
@@ -47,58 +47,37 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 
 	@Override
 	public List<DrugReference> load() {
-		// Prefer the operator-configured file in the application data directory. The fail-safe
-		// read returns "" when unset/blank or no context is available -> classpath default below.
-		String configuredPath = ChartSearchAiUtils.getStringGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, "");
-
-		if (!configuredPath.isEmpty()) {
-			try {
-				String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath,
-						ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH);
-				try (InputStream in = new FileInputStream(new File(resolved))) {
-					List<DrugReference> loaded = parse(in);
-					log.info("Loaded {} drug-reference entries from {}", loaded.size(), resolved);
-					return loaded;
-				}
-			}
-			catch (IllegalStateException e) {
-				// File not configured/found/path-invalid -> fall back to the bundled default.
-				log.info("Drug-reference file '{}' not available ({}); using bundled default",
-						configuredPath, e.getMessage());
-			}
-			catch (IOException e) {
-				log.warn("Failed to read drug-reference file '{}'; using bundled default", configuredPath, e);
-			}
-		}
-
-		try (InputStream in = JsonDrugReferenceSource.class.getResourceAsStream(CLASSPATH_DEFAULT)) {
-			if (in == null) {
-				log.warn("Bundled drug-reference dataset {} not found on classpath; running empty",
-						CLASSPATH_DEFAULT);
-				return Collections.emptyList();
-			}
-			List<DrugReference> loaded = parse(in);
-			log.info("Loaded {} drug-reference entries from bundled default {}",
-					loaded.size(), CLASSPATH_DEFAULT);
-			return loaded;
-		}
-		catch (IOException e) {
-			log.error("Failed to parse bundled drug-reference dataset; running empty", e);
-			return Collections.emptyList();
-		}
+		return ReferenceDataFiles.loadWithClasspathFallback(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, CLASSPATH_DEFAULT,
+				"drug-reference entries", JsonDrugReferenceSource::parse);
 	}
 
 	/**
-	 * Parse a dataset stream into reference entries. Package-private and static so
-	 * tests can exercise the real parser against the real dataset.
+	 * Parse a dataset stream into reference entries. Entries with a blank {@code id} or
+	 * {@code name} are dropped (with a warning): a name-less entry would render
+	 * {@code "Drug reference — null"} into the citable record and a {@code null} drug into the
+	 * safety warnings, and an id-less one has no stable citation {@code resourceUuid}.
+	 * Package-private and static so tests can exercise the real parser against the real dataset.
 	 */
 	static List<DrugReference> parse(InputStream in) throws IOException {
 		Dataset dataset = MAPPER.readValue(in, Dataset.class);
 		if (dataset == null || dataset.entries == null) {
 			return Collections.emptyList();
 		}
-		return dataset.entries;
+		List<DrugReference> usable = new ArrayList<DrugReference>();
+		int dropped = 0;
+		for (DrugReference entry : dataset.entries) {
+			if (entry == null || ChartSearchAiUtils.isBlank(entry.getId())
+					|| ChartSearchAiUtils.isBlank(entry.getName())) {
+				dropped++;
+				continue;
+			}
+			usable.add(entry);
+		}
+		if (dropped > 0) {
+			log.warn("Dropped {} unusable drug-reference entries (blank id or name)", dropped);
+		}
+		return usable;
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)

@@ -11,7 +11,6 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -31,13 +30,17 @@ import org.springframework.stereotype.Service;
  * hand-maintaining a chartsearchai-specific file. See ADR Decision 24.
  *
  * <p>Loading is lazy and cached: the first lookup triggers a load, and the result
- * is held for the life of the bean. Editing the dataset — or switching the source
- * format — therefore requires a module restart.
+ * is held for the life of the bean. The same applies to the curated
+ * {@link CrossReactivityGroup} dataset, which loads independently of the source
+ * format. Editing either dataset — or switching the source format — therefore
+ * requires a module restart.
  */
 @Service("chartSearchAi.drugReferenceService")
 public class DrugReferenceService {
 
 	private volatile List<DrugReference> entries;
+
+	private volatile List<CrossReactivityGroup> crossReactivityGroups;
 
 	private DrugReferenceSource source;
 
@@ -111,17 +114,22 @@ public class DrugReferenceService {
 		return null;
 	}
 
-	/** @return the union of every alias across all entries, lowercased (used by the answer parser). */
-	public Set<String> allAliases() {
-		Set<String> out = new LinkedHashSet<String>();
-		for (DrugReference ref : getAll()) {
-			for (String alias : ref.getAliases()) {
-				if (alias != null && !alias.trim().isEmpty()) {
-					out.add(alias.trim().toLowerCase(Locale.ROOT));
+	/**
+	 * @return the curated cross-reactivity groups, loaded lazily from
+	 *         {@code cross-reactivity-groups.json} (operator path, else the bundled default) and
+	 *         cached for the bean's lifetime. Independent of the entry source, so the rule-less
+	 *         {@code atc} format gains cross-branch family reasoning from the same file. Never null.
+	 */
+	public List<CrossReactivityGroup> getCrossReactivityGroups() {
+		if (crossReactivityGroups == null) {
+			synchronized (this) {
+				if (crossReactivityGroups == null) {
+					crossReactivityGroups = Collections
+							.unmodifiableList(new CrossReactivityGroupsLoader().load());
 				}
 			}
 		}
-		return out;
+		return crossReactivityGroups;
 	}
 
 	private void ensureLoaded() {
@@ -159,9 +167,22 @@ public class DrugReferenceService {
 		this.source = source;
 	}
 
-	/** Test seam: inject a known entry set, bypassing source loading. */
+	/**
+	 * Test seam: inject a known entry set, bypassing ALL dataset loading — the curated
+	 * cross-reactivity groups are pinned empty too, so the resulting service is fully hermetic
+	 * (an ATC-only dataset really is classification-only, which is what the ADR Decision 24
+	 * boundary tests assert). Tests that want groups set them via
+	 * {@link #setCrossReactivityGroups} afterwards.
+	 */
 	void setEntries(List<DrugReference> entries) {
 		this.entries = entries == null ? Collections.<DrugReference> emptyList()
 				: Collections.unmodifiableList(new ArrayList<DrugReference>(entries));
+		this.crossReactivityGroups = Collections.emptyList();
+	}
+
+	/** Test seam: inject known cross-reactivity groups, bypassing the groups-file load. */
+	void setCrossReactivityGroups(List<CrossReactivityGroup> groups) {
+		this.crossReactivityGroups = groups == null ? Collections.<CrossReactivityGroup> emptyList()
+				: Collections.unmodifiableList(new ArrayList<CrossReactivityGroup>(groups));
 	}
 }

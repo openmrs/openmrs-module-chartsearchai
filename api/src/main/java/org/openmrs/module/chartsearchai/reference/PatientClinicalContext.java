@@ -16,10 +16,11 @@ import java.util.Set;
 
 /**
  * The slice of a patient's clinical state the drug-reference feature needs:
- * age (for dose-band selection and age-gated injection), the names/ATC codes of
- * active drug orders (for interaction checks and order-driven injection), and
- * lowercased text tokens from active allergies and conditions (for
- * contraindication checks).
+ * age (for dose-band selection and age-gated injection), weight in kg (for the
+ * weight-aware per-dose overdose check; {@code null} = unknown, check skipped),
+ * the names/ATC codes of active drug orders (for interaction checks and
+ * order-driven injection), and lowercased text tokens from active allergies and
+ * conditions (for contraindication checks).
  *
  * <p>This is a pure value object so the injector and validator can be unit-tested
  * with hand-built contexts, while production builds one from a {@code Patient} via
@@ -31,6 +32,8 @@ public class PatientClinicalContext {
 
 	private final Integer ageYears;
 
+	private final Double weightKg;
+
 	private final Set<String> activeDrugNames;
 
 	private final Set<String> activeDrugAtcCodes;
@@ -39,13 +42,21 @@ public class PatientClinicalContext {
 
 	private final Set<String> conditionTokens;
 
-	public PatientClinicalContext(Integer ageYears, Set<String> activeDrugNames,
+	public PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens) {
 		this.ageYears = ageYears;
+		this.weightKg = weightKg;
 		this.activeDrugNames = lower(activeDrugNames);
 		this.activeDrugAtcCodes = upper(activeDrugAtcCodes);
 		this.allergyTokens = lower(allergyTokens);
 		this.conditionTokens = lower(conditionTokens);
+	}
+
+	/** Pre-weight constructor, retained for test convenience (production uses the weight-carrying
+	 *  form): equivalent to an unknown weight. */
+	public PatientClinicalContext(Integer ageYears, Set<String> activeDrugNames,
+			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens) {
+		this(ageYears, null, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens);
 	}
 
 	private static Set<String> lower(Set<String> in) {
@@ -62,21 +73,22 @@ public class PatientClinicalContext {
 	}
 
 	private static Set<String> upper(Set<String> in) {
+		// The active-order side of every ATC comparison must normalize by the same shared rule as
+		// the reference side (entry codes / group prefixes), or matching silently drifts apart.
 		if (in == null) {
 			return Collections.emptySet();
 		}
-		Set<String> out = new LinkedHashSet<String>();
-		for (String s : in) {
-			if (s != null && !s.trim().isEmpty()) {
-				out.add(s.trim().toUpperCase(Locale.ROOT));
-			}
-		}
-		return Collections.unmodifiableSet(out);
+		return Collections.unmodifiableSet(DrugReference.normalizeAtcTokens(in));
 	}
 
 	/** @return the patient's age in years, or {@code null} when unknown. */
 	public Integer getAgeYears() {
 		return ageYears;
+	}
+
+	/** @return the patient's most recent weight in kg, or {@code null} when unknown/stale. */
+	public Double getWeightKg() {
+		return weightKg;
 	}
 
 	/** @return lowercased display names of the patient's active drug orders. */
@@ -109,11 +121,8 @@ public class PatientClinicalContext {
 				}
 			}
 		}
-		if (atcCode != null && !atcCode.trim().isEmpty()
-				&& activeDrugAtcCodes.contains(atcCode.trim().toUpperCase(Locale.ROOT))) {
-			return true;
-		}
-		return false;
+		String normalizedAtc = DrugReference.normalizeAtcToken(atcCode);
+		return normalizedAtc != null && activeDrugAtcCodes.contains(normalizedAtc);
 	}
 
 	/** @return true when any allergy token contains the given (lowercased) contraindication token. */

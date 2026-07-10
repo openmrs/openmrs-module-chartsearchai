@@ -1,6 +1,6 @@
 {
   "dataset": "drug-safety-v1",
-  "description": "Post-LLM drug-safety validator eval cases. Each case feeds a simulated answer plus a patient clinical context to the real DrugSafetyValidator and asserts the warning types raised. Model-free: it exercises the deterministic post-check, not the LLM. The 'question' field is fed to the validator, which is question-aware: it checks the drug the question asks about, not only the drug the answer names.",
+  "description": "Post-LLM drug-safety validator eval cases. Each case feeds a simulated answer plus a patient clinical context (age, optional weightKg, active drug names and/or ATC codes, allergies, conditions) to the real DrugSafetyValidator and asserts the warning types raised. Model-free: it exercises the deterministic post-check, not the LLM. The 'question' field is fed to the validator, which is question-aware: it checks the drug the question asks about, not only the drug the answer names.",
   "cases": [
     {
       "id": "dosing-overdose-flag",
@@ -61,6 +61,39 @@
       "allergies": ["nsaid"],
       "conditions": [],
       "expectWarningTypes": ["contraindication"]
+    },
+    {
+      "id": "dosing-weight-per-dose-overdose-flag",
+      "question": "What ibuprofen dose can this 20 kg child get?",
+      "answer": "Ibuprofen 400 mg every 8 hours can be given.",
+      "ageYears": 5,
+      "weightKg": 20,
+      "activeDrugs": [],
+      "allergies": [],
+      "conditions": [],
+      "expectWarningTypes": ["overdose"]
+    },
+    {
+      "id": "dosing-weight-per-dose-within-limit",
+      "question": "What ibuprofen dose can this 20 kg child get?",
+      "answer": "Ibuprofen 150 mg every 8 hours is appropriate.",
+      "ageYears": 5,
+      "weightKg": 20,
+      "activeDrugs": [],
+      "allergies": [],
+      "conditions": [],
+      "expectWarningTypes": []
+    },
+    {
+      "id": "interaction-cross-branch-group",
+      "question": "Can I add ibuprofen for this patient's pain?",
+      "answer": "Ibuprofen could be considered for the patient's pain.",
+      "ageYears": 40,
+      "activeDrugs": [],
+      "activeDrugAtcCodes": ["N02BA01"],
+      "allergies": [],
+      "conditions": [],
+      "expectWarningTypes": ["interaction"]
     }
   ]
 }

@@ -47,7 +47,8 @@ Their `data/drug_knowledge_base.json` entry shape is the ancestor of our
 | `category` | `drugClass` | drug class label |
 | `contraindications` | `contraindications` | we use a typed `{type, token, note}` rule shape |
 | `dosing.{child,adolescent}.mg_per_kg_range`, `max_daily_dose_mg` | `ageBands[].{mgPerKgMin,mgPerKgMax,maxDailyDoseMg}` | age-banded pediatric dosing |
-| `indications`, `major_warnings`, `precautions` | — | not carried over |
+| `major_warnings` | `warnings` | carried over 2026-07 (Decision 27): free-text, rendered into the injected citable record; display-only |
+| `indications`, `precautions` | — | not carried over |
 | — | `interactions[].{token, atc, note}` | our structured interaction rules |
 
 Deterministic alias resolution is also shared in spirit: their
@@ -138,7 +139,10 @@ reactivity** + **duplicate-therapy** checks and the injector's relevance scoping
 and the `AtcDrugReferenceSource` consumes a WHO ATC export as a pluggable
 classification source (ADR Decision 24). Documented boundary: ATC's tree does not
 capture cross-*branch* cross-reactivity (aspirin `N02BA01` vs ibuprofen `M01AE01`),
-which needs curated data.
+which needs curated data — **closed 2026-07 as data** by
+`cross-reactivity-groups.json` (curated ATC-prefix families loaded alongside either
+source; ADR Decision 27). This is the local, offline equivalent of the RxClass
+cross-reactivity lookup their allergy agent does via a live API.
 
 ---
 
@@ -206,6 +210,26 @@ chart, and the deterministic layers enrich (pre) and validate (post).
   relevance-scoped order injection. We use **no external drug APIs** and do **not**
   RAG the drug KB.
 
+## 9. Parity follow-through (2026-07, ADR Decision 27)
+
+A functional gap analysis of the origin project identified the three capabilities that
+both survive chartsearchai's constraints and add value; all three now exist here, as data:
+
+- **Weight-aware per-dose overdose validation** — their `DoseCalculator`'s weight × mg/kg
+  arithmetic, recast from *calculating a recommended dose* (which we deliberately do not do)
+  into *validating the stated dose*: a fresh weight obs + the band's `mgPerKgMax` flag
+  per-administration excess the absolute daily ceiling cannot see.
+- **Curated cross-reactivity groups** — the offline equivalent of their live RxClass
+  cross-reactivity lookup (see §5).
+- **Prose `warnings`** — their `major_warnings` content (Reye-syndrome-type cautions),
+  rendered into the injected citable record; display-only, never validator-enforced.
+
+Deliberately still unported: dose *recommendation* (prescribing-CDS posture), live
+RxNorm/openFDA/RxClass APIs (local-only constraint), excipient/food-allergen matching
+(no local data; allergen→excipient table would be clinical knowledge in code).
+
 See ADR [Decision 23](adr.md#decision-23-drug-reference-injection--post-answer-drug-safety-validation)
-(the feature) and [Decision 24](adr.md#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets)
-(pluggable consumer of authoritative datasets / the ATC class layer).
+(the feature), [Decision 24](adr.md#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets)
+(pluggable consumer of authoritative datasets / the ATC class layer), and
+[Decision 27](adr.md#decision-27-drug-safety-parity-follow-through--weight-aware-dosing-curated-cross-reactivity-groups-prose-warnings)
+(this parity follow-through).

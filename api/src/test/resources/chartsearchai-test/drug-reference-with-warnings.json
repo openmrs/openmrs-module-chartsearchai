@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "description": "Test fixture: a curated entry carrying prose warnings (and no age bands), parsed by the real JsonDrugReferenceSource parser.",
+  "entries": [
+    {
+      "id": "aspirin",
+      "name": "Aspirin",
+      "drugClass": "Salicylate (NSAID)",
+      "aliases": ["aspirin", "acetylsalicylic acid", "asa"],
+      "atcCodes": ["N02BA01"],
+      "warnings": [
+        "Avoid routine use in children under 16 years: risk of Reye syndrome, especially during viral illness",
+        "Increased bleeding risk with concurrent anticoagulants"
+      ],
+      "contraindications": [
+        { "type": "allergy", "token": "nsaid", "note": "NSAID hypersensitivity" }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

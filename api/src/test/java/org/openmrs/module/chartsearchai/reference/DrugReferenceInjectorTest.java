@@ -11,17 +11,11 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -38,41 +32,26 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 public class DrugReferenceInjectorTest {
 
 	private DrugReferenceInjector injector() {
-		DrugReferenceInjector injector = new DrugReferenceInjector();
-		injector.setDrugReferenceService(new DrugReferenceService());
-		return injector;
+		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.bundledService());
 	}
 
 	/** Injector backed by the real WHO ATC sample (parsed by the real source), which — unlike the
 	 *  bundled JSON — contains two drugs in the same ATC subgroup (ibuprofen/naproxen, both M01AE),
 	 *  needed to exercise the "related active order" path. */
 	private DrugReferenceInjector atcInjector() throws IOException {
-		DrugReferenceService svc = new DrugReferenceService();
-		try (InputStream in = getClass().getClassLoader().getResourceAsStream("atc/atc-sample.tsv")) {
-			assertNotNull(in, "ATC sample resource should be on the test classpath");
-			svc.setEntries(AtcDrugReferenceSource.parse(in));
-		}
-		DrugReferenceInjector injector = new DrugReferenceInjector();
-		injector.setDrugReferenceService(svc);
-		return injector;
+		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.atcService(false));
 	}
 
 	private Set<String> set(String... values) {
-		return new LinkedHashSet<String>(Arrays.asList(values));
+		return DrugReferenceTestSupport.set(values);
 	}
 
 	private PatientChart oneRecordChart() {
-		List<RecordMapping> mappings = new ArrayList<RecordMapping>();
-		mappings.add(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,
-				"obs-uuid-1", null, "BP 120/80"));
-		return new PatientChart("Patient: 5-year-old Male\n\n[1] BP 120/80\n",
-				Collections.unmodifiableList(mappings), Collections.<Integer> emptyList());
+		return DrugReferenceTestSupport.oneRecordChart();
 	}
 
 	private PatientClinicalContext context(Integer age, Set<String> atc) {
-		return new PatientClinicalContext(age, Collections.<String> emptySet(),
-				atc == null ? Collections.<String> emptySet() : atc,
-				Collections.<String> emptySet(), Collections.<String> emptySet());
+		return DrugReferenceTestSupport.ctx(age, null, null, atc, null, null);
 	}
 
 	@Test

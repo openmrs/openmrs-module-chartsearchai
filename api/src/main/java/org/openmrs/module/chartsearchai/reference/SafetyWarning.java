@@ -18,7 +18,9 @@ package org.openmrs.module.chartsearchai.reference;
  */
 public class SafetyWarning {
 
-	/** Overdose: a parsed daily dose exceeds the reference maximum for the patient's age band. */
+	/** Overdose: a daily dose parsed from the answer exceeds the reference maximum for the patient's
+	 *  age band — or, when a fresh weight is on record, a per-administration dose exceeds the band's
+	 *  {@code mgPerKgMax} × weight. One warning per drug; the daily ceiling wins when both trip. */
 	public static final String TYPE_OVERDOSE = "overdose";
 
 	/** Interaction: a drug named in the answer interacts with one of the patient's active orders. */

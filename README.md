@@ -234,6 +234,7 @@ Response:
   "safetyWarnings": [],
   "session": "session-uuid",
   "messageId": "assistant-message-uuid",
+  "auditLogId": 42,
   "model": "single-e4b-checked"
 }
 ```
@@ -269,7 +270,7 @@ The product stream relays the hub profile's staged answer/validation/In-Depth se
 | `done` | Final envelope with the settled answer and the completed in-depth |
 | `error` | Error message if something goes wrong |
 
-Every JSON event payload also carries `session`, `messageId`, `model`, and `disclaimer`.
+Every persisted JSON event payload also carries `session`, `messageId`, `auditLogId`, `model`, and `disclaimer`.
 
 ### Serving-side warmup
 
@@ -284,7 +285,7 @@ POST /ws/rest/v1/chartsearchai/feedback
 Content-Type: application/json
 
 {
-  "questionId": "42",
+  "auditLogId": 42,
   "rating": "positive",
   "comment": "Accurate and helpful"
 }
@@ -292,7 +293,7 @@ Content-Type: application/json
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `questionId` | Yes | The `questionId` from the search response |
+| `auditLogId` | Yes | The numeric `auditLogId` from the chat response |
 | `rating` | Yes | `"positive"` or `"negative"` |
 | `comment` | No | Optional text (max 500 characters, truncated if longer) |
 

@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.io.IOException;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -27,15 +26,12 @@ import org.openmrs.User;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChatService;
 import org.openmrs.module.chartsearchai.api.db.ChartSearchAiDAO;
 import org.openmrs.module.chartsearchai.api.db.ChatDAO;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.chartsearchai.model.ChatMessage;
 import org.openmrs.module.chartsearchai.model.ChatSession;
-import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -100,11 +96,11 @@ public class ChatServiceImpl implements ChatService {
 		persistUserMessage(session, question, nextOrdinal);
 
 		Map<String, Object> wire = normalizedHubWire(answerWire);
-		ChartAnswer answer = chartAnswerFromWire(wire);
-		ChatMessage assistant = persistAssistantWireTurn(session, wire, answer, nextOrdinal + 1,
+		ChatMessage assistant = persistAssistantWireTurn(session, wire, nextOrdinal + 1,
 				ChatMessage.FINISH_STOP, question, responseTimeMs);
 		touchSession(session);
-		return new ChatTurnResult(answer, session.getUuid(), assistant.getUuid());
+		return new ChatTurnResult(session.getUuid(), assistant.getUuid(),
+				assistant.getAuditLog().getAuditLogId());
 	}
 
 	@Override
@@ -118,9 +114,10 @@ public class ChatServiceImpl implements ChatService {
 			merged.putAll(updateWire);
 		}
 		saveAssistantWire(assistant, merged, "hub staged update");
-		ChartAnswer answer = chartAnswerFromWire(merged);
+		updateAuditFromWire(assistant.getAuditLog(), merged);
 		touchSession(session);
-		return new ChatTurnResult(answer, session.getUuid(), assistant.getUuid());
+		return new ChatTurnResult(session.getUuid(), assistant.getUuid(),
+				assistant.getAuditLog() == null ? null : assistant.getAuditLog().getAuditLogId());
 	}
 
 	@Override
@@ -150,9 +147,9 @@ public class ChatServiceImpl implements ChatService {
 	}
 
 	private ChatMessage persistAssistantWireTurn(ChatSession session, Map<String, Object> wire,
-			ChartAnswer answer, int ordinal, String finishReason, String questionForAudit,
+			int ordinal, String finishReason, String questionForAudit,
 			long responseTimeMs) {
-		ChartSearchAuditLog audit = buildAuditRow(session, questionForAudit, answer, responseTimeMs);
+		ChartSearchAuditLog audit = buildAuditRow(session, questionForAudit, wire, responseTimeMs);
 		auditDAO.saveAuditLog(audit);
 
 		ChatMessage msg = new ChatMessage();
@@ -162,8 +159,8 @@ public class ChatServiceImpl implements ChatService {
 		msg.setContent(serializeWire(wire, "hub staged answer"));
 		msg.setCreatedAt(new Date());
 		msg.setAuditLog(audit);
-		msg.setInputTokens(answer.getInputTokens());
-		msg.setOutputTokens(answer.getOutputTokens());
+		msg.setInputTokens(0);
+		msg.setOutputTokens(0);
 		msg.setFinishReason(finishReason);
 		return chatDAO.saveMessage(msg);
 	}
@@ -192,78 +189,6 @@ public class ChatServiceImpl implements ChatService {
 			out.put("blocks", Collections.emptyList());
 		}
 		return out;
-	}
-
-	@SuppressWarnings("unchecked")
-	private static ChartAnswer chartAnswerFromWire(Map<String, Object> wire) {
-		String answer = wire.get("answer") == null ? "" : String.valueOf(wire.get("answer"));
-		List<RecordReference> references = referencesFromWire(wire.get("references"));
-		Map<String, Object> confidence = wire.get("confidence") instanceof Map
-				? new LinkedHashMap<>((Map<String, Object>) wire.get("confidence"))
-				: null;
-		Map<String, Object> answerValidation = wire.get("answerValidation") instanceof Map
-				? new LinkedHashMap<>((Map<String, Object>) wire.get("answerValidation"))
-				: null;
-		List<Map<String, Object>> safetyWarnings = safetyWarningsFromWire(wire.get("safetyWarnings"));
-		return new ChartAnswer(answer, references, Collections.emptyList(),
-				confidence, answerValidation, 0, 0, 0, safetyWarnings);
-	}
-
-	@SuppressWarnings("unchecked")
-	private static List<Map<String, Object>> safetyWarningsFromWire(Object raw) {
-		if (!(raw instanceof List)) {
-			return Collections.emptyList();
-		}
-		List<Map<String, Object>> out = new ArrayList<>();
-		for (Object item : (List<Object>) raw) {
-			if (item instanceof Map) {
-				out.add(new LinkedHashMap<>((Map<String, Object>) item));
-			}
-		}
-		return out;
-	}
-
-	@SuppressWarnings("unchecked")
-	private static List<RecordReference> referencesFromWire(Object raw) {
-		if (!(raw instanceof List)) {
-			return Collections.emptyList();
-		}
-		List<RecordReference> out = new ArrayList<>();
-		for (Object item : (List<Object>) raw) {
-			if (!(item instanceof Map)) {
-				continue;
-			}
-			Map<String, Object> ref = (Map<String, Object>) item;
-			Object index = ref.get("index");
-			if (!(index instanceof Number)) {
-				continue;
-			}
-			Boolean grounded = ref.get("grounded") instanceof Boolean
-					? (Boolean) ref.get("grounded")
-					: null;
-			out.add(new RecordReference(
-					((Number) index).intValue(),
-					ref.get("resourceType") == null ? null : String.valueOf(ref.get("resourceType")),
-					ref.get("resourceUuid") == null ? null : String.valueOf(ref.get("resourceUuid")),
-					parseWireDate(ref.get("date")),
-					grounded));
-		}
-		return out;
-	}
-
-	private static Date parseWireDate(Object raw) {
-		if (raw instanceof Number) {
-			return new Date(((Number) raw).longValue());
-		}
-		if (!(raw instanceof String) || ((String) raw).trim().isEmpty()) {
-			return null;
-		}
-		try {
-			return DateFormatUtil.toLegacyDate(LocalDate.parse(((String) raw).trim()));
-		}
-		catch (RuntimeException ignored) {
-			return null;
-		}
 	}
 
 	private ChatMessage saveAssistantWire(ChatMessage assistant, Map<String, Object> wire,
@@ -302,22 +227,6 @@ public class ChatServiceImpl implements ChatService {
 		return wire;
 	}
 
-	private static List<Map<String, Object>> referencesToWire(List<RecordReference> references) {
-		List<Map<String, Object>> out = new ArrayList<>();
-		if (references == null) {
-			return out;
-		}
-		for (RecordReference ref : references) {
-			Map<String, Object> refMap = new LinkedHashMap<>();
-			refMap.put("index", ref.getIndex());
-			refMap.put("resourceType", ref.getResourceType());
-			refMap.put("resourceUuid", ref.getResourceUuid());
-			refMap.put("date", ref.getDate() == null ? null : DateFormatUtil.formatDate(ref.getDate()));
-			out.add(refMap);
-		}
-		return out;
-	}
-
 	private void requireAssistantInSession(ChatSession session, ChatMessage assistant, String operation) {
 		requireOk(assistant != null, "Assistant message not found");
 		requireOk(ChatMessage.ROLE_ASSISTANT.equals(assistant.getRole()),
@@ -328,54 +237,6 @@ public class ChatServiceImpl implements ChatService {
 				"Assistant message does not belong to this chat session");
 	}
 
-	private static List<Map<String, Object>> blocksToWire(List<ResponseBlock> blocks) {
-		List<Map<String, Object>> out = new ArrayList<>();
-		if (blocks == null) {
-			return out;
-		}
-		for (ResponseBlock block : blocks) {
-			Map<String, Object> blockMap = new LinkedHashMap<>();
-			blockMap.put("kind", block.getKind());
-			if (block.getTitle() != null) {
-				blockMap.put("title", block.getTitle());
-			}
-			List<Map<String, Object>> columns = new ArrayList<>();
-			for (ResponseBlock.Column c : block.getColumns()) {
-				Map<String, Object> col = new LinkedHashMap<>();
-				col.put("key", c.getKey());
-				col.put("label", c.getLabel());
-				columns.add(col);
-			}
-			blockMap.put("columns", columns);
-			List<Map<String, Object>> rows = new ArrayList<>();
-			for (ResponseBlock.Row row : block.getRows()) {
-				Map<String, Object> cellsMap = new LinkedHashMap<>();
-				for (Map.Entry<String, ResponseBlock.Cell> entry : row.getCells().entrySet()) {
-					Map<String, Object> cellMap = new LinkedHashMap<>();
-					cellMap.put("text", entry.getValue().getText());
-					cellMap.put("refs", entry.getValue().getRefs());
-					cellsMap.put(entry.getKey(), cellMap);
-				}
-				Map<String, Object> rowMap = new LinkedHashMap<>();
-				rowMap.put("cells", cellsMap);
-				rows.add(rowMap);
-			}
-			blockMap.put("rows", rows);
-			out.add(blockMap);
-		}
-		return out;
-	}
-
-	/**
-	 * Extract the prose-only answer from a stored assistant message content
-	 * for LLM-replay. Handles both shapes:
-	 * <ul>
-	 *   <li>New: {@code {"answer": "<prose>", "blocks": [...]}}</li>
-	 *   <li>Legacy: plain string</li>
-	 * </ul>
-	 * Sending the JSON envelope to the LLM in prior assistant turns confuses
-	 * small models; the prose summary is enough context for follow-ups.
-	 */
 	/**
 	 * Project the persisted prior turns into the shape the LLM should see.
 	 * For assistant rows, replaces the stored JSON envelope with just the
@@ -426,19 +287,33 @@ public class ChatServiceImpl implements ChatService {
 	}
 
 	private ChartSearchAuditLog buildAuditRow(ChatSession session, String question,
-			ChartAnswer answer, long responseTimeMs) {
+			Map<String, Object> wire, long responseTimeMs) {
 		ChartSearchAuditLog audit = new ChartSearchAuditLog();
 		audit.setUser(session.getUser());
 		audit.setPatient(session.getPatient());
 		audit.setQuestion(question);
-		audit.setAnswer(answer.getAnswer());
-		audit.setReferenceCount(answer.getReferences() == null ? 0 : answer.getReferences().size());
+		applyWireToAudit(audit, wire);
 		audit.setSearchMode(SEARCH_MODE_CHAT);
 		audit.setResponseTimeMs(responseTimeMs);
-		audit.setInputTokens(answer.getInputTokens());
-		audit.setOutputTokens(answer.getOutputTokens());
+		audit.setInputTokens(0);
+		audit.setOutputTokens(0);
 		audit.setDateCreated(new Date());
 		return audit;
+	}
+
+	private void updateAuditFromWire(ChartSearchAuditLog audit, Map<String, Object> wire) {
+		if (audit == null) {
+			return;
+		}
+		applyWireToAudit(audit, wire);
+		auditDAO.saveAuditLog(audit);
+	}
+
+	private static void applyWireToAudit(ChartSearchAuditLog audit, Map<String, Object> wire) {
+		Object answer = wire == null ? null : wire.get("answer");
+		audit.setAnswer(answer == null ? "" : String.valueOf(answer));
+		Object references = wire == null ? null : wire.get("references");
+		audit.setReferenceCount(references instanceof List ? ((List<?>) references).size() : 0);
 	}
 
 	/**

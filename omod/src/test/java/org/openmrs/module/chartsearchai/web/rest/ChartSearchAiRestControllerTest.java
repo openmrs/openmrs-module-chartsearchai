@@ -12,19 +12,28 @@ package org.openmrs.module.chartsearchai.web.rest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.UserContext;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.AuditLogService;
+import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 public class ChartSearchAiRestControllerTest {
 
@@ -129,26 +138,26 @@ public class ChartSearchAiRestControllerTest {
 	// --- Feedback input validation tests ---
 
 	@Test
-	public void validateFeedbackInput_shouldRejectMissingQuestionId() {
+	public void validateFeedbackInput_shouldRejectMissingAuditLogId() {
 		Map<String, Object> body = new HashMap<String, Object>();
 		body.put("rating", "positive");
 		String error = ChartSearchAiRestController.validateFeedbackInput(body);
-		assertEquals("questionId is required", error);
+		assertEquals("auditLogId is required", error);
 	}
 
 	@Test
-	public void validateFeedbackInput_shouldRejectNonNumericQuestionId() {
+	public void validateFeedbackInput_shouldRejectNonNumericAuditLogId() {
 		Map<String, Object> body = new HashMap<String, Object>();
-		body.put("questionId", "abc");
+		body.put("auditLogId", "abc");
 		body.put("rating", "positive");
 		String error = ChartSearchAiRestController.validateFeedbackInput(body);
-		assertEquals("Invalid questionId", error);
+		assertEquals("Invalid auditLogId", error);
 	}
 
 	@Test
 	public void validateFeedbackInput_shouldRejectMissingRating() {
 		Map<String, Object> body = new HashMap<String, Object>();
-		body.put("questionId", "42");
+		body.put("auditLogId", "42");
 		String error = ChartSearchAiRestController.validateFeedbackInput(body);
 		assertEquals("rating must be 'positive' or 'negative'", error);
 	}
@@ -156,7 +165,7 @@ public class ChartSearchAiRestControllerTest {
 	@Test
 	public void validateFeedbackInput_shouldRejectInvalidRating() {
 		Map<String, Object> body = new HashMap<String, Object>();
-		body.put("questionId", "42");
+		body.put("auditLogId", "42");
 		body.put("rating", "neutral");
 		String error = ChartSearchAiRestController.validateFeedbackInput(body);
 		assertEquals("rating must be 'positive' or 'negative'", error);
@@ -165,7 +174,7 @@ public class ChartSearchAiRestControllerTest {
 	@Test
 	public void validateFeedbackInput_shouldAcceptPositiveRating() {
 		Map<String, Object> body = new HashMap<String, Object>();
-		body.put("questionId", "42");
+		body.put("auditLogId", "42");
 		body.put("rating", "positive");
 		assertNull(ChartSearchAiRestController.validateFeedbackInput(body));
 	}
@@ -173,17 +182,48 @@ public class ChartSearchAiRestControllerTest {
 	@Test
 	public void validateFeedbackInput_shouldAcceptNegativeRating() {
 		Map<String, Object> body = new HashMap<String, Object>();
-		body.put("questionId", "42");
+		body.put("auditLogId", "42");
 		body.put("rating", "negative");
 		assertNull(ChartSearchAiRestController.validateFeedbackInput(body));
 	}
 
 	@Test
-	public void validateFeedbackInput_shouldAcceptNumericQuestionId() {
+	public void validateFeedbackInput_shouldAcceptNumericAuditLogId() {
 		Map<String, Object> body = new HashMap<String, Object>();
-		body.put("questionId", 42);
+		body.put("auditLogId", 42);
 		body.put("rating", "positive");
 		assertNull(ChartSearchAiRestController.validateFeedbackInput(body));
+	}
+
+	@Test
+	public void submitFeedback_updatesTheAuditRowIdentifiedByAuditLogId() {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		AuditLogService auditLogService = mock(AuditLogService.class);
+		ReflectionTestUtils.setField(controller, "auditLogService", auditLogService);
+		User user = new User();
+		user.setUserId(7);
+		ChartSearchAuditLog audit = new ChartSearchAuditLog();
+		audit.setAuditLogId(42);
+		audit.setUser(user);
+		when(auditLogService.getAuditLog(42)).thenReturn(audit);
+
+		Map<String, Object> body = new HashMap<String, Object>();
+		body.put("auditLogId", 42);
+		body.put("rating", "negative");
+		body.put("comment", "Wrong date");
+
+		ResponseEntity<Object> response;
+		try (MockedStatic<Context> context = mockStatic(Context.class)) {
+			context.when(() -> Context.requirePrivilege(
+					ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(invocation -> null);
+			context.when(Context::getAuthenticatedUser).thenReturn(user);
+			response = controller.submitFeedback(body);
+		}
+
+		assertEquals(HttpStatus.OK, response.getStatusCode());
+		assertEquals("negative", audit.getRating());
+		assertEquals("Wrong date", audit.getFeedbackComment());
+		verify(auditLogService).saveAuditLog(audit);
 	}
 
 	@Test

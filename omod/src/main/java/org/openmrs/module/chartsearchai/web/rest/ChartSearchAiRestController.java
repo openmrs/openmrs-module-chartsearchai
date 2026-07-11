@@ -220,7 +220,7 @@ public class ChartSearchAiRestController {
 					errorResponse(validationError), HttpStatus.BAD_REQUEST);
 		}
 
-		Integer auditLogId = Integer.valueOf(body.get("questionId").toString());
+		Integer auditLogId = Integer.valueOf(body.get("auditLogId").toString());
 		String rating = body.get("rating").toString();
 		String comment = sanitizeFeedbackComment(
 				body.get("comment") != null ? body.get("comment").toString() : null);
@@ -496,6 +496,7 @@ public class ChartSearchAiRestController {
 		response.put("disclaimer", DISCLAIMER);
 		response.put("session", result.getSessionUuid());
 		response.put("messageId", result.getAssistantMessageUuid());
+		response.put("auditLogId", result.getAuditLogId());
 		response.put("model", answeredModel);
 
 		return new ResponseEntity<Object>(response, HttpStatus.OK);
@@ -548,6 +549,7 @@ public class ChartSearchAiRestController {
 		for (ChatMessage m : messages) {
 			Map<String, Object> entry = new LinkedHashMap<String, Object>();
 			entry.put("messageId", m.getUuid());
+			entry.put("auditLogId", m.getAuditLog() == null ? null : m.getAuditLog().getAuditLogId());
 			entry.put("role", m.getRole());
 
 			// Assistant rows persist a JSON envelope ({answer, blocks}); user
@@ -770,19 +772,19 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Validates feedback input fields (questionId and rating). Returns an error
+	 * Validates feedback input fields (auditLogId and rating). Returns an error
 	 * message if validation fails, or null if the input is valid.
 	 */
 	static String validateFeedbackInput(Map<String, Object> body) {
-		Object questionIdObj = body.get("questionId");
-		if (questionIdObj == null) {
-			return "questionId is required";
+		Object auditLogIdObj = body.get("auditLogId");
+		if (auditLogIdObj == null) {
+			return "auditLogId is required";
 		}
 		try {
-			Integer.valueOf(questionIdObj.toString());
+			Integer.valueOf(auditLogIdObj.toString());
 		}
 		catch (NumberFormatException e) {
-			return "Invalid questionId";
+			return "Invalid auditLogId";
 		}
 		String rating = body.get("rating") != null ? body.get("rating").toString() : null;
 		if (rating == null || (!"positive".equals(rating) && !"negative".equals(rating))) {
@@ -822,22 +824,11 @@ public class ChartSearchAiRestController {
 			String question, HubRequest hubRequest) throws IOException {
 		List<ChatMessage> priorTurns = chatService.priorTurnsForRelay(session);
 		String requestJson = hubRelayRequestJson(hubRequest.profileId, patientUuid, priorTurns, question, true);
-		HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-				.uri(URI.create(hubRequest.endpointUrl))
-				.version(HttpClient.Version.HTTP_1_1)
-				.timeout(Duration.ofSeconds(300))
-				.header("Content-Type", "application/json")
-				.header("Accept", "text/event-stream")
-				.POST(HttpRequest.BodyPublishers.ofByteArray(
-						requestJson.getBytes(StandardCharsets.UTF_8)));
-		String apiKey = runtimeApiKey();
-		if (apiKey != null && !apiKey.trim().isEmpty()) {
-			requestBuilder.header("Authorization", "Bearer " + apiKey.trim());
-		}
+		HttpRequest request = hubRelayHttpRequest(hubRequest, requestJson, true);
 		long hubCallStart = System.nanoTime();
 		HttpResponse<InputStream> hubResponse;
 		try {
-			hubResponse = HttpClient.newHttpClient().send(requestBuilder.build(),
+			hubResponse = HttpClient.newHttpClient().send(request,
 					HttpResponse.BodyHandlers.ofInputStream());
 		}
 		catch (InterruptedException e) {
@@ -855,6 +846,7 @@ public class ChartSearchAiRestController {
 		final String[] assistantMessageUuid = new String[1];
 		final boolean[] doneSeen = new boolean[1];
 		final boolean[] inDepthTerminalSeen = new boolean[1];
+		final boolean[] answerValidationSettled = new boolean[1];
 		try (BufferedReader reader = new BufferedReader(new InputStreamReader(
 				hubResponse.body(), StandardCharsets.UTF_8))) {
 			String event = "";
@@ -864,6 +856,7 @@ public class ChartSearchAiRestController {
 				if (line.isEmpty()) {
 					handleHubStagedEvent(out, session, question, hubRequest.profileId,
 								assistantMessageUuid, doneSeen, inDepthTerminalSeen,
+								answerValidationSettled,
 								event, data.toString(), hubCallStart);
 					event = "";
 					data.setLength(0);
@@ -885,12 +878,14 @@ public class ChartSearchAiRestController {
 			if (data.length() > 0) {
 				handleHubStagedEvent(out, session, question, hubRequest.profileId,
 						assistantMessageUuid, doneSeen, inDepthTerminalSeen,
+						answerValidationSettled,
 						event, data.toString(), hubCallStart);
 			}
 		}
 		finally {
 			if (!doneSeen[0] && !inDepthTerminalSeen[0]) {
-				persistInterruptedInDepth(session, assistantMessageUuid[0]);
+				persistInterruptedState(session, assistantMessageUuid[0],
+						!answerValidationSettled[0]);
 			}
 		}
 		if (!doneSeen[0]) {
@@ -907,20 +902,10 @@ public class ChartSearchAiRestController {
 			HubRequest hubRequest) throws IOException {
 		List<ChatMessage> priorTurns = chatService.priorTurnsForRelay(session);
 		String requestJson = hubRelayRequestJson(hubRequest.profileId, patientUuid, priorTurns, question, false);
-		HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-				.uri(URI.create(hubRequest.endpointUrl))
-				.version(HttpClient.Version.HTTP_1_1)
-				.timeout(Duration.ofSeconds(300))
-				.header("Content-Type", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofByteArray(
-						requestJson.getBytes(StandardCharsets.UTF_8)));
-		String apiKey = runtimeApiKey();
-		if (apiKey != null && !apiKey.trim().isEmpty()) {
-			requestBuilder.header("Authorization", "Bearer " + apiKey.trim());
-		}
+		HttpRequest request = hubRelayHttpRequest(hubRequest, requestJson, false);
 		HttpResponse<String> hubResponse;
 		try {
-			hubResponse = HttpClient.newHttpClient().send(requestBuilder.build(),
+			hubResponse = HttpClient.newHttpClient().send(request,
 					HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 		}
 		catch (InterruptedException e) {
@@ -947,13 +932,14 @@ public class ChartSearchAiRestController {
 	@SuppressWarnings("unchecked")
 	private void handleHubStagedEvent(OutputStream out, ChatSession session, String question,
 			String model, String[] assistantMessageUuid, boolean[] doneSeen,
-			boolean[] inDepthTerminalSeen, String event,
+			boolean[] inDepthTerminalSeen, boolean[] answerValidationSettled, String event,
 			String data, long hubCallStart) throws IOException {
 		if (event == null || event.isEmpty() || data == null || data.isEmpty()) {
 			return;
 		}
 		if ("error".equals(event)) {
-			persistInterruptedInDepth(session, assistantMessageUuid[0]);
+			persistInterruptedState(session, assistantMessageUuid[0],
+					!answerValidationSettled[0]);
 			doneSeen[0] = true;
 			writeSseEvent(out, event, data);
 			return;
@@ -964,21 +950,31 @@ public class ChartSearchAiRestController {
 			long responseTimeMs = (System.nanoTime() - hubCallStart) / 1_000_000;
 			ChatTurnResult result = chatService.persistHubStagedAnswer(session, question, payload, responseTimeMs);
 			assistantMessageUuid[0] = result.getAssistantMessageUuid();
-			writeHubPayload(out, event, payload, result.getSessionUuid(), assistantMessageUuid[0], model);
+			Object validation = payload.get("answerValidation");
+			if (validation instanceof Map
+					&& !"validating".equals(((Map<?, ?>) validation).get("status"))) {
+				answerValidationSettled[0] = true;
+			}
+			writeHubPayload(out, event, payload, result, model);
 			return;
 		}
 		if ("answer_validation".equals(event)) {
 			ChatTurnResult result = chatService.updateHubStagedMessage(
 					session, assistantMessageUuid[0], payload);
-			writeHubPayload(out, event, payload, result.getSessionUuid(), assistantMessageUuid[0], model);
+			answerValidationSettled[0] = true;
+			writeHubPayload(out, event, payload, result, model);
 			return;
 		}
 		if ("indepth_pending".equals(event)) {
+			Object validation = payload.get("answerValidation");
+			if (validation instanceof Map
+					&& !"validating".equals(((Map<?, ?>) validation).get("status"))) {
+				answerValidationSettled[0] = true;
+			}
 			if (assistantMessageUuid[0] != null) {
 				ChatTurnResult result = chatService.updateHubStagedMessage(
 						session, assistantMessageUuid[0], payload);
-				writeHubPayload(out, event, payload, result.getSessionUuid(),
-						assistantMessageUuid[0], model);
+				writeHubPayload(out, event, payload, result, model);
 			}
 			else {
 				payload.put("messageId", null);
@@ -997,7 +993,10 @@ public class ChartSearchAiRestController {
 				update.put("inDepth", payload);
 			}
 			if (assistantMessageUuid[0] != null) {
-				chatService.updateHubStagedMessage(session, assistantMessageUuid[0], update);
+				ChatTurnResult result = chatService.updateHubStagedMessage(
+						session, assistantMessageUuid[0], update);
+				writeHubPayload(out, event, payload, result, model);
+				return;
 			}
 			payload.put("messageId", assistantMessageUuid[0]);
 			writeSseEvent(out, event, MAPPER.writeValueAsString(payload));
@@ -1013,13 +1012,15 @@ public class ChartSearchAiRestController {
 			} else {
 				result = chatService.updateHubStagedMessage(session, assistantMessageUuid[0], payload);
 			}
-			writeHubPayload(out, event, payload, result.getSessionUuid(), assistantMessageUuid[0], model);
+			answerValidationSettled[0] = true;
+			writeHubPayload(out, event, payload, result, model);
 			return;
 		}
 		writeSseEvent(out, event, data);
 	}
 
-	private void persistInterruptedInDepth(ChatSession session, String assistantMessageUuid) {
+	private void persistInterruptedState(ChatSession session, String assistantMessageUuid,
+			boolean answerValidationPending) {
 		if (assistantMessageUuid == null) {
 			return;
 		}
@@ -1029,6 +1030,13 @@ public class ChartSearchAiRestController {
 		inDepth.put("error", "In-Depth was interrupted.");
 		Map<String, Object> update = new LinkedHashMap<String, Object>();
 		update.put("inDepth", inDepth);
+		if (answerValidationPending) {
+			Map<String, Object> validation = new LinkedHashMap<String, Object>();
+			validation.put("status", "unavailable");
+			validation.put("label", "Check unavailable");
+			validation.put("summary", "The answer check was interrupted before completion.");
+			update.put("answerValidation", validation);
+		}
 		try {
 			chatService.updateHubStagedMessage(session, assistantMessageUuid, update);
 		}
@@ -1039,9 +1047,10 @@ public class ChartSearchAiRestController {
 	}
 
 	private void writeHubPayload(OutputStream out, String event, Map<String, Object> payload,
-			String sessionUuid, String assistantMessageUuid, String model) throws IOException {
-		payload.put("session", sessionUuid);
-		payload.put("messageId", assistantMessageUuid);
+			ChatTurnResult result, String model) throws IOException {
+		payload.put("session", result.getSessionUuid());
+		payload.put("messageId", result.getAssistantMessageUuid());
+		payload.put("auditLogId", result.getAuditLogId());
 		payload.put("model", model);
 		payload.put("disclaimer", DISCLAIMER);
 		writeSseEvent(out, event, MAPPER.writeValueAsString(payload));
@@ -1079,6 +1088,25 @@ public class ChartSearchAiRestController {
 	private String runtimeApiKey() {
 		Properties props = Context.getRuntimeProperties();
 		return props == null ? null : props.getProperty(ChartSearchAiConstants.RP_HUB_API_KEY);
+	}
+
+	private HttpRequest hubRelayHttpRequest(HubRequest hubRequest, String requestJson,
+			boolean stream) {
+		HttpRequest.Builder builder = HttpRequest.newBuilder()
+				.uri(URI.create(hubRequest.endpointUrl))
+				.version(HttpClient.Version.HTTP_1_1)
+				.timeout(Duration.ofSeconds(300))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofByteArray(
+						requestJson.getBytes(StandardCharsets.UTF_8)));
+		if (stream) {
+			builder.header("Accept", "text/event-stream");
+		}
+		String apiKey = runtimeApiKey();
+		if (apiKey != null && !apiKey.trim().isEmpty()) {
+			builder.header("Authorization", "Bearer " + apiKey.trim());
+		}
+		return builder.build();
 	}
 
 	@SuppressWarnings("unchecked")

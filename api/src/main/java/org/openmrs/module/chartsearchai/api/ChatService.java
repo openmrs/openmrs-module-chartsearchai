@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.openmrs.Patient;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.model.ChatMessage;
 import org.openmrs.module.chartsearchai.model.ChatSession;
 
@@ -74,26 +73,25 @@ public interface ChatService {
 	List<ChatMessage> priorTurnsForRelay(ChatSession session);
 
 	/**
-	 * Container for the controller's response: the ChartAnswer (text +
-	 * references + usage metadata), plus the session uuid and the newly-created
-	 * assistant message uuid for client-side threading.
+	 * Persistence identifiers returned to the relay. The authoritative answer
+	 * remains the hub wire supplied to the persistence method.
 	 */
 	class ChatTurnResult {
-
-		private final ChartAnswer answer;
 
 		private final String sessionUuid;
 
 		private final String assistantMessageUuid;
 
-		public ChatTurnResult(ChartAnswer answer, String sessionUuid, String assistantMessageUuid) {
-			this.answer = answer;
-			this.sessionUuid = sessionUuid;
-			this.assistantMessageUuid = assistantMessageUuid;
+		private final Integer auditLogId;
+
+		public ChatTurnResult(String sessionUuid, String assistantMessageUuid) {
+			this(sessionUuid, assistantMessageUuid, null);
 		}
 
-		public ChartAnswer getAnswer() {
-			return answer;
+		public ChatTurnResult(String sessionUuid, String assistantMessageUuid, Integer auditLogId) {
+			this.sessionUuid = sessionUuid;
+			this.assistantMessageUuid = assistantMessageUuid;
+			this.auditLogId = auditLogId;
 		}
 
 		public String getSessionUuid() {
@@ -102,6 +100,10 @@ public interface ChatService {
 
 		public String getAssistantMessageUuid() {
 			return assistantMessageUuid;
+		}
+
+		public Integer getAuditLogId() {
+			return auditLogId;
 		}
 	}
 }

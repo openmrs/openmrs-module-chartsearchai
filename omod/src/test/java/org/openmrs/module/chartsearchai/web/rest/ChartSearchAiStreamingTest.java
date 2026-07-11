@@ -31,8 +31,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.Consumer;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -44,11 +46,10 @@ import org.openmrs.api.PatientService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChatService;
 import org.openmrs.module.chartsearchai.api.ChatService.ChatTurnResult;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
+import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.chartsearchai.model.ChatMessage;
 import org.openmrs.module.chartsearchai.model.ChatSession;
 import org.springframework.http.HttpStatus;
@@ -264,11 +265,9 @@ public class ChartSearchAiStreamingTest {
 			body.put("profile", "med-agent-team-high-validated");
 			configureHub(f, hubUrl);
 			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
-					.thenReturn(new ChatTurnResult(new ChartAnswer("Direct answer [1].", Collections.emptyList()),
-							"session-uuid", "assistant-msg-uuid"));
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 			when(f.chatService.updateHubStagedMessage(eq(f.session), eq("assistant-msg-uuid"), any()))
-					.thenReturn(new ChatTurnResult(new ChartAnswer("Direct answer [1].", Collections.emptyList()),
-							"session-uuid", "assistant-msg-uuid"));
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 
 			MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -444,8 +443,7 @@ public class ChartSearchAiStreamingTest {
 			body.put("modelName", "client-controlled-model");
 			configureHub(f, hubUrl);
 			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
-					.thenReturn(new ChatTurnResult(new ChartAnswer("Sync answer [1].", Collections.emptyList()),
-							"session-uuid", "assistant-msg-uuid"));
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 
 			ResponseEntity<Object> response;
 			try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
@@ -549,11 +547,9 @@ public class ChartSearchAiStreamingTest {
 			configureHub(f, hubUrl);
 			when(f.chatService.persistHubStagedAnswer(
 					eq(f.session), eq("What medications is this patient taking?"), any(), anyLong()))
-					.thenReturn(new ChatTurnResult(new ChartAnswer("Initial answer [1].",
-							Collections.emptyList()), "session-uuid", "assistant-msg-uuid"));
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 			when(f.chatService.updateHubStagedMessage(eq(f.session), eq("assistant-msg-uuid"), any()))
-					.thenReturn(new ChatTurnResult(new ChartAnswer("Edited answer [2].",
-							Collections.emptyList()), "session-uuid", "assistant-msg-uuid"));
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 
 			MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -579,6 +575,7 @@ public class ChartSearchAiStreamingTest {
 
 			JsonNode answerDone = parseEvent(sse, "answer_done");
 			assertEquals("assistant-msg-uuid", answerDone.get("messageId").asText());
+			assertEquals(42, answerDone.get("auditLogId").asInt());
 			assertEquals("checking", answerDone.get("references").get(0).get("groundingStatus").asText());
 			JsonNode pending = parseEvent(sse, "indepth_pending");
 			assertEquals("verified", pending.get("references").get(0).get("groundingStatus").asText());
@@ -657,11 +654,9 @@ public class ChartSearchAiStreamingTest {
 			body.put("profile", "single-12b-checked");
 			configureHub(f, hubUrl);
 			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
-					.thenReturn(new ChatTurnResult(new ChartAnswer("2026-01-26.", Collections.emptyList()),
-							"session-uuid", "assistant-msg-uuid"));
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 			when(f.chatService.updateHubStagedMessage(eq(f.session), eq("assistant-msg-uuid"), any()))
-					.thenReturn(new ChatTurnResult(new ChartAnswer("2026-01-26.", Collections.emptyList()),
-							"session-uuid", "assistant-msg-uuid"));
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 
 			MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -686,6 +681,69 @@ public class ChartSearchAiStreamingTest {
 			assertEquals("user", messages.get(2).get("role").asText());
 			assertEquals("Repeat just the ISO date from your previous answer.",
 					messages.get(2).get("content").asText());
+		}
+		finally {
+			hub.stop(0);
+		}
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void chatStream_noReviewGroundingSettledBeforeInterruptedInDepth_preservesCheckedValidation()
+			throws Exception {
+		Fixture f = newFixture(true);
+		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		hub.createContext("/v1/chat/completions", exchange -> {
+			String sse = ""
+					+ "event: answer_done\n"
+					+ "data: {\"answer\":\"Ans [1].\",\"references\":[{\"index\":1,"
+					+ "\"groundingStatus\":\"checking\"}],\"blocks\":[],"
+					+ "\"answerValidation\":{\"status\":\"validating\"},"
+					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
+					+ "event: indepth_pending\n"
+					+ "data: {\"answer\":\"Ans [1].\",\"references\":[{\"index\":1,"
+					+ "\"groundingStatus\":\"verified\"}],"
+					+ "\"answerValidation\":{\"status\":\"checked\",\"label\":\"Checked\"},"
+					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n";
+			byte[] bytes = sse.getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+			exchange.sendResponseHeaders(200, bytes.length);
+			try (OutputStream body = exchange.getResponseBody()) {
+				body.write(bytes);
+			}
+		});
+		hub.start();
+		try {
+			configureHub(f, "http://127.0.0.1:" + hub.getAddress().getPort() + "/v1/chat/completions");
+			Map<String, String> body = chatBody();
+			body.put("profile", "med-agent-team-staged-12b");
+			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
+			when(f.chatService.updateHubStagedMessage(eq(f.session), eq("assistant-msg-uuid"), any()))
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
+
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
+				ctx.when(() -> Context.requirePrivilege(
+						ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(inv -> null);
+				ctx.when(Context::getPatientService).thenReturn(f.patientService);
+				ctx.when(Context::getAdministrationService).thenReturn(f.adminService);
+				ctx.when(Context::getAuthenticatedUser).thenReturn(f.user);
+				ctx.when(Context::getRuntimeProperties).thenReturn(new Properties());
+				f.controller.chatStream(body, response);
+			}
+
+			ArgumentCaptor<Map<String, Object>> updates = ArgumentCaptor.forClass(Map.class);
+			verify(f.chatService, times(2)).updateHubStagedMessage(
+					eq(f.session), eq("assistant-msg-uuid"), updates.capture());
+			Map<String, Object> settled = updates.getAllValues().get(0);
+			Map<String, Object> validation = (Map<String, Object>) settled.get("answerValidation");
+			assertEquals("checked", validation.get("status"));
+
+			Map<String, Object> interrupted = updates.getAllValues().get(1);
+			assertFalse(interrupted.containsKey("answerValidation"),
+					"tail interruption must not downgrade an already checked answer");
+			assertEquals("failed", ((Map<String, Object>) interrupted.get("inDepth")).get("status"));
 		}
 		finally {
 			hub.stop(0);
@@ -720,11 +778,9 @@ public class ChartSearchAiStreamingTest {
 			body.put("profile", "single-12b-checked");
 			configureHub(f, hubUrl);
 			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
-					.thenReturn(new ChatTurnResult(new ChartAnswer("Ans.", Collections.emptyList()),
-							"session-uuid", "assistant-msg-uuid"));
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 			when(f.chatService.updateHubStagedMessage(eq(f.session), eq("assistant-msg-uuid"), any()))
-					.thenReturn(new ChatTurnResult(new ChartAnswer("Ans.", Collections.emptyList()),
-							"session-uuid", "assistant-msg-uuid"));
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 
 			MockHttpServletResponse response = new MockHttpServletResponse();
 			try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
@@ -755,16 +811,16 @@ public class ChartSearchAiStreamingTest {
 	/**
 	 * Gate 6: a mid-leg browser disconnect must be detected via a heartbeat-triggered write, not
 	 * only discovered on the NEXT real event. The hub answers fast, then goes quiet (as it would
-	 * mid in-depth generation) sending only heartbeat comment lines for well over a second before
-	 * ever emitting {@code done}; the browser "disconnects" after the first successful write. If
-	 * the relay only writes on real events, it blocks reading heartbeats for the whole stall and
-	 * this test takes 1200ms+; if it writes (and so notices the disconnect) on each heartbeat, it
-	 * must return promptly.
+	 * mid in-depth generation) sending only heartbeat comment lines before ever emitting
+	 * {@code done}; the browser "disconnects" after the first successful write. The fake hub records
+	 * when the relay closes the upstream stream, proving cancellation behavior without imposing a
+	 * machine-dependent latency threshold.
 	 */
 	@Test
 	public void chatStream_hubNativeSingleProfile_abortsPromptlyOnDisconnectDuringHeartbeats()
 			throws Exception {
 		Fixture f = newFixture(true);
+		CountDownLatch upstreamClosed = new CountDownLatch(1);
 		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
 		hub.createContext("/v1/chat/completions", exchange -> {
 			exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
@@ -796,6 +852,7 @@ public class ChartSearchAiStreamingTest {
 			catch (IOException expectedOnceRelayCloses) {
 				// the relay closed its connection to us mid-stream once it noticed the "browser"
 				// disconnect — exactly the behavior under test.
+				upstreamClosed.countDown();
 			}
 		});
 		hub.start();
@@ -805,13 +862,11 @@ public class ChartSearchAiStreamingTest {
 			body.put("profile", "single-12b-checked");
 			configureHub(f, hubUrl);
 			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
-					.thenReturn(new ChatTurnResult(new ChartAnswer("Ans.", Collections.emptyList()),
-							"session-uuid", "assistant-msg-uuid"));
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 
 			// "Browser" that accepts the FIRST write (answer_done) then disconnects.
 			DisconnectAfterNWritesResponse response = new DisconnectAfterNWritesResponse(1);
 
-			long startNanos = System.nanoTime();
 			try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
 				ctx.when(() -> Context.requirePrivilege(
 						ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(inv -> null);
@@ -822,11 +877,10 @@ public class ChartSearchAiStreamingTest {
 
 				f.controller.chatStream(body, response);
 			}
-			long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
 
-			assertTrue(elapsedMs < 700, "relay must abort promptly on a mid-leg disconnect — took "
-					+ elapsedMs + "ms; 8 heartbeats * 150ms = 1200ms of missed opportunities to notice "
-					+ "means it only writes (and so only notices disconnects) on real events");
+			assertTrue(
+					upstreamClosed.await(5, TimeUnit.SECONDS),
+					"relay must close the active hub stream after a browser disconnect");
 
 			@SuppressWarnings("unchecked")
 			ArgumentCaptor<Map<String, Object>> update = ArgumentCaptor.forClass(Map.class);
@@ -835,6 +889,10 @@ public class ChartSearchAiStreamingTest {
 			Map<String, Object> inDepth = (Map<String, Object>) update.getValue().get("inDepth");
 			assertEquals("failed", inDepth.get("status"));
 			assertEquals("In-Depth was interrupted.", inDepth.get("error"));
+			Map<String, Object> validation =
+					(Map<String, Object>) update.getValue().get("answerValidation");
+			assertEquals("unavailable", validation.get("status"));
+			assertEquals("Check unavailable", validation.get("label"));
 		}
 		finally {
 			hub.stop(0);
@@ -848,6 +906,9 @@ public class ChartSearchAiStreamingTest {
 		ChatMessage assistant = new ChatMessage();
 		assistant.setUuid("assistant-msg-uuid");
 		assistant.setRole(ChatMessage.ROLE_ASSISTANT);
+		ChartSearchAuditLog audit = new ChartSearchAuditLog();
+		audit.setAuditLogId(42);
+		assistant.setAuditLog(audit);
 		assistant.setContent("{\"answer\":\"Use caution.\",\"references\":[],\"blocks\":[],"
 				+ "\"safetyWarnings\":[{\"type\":\"overdose\",\"drug\":\"Ibuprofen\","
 				+ "\"detail\":\"Dose exceeds the weight-based limit.\"}],"
@@ -869,6 +930,7 @@ public class ChartSearchAiStreamingTest {
 		List<Map<String, Object>> messages = (List<Map<String, Object>>) body.get("messages");
 		List<Map<String, Object>> warnings =
 				(List<Map<String, Object>>) messages.get(0).get("safetyWarnings");
+		assertEquals(42, messages.get(0).get("auditLogId"));
 		assertEquals("Ibuprofen", warnings.get(0).get("drug"));
 		Map<String, Object> inDepth = (Map<String, Object>) messages.get(0).get("inDepth");
 		assertEquals("failed", inDepth.get("status"));

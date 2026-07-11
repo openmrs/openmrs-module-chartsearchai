@@ -146,9 +146,9 @@ public class ChartSearchAiRestController {
 	}
 
 	// Defense-in-depth: catches common prompt injection phrases. This is a blocklist
-	// and can be bypassed with paraphrasing. The primary defense is the structured-output
-	// constraint (response_format: json_schema, used by both engines) which forces LLM
-	// output into a fixed {reasoning, answer, citations} shape regardless of prompt content.
+	// and can be bypassed with paraphrasing. The hub's product profile owns the primary
+	// structured-output constraint and returns the fixed clinical-answer envelope; this relay
+	// deliberately does not construct model prompts or schemas.
 	private static final Pattern PROMPT_INJECTION = Pattern.compile(
 			"(?i)(ignore\\s+(previous|above|all)\\s+(instructions|prompts|rules)"
 			+ "|disregard\\s+(your|the|all)\\s+(instructions|rules|prompt)"
@@ -1160,29 +1160,7 @@ public class ChartSearchAiRestController {
 		user.put("content", question);
 		messages.add(user);
 		root.put("messages", messages);
-		root.put("response_format", chartAnswerResponseFormat());
 		return MAPPER.writeValueAsString(root);
-	}
-
-	private Map<String, Object> chartAnswerResponseFormat() {
-		Map<String, Object> root = new LinkedHashMap<String, Object>();
-		root.put("type", "json_schema");
-		Map<String, Object> jsonSchema = new LinkedHashMap<String, Object>();
-		jsonSchema.put("name", "chart_answer");
-		Map<String, Object> schema = new LinkedHashMap<String, Object>();
-		schema.put("type", "object");
-		Map<String, Object> properties = new LinkedHashMap<String, Object>();
-		properties.put("answer", Collections.singletonMap("type", "string"));
-		Map<String, Object> citations = new LinkedHashMap<String, Object>();
-		citations.put("type", "array");
-		citations.put("items", Collections.singletonMap("type", "integer"));
-		properties.put("citations", citations);
-		properties.put("blocks", Collections.singletonMap("type", "array"));
-		schema.put("properties", properties);
-		schema.put("required", java.util.Arrays.asList("answer", "citations", "blocks"));
-		jsonSchema.put("schema", schema);
-		root.put("json_schema", jsonSchema);
-		return root;
 	}
 
 	private String runtimeApiKey() {

@@ -502,6 +502,8 @@ public class ChartSearchAiStreamingTest {
 			assertTrue(hubRequestBody.get().length() > 0, "hub request JSON body must not be empty");
 			assertEquals("single-12b-checked", hubRequest.get("model").asText());
 			assertEquals("patient-uuid", hubRequest.get("patient").asText());
+			assertFalse(hubRequest.has("response_format"),
+					"the hub product profile, not the Java relay, owns the answer schema");
 			assertEquals("What medications is this patient taking?",
 					hubRequest.get("messages").get(0).get("content").asText());
 			verify(f.chatService, times(1)).persistHubStagedAnswer(

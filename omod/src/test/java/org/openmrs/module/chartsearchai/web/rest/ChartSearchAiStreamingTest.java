@@ -607,7 +607,9 @@ public class ChartSearchAiStreamingTest {
 					+ "data: {\"answer\":\"Ans.\",\"references\":[],\"blocks\":[],"
 					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
 					+ "event: indepth_done\n"
-					+ "data: {\"status\":\"complete\",\"answer\":\"Finished details.\"}\n\n";
+					+ "data: {\"status\":\"complete\",\"answer\":\"Finished details.\","
+					+ "\"references\":[{\"index\":1,\"groundingStatus\":\"verified\"}],"
+					+ "\"inDepth\":{\"status\":\"complete\",\"answer\":\"Finished details.\"}}\n\n";
 			byte[] bytes = sse.getBytes(StandardCharsets.UTF_8);
 			exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
 			exchange.sendResponseHeaders(200, bytes.length);
@@ -645,6 +647,9 @@ public class ChartSearchAiStreamingTest {
 			Map<String, Object> inDepth = (Map<String, Object>) update.getValue().get("inDepth");
 			assertEquals("complete", inDepth.get("status"));
 			assertEquals("Finished details.", inDepth.get("answer"));
+			List<Map<String, Object>> references =
+					(List<Map<String, Object>>) update.getValue().get("references");
+			assertEquals("verified", references.get(0).get("groundingStatus"));
 		}
 		finally {
 			hub.stop(0);

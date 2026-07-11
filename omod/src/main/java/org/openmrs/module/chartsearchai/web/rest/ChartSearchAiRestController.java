@@ -1078,8 +1078,14 @@ public class ChartSearchAiRestController {
 		}
 		if ("indepth_done".equals(event) || "indepth_error".equals(event)) {
 			inDepthTerminalSeen[0] = true;
-			Map<String, Object> update = new LinkedHashMap<String, Object>();
-			update.put("inDepth", payload);
+			Map<String, Object> update;
+			if (payload.get("inDepth") instanceof Map) {
+				update = payload;
+			}
+			else {
+				update = new LinkedHashMap<String, Object>();
+				update.put("inDepth", payload);
+			}
 			if (assistantMessageUuid[0] != null) {
 				chatService.updateHubStagedMessage(session, assistantMessageUuid[0], update);
 			}

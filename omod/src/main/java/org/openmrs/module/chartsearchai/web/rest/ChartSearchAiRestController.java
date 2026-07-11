@@ -1064,8 +1064,16 @@ public class ChartSearchAiRestController {
 			return;
 		}
 		if ("indepth_pending".equals(event)) {
-			payload.put("messageId", assistantMessageUuid[0]);
-			writeSseEvent(out, event, MAPPER.writeValueAsString(payload));
+			if (assistantMessageUuid[0] != null) {
+				ChatTurnResult result = chatService.updateHubStagedMessage(
+						session, assistantMessageUuid[0], payload);
+				writeHubPayload(out, event, payload, result.getSessionUuid(),
+						assistantMessageUuid[0], model);
+			}
+			else {
+				payload.put("messageId", null);
+				writeSseEvent(out, event, MAPPER.writeValueAsString(payload));
+			}
 			return;
 		}
 		if ("indepth_done".equals(event) || "indepth_error".equals(event)) {

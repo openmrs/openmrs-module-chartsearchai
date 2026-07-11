@@ -429,7 +429,11 @@ public class ChartSearchAiStreamingTest {
 					+ "\"answerValidation\":{\"status\":\"edited\",\"originalAnswer\":\"Initial answer [1].\"},"
 					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
 					+ "event: indepth_pending\n"
-					+ "data: {\"status\":\"pending\",\"answer\":\"\"}\n\n"
+					+ "data: {\"answer\":\"Edited answer [2].\",\"references\":[{\"index\":2,"
+					+ "\"resourceType\":\"Order\",\"resourceUuid\":\"ord-2\","
+					+ "\"groundingStatus\":\"verified\",\"grounded\":true}],\"blocks\":[],"
+					+ "\"answerValidation\":{\"status\":\"edited\",\"originalAnswer\":\"Initial answer [1].\"},"
+					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
 					+ "event: indepth_done\n"
 					+ "data: {\"status\":\"complete\",\"answer\":\"Deep details.\"}\n\n"
 					+ "event: done\n"
@@ -484,6 +488,8 @@ public class ChartSearchAiStreamingTest {
 			JsonNode answerDone = parseEvent(sse, "answer_done");
 			assertEquals("assistant-msg-uuid", answerDone.get("messageId").asText());
 			assertEquals("checking", answerDone.get("references").get(0).get("groundingStatus").asText());
+			JsonNode pending = parseEvent(sse, "indepth_pending");
+			assertEquals("verified", pending.get("references").get(0).get("groundingStatus").asText());
 			JsonNode done = parseDoneEvent(sse);
 			assertEquals("Edited answer [2].", done.get("answer").asText());
 			assertEquals("verified", done.get("references").get(0).get("groundingStatus").asText());
@@ -500,7 +506,7 @@ public class ChartSearchAiStreamingTest {
 					hubRequest.get("messages").get(0).get("content").asText());
 			verify(f.chatService, times(1)).persistHubStagedAnswer(
 					eq(f.session), eq("What medications is this patient taking?"), any(), anyLong());
-			verify(f.chatService, times(3)).updateHubStagedMessage(
+			verify(f.chatService, times(4)).updateHubStagedMessage(
 					eq(f.session), eq("assistant-msg-uuid"), any());
 		}
 		finally {

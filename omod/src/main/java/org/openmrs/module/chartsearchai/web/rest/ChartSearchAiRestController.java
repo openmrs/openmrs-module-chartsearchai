@@ -45,17 +45,12 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ContextAuthenticationException;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
-import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChatService;
 import org.openmrs.module.chartsearchai.api.ChatService.ChatTurnResult;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
-import org.openmrs.module.chartsearchai.api.impl.ResponseBlock;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.chartsearchai.model.ChatMessage;
 import org.openmrs.module.chartsearchai.model.ChatSession;
-import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,54 +91,6 @@ public class ChartSearchAiRestController {
 	private static final int MAX_QUESTION_LENGTH = 1000;
 
 	private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]");
-
-	private static String formatDate(Date date) {
-		return date != null ? DateFormatUtil.formatDate(date) : null;
-	}
-
-	/**
-	 * Serialize a list of {@link ResponseBlock} into the JSON-Map shape used
-	 * by both the {@code /chat} sync response and the SSE {@code done} event.
-	 * Keeps wire format identical across the two surfaces so the SPA only
-	 * implements one parser.
-	 */
-	private static List<Map<String, Object>> blocksToJson(List<ResponseBlock> blocks) {
-		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
-		if (blocks == null) {
-			return out;
-		}
-		for (ResponseBlock block : blocks) {
-			Map<String, Object> blockMap = new LinkedHashMap<String, Object>();
-			blockMap.put("kind", block.getKind());
-			if (block.getTitle() != null) {
-				blockMap.put("title", block.getTitle());
-			}
-			List<Map<String, Object>> columns = new ArrayList<Map<String, Object>>();
-			for (ResponseBlock.Column c : block.getColumns()) {
-				Map<String, Object> col = new LinkedHashMap<String, Object>();
-				col.put("key", c.getKey());
-				col.put("label", c.getLabel());
-				columns.add(col);
-			}
-			blockMap.put("columns", columns);
-			List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-			for (ResponseBlock.Row row : block.getRows()) {
-				Map<String, Object> cellsMap = new LinkedHashMap<String, Object>();
-				for (Map.Entry<String, ResponseBlock.Cell> entry : row.getCells().entrySet()) {
-					Map<String, Object> cellMap = new LinkedHashMap<String, Object>();
-					cellMap.put("text", entry.getValue().getText());
-					cellMap.put("refs", entry.getValue().getRefs());
-					cellsMap.put(entry.getKey(), cellMap);
-				}
-				Map<String, Object> rowMap = new LinkedHashMap<String, Object>();
-				rowMap.put("cells", cellsMap);
-				rows.add(rowMap);
-			}
-			blockMap.put("rows", rows);
-			out.add(blockMap);
-		}
-		return out;
-	}
 
 	// Defense-in-depth: catches common prompt injection phrases. This is a blocklist
 	// and can be bypassed with paraphrasing. The hub's product profile owns the primary
@@ -408,18 +355,6 @@ public class ChartSearchAiRestController {
 				streamHubStagedChat(out, session, patientUuid, sanitizedQuestion, hubRequest);
 				return;
 			}
-			catch (ChartTooLargeException e) {
-				log.warn("Chart too large for chat streaming for patient [id={}]: {}",
-						patient.getPatientId(), e.getMessage());
-				try {
-					writeSseEvent(out, "error",
-							"This patient's chart is too large to process. "
-									+ "Contact your administrator to increase the LLM context size.");
-				}
-				catch (IOException ioe) {
-					log.debug("Could not send too-large error event, client likely disconnected");
-				}
-			}
 			catch (IllegalStateException e) {
 				log.error("Chat configuration error during streaming", e);
 				try {
@@ -537,20 +472,18 @@ public class ChartSearchAiRestController {
 		}
 
 		ChatTurnResult result;
+		Map<String, Object> wire;
 		try {
 			// Synchronous callers drain the same hub engine the product streams.
 			long hubCallStart = System.nanoTime();
-			Map<String, Object> wire = hubRelayCompletionWire(session, patientUuid, question, hubRequest);
+			wire = hubRelayCompletionWire(session, patientUuid, question, hubRequest);
 			long responseTimeMs = (System.nanoTime() - hubCallStart) / 1_000_000;
 			result = chatService.persistHubStagedAnswer(session, question, wire, responseTimeMs);
 		}
-		catch (ChartTooLargeException e) {
-			log.warn("Chart too large for chat for patient [id={}]: {}",
-					patient.getPatientId(), e.getMessage());
-			return new ResponseEntity<Object>(
-					errorResponse("This patient's chart is too large to process. "
-							+ "Contact your administrator to increase the LLM context size."),
-					HttpStatus.PAYLOAD_TOO_LARGE);
+		catch (HubRelayException e) {
+			log.warn("Hub rejected chat for patient [id={}] with {}: {}",
+					patient.getPatientId(), e.code, e.getMessage());
+			return new ResponseEntity<Object>(errorResponse(e.userMessage), e.status);
 		}
 		catch (Exception e) {
 			log.error("Chat failed for patient [id={}]", patient.getPatientId(), e);
@@ -559,31 +492,8 @@ public class ChartSearchAiRestController {
 					HttpStatus.INTERNAL_SERVER_ERROR);
 		}
 
-		ChartAnswer answer = result.getAnswer();
-		Map<String, Object> response = new LinkedHashMap<String, Object>();
-		response.put("answer", answer.getAnswer());
+		Map<String, Object> response = new LinkedHashMap<String, Object>(wire);
 		response.put("disclaimer", DISCLAIMER);
-
-		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
-		for (RecordReference ref : answer.getReferences()) {
-			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
-			refMap.put("index", ref.getIndex());
-			refMap.put("resourceType", ref.getResourceType());
-			refMap.put("resourceUuid", ref.getResourceUuid());
-			refMap.put("date", formatDate(ref.getDate()));
-			refs.add(refMap);
-		}
-		response.put("references", refs);
-		response.put("blocks", blocksToJson(answer.getBlocks()));
-		if (answer.getConfidence() != null) {
-			response.put("confidence", answer.getConfidence());
-		}
-		if (answer.getAnswerValidation() != null) {
-			response.put("answerValidation", answer.getAnswerValidation());
-		}
-		if (!answer.getSafetyWarnings().isEmpty()) {
-			response.put("safetyWarnings", answer.getSafetyWarnings());
-		}
 		response.put("session", result.getSessionUuid());
 		response.put("messageId", result.getAssistantMessageUuid());
 		response.put("model", answeredModel);
@@ -937,7 +847,8 @@ public class ChartSearchAiRestController {
 		if (hubResponse.statusCode() < 200 || hubResponse.statusCode() >= 300) {
 			String body = new String(hubResponse.body().readAllBytes(), StandardCharsets.UTF_8);
 			log.warn("Hub staged stream returned HTTP {}: {}", hubResponse.statusCode(), body);
-			writeSseEvent(out, "error", "Hub staged stream failed: HTTP " + hubResponse.statusCode());
+			HubRelayException failure = hubRelayFailure(hubResponse.statusCode(), body);
+			writeSseEvent(out, "error", failure.userMessage);
 			return;
 		}
 
@@ -1017,8 +928,7 @@ public class ChartSearchAiRestController {
 			throw new IOException("Hub relay interrupted", e);
 		}
 		if (hubResponse.statusCode() < 200 || hubResponse.statusCode() >= 300) {
-			throw new IOException("Hub relay failed: HTTP " + hubResponse.statusCode()
-					+ ": " + hubResponse.body());
+			throw hubRelayFailure(hubResponse.statusCode(), hubResponse.body());
 		}
 		Map<String, Object> completion = MAPPER.readValue(hubResponse.body(),
 				new TypeReference<Map<String, Object>>() {});
@@ -1160,12 +1070,48 @@ public class ChartSearchAiRestController {
 		user.put("content", question);
 		messages.add(user);
 		root.put("messages", messages);
+		Map<String, Object> context = new LinkedHashMap<String, Object>();
+		context.put("require_product_profile", true);
+		root.put("context", context);
 		return MAPPER.writeValueAsString(root);
 	}
 
 	private String runtimeApiKey() {
 		Properties props = Context.getRuntimeProperties();
 		return props == null ? null : props.getProperty(ChartSearchAiConstants.RP_HUB_API_KEY);
+	}
+
+	@SuppressWarnings("unchecked")
+	private HubRelayException hubRelayFailure(int upstreamStatus, String body) {
+		String code = "hub_rejected_request";
+		String detailMessage = null;
+		try {
+			Map<String, Object> envelope = MAPPER.readValue(body,
+					new TypeReference<Map<String, Object>>() {});
+			Object detail = envelope.get("detail");
+			if (detail instanceof Map) {
+				Map<String, Object> fields = (Map<String, Object>) detail;
+				if (fields.get("code") != null) {
+					code = fields.get("code").toString();
+				}
+				if (fields.get("message") != null) {
+					detailMessage = fields.get("message").toString();
+				}
+			}
+		}
+		catch (IOException malformedErrorBody) {
+			log.debug("Hub returned a non-JSON error body", malformedErrorBody);
+		}
+		if ("insufficient_context".equals(code)) {
+			return new HubRelayException(HttpStatus.UNPROCESSABLE_ENTITY, code,
+					detailMessage == null ? "The chart cannot fit safely in the selected model's context."
+							: detailMessage,
+					"This chart cannot fit safely in the selected model's context. "
+							+ "Choose a profile with a larger context window or review the chart directly.");
+		}
+		return new HubRelayException(HttpStatus.BAD_GATEWAY, code,
+				"Hub relay failed: HTTP " + upstreamStatus,
+				"The clinical answer service could not process this request.");
 	}
 
 	private void writeSseEvent(OutputStream out, String event, String data) throws IOException {
@@ -1223,6 +1169,24 @@ public class ChartSearchAiRestController {
 		HubRequest(String endpointUrl, String profileId) {
 			this.endpointUrl = endpointUrl;
 			this.profileId = profileId;
+		}
+	}
+
+	private static final class HubRelayException extends IOException {
+
+		private static final long serialVersionUID = 1L;
+
+		private final HttpStatus status;
+
+		private final String code;
+
+		private final String userMessage;
+
+		HubRelayException(HttpStatus status, String code, String message, String userMessage) {
+			super(message);
+			this.status = status;
+			this.code = code;
+			this.userMessage = userMessage;
 		}
 	}
 

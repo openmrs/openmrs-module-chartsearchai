@@ -319,6 +319,90 @@ public class ChartSearchAiStreamingTest {
 		assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
 	}
 
+	@Test
+	@SuppressWarnings("unchecked")
+	public void chat_mapsStructuredInsufficientContextWithoutTheDeletedJavaChartSizer()
+			throws Exception {
+		Fixture f = newFixture(true);
+		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		hub.createContext("/v1/chat/completions", exchange -> {
+			byte[] bytes = ("{\"detail\":{\"code\":\"insufficient_context\","
+					+ "\"source\":\"selector\",\"message\":\"Mandatory evidence exceeds budget.\"}}")
+					.getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().add("Content-Type", "application/json");
+			exchange.sendResponseHeaders(422, bytes.length);
+			try (OutputStream responseBody = exchange.getResponseBody()) {
+				responseBody.write(bytes);
+			}
+		});
+		hub.start();
+		try {
+			configureHub(f, "http://127.0.0.1:" + hub.getAddress().getPort()
+					+ "/v1/chat/completions");
+			Map<String, String> request = chatBody();
+			request.put("profile", "single-e4b-checked");
+			ResponseEntity<Object> response;
+			try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
+				ctx.when(() -> Context.requirePrivilege(
+						ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(inv -> null);
+				ctx.when(Context::getPatientService).thenReturn(f.patientService);
+				ctx.when(Context::getAdministrationService).thenReturn(f.adminService);
+				ctx.when(Context::getAuthenticatedUser).thenReturn(f.user);
+				ctx.when(Context::getRuntimeProperties).thenReturn(new Properties());
+				response = f.controller.chat(request);
+			}
+
+			assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, response.getStatusCode());
+			Map<String, String> error = (Map<String, String>) response.getBody();
+			assertTrue(error.get("error").contains("cannot fit safely"));
+			verify(f.chatService, times(0)).persistHubStagedAnswer(any(), any(), any(), anyLong());
+		}
+		finally {
+			hub.stop(0);
+		}
+	}
+
+	@Test
+	public void chatStream_mapsStructuredInsufficientContextToAReadableErrorEvent()
+			throws Exception {
+		Fixture f = newFixture(true);
+		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		hub.createContext("/v1/chat/completions", exchange -> {
+			byte[] bytes = ("{\"detail\":{\"code\":\"insufficient_context\","
+					+ "\"message\":\"Mandatory evidence exceeds budget.\"}}")
+					.getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(422, bytes.length);
+			try (OutputStream responseBody = exchange.getResponseBody()) {
+				responseBody.write(bytes);
+			}
+		});
+		hub.start();
+		try {
+			configureHub(f, "http://127.0.0.1:" + hub.getAddress().getPort()
+					+ "/v1/chat/completions");
+			Map<String, String> request = chatBody();
+			request.put("profile", "single-e4b-checked");
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
+				ctx.when(() -> Context.requirePrivilege(
+						ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(inv -> null);
+				ctx.when(Context::getPatientService).thenReturn(f.patientService);
+				ctx.when(Context::getAdministrationService).thenReturn(f.adminService);
+				ctx.when(Context::getAuthenticatedUser).thenReturn(f.user);
+				ctx.when(Context::getRuntimeProperties).thenReturn(new Properties());
+				f.controller.chatStream(request, response);
+			}
+
+			String sse = response.getContentAsString();
+			assertTrue(sse.contains("event: error"));
+			assertTrue(sse.contains("cannot fit safely"));
+			assertTrue(!sse.contains("Mandatory evidence exceeds budget"));
+		}
+		finally {
+			hub.stop(0);
+		}
+	}
+
 	/**
 	 * Synchronous clients drain the same selected hub product profile the UI streams.
 	 */
@@ -339,8 +423,11 @@ public class ChartSearchAiStreamingTest {
 			}
 			String completion = "{\"choices\":[{\"message\":{\"content\":"
 					+ "\"{\\\"answer\\\":\\\"Sync answer [1].\\\",\\\"references\\\":"
-					+ "[{\\\"index\\\":1,\\\"resourceType\\\":\\\"Observation\\\",\\\"resourceUuid\\\":\\\"obs-1\\\"}],"
-					+ "\\\"blocks\\\":[]}\"}}]}";
+					+ "[{\\\"index\\\":1,\\\"resourceType\\\":\\\"Observation\\\",\\\"resourceUuid\\\":\\\"obs-1\\\","
+					+ "\\\"sourceText\\\":\\\"CD4 count 500\\\",\\\"usage\\\":[{\\\"location\\\":\\\"answer\\\"}],"
+					+ "\\\"groundingChecks\\\":[{\\\"status\\\":\\\"verified\\\"}],\\\"groundingScope\\\":\\\"record\\\"}],"
+					+ "\\\"blocks\\\":[],\\\"temporalGate\\\":{\\\"mode\\\":\\\"enforce\\\"},"
+					+ "\\\"inDepth\\\":{\\\"status\\\":\\\"complete\\\",\\\"answer\\\":\\\"Details.\\\"}}\"}}]}";
 			byte[] bytes = completion.getBytes(StandardCharsets.UTF_8);
 			exchange.getResponseHeaders().add("Content-Type", "application/json");
 			exchange.sendResponseHeaders(200, bytes.length);
@@ -375,6 +462,11 @@ public class ChartSearchAiStreamingTest {
 			JsonNode result = MAPPER.valueToTree(response.getBody());
 			assertEquals("Sync answer [1].", result.get("answer").asText());
 			assertEquals("single-e4b-checked", result.get("model").asText());
+			assertEquals("CD4 count 500", result.get("references").get(0).get("sourceText").asText());
+			assertEquals("answer", result.get("references").get(0).get("usage").get(0).get("location").asText());
+			assertEquals("record", result.get("references").get(0).get("groundingScope").asText());
+			assertEquals("complete", result.get("inDepth").get("status").asText());
+			assertEquals("enforce", result.get("temporalGate").get("mode").asText());
 
 			JsonNode hubRequest = MAPPER.readTree(hubRequestBody.get());
 			assertEquals("single-e4b-checked", hubRequest.get("model").asText());
@@ -504,6 +596,8 @@ public class ChartSearchAiStreamingTest {
 			assertEquals("patient-uuid", hubRequest.get("patient").asText());
 			assertFalse(hubRequest.has("response_format"),
 					"the hub product profile, not the Java relay, owns the answer schema");
+			assertTrue(hubRequest.get("context").get("require_product_profile").asBoolean(),
+					"the relay must require the hub to reject experimental/non-product legs");
 			assertEquals("What medications is this patient taking?",
 					hubRequest.get("messages").get(0).get("content").asText());
 			verify(f.chatService, times(1)).persistHubStagedAnswer(

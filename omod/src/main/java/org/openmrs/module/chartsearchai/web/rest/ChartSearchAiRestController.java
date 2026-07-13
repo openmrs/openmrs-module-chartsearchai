@@ -951,7 +951,7 @@ public class ChartSearchAiRestController {
 			assistantMessageUuid[0] = result.getAssistantMessageUuid();
 			Object validation = payload.get("answerValidation");
 			if (validation instanceof Map
-					&& !"validating".equals(((Map<?, ?>) validation).get("status"))) {
+					&& !"checking".equals(((Map<?, ?>) validation).get("status"))) {
 				answerValidationSettled[0] = true;
 			}
 			writeHubPayload(out, event, payload, result, model);
@@ -967,7 +967,7 @@ public class ChartSearchAiRestController {
 		if ("indepth_pending".equals(event)) {
 			Object validation = payload.get("answerValidation");
 			if (validation instanceof Map
-					&& !"validating".equals(((Map<?, ?>) validation).get("status"))) {
+					&& !"checking".equals(((Map<?, ?>) validation).get("status"))) {
 				answerValidationSettled[0] = true;
 			}
 			if (assistantMessageUuid[0] != null) {

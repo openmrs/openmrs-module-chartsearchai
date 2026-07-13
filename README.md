@@ -263,7 +263,7 @@ The product stream relays the hub profile's staged answer/validation/In-Depth se
 
 | Event | Description |
 |-------|-------------|
-| `answer_done` | The direct answer is complete; the envelope's `answerValidation.status` is `validating` and `inDepth.status` is `pending` |
+| `answer_done` | The direct answer is complete; the envelope's `answerValidation.status` is `checking` and `inDepth.status` is `pending` |
 | `answer_validation` | *(only when the level has a validator)* the same message updated after its self-check |
 | `indepth_pending` | The in-depth analysis is about to start |
 | `indepth_done` / `indepth_error` | The in-depth analysis completed or failed |

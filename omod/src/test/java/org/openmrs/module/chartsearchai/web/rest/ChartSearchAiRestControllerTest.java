@@ -10,13 +10,16 @@
 package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.net.http.HttpRequest;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -36,6 +39,17 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 public class ChartSearchAiRestControllerTest {
+
+	@Test
+	public void buildHubRelayHttpRequest_shouldNotImposeAWholeProfileTimeout() {
+		HttpRequest request = ChartSearchAiRestController.buildHubRelayHttpRequest(
+				"http://med-agent-hub:8080/v1/chat/completions", "{}", true, "secret");
+
+		assertFalse(request.timeout().isPresent());
+		assertTrue(request.headers().firstValue("Accept").isPresent());
+		assertEquals("Bearer secret",
+				request.headers().firstValue("Authorization").orElse(null));
+	}
 
 	@Test
 	public void validateQuestion_shouldAcceptNormalClinicalQuestion() {

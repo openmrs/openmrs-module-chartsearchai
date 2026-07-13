@@ -19,7 +19,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -1092,17 +1091,26 @@ public class ChartSearchAiRestController {
 
 	private HttpRequest hubRelayHttpRequest(HubRequest hubRequest, String requestJson,
 			boolean stream) {
+		return buildHubRelayHttpRequest(hubRequest.endpointUrl, requestJson, stream,
+				runtimeApiKey());
+	}
+
+	/**
+	 * Builds a hub request without a whole-profile wall-clock timeout. Product profiles emit a fast
+	 * Answer and may continue through review, grounding, and In-Depth for longer than any fixed relay
+	 * threshold. The hub owns stage/model limits, while stream disconnects propagate cancellation.
+	 */
+	static HttpRequest buildHubRelayHttpRequest(String endpointUrl, String requestJson,
+			boolean stream, String apiKey) {
 		HttpRequest.Builder builder = HttpRequest.newBuilder()
-				.uri(URI.create(hubRequest.endpointUrl))
+				.uri(URI.create(endpointUrl))
 				.version(HttpClient.Version.HTTP_1_1)
-				.timeout(Duration.ofSeconds(300))
 				.header("Content-Type", "application/json")
 				.POST(HttpRequest.BodyPublishers.ofByteArray(
 						requestJson.getBytes(StandardCharsets.UTF_8)));
 		if (stream) {
 			builder.header("Accept", "text/event-stream");
 		}
-		String apiKey = runtimeApiKey();
 		if (apiKey != null && !apiKey.trim().isEmpty()) {
 			builder.header("Authorization", "Bearer " + apiKey.trim());
 		}

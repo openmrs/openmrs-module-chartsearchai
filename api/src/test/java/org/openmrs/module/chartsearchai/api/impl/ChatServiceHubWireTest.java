@@ -12,7 +12,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -104,5 +106,34 @@ public class ChatServiceHubWireTest {
 		assertEquals("Checked final answer [1].", audit.getAnswer());
 		assertEquals(1, audit.getReferenceCount());
 		verify(auditDAO).saveAuditLog(audit);
+	}
+
+	@Test
+	public void priorTurnsForRelay_projectsPersistedAssistantWireWithoutMutatingRows() {
+		ChatDAO chatDAO = mock(ChatDAO.class);
+		ChatServiceImpl service = new ChatServiceImpl();
+		ReflectionTestUtils.setField(service, "chatDAO", chatDAO);
+
+		ChatSession session = new ChatSession();
+		ChatMessage user = new ChatMessage();
+		user.setRole(ChatMessage.ROLE_USER);
+		user.setOrdinal(0);
+		user.setContent("Name the medication you selected.");
+		ChatMessage assistant = new ChatMessage();
+		assistant.setRole(ChatMessage.ROLE_ASSISTANT);
+		assistant.setOrdinal(1);
+		assistant.setContent("{\"answer\":\"I selected naproxen.\",\"references\":[{\"index\":3}],"
+				+ "\"inDepth\":{\"status\":\"complete\",\"answer\":\"Extra detail\"}}");
+		when(chatDAO.getMessages(session)).thenReturn(Arrays.asList(user, assistant));
+
+		List<ChatMessage> projected = service.priorTurnsForRelay(session);
+
+		assertEquals(2, projected.size());
+		assertEquals("Name the medication you selected.", projected.get(0).getContent());
+		assertEquals("I selected naproxen.", projected.get(1).getContent());
+		assertEquals(1, projected.get(1).getOrdinal());
+		assertEquals("{\"answer\":\"I selected naproxen.\",\"references\":[{\"index\":3}],"
+				+ "\"inDepth\":{\"status\":\"complete\",\"answer\":\"Extra detail\"}}",
+				assistant.getContent(), "projection must not mutate the persisted assistant envelope");
 	}
 }

@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -408,9 +409,11 @@ public class ChartSearchAiStreamingTest {
 	@Test
 	public void chat_profileRelaysToTheSameHubEngine() throws Exception {
 		Fixture f = newFixture(true);
+		AtomicInteger hubRequestCount = new AtomicInteger();
 		AtomicReference<String> hubRequestBody = new AtomicReference<String>();
 		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
 		hub.createContext("/v1/chat/completions", exchange -> {
+			hubRequestCount.incrementAndGet();
 			hubRequestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
 			// Deliberate delay so the recorded responseTimeMs is deterministically non-zero,
 			// proving it reflects real elapsed time rather than the old hardcoded 0.
@@ -467,7 +470,11 @@ public class ChartSearchAiStreamingTest {
 			assertEquals("enforce", result.get("temporalGate").get("mode").asText());
 
 			JsonNode hubRequest = MAPPER.readTree(hubRequestBody.get());
+			assertEquals(1, hubRequestCount.get(), "one chat turn must make exactly one hub request");
 			assertEquals("single-e4b-checked", hubRequest.get("model").asText());
+			assertFalse(hubRequest.get("model").asText().startsWith("answer:"));
+			assertFalse(hubRequest.get("model").asText().startsWith("answer-review:"));
+			assertFalse(hubRequest.get("model").asText().startsWith("indepth-only:"));
 			assertEquals("patient-uuid", hubRequest.get("patient").asText());
 			assertFalse(hubRequest.get("stream").asBoolean());
 
@@ -495,12 +502,14 @@ public class ChartSearchAiStreamingTest {
 	public void chatStream_hubNativeSingleProfile_relaysOneHubStreamAndUpdatesSameMessage()
 			throws Exception {
 		Fixture f = newFixture(true);
+		AtomicInteger hubRequestCount = new AtomicInteger();
 		AtomicReference<String> hubRequestBody = new AtomicReference<String>();
 		AtomicReference<String> hubRequestProtocol = new AtomicReference<String>();
 		AtomicReference<String> hubRequestAccept = new AtomicReference<String>();
 		AtomicReference<String> hubRequestContentType = new AtomicReference<String>();
 		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
 		hub.createContext("/v1/chat/completions", exchange -> {
+			hubRequestCount.incrementAndGet();
 			hubRequestProtocol.set(exchange.getProtocol());
 			hubRequestAccept.set(exchange.getRequestHeaders().getFirst("Accept"));
 			hubRequestContentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
@@ -585,11 +594,15 @@ public class ChartSearchAiStreamingTest {
 			assertEquals("single-12b-checked", done.get("model").asText());
 
 			JsonNode hubRequest = MAPPER.readTree(hubRequestBody.get());
+			assertEquals(1, hubRequestCount.get(), "one streamed turn must make exactly one hub request");
 			assertEquals("HTTP/1.1", hubRequestProtocol.get());
 			assertEquals("text/event-stream", hubRequestAccept.get());
 			assertTrue(hubRequestContentType.get().startsWith("application/json"));
 			assertTrue(hubRequestBody.get().length() > 0, "hub request JSON body must not be empty");
 			assertEquals("single-12b-checked", hubRequest.get("model").asText());
+			assertFalse(hubRequest.get("model").asText().startsWith("answer:"));
+			assertFalse(hubRequest.get("model").asText().startsWith("answer-review:"));
+			assertFalse(hubRequest.get("model").asText().startsWith("indepth-only:"));
 			assertEquals("patient-uuid", hubRequest.get("patient").asText());
 			assertFalse(hubRequest.has("response_format"),
 					"the hub product profile, not the Java relay, owns the answer schema");

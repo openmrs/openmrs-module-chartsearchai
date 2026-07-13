@@ -729,7 +729,7 @@ public class ChartSearchAiStreamingTest {
 		try {
 			configureHub(f, "http://127.0.0.1:" + hub.getAddress().getPort() + "/v1/chat/completions");
 			Map<String, String> body = chatBody();
-			body.put("profile", "med-agent-team-staged-12b");
+			body.put("profile", "single-12b-checked");
 			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
 					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
 			when(f.chatService.updateHubStagedMessage(eq(f.session), eq("assistant-msg-uuid"), any()))

@@ -45,12 +45,6 @@
 	</globalProperty>
 
 	<globalProperty>
-		<property>chartsearchai.hub.profileId</property>
-		<defaultValue>single-e4b-checked</defaultValue>
-		<description>Fallback med-agent-hub product profile when a request does not provide a profile id. The ESM normally selects the hub-advertised default.</description>
-	</globalProperty>
-
-	<globalProperty>
 		<property>chartsearchai.rateLimitPerMinute</property>
 		<defaultValue>10</defaultValue>
 		<description>Maximum number of AI chart search queries a single user can make per minute. Set to 0 to disable rate limiting.</description>

@@ -965,6 +965,9 @@ public class ChartSearchAiRestController {
 			return;
 		}
 		if ("indepth_pending".equals(event)) {
+			if (!(payload.get("inDepth") instanceof Map)) {
+				throw new IOException("Hub indepth_pending event is missing the inDepth envelope.");
+			}
 			Object validation = payload.get("answerValidation");
 			if (validation instanceof Map
 					&& !"checking".equals(((Map<?, ?>) validation).get("status"))) {
@@ -983,17 +986,12 @@ public class ChartSearchAiRestController {
 		}
 		if ("indepth_done".equals(event) || "indepth_error".equals(event)) {
 			inDepthTerminalSeen[0] = true;
-			Map<String, Object> update;
-			if (payload.get("inDepth") instanceof Map) {
-				update = payload;
-			}
-			else {
-				update = new LinkedHashMap<String, Object>();
-				update.put("inDepth", payload);
+			if (!(payload.get("inDepth") instanceof Map)) {
+				throw new IOException("Hub " + event + " event is missing the inDepth envelope.");
 			}
 			if (assistantMessageUuid[0] != null) {
 				ChatTurnResult result = chatService.updateHubStagedMessage(
-						session, assistantMessageUuid[0], update);
+						session, assistantMessageUuid[0], payload);
 				writeHubPayload(out, event, payload, result, model);
 				return;
 			}
@@ -1231,14 +1229,10 @@ public class ChartSearchAiRestController {
 	 * endpoint or compose stages; they may only choose a hub-advertised profile id.
 	 */
 	private HubRequest resolveHubRequest(Map<String, String> body) {
-		String endpointUrl = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL);
-		String requestedProfile = body == null ? null : body.get("profile");
-		if (requestedProfile == null || requestedProfile.trim().isEmpty()) {
-			requestedProfile = Context.getAdministrationService()
-					.getGlobalProperty(ChartSearchAiConstants.GP_HUB_PROFILE_ID);
-		}
-		if (endpointUrl == null || endpointUrl.trim().isEmpty()) {
+			String endpointUrl = Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL);
+			String requestedProfile = body == null ? null : body.get("profile");
+			if (endpointUrl == null || endpointUrl.trim().isEmpty()) {
 			throw new IllegalArgumentException("med-agent-hub endpoint is not configured.");
 		}
 		if (requestedProfile == null || requestedProfile.trim().isEmpty()) {

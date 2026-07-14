@@ -27,8 +27,6 @@ public class ChartSearchAiConstants {
 
 	public static final String RP_HUB_API_KEY = "chartsearchai.hub.apikey";
 
-	public static final String GP_HUB_PROFILE_ID = "chartsearchai.hub.profileId";
-
 	public static final String GP_RATE_LIMIT_PER_MINUTE = "chartsearchai.rateLimitPerMinute";
 
 	public static final int DEFAULT_RATE_LIMIT_PER_MINUTE = 10;

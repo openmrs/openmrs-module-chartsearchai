@@ -14,10 +14,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -113,6 +115,7 @@ public class ChartSearchAiStreamingTest {
 		Map<String, String> body = new HashMap<String, String>();
 		body.put("patient", "patient-uuid");
 		body.put("question", "What medications is this patient taking?");
+		body.put("profile", "single-e4b-checked");
 		return body;
 	}
 
@@ -143,6 +146,28 @@ public class ChartSearchAiStreamingTest {
 		assertEquals(HttpStatus.BAD_REQUEST.value(), response.getStatus());
 		assertFalse(response.getContentAsString().startsWith("event:"),
 				"must fail before the SSE stream opens, got:\n" + response.getContentAsString());
+	}
+
+	@Test
+	public void chatStream_shouldRequireARequestSelectedHubProfile() throws Exception {
+		Fixture f = newFixture(true);
+		configureHub(f, "http://hub/v1/chat/completions");
+		Map<String, String> body = chatBody();
+		body.remove("profile");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+
+		try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
+			ctx.when(() -> Context.requirePrivilege(
+					ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(inv -> null);
+			ctx.when(Context::getPatientService).thenReturn(f.patientService);
+			ctx.when(Context::getAdministrationService).thenReturn(f.adminService);
+			ctx.when(Context::getAuthenticatedUser).thenReturn(f.user);
+
+			f.controller.chatStream(body, response);
+		}
+
+		assertEquals(HttpStatus.BAD_REQUEST.value(), response.getStatus());
+		assertTrue(response.getContentAsString().contains("profile is required"));
 	}
 
 	/**
@@ -192,8 +217,6 @@ public class ChartSearchAiStreamingTest {
 	public void chatStream_shouldReturnCleanError_whenSessionOrChartBuildFails() throws Exception {
 		Fixture f = newFixture(true);
 		configureHub(f, "http://hub/v1/chat/completions");
-		when(f.adminService.getGlobalProperty(ChartSearchAiConstants.GP_HUB_PROFILE_ID))
-				.thenReturn("single-e4b-checked");
 		// Simulate session resolution hitting a dangling encounter FK.
 		when(f.chatService.openOrLoadActiveSession(f.patient))
 				.thenThrow(new RuntimeException(
@@ -246,8 +269,8 @@ public class ChartSearchAiStreamingTest {
 					+ "data: {\"answer\":\"Direct answer [1].\",\"references\":[],\"blocks\":[],"
 					+ "\"answerValidation\":{\"status\":\"checked\"},"
 					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
-					+ "event: indepth_pending\ndata: {\"status\":\"pending\",\"answer\":\"\"}\n\n"
-					+ "event: indepth_done\ndata: {\"status\":\"complete\",\"answer\":\"Background claim.\"}\n\n"
+					+ "event: indepth_pending\ndata: {\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
+					+ "event: indepth_done\ndata: {\"inDepth\":{\"status\":\"complete\",\"answer\":\"Background claim.\"}}\n\n"
 					+ "event: done\n"
 					+ "data: {\"answer\":\"Direct answer [1].\",\"references\":[],\"blocks\":[],"
 					+ "\"answerValidation\":{\"status\":\"checked\"},"
@@ -292,6 +315,57 @@ public class ChartSearchAiStreamingTest {
 			JsonNode hubRequest = MAPPER.readTree(hubRequestBody.get());
 			assertEquals("med-agent-team-high-validated", hubRequest.get("model").asText());
 			verify(f.chatService, times(1)).persistHubStagedAnswer(eq(f.session), any(), any(), anyLong());
+		}
+		finally {
+			hub.stop(0);
+		}
+	}
+
+	@Test
+	public void chatStream_rejectsRetiredFlatInDepthEvents() throws Exception {
+		Fixture f = newFixture(true);
+		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		hub.createContext("/v1/chat/completions", exchange -> {
+			String sse = ""
+					+ "event: answer_done\n"
+					+ "data: {\"answer\":\"Answer.\",\"references\":[],\"blocks\":[],"
+					+ "\"answerValidation\":{\"status\":\"checked\"},"
+					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
+					+ "event: indepth_pending\n"
+					+ "data: {\"status\":\"pending\",\"answer\":\"\"}\n\n";
+			byte[] bytes = sse.getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+			exchange.sendResponseHeaders(200, bytes.length);
+			try (OutputStream body = exchange.getResponseBody()) {
+				body.write(bytes);
+			}
+		});
+		hub.start();
+		try {
+			configureHub(f, "http://127.0.0.1:" + hub.getAddress().getPort()
+					+ "/v1/chat/completions");
+			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
+			when(f.chatService.updateHubStagedMessage(eq(f.session), eq("assistant-msg-uuid"), any()))
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
+
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
+				ctx.when(() -> Context.requirePrivilege(
+						ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(inv -> null);
+				ctx.when(Context::getPatientService).thenReturn(f.patientService);
+				ctx.when(Context::getAdministrationService).thenReturn(f.adminService);
+				ctx.when(Context::getAuthenticatedUser).thenReturn(f.user);
+				ctx.when(Context::getRuntimeProperties).thenReturn(new Properties());
+				f.controller.chatStream(chatBody(), response);
+			}
+
+			String relayed = response.getContentAsString();
+			assertTrue(relayed.contains("event: answer_done"));
+			assertTrue(relayed.contains("event: error"));
+			assertTrue(relayed.contains("Chart search failed"));
+			verify(f.chatService, never()).updateHubStagedMessage(
+					eq(f.session), eq("assistant-msg-uuid"), argThat(update -> update.get("status") != null));
 		}
 		finally {
 			hub.stop(0);
@@ -534,7 +608,7 @@ public class ChartSearchAiStreamingTest {
 					+ "\"answerValidation\":{\"status\":\"edited\",\"originalAnswer\":\"Initial answer [1].\"},"
 					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
 					+ "event: indepth_done\n"
-					+ "data: {\"status\":\"complete\",\"answer\":\"Deep details.\"}\n\n"
+					+ "data: {\"inDepth\":{\"status\":\"complete\",\"answer\":\"Deep details.\"}}\n\n"
 					+ "event: done\n"
 					+ "data: {\"answer\":\"Edited answer [2].\",\"references\":[{\"index\":2,"
 					+ "\"resourceType\":\"Order\",\"resourceUuid\":\"ord-2\","
@@ -647,8 +721,8 @@ public class ChartSearchAiStreamingTest {
 					+ "event: answer_done\n"
 					+ "data: {\"answer\":\"2026-01-26.\",\"references\":[],\"blocks\":[],"
 					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
-					+ "event: indepth_pending\ndata: {\"status\":\"pending\",\"answer\":\"\"}\n\n"
-					+ "event: indepth_done\ndata: {\"status\":\"complete\",\"answer\":\"\"}\n\n"
+					+ "event: indepth_pending\ndata: {\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
+					+ "event: indepth_done\ndata: {\"inDepth\":{\"status\":\"complete\",\"answer\":\"\"}}\n\n"
 					+ "event: done\n"
 					+ "data: {\"answer\":\"2026-01-26.\",\"references\":[],\"blocks\":[],"
 					+ "\"inDepth\":{\"status\":\"complete\",\"answer\":\"\"}}\n\n";
@@ -774,7 +848,7 @@ public class ChartSearchAiStreamingTest {
 					+ "data: {\"answer\":\"Ans.\",\"references\":[],\"blocks\":[],"
 					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
 					+ "event: indepth_done\n"
-					+ "data: {\"status\":\"complete\",\"answer\":\"Finished details.\","
+					+ "data: {\"answer\":\"Ans.\","
 					+ "\"references\":[{\"index\":1,\"groundingStatus\":\"verified\"}],"
 					+ "\"inDepth\":{\"status\":\"complete\",\"answer\":\"Finished details.\"}}\n\n";
 			byte[] bytes = sse.getBytes(StandardCharsets.UTF_8);

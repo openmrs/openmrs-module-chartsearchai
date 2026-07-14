@@ -100,8 +100,11 @@ Minimum required configuration:
 | Property | Where | Description |
 |----------|-------|-------------|
 | `chartsearchai.hub.endpointUrl` | Global property | med-agent-hub `/v1/chat/completions` URL |
-| `chartsearchai.hub.profileId` | Global property | Fallback product profile; defaults to `single-e4b-checked`. The ESM normally uses the hub-advertised default |
 | `chartsearchai.hub.apikey` | `openmrs-runtime.properties` | Optional Bearer token for the hub |
+
+The ESM discovers product profiles from the hub metadata endpoint, selects the
+available profile marked as default, and sends that profile on every chat
+request. The OpenMRS module intentionally has no second profile default.
 
 The API key is read from `openmrs-runtime.properties` (not from the database) so it is never exposed in the Admin UI or database backups:
 
@@ -137,7 +140,6 @@ Set these global properties in **Admin > Settings**:
 | Property | Default | Description |
 |----------|---------|-------------|
 | `chartsearchai.hub.endpointUrl` | *(empty)* | med-agent-hub chat-completions URL |
-| `chartsearchai.hub.profileId` | `single-e4b-checked` | Fallback product profile when the request omits one |
 | `chartsearchai.hub.apikey` | *(empty)* | Optional runtime-property Bearer token |
 
 The API key is read from `openmrs-runtime.properties` (not from the database) so it is never exposed in the Admin UI or database backups. Add it to your runtime properties file:

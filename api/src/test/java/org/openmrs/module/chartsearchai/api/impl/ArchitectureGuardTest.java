@@ -56,7 +56,7 @@ public class ArchitectureGuardTest {
 		String config = Files.readString(root.resolve("omod/src/main/resources/config.xml"));
 
 		assertTrue(config.contains("chartsearchai.hub.endpointUrl"));
-		assertTrue(config.contains("chartsearchai.hub.profileId"));
+		assertFalse(config.contains("chartsearchai.hub.profileId"));
 		assertFalse(config.contains("chartsearchai.llm."));
 	}
 

@@ -244,6 +244,12 @@ Response:
 
 `confidence`, `answerValidation`, and `safetyWarnings` are emitted by the selected hub profile.
 `safetyWarnings` entries are non-blocking advisories.
+Flagged content is retained for manual review rather than hidden. When In-Depth checks remove or
+withhold generated claims, the nested object may also carry `reviewDraft` and
+`reviewReferences`; ChartSearchAI persists and relays those fields separately from the final
+`inDepth.answer` and final `references`.
+When Answer checks change model output, `answerValidation.originalAnswer` and
+`answerValidation.originalReferences` preserve the pre-check Answer and only its source mappings.
 
 ### Streaming chat (SSE)
 

@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -88,6 +89,7 @@ public class ChartSearchAiRestController {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private static final int MAX_QUESTION_LENGTH = 1000;
+	private static final int MAX_REQUEST_ID_LENGTH = 128;
 
 	private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]");
 
@@ -254,6 +256,7 @@ public class ChartSearchAiRestController {
 		String patientUuid = body.get("patient");
 		String sessionUuid = body.get("session");
 		String question = body.get("question");
+		String requestId = requestCorrelationId(body);
 
 		if (patientUuid == null || patientUuid.trim().isEmpty()) {
 			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "patient is required");
@@ -333,7 +336,7 @@ public class ChartSearchAiRestController {
 			unwrapped.flushBuffer();
 
 			try {
-				streamHubStagedChat(out, session, patientUuid, sanitizedQuestion, hubRequest);
+				streamHubStagedChat(out, session, patientUuid, sanitizedQuestion, requestId, hubRequest);
 				return;
 			}
 			catch (IllegalStateException e) {
@@ -395,6 +398,7 @@ public class ChartSearchAiRestController {
 		String patientUuid = body.get("patient");
 		String sessionUuid = body.get("session");
 		String question = body.get("question");
+		String requestId = requestCorrelationId(body);
 
 		PatientResolution resolved = resolvePatient(patientUuid);
 		if (resolved.hasError()) {
@@ -451,7 +455,7 @@ public class ChartSearchAiRestController {
 		try {
 			// Synchronous callers drain the same hub engine the product streams.
 			long hubCallStart = System.nanoTime();
-			wire = hubRelayCompletionWire(session, patientUuid, question, hubRequest);
+			wire = hubRelayCompletionWire(session, patientUuid, question, requestId, hubRequest);
 			long responseTimeMs = (System.nanoTime() - hubCallStart) / 1_000_000;
 			result = chatService.persistHubStagedAnswer(session, question, wire, responseTimeMs);
 		}
@@ -471,6 +475,7 @@ public class ChartSearchAiRestController {
 		response.put("disclaimer", DISCLAIMER);
 		response.put("session", result.getSessionUuid());
 		response.put("messageId", result.getAssistantMessageUuid());
+		response.put("requestId", requestId);
 		response.put("auditLogId", result.getAuditLogId());
 		response.put("model", answeredModel);
 
@@ -784,9 +789,10 @@ public class ChartSearchAiRestController {
 	}
 
 	private void streamHubStagedChat(OutputStream out, ChatSession session, String patientUuid,
-			String question, HubRequest hubRequest) throws IOException {
+			String question, String requestId, HubRequest hubRequest) throws IOException {
 		List<ChatMessage> priorTurns = chatService.priorTurnsForRelay(session);
-		String requestJson = hubRelayRequestJson(hubRequest.profileId, patientUuid, priorTurns, question, true);
+		String requestJson = hubRelayRequestJson(hubRequest.profileId, patientUuid, session.getUuid(), requestId,
+				priorTurns, question, true);
 		HttpRequest request = hubRelayHttpRequest(hubRequest, requestJson, true);
 		long hubCallStart = System.nanoTime();
 		HttpResponse<InputStream> hubResponse;
@@ -810,6 +816,7 @@ public class ChartSearchAiRestController {
 		final boolean[] doneSeen = new boolean[1];
 		final boolean[] inDepthTerminalSeen = new boolean[1];
 		final boolean[] answerValidationSettled = new boolean[1];
+		final Map<String, Object> latestPayload = new LinkedHashMap<String, Object>();
 		try (BufferedReader reader = new BufferedReader(new InputStreamReader(
 				hubResponse.body(), StandardCharsets.UTF_8))) {
 			String event = "";
@@ -818,8 +825,8 @@ public class ChartSearchAiRestController {
 			while ((line = reader.readLine()) != null) {
 				if (line.isEmpty()) {
 					handleHubStagedEvent(out, session, question, hubRequest.profileId,
-								assistantMessageUuid, doneSeen, inDepthTerminalSeen,
-								answerValidationSettled,
+							assistantMessageUuid, doneSeen, inDepthTerminalSeen,
+							answerValidationSettled, latestPayload,
 								event, data.toString(), hubCallStart);
 					event = "";
 					data.setLength(0);
@@ -841,14 +848,14 @@ public class ChartSearchAiRestController {
 			if (data.length() > 0) {
 				handleHubStagedEvent(out, session, question, hubRequest.profileId,
 						assistantMessageUuid, doneSeen, inDepthTerminalSeen,
-						answerValidationSettled,
+						answerValidationSettled, latestPayload,
 						event, data.toString(), hubCallStart);
 			}
 		}
 		finally {
 			if (!doneSeen[0] && !inDepthTerminalSeen[0]) {
 				persistInterruptedState(session, assistantMessageUuid[0],
-						!answerValidationSettled[0]);
+						!answerValidationSettled[0], latestPayload);
 			}
 		}
 		if (!doneSeen[0]) {
@@ -862,9 +869,10 @@ public class ChartSearchAiRestController {
 	 */
 	@SuppressWarnings("unchecked")
 	private Map<String, Object> hubRelayCompletionWire(ChatSession session, String patientUuid, String question,
-			HubRequest hubRequest) throws IOException {
+			String requestId, HubRequest hubRequest) throws IOException {
 		List<ChatMessage> priorTurns = chatService.priorTurnsForRelay(session);
-		String requestJson = hubRelayRequestJson(hubRequest.profileId, patientUuid, priorTurns, question, false);
+		String requestJson = hubRelayRequestJson(hubRequest.profileId, patientUuid, session.getUuid(), requestId,
+				priorTurns, question, false);
 		HttpRequest request = hubRelayHttpRequest(hubRequest, requestJson, false);
 		HttpResponse<String> hubResponse;
 		try {
@@ -895,20 +903,23 @@ public class ChartSearchAiRestController {
 	@SuppressWarnings("unchecked")
 	private void handleHubStagedEvent(OutputStream out, ChatSession session, String question,
 			String model, String[] assistantMessageUuid, boolean[] doneSeen,
-			boolean[] inDepthTerminalSeen, boolean[] answerValidationSettled, String event,
-			String data, long hubCallStart) throws IOException {
+			boolean[] inDepthTerminalSeen, boolean[] answerValidationSettled,
+			Map<String, Object> latestPayload, String event, String data,
+			long hubCallStart) throws IOException {
 		if (event == null || event.isEmpty() || data == null || data.isEmpty()) {
 			return;
 		}
 		if ("error".equals(event)) {
 			persistInterruptedState(session, assistantMessageUuid[0],
-					!answerValidationSettled[0]);
+					!answerValidationSettled[0], latestPayload);
 			doneSeen[0] = true;
 			writeSseEvent(out, event, data);
 			return;
 		}
 		Map<String, Object> payload = MAPPER.readValue(data,
 				new TypeReference<Map<String, Object>>() {});
+		latestPayload.clear();
+		latestPayload.putAll(payload);
 		if ("answer_done".equals(event)) {
 			long responseTimeMs = (System.nanoTime() - hubCallStart) / 1_000_000;
 			ChatTurnResult result = chatService.persistHubStagedAnswer(session, question, payload, responseTimeMs);
@@ -980,19 +991,26 @@ public class ChartSearchAiRestController {
 		writeSseEvent(out, event, data);
 	}
 
+	@SuppressWarnings("unchecked")
 	private void persistInterruptedState(ChatSession session, String assistantMessageUuid,
-			boolean answerValidationPending) {
+			boolean answerValidationPending, Map<String, Object> latestPayload) {
 		if (assistantMessageUuid == null) {
 			return;
 		}
-		Map<String, Object> inDepth = new LinkedHashMap<String, Object>();
+		Object latestInDepth = latestPayload == null ? null : latestPayload.get("inDepth");
+		Map<String, Object> inDepth = latestInDepth instanceof Map
+				? new LinkedHashMap<String, Object>((Map<String, Object>) latestInDepth)
+				: new LinkedHashMap<String, Object>();
 		inDepth.put("status", "failed");
 		inDepth.put("answer", "");
 		inDepth.put("error", "In-Depth was interrupted.");
 		Map<String, Object> update = new LinkedHashMap<String, Object>();
 		update.put("inDepth", inDepth);
 		if (answerValidationPending) {
-			Map<String, Object> validation = new LinkedHashMap<String, Object>();
+			Object latestValidation = latestPayload == null ? null : latestPayload.get("answerValidation");
+			Map<String, Object> validation = latestValidation instanceof Map
+					? new LinkedHashMap<String, Object>((Map<String, Object>) latestValidation)
+					: new LinkedHashMap<String, Object>();
 			validation.put("status", "unavailable");
 			validation.put("label", "Check unavailable");
 			validation.put("summary", "The answer check was interrupted before completion.");
@@ -1017,8 +1035,8 @@ public class ChartSearchAiRestController {
 		writeSseEvent(out, event, MAPPER.writeValueAsString(payload));
 	}
 
-	private String hubRelayRequestJson(String model, String patientUuid, List<ChatMessage> priorTurns,
-			String question, boolean stream) throws IOException {
+	private String hubRelayRequestJson(String model, String patientUuid, String sessionUuid, String requestId,
+			List<ChatMessage> priorTurns, String question, boolean stream) throws IOException {
 		Map<String, Object> root = new LinkedHashMap<String, Object>();
 		root.put("model", model);
 		root.put("stream", stream);
@@ -1042,8 +1060,21 @@ public class ChartSearchAiRestController {
 		root.put("messages", messages);
 		Map<String, Object> context = new LinkedHashMap<String, Object>();
 		context.put("require_product_profile", true);
+		context.put("session", sessionUuid);
+		context.put("request_id", requestId);
 		root.put("context", context);
 		return MAPPER.writeValueAsString(root);
+	}
+
+	private String requestCorrelationId(Map<String, String> body) {
+		String requestId = body == null ? null : body.get("requestId");
+		if (requestId != null) {
+			requestId = CONTROL_CHARS.matcher(requestId).replaceAll("").trim();
+		}
+		if (requestId == null || requestId.isEmpty() || requestId.length() > MAX_REQUEST_ID_LENGTH) {
+			return UUID.randomUUID().toString();
+		}
+		return requestId;
 	}
 
 	private String runtimeApiKey() {

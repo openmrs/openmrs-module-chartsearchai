@@ -614,10 +614,16 @@ public class ChartSearchAiStreamingTest {
 					+ "event: indepth_done\n"
 					+ "data: {\"inDepth\":{\"status\":\"complete\",\"answer\":\"Deep details.\"}}\n\n"
 					+ "event: done\n"
-					+ "data: {\"answer\":\"Edited answer [2].\",\"references\":[{\"index\":2,"
+					+ "data: {\"answer\":\"Flagged answer [2].\",\"references\":[{\"index\":2,"
 					+ "\"resourceType\":\"Order\",\"resourceUuid\":\"ord-2\","
 					+ "\"groundingStatus\":\"verified\",\"grounded\":true}],\"blocks\":[],"
-					+ "\"answerValidation\":{\"status\":\"edited\",\"originalAnswer\":\"Initial answer [1].\"},"
+					+ "\"confidence\":{\"answer\":{\"level\":\"red\",\"note\":\"Manual review required.\"}},"
+					+ "\"answerValidation\":{\"status\":\"needs_review\",\"label\":\"Needs review\","
+					+ "\"originalAnswer\":\"Initial answer [1].\","
+					+ "\"originalReferences\":[{\"index\":1,\"resourceType\":\"Observation\"}],"
+					+ "\"originalBlocks\":[{\"kind\":\"table\",\"title\":\"Rejected table\","
+					+ "\"columns\":[{\"key\":\"value\",\"label\":\"Value\"}],"
+					+ "\"rows\":[{\"cells\":{\"value\":{\"text\":\"unsafe\",\"refs\":[1]}}}]}]},"
 					+ "\"inDepth\":{\"status\":\"complete\",\"answer\":\"Deep details.\"}}\n\n";
 			byte[] bytes = sse.getBytes(StandardCharsets.UTF_8);
 			exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
@@ -631,6 +637,7 @@ public class ChartSearchAiStreamingTest {
 		try {
 			Map<String, String> body = chatBody();
 			body.put("profile", "single-12b-checked");
+			body.put("requestId", "turn-1");
 			configureHub(f, hubUrl);
 			when(f.chatService.persistHubStagedAnswer(
 					eq(f.session), eq("What medications is this patient taking?"), any(), anyLong()))
@@ -667,7 +674,13 @@ public class ChartSearchAiStreamingTest {
 			JsonNode pending = parseEvent(sse, "indepth_pending");
 			assertEquals("verified", pending.get("references").get(0).get("groundingStatus").asText());
 			JsonNode done = parseDoneEvent(sse);
-			assertEquals("Edited answer [2].", done.get("answer").asText());
+			assertEquals("Flagged answer [2].", done.get("answer").asText());
+			assertEquals("red", done.get("confidence").get("answer").get("level").asText());
+			assertEquals("needs_review", done.get("answerValidation").get("status").asText());
+			assertEquals("Initial answer [1].",
+					done.get("answerValidation").get("originalAnswer").asText());
+			assertEquals("Rejected table",
+					done.get("answerValidation").get("originalBlocks").get(0).get("title").asText());
 			assertEquals("verified", done.get("references").get(0).get("groundingStatus").asText());
 			assertEquals("single-12b-checked", done.get("model").asText());
 
@@ -686,12 +699,25 @@ public class ChartSearchAiStreamingTest {
 					"the hub product profile, not the Java relay, owns the answer schema");
 			assertTrue(hubRequest.get("context").get("require_product_profile").asBoolean(),
 					"the relay must require the hub to reject experimental/non-product legs");
+			assertEquals(f.session.getUuid(), hubRequest.get("context").get("session").asText(),
+					"the relay session must correlate the hub trace with the persisted turn");
+			assertEquals("turn-1", hubRequest.get("context").get("request_id").asText(),
+					"the client turn id must correlate the UI, persisted result, and hub trace");
 			assertEquals("What medications is this patient taking?",
 					hubRequest.get("messages").get(0).get("content").asText());
 			verify(f.chatService, times(1)).persistHubStagedAnswer(
 					eq(f.session), eq("What medications is this patient taking?"), any(), anyLong());
+			@SuppressWarnings("unchecked")
+			ArgumentCaptor<Map<String, Object>> updateWireCaptor = ArgumentCaptor.forClass(Map.class);
 			verify(f.chatService, times(4)).updateHubStagedMessage(
-					eq(f.session), eq("assistant-msg-uuid"), any());
+					eq(f.session), eq("assistant-msg-uuid"), updateWireCaptor.capture());
+			JsonNode persistedFinal = MAPPER.valueToTree(
+					updateWireCaptor.getAllValues().get(updateWireCaptor.getAllValues().size() - 1));
+			assertEquals("Flagged answer [2].", persistedFinal.get("answer").asText());
+			assertEquals("needs_review",
+					persistedFinal.get("answerValidation").get("status").asText());
+			assertEquals("Rejected table", persistedFinal.get("answerValidation")
+					.get("originalBlocks").get(0).get("title").asText());
 		}
 		finally {
 			hub.stop(0);
@@ -917,10 +943,15 @@ public class ChartSearchAiStreamingTest {
 			exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
 			exchange.sendResponseHeaders(200, 0); // chunked — arbitrary length, flushed incrementally
 			try (OutputStream body = exchange.getResponseBody()) {
-				body.write((""
-						+ "event: answer_done\n"
-						+ "data: {\"answer\":\"Ans.\",\"references\":[],\"blocks\":[],"
-						+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n")
+					body.write((""
+							+ "event: answer_done\n"
+							+ "data: {\"answer\":\"Ans.\",\"references\":[],\"blocks\":[],"
+							+ "\"answerValidation\":{\"status\":\"checking\","
+							+ "\"originalAnswer\":\"Original answer [1].\","
+							+ "\"originalReferences\":[{\"index\":1}],"
+							+ "\"originalBlocks\":[{\"kind\":\"table\",\"title\":\"Original table\","
+							+ "\"columns\":[],\"rows\":[]}]},"
+							+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n")
 						.getBytes(StandardCharsets.UTF_8));
 				body.flush();
 				for (int i = 0; i < 8; i++) {
@@ -980,10 +1011,17 @@ public class ChartSearchAiStreamingTest {
 			Map<String, Object> inDepth = (Map<String, Object>) update.getValue().get("inDepth");
 			assertEquals("failed", inDepth.get("status"));
 			assertEquals("In-Depth was interrupted.", inDepth.get("error"));
-			Map<String, Object> validation =
-					(Map<String, Object>) update.getValue().get("answerValidation");
-			assertEquals("unavailable", validation.get("status"));
-			assertEquals("Check unavailable", validation.get("label"));
+				Map<String, Object> validation =
+						(Map<String, Object>) update.getValue().get("answerValidation");
+				assertEquals("unavailable", validation.get("status"));
+				assertEquals("Check unavailable", validation.get("label"));
+				assertEquals("Original answer [1].", validation.get("originalAnswer"));
+				List<Map<String, Object>> originalReferences =
+						(List<Map<String, Object>>) validation.get("originalReferences");
+				assertEquals(1, originalReferences.get(0).get("index"));
+				List<Map<String, Object>> originalBlocks =
+						(List<Map<String, Object>>) validation.get("originalBlocks");
+				assertEquals("Original table", originalBlocks.get(0).get("title"));
 		}
 		finally {
 			hub.stop(0);
@@ -1001,10 +1039,18 @@ public class ChartSearchAiStreamingTest {
 		audit.setAuditLogId(42);
 		assistant.setAuditLog(audit);
 		assistant.setContent("{\"answer\":\"Use caution.\",\"references\":[],\"blocks\":[],"
+				+ "\"answerValidation\":{\"status\":\"edited\","
+				+ "\"originalAnswer\":\"Original caution [1].\","
+				+ "\"originalReferences\":[{\"index\":1,\"resourceType\":\"obs\"}],"
+				+ "\"originalBlocks\":[{\"kind\":\"table\",\"title\":\"Rejected table\","
+				+ "\"columns\":[{\"key\":\"dose\",\"label\":\"Dose\"}],"
+				+ "\"rows\":[{\"cells\":{\"dose\":{\"text\":\"unsafe\",\"refs\":[1]}}}]}]},"
 				+ "\"safetyWarnings\":[{\"type\":\"overdose\",\"drug\":\"Ibuprofen\","
 				+ "\"detail\":\"Dose exceeds the weight-based limit.\"}],"
 				+ "\"inDepth\":{\"status\":\"failed\",\"answer\":\"\","
-				+ "\"error\":\"In-Depth was interrupted.\"}}");
+				+ "\"error\":\"In-Depth was interrupted.\","
+				+ "\"reviewDraft\":\"Rejected model claim [1].\","
+				+ "\"reviewReferences\":[{\"index\":1,\"resourceType\":\"obs\"}]}}");
 		when(f.chatService.getMessages(f.session)).thenReturn(Collections.singletonList(assistant));
 
 		ResponseEntity<Object> response;
@@ -1023,9 +1069,24 @@ public class ChartSearchAiStreamingTest {
 				(List<Map<String, Object>>) messages.get(0).get("safetyWarnings");
 		assertEquals(42, messages.get(0).get("auditLogId"));
 		assertEquals("Ibuprofen", warnings.get(0).get("drug"));
+		Map<String, Object> answerValidation =
+				(Map<String, Object>) messages.get(0).get("answerValidation");
+		assertEquals("Original caution [1].", answerValidation.get("originalAnswer"));
+		List<Map<String, Object>> originalReferences =
+				(List<Map<String, Object>>) answerValidation.get("originalReferences");
+		assertEquals(1, originalReferences.get(0).get("index"));
+		assertEquals("obs", originalReferences.get(0).get("resourceType"));
+		List<Map<String, Object>> originalBlocks =
+				(List<Map<String, Object>>) answerValidation.get("originalBlocks");
+		assertEquals("Rejected table", originalBlocks.get(0).get("title"));
 		Map<String, Object> inDepth = (Map<String, Object>) messages.get(0).get("inDepth");
 		assertEquals("failed", inDepth.get("status"));
 		assertEquals("In-Depth was interrupted.", inDepth.get("error"));
+		assertEquals("Rejected model claim [1].", inDepth.get("reviewDraft"));
+		List<Map<String, Object>> reviewReferences =
+				(List<Map<String, Object>>) inDepth.get("reviewReferences");
+		assertEquals(1, reviewReferences.get(0).get("index"));
+		assertEquals("obs", reviewReferences.get(0).get("resourceType"));
 	}
 
 	/**

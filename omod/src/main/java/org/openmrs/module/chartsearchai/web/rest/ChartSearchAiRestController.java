@@ -91,18 +91,6 @@ public class ChartSearchAiRestController {
 
 	private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]");
 
-	// Defense-in-depth: catches common prompt injection phrases. This is a blocklist
-	// and can be bypassed with paraphrasing. The hub's product profile owns the primary
-	// structured-output constraint and returns the fixed clinical-answer envelope; this relay
-	// deliberately does not construct model prompts or schemas.
-	private static final Pattern PROMPT_INJECTION = Pattern.compile(
-			"(?i)(ignore\\s+(previous|above|all)\\s+(instructions|prompts|rules)"
-			+ "|disregard\\s+(your|the|all)\\s+(instructions|rules|prompt)"
-			+ "|override\\s+(your|the|all)\\s+(instructions|rules|prompt)"
-			+ "|bypass\\s+(your|the|all)\\s+(instructions|rules|prompt)"
-			+ "|you\\s+are\\s+now|new\\s+instructions:|system\\s+prompt:"
-			+ "|forget\\s+(your|the|all|previous)\\s+(instructions|rules|prompt))");
-
 	private static final String DISCLAIMER = "This response is AI-generated and may not be "
 			+ "accurate. It is not a substitute for clinical judgment. Always verify against "
 			+ "the patient's medical records.";
@@ -286,12 +274,6 @@ public class ChartSearchAiRestController {
 			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "question is required");
 			return;
 		}
-		String sanitizationError = validateQuestion(sanitizedQuestion);
-		if (sanitizationError != null) {
-			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, sanitizationError);
-			return;
-		}
-
 		Patient patient = Context.getPatientService().getPatientByUuid(patientUuid);
 		if (patient == null) {
 			writeJsonError(response, HttpServletResponse.SC_NOT_FOUND, "Patient not found");
@@ -436,12 +418,6 @@ public class ChartSearchAiRestController {
 			return new ResponseEntity<Object>(
 					errorResponse("question is required"), HttpStatus.BAD_REQUEST);
 		}
-		String sanitizationError = validateQuestion(question);
-		if (sanitizationError != null) {
-			return new ResponseEntity<Object>(
-					errorResponse(sanitizationError), HttpStatus.BAD_REQUEST);
-		}
-
 		User user = Context.getAuthenticatedUser();
 		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
 		if (rateLimitError != null) {
@@ -805,18 +781,6 @@ public class ChartSearchAiRestController {
 			comment = comment.substring(0, 500);
 		}
 		return comment;
-	}
-
-	/**
-	 * Validates and sanitizes the question input. Returns an error message if the question
-	 * is rejected, or null if it passes validation.
-	 */
-	static String validateQuestion(String question) {
-		if (PROMPT_INJECTION.matcher(question).find()) {
-			log.warn("Rejected question containing prompt injection pattern");
-			return "Question contains disallowed content";
-		}
-		return null;
 	}
 
 	private void streamHubStagedChat(OutputStream out, ChatSession session, String patientUuid,

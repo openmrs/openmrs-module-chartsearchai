@@ -256,9 +256,11 @@ public class ChartSearchAiStreamingTest {
 	public void chatStream_stagedTeamModel_relaysOneHubCallNotTheLegacyThreeCallDecomposition()
 			throws Exception {
 		Fixture f = newFixture(true);
+		AtomicInteger hubRequestCount = new AtomicInteger();
 		AtomicReference<String> hubRequestBody = new AtomicReference<String>();
 		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
 		hub.createContext("/v1/chat/completions", exchange -> {
+			hubRequestCount.incrementAndGet();
 			hubRequestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
 			String sse = ""
 					+ "event: answer_done\n"
@@ -313,6 +315,8 @@ public class ChartSearchAiStreamingTest {
 			assertEquals("complete", done.get("inDepth").get("status").asText());
 
 			JsonNode hubRequest = MAPPER.readTree(hubRequestBody.get());
+			assertEquals(1, hubRequestCount.get(),
+					"one product profile request must produce exactly one upstream hub call");
 			assertEquals("med-agent-team-high-validated", hubRequest.get("model").asText());
 			verify(f.chatService, times(1)).persistHubStagedAnswer(eq(f.session), any(), any(), anyLong());
 		}

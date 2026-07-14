@@ -8,6 +8,7 @@ For project background, community discussion, and roadmap, see the [wiki project
 
 The standalone download above includes the backend module and frontend ESM. Chat uses med-agent-hub as its one inference and orchestration endpoint; the hub may use local or remote model-serving backends behind that boundary.
 
+- **OpenMRS relay**: ChartSearchAI authorizes the patient request, owns session/audit persistence, and relays exactly one request to med-agent-hub for each clinical turn.
 - **Clinical answer service**: med-agent-hub owns chart context, model/profile stages, deterministic checks, answer review, evidence grounding, and In-Depth generation.
 - **Context sources**: configured behind med-agent-hub. Querystore is supported as one optional source, but ChartSearchAI does not import or require it.
 

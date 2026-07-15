@@ -288,7 +288,7 @@ public class ChartSearchAiStreamingTest {
 		String hubUrl = "http://127.0.0.1:" + hub.getAddress().getPort() + "/v1/chat/completions";
 		try {
 			Map<String, String> body = chatBody();
-			body.put("profile", "med-agent-team-high-validated");
+			body.put("profile", "team-med-checked");
 			configureHub(f, hubUrl);
 			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
 					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
@@ -317,7 +317,7 @@ public class ChartSearchAiStreamingTest {
 			JsonNode hubRequest = MAPPER.readTree(hubRequestBody.get());
 			assertEquals(1, hubRequestCount.get(),
 					"one product profile request must produce exactly one upstream hub call");
-			assertEquals("med-agent-team-high-validated", hubRequest.get("model").asText());
+			assertEquals("team-med-checked", hubRequest.get("model").asText());
 			verify(f.chatService, times(1)).persistHubStagedAnswer(eq(f.session), any(), any(), anyLong());
 		}
 		finally {
@@ -611,8 +611,13 @@ public class ChartSearchAiStreamingTest {
 					+ "\"groundingStatus\":\"verified\",\"grounded\":true}],\"blocks\":[],"
 					+ "\"answerValidation\":{\"status\":\"edited\",\"originalAnswer\":\"Initial answer [1].\"},"
 					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
-					+ "event: indepth_done\n"
-					+ "data: {\"inDepth\":{\"status\":\"complete\",\"answer\":\"Deep details.\"}}\n\n"
+					+ "event: indepth_error\n"
+					+ "data: {\"answer\":\"Flagged answer [2].\",\"references\":[{\"index\":2,"
+					+ "\"resourceType\":\"Order\",\"resourceUuid\":\"ord-2\","
+					+ "\"groundingStatus\":\"verified\",\"grounded\":true}],\"blocks\":[],"
+					+ "\"inDepth\":{\"status\":\"needs_review\",\"answer\":\"\","
+					+ "\"error\":\"All claims were withheld.\","
+					+ "\"reviewDraft\":\"Rejected detail [2].\"}}\n\n"
 					+ "event: done\n"
 					+ "data: {\"answer\":\"Flagged answer [2].\",\"references\":[{\"index\":2,"
 					+ "\"resourceType\":\"Order\",\"resourceUuid\":\"ord-2\","
@@ -624,7 +629,9 @@ public class ChartSearchAiStreamingTest {
 					+ "\"originalBlocks\":[{\"kind\":\"table\",\"title\":\"Rejected table\","
 					+ "\"columns\":[{\"key\":\"value\",\"label\":\"Value\"}],"
 					+ "\"rows\":[{\"cells\":{\"value\":{\"text\":\"unsafe\",\"refs\":[1]}}}]}]},"
-					+ "\"inDepth\":{\"status\":\"complete\",\"answer\":\"Deep details.\"}}\n\n";
+					+ "\"inDepth\":{\"status\":\"needs_review\",\"answer\":\"\","
+					+ "\"error\":\"All claims were withheld.\","
+					+ "\"reviewDraft\":\"Rejected detail [2].\"}}\n\n";
 			byte[] bytes = sse.getBytes(StandardCharsets.UTF_8);
 			exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
 			exchange.sendResponseHeaders(200, bytes.length);
@@ -662,10 +669,10 @@ public class ChartSearchAiStreamingTest {
 			assertTrue(sse.indexOf("event: answer_done") >= 0, "answer_done missing:\n" + sse);
 			assertTrue(sse.indexOf("event: answer_validation") > sse.indexOf("event: answer_done"),
 					"answer_validation must follow answer_done:\n" + sse);
-			assertTrue(sse.indexOf("event: indepth_done") > sse.indexOf("event: indepth_pending"),
-					"indepth_done must follow pending:\n" + sse);
-			assertTrue(sse.indexOf("event: done") > sse.indexOf("event: indepth_done"),
-					"done must follow indepth_done:\n" + sse);
+			assertTrue(sse.indexOf("event: indepth_error") > sse.indexOf("event: indepth_pending"),
+					"indepth_error must follow pending:\n" + sse);
+			assertTrue(sse.indexOf("event: done") > sse.indexOf("event: indepth_error"),
+					"done must follow indepth_error:\n" + sse);
 
 			JsonNode answerDone = parseEvent(sse, "answer_done");
 			assertEquals("assistant-msg-uuid", answerDone.get("messageId").asText());
@@ -682,6 +689,8 @@ public class ChartSearchAiStreamingTest {
 			assertEquals("Rejected table",
 					done.get("answerValidation").get("originalBlocks").get(0).get("title").asText());
 			assertEquals("verified", done.get("references").get(0).get("groundingStatus").asText());
+			assertEquals("needs_review", done.get("inDepth").get("status").asText());
+			assertEquals("Rejected detail [2].", done.get("inDepth").get("reviewDraft").asText());
 			assertEquals("single-12b-checked", done.get("model").asText());
 
 			JsonNode hubRequest = MAPPER.readTree(hubRequestBody.get());
@@ -718,6 +727,9 @@ public class ChartSearchAiStreamingTest {
 					persistedFinal.get("answerValidation").get("status").asText());
 			assertEquals("Rejected table", persistedFinal.get("answerValidation")
 					.get("originalBlocks").get(0).get("title").asText());
+			assertEquals("needs_review", persistedFinal.get("inDepth").get("status").asText());
+			assertEquals("Rejected detail [2].",
+					persistedFinal.get("inDepth").get("reviewDraft").asText());
 		}
 		finally {
 			hub.stop(0);

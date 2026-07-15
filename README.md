@@ -273,17 +273,19 @@ The product stream relays the hub profile's staged answer/validation/In-Depth se
 | Event | Description |
 |-------|-------------|
 | `answer_done` | The direct answer is complete; the envelope's `answerValidation.status` is `checking` and `inDepth.status` is `pending` |
-| `answer_validation` | *(only when the level has a validator)* the same message updated after its self-check |
-| `indepth_pending` | The in-depth analysis is about to start |
-| `indepth_done` / `indepth_error` | The in-depth analysis completed or failed |
-| `done` | Final envelope with the settled answer and the completed in-depth |
+| `answer_validation` | *(only when the profile declares review)* the same message updated after its check |
+| `indepth_pending` | The In-Depth phase has started; it may complete, fail, or be withheld for review |
+| `indepth_done` / `indepth_error` | In-Depth completed, failed, or settled as `needs_review` |
+| `done` | Final envelope with the settled Answer and terminal In-Depth state |
 | `error` | Error message if something goes wrong |
 
 Every persisted JSON event payload also carries `session`, `messageId`, `auditLogId`, `model`, and `disclaimer`.
 
 ### Serving-side warmup
 
-Model readiness and prompt-cache preparation belong to med-agent-hub and its serving backend. For local demos, prepare the hub/router before recording latency-sensitive sessions.
+Model readiness belongs to med-agent-hub and its serving backend. Normal local startup does not send
+a clinical warmup question or cache patient-chart context. The explicit demo helper can exercise its
+known first question as a test/recording control.
 
 ### Feedback
 

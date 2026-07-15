@@ -2,11 +2,11 @@
 
 This document captures the architectural decisions made for the Chart Search AI module, including alternatives evaluated and the reasoning behind the chosen approaches.
 
-> **Current implementation note (2026-07):** several early decisions below describe an embedded
+> **Status: historical decision record.** Several early decisions below describe an embedded
 > `LocalLlmEngine`, in-module prompt assembly, Java-side citation grounding, and `/warmup`. The current
-> hub-relay implementation keeps chartsearchai as the OpenMRS session/persistence/UI relay and sends chat
-> turns to a configured OpenAI-compatible endpoint such as med-agent-hub. Treat older local-engine
-> decisions as historical unless a later decision explicitly reintroduces them.
+> hub-relay implementation keeps ChartSearchAI as the OpenMRS authorization/session/persistence/SSE
+> relay and sends one product-profile request to med-agent-hub. Treat the older decisions as history,
+> not current behavior.
 
 ## Table of Contents
 

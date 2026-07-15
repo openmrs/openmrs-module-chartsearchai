@@ -15,19 +15,19 @@ Two architectural moves retired the old pre-filter:
    pipeline, scoring/ranking code, an embedding store, or a retrieval eval harness (see this module's
    `CLAUDE.md`). Retrieval *and retrieval-quality evaluation* belong to querystore — it owns the index
    and the embedder.
-2. **The chat path retrieves the *whole* chart.** med-agent-hub's `_retrieve_chart`
-   (`server/team.py`) calls `QueryStoreClient.get_patient_chart(patient_uuid)`, which returns **every
-   resourceType** for the patient; `render_chart` serializes all of it for the LLM. There is no
-   query-time semantic top-K selection in the chat answer path, so the old pre-filter's failure mode
-   ("sometimes too many, sometimes too few records") no longer applies here — the model sees the
-   whole chart.
+2. **The chat path builds a complete evidence ledger, then applies an exact context budget.**
+   med-agent-hub can obtain patient records from Querystore, inline chart input, or another source
+   adapter. Small charts remain byte-identical and complete. Oversized charts are reduced by the
+   hub's deterministic selector, while temporal and safety checks continue to use the complete
+   ledger. There is no learned semantic top-K selector in the current answer path.
 
-Net: the "which records pass the similarity threshold?" problem this doc used to solve was **designed
-away** for the chat path, and the general semantic-search capability moved to querystore.
+Net: the old embedding threshold was removed from the chat path. Querystore owns its search/index
+capabilities; med-agent-hub owns answer-time context supply and deterministic selection. A future
+learned reranker may operate behind the hub's selector contract, but it is not part of this iteration.
 
 ## Where retrieval quality lives now
 
-querystore, not here. Its ADR (`targets/querystore/docs/adr.md`) is the current source of truth for:
+For Querystore's retrieval backends, its ADR (`targets/querystore/docs/adr.md`) is the source of truth:
 
 - **Hybrid retrieval** — BM25 + kNN with rank-based **RRF fusion** (`BackendStore.hybrid`), across
   pluggable **MySQL / Lucene / Elasticsearch** backends (Decision 3).
@@ -36,7 +36,8 @@ querystore, not here. Its ADR (`targets/querystore/docs/adr.md`) is the current 
 - **Embedder choice + evaluation** — querystore owns the embedder (`EmbeddingProvider`, single-encoder
   models such as multilingual-e5 or all-MiniLM-L6-v2) and the multi-patient eval that ratifies changes.
 
-If you need to improve clinical retrieval, open the work against querystore, not ChartSearchAI.
+Answer-time context selection belongs in med-agent-hub. Indexing, embedding, and search-backend work
+belongs in Querystore. ChartSearchAI should not regain either responsibility.
 
 ## The one durable lesson worth keeping
 

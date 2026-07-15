@@ -1,8 +1,12 @@
 # Migration plan — remove chartsearchai's indexing/storage/sync layer, retrieve from querystore
 
+> **Status: historical and superseded; migration complete.** The completion record below predates
+> the hub relay. Today Querystore is an optional med-agent-hub context source, and ChartSearchAI no
+> longer owns inference, grounding, drug safety, or context selection.
+
 Tracks GitHub issue [#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51).
 
-> **Status (2026-06-17): migration COMPLETE.** All phases merged:
+> **Completion record (2026-06-17):** All phases merged:
 > Phase 0/0.5/1 ([#52](https://github.com/openmrs/openmrs-module-chartsearchai/pull/52),
 > [#53](https://github.com/openmrs/openmrs-module-chartsearchai/pull/53)/[#54](https://github.com/openmrs/openmrs-module-chartsearchai/pull/54)),
 > **Phase 2** querystore-only retrieval + legacy stack deleted ([#57](https://github.com/openmrs/openmrs-module-chartsearchai/pull/57)),

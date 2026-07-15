@@ -27,10 +27,11 @@ Same KB **data schema** — we adapted their `drug_knowledge_base.json`. Everyth
   intent and routes it to *one* knowledge source: a deterministic drug-JSON lookup, a **PDF RAG**
   store (Chroma), live **RxNorm/FDA** APIs, or the OpenMRS DB — and it gates the LLM *off* for most
   intents ("pull from DB only").
-- **The ChartSearchAI stack** (OpenMRS SPA → ChartSearchAI relay → med-agent-hub) runs a single path:
-  *every* query retrieves the patient chart from querystore, the hub deterministically injects
-  matching drug-reference records, generates one LLM answer, then runs a deterministic **post-answer
-  safety validator**.
+- **The ChartSearchAI stack** (OpenMRS SPA → ChartSearchAI relay → med-agent-hub) runs a profile-
+  composed path. The hub builds an evidence ledger from configured context sources (Querystore is
+  optional), deterministically injects matching drug-reference records, fits whole records to the
+  model window when necessary, generates one LLM answer, then runs deterministic **post-answer
+  safety validation**.
 
 Two consequences worth highlighting up front:
 - Their RAG **does not index the drug KB** — it indexes clinical PDFs. The drug JSON is read
@@ -94,7 +95,8 @@ it diverges:
 - `utils/warning_engine.py` is a **template message formatter** (doctor vs patient wording) — it does
   *not* compute the alert; detection happens in the agents.
 
-**The hub** (`server/drug_safety.py`) — on every query, gated by the per-level `drug_safety` knob:
+**The hub** (`server/drug_safety.py`) — on every product-profile query; all current product profiles
+enable drug safety:
 - `inject_drug_references(...)` injects matching reference entries into the retrieved chart as
   **numbered, citable records** the LLM grounds on (question-driven by alias + order-driven by ATC,
   relevance-scoped — see ADR Decision 24). Dosing is age-gated.
@@ -167,7 +169,8 @@ The drug KB and the PDF RAG are reached by **mutually exclusive intents**.
 
 ```
 query
- ├─ hub retrieves the patient chart from querystore (whole chart per turn)
+ ├─ hub builds a complete evidence ledger from the configured context source(s)
+ ├─ small chart: retain all records; oversized chart: deterministic whole-record selection
  ├─ inject_drug_references: inject matching reference records (relevance-scoped)
  ├─ LLM generates ONE answer, citing chart + reference records
  ├─ grounding/entailment pass over the citations
@@ -175,9 +178,9 @@ query
     (rule + ATC class) → non-blocking safety chips
 ```
 
-No intent router, no LLM gate, no external APIs: the LLM always answers over the chart, and the
-deterministic layers enrich (pre) and validate (post). The whole feature is gated by the per-level
-`drug_safety` knob (default off).
+No intent router, no LLM gate, no external APIs: the LLM answers over the selected evidence view,
+while temporal and drug-safety layers use the complete ledger. Drug safety is required by current
+product profiles; low-level experimental legs may configure it explicitly.
 
 ---
 

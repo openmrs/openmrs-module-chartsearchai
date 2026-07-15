@@ -93,7 +93,11 @@ The `.omod` file is in `omod/target/`.
 
 ### 2. Configure med-agent-hub
 
-chartsearchai does not bundle a model runtime or select model backends. It sends every chat turn to one med-agent-hub deployment. For local/offline use, run the hub as a local sidecar and let the hub manage its llama.cpp or other OpenAI-compatible serving backend.
+chartsearchai does not bundle a model runtime or select model backends. It sends every chat turn to
+one med-agent-hub deployment. For local/offline use, run the hub as a local sidecar. The local
+launcher owns the llama.cpp router process and residency limit; the hub owns profile execution,
+backend readiness, and profile availability metadata. Other deployments may connect the hub to a
+different OpenAI-compatible serving backend.
 
 Minimum required configuration:
 

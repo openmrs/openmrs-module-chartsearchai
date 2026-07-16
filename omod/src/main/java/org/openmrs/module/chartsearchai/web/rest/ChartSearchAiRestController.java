@@ -960,18 +960,19 @@ public class ChartSearchAiRestController {
 			return;
 		}
 		if ("indepth_done".equals(event) || "indepth_error".equals(event)) {
-			inDepthTerminalSeen[0] = true;
 			if (!(payload.get("inDepth") instanceof Map)) {
 				throw new IOException("Hub " + event + " event is missing the inDepth envelope.");
 			}
 			if (assistantMessageUuid[0] != null) {
 				ChatTurnResult result = chatService.updateHubStagedMessage(
 						session, assistantMessageUuid[0], payload);
+				inDepthTerminalSeen[0] = true;
 				writeHubPayload(out, event, payload, result, model);
 				return;
 			}
 			payload.put("messageId", assistantMessageUuid[0]);
 			writeSseEvent(out, event, MAPPER.writeValueAsString(payload));
+			inDepthTerminalSeen[0] = true;
 			return;
 		}
 		if ("done".equals(event)) {

@@ -937,6 +937,118 @@ public class ChartSearchAiStreamingTest {
 		}
 	}
 
+	@Test
+	@SuppressWarnings("unchecked")
+	public void chatStream_malformedInDepthTerminal_persistsInterruptedState() throws Exception {
+		Fixture f = newFixture(true);
+		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		hub.createContext("/v1/chat/completions", exchange -> {
+			String sse = ""
+					+ "event: answer_done\n"
+					+ "data: {\"answer\":\"Ans.\",\"references\":[],\"blocks\":[],"
+					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
+					+ "event: indepth_done\n"
+					+ "data: {\"answer\":\"Ans.\"}\n\n";
+			byte[] bytes = sse.getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+			exchange.sendResponseHeaders(200, bytes.length);
+			try (OutputStream body = exchange.getResponseBody()) {
+				body.write(bytes);
+			}
+		});
+		hub.start();
+		try {
+			configureHub(f, "http://127.0.0.1:" + hub.getAddress().getPort()
+					+ "/v1/chat/completions");
+			Map<String, String> body = chatBody();
+			body.put("profile", "single-12b-checked");
+			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
+			when(f.chatService.updateHubStagedMessage(eq(f.session), eq("assistant-msg-uuid"), any()))
+					.thenReturn(new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42));
+
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
+				ctx.when(() -> Context.requirePrivilege(
+						ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(inv -> null);
+				ctx.when(Context::getPatientService).thenReturn(f.patientService);
+				ctx.when(Context::getAdministrationService).thenReturn(f.adminService);
+				ctx.when(Context::getAuthenticatedUser).thenReturn(f.user);
+				ctx.when(Context::getRuntimeProperties).thenReturn(new Properties());
+
+				f.controller.chatStream(body, response);
+			}
+			assertTrue(response.getContentAsString().contains("event: error"));
+
+			ArgumentCaptor<Map<String, Object>> update = ArgumentCaptor.forClass(Map.class);
+			verify(f.chatService).updateHubStagedMessage(
+					eq(f.session), eq("assistant-msg-uuid"), update.capture());
+			assertEquals("failed", ((Map<String, Object>) update.getValue().get("inDepth"))
+					.get("status"));
+		}
+		finally {
+			hub.stop(0);
+		}
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void chatStream_failedInDepthPersistence_persistsInterruptedState() throws Exception {
+		Fixture f = newFixture(true);
+		HttpServer hub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		hub.createContext("/v1/chat/completions", exchange -> {
+			String sse = ""
+					+ "event: answer_done\n"
+					+ "data: {\"answer\":\"Ans.\",\"references\":[],\"blocks\":[],"
+					+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"\"}}\n\n"
+					+ "event: indepth_done\n"
+					+ "data: {\"answer\":\"Ans.\","
+					+ "\"inDepth\":{\"status\":\"complete\",\"answer\":\"Details.\"}}\n\n";
+			byte[] bytes = sse.getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+			exchange.sendResponseHeaders(200, bytes.length);
+			try (OutputStream responseBody = exchange.getResponseBody()) {
+				responseBody.write(bytes);
+			}
+		});
+		hub.start();
+		try {
+			configureHub(f, "http://127.0.0.1:" + hub.getAddress().getPort()
+					+ "/v1/chat/completions");
+			Map<String, String> body = chatBody();
+			body.put("profile", "single-12b-checked");
+			ChatTurnResult recovered = new ChatTurnResult("session-uuid", "assistant-msg-uuid", 42);
+			when(f.chatService.persistHubStagedAnswer(eq(f.session), any(), any(), anyLong()))
+					.thenReturn(recovered);
+			when(f.chatService.updateHubStagedMessage(eq(f.session), eq("assistant-msg-uuid"), any()))
+					.thenThrow(new RuntimeException("database write failed"))
+					.thenReturn(recovered);
+
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			try (MockedStatic<Context> ctx = mockStatic(Context.class)) {
+				ctx.when(() -> Context.requirePrivilege(
+						ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA)).then(inv -> null);
+				ctx.when(Context::getPatientService).thenReturn(f.patientService);
+				ctx.when(Context::getAdministrationService).thenReturn(f.adminService);
+				ctx.when(Context::getAuthenticatedUser).thenReturn(f.user);
+				ctx.when(Context::getRuntimeProperties).thenReturn(new Properties());
+
+				f.controller.chatStream(body, response);
+			}
+			assertTrue(response.getContentAsString().contains("event: error"));
+
+			ArgumentCaptor<Map<String, Object>> updates = ArgumentCaptor.forClass(Map.class);
+			verify(f.chatService, times(2)).updateHubStagedMessage(
+					eq(f.session), eq("assistant-msg-uuid"), updates.capture());
+			Map<String, Object> interrupted = updates.getAllValues().get(1);
+			assertEquals("failed", ((Map<String, Object>) interrupted.get("inDepth"))
+					.get("status"));
+		}
+		finally {
+			hub.stop(0);
+		}
+	}
+
 	/**
 	 * Gate 6: a mid-leg browser disconnect must be detected via a heartbeat-triggered write, not
 	 * only discovered on the NEXT real event. The hub answers fast, then goes quiet (as it would

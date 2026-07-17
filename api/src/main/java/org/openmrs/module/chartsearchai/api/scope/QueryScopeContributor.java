@@ -45,6 +45,10 @@ import java.util.Set;
  *       eval and the temporal probe (they pull in opposite directions — see ADR Decision 28). Ship
  *       your contributor with its own adjudicated eval cells; an unvalidated contributor can silently
  *       regress its domain's answer quality.</li>
+ *   <li><b>Called on the hot path, concurrently.</b> {@link #scopedResourceTypes} runs synchronously
+ *       during chart assembly on every scoped query, from multiple request threads at once. Make it
+ *       thread-safe (ideally a pure function of the question — a word-boundary keyword match) and
+ *       cheap: do no I/O, database, or network calls here, or every scoped answer pays the cost.</li>
  * </ul>
  */
 public interface QueryScopeContributor {

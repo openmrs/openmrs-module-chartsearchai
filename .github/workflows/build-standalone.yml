@@ -11,7 +11,7 @@ on:
       refapp_version:
         description: 'O3 Reference Application version'
         required: false
-        default: '3.7.0-rc.2'
+        default: '3.7.1'
         type: string
       openmrs_version:
         description: 'OpenMRS Core version'
@@ -44,7 +44,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REFAPP_VERSION: ${{ inputs.refapp_version || '3.7.0-rc.2' }}
+  REFAPP_VERSION: ${{ inputs.refapp_version || '3.7.1' }}
   OPENMRS_VERSION: ${{ inputs.openmrs_version || '2.9.0-SNAPSHOT' }}
   STANDALONE_BRANCH: ${{ inputs.standalone_branch || 'openmrs-emr3' }}
   GGUF_MODEL_URL: ${{ inputs.gguf_model_url || 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf' }}

@@ -15,10 +15,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Resolves the querystore-retrieval global properties with validation and
- * per-field defaults. The embedding-pipeline tuning getters were removed with
- * the legacy retrieval pipeline (issue #51); only the settings the querystore
- * path ({@link QueryStoreChartBuilder}) consults remain.
+ * Resolves the querystore-retrieval and chart-assembly global properties with validation and
+ * per-field defaults. The embedding-pipeline tuning getters were removed with the legacy
+ * retrieval pipeline (issue #51); the remaining settings are consulted by the querystore path
+ * ({@link QueryStoreChartBuilder}) and the chartMode gates ({@link ChartBuildingStrategy},
+ * {@link LlmInferenceService}, {@link PrewarmBootstrapService}, {@link PrewarmRefreshExecutor},
+ * {@link WarmupExecutor}).
  */
 final class PipelineSettings {
 
@@ -37,6 +39,20 @@ final class PipelineSettings {
 		String mode = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_SERIALIZER_DEDUP_GROUP_LABELS, "false");
 		return "true".equalsIgnoreCase(mode.trim());
+	}
+
+	/** True when {@code chartsearchai.chartMode=queryScoped}: prompts carry a query-scoped record
+	 *  slice instead of the whole chart, and the full-chart prefill machinery (warmup, prewarm,
+	 *  per-patient KV persistence, preview) disengages. Any other value — including unset — is the
+	 *  fullChart default, so a typo can never silently change what the LLM sees. Fail-safe via the
+	 *  shared {@link ChartSearchAiUtils#getStringGlobalProperty} reader: a GP layer that cannot be
+	 *  read resolves to fullChart rather than breaking the answer path. Safe for the destructive
+	 *  KV decisions too, because those never trust a re-read of this gate — they follow the built
+	 *  chart's own {@code PatientChart#isQueryScoped()} stamp. */
+	static boolean queryScopedMode() {
+		return ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED.equalsIgnoreCase(
+				org.openmrs.module.chartsearchai.ChartSearchAiUtils.getStringGlobalProperty(
+						ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_FULL_CHART));
 	}
 
 	static int getQueryStoreTopK() {

@@ -28,6 +28,12 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 20: MedCPT dual-encoder as an alternative embedding model](#decision-20-medcpt-dual-encoder-as-an-alternative-embedding-model)
 - [Decision 21: Concept-name re-ranking for subword-tokenized queries](#decision-21-concept-name-re-ranking-for-subword-tokenized-queries)
 - [Decision 22: e5-base-v2 for the querystore-backed retrieval path](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path)
+- [Decision 23: Drug-reference injection + post-answer drug-safety validation](#decision-23-drug-reference-injection--post-answer-drug-safety-validation)
+- [Decision 24: Drug-reference as a pluggable consumer of authoritative datasets](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets)
+- [Decision 25: Citation grounding (Tier-1 cosine + Tier-2 entailment)](#decision-25-citation-grounding-tier-1-cosine--tier-2-entailment)
+- [Decision 26: Chart-write detection via core service events](#decision-26-chart-write-detection-via-core-service-events)
+- [Decision 27: Drug-safety parity follow-through — weight-aware dosing, curated cross-reactivity groups, prose warnings](#decision-27-drug-safety-parity-follow-through--weight-aware-dosing-curated-cross-reactivity-groups-prose-warnings)
+- [Decision 28: Query-scoped slice charts (chartMode=queryScoped)](#decision-28-query-scoped-slice-charts-chartmodequeryscoped)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -1888,6 +1894,34 @@ Three additive, data-driven extensions:
   own the clinical breadth of their families, consistent with the no-medical-knowledge-in-code rule.
 - **−** Prose warnings are LLM-visible but not validator-enforced; a deployment wanting
   enforcement must express the fact as a structured rule instead.
+
+## Decision 28: Query-scoped slice charts (chartMode=queryScoped)
+
+**Status: Accepted** (July 2026) — implemented behind `chartsearchai.chartMode` (default `fullChart`, unchanged behavior). Complements — and in scoped mode disengages — the warmup/prewarm/KV-persistence machinery of Decisions 12 and 26.
+
+### Context
+
+The fullChart architecture amortizes one large prefill (whole chart, ~13–15k tokens) across queries via llama-server's KV prefix cache, warmup-on-open, and the pinned prewarm corpus. Its weak spot is the *not-yet-warmed* patient: on a GPU-less host the first query pays the full prefill (~70s measured for ~150-record charts; minutes for large ones), and warmth requires per-patient state (~110–280 MB of persisted KV each) that cannot scale to every patient of a real facility — cold patients always exist. A directive constraint for this work: the answer path must not depend on prefill amortization at all.
+
+### Decision
+
+Add a second chart-assembly mode. `QueryScopeRouter` maps the question to an intent by conservative word-boundary cues — MEDICATIONS, ALLERGIES, PROGRAMS, CONDITIONS, VISITS, ORDERS get their record types included *complete* (an enumeration answer cannot omit what isn't retrieved); everything else is TOPICAL. Every slice also carries the querystore similarity top-K (semantic catch-all; lab abbreviations expanded first, e.g. BMP → basic metabolic panel), the demographics record, obs-group *family completion* (a panel parent or member in the slice pulls the whole panel — member texts carry no panel name, so similarity alone misses the values), and — only for temporal questions ("most recent…", "lately…") — a recency anchor of the chart's newest records. Slices render in chart order (most recent first) with a date on every record: run-length date compression is a full-chart token optimization, and at slice scale it hid exactly the dates temporal questions need. Records whose querystore date is administrative (`patient`, `allergy` — dateCreated) render undated in both modes, so record-keeping time is never presented as encounter time. In scoped mode, warmup, the prewarm bootstrap sweep, per-patient KV persistence, and the progressive-reasoning preview all disengage (the same `shouldRunWarmup` decision point Decision 12's machinery already consulted).
+
+### Evidence (rc.2 standalone, E4B, July 2026 gates)
+
+- CPU cold first answer: fullChart 73–74s vs scoped 12–27s; first output ~68s vs 7–12s. Scoped cold ≡ scoped warm — no warmth states exist.
+- 40-cell adjudicated quality (same build): meanF1 0.733 vs 0.800, abstention 0.89 vs 1.00, off-topic citations 51 vs 2; per-cell 9 better / 4 worse / 27 ties.
+- Temporal DB-truth probe: scoped 15/15 stable; fullChart 14/15 (a stale-value failure that survives rebuilds).
+- Two gates are mandatory for any slice-composition change — the 40-cell scope eval and the temporal probe pull in opposite directions (an unconditional recency anchor fixed temporal cells and simultaneously drove an absent-topic cell to 39 drift citations).
+
+### Trade-offs
+
+- **+** Cold latency collapses ~5–7× on CPU with zero pre-warming, no per-patient disk, no sweeps; quality gates met or improved on every axis.
+- **+** Typed completeness fixes fullChart's omit-for-brevity failures on enumeration questions; the small prompt also decodes faster.
+- **−** Repeat queries lose the ~2.5s ultra-warm full-chart path (each question pays its own small prefill; on CPU scoped is still faster than fullChart's warm decode).
+- **−** Deep-history recall depends on the router + similarity + family completion; the residual known weakness is type-conflation on "last visit"-style questions (the model quotes the newest dated record — e.g. a billing event — instead of a visit record; billing dates are real event dates, so they stay rendered).
+- **−** The intent router is an English keyword table; unmatched phrasings degrade to TOPICAL (similarity-only), never to a wrong typed scope.
+- **−** Flipping modes leaves the previous mode's persisted KV `.bin` files on disk unused until manually cleaned. The pinned prewarm corpus does not survive a scoped interlude unattended (edits during the interlude are not re-pinned; the sweep and per-edit refresh refuse to run in scoped mode rather than fake success) — after flipping back, re-run the `/prewarm` sweep. The admin-date byte change likewise invalidates pre-existing KV entries once: each patient's first touch re-prefills and re-persists **unpinned** (the purge also removes the old entry's `.pin`), so fullChart deployments with a pinned corpus should re-run the sweep after upgrading across this change.
 
 ## Known limitations
 

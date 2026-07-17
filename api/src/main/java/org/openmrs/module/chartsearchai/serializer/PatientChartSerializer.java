@@ -32,9 +32,11 @@ import org.springframework.stereotype.Component;
  * (querystore's serialized documents) — metadata for the LLM to reason about
  * chronology. The timestamp is not repeated on every line; see the compression below.
  * To save prompt tokens on charts that cluster many records per encounter date,
- * the date is <strong>run-length compressed</strong>: it is rendered on the first
+ * the date is <strong>run-length compressed</strong> by default: it is rendered on the first
  * record of each consecutive same-date run and dropped on the rest (and re-shown
- * after any undated record, which resets the run). The chart stays a flat numbered
+ * after any undated record, which resets the run). Callers serializing small
+ * query-scoped slices switch this off via the {@code compressDateRuns} overload —
+ * see {@link #serialize(Patient, List, Set, boolean, boolean)}. The chart stays a flat numbered
  * list — a same-date follow-on line looks exactly like a legacy undated line — so
  * no information is lost and the model's per-record view is unchanged in shape. The
  * {@link RecordMapping} text, by contrast, always retains the inline date so the
@@ -109,6 +111,22 @@ public class PatientChartSerializer {
 	 */
 	public PatientChart serialize(Patient patient, List<SerializedRecord> records, Set<String> focusUuids,
 			boolean dedupGroupLabels) {
+		return serialize(patient, records, focusUuids, dedupGroupLabels, true);
+	}
+
+	/**
+	 * As {@link #serialize(Patient, List, Set, boolean)} but with the date-run compression
+	 * switchable. Compression exists to save prompt tokens on whole-chart serializations
+	 * (hundreds of records clustering many per date); the query-scoped slice chart is a few dozen
+	 * records, where the saving is negligible and the cost is real — a temporal question ("most
+	 * recent weight?") needs the date visible on the record itself, not inferred from a run
+	 * header several lines up (measured: a small model quoted an older, explicitly-dated reading
+	 * over the newest, run-compressed one). {@code compressDateRuns=false} renders every dated
+	 * record's {@code "(date)"} label. The grounding {@link RecordMapping} text is identical
+	 * either way (it always carries the date).
+	 */
+	public PatientChart serialize(Patient patient, List<SerializedRecord> records, Set<String> focusUuids,
+			boolean dedupGroupLabels, boolean compressDateRuns) {
 		StringBuilder sb = new StringBuilder();
 		List<RecordMapping> mappings = new ArrayList<RecordMapping>();
 		List<Integer> focusIndices = new ArrayList<Integer>();
@@ -176,7 +194,7 @@ public class PatientChartSerializer {
 			boolean dropGroupLabel = dedupGroupLabels && !groupLabel.isEmpty()
 					&& currentGroupUuid != null && currentGroupUuid.equals(previousGroupUuid);
 			sb.append("[").append(index).append("] ");
-			if (dateLabel != null && !dateLabel.equals(previousDateLabel)) {
+			if (dateLabel != null && (!compressDateRuns || !dateLabel.equals(previousDateLabel))) {
 				sb.append(dateLabelPrefix(dateLabel));
 			}
 			sb.append(bodyBase);
@@ -303,6 +321,14 @@ public class PatientChartSerializer {
 
 		private final List<Integer> focusIndices;
 
+		/** Whether this chart is a question-dependent query-scoped slice (set by the scoped
+		 *  builder via {@link #markQueryScoped}) rather than the stable full chart. Carried ON
+		 *  the chart so downstream KV decisions are made against the chart that was actually
+		 *  built: re-reading the chartMode GP later can disagree with the read that built this
+		 *  chart (a transient GP-read failure, or an operator flip mid-request), and persisting
+		 *  a slice prompt under a patient's KV scope would purge their real full-chart entry. */
+		private boolean queryScoped;
+
 		public PatientChart(String text, List<RecordMapping> mappings) {
 			this(text, mappings, Collections.<Integer>emptyList());
 		}
@@ -323,6 +349,17 @@ public class PatientChartSerializer {
 
 		public List<Integer> getFocusIndices() {
 			return focusIndices;
+		}
+
+		/** Marks this chart as a query-scoped slice; called only by the scoped chart builder. */
+		public void markQueryScoped() {
+			this.queryScoped = true;
+		}
+
+		/** True when this chart is a question-dependent query-scoped slice — the authoritative,
+		 *  race-free signal for KV decisions (see the field note). */
+		public boolean isQueryScoped() {
+			return queryScoped;
 		}
 	}
 

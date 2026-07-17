@@ -161,14 +161,21 @@ public class LlmInferenceService implements ChartSearchService {
 		if (!llmProvider.supportsWarmup()) {
 			return;
 		}
-		// Chart-byte-stability gate — the single warmup-viability decision point. Post-#51 every
-		// retrieval mode yields a question-independent chart prefix, so this currently always
-		// proceeds; it is retained (and fed the preFilter GP read) so a future per-query mode can
-		// re-gate here rather than at this call site. See shouldRunWarmup.
-		if (!shouldRunWarmup(chartBuildingStrategy.usePreFilter())) {
+		// Chart-byte-stability gate — the single warmup-viability decision point. queryScoped mode
+		// produces question-DEPENDENT slice prompts, so there is no stable full-chart prefix to
+		// prime and warmup must not run (it would prefill bytes no real query reuses).
+		if (!shouldRunWarmup(chartBuildingStrategy.usePreFilter(), resolveQueryScopedMode())) {
 			return;
 		}
 		PatientChart chart = chartBuildingStrategy.buildChart(patient, "");
+		// Race guard: trust the CHART, not a re-read of the chartMode GP. If the mode read that
+		// gated this warmup disagreed with the read that built the chart (transient GP-read
+		// failure, or an operator flip in between), persisting a question-dependent slice under
+		// the patient's KV scope would purge their real full-chart entry — pinned entries
+		// included. A skipped warmup is always safe; a mis-scoped persist is not.
+		if (chart.isQueryScoped()) {
+			return;
+		}
 		// Pass the patient UUID as the KV-cache scope so the local engine can replace this patient's
 		// stale on-disk entry when their chart changes, instead of leaving an orphan per chart version.
 		// pin=true (prewarm bootstrap) exempts the saved entry from the LRU cap so it joins the durable
@@ -198,8 +205,8 @@ public class LlmInferenceService implements ChartSearchService {
 	 * {@link #warmup(Patient)} call site instead, so this helper focuses
 	 * narrowly on chart-byte-stability semantics.
 	 *
-	 * <p>Since the querystore migration (#51) made querystore the only retrieval path, every
-	 * mode now produces a question-independent chart prefix, so warmup is always viable:
+	 * <p>Within the fullChart mode (this overload's scope), every configuration since the
+	 * querystore migration (#51) produces a question-independent chart prefix, so warmup is viable:
 	 * <ul>
 	 *   <li>{@code preFilter=false} — {@link QueryStoreChartBuilder} returns the patient's full
 	 *       chart via {@code getPatientChart}; bytes are a function of the patient only.</li>
@@ -209,13 +216,24 @@ public class LlmInferenceService implements ChartSearchService {
 	 *       where they don't break llama-server's prefix-cache match.</li>
 	 * </ul>
 	 *
-	 * <p>The {@code preFilter} parameter is retained as the contract for this single decision
-	 * point: if a future retrieval mode reintroduces a per-query chart prefix, gate it here (and in
-	 * {@link LlmInferenceServiceWarmupTest}) rather than at the {@code warmup()} call site,
-	 * which would split the decision across two places.
+	 * <p>The per-query chart prefix this decision point was reserved for now exists:
+	 * {@code chartsearchai.chartMode=queryScoped} builds question-dependent slice prompts, gated by
+	 * the {@link #shouldRunWarmup(boolean, boolean)} overload. This one-arg form remains the
+	 * fullChart-mode contract (and its tests remain the fullChart spec).
 	 */
 	static boolean shouldRunWarmup(boolean preFilterEnabled) {
 		return true;
+	}
+
+	/**
+	 * As {@link #shouldRunWarmup(boolean)} but aware of the {@code chartsearchai.chartMode} GP:
+	 * queryScoped mode assembles a question-dependent slice per query, so no warmup prefix can
+	 * ever be reused — warmup (and the per-patient KV scope, see {@link #kvCacheScopeFor}) must
+	 * disengage. This is exactly the "future per-query mode" the one-arg overload's contract
+	 * reserved this decision point for.
+	 */
+	static boolean shouldRunWarmup(boolean preFilterEnabled, boolean queryScopedMode) {
+		return shouldRunWarmup(preFilterEnabled) && !queryScopedMode;
 	}
 
 	/**
@@ -232,10 +250,16 @@ public class LlmInferenceService implements ChartSearchService {
 		if (patient == null || patient.getUuid() == null) {
 			return null;
 		}
-		if (!shouldRunWarmup(chartBuildingStrategy.usePreFilter())) {
+		if (!shouldRunWarmup(chartBuildingStrategy.usePreFilter(), resolveQueryScopedMode())) {
 			return null;
 		}
 		return patient.getUuid();
+	}
+
+	/** Test seam wrapping {@link ChartBuildingStrategy#queryScopedMode()}; production delegates,
+	 *  tests override to exercise the queryScoped gating without an OpenMRS context. */
+	protected boolean resolveQueryScopedMode() {
+		return chartBuildingStrategy.queryScopedMode();
 	}
 
 	/** Test seam wrapping {@link PipelineSettings#progressiveReasoningEnabled()}; production
@@ -266,6 +290,11 @@ public class LlmInferenceService implements ChartSearchService {
 		long start = System.currentTimeMillis();
 		try {
 			if (!resolveProgressiveReasoningEnabled()) {
+				return 0L;
+			}
+			// queryScoped mode: the committed answer itself starts after a small slice prefill, so
+			// a preview pass would only occupy llama-server's single slot and DELAY that answer.
+			if (resolveQueryScopedMode()) {
 				return 0L;
 			}
 			PatientChart focused = chartBuildingStrategy.buildFocusedChart(patient, question);
@@ -346,9 +375,16 @@ public class LlmInferenceService implements ChartSearchService {
 			previewMs = maybeEmitPreliminaryReasoning(patient, question, preliminaryReasoningConsumer);
 
 			long llmStart = System.currentTimeMillis();
+			// KV scope: decided against the CHART that was built, not a re-read of the chartMode
+			// GP. A query-scoped slice must never carry a patient KV scope — persisting its
+			// question-dependent prompt under that scope would purge the patient's real
+			// full-chart entry (pin included) with a file no future request can hit. The GP
+			// re-read inside kvCacheScopeFor can disagree with the build (transient read failure
+			// or an operator flip mid-request); chart.isQueryScoped() cannot.
+			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
 			LlmResponse response = llmProvider.searchStreaming(
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
-					reasoningConsumer, kvCacheScopeFor(patient));
+					reasoningConsumer, kvCacheScope);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();

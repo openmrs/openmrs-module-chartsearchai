@@ -44,6 +44,7 @@ public class PrewarmBootstrapServiceTest {
 		recorder = new RecordingChartSearchService();
 		service = new TestablePrewarmBootstrapService(tempDir);
 		service.setChartSearchService(recorder);
+		service.watchForFlip(recorder);
 	}
 
 	@AfterEach
@@ -55,6 +56,40 @@ public class PrewarmBootstrapServiceTest {
 			}
 		}
 		tempDir.delete();
+	}
+
+	@Test
+	public void runSweep_shouldSkipWithoutWarmingAnyone_whenChartModeIsQueryScoped() {
+		// queryScoped prompts are per-question slices — there is no full-chart prefix to pre-fill,
+		// so every per-patient warmup would silently no-op (LlmInferenceService gates it). Without
+		// this skip, the sweep still walks every patient (SQL + progress writes) and reports
+		// COMPLETED with zero pinned entries — which reads as a successful prewarm that never
+		// happened. The sweep must refuse up front and end STOPPED, not COMPLETED.
+		service.patientIds = new ArrayList<>(java.util.Arrays.asList(1L, 2L, 3L));
+		service.queryScopedMode = true;
+
+		service.runSweep(PrewarmBootstrapService.SCOPE_ALL, 0L, 0L, 0L);
+
+		assertEquals(0, recorder.warmedPatientIds.size(),
+				"no per-patient warmup calls may be issued in queryScoped mode");
+		assertEquals(PrewarmBootstrapService.STATUS_STOPPED, service.getStatus().getStatus(),
+				"the sweep must end STOPPED — COMPLETED would fake a successful prewarm");
+	}
+
+	@Test
+	public void runSweep_shouldStopMidSweep_whenChartModeFlipsToQueryScoped() {
+		// A flip an hour into a multi-hour sweep must end STOPPED at the flip point, not march
+		// on counting done++ for patients whose warmups silently no-op — that would report
+		// COMPLETED for a corpus that was never pinned past the flip. Cursor semantics are the
+		// same as a manual stop, so flipping back and re-triggering resumes where it stopped.
+		service.patientIds = new ArrayList<>(java.util.Arrays.asList(1L, 2L, 3L, 4L, 5L));
+		service.flipToQueryScopedAfterWarmups = 2;
+
+		service.runSweep(PrewarmBootstrapService.SCOPE_ALL, 0L, 0L, 0L);
+
+		assertEquals(java.util.Arrays.asList(1, 2), recorder.warmedPatientIds,
+				"no warmup may be issued after the flip is observed");
+		assertEquals(PrewarmBootstrapService.STATUS_STOPPED, service.getStatus().getStatus());
 	}
 
 	@Test
@@ -135,6 +170,18 @@ public class PrewarmBootstrapServiceTest {
 
 		int pinnedOnDisk = 0;
 
+		boolean queryScopedMode = false;
+
+		/** When &gt; 0, {@link #isQueryScopedMode} starts returning true once the recorder has
+		 *  warmed this many patients — simulating a mid-sweep GP flip. */
+		int flipToQueryScopedAfterWarmups = 0;
+
+		private RecordingChartSearchService flipRecorder;
+
+		void watchForFlip(RecordingChartSearchService recorder) {
+			this.flipRecorder = recorder;
+		}
+
 		TestablePrewarmBootstrapService(File dir) {
 			this.dir = dir;
 		}
@@ -166,6 +213,15 @@ public class PrewarmBootstrapServiceTest {
 		@Override
 		protected long getThrottleMs() {
 			return 0L; // no real sleeping in tests
+		}
+
+		@Override
+		protected boolean isQueryScopedMode() {
+			if (flipToQueryScopedAfterWarmups > 0 && flipRecorder != null
+					&& flipRecorder.warmedPatientIds.size() >= flipToQueryScopedAfterWarmups) {
+				return true;
+			}
+			return queryScopedMode;
 		}
 
 		@Override

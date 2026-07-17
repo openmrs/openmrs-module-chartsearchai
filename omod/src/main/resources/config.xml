@@ -193,6 +193,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.chartMode</property>
+		<defaultValue>fullChart</defaultValue>
+		<description>How the LLM prompt's chart context is assembled per query. "fullChart" (default): the whole patient chart is serialized into every prompt; llama-server's KV prefix cache plus warmup/prewarm amortize the multi-thousand-token prefill across queries, but a not-yet-warmed patient's first query pays it in full (tens of seconds to minutes on a GPU-less host). "queryScoped": the prompt carries only a query-scoped slice — every record of the question's typed scope (e.g. all drug orders for a medications question, complete by construction) plus the querystore similarity top-K (chartsearchai.querystore.topK) plus the demographics record, in most-recent-first order. Slices are a few hundred tokens, so a cold patient's first answer starts after a small prefill with no pre-warming; warmup, the prewarm bootstrap, per-patient KV persistence, and the progressive-reasoning preview all disengage in this mode. Persisted full-chart KV files from fullChart mode stay on disk unused while queryScoped is active (delete the kvCacheDir contents to reclaim space). Note that the pinned prewarm corpus does NOT survive a scoped interlude unattended: chart edits made while queryScoped is active are not re-pinned, so after flipping back to fullChart, re-run the /prewarm sweep to rebuild the corpus. Any other value behaves as fullChart.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.progressiveReasoning.enabled</property>
 		<defaultValue>false</defaultValue>
 		<description>When true, a streaming AI query first streams a fast "preliminary" reasoning pass over only the top chartsearchai.progressiveReasoning.topK querystore records (a few hundred tokens) to the thinking channel, ahead of the unchanged full-chart answer. On a GPU-less host the full chart is a multi-thousand-token prefill (tens of seconds to minutes to the first token); the focused preview prefills in a second or two, so the clinician sees reasoning almost immediately. The committed answer is still the full-chart call (the preview's answer is discarded), so response quality is unchanged. Default: false (opt-in): the two passes share llama-server's single slot, trading a marginally longer time-to-final-answer for a much shorter time-to-first-reasoning. Affects only the streaming search endpoint.</description>

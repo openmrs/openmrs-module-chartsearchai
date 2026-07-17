@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,9 +31,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Normalizes a raw user question into the inputs the querystore focus-hint pass
- * consumes: a stopword-stripped form ({@link #stripQueryStopwords}), content terms
- * for keyword matching, and a recency cap.
+ * Normalizes a raw user question into the inputs querystore retrieval consumes — the focus-hint
+ * pass and the query-scoped slice pass: a stopword-stripped form ({@link #stripQueryStopwords}),
+ * a lab-abbreviation-expanded form for the scoped slice ({@link #expandLabPanelAbbreviations}),
+ * content terms for keyword matching, and a recency cap.
  */
 final class QueryPreprocessor {
 
@@ -159,6 +161,45 @@ final class QueryPreprocessor {
 			return 1;
 		}
 		return 0;
+	}
+
+	/**
+	 * Common lab-panel abbreviations mapped to the full concept names querystore indexes.
+	 * Clinicians ask by abbreviation ("the last BMP") but the indexed records carry the full
+	 * panel name ("Basic metabolic panel"), so the abbreviation alone embeds far from the
+	 * records and the similarity slice misses them (measured on the rc.2 standalone: "results
+	 * of the last BMP" answered "no records" while the panel existed). Word-boundary,
+	 * case-insensitive; deliberately curated — only unambiguous panel abbreviations belong here.
+	 */
+	private static final Map<Pattern, String> LAB_PANEL_ABBREVIATIONS;
+	static {
+		Map<Pattern, String> m = new LinkedHashMap<Pattern, String>();
+		m.put(Pattern.compile("\\bBMP\\b", Pattern.CASE_INSENSITIVE), "basic metabolic panel");
+		m.put(Pattern.compile("\\bCMP\\b", Pattern.CASE_INSENSITIVE), "comprehensive metabolic panel");
+		m.put(Pattern.compile("\\bCBC\\b", Pattern.CASE_INSENSITIVE), "complete blood count");
+		m.put(Pattern.compile("\\bLFTs?\\b", Pattern.CASE_INSENSITIVE), "liver function tests");
+		m.put(Pattern.compile("\\bRFTs?\\b", Pattern.CASE_INSENSITIVE), "renal function tests");
+		m.put(Pattern.compile("\\bABG\\b", Pattern.CASE_INSENSITIVE), "arterial blood gas");
+		m.put(Pattern.compile("\\bESR\\b", Pattern.CASE_INSENSITIVE), "erythrocyte sedimentation rate");
+		m.put(Pattern.compile("\\bCRP\\b", Pattern.CASE_INSENSITIVE), "C-reactive protein");
+		LAB_PANEL_ABBREVIATIONS = Collections.unmodifiableMap(m);
+	}
+
+	/**
+	 * Appends the full panel name after each recognized lab abbreviation ("last BMP" →
+	 * "last BMP basic metabolic panel"), keeping the original token so both surface forms reach
+	 * the retrieval embedding. Pass-through for null/blank/cue-free questions. Used by the
+	 * query-scoped slice builder before {@link #stripQueryStopwords}.
+	 */
+	static String expandLabPanelAbbreviations(String question) {
+		if (question == null || question.trim().isEmpty()) {
+			return question;
+		}
+		String expanded = question;
+		for (Map.Entry<Pattern, String> entry : LAB_PANEL_ABBREVIATIONS.entrySet()) {
+			expanded = entry.getKey().matcher(expanded).replaceAll("$0 " + entry.getValue());
+		}
+		return expanded;
 	}
 
 	/**

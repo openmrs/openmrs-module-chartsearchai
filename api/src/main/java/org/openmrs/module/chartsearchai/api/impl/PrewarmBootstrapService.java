@@ -147,6 +147,17 @@ public class PrewarmBootstrapService {
 	}
 
 	void runSweep(String scope, long startCursor, long carriedDone, long carriedFailed) {
+		// queryScoped prompts are per-question slices — there is no full-chart prefix to pre-fill,
+		// so LlmInferenceService.warmup no-ops for every patient. Without this refusal the sweep
+		// would still walk the whole patient table (SQL + per-patient progress writes) and report
+		// COMPLETED with zero pinned entries — a prewarm that looks successful but warmed nothing.
+		if (isQueryScopedMode()) {
+			log.warn("Prewarm sweep skipped: chartsearchai.chartMode=queryScoped — scoped answers "
+					+ "use per-question slice prompts, so there is no full-chart prefix to pre-fill or pin.");
+			progress = progress.finished(STATUS_STOPPED, 0, carriedDone, carriedFailed);
+			persistProgress(progress);
+			return;
+		}
 		long cursor = startCursor;
 		long done = carriedDone;
 		long failed = carriedFailed;
@@ -158,6 +169,16 @@ public class PrewarmBootstrapService {
 		while (!cancelRequested && !(batch = enumeratePatientIdsAfter(cursor, ENUMERATION_BATCH)).isEmpty()) {
 			for (Long id : batch) {
 				if (cancelRequested) {
+					break;
+				}
+				// Re-check per patient, not just at sweep start: a fullChart→queryScoped flip an
+				// hour into a multi-hour sweep silently no-ops every remaining warmup (the
+				// LlmInferenceService gate returns without logging) while done++ still counts
+				// them — the sweep would end COMPLETED having pinned nothing past the flip.
+				if (isQueryScopedMode()) {
+					log.warn("Prewarm sweep stopping: chartsearchai.chartMode flipped to queryScoped "
+							+ "mid-sweep — remaining patients would silently not be pinned.");
+					cancelRequested = true;
 					break;
 				}
 				if (maxPinned > 0 && countPinnedEntries() >= maxPinned) {
@@ -229,6 +250,12 @@ public class PrewarmBootstrapService {
 	protected boolean isPrewarmEnabled() {
 		return ChartSearchAiUtils.getBooleanGlobalProperty(
 				ChartSearchAiConstants.GP_PREWARM_ENABLED, ChartSearchAiConstants.DEFAULT_PREWARM_ENABLED);
+	}
+
+	/** Seam wrapping {@link PipelineSettings#queryScopedMode()} (fail-safe false); the sweep
+	 *  refuses to run in queryScoped mode — see {@link #runSweep}. */
+	protected boolean isQueryScopedMode() {
+		return PipelineSettings.queryScopedMode();
 	}
 
 	protected long getThrottleMs() {

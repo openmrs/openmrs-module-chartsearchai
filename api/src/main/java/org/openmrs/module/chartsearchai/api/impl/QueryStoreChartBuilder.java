@@ -20,6 +20,7 @@ import java.util.Set;
 import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
@@ -92,6 +93,13 @@ class QueryStoreChartBuilder {
 
 	@Autowired
 	private PatientChartSerializer chartSerializer;
+
+	/** Query-scope contributors registered by other modules (billing, appointments, …). Optional:
+	 *  {@code required=false} so chartsearchai runs with zero contributors (built-in routing only).
+	 *  OpenMRS's shared application context collects every {@link QueryScopeContributor} bean across
+	 *  modules. See {@link #buildScoped} for how their claims union with the built-in typed scope. */
+	@Autowired(required = false)
+	private List<QueryScopeContributor> scopeContributors;
 
 	/** Test seam: production wires {@link PatientChartSerializer} via {@link Autowired}.
 	 *  Package-private so {@code QueryStoreChartBuilderTest} can inject a real serializer
@@ -202,7 +210,13 @@ class QueryStoreChartBuilder {
 		// Every matched intent contributes its types (union): completeness must hold for
 		// whichever intent a multi-cue question ("any drug allergies?") actually meant.
 		Set<QueryScopeRouter.Intent> intents = QueryScopeRouter.matchedIntents(question);
-		Set<String> typedScope = QueryScopeRouter.typedSlice(intents);
+		// The built-in typed scope, additionally UNIONed with any module-contributed scopes
+		// (billing, appointments, …). typedSlice(...) is unmodifiable, so wrap it before adding.
+		// The union is additive: with zero contributors this is exactly the built-in behaviour, and
+		// a contributor can only add its own domain's records — never perturb another domain's
+		// routing. See QueryScopeContributor.
+		Set<String> typedScope = new HashSet<String>(QueryScopeRouter.typedSlice(intents));
+		typedScope.addAll(contributedResourceTypes(question));
 		String intentLabel = intentLabel(intents);
 
 		QueryStoreService queryStore = resolveQueryStoreOrNull();
@@ -571,6 +585,45 @@ class QueryStoreChartBuilder {
 	/** Seam for tests: production reads the global property. */
 	protected int resolveQueryStoreTopK() {
 		return PipelineSettings.getQueryStoreTopK();
+	}
+
+	/** Seam for tests: production returns the Spring-collected {@link QueryScopeContributor} beans
+	 *  (empty when none are registered, since the autowire is {@code required=false}). */
+	protected List<QueryScopeContributor> resolveScopeContributors() {
+		return scopeContributors == null ? Collections.<QueryScopeContributor> emptyList() : scopeContributors;
+	}
+
+	/**
+	 * Union of every registered {@link QueryScopeContributor}'s claimed resourceTypes for this
+	 * question — the module-extension point unioned into {@link #buildScoped}'s typed scope.
+	 * Fail-safe: a contributor that throws (or returns null) is skipped with a WARN and forfeits its
+	 * claim, never breaking chart assembly. Returns an empty set when no contributor claims anything.
+	 */
+	private Set<String> contributedResourceTypes(String question) {
+		List<QueryScopeContributor> contributors = resolveScopeContributors();
+		if (contributors == null || contributors.isEmpty()) {
+			return Collections.<String> emptySet();
+		}
+		Set<String> types = new HashSet<String>();
+		for (QueryScopeContributor contributor : contributors) {
+			if (contributor == null) {
+				continue;
+			}
+			try {
+				Set<String> claimed = contributor.scopedResourceTypes(question);
+				if (claimed != null) {
+					types.addAll(claimed);
+				}
+			}
+			catch (RuntimeException e) {
+				// A misbehaving contributor must never break the answer path (same fail-safe posture
+				// as querystore resolution / similarity). getClass() is used for the label because a
+				// contributor whose scopedResourceTypes() throws may also have a throwing getDomainName().
+				log.warn("QueryScopeContributor [{}] failed; ignoring its scope claim for this query",
+						contributor.getClass().getName(), e);
+			}
+		}
+		return types;
 	}
 
 	/** The query-scoped slice's recency anchor: the chart's N most recent records are always in

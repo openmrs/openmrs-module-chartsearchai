@@ -34,6 +34,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 26: Chart-write detection via core service events](#decision-26-chart-write-detection-via-core-service-events)
 - [Decision 27: Drug-safety parity follow-through — weight-aware dosing, curated cross-reactivity groups, prose warnings](#decision-27-drug-safety-parity-follow-through--weight-aware-dosing-curated-cross-reactivity-groups-prose-warnings)
 - [Decision 28: Query-scoped slice charts (chartMode=queryScoped)](#decision-28-query-scoped-slice-charts-chartmodequeryscoped)
+- [Decision 29: Module-extensible query-scope routing (QueryScopeContributor SPI)](#decision-29-module-extensible-query-scope-routing-queryscopecontributor-spi)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -1934,6 +1935,25 @@ The gates were re-run on the current build; the fullChart baseline reproduced **
 - **Deeper retrieval** (topK=50 above) adds noise without net benefit.
 
 Conclusion: the four cell-level regressions are a genuine Pareto cost of the precision/abstention rebalance that drives the aggregate win; no tested change improves the net. Ship at `chartMode=queryScoped`, `querystore.topK=30`.
+
+## Decision 29: Module-extensible query-scope routing (QueryScopeContributor SPI)
+
+**Status: Accepted** (July 2026) — implemented. Extends [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped).
+
+### Context
+
+Decision 28's `QueryScopeRouter` maps a question to a *complete-by-construction* typed scope for six built-in domains (medications, allergies, programs, conditions, visits, orders). Any other domain — billing, appointments, and whatever a given deployment's modules add — falls through to TOPICAL (similarity-only), with no completeness guarantee, and the router's resource-type strings are baked into chartsearchai. That means a new domain cannot get first-class scoped routing without editing this module, and "appointments" is actively *misrouted* today (it is a VISITS cue mapping to `{visit, encounter}`, not to a distinct appointment resourceType).
+
+### Decision
+
+Add a Spring SPI, `QueryScopeContributor` (in `chartsearchai-api`): a module registers a bean that, for a question it recognizes, returns the querystore resourceTypes to include complete. `QueryStoreChartBuilder` autowires `List<QueryScopeContributor>` (`required=false`) and, in `buildScoped`, **unions** each contributor's claim on top of the built-in typed scope. The union is deliberately *additive*: with zero contributors the slice is byte-identical to Decision 28's gated behaviour, and a contributor can only add its own domain's records — it can never perturb another domain's routing, so none of Decision 28's measured wins are put at risk. Each contributor call is wrapped in try/catch — a contributor that throws (or returns null) is skipped with a WARN and forfeits its claim, never breaking the answer path (the same fail-safe posture as querystore resolution and similarity).
+
+### Trade-offs
+
+- **+** New domains get complete-by-construction scoping without modifying chartsearchai; no hard dependency (contributors declare chartsearchai as `aware_of_module` and compile against `chartsearchai-api`); zero contributors = unchanged behaviour.
+- **+** Fixes the appointment misroute in principle: an appointment module registers the real resourceType instead of the wrong `{visit, encounter}` mapping.
+- **−** The hook is only half the contract. querystore owns retrieval/indexing (project rule), so a claimed resourceType contributes nothing unless querystore actually indexes that domain — first-class support for a new domain needs *both* a querystore indexing extension and a contributor here.
+- **−** A contributor is a slice-composition change, which this project gates on BOTH the scope eval and the temporal probe (they pull in opposite directions — see Decision 28). The SPI cannot enforce that a contributor was gated; the interface javadoc states the expectation, and an unvalidated contributor can silently regress its own domain's answer quality. Union also means a careless, over-broad contributor enlarges the slice for its questions (the same over-cite risk Decision 28 measured) — hence the contract's "match conservatively; prefer to under-claim."
 
 ## Known limitations
 

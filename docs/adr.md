@@ -28,6 +28,12 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 20: MedCPT dual-encoder as an alternative embedding model](#decision-20-medcpt-dual-encoder-as-an-alternative-embedding-model)
 - [Decision 21: Concept-name re-ranking for subword-tokenized queries](#decision-21-concept-name-re-ranking-for-subword-tokenized-queries)
 - [Decision 22: e5-base-v2 for the querystore-backed retrieval path](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path)
+- [Decision 23: Drug-reference injection + post-answer drug-safety validation](#decision-23-drug-reference-injection--post-answer-drug-safety-validation)
+- [Decision 24: Drug-reference as a pluggable consumer of authoritative datasets](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets)
+- [Decision 25: Citation grounding (Tier-1 cosine + Tier-2 entailment)](#decision-25-citation-grounding-tier-1-cosine--tier-2-entailment)
+- [Decision 26: Chart-write detection via core service events](#decision-26-chart-write-detection-via-core-service-events)
+- [Decision 27: Drug-safety parity follow-through — weight-aware dosing, curated cross-reactivity groups, prose warnings](#decision-27-drug-safety-parity-follow-through--weight-aware-dosing-curated-cross-reactivity-groups-prose-warnings)
+- [Decision 28: Query-scoped slice charts (chartMode=queryScoped)](#decision-28-query-scoped-slice-charts-chartmodequeryscoped)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -1888,6 +1894,46 @@ Three additive, data-driven extensions:
   own the clinical breadth of their families, consistent with the no-medical-knowledge-in-code rule.
 - **−** Prose warnings are LLM-visible but not validator-enforced; a deployment wanting
   enforcement must express the fact as a structured rule instead.
+
+## Decision 28: Query-scoped slice charts (chartMode=queryScoped)
+
+**Status: Accepted** (July 2026) — implemented behind `chartsearchai.chartMode` (default `fullChart`, unchanged behavior). Complements — and in scoped mode disengages — the warmup/prewarm/KV-persistence machinery of Decisions 12 and 26.
+
+### Context
+
+The fullChart architecture amortizes one large prefill (whole chart, ~13–15k tokens) across queries via llama-server's KV prefix cache, warmup-on-open, and the pinned prewarm corpus. Its weak spot is the *not-yet-warmed* patient: on a GPU-less host the first query pays the full prefill (~70s measured for ~150-record charts; minutes for large ones), and warmth requires per-patient state (~110–280 MB of persisted KV each) that cannot scale to every patient of a real facility — cold patients always exist. A directive constraint for this work: the answer path must not depend on prefill amortization at all.
+
+### Decision
+
+Add a second chart-assembly mode. `QueryScopeRouter` matches the question against conservative word-boundary cue sets — MEDICATIONS, ALLERGIES, PROGRAMS, CONDITIONS, VISITS, ORDERS get their record types included *complete* (an enumeration answer cannot omit what isn't retrieved); a question matching several cue sets ("any drug allergies?") carries the *union* of the matched intents' types, because first-match routing silently dropped the runner-up's completeness on exactly the type being enumerated; everything cue-free is TOPICAL. Every slice also carries the querystore similarity top-K (semantic catch-all; lab abbreviations expanded first, e.g. BMP → basic metabolic panel), the demographics record, obs-group *family completion* (a panel parent or member in the slice pulls the whole panel — member texts carry no panel name, so similarity alone misses the values), and — only for temporal questions ("most recent…", "lately…") — a recency anchor of the chart's newest records. Slices render in chart order (most recent first) with a date on every record: run-length date compression is a full-chart token optimization, and at slice scale it hid exactly the dates temporal questions need. Records whose querystore date is administrative render undated in both modes — `patient` and `allergy` (dateCreated), the two types measured answering "when was the last visit?" with record-keeping time. Known remainder: querystore also stamps dateCreated on `condition`/`diagnosis` (unconditionally) and on `program`/`medication_dispense` (when their clinical date is null); those still render it, so a "when was X diagnosed?" answer can quote record-keeping time. They stay dated for now because blanket-undating an unmeasured type can cost more than it fixes (an undated condition list loses chronology; condition's clinical onset_date sits in doc metadata, unrendered) — extending the set, or rendering onset instead, is follow-up work behind the two gates below. In scoped mode, warmup, the prewarm bootstrap sweep, per-patient KV persistence, and the progressive-reasoning preview all disengage (the same `shouldRunWarmup` decision point Decision 12's machinery already consulted).
+
+### Evidence (rc.2 standalone, E4B, July 2026 gates)
+
+- CPU cold first answer: fullChart 73–74s vs scoped 12–27s; first output ~68s vs 7–12s. Scoped cold ≡ scoped warm — no warmth states exist.
+- 40-cell adjudicated quality (same build): meanF1 0.733 vs 0.800, abstention 0.89 vs 1.00, off-topic citations 51 vs 2; per-cell 9 better / 4 worse / 27 ties.
+- Temporal DB-truth probe: scoped 15/15 stable; fullChart 14/15 (a stale-value failure that survives rebuilds).
+- Two gates are mandatory for any slice-composition change — the 40-cell scope eval and the temporal probe pull in opposite directions (an unconditional recency anchor fixed temporal cells and simultaneously drove an absent-topic cell to 39 drift citations).
+- Gate re-run after the router union fix (fdf1c9c, 2026-07-17, same rc.2 standalone/E4B): 40-cell aggregate unchanged — meanF1 0.800, abstention 1.00, off-topic 2 (none of the eight questions is multi-cue, so routing on them is identical; confirmed from the per-cell `intent=` labels). The temporal probe is now committed (`eval/drift-metric/temporal_probe_rc2.py`) and extended with previously-uncovered "when was the last visit?" cells: 14/15 — 10/10 value-recency plus 2 correct abstentions, the one miss being the type-conflation residual already listed under trade-offs (the newest encounter was in-slice and the model quoted an older one; "last visit" accepts the newest visit-table OR encounter date, since the VISITS scope deliberately carries both). New drug-allergies topic (the union's coverage cell, 45-cell suite): both present cells F1 1.00 — typed-complete imipenem condition/diagnosis rows and DRUG-typed allergy rows; one absent-cell drift where a latex-allergy condition was presented as a drug allergy (model-side negative-question failure; the records reach the slice via similarity identically pre/post union). 45-cell aggregate: meanF1 0.817, abstention 0.95, off-topic 4.
+
+### Trade-offs
+
+- **+** Cold latency collapses ~5–7× on CPU with zero pre-warming, no per-patient disk, no sweeps; quality gates met or improved on every axis.
+- **+** Typed completeness fixes fullChart's omit-for-brevity failures on enumeration questions; the small prompt also decodes faster.
+- **−** Repeat queries lose the ~2.5s ultra-warm full-chart path (each question pays its own small prefill; on CPU scoped is still faster than fullChart's warm decode).
+- **−** Deep-history recall depends on the router + similarity + family completion; the residual known weakness is type-conflation on "last visit"-style questions (the model quotes the newest dated record — e.g. a billing event — instead of a visit record; billing dates are real event dates, so they stay rendered).
+- **−** The intent router is an English keyword table; unmatched phrasings degrade to TOPICAL (similarity-only), never to a wrong typed scope, and multi-cue questions union every matched intent's types rather than betting on one.
+- **−** Flipping modes leaves the previous mode's persisted KV `.bin` files on disk unused until manually cleaned. The pinned prewarm corpus does not survive a scoped interlude unattended (edits during the interlude are not re-pinned; the sweep and per-edit refresh refuse to run in scoped mode rather than fake success) — after flipping back, re-run the `/prewarm` sweep. The admin-date byte change likewise invalidates pre-existing KV entries once: each patient's first touch re-prefills and re-persists **unpinned** (the purge also removes the old entry's `.pin`), so fullChart deployments with a pinned corpus should re-run the sweep after upgrading across this change.
+- **Correctness note (KV-stamp preservation).** The per-request KV decision reads the built chart's `PatientChart#isQueryScoped()` stamp, never a re-read of the `chartMode` GP, so a mode-flip or transient GP-read mid-request cannot mis-scope the persist. The one hazard was the drug-reference injector ([Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation)): `injectRecords` rebuilds the `PatientChart` to append reference records, and the fresh instance defaulted the stamp to `false` — so on the medications path (the flagship scoped intent *and* the likeliest drug-ref match) an injected scoped slice could be persisted under the patient's KV scope and evict their pinned full-chart entry. `injectRecords` now carries the stamp across the reconstruction (regression-tested with the real injector). It is the only `PatientChart` reconstructor outside the serializer, whose output is always (re-)stamped by `buildScoped`.
+
+### Follow-up: independent re-measurement and tuning levers ruled out (2026-07-17)
+
+The gates were re-run on the current build; the fullChart baseline reproduced **exactly** (meanF1 0.733, abstention 0.89, off-topic 51), and scoped reproduced **exactly** (0.800 / 1.00 / 2), confirming the harness and the reported numbers. The four scoped cells that score below fullChart were then diagnosed from the actual cited records: three are **recall losses where scoped keeps perfect precision** (the missed records are in the slice but uncited — the model answers more conservatively, which is the same property that yields the abstention and off-topic-drift wins), and one is an over-citation of a borderline-relevant condition. They pull in **opposite directions**, so no single lever fixes them as a set. Three levers were measured and all net-regress:
+
+- **`querystore.topK` (the one no-code dial).** Curve on the 40-cell gate: topK=20 → meanF1 0.865 / abstention 0.94 / off-topic **25**; topK=25 → 0.813 / 1.00 / 16; **topK=30 (shipped) → 0.800 / 1.00 / 2**; topK=50 → 0.771 / 1.00 / 7. Lowering topK raises present-cell F1 but **reintroduces off-topic drift** — at topK=20 an *absent* cardiac cell dumped 21 irrelevant citations instead of abstaining. **topK=30 uniquely minimizes drift with perfect abstention**; it is a safety optimum, not a max-F1 point, and stays the default.
+- **Subtype-aware routing.** Routing domain-qualified conditions questions ("mental health or psychiatric *conditions*?") to TOPICAL instead of the full CONDITIONS dump fixed the *under-cited* mental cell (0.67 → 0.92) but **broke the *over-cited* one** (0.67 → 0.50) and raised off-topic 2 → 9 — net worse; reverted. Both cells are the identical question; they differ only by patient chart shape, which a text router cannot see.
+- **Deeper retrieval** (topK=50 above) adds noise without net benefit.
+
+Conclusion: the four cell-level regressions are a genuine Pareto cost of the precision/abstention rebalance that drives the aggregate win; no tested change improves the net. Ship at `chartMode=queryScoped`, `querystore.topK=30`.
 
 ## Known limitations
 

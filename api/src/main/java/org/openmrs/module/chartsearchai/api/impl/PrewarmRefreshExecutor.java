@@ -92,10 +92,25 @@ public class PrewarmRefreshExecutor {
 		if (!isRefreshEnabled()) {
 			return;
 		}
+		// queryScoped mode has no full-chart prefix to refresh: the downstream warmup gate would
+		// silently no-op anyway, so scheduling the debounce + daemon session per chart edit is
+		// pure churn — and the stale .pin files from a fullChart era would keep this firing on
+		// every edit for as long as the scoped interlude lasts. Refreshes resume on flip-back;
+		// operators should re-run the /prewarm sweep then (edits made during the interlude were
+		// not re-pinned — see the chartMode GP description).
+		if (isQueryScopedMode()) {
+			return;
+		}
 		if (!isPinned(patient.getUuid())) {
 			return;
 		}
 		scheduleRepin(patient, getDebounceMs());
+	}
+
+	/** Seam wrapping {@link PipelineSettings#queryScopedMode()} (fail-safe false); scoped mode
+	 *  skips re-pin scheduling entirely — see {@link #onChartWrite}. */
+	protected boolean isQueryScopedMode() {
+		return PipelineSettings.queryScopedMode();
 	}
 
 	/** Cancels any pending re-pin for this patient and schedules a fresh one {@code delayMs} out, so a

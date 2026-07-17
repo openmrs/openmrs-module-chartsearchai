@@ -204,6 +204,10 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		// longer belong in the key.
 		String preFilter = gp(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
 		String queryStoreTopK = gp(ChartSearchAiConstants.GP_QUERYSTORE_TOP_K, "");
+		// chartMode swaps the entire context (full chart vs query-scoped slice) — the largest
+		// possible "changes what the LLM sees", so a mode flip must miss rather than serve the
+		// other mode's answers until TTL.
+		String chartMode = gp(ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_FULL_CHART);
 		// Grounding GPs change the answer's per-citation `grounded` verdict, so
 		// they must be part of the key — otherwise toggling grounding (or its
 		// floor / entailment flag) while caching is on would serve answers whose
@@ -212,6 +216,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		String groundingMinCosine = gp(ChartSearchAiConstants.GP_GROUNDING_MIN_COSINE, "");
 		String groundingEntailment = gp(ChartSearchAiConstants.GP_GROUNDING_ENTAILMENT_ENABLED, "");
 		return patient.getUuid() + "::" + preFilter.trim().toLowerCase()
+				+ "::" + chartMode.trim().toLowerCase()
 				+ "::" + queryStoreTopK.trim()
 				+ "::" + grounding.trim().toLowerCase()
 				+ "::" + groundingMinCosine.trim()

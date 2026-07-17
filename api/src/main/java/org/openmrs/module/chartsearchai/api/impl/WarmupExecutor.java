@@ -56,12 +56,24 @@ public class WarmupExecutor {
 		this.daemonToken = token;
 	}
 
+	/** Seam wrapping {@link PipelineSettings#queryScopedMode()} (fail-safe false); scoped mode
+	 *  skips warmup submission entirely — see {@link #submit}. */
+	protected boolean isQueryScopedMode() {
+		return PipelineSettings.queryScopedMode();
+	}
+
 	public void submit(Patient patient) {
 		if (patient == null || patient.getPatientId() == null) {
 			return;
 		}
 		// Short-circuit before spawning a daemon thread, to avoid the Hibernate
-		// session inside Daemon.runInDaemonThread when warmup is off.
+		// session inside Daemon.runInDaemonThread when warmup is off — and equally when
+		// chartMode=queryScoped, where the downstream LlmInferenceService gate makes every
+		// warmup a guaranteed no-op: without this check, every chart open would still pay a
+		// daemon session open + GP reads for work that can never have an effect.
+		if (isQueryScopedMode()) {
+			return;
+		}
 		if (!LlmInferenceService.isWarmupEnabled()) {
 			return;
 		}

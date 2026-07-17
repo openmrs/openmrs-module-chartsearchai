@@ -31,7 +31,17 @@ class ChartBuildingStrategy {
 	@Qualifier("chartSearchAi.queryStoreChartBuilder")
 	private QueryStoreChartBuilder queryStoreChartBuilder;
 
+	/** Test seam: production wires {@link QueryStoreChartBuilder} via {@link Autowired}. */
+	void setQueryStoreChartBuilder(QueryStoreChartBuilder queryStoreChartBuilder) {
+		this.queryStoreChartBuilder = queryStoreChartBuilder;
+	}
+
 	PatientChart buildChart(Patient patient, String question) {
+		// The chartMode dispatch lives here — the single chart-assembly entry point — so every
+		// caller (search, searchStreaming, warmup) sees the same mode without re-reading the GP.
+		if (queryScopedMode()) {
+			return queryStoreChartBuilder.buildScoped(patient, question);
+		}
 		return queryStoreChartBuilder.build(patient, question);
 	}
 
@@ -47,5 +57,11 @@ class ChartBuildingStrategy {
 
 	boolean usePreFilter() {
 		return PipelineSettings.usePreFilter();
+	}
+
+	/** True when {@code chartsearchai.chartMode=queryScoped} — prompts carry a query-scoped slice
+	 *  and the full-chart prefill machinery (warmup, KV persistence, preview) disengages. */
+	boolean queryScopedMode() {
+		return PipelineSettings.queryScopedMode();
 	}
 }

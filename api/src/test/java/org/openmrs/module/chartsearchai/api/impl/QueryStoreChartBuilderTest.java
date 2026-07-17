@@ -22,7 +22,6 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.querystore.api.QueryStoreService;
-import org.openmrs.module.querystore.backend.WriteResult;
 import org.openmrs.module.querystore.model.QueryDocument;
 
 /**
@@ -47,12 +46,12 @@ public class QueryStoreChartBuilderTest {
 		return p;
 	}
 
-	private CountingQueryStore queryStore;
+	private CountingQueryStoreStub queryStore;
 	private TestableQueryStoreChartBuilder builder;
 
 	@BeforeEach
 	public void setUp() {
-		queryStore = new CountingQueryStore();
+		queryStore = new CountingQueryStoreStub();
 		builder = new TestableQueryStoreChartBuilder(queryStore);
 		builder.setChartSerializer(new PatientChartSerializer());
 	}
@@ -157,6 +156,48 @@ public class QueryStoreChartBuilderTest {
 				"preFilter=true must call getPatientChart for the stable chart bytes");
 		assertEquals(1, queryStore.searchByPatientCalls,
 				"preFilter=true must also call searchByPatient for the focus-hint ranking");
+	}
+
+	@Test
+	public void build_shouldNotStampChartsAsQueryScoped() {
+		// Only buildScoped stamps the flag; a stamped full chart would wrongly suppress the KV
+		// scope (and with it warmup/restore) for the mode whose whole design depends on it.
+		assertFalse(builder.build(patient(1), "any allergies?").isQueryScoped(),
+				"fullChart builds must never carry the query-scoped stamp");
+	}
+
+	@Test
+	public void build_shouldNotRenderAdministrativeDates_onPatientAndAllergyRecords() {
+		// Shared toSerializedRecords contract, locked from the fullChart entry point too (the
+		// scoped test covers buildScoped): querystore stamps dateCreated on patient and allergy
+		// documents (no clinical event date exists — see its Patient/AllergyRecordSerializer), and
+		// rendering that as a "(date)" label misleads temporal reasoning — measured, "when was the
+		// last visit?" was answered from these records' creation dates. The condition record's
+		// date is ALSO dateCreated upstream but deliberately still renders (undating an unmeasured
+		// type is reserved for the gates — see the ADMIN_DATED_TYPES javadoc).
+		QueryDocument allergyDoc = new QueryDocument();
+		allergyDoc.setResourceType("allergy");
+		allergyDoc.setResourceUuid("allergy-uuid-1");
+		allergyDoc.setText("Allergy: Bee venom. Severity: Severe");
+		allergyDoc.setDate(java.time.LocalDate.of(2026, 6, 30));
+		QueryDocument conditionDoc = new QueryDocument();
+		conditionDoc.setResourceType("condition");
+		conditionDoc.setResourceUuid("cond-uuid-1");
+		conditionDoc.setText("Condition: Malaria. Status: ACTIVE");
+		conditionDoc.setDate(java.time.LocalDate.of(2026, 6, 27));
+		queryStore.stubChart = new ArrayList<>();
+		queryStore.stubChart.add(allergyDoc);
+		queryStore.stubChart.add(conditionDoc);
+		builder.usePreFilter = false;
+
+		PatientChart chart = builder.build(patient(1), "any allergies?");
+
+		String text = chart.getText();
+		assertFalse(text.contains("(2026-06-30)"),
+				"the allergy record's administrative creation date must not render:\n" + text);
+		assertTrue(text.contains("(2026-06-27) Condition: Malaria"),
+				"types outside ADMIN_DATED_TYPES keep their dates (condition's is also dateCreated "
+						+ "upstream — kept pending the gated follow-up):\n" + text);
 	}
 
 	@Test
@@ -588,68 +629,4 @@ public class QueryStoreChartBuilderTest {
 		}
 	}
 
-	private static final class CountingQueryStore implements QueryStoreService {
-
-		int searchByPatientCalls = 0;
-
-		int getPatientChartCalls = 0;
-
-		int lastSearchTopK = -1;
-
-		List<QueryDocument> stubHits = new ArrayList<QueryDocument>();
-
-		List<QueryDocument> stubChart = new ArrayList<QueryDocument>();
-
-		boolean throwOnSearch = false;
-
-		/** Backwards-compatible aggregate counter — pre-focus-hint tests assert on
-		 *  total querystore calls without caring which method. */
-		int getCallCount() {
-			return searchByPatientCalls + getPatientChartCalls;
-		}
-
-		@Override
-		public List<QueryDocument> searchByPatient(String patientUuid, String question, int topK) {
-			searchByPatientCalls++;
-			lastSearchTopK = topK;
-			if (throwOnSearch) {
-				throw new RuntimeException("simulated focus-hint RPC failure");
-			}
-			return stubHits;
-		}
-
-		@Override
-		public List<QueryDocument> getPatientChart(String patientUuid) {
-			getPatientChartCalls++;
-			return stubChart;
-		}
-
-		@Override
-		public List<QueryDocument> search(String question, int topK) {
-			throw new UnsupportedOperationException("not used by chartsearchai");
-		}
-
-		@Override
-		public WriteResult index(QueryDocument doc) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public void delete(String resourceType, String resourceUuid) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public void bulkDeleteByPatient(String patientUuid) {
-			throw new UnsupportedOperationException();
-		}
-
-		@Override
-		public void onStartup() {
-		}
-
-		@Override
-		public void onShutdown() {
-		}
-	}
 }

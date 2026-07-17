@@ -79,6 +79,19 @@ public class ChartSearchServiceRouterTest {
 	}
 
 	@Test
+	public void buildCacheKey_changesWhenChartModeChanges() {
+		// chartMode swaps the ENTIRE context the LLM sees (full chart vs query-scoped slice), so
+		// it must be in the key — otherwise flipping the mode while caching is on serves the other
+		// mode's answers until the TTL expires, and flipping back within the TTL mixes both.
+		StubRouter router = new StubRouter();
+		Patient p = patient("p1");
+		String fullChart = router.buildCacheKey(p, "q");
+		router.gps.put(ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED);
+		assertNotEquals(fullChart, router.buildCacheKey(p, "q"),
+				"a mode flip must never serve the other mode's cached answers");
+	}
+
+	@Test
 	public void buildCacheKey_changesWhenGroundingEnabledToggles() {
 		StubRouter router = new StubRouter();
 		Patient p = patient("p1");

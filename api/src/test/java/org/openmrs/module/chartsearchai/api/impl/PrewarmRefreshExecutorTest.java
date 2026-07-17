@@ -37,6 +37,23 @@ public class PrewarmRefreshExecutorTest {
 	}
 
 	@Test
+	public void onChartWrite_shouldDoNothing_inQueryScopedMode() throws Exception {
+		// Scoped mode has no full-chart prefix to refresh; the downstream warmup gate would
+		// silently no-op every re-pin, so a scoped interlude must not schedule the debounce +
+		// daemon session per chart edit (the stale .pin files from a fullChart era keep the
+		// isPinned check true, which without this gate would fire on every edit).
+		TestableRefreshExecutor ex = new TestableRefreshExecutor();
+		ex.enabled = true;
+		ex.pinned = true;
+		ex.queryScopedMode = true;
+
+		ex.onChartWrite(patient(1));
+
+		Thread.sleep(120);
+		assertEquals(0, ex.repins.get(), "queryScoped mode must schedule no re-pins");
+	}
+
+	@Test
 	public void onChartWrite_shouldDoNothing_whenRefreshDisabled() throws Exception {
 		TestableRefreshExecutor ex = new TestableRefreshExecutor();
 		ex.enabled = false;
@@ -113,7 +130,14 @@ public class PrewarmRefreshExecutorTest {
 
 		boolean pinned;
 
+		boolean queryScopedMode = false;
+
 		long debounceMs = 50;
+
+		@Override
+		protected boolean isQueryScopedMode() {
+			return queryScopedMode;
+		}
 
 		final AtomicInteger repins = new AtomicInteger();
 

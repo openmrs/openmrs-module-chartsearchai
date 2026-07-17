@@ -42,6 +42,29 @@ public class ChartSearchAiConstants {
 
 	public static final int DEFAULT_QUERYSTORE_TOP_K = 30;
 
+	/**
+	 * How the LLM prompt's chart context is assembled per query.
+	 * <ul>
+	 *   <li>{@link #CHART_MODE_FULL_CHART} (default) — the patient's whole chart is serialized into
+	 *       every prompt. The chart bytes are a function of the patient only, so llama-server's
+	 *       KV prefix cache (plus warmup/prewarm/disk persistence) amortizes the multi-thousand-token
+	 *       prefill across queries. First-ever queries on a not-yet-warmed patient pay that full
+	 *       prefill (tens of seconds to minutes on a GPU-less host).</li>
+	 *   <li>{@link #CHART_MODE_QUERY_SCOPED} — the prompt carries only a query-scoped slice: every
+	 *       record of the question's typed scope (e.g. all drug orders for a medications question —
+	 *       complete by construction, see {@code QueryScopeRouter}) plus the querystore similarity
+	 *       top-K plus the demographics record, in the chart's most-recent-first order. Slices are a
+	 *       few hundred tokens, so a cold patient's first answer starts after a small prefill with no
+	 *       pre-warming of any kind; the full-chart prefill machinery (warmup, prewarm bootstrap,
+	 *       per-patient KV persistence, progressive-reasoning preview) disengages in this mode.</li>
+	 * </ul>
+	 */
+	public static final String GP_CHART_MODE = "chartsearchai.chartMode";
+
+	public static final String CHART_MODE_FULL_CHART = "fullChart";
+
+	public static final String CHART_MODE_QUERY_SCOPED = "queryScoped";
+
 	public static final String GP_AUDIT_LOG_RETENTION_DAYS = "chartsearchai.auditLogRetentionDays";
 
 	public static final int DEFAULT_AUDIT_LOG_RETENTION_DAYS = 90;

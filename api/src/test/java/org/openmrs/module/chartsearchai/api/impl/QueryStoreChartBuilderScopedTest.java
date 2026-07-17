@@ -24,6 +24,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -359,9 +360,9 @@ public class QueryStoreChartBuilderScopedTest {
 	}
 
 	/** A test contributor claiming a fixed type set when the question contains a cue word. */
-	private static org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor contributor(
+	private static QueryScopeContributor contributor(
 			final String cue, final String... types) {
-		return new org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor() {
+		return new QueryScopeContributor() {
 
 			@Override
 			public Set<String> scopedResourceTypes(String question) {
@@ -431,7 +432,7 @@ public class QueryStoreChartBuilderScopedTest {
 	public void buildScoped_shouldSurviveThrowingContributor() {
 		// A misbehaving contributor must never break chart assembly — it forfeits its claim, the rest
 		// of the slice (built-in scope + similarity + patient) is built normally.
-		builder.contributors.add(new org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor() {
+		builder.contributors.add(new QueryScopeContributor() {
 
 			@Override
 			public Set<String> scopedResourceTypes(String question) {
@@ -452,21 +453,42 @@ public class QueryStoreChartBuilderScopedTest {
 				"the surviving contributor's claim must still apply after another throws; got " + uuids);
 	}
 
+	@Test
+	public void buildScoped_shouldSurvive_whenContributorResolutionItselfFails() {
+		// Beyond a single contributor throwing: resolving the contributor beans can itself fail
+		// (e.g. no OpenMRS service context). buildScoped must degrade to the built-in scope, not break.
+		builder.throwOnResolveContributors = true;
+		queryStore.stubChart = new ArrayList<QueryDocument>(Arrays.asList(
+				doc("patient", "p-1", "Patient: Jane Doe", LocalDate.of(2026, 7, 1)),
+				doc("drug_order", "d-1", "Drug order: Lisinopril 10 mg", LocalDate.of(2026, 6, 30))));
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "What medications is the patient taking?");
+
+		assertTrue(mappedUuids(chart).containsAll(Arrays.asList("p-1", "d-1")),
+				"contributor-resolution failure must still yield the built-in typed slice; got " + mappedUuids(chart));
+	}
+
 	private static final class TestableScopedBuilder extends QueryStoreChartBuilder {
 
 		private final QueryStoreService stub;
 
 		int recencyAnchor = 0;
 
-		java.util.List<org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor> contributors =
-				new ArrayList<org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor>();
+		boolean throwOnResolveContributors = false;
+
+		List<QueryScopeContributor> contributors =
+				new ArrayList<QueryScopeContributor>();
 
 		TestableScopedBuilder(QueryStoreService stub) {
 			this.stub = stub;
 		}
 
 		@Override
-		protected java.util.List<org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor> resolveScopeContributors() {
+		protected List<QueryScopeContributor> resolveScopeContributors() {
+			if (throwOnResolveContributors) {
+				throw new RuntimeException("simulated getRegisteredComponents failure");
+			}
 			return contributors;
 		}
 

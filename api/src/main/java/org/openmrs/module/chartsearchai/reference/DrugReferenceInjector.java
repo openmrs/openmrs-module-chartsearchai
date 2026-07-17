@@ -108,8 +108,17 @@ public class DrugReferenceInjector {
 
 		log.debug("Injected {} drug-reference record(s) into chart for question '{}'",
 				matched.size(), question);
-		return new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
+		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
+		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
+		// derives its KV-cache decision from PatientChart.isQueryScoped() precisely so a mode-flip /
+		// GP-read race cannot mis-scope the persist; a fresh PatientChart defaults the flag to false,
+		// so dropping it here would silently re-arm exactly that hazard for question-dependent slices
+		// (the medications path — the flagship scoped intent — is also the likeliest drug-ref match).
+		if (chart.isQueryScoped()) {
+			injected.markQueryScoped();
+		}
+		return injected;
 	}
 
 	/**

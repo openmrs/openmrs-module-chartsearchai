@@ -78,11 +78,14 @@ final class QueryScopeRouter {
 
 	/**
 	 * True when the question asks about the newest value/event ("most recent weight", "when was
-	 * the last visit"). Only these slices carry the recency anchor — the chart's newest records —
-	 * because similarity ranks by meaning, not date, and can exclude the latest reading
-	 * (measured: a stale systolic quoted). Scope questions must NOT get the anchor: recent
-	 * vitals in a small slice bait enumeration on absent-topic questions (measured: an absent
-	 * "heart" cell drifting to 39 vitals citations).
+	 * the last visit"). Only temporal questions carry the recency anchor — the chart's newest
+	 * records — because similarity ranks by meaning, not date, and can exclude the latest reading
+	 * (measured: a stale systolic quoted). The gate is temporal phrasing alone, independent of
+	 * typed scope: NON-temporal questions get no anchor, which is what keeps recent vitals out of
+	 * an absent-topic slice where they bait enumeration (measured: a non-temporal "any heart
+	 * problems?" cell drifting to 39 vitals citations back when the anchor was unconditional). A
+	 * typed-scope question phrased temporally ("current medications") does receive the anchor; its
+	 * typed scope is already complete, so the newest records are additive rather than misleading.
 	 */
 	static boolean isTemporal(String question) {
 		return question != null && TEMPORAL_CUES.matcher(question).find();

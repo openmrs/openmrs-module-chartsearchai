@@ -197,7 +197,11 @@ final class QueryPreprocessor {
 		}
 		String expanded = question;
 		for (Map.Entry<Pattern, String> entry : LAB_PANEL_ABBREVIATIONS.entrySet()) {
-			expanded = entry.getKey().matcher(expanded).replaceAll("$0 " + entry.getValue());
+			// "$0" keeps the matched abbreviation; the panel name is quoted so a value ever
+			// containing '$' or '\' is inserted literally instead of being parsed as a group
+			// reference / escape (which would throw or mangle the retrieval text).
+			expanded = entry.getKey().matcher(expanded)
+					.replaceAll("$0 " + Matcher.quoteReplacement(entry.getValue()));
 		}
 		return expanded;
 	}

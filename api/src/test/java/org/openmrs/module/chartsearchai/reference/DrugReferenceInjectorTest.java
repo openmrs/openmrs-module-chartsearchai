@@ -69,6 +69,42 @@ public class DrugReferenceInjectorTest {
 	}
 
 	@Test
+	public void injectionPreservesQueryScopedStamp() {
+		// A query-scoped slice that gains a drug-reference record MUST stay stamped query-scoped:
+		// LlmInferenceService.searchStreaming derives the KV-cache decision from
+		// PatientChart.isQueryScoped() (not a re-read of the chartMode GP, deliberately). If
+		// injection drops the stamp, a question-dependent slice can be persisted under the
+		// patient's KV scope during a mode-flip/GP-read race, evicting their real full-chart
+		// (pinned) entry. Regression: injectRecords rebuilt the chart via a fresh PatientChart,
+		// which reset the flag to false.
+		PatientChart scoped = oneRecordChart();
+		scoped.markQueryScoped();
+
+		PatientChart result = injector().injectRecords(scoped,
+				context(5, null), "what is the safe dose of ibuprofen?");
+
+		assertTrue(result.getMappings().size() > scoped.getMappings().size(),
+				"precondition: a reference record must actually be injected, else the rebuild path is not exercised");
+		assertTrue(result.isQueryScoped(),
+				"the injected chart must carry forward the query-scoped stamp");
+	}
+
+	@Test
+	public void injectionLeavesFullChartUnstamped() {
+		// The mirror guard: injection must never ADD the stamp to a full chart, which would wrongly
+		// suppress the patient KV scope for the mode whose whole design depends on it.
+		PatientChart full = oneRecordChart();
+
+		PatientChart result = injector().injectRecords(full,
+				context(5, null), "what is the safe dose of ibuprofen?");
+
+		assertTrue(result.getMappings().size() > full.getMappings().size(),
+				"precondition: a reference record must actually be injected");
+		assertFalse(result.isQueryScoped(),
+				"a full chart must never acquire the query-scoped stamp through injection");
+	}
+
+	@Test
 	public void dosingIsRenderedForMatchingAgeBand() {
 		PatientChart result = injector().injectRecords(oneRecordChart(),
 				context(5, null), "ibuprofen dose?");

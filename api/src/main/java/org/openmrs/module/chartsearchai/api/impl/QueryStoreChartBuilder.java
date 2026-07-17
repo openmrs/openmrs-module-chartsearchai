@@ -227,7 +227,7 @@ class QueryStoreChartBuilder {
 		// dropped) — at the cap, "complete by construction" typed slices may be missing
 		// pre-cutoff records, and unlike fullChart (which fails loud on context overflow) the
 		// slice keeps working. Surface it for operators.
-		if (chartDocs.size() >= 10_000) {
+		if (chartDocs.size() >= QUERYSTORE_ES_CHART_CAP) {
 			log.warn("getPatientChart returned {} docs for patient [uuid={}] — at querystore's ES "
 					+ "tier cap; typed slices may silently omit records older than the cutoff.",
 					chartDocs.size(), patient.getUuid());
@@ -249,8 +249,10 @@ class QueryStoreChartBuilder {
 		// Filter the chart (already most-recent-first) down to the slice, preserving its order.
 		// TEMPORAL questions additionally carry the recency anchor — the first N chart records:
 		// similarity ranks by meaning, not date, so without it "most recent X" can lose the newest
-		// reading to older, better-matching records (measured: a stale systolic quoted). Scope
-		// questions must NOT carry it (see QueryScopeRouter.isTemporal).
+		// reading to older, better-matching records (measured: a stale systolic quoted). The anchor
+		// is gated purely on temporal phrasing (QueryScopeRouter.isTemporal), independent of typed
+		// scope; non-temporal questions get none, which is what keeps an absent-topic slice from
+		// baiting enumeration.
 		int recencyAnchor = QueryScopeRouter.isTemporal(question) ? resolveScopedRecencyAnchor() : 0;
 		List<QueryDocument> sliceDocs = new ArrayList<QueryDocument>();
 		Set<String> sliceUuids = new HashSet<String>();
@@ -424,6 +426,13 @@ class QueryStoreChartBuilder {
 	 *  {@code errorClass=}, which a shared catch-and-null helper would erase). */
 	private static final String GET_PATIENT_CHART_FAILED_MSG =
 			"QueryStore.getPatientChart failed for patient [uuid={}]";
+
+	/** querystore's Elasticsearch tier caps {@code getPatientChart} at its most-recent N documents
+	 *  (older tail silently dropped) — mirrors {@code ElasticsearchBackendStore.FULL_CHART_MAX_HITS}
+	 *  in the querystore module. Kept in sync manually: querystore-api exposes no constant for it.
+	 *  A returned size at this value means a scoped typed slice may be missing pre-cutoff records
+	 *  (see {@link #buildScoped}). */
+	private static final int QUERYSTORE_ES_CHART_CAP = 10_000;
 
 	/**
 	 * Runs the similarity search and collects hit uuids, degrading to an empty set on failure with

@@ -5,9 +5,10 @@ OUT="$1"; mkdir -p "$OUT"
 PATIENTS=("bc4ba445-a35c-4996-b804-4d5b68387571" "1128c659-2d0a-4314-af23-91bac1b01109" "59a5f0bb-b863-4213-9177-b883fe9f5f79" "16ca09dd-a8d4-405a-bda6-76d18ed65b25" "dkb00000-0000-0000-0000-000000000001")
 # Override for supplemental runs: CAPTURE_PATIENTS="uuid1 uuid2" capture_eval_rc2.sh <outdir>
 if [ -n "$CAPTURE_PATIENTS" ]; then read -r -a PATIENTS <<< "$CAPTURE_PATIENTS"; fi
-QUERIES=("Is the patient enrolled in any programs?" "Does the patient have any allergies?" "What medications is the patient taking?" "Does the patient have any eye problems?" "Does the patient have any heart or cardiac problems?" "Has the patient had any fractures or broken bones?" "Does the patient have any kidney problems?" "Does the patient have any mental health or psychiatric conditions?")
+QUERIES=("Is the patient enrolled in any programs?" "Does the patient have any allergies?" "What medications is the patient taking?" "Does the patient have any eye problems?" "Does the patient have any heart or cardiac problems?" "Has the patient had any fractures or broken bones?" "Does the patient have any kidney problems?" "Does the patient have any mental health or psychiatric conditions?" "Does the patient have any drug allergies?")
 topic_of() {
   case "$1" in
+    *drug\ allergies*) echo drug-allergies;;
     *programs*) echo programs;; *allergies*) echo allergies;; *medications*) echo medications;;
     *eye*) echo eye;; *heart*) echo heart;; *fractures*) echo fractures;;
     *kidney*) echo kidney;; *mental*) echo mental;; *) echo unknown;;

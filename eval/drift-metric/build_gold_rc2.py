@@ -29,7 +29,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # Filled in after the profiling pass; see main().
 EVAL_PATIENTS = {}  # name -> (uuid, person_id), set by profile or overridden via GOLD_PATIENTS env
 
-TOPICS = ["programs", "allergies", "medications", "eye", "heart", "fractures", "kidney", "mental"]
+TOPICS = ["programs", "allergies", "medications", "eye", "heart", "fractures", "kidney", "mental",
+          "drug-allergies"]
 
 # Category boundaries inherited from the ORIGINAL human gold (metric_gold.json ontopic texts).
 # "names": exact concept names the human counted (normalized). "stems": regex fragments that
@@ -103,6 +104,12 @@ BOUNDARIES = {
     # urticaria/angioedema adjudicated ON from capture review (hypersensitivity conditions;
     # precedent: "Itching", "Seasonal allergic rhinitis").
     "allergies": {"stems": [r"allerg", r"\bitching\b", r"anaphyla", r"urticaria", r"angio-?oedema|angio-?edema"], "auto": True},
+    # drug-allergies (added with the router union fix, fdf1c9c): the DRUG-allergen subset of the
+    # allergies universe. allergy rows are on-topic iff allergen_type=DRUG (DB truth, no naming
+    # heuristics); condition/diagnosis rows only via stems or explicit ADJUDICATIONS — the rc.2
+    # install records e.g. "Allergy to imipenem" as condition+diagnosis rows, and imipenem is not
+    # in this install's drug table, so drug-table membership cannot be the rule here.
+    "drug-allergies": {"stems": [r"drug allerg", r"drug hypersensitivity", r"adverse drug reaction"], "auto": True},
     "medications": {"stems": [], "auto": True},  # drug orders + dispenses; obs med-mentions via drug-name scan
     "programs": {"stems": [], "auto": True},
 }
@@ -112,6 +119,14 @@ BOUNDARIES = {
 ADJUDICATIONS = {
     # "fear of medical care" was counted under mental by the original human gold; the stem
     # r"fear of" auto-covers it. Add overrides here as capture-time unknowns surface.
+    # drug-allergies: the rc.2 install's five "allerg"-named condition/diagnosis concepts,
+    # each called explicitly (imipenem is a carbapenem antibiotic -> drug allergy; latex,
+    # spiders, peanuts ("eanuts" is the install's typo) and environmental are not drugs).
+    "allergy to imipenem": {"drug-allergies": True},
+    "allergy to latex": {"drug-allergies": False},
+    "allergy to spiders": {"drug-allergies": False},
+    "allergy to eanuts": {"drug-allergies": False},
+    "environmental allergies": {"drug-allergies": False},
 }
 
 
@@ -163,12 +178,14 @@ def fetch_universe(pid):
           AND cn.concept_name_type='FULLY_SPECIFIED' AND cn.voided=0
         WHERE pp.patient_id={pid} AND pp.voided=0"""):
         recs.append((u, "program", norm(name), f"Program: {name}", ""))
-    for u, name in sql(f"""
-        SELECT a.uuid, COALESCE(cn.name, a.coded_allergen)
+    for u, name, atype in sql(f"""
+        SELECT a.uuid, COALESCE(cn.name, a.coded_allergen), a.allergen_type
         FROM allergy a LEFT JOIN concept_name cn ON cn.concept_id=a.coded_allergen
           AND cn.locale='en' AND cn.concept_name_type='FULLY_SPECIFIED' AND cn.voided=0
         WHERE a.patient_id={pid} AND a.voided=0"""):
-        recs.append((u, "allergy", norm(name), f"Allergy: {name}", ""))
+        # allergen_type rides in the textval slot (unused for allergy rows): DB truth for the
+        # drug-allergies topic without a second query or naming heuristics.
+        recs.append((u, "allergy", norm(name), f"Allergy: {name}", norm(atype)))
     for u, name, vn, vt, vc in sql(f"""
         SELECT o.uuid, cn.name, o.value_numeric, o.value_text, vcn.name
         FROM obs o JOIN concept_name cn ON cn.concept_id=o.concept_id AND cn.locale='en'
@@ -213,6 +230,15 @@ def classify(topic, kind, name, display, textval=""):
     b = BOUNDARIES[topic]
     if topic == "programs":
         return kind == "program"
+    if topic == "drug-allergies":
+        if kind == "allergy":
+            return textval == "drug"
+        if kind in ("condition", "diagnosis", "obs"):
+            adj = ADJUDICATIONS.get(name, {}).get(topic)
+            if adj is not None:
+                return adj
+            return bool(any(re.search(s, name) for s in b["stems"]))
+        return False
     if topic == "allergies":
         if kind == "allergy":
             return True

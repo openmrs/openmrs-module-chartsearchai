@@ -1,6 +1,6 @@
 # rc.2 gold audit — boundaries inherited from the original human gold
 
-## Barbara Miller (pid 9, 16ca09dd-a8d4-405a-bda6-76d18ed65b25) — 256 records, topic counts {'programs': 0, 'allergies': 0, 'medications': 0, 'eye': 0, 'heart': 2, 'fractures': 0, 'kidney': 24, 'mental': 2}
+## Barbara Miller (pid 9, 16ca09dd-a8d4-405a-bda6-76d18ed65b25) — 256 records, topic counts {'programs': 0, 'allergies': 0, 'medications': 0, 'eye': 0, 'heart': 2, 'fractures': 0, 'kidney': 24, 'mental': 2, 'drug-allergies': 0}
 ### Barbara Miller|programs present=False ontopic=0
 ### Barbara Miller|allergies present=False ontopic=0
 ### Barbara Miller|medications present=False ontopic=0
@@ -37,7 +37,8 @@
 ### Barbara Miller|mental present=True ontopic=2
   ON  Condition: Fearful mood. Status: ACTIVE
   ON  Diagnosis: Fearful mood. Certainty: PROVISIONAL
-## Agnes Adams (pid 27, bc4ba445-a35c-4996-b804-4d5b68387571) — 564 records, topic counts {'programs': 0, 'allergies': 10, 'medications': 0, 'eye': 0, 'heart': 5, 'fractures': 4, 'kidney': 64, 'mental': 8}
+### Barbara Miller|drug-allergies present=False ontopic=0
+## Agnes Adams (pid 27, bc4ba445-a35c-4996-b804-4d5b68387571) — 564 records, topic counts {'programs': 0, 'allergies': 10, 'medications': 0, 'eye': 0, 'heart': 5, 'fractures': 4, 'kidney': 64, 'mental': 8, 'drug-allergies': 2}
 ### Agnes Adams|programs present=False ontopic=0
 ### Agnes Adams|allergies present=True ontopic=10
   ON  Condition: Allergy to eanuts. Status: ACTIVE
@@ -133,7 +134,10 @@
   ON  Diagnosis: Brief reactive psychosis. Certainty: PROVISIONAL
   ON  Diagnosis: Hyperkinetic syndrome of childhood. Certainty: CONFIRMED
   ON  Diagnosis: Obsessive-compulsive disorder. Certainty: PROVISIONAL
-## Donald Thompson (pid 39, 59a5f0bb-b863-4213-9177-b883fe9f5f79) — 398 records, topic counts {'programs': 1, 'allergies': 4, 'medications': 0, 'eye': 0, 'heart': 0, 'fractures': 4, 'kidney': 3, 'mental': 12}
+### Agnes Adams|drug-allergies present=True ontopic=2
+  ON  Condition: Allergy to imipenem. Status: ACTIVE
+  ON  Diagnosis: Allergy to imipenem. Certainty: CONFIRMED
+## Donald Thompson (pid 39, 59a5f0bb-b863-4213-9177-b883fe9f5f79) — 398 records, topic counts {'programs': 1, 'allergies': 4, 'medications': 0, 'eye': 0, 'heart': 0, 'fractures': 4, 'kidney': 3, 'mental': 12, 'drug-allergies': 0}
 ### Donald Thompson|programs present=True ontopic=1
   ON  Program: PMTCT
 ### Donald Thompson|allergies present=True ontopic=4
@@ -166,7 +170,8 @@
   ON  Diagnosis: Rumination disorder. Certainty: PROVISIONAL
   ON  Diagnosis: Suicidal thoughts. Certainty: CONFIRMED
   ON  Diagnosis: Undifferentiated somatoform disorder. Certainty: CONFIRMED
-## Helen Roberts (pid 47, 1128c659-2d0a-4314-af23-91bac1b01109) — 446 records, topic counts {'programs': 0, 'allergies': 2, 'medications': 0, 'eye': 2, 'heart': 6, 'fractures': 12, 'kidney': 4, 'mental': 8}
+### Donald Thompson|drug-allergies present=False ontopic=0
+## Helen Roberts (pid 47, 1128c659-2d0a-4314-af23-91bac1b01109) — 446 records, topic counts {'programs': 0, 'allergies': 2, 'medications': 0, 'eye': 2, 'heart': 6, 'fractures': 12, 'kidney': 4, 'mental': 8, 'drug-allergies': 0}
 ### Helen Roberts|programs present=False ontopic=0
 ### Helen Roberts|allergies present=True ontopic=2
   ON  Condition: Environmental Allergies. Status: ACTIVE
@@ -209,7 +214,8 @@
   ON  Diagnosis: Organic mental disorder. Certainty: PROVISIONAL
   ON  Diagnosis: Schizotypal personality disorder. Certainty: CONFIRMED
   ON  Diagnosis: Separation anxiety disorder of childhood. Certainty: PROVISIONAL
-## Margaret Holloway (pid 58, dkb00000-0000-0000-0000-000000000001) — 18 records, topic counts {'programs': 0, 'allergies': 4, 'medications': 8, 'eye': 0, 'heart': 0, 'fractures': 0, 'kidney': 1, 'mental': 0}
+### Helen Roberts|drug-allergies present=False ontopic=0
+## Margaret Holloway (pid 58, dkb00000-0000-0000-0000-000000000001) — 18 records, topic counts {'programs': 0, 'allergies': 4, 'medications': 8, 'eye': 0, 'heart': 0, 'fractures': 0, 'kidney': 1, 'mental': 0, 'drug-allergies': 4}
 ### Margaret Holloway|programs present=False ontopic=0
 ### Margaret Holloway|allergies present=True ontopic=4
   ON  Allergy: Acetaminophen
@@ -231,3 +237,8 @@
 ### Margaret Holloway|kidney present=True ontopic=1
   ON  Condition: Significant renal impairment. Status: ACTIVE
 ### Margaret Holloway|mental present=False ontopic=0
+### Margaret Holloway|drug-allergies present=True ontopic=4
+  ON  Allergy: Acetaminophen
+  ON  Allergy: Ibuprofen
+  ON  Allergy: Other non-coded
+  ON  Allergy: Penicillin drug class

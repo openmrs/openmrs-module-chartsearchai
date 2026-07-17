@@ -105,6 +105,42 @@ public class QueryStoreChartBuilderScopedTest {
 	}
 
 	@Test
+	public void buildScoped_shouldKeepAllergiesTypedComplete_whenMedicationCuesAlsoMatch() {
+		// "any drug allergies?" carries BOTH a medications cue ("drug") and an allergies cue.
+		// First-match routing sent it to MEDICATIONS alone, so the allergy list's completeness
+		// hung on the similarity top-K — an allergy the embedding missed was silently absent
+		// from an allergy enumeration (the highest-stakes omission this mode can make). The
+		// union contract: every matched intent's types are complete. Similarity returns NOTHING
+		// here, so the allergy record can only arrive via its typed scope.
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "any drug allergies?");
+
+		List<String> uuids = mappedUuids(chart);
+		assertTrue(uuids.contains("a-1"),
+				"the allergy list must be typed-complete when an allergy cue matched, even though "
+						+ "a medications cue matched too; got " + uuids);
+		assertTrue(uuids.containsAll(Arrays.asList("d-1", "d-2")),
+				"the medications side of the union stays complete as well; got " + uuids);
+		assertFalse(uuids.contains("c-1"), "unmatched types stay outside the union; got " + uuids);
+	}
+
+	@Test
+	public void buildScoped_shouldKeepAllergiesTypedComplete_forAdverseReactionPhrasings() {
+		// "any adverse drug reactions?" has no literal allergy-word, but "adverse"/"reactions" are
+		// allergy-table vocabulary (the allergy records themselves read "Reaction: ..."). Without
+		// an allergies cue the question rode similarity alone for exactly the records it asks to
+		// enumerate.
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "any adverse drug reactions?");
+
+		assertTrue(mappedUuids(chart).contains("a-1"),
+				"adverse-reaction phrasings must keep the allergy table typed-complete; got "
+						+ mappedUuids(chart));
+	}
+
+	@Test
 	public void buildScoped_shouldPreserveChartDateOrder_notSimilarityOrder() {
 		// Similarity ranks the OLDEST record first; the slice must still render date-desc
 		// (chart order), because the system prompt asserts "sorted most recent first".
@@ -264,8 +300,10 @@ public class QueryStoreChartBuilderScopedTest {
 		// event date — see its Patient/AllergyRecordSerializer). Rendering that as a "(date)"
 		// label misleads temporal reasoning: measured, "when was the last visit?" was answered
 		// from the allergy record's creation date in one mode and the patient record's in the
-		// other. Chart assembly drops the date label for these types; clinically-dated records
-		// (conditions, obs, visits...) keep theirs.
+		// other. Chart assembly drops the date label for these two types ONLY. The condition
+		// record's date below is ALSO dateCreated upstream, but it deliberately still renders —
+		// undating an unmeasured type is a slice-byte change reserved for the gates (see the
+		// ADMIN_DATED_TYPES javadoc); this test pins that deliberate remainder too.
 		queryStore.stubChart = new ArrayList<QueryDocument>(Arrays.asList(
 				doc("allergy", "a-9", "Allergy: Bee venom. Severity: Severe", LocalDate.of(2026, 6, 30)),
 				doc("patient", "p-1", "Patient: Jane Doe", LocalDate.of(2026, 7, 4)),
@@ -281,7 +319,8 @@ public class QueryStoreChartBuilderScopedTest {
 		assertFalse(text.contains("(2026-07-04)"),
 				"the patient record's creation date must not render as a clinical date:\n" + text);
 		assertTrue(text.contains("(2026-06-27) Condition: Malaria"),
-				"clinically-dated records keep their dates:\n" + text);
+				"types outside ADMIN_DATED_TYPES keep their dates (condition's is also dateCreated "
+						+ "upstream — kept pending the gated follow-up):\n" + text);
 	}
 
 	@Test

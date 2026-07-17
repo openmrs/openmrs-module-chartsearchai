@@ -13,80 +13,113 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Collections;
+import java.util.EnumSet;
+
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter.Intent;
 
 /**
  * Pure unit tests for {@link QueryScopeRouter}: the question → typed-record-scope mapping
  * that decides which record types are included <em>complete</em> in a query-scoped slice
- * chart. Routing must be conservative — only unambiguous intent keywords map to a typed
- * scope; everything else is TOPICAL (similarity-only), because a wrong typed scope biases
- * the slice while similarity still provides the semantic catch-all.
+ * chart. Routing must be conservative — only unambiguous intent keywords match; everything
+ * else matches nothing (TOPICAL, similarity-only), because a wrong typed scope biases the
+ * slice while similarity still provides the semantic catch-all. Multi-cue questions carry
+ * EVERY matched intent (the builder unions their typed slices): first-match routing silently
+ * dropped the runner-up's completeness on exactly the type being enumerated ("any drug
+ * allergies?" routed MEDICATIONS-only, leaving the allergy list to similarity luck).
  */
 public class QueryScopeRouterTest {
 
 	@Test
-	public void route_shouldDetectMedicationsIntent() {
-		assertEquals(QueryScopeRouter.Intent.MEDICATIONS,
-				QueryScopeRouter.route("What medications is the patient taking?"));
-		assertEquals(QueryScopeRouter.Intent.MEDICATIONS,
-				QueryScopeRouter.route("current meds?"));
-		assertEquals(QueryScopeRouter.Intent.MEDICATIONS,
-				QueryScopeRouter.route("Is she on any drugs or prescriptions?"));
+	public void matchedIntents_shouldDetectMedicationsIntent() {
+		assertEquals(EnumSet.of(Intent.MEDICATIONS),
+				QueryScopeRouter.matchedIntents("What medications is the patient taking?"));
+		assertEquals(EnumSet.of(Intent.MEDICATIONS),
+				QueryScopeRouter.matchedIntents("current meds?"));
+		assertEquals(EnumSet.of(Intent.MEDICATIONS),
+				QueryScopeRouter.matchedIntents("Is she on any drugs or prescriptions?"));
 	}
 
 	@Test
-	public void route_shouldDetectAllergiesIntent() {
-		assertEquals(QueryScopeRouter.Intent.ALLERGIES,
-				QueryScopeRouter.route("Does the patient have any allergies?"));
-		assertEquals(QueryScopeRouter.Intent.ALLERGIES,
-				QueryScopeRouter.route("is he allergic to penicillin"));
+	public void matchedIntents_shouldDetectAllergiesIntent() {
+		assertEquals(EnumSet.of(Intent.ALLERGIES),
+				QueryScopeRouter.matchedIntents("Does the patient have any allergies?"));
+		assertEquals(EnumSet.of(Intent.ALLERGIES),
+				QueryScopeRouter.matchedIntents("is he allergic to penicillin"));
 	}
 
 	@Test
-	public void route_shouldDetectProgramsIntent() {
-		assertEquals(QueryScopeRouter.Intent.PROGRAMS,
-				QueryScopeRouter.route("Is the patient enrolled in any programs?"));
+	public void matchedIntents_shouldReturnEveryMatchedIntent_forDrugAllergyQuestions() {
+		// The collision class: a medications cue AND an allergies cue in one question. First-match
+		// routing returned MEDICATIONS alone, so the allergy list's completeness hung on the
+		// similarity top-K — a silently incomplete allergy enumeration if the embedding missed one.
+		// Both intents must come back so the builder unions the typed slices.
+		assertEquals(EnumSet.of(Intent.MEDICATIONS, Intent.ALLERGIES),
+				QueryScopeRouter.matchedIntents("any drug allergies?"));
+		assertEquals(EnumSet.of(Intent.MEDICATIONS, Intent.ALLERGIES),
+				QueryScopeRouter.matchedIntents("does the patient have any medication allergies?"));
+		assertEquals(EnumSet.of(Intent.MEDICATIONS, Intent.ALLERGIES),
+				QueryScopeRouter.matchedIntents("is she allergic to any medications?"));
 	}
 
 	@Test
-	public void route_shouldDetectConditionsIntent() {
-		assertEquals(QueryScopeRouter.Intent.CONDITIONS,
-				QueryScopeRouter.route("What active conditions does the patient have?"));
-		assertEquals(QueryScopeRouter.Intent.CONDITIONS,
-				QueryScopeRouter.route("what are the patient's diagnoses?"));
+	public void matchedIntents_shouldTreatAdverseReactionVocabulary_asAllergiesCues() {
+		// "adverse", "reaction(s)" and "intolerance" are the allergy table's own vocabulary
+		// (records read "Allergy: X. Reaction: rash") — without them, "any adverse drug
+		// reactions?" enumerated the allergy domain on similarity alone.
+		assertEquals(EnumSet.of(Intent.MEDICATIONS, Intent.ALLERGIES),
+				QueryScopeRouter.matchedIntents("any adverse drug reactions?"));
+		assertEquals(EnumSet.of(Intent.ALLERGIES),
+				QueryScopeRouter.matchedIntents("any known intolerances?"));
 	}
 
 	@Test
-	public void route_shouldDetectVisitsIntent() {
-		assertEquals(QueryScopeRouter.Intent.VISITS,
-				QueryScopeRouter.route("When was the patient's last visit?"));
-		assertEquals(QueryScopeRouter.Intent.VISITS,
-				QueryScopeRouter.route("any upcoming appointments?"));
+	public void matchedIntents_shouldDetectProgramsIntent() {
+		assertEquals(EnumSet.of(Intent.PROGRAMS),
+				QueryScopeRouter.matchedIntents("Is the patient enrolled in any programs?"));
 	}
 
 	@Test
-	public void route_shouldFallBackToTopical_forClinicalTopicQuestions() {
+	public void matchedIntents_shouldDetectConditionsIntent() {
+		assertEquals(EnumSet.of(Intent.CONDITIONS),
+				QueryScopeRouter.matchedIntents("What active conditions does the patient have?"));
+		assertEquals(EnumSet.of(Intent.CONDITIONS),
+				QueryScopeRouter.matchedIntents("what are the patient's diagnoses?"));
+	}
+
+	@Test
+	public void matchedIntents_shouldDetectVisitsIntent() {
+		assertEquals(EnumSet.of(Intent.VISITS),
+				QueryScopeRouter.matchedIntents("When was the patient's last visit?"));
+		assertEquals(EnumSet.of(Intent.VISITS),
+				QueryScopeRouter.matchedIntents("any upcoming appointments?"));
+	}
+
+	@Test
+	public void matchedIntents_shouldMatchNothing_forClinicalTopicQuestions() {
 		// "problems" alone is NOT a conditions cue — "eye problems" is a topical question and
-		// must stay similarity-driven, not be routed to the condition/diagnosis tables.
-		assertEquals(QueryScopeRouter.Intent.TOPICAL,
-				QueryScopeRouter.route("Does the patient have any eye problems?"));
-		assertEquals(QueryScopeRouter.Intent.TOPICAL,
-				QueryScopeRouter.route("Has the patient had any fractures or broken bones?"));
-		assertEquals(QueryScopeRouter.Intent.TOPICAL,
-				QueryScopeRouter.route("Is she pregnant?"));
+		// must stay similarity-driven, not be routed to the condition/diagnosis tables. An empty
+		// set is the TOPICAL case: the slice is the similarity top-K alone.
+		assertEquals(Collections.emptySet(),
+				QueryScopeRouter.matchedIntents("Does the patient have any eye problems?"));
+		assertEquals(Collections.emptySet(),
+				QueryScopeRouter.matchedIntents("Has the patient had any fractures or broken bones?"));
+		assertEquals(Collections.emptySet(),
+				QueryScopeRouter.matchedIntents("Is she pregnant?"));
 	}
 
 	@Test
-	public void route_shouldFallBackToTopical_forBlankOrNullQuestions() {
-		assertEquals(QueryScopeRouter.Intent.TOPICAL, QueryScopeRouter.route(null));
-		assertEquals(QueryScopeRouter.Intent.TOPICAL, QueryScopeRouter.route("   "));
+	public void matchedIntents_shouldMatchNothing_forBlankOrNullQuestions() {
+		assertEquals(Collections.emptySet(), QueryScopeRouter.matchedIntents(null));
+		assertEquals(Collections.emptySet(), QueryScopeRouter.matchedIntents("   "));
 	}
 
 	@Test
-	public void route_shouldNotMatchIntentKeywordsInsideOtherWords() {
+	public void matchedIntents_shouldNotMatchIntentKeywordsInsideOtherWords() {
 		// "programmer", "medicated dressing" style substrings must not trigger a typed scope.
-		assertEquals(QueryScopeRouter.Intent.TOPICAL,
-				QueryScopeRouter.route("does the note mention reprogramming the pacemaker device"));
+		assertEquals(Collections.emptySet(),
+				QueryScopeRouter.matchedIntents("does the note mention reprogramming the pacemaker device"));
 	}
 
 	@Test
@@ -111,21 +144,22 @@ public class QueryScopeRouterTest {
 	}
 
 	@Test
-	public void route_shouldDetectOrdersIntent() {
-		assertEquals(QueryScopeRouter.Intent.ORDERS,
-				QueryScopeRouter.route("What things have been ordered for this patient over the past 6 months?"));
-		assertEquals(QueryScopeRouter.Intent.ORDERS,
-				QueryScopeRouter.route("any outstanding orders?"));
-		assertEquals(QueryScopeRouter.Intent.ORDERS,
-				QueryScopeRouter.route("show the patient's test orders"));
+	public void matchedIntents_shouldDetectOrdersIntent() {
+		assertEquals(EnumSet.of(Intent.ORDERS),
+				QueryScopeRouter.matchedIntents("What things have been ordered for this patient over the past 6 months?"));
+		assertEquals(EnumSet.of(Intent.ORDERS),
+				QueryScopeRouter.matchedIntents("any outstanding orders?"));
+		assertEquals(EnumSet.of(Intent.ORDERS),
+				QueryScopeRouter.matchedIntents("show the patient's test orders"));
 	}
 
 	@Test
-	public void route_shouldPreferMedicationsOverOrders_whenBothCuesPresent() {
-		// "prescriptions ordered" is a medications question first — the med scope includes the
-		// drug orders anyway, and medications carries the stronger completeness expectation.
-		assertEquals(QueryScopeRouter.Intent.MEDICATIONS,
-				QueryScopeRouter.route("what prescriptions were ordered for her?"));
+	public void matchedIntents_shouldReturnBothMedicationsAndOrders_whenBothCuesPresent() {
+		// Supersedes the old first-match precedence (MEDICATIONS shadowed ORDERS): shadowing was
+		// the same mechanism that broke drug-allergy questions, and the union costs only a few
+		// extra order records while completeness holds for whichever reading the user meant.
+		assertEquals(EnumSet.of(Intent.MEDICATIONS, Intent.ORDERS),
+				QueryScopeRouter.matchedIntents("what prescriptions were ordered for her?"));
 	}
 
 	@Test
@@ -152,5 +186,13 @@ public class QueryScopeRouterTest {
 		assertTrue(QueryScopeRouter.typedSlice(QueryScopeRouter.Intent.ORDERS)
 				.containsAll(java.util.Arrays.asList("drug_order", "test_order", "referral_order")));
 		assertTrue(QueryScopeRouter.typedSlice(QueryScopeRouter.Intent.TOPICAL).isEmpty());
+	}
+
+	@Test
+	public void typedSlice_shouldUnionTheTypesOfEveryMatchedIntent() {
+		assertEquals(new java.util.HashSet<String>(
+						java.util.Arrays.asList("drug_order", "medication_dispense", "allergy")),
+				QueryScopeRouter.typedSlice(EnumSet.of(Intent.MEDICATIONS, Intent.ALLERGIES)));
+		assertTrue(QueryScopeRouter.typedSlice(EnumSet.noneOf(Intent.class)).isEmpty());
 	}
 }

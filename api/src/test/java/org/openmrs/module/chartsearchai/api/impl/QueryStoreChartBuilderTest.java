@@ -172,7 +172,9 @@ public class QueryStoreChartBuilderTest {
 		// scoped test covers buildScoped): querystore stamps dateCreated on patient and allergy
 		// documents (no clinical event date exists — see its Patient/AllergyRecordSerializer), and
 		// rendering that as a "(date)" label misleads temporal reasoning — measured, "when was the
-		// last visit?" was answered from these records' creation dates.
+		// last visit?" was answered from these records' creation dates. The condition record's
+		// date is ALSO dateCreated upstream but deliberately still renders (undating an unmeasured
+		// type is reserved for the gates — see the ADMIN_DATED_TYPES javadoc).
 		QueryDocument allergyDoc = new QueryDocument();
 		allergyDoc.setResourceType("allergy");
 		allergyDoc.setResourceUuid("allergy-uuid-1");
@@ -194,7 +196,8 @@ public class QueryStoreChartBuilderTest {
 		assertFalse(text.contains("(2026-06-30)"),
 				"the allergy record's administrative creation date must not render:\n" + text);
 		assertTrue(text.contains("(2026-06-27) Condition: Malaria"),
-				"clinically-dated records keep their dates:\n" + text);
+				"types outside ADMIN_DATED_TYPES keep their dates (condition's is also dateCreated "
+						+ "upstream — kept pending the gated follow-up):\n" + text);
 	}
 
 	@Test

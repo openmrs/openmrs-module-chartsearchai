@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -27,10 +28,17 @@ import java.util.regex.Pattern;
  *
  * <p>Routing is deliberately conservative: only unambiguous intent keywords map to a typed
  * scope, matched on word boundaries so substrings ("re<b>program</b>ming") never trigger.
- * Everything else — topical questions like "any eye problems?" — is {@link Intent#TOPICAL},
- * where the slice is the similarity top-K alone and the prompt's abstention language (same
- * contract as the focus-hint path) handles the no-match case. A misroute to TOPICAL only
- * costs typed completeness; a wrong typed scope would bias the slice — hence conservative.
+ * A question matching SEVERAL cue sets ("any drug allergies?") carries every matched intent
+ * and the builder unions their typed slices: completeness must hold for whichever intent the
+ * user meant, and a union can only over-include — first-match routing instead silently
+ * dropped the runner-up's completeness on exactly the type being enumerated (measured on the
+ * cue patterns: "any drug allergies?" routed MEDICATIONS-only, so an allergy outside the
+ * similarity top-K was invisible to an allergy enumeration). Everything cue-free — topical
+ * questions like "any eye problems?" — matches nothing ({@link Intent#TOPICAL}), where the
+ * slice is the similarity top-K alone and the prompt's abstention language (same contract as
+ * the focus-hint path) handles the no-match case. A misroute to TOPICAL only costs typed
+ * completeness; a wrong or partial typed scope would bias the slice — hence conservative
+ * cues, unioned when they co-occur.
  *
  * <p>The type strings are querystore's {@code QueryDocument.resourceType} values (its
  * {@code *RecordSerializer.getResourceType()} contract): {@code drug_order},
@@ -44,7 +52,9 @@ final class QueryScopeRouter {
 	private QueryScopeRouter() {
 	}
 
-	/** The question's slice intent: a typed enumeration scope, or TOPICAL (similarity only). */
+	/** A slice intent: a typed enumeration scope. TOPICAL (similarity only) is the label for the
+	 *  no-cue case — {@link #matchedIntents} returns an EMPTY set for it, never the constant, so
+	 *  it exists for {@link #typedSlice(Intent)} callers and the builder's log label. */
 	enum Intent {
 		MEDICATIONS, ALLERGIES, PROGRAMS, CONDITIONS, VISITS, ORDERS, TOPICAL
 	}
@@ -52,7 +62,13 @@ final class QueryScopeRouter {
 	private static final Pattern MEDICATIONS_CUES = cues(
 			"medications?", "medicines?", "meds", "drugs?", "prescriptions?", "prescribed");
 
-	private static final Pattern ALLERGIES_CUES = cues("allerg(?:y|ies|ic|en|ens)");
+	/** Beyond the literal allergy words: "adverse", "reaction(s)" and "intolerance" are the
+	 *  allergy-table's own vocabulary (records read "Allergy: X. Reaction: rash"; the OpenMRS
+	 *  allergy UI captures adverse reactions and intolerances), so "any adverse drug reactions?"
+	 *  must keep that table typed-complete. Over-inclusion cost is negligible — the allergy
+	 *  table is small and unioning it never biases the slice the way a wrong single scope did. */
+	private static final Pattern ALLERGIES_CUES = cues("allerg(?:y|ies|ic|en|ens)", "adverse",
+			"reactions?", "intoleran(?:t|ce|ces)");
 
 	private static final Pattern PROGRAMS_CUES = cues("programs?", "enrolled", "enrollments?");
 
@@ -91,33 +107,51 @@ final class QueryScopeRouter {
 		return question != null && TEMPORAL_CUES.matcher(question).find();
 	}
 
-	/** Routes a question to its slice intent; null/blank questions are TOPICAL. */
-	static Intent route(String question) {
+	/**
+	 * Every enumeration intent whose cues match {@code question}, in {@link Intent} declaration
+	 * order; empty for null/blank/cue-free questions (the TOPICAL, similarity-only case). The
+	 * result never contains {@link Intent#TOPICAL}. Multi-cue questions return every matched
+	 * intent so the builder can union their typed slices — see the class javadoc for why
+	 * first-match-wins was the collision that silently dropped allergy completeness.
+	 */
+	static Set<Intent> matchedIntents(String question) {
 		if (question == null || question.trim().isEmpty()) {
-			return Intent.TOPICAL;
+			return Collections.emptySet();
 		}
+		Set<Intent> matched = EnumSet.noneOf(Intent.class);
 		String q = question.toLowerCase(Locale.ROOT);
 		if (MEDICATIONS_CUES.matcher(q).find()) {
-			return Intent.MEDICATIONS;
+			matched.add(Intent.MEDICATIONS);
 		}
 		if (ALLERGIES_CUES.matcher(q).find()) {
-			return Intent.ALLERGIES;
+			matched.add(Intent.ALLERGIES);
 		}
 		if (PROGRAMS_CUES.matcher(q).find()) {
-			return Intent.PROGRAMS;
+			matched.add(Intent.PROGRAMS);
 		}
 		if (CONDITIONS_CUES.matcher(q).find()) {
-			return Intent.CONDITIONS;
+			matched.add(Intent.CONDITIONS);
 		}
 		if (VISITS_CUES.matcher(q).find()) {
-			return Intent.VISITS;
+			matched.add(Intent.VISITS);
 		}
-		// After MEDICATIONS: "what prescriptions were ordered" is a medications question first —
-		// the med scope carries the drug orders anyway, with the stronger completeness contract.
 		if (ORDERS_CUES.matcher(q).find()) {
-			return Intent.ORDERS;
+			matched.add(Intent.ORDERS);
 		}
-		return Intent.TOPICAL;
+		return matched;
+	}
+
+	/** The union of {@link #typedSlice(Intent)} across {@code intents}; empty when none matched
+	 *  (TOPICAL: the slice is similarity-only). */
+	static Set<String> typedSlice(Set<Intent> intents) {
+		if (intents.isEmpty()) {
+			return Collections.emptySet();
+		}
+		Set<String> union = new HashSet<String>();
+		for (Intent intent : intents) {
+			union.addAll(typedSlice(intent));
+		}
+		return Collections.unmodifiableSet(union);
 	}
 
 	/** The querystore resource types included complete for {@code intent}; empty for TOPICAL. */

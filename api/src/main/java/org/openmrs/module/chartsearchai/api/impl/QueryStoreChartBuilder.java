@@ -199,14 +199,17 @@ class QueryStoreChartBuilder {
 			return markScoped(emptyChart(patient));
 		}
 
-		QueryScopeRouter.Intent intent = QueryScopeRouter.route(question);
-		Set<String> typedScope = QueryScopeRouter.typedSlice(intent);
+		// Every matched intent contributes its types (union): completeness must hold for
+		// whichever intent a multi-cue question ("any drug allergies?") actually meant.
+		Set<QueryScopeRouter.Intent> intents = QueryScopeRouter.matchedIntents(question);
+		Set<String> typedScope = QueryScopeRouter.typedSlice(intents);
+		String intentLabel = intentLabel(intents);
 
 		QueryStoreService queryStore = resolveQueryStoreOrNull();
 		if (queryStore == null) {
 			log.warn(QUERYSTORE_UNAVAILABLE_MSG);
 			log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs=0 simHits=0 slice=0 rpcMs=0 serializeMs=0 totalMs={} outcome=unavailable",
-					patient.getPatientId(), intent, System.currentTimeMillis() - buildStart);
+					patient.getPatientId(), intentLabel, System.currentTimeMillis() - buildStart);
 			return markScoped(emptyChart(patient));
 		}
 
@@ -218,7 +221,7 @@ class QueryStoreChartBuilder {
 		catch (RuntimeException e) {
 			log.error(GET_PATIENT_CHART_FAILED_MSG, patient.getUuid(), e);
 			log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs=0 simHits=0 slice=0 rpcMs={} serializeMs=0 totalMs={} outcome=error errorClass={}",
-					patient.getPatientId(), intent, System.currentTimeMillis() - rpcStart,
+					patient.getPatientId(), intentLabel, System.currentTimeMillis() - rpcStart,
 					System.currentTimeMillis() - buildStart, e.getClass().getSimpleName());
 			return markScoped(emptyChart(patient));
 		}
@@ -282,7 +285,7 @@ class QueryStoreChartBuilder {
 				Collections.<String>emptySet(), false, false);
 		long serializeMs = System.currentTimeMillis() - serializeStart;
 		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} simHits={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
-				patient.getPatientId(), intent, chartDocs.size(), similarityUuids.size(), records.size(),
+				patient.getPatientId(), intentLabel, chartDocs.size(), similarityUuids.size(), records.size(),
 				rpcMs, serializeMs, System.currentTimeMillis() - buildStart);
 		return markScoped(chart);
 	}
@@ -293,6 +296,23 @@ class QueryStoreChartBuilder {
 	private static PatientChart markScoped(PatientChart chart) {
 		chart.markQueryScoped();
 		return chart;
+	}
+
+	/** The [timing] log label for the slice's matched intents: {@code TOPICAL} when none matched,
+	 *  else the names joined with {@code +} in declaration order (e.g.
+	 *  {@code MEDICATIONS+ALLERGIES}) — one greppable token per line either way. */
+	private static String intentLabel(Set<QueryScopeRouter.Intent> intents) {
+		if (intents.isEmpty()) {
+			return QueryScopeRouter.Intent.TOPICAL.name();
+		}
+		StringBuilder label = new StringBuilder();
+		for (QueryScopeRouter.Intent intent : intents) {
+			if (label.length() > 0) {
+				label.append('+');
+			}
+			label.append(intent.name());
+		}
+		return label.toString();
 	}
 
 	/**
@@ -470,12 +490,24 @@ class QueryStoreChartBuilder {
 	}
 
 	/**
-	 * Record types whose querystore {@code record_date} is ADMINISTRATIVE ({@code dateCreated} —
-	 * see querystore's {@code PatientRecordSerializer}/{@code AllergyRecordSerializer}), not a
-	 * clinical event date. Rendering it as a "(date)" label misleads temporal reasoning: measured
-	 * on the rc.2 standalone, "when was the last visit?" was answered from the allergy record's
-	 * creation date in one mode and the patient record's in the other. These types render undated;
-	 * the date still drives querystore's chart ordering.
+	 * Record types rendered UNDATED because their querystore {@code record_date} is
+	 * ADMINISTRATIVE ({@code dateCreated} — see querystore's {@code PatientRecordSerializer} /
+	 * {@code AllergyRecordSerializer}), not a clinical event date. Rendering it as a "(date)"
+	 * label misleads temporal reasoning: measured on the rc.2 standalone, "when was the last
+	 * visit?" was answered from the allergy record's creation date in one mode and the patient
+	 * record's in the other. The date still drives querystore's chart ordering.
+	 *
+	 * <p>Deliberately NOT the complete set of administratively-dated types. querystore's
+	 * {@code condition} and {@code diagnosis} documents also carry {@code dateCreated}
+	 * unconditionally (their serializers have no clinical-date fallback), and {@code program} /
+	 * {@code medication_dispense} fall back to it when {@code dateEnrolled} /
+	 * {@code dateHandedOver} is null — all of those still render their date, so a
+	 * "when was X diagnosed?" answer can quote record-keeping time. They are excluded here
+	 * because blanket-undating them is not obviously an improvement: an undated condition list
+	 * loses chronology the model may need, and condition's clinical {@code onset_date} sits in
+	 * querystore doc metadata this module does not render yet. Extending this set (or rendering
+	 * onset instead) changes slice bytes in both modes and is reserved for the two mandatory
+	 * evaluation gates (ADR Decision 28).
 	 */
 	private static final Set<String> ADMIN_DATED_TYPES = Collections.unmodifiableSet(
 			new HashSet<String>(Arrays.asList(PATIENT_RESOURCE_TYPE, "allergy")));

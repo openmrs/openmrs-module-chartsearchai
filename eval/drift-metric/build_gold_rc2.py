@@ -74,7 +74,7 @@ BOUNDARIES = {
         # uric acid, urinalysis, urine glucose, urinary albumin, bacteriuria) + their test orders.
         # "Oliguria" adjudicated ON from capture review (urinary symptom; precedent:
         # "Painful Urging to Urinate", "Urinary incontinence"). Dehydration/hepatitis stay OFF.
-        "stems": [r"kidney", r"renal", r"nephr", r"creatinine", r"blood urea", r"\burea\b", r"oliguria",
+        "stems": [r"kidney", r"\brenal\b", r"nephr", r"creatinine", r"blood urea", r"\burea\b", r"oliguria",
                   r"uric acid", r"glomerular", r"urinalysis", r"urinary", r"urine", r"bladder",
                   r"ureter", r"urethr", r"urinate", r"incontinence", r"dialysis", r"pyelonephritis",
                   r"bacteriuria"],
@@ -89,7 +89,10 @@ BOUNDARIES = {
         # asks for psychiatric conditions.
         "stems": [r"schizo", r"psychos", r"psychiatric", r"\bmental\b", r"depress", r"anxiety",
                   r"fearful mood", r"rumination disorder", r"somatoform", r"enuresis",
-                  r"anxio", r"bipolar", r"eating disorder", r"anorexia", r"bulimia", r"substance",
+                  r"anxio", r"bipolar", r"eating disorder", r"anorexia", r"bulimia",
+                  # bare "substance" also matched "Stool test for reducing substance" (a GI lab) —
+                  # require a substance-use qualifier; "psychoactive substance" is covered below.
+                  r"substance (abuse|use|addiction|dependence|misuse)",
                   r"cocaine", r"stimulant use", r"sedative", r"hypnotic", r"alcohol use|alcoholism",
                   r"adjustment reaction", r"aggressive behavior", r"hoarding", r"obsessive",
                   r"compulsive", r"explosive disorder", r"conversion disorder", r"self-accusation",
@@ -127,6 +130,15 @@ ADJUDICATIONS = {
     "allergy to spiders": {"drug-allergies": False},
     "allergy to eanuts": {"drug-allergies": False},
     "environmental allergies": {"drug-allergies": False},
+    # Widened-gold patients (2026-07-19): anaesthetic/antibiotic drug allergens recorded as
+    # condition/diagnosis rows — drugs, so ON for drug-allergies (imipenem precedent).
+    "allergy to sevoflurane": {"drug-allergies": True},
+    "allergy to sufentanil": {"drug-allergies": True},
+    "4-quinolones allergy": {"drug-allergies": True},
+    # non-drug allergens surfaced by the new patients — explicitly OFF for drug-allergies.
+    "allergy to insect bites": {"drug-allergies": False},
+    "dander (animal) allergy": {"drug-allergies": False},
+    "food allergy": {"drug-allergies": False},
 }
 
 
@@ -286,9 +298,23 @@ def profile_patients():
 # Pinned 2026-07-16: the five patients whose 40 cells were captured for the fullChart-vs-
 # queryScoped A/B. Selection greed depends on boundary stems, so re-running after an
 # adjudication round must NOT swap patients out from under already-taken captures.
+# Widened 2026-07-19: all rc.2 patients with a substantial chart (>=200 unvoided citable
+# records) added, so the fullChart-vs-queryScoped verdict rests on 22 patients not 5. The
+# original five stay first (their captures are reused). The <200-record tail and the synthetic
+# scan-test patients (Karen Sanchez, Susan Harris, the three *Scan* rows: 0 present topics) are
+# excluded — they add no present cells and near-empty charts are not representative.
 PINNED = ["bc4ba445-a35c-4996-b804-4d5b68387571", "1128c659-2d0a-4314-af23-91bac1b01109",
           "59a5f0bb-b863-4213-9177-b883fe9f5f79", "16ca09dd-a8d4-405a-bda6-76d18ed65b25",
-          "dkb00000-0000-0000-0000-000000000001"]
+          "dkb00000-0000-0000-0000-000000000001",
+          "813b9f0d-3a8e-4f67-a0dd-d9b3eeef65c5", "489db738-ad5f-4335-a9f1-270ec0c76ea2",
+          "5b24c81f-2b66-41ed-8f2d-158433d531cc", "b360ca49-d432-404f-9b6c-aa6a66125693",
+          "bd3927f4-8c75-470b-bdbb-6c92857b2205", "c34d0124-76c9-4197-9f84-35e44e1317a8",
+          "007e38b8-1344-4ea9-a790-a3f078471db3", "089f766b-943c-427b-a039-672f90b0a49e",
+          "520016d7-67ae-40fa-aa8f-e8a5ec2b8fd6", "8d9fc13a-5d4c-4c5c-b265-23ac067835a4",
+          "53927035-f177-4144-9d3f-b80ced7614bc", "072f69ce-f25a-4ca0-b2ff-4a7a4325ddd9",
+          "0563178c-e107-43a0-be05-2a179ab02dbe", "3d6b5ada-c402-4f3f-9c70-6a17f4d2a339",
+          "ec6af3d5-3082-45f4-8f14-cf42dad41ed2", "47028119-e1e0-467c-b807-a23d1a81fb2b",
+          "e9712a18-c181-46c5-8a17-46b02e39b23b"]
 
 
 def main():

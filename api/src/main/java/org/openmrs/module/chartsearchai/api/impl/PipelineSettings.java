@@ -52,9 +52,17 @@ final class PipelineSettings {
 	 *  destructive KV decisions too, because those never trust a re-read of this gate — they follow
 	 *  the built chart's own {@code PatientChart#isQueryScoped()} stamp. */
 	static boolean queryScopedMode() {
-		return ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED.equalsIgnoreCase(
-				org.openmrs.module.chartsearchai.ChartSearchAiUtils.getStringGlobalProperty(
-						ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_DEFAULT));
+		return isQueryScoped(org.openmrs.module.chartsearchai.ChartSearchAiUtils.getStringGlobalProperty(
+				ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_DEFAULT));
+	}
+
+	/** The pure resolved-value → scoped decision, split out so the opt-out/typo-safety contract is
+	 *  unit-testable without a Context: scoped requires an exact (case-insensitive) {@code queryScoped}
+	 *  match, so {@code fullChart}, any typo, and null all resolve to fullChart. The
+	 *  {@link ChartSearchAiConstants#CHART_MODE_DEFAULT default} for unset/unreadable is applied by the
+	 *  caller (the {@code getStringGlobalProperty} fallback), not here. */
+	static boolean isQueryScoped(String resolvedMode) {
+		return ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED.equalsIgnoreCase(resolvedMode);
 	}
 
 	static int getQueryStoreTopK() {

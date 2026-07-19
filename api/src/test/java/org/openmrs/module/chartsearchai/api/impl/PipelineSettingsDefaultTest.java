@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -42,5 +43,20 @@ public class PipelineSettingsDefaultTest {
 		assertTrue(ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED
 				.equals(ChartSearchAiConstants.CHART_MODE_DEFAULT),
 				"CHART_MODE_DEFAULT must be queryScoped");
+	}
+
+	@Test
+	public void isQueryScoped_optOutAndTypoSafety() {
+		// Locks the documented contract: flipping the default did NOT change how a set value is
+		// read — scoped requires an exact (case-insensitive) queryScoped match, so an operator can
+		// still opt back into fullChart, and a typo fails toward the whole chart rather than
+		// silently enabling the slice.
+		assertTrue(PipelineSettings.isQueryScoped("queryScoped"), "exact match enables scoped");
+		assertTrue(PipelineSettings.isQueryScoped("QueryScoped"), "match is case-insensitive");
+		assertFalse(PipelineSettings.isQueryScoped(ChartSearchAiConstants.CHART_MODE_FULL_CHART),
+				"an explicit fullChart must stay fullChart (opt-out works)");
+		assertFalse(PipelineSettings.isQueryScoped("queryscopd"),
+				"a typo must resolve to fullChart, not silently enable the slice");
+		assertFalse(PipelineSettings.isQueryScoped(null), "null resolves to fullChart");
 	}
 }

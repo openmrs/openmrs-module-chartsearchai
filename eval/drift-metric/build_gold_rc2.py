@@ -20,7 +20,8 @@ import re
 import subprocess
 from collections import defaultdict
 
-M = os.environ["MARIADB_BIN"]
+# DB config is read lazily inside sql() (not at import), so the module can be imported
+# without a live DB — e.g. for the --selftest that exercises classify() offline.
 PORT = os.environ.get("MARIADB_PORT", "3316")
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -143,6 +144,7 @@ ADJUDICATIONS = {
 
 
 def sql(q):
+    M = os.environ["MARIADB_BIN"]
     out = subprocess.run([M, "--skip-ssl", "-h127.0.0.1", "-P" + PORT, "-uopenmrs", "openmrs",
                           "-N", "--batch", "-e", q],
                          capture_output=True, text=True,
@@ -380,5 +382,44 @@ def write_outputs(chosen):
     print(f"cells={len(gold)} -> metric_gold.rc2.json / offtopic_adj.rc2.json / gold_audit.rc2.md")
 
 
+def selftest():
+    """Offline regression guard for the classify() boundaries (no DB). Locks the two
+    substring bug-fixes (adrenal !-> kidney, reducing-substance !-> mental) and the
+    drug-allergy adjudications, so re-broadening a stem fails here instead of silently
+    miscounting the gold. Names are passed already-normalized, as fetch_universe() feeds
+    them. condition/diagnosis/allergy/program/drug_order paths take no DB."""
+    C = classify
+    # kidney: the "renal" stem must NOT catch "adrenal" (endocrine), but must catch real renal terms.
+    assert C("kidney", "condition", "malignant tumor of adrenal gland", "") is False, "adrenal is not kidney"
+    assert C("kidney", "condition", "chronic kidney disease, stage v", "") is True
+    assert C("kidney", "condition", "significant renal impairment", "") is True
+    assert C("kidney", "diagnosis", "acute pyelonephritis", "") is True
+    # mental: the "substance" stem must NOT catch "reducing substance" (a GI lab), but must catch use disorders.
+    assert C("mental", "obs", "stool test for reducing substance", "") is False, "reducing substance is not mental"
+    assert C("mental", "condition", "substance abuse", "") is True
+    assert C("mental", "condition", "moderate alcohol use disorder", "") is True
+    assert C("mental", "diagnosis", "mental or behavioral disorder due to psychoactive substance", "") is True
+    # drug-allergies: allergy rows keyed on allergen_type=drug (the textval slot); condition/
+    # diagnosis via adjudication. Signature is classify(topic, kind, name, display, textval="").
+    assert C("drug-allergies", "allergy", "penicillin drug class", "", "drug") is True
+    assert C("drug-allergies", "allergy", "bee venom", "", "food") is False
+    assert C("drug-allergies", "condition", "allergy to sevoflurane", "") is True
+    assert C("drug-allergies", "condition", "allergy to imipenem", "") is True
+    assert C("drug-allergies", "diagnosis", "allergy to latex", "") is False
+    assert C("drug-allergies", "condition", "food allergy", "") is False
+    # allergies (superset): any allergy row + allergy-named conditions on-topic.
+    assert C("allergies", "allergy", "penicillin drug class", "", "drug") is True
+    assert C("allergies", "condition", "allergy to sevoflurane", "") is True
+    # typed topics: DB-truth anchors, no stems.
+    assert C("programs", "program", "pmtct", "") is True
+    assert C("programs", "condition", "chronic kidney disease", "") is False
+    assert C("medications", "drug_order", "warfarin", "") is True
+    print("selftest OK")
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--selftest":
+        selftest()
+    else:
+        main()

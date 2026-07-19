@@ -202,6 +202,14 @@ public class LlmInferenceServiceProgressiveReasoningTest {
 		protected boolean resolveProgressiveReasoningEnabled() {
 			return progressiveEnabled;
 		}
+
+		// Progressive-reasoning preview is a fullChart-mode feature (it disengages in queryScoped,
+		// now the default). Pin fullChart so these tests exercise the preview path rather than the
+		// resolved default, which without a Context would return queryScoped and skip the preview.
+		@Override
+		protected boolean resolveQueryScopedMode() {
+			return false;
+		}
 	}
 
 	private final class StubStrategy extends ChartBuildingStrategy {

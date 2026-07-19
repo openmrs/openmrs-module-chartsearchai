@@ -45,18 +45,22 @@ public class ChartSearchAiConstants {
 	/**
 	 * How the LLM prompt's chart context is assembled per query.
 	 * <ul>
-	 *   <li>{@link #CHART_MODE_FULL_CHART} (default) — the patient's whole chart is serialized into
-	 *       every prompt. The chart bytes are a function of the patient only, so llama-server's
-	 *       KV prefix cache (plus warmup/prewarm/disk persistence) amortizes the multi-thousand-token
-	 *       prefill across queries. First-ever queries on a not-yet-warmed patient pay that full
-	 *       prefill (tens of seconds to minutes on a GPU-less host).</li>
-	 *   <li>{@link #CHART_MODE_QUERY_SCOPED} — the prompt carries only a query-scoped slice: every
-	 *       record of the question's typed scope (e.g. all drug orders for a medications question —
-	 *       complete by construction, see {@code QueryScopeRouter}) plus the querystore similarity
-	 *       top-K plus the demographics record, in the chart's most-recent-first order. Slices are a
-	 *       few hundred tokens, so a cold patient's first answer starts after a small prefill with no
-	 *       pre-warming of any kind; the full-chart prefill machinery (warmup, prewarm bootstrap,
-	 *       per-patient KV persistence, progressive-reasoning preview) disengages in this mode.</li>
+	 *   <li>{@link #CHART_MODE_QUERY_SCOPED} ({@link #CHART_MODE_DEFAULT default}) — the prompt carries
+	 *       only a query-scoped slice: every record of the question's typed scope (e.g. all drug orders
+	 *       for a medications question — complete by construction, see {@code QueryScopeRouter}) plus the
+	 *       querystore similarity top-K plus the demographics record, in the chart's most-recent-first
+	 *       order. Slices are a few hundred tokens, so a cold patient's first answer starts after a small
+	 *       prefill with no pre-warming of any kind; the full-chart prefill machinery (warmup, prewarm
+	 *       bootstrap, per-patient KV persistence, progressive-reasoning preview) disengages in this
+	 *       mode. Made the default 2026-07 after a 22-patient drift-metric A/B: scoped beat fullChart on
+	 *       meanF1 (0.748 vs 0.668), abstention (0.86 vs 0.74), and off-topic drift (181 vs 477) — the
+	 *       focused slice keeps the small model from drowning in a whole chart's worth of noise.</li>
+	 *   <li>{@link #CHART_MODE_FULL_CHART} — the patient's whole chart is serialized into every prompt.
+	 *       The chart bytes are a function of the patient only, so llama-server's KV prefix cache (plus
+	 *       warmup/prewarm/disk persistence) amortizes the multi-thousand-token prefill across queries;
+	 *       this makes repeat/varied questions on an already-warmed patient fast, at the cost of a heavy
+	 *       first-ever query (tens of seconds to minutes on a GPU-less host). Prefer this only where a
+	 *       single patient is queried many times per session and completeness-over-focus is wanted.</li>
 	 * </ul>
 	 */
 	public static final String GP_CHART_MODE = "chartsearchai.chartMode";
@@ -64,6 +68,16 @@ public class ChartSearchAiConstants {
 	public static final String CHART_MODE_FULL_CHART = "fullChart";
 
 	public static final String CHART_MODE_QUERY_SCOPED = "queryScoped";
+
+	/**
+	 * The chart mode used when {@link #GP_CHART_MODE} is unset (and the fail-safe when the GP layer
+	 * cannot be read). Single source of truth for the default so the two independent readers
+	 * ({@code PipelineSettings.queryScopedMode} and {@code ChartSearchServiceRouter}'s cache key)
+	 * cannot drift. A GP explicitly set to a typo'd value still resolves to fullChart, because the
+	 * scoped gate requires an exact (case-insensitive) {@code queryScoped} match — only a genuinely
+	 * absent or unreadable GP takes this default.
+	 */
+	public static final String CHART_MODE_DEFAULT = CHART_MODE_QUERY_SCOPED;
 
 	public static final String GP_AUDIT_LOG_RETENTION_DAYS = "chartsearchai.auditLogRetentionDays";
 

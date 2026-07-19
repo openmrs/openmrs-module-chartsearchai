@@ -40,8 +40,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *   <li>the progressive-reasoning preview is skipped (the scoped answer itself starts after a
  *       small prefill; a preview pass would occupy the single slot for no benefit).</li>
  * </ul>
- * fullChart mode (the default) must keep today's behavior byte-for-byte — the negative
- * controls assert that.
+ * fullChart mode (the non-default alternative since 2026-07) must keep today's behavior
+ * byte-for-byte — the negative controls assert that.
  */
 public class LlmInferenceServiceQueryScopedTest {
 

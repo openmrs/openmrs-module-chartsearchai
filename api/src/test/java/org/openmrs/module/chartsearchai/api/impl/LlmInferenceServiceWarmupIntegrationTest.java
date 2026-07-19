@@ -176,6 +176,15 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 		protected boolean resolveWarmupEnabled() {
 			return warmupEnabledStub;
 		}
+
+		// These tests exercise fullChart-mode warmup/KV-scope behavior. queryScoped is now the
+		// default (and disengages warmup), so pin fullChart explicitly rather than depend on the
+		// resolved default — without a Context the real resolver would otherwise return the new
+		// queryScoped default and disengage the very machinery under test.
+		@Override
+		protected boolean resolveQueryScopedMode() {
+			return false;
+		}
 	}
 
 	/**

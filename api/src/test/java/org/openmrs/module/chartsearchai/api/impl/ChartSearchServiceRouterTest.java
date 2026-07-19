@@ -85,6 +85,9 @@ public class ChartSearchServiceRouterTest {
 		// mode's answers until the TTL expires, and flipping back within the TTL mixes both.
 		StubRouter router = new StubRouter();
 		Patient p = patient("p1");
+		// Pin both modes explicitly (queryScoped is now the default, so an unset GP would compare
+		// queryScoped-vs-queryScoped) — the point is that the two modes yield different keys.
+		router.gps.put(ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_FULL_CHART);
 		String fullChart = router.buildCacheKey(p, "q");
 		router.gps.put(ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED);
 		assertNotEquals(fullChart, router.buildCacheKey(p, "q"),

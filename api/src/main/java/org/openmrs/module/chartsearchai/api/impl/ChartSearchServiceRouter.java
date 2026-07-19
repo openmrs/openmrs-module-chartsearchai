@@ -207,7 +207,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		// chartMode swaps the entire context (full chart vs query-scoped slice) — the largest
 		// possible "changes what the LLM sees", so a mode flip must miss rather than serve the
 		// other mode's answers until TTL.
-		String chartMode = gp(ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_FULL_CHART);
+		String chartMode = gp(ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_DEFAULT);
 		// Grounding GPs change the answer's per-citation `grounded` verdict, so
 		// they must be part of the key — otherwise toggling grounding (or its
 		// floor / entailment flag) while caching is on would serve answers whose

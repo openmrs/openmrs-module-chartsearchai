@@ -185,6 +185,33 @@ public class LlmInferenceServiceTest {
 	}
 
 	@Test
+	public void extractCitedReferences_shouldKeepTheArrayWhenTheOnlyInlineMarkerIsUnmapped() {
+		List<RecordMapping> mappings = Arrays.asList(
+				new RecordMapping(8, "condition", uuid(8), null),
+				new RecordMapping(9, "obs", uuid(9), null));
+
+		// A positive answer whose ONLY inline marker is a typo ([99] does not exist)
+		// while its structured array lists real records. The abstention-dump drop
+		// must NOT fire: the model DID attempt an inline citation, so this is a
+		// mistyped positive answer, not an abstention. Any inline marker — mapped or
+		// not — bypasses the drop by design; a map-aware drop that tried to also
+		// catch a stray-bracket abstention would lose these legitimate array
+		// citations, and the two cases are otherwise indistinguishable without
+		// semantic abstention detection. This locks that decision.
+		String answer = "Yes, the patient has cancer [99].";
+
+		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
+				answer, Arrays.asList(8, 9), mappings);
+
+		List<Integer> indices = new ArrayList<Integer>();
+		for (RecordReference ref : result) {
+			indices.add(ref.getIndex());
+		}
+		Collections.sort(indices);
+		assertEquals(Arrays.asList(8, 9), indices);
+	}
+
+	@Test
 	public void stripQueryStopwords_shouldNormalizeDifferentPhrasingsToSameResult() {
 		// Both queries have only 1 content word ("medications"), so both
 		// preserve the full sentence. The embedding model handles both

@@ -465,11 +465,27 @@ public class LlmInferenceService implements ChartSearchService {
 	 * sources of citation indices that can disagree: the LLM's structured
 	 * {@code citations} array and the {@code [N]} markers it writes inline in the
 	 * prose. We take the UNION of both (restricted to indices that map to a real
-	 * retrieved record), so a record the model cited inline but forgot to add to
-	 * the array — or listed in the array but only referenced inline — still
-	 * resolves to a reference. Indices with no matching record are dropped and
+	 * retrieved record), so a record the model cited inline but omitted from the
+	 * array — or one it listed in the array while citing at least one record
+	 * inline — still resolves to a reference. The one exception is the
+	 * abstention-dump carve-out below: an answer whose prose cites nothing inline
+	 * discards the array entirely. Indices with no matching record are dropped and
 	 * logged, exactly as the array path already drops unmapped indices; the
 	 * prose itself is never rewritten.
+	 *
+	 * <p>An inline {@code [N]} marker in the answer is the authoritative record of
+	 * what the model cited: the system prompt instructs it to "Cite EVERY record
+	 * you reference by its number in brackets", and its own few-shot demonstrates
+	 * that an abstention answer carries {@code "citations": []}. A small local
+	 * model breaks that contract by writing an abstention ("no cancer found") with
+	 * no inline markers yet dumping its whole reviewed record set into the
+	 * structured array. So when the answer is real prose that anchors NO citation
+	 * inline, the structured array is treated as unanchored and no references are
+	 * surfaced — a "not found" answer must not arrive with the entire chart
+	 * attached. This is scoped to non-blank prose: an empty/blank answer is the
+	 * absence of an answer (a distinct degenerate output), not an answer that
+	 * failed to anchor its citations, so the array still resolves there — as does
+	 * the legacy {@code answer == null} entry point.
 	 */
 	static List<RecordReference> extractCitedReferences(String answer, List<Integer> citations,
 			List<RecordMapping> mappings) {
@@ -485,10 +501,19 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 		}
 		if (answer != null) {
+			Set<Integer> inline = new LinkedHashSet<Integer>();
 			Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(answer);
 			while (marker.find()) {
-				seen.add(Integer.valueOf(marker.group(1)));
+				inline.add(Integer.valueOf(marker.group(1)));
 			}
+			// Real answer prose that anchors NO citation inline: the structured
+			// array is unanchored (the abstention-dump failure mode), so surface
+			// nothing rather than the records the model merely reviewed. The
+			// !isBlank guard exempts a blank answer — see the method javadoc.
+			if (inline.isEmpty() && !ChartSearchAiUtils.isBlank(answer)) {
+				return new ArrayList<RecordReference>();
+			}
+			seen.addAll(inline);
 		}
 
 		List<RecordReference> references = new ArrayList<RecordReference>();

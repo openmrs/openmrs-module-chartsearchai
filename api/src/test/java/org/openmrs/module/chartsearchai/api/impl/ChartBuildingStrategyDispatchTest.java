@@ -78,9 +78,11 @@ public class ChartBuildingStrategyDispatchTest {
 	}
 
 	@Test
-	public void buildChart_shouldDispatchToFullChartBuilder_byDefault() {
+	public void buildChart_shouldDispatchToFullChartBuilder_whenNotScoped() {
 		CountingBuilder builder = new CountingBuilder();
 
+		// queryScopedMode() == false selects fullChart (which is no longer the GP default, but
+		// remains the mode this dispatch branch serves).
 		new TestableStrategy(builder, false).buildChart(patient(), "any allergies?");
 
 		assertEquals(1, builder.buildCalls, "fullChart mode keeps today's full-chart build");

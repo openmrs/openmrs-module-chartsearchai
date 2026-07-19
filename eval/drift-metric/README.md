@@ -95,3 +95,27 @@ Both failed, through opposite mechanisms:
 Conclusion: E2B needs its full reasoning scratchpad to enumerate completely. Shortening it
 — by force or by instruction — trades one safety property for another. Do not revisit
 without a different model or a mechanism that preserves completeness.
+
+## Widened rc.2 gold: fullChart vs queryScoped (2026-07-19, 22 patients)
+
+`chartsearchai.chartMode=queryScoped` (query-scoped slice prompts, #74) vs `fullChart`
+(the whole chart), scored on the **widened rc.2 gold** — every rc.2 patient with a
+substantial chart (≥200 unvoided citable records), **22 patients × 9 topics = 198 cells**
+(104 present / 94 absent). Same module build in both arms, greedy decode, cache off.
+
+| arm | meanF1 (104 present) | abstention (94 absent) | drift (off-topic citations) |
+|---|---|---|---|
+| fullChart | 0.668 | 0.74 (70/94) | 477 |
+| **queryScoped** | **0.748** | **0.86 (81/94)** | **181** |
+
+queryScoped wins/ties meanF1 on 8/9 topics (only `heart` regresses, −0.09), wins/ties
+abstention on every topic (standout: `programs` 5/13 → 13/13 — fullChart drifts
+"programs → appointments/visits"), and cuts total drift 62%. The residual drift is
+dominated by `heart` (329 → 100), largely the "raw vitals are off-topic for heart" gold
+rule, applied equally to both arms. An earlier 5-patient run agreed directionally; this
+confirms it at 4.4× scale. **Supports keeping queryScoped as the demo default.**
+
+This run also corrected two boundary substring false-positives in `build_gold_rc2.py`
+(`renal` matched "adrenal"; `substance` matched "reducing substance") that had been
+miscounting the gold, so figures here are not directly comparable to pre-2026-07-19
+rc.2 captures — re-score against the current `metric_gold.rc2.json`.

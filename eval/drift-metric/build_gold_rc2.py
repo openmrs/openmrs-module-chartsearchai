@@ -20,7 +20,8 @@ import re
 import subprocess
 from collections import defaultdict
 
-M = os.environ["MARIADB_BIN"]
+# DB config is read lazily inside sql() (not at import), so the module can be imported
+# without a live DB — e.g. for the --selftest that exercises classify() offline.
 PORT = os.environ.get("MARIADB_PORT", "3316")
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -78,6 +79,12 @@ BOUNDARIES = {
                   r"uric acid", r"glomerular", r"urinalysis", r"urinary", r"urine", r"bladder",
                   r"ureter", r"urethr", r"urinate", r"incontinence", r"dialysis", r"pyelonephritis",
                   r"bacteriuria"],
+        # "renal" is kept broad (so prerenal/perirenal/intrarenal — genuine renal terms — count)
+        # but the adrenal/suprarenal glands are ENDOCRINE, not renal: exclude them so "Malignant
+        # tumor of adrenal gland" is not scored kidney. (An earlier \brenal\b fix excluded adrenal
+        # but silently dropped prerenal/perirenal too; this states the intent directly. Gold-neutral
+        # on the current universes — none contain prerenal/perirenal/intrarenal/suprarenal.)
+        "exclude": [r"adrenal", r"suprarenal"],
         "auto": True,
     },
     "mental": {
@@ -89,7 +96,10 @@ BOUNDARIES = {
         # asks for psychiatric conditions.
         "stems": [r"schizo", r"psychos", r"psychiatric", r"\bmental\b", r"depress", r"anxiety",
                   r"fearful mood", r"rumination disorder", r"somatoform", r"enuresis",
-                  r"anxio", r"bipolar", r"eating disorder", r"anorexia", r"bulimia", r"substance",
+                  r"anxio", r"bipolar", r"eating disorder", r"anorexia", r"bulimia",
+                  # bare "substance" also matched "Stool test for reducing substance" (a GI lab) —
+                  # require a substance-use qualifier; "psychoactive substance" is covered below.
+                  r"substance (abuse|use|addiction|dependence|misuse)",
                   r"cocaine", r"stimulant use", r"sedative", r"hypnotic", r"alcohol use|alcoholism",
                   r"adjustment reaction", r"aggressive behavior", r"hoarding", r"obsessive",
                   r"compulsive", r"explosive disorder", r"conversion disorder", r"self-accusation",
@@ -127,10 +137,20 @@ ADJUDICATIONS = {
     "allergy to spiders": {"drug-allergies": False},
     "allergy to eanuts": {"drug-allergies": False},
     "environmental allergies": {"drug-allergies": False},
+    # Widened-gold patients (2026-07-19): anaesthetic/antibiotic drug allergens recorded as
+    # condition/diagnosis rows — drugs, so ON for drug-allergies (imipenem precedent).
+    "allergy to sevoflurane": {"drug-allergies": True},
+    "allergy to sufentanil": {"drug-allergies": True},
+    "4-quinolones allergy": {"drug-allergies": True},
+    # non-drug allergens surfaced by the new patients — explicitly OFF for drug-allergies.
+    "allergy to insect bites": {"drug-allergies": False},
+    "dander (animal) allergy": {"drug-allergies": False},
+    "food allergy": {"drug-allergies": False},
 }
 
 
 def sql(q):
+    M = os.environ["MARIADB_BIN"]
     out = subprocess.run([M, "--skip-ssl", "-h127.0.0.1", "-P" + PORT, "-uopenmrs", "openmrs",
                           "-N", "--batch", "-e", q],
                          capture_output=True, text=True,
@@ -286,9 +306,23 @@ def profile_patients():
 # Pinned 2026-07-16: the five patients whose 40 cells were captured for the fullChart-vs-
 # queryScoped A/B. Selection greed depends on boundary stems, so re-running after an
 # adjudication round must NOT swap patients out from under already-taken captures.
+# Widened 2026-07-19: all rc.2 patients with a substantial chart (>=200 unvoided citable
+# records) added, so the fullChart-vs-queryScoped verdict rests on 22 patients not 5. The
+# original five stay first (their captures are reused). The <200-record tail and the synthetic
+# scan-test patients (Karen Sanchez, Susan Harris, the three *Scan* rows: 0 present topics) are
+# excluded — they add no present cells and near-empty charts are not representative.
 PINNED = ["bc4ba445-a35c-4996-b804-4d5b68387571", "1128c659-2d0a-4314-af23-91bac1b01109",
           "59a5f0bb-b863-4213-9177-b883fe9f5f79", "16ca09dd-a8d4-405a-bda6-76d18ed65b25",
-          "dkb00000-0000-0000-0000-000000000001"]
+          "dkb00000-0000-0000-0000-000000000001",
+          "813b9f0d-3a8e-4f67-a0dd-d9b3eeef65c5", "489db738-ad5f-4335-a9f1-270ec0c76ea2",
+          "5b24c81f-2b66-41ed-8f2d-158433d531cc", "b360ca49-d432-404f-9b6c-aa6a66125693",
+          "bd3927f4-8c75-470b-bdbb-6c92857b2205", "c34d0124-76c9-4197-9f84-35e44e1317a8",
+          "007e38b8-1344-4ea9-a790-a3f078471db3", "089f766b-943c-427b-a039-672f90b0a49e",
+          "520016d7-67ae-40fa-aa8f-e8a5ec2b8fd6", "8d9fc13a-5d4c-4c5c-b265-23ac067835a4",
+          "53927035-f177-4144-9d3f-b80ced7614bc", "072f69ce-f25a-4ca0-b2ff-4a7a4325ddd9",
+          "0563178c-e107-43a0-be05-2a179ab02dbe", "3d6b5ada-c402-4f3f-9c70-6a17f4d2a339",
+          "ec6af3d5-3082-45f4-8f14-cf42dad41ed2", "47028119-e1e0-467c-b807-a23d1a81fb2b",
+          "e9712a18-c181-46c5-8a17-46b02e39b23b"]
 
 
 def main():
@@ -354,5 +388,47 @@ def write_outputs(chosen):
     print(f"cells={len(gold)} -> metric_gold.rc2.json / offtopic_adj.rc2.json / gold_audit.rc2.md")
 
 
+def selftest():
+    """Offline regression guard for the classify() boundaries (no DB). Locks the two
+    substring bug-fixes (adrenal !-> kidney, reducing-substance !-> mental) and the
+    drug-allergy adjudications, so re-broadening a stem fails here instead of silently
+    miscounting the gold. Names are passed already-normalized, as fetch_universe() feeds
+    them. condition/diagnosis/allergy/program/drug_order paths take no DB."""
+    C = classify
+    # kidney: "renal" is broad but the adrenal/suprarenal ENDOCRINE glands are excluded; genuine
+    # renal-prefixed terms (prerenal/perirenal/intrarenal) still count.
+    assert C("kidney", "condition", "malignant tumor of adrenal gland", "") is False, "adrenal is endocrine, not kidney"
+    assert C("kidney", "condition", "malignant tumor of suprarenal gland", "") is False, "suprarenal is endocrine, not kidney"
+    assert C("kidney", "condition", "prerenal azotemia", "") is True, "prerenal IS a renal term"
+    assert C("kidney", "condition", "chronic kidney disease, stage v", "") is True
+    assert C("kidney", "condition", "significant renal impairment", "") is True
+    assert C("kidney", "diagnosis", "acute pyelonephritis", "") is True
+    # mental: the "substance" stem must NOT catch "reducing substance" (a GI lab), but must catch use disorders.
+    assert C("mental", "obs", "stool test for reducing substance", "") is False, "reducing substance is not mental"
+    assert C("mental", "condition", "substance abuse", "") is True
+    assert C("mental", "condition", "moderate alcohol use disorder", "") is True
+    assert C("mental", "diagnosis", "mental or behavioral disorder due to psychoactive substance", "") is True
+    # drug-allergies: allergy rows keyed on allergen_type=drug (the textval slot); condition/
+    # diagnosis via adjudication. Signature is classify(topic, kind, name, display, textval="").
+    assert C("drug-allergies", "allergy", "penicillin drug class", "", "drug") is True
+    assert C("drug-allergies", "allergy", "bee venom", "", "food") is False
+    assert C("drug-allergies", "condition", "allergy to sevoflurane", "") is True
+    assert C("drug-allergies", "condition", "allergy to imipenem", "") is True
+    assert C("drug-allergies", "diagnosis", "allergy to latex", "") is False
+    assert C("drug-allergies", "condition", "food allergy", "") is False
+    # allergies (superset): any allergy row + allergy-named conditions on-topic.
+    assert C("allergies", "allergy", "penicillin drug class", "", "drug") is True
+    assert C("allergies", "condition", "allergy to sevoflurane", "") is True
+    # typed topics: DB-truth anchors, no stems.
+    assert C("programs", "program", "pmtct", "") is True
+    assert C("programs", "condition", "chronic kidney disease", "") is False
+    assert C("medications", "drug_order", "warfarin", "") is True
+    print("selftest OK")
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--selftest":
+        selftest()
+    else:
+        main()

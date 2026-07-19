@@ -75,10 +75,16 @@ BOUNDARIES = {
         # uric acid, urinalysis, urine glucose, urinary albumin, bacteriuria) + their test orders.
         # "Oliguria" adjudicated ON from capture review (urinary symptom; precedent:
         # "Painful Urging to Urinate", "Urinary incontinence"). Dehydration/hepatitis stay OFF.
-        "stems": [r"kidney", r"\brenal\b", r"nephr", r"creatinine", r"blood urea", r"\burea\b", r"oliguria",
+        "stems": [r"kidney", r"renal", r"nephr", r"creatinine", r"blood urea", r"\burea\b", r"oliguria",
                   r"uric acid", r"glomerular", r"urinalysis", r"urinary", r"urine", r"bladder",
                   r"ureter", r"urethr", r"urinate", r"incontinence", r"dialysis", r"pyelonephritis",
                   r"bacteriuria"],
+        # "renal" is kept broad (so prerenal/perirenal/intrarenal — genuine renal terms — count)
+        # but the adrenal/suprarenal glands are ENDOCRINE, not renal: exclude them so "Malignant
+        # tumor of adrenal gland" is not scored kidney. (An earlier \brenal\b fix excluded adrenal
+        # but silently dropped prerenal/perirenal too; this states the intent directly. Gold-neutral
+        # on the current universes — none contain prerenal/perirenal/intrarenal/suprarenal.)
+        "exclude": [r"adrenal", r"suprarenal"],
         "auto": True,
     },
     "mental": {
@@ -389,8 +395,11 @@ def selftest():
     miscounting the gold. Names are passed already-normalized, as fetch_universe() feeds
     them. condition/diagnosis/allergy/program/drug_order paths take no DB."""
     C = classify
-    # kidney: the "renal" stem must NOT catch "adrenal" (endocrine), but must catch real renal terms.
-    assert C("kidney", "condition", "malignant tumor of adrenal gland", "") is False, "adrenal is not kidney"
+    # kidney: "renal" is broad but the adrenal/suprarenal ENDOCRINE glands are excluded; genuine
+    # renal-prefixed terms (prerenal/perirenal/intrarenal) still count.
+    assert C("kidney", "condition", "malignant tumor of adrenal gland", "") is False, "adrenal is endocrine, not kidney"
+    assert C("kidney", "condition", "malignant tumor of suprarenal gland", "") is False, "suprarenal is endocrine, not kidney"
+    assert C("kidney", "condition", "prerenal azotemia", "") is True, "prerenal IS a renal term"
     assert C("kidney", "condition", "chronic kidney disease, stage v", "") is True
     assert C("kidney", "condition", "significant renal impairment", "") is True
     assert C("kidney", "diagnosis", "acute pyelonephritis", "") is True

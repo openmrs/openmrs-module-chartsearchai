@@ -41,18 +41,20 @@ final class PipelineSettings {
 		return "true".equalsIgnoreCase(mode.trim());
 	}
 
-	/** True when {@code chartsearchai.chartMode=queryScoped}: prompts carry a query-scoped record
-	 *  slice instead of the whole chart, and the full-chart prefill machinery (warmup, prewarm,
-	 *  per-patient KV persistence, preview) disengages. Any other value — including unset — is the
-	 *  fullChart default, so a typo can never silently change what the LLM sees. Fail-safe via the
-	 *  shared {@link ChartSearchAiUtils#getStringGlobalProperty} reader: a GP layer that cannot be
-	 *  read resolves to fullChart rather than breaking the answer path. Safe for the destructive
-	 *  KV decisions too, because those never trust a re-read of this gate — they follow the built
-	 *  chart's own {@code PatientChart#isQueryScoped()} stamp. */
+	/** True when {@code chartsearchai.chartMode} selects the query-scoped slice (the
+	 *  {@link ChartSearchAiConstants#CHART_MODE_DEFAULT default} since 2026-07): prompts carry a
+	 *  query-scoped record slice instead of the whole chart, and the full-chart prefill machinery
+	 *  (warmup, prewarm, per-patient KV persistence, preview) disengages. Resolution: an absent or
+	 *  unreadable GP takes {@code CHART_MODE_DEFAULT} (= queryScoped) via the fail-safe
+	 *  {@link ChartSearchAiUtils#getStringGlobalProperty} reader; a GP explicitly set to
+	 *  {@code fullChart} — or to any typo that is not an exact (case-insensitive) {@code queryScoped}
+	 *  — resolves to fullChart, so a mistyped value still fails toward the whole chart. Safe for the
+	 *  destructive KV decisions too, because those never trust a re-read of this gate — they follow
+	 *  the built chart's own {@code PatientChart#isQueryScoped()} stamp. */
 	static boolean queryScopedMode() {
 		return ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED.equalsIgnoreCase(
 				org.openmrs.module.chartsearchai.ChartSearchAiUtils.getStringGlobalProperty(
-						ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_FULL_CHART));
+						ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_DEFAULT));
 	}
 
 	static int getQueryStoreTopK() {

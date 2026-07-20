@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,13 +37,14 @@ final class PipelineSettings {
 	}
 
 	/** Whether queryScoped dominant-concept slice expansion is enabled
-	 *  ({@code chartsearchai.slice.conceptExpansion}). Default-true opt-out (mirrors
-	 *  {@link #usePreFilter}'s {@code !"false"} idiom): only an explicit {@code false} disables it,
-	 *  so a typo'd value still leaves the feature on. */
+	 *  ({@code chartsearchai.slice.conceptExpansion}). Default-true opt-out: only an explicit
+	 *  {@code false} disables it, so a typo'd value still leaves the feature on. Resolved through the
+	 *  fail-safe {@link ChartSearchAiUtils#getStringGlobalProperty} reader (like {@link #queryScopedMode})
+	 *  rather than a raw Context read, so an unreadable GP layer resolves to the default (on) instead
+	 *  of throwing into the answer path. */
 	static boolean conceptExpansionEnabled() {
-		String mode = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_CONCEPT_EXPANSION, "true");
-		return !"false".equalsIgnoreCase(mode.trim());
+		return !"false".equalsIgnoreCase(ChartSearchAiUtils.getStringGlobalProperty(
+				ChartSearchAiConstants.GP_CONCEPT_EXPANSION, "true").trim());
 	}
 
 	static boolean dedupGroupLabels() {

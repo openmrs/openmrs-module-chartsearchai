@@ -55,6 +55,17 @@ public class PipelineSettingsDefaultTest {
 	}
 
 	@Test
+	public void conceptExpansionEnabled_defaultsToTrue_whenGpUnsetOrUnreadable() {
+		// Same no-Context mechanism as queryScopedMode: getStringGlobalProperty hits its catch clause
+		// and returns the "true" default. Locks the shipped default-ON contract — a silent revert to
+		// off would disable repeated-measure expansion (the BP-series fix) for everyone without a
+		// failing test. The !"false" opt-out also means only an explicit false (or a Context that
+		// returns it) can turn it off; a typo stays on.
+		assertTrue(PipelineSettings.conceptExpansionEnabled(),
+				"conceptExpansion must default to true when chartsearchai.slice.conceptExpansion is unset");
+	}
+
+	@Test
 	public void isQueryScoped_optOutAndTypoSafety() {
 		// Locks the documented contract: flipping the default did NOT change how a set value is
 		// read — scoped requires an exact (case-insensitive) queryScoped match, so an operator can

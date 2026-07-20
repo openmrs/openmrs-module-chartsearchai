@@ -10,16 +10,21 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
@@ -240,13 +245,22 @@ class QueryStoreChartBuilder {
 		// abbreviations are expanded first ("BMP" → "+ basic metabolic panel") so the retrieval
 		// text carries the full concept name querystore indexed. Failure degrades to the typed
 		// slice alone (never blocks the answer), mirroring build()'s focus-hint contract.
-		Set<String> similarityUuids = Collections.<String>emptySet();
+		List<QueryDocument> simHits = Collections.<QueryDocument>emptyList();
 		if (question != null && !question.trim().isEmpty()) {
-			similarityUuids = searchSimilarityUuids(queryStore, patient,
+			simHits = searchSimilarityHits(queryStore, patient,
 					QueryPreprocessor.stripQueryStopwords(
 							QueryPreprocessor.expandLabPanelAbbreviations(question)),
 					"QueryStore.searchByPatient failed for scoped build [uuid={}] — proceeding with the typed slice only");
 		}
+		Set<String> similarityUuids = collectFocusUuids(simHits);
+		// Repeated-measure completeness: when one concept recurs (the plurality) across the
+		// similarity ranking (e.g. many blood-pressure readings), a fixed top-K truncates the series
+		// arbitrarily — surface EVERY chart record of that concept instead. Empty for diverse
+		// rankings (conditions/diagnoses) and suppressed for condition-oriented queries, so those
+		// queries are unaffected. Generic — no clinical vocabulary; see dominantConceptExpansion.
+		Set<String> expansionUuids = resolveConceptExpansionEnabled()
+				? dominantConceptExpansion(simHits, chartDocs)
+				: Collections.<String>emptySet();
 		long rpcMs = System.currentTimeMillis() - rpcStart;
 
 		// Filter the chart (already most-recent-first) down to the slice, preserving its order.
@@ -268,7 +282,8 @@ class QueryStoreChartBuilder {
 			boolean isPatientRecord = PATIENT_RESOURCE_TYPE.equals(doc.getResourceType());
 			boolean inTypedScope = doc.getResourceType() != null && typedScope.contains(doc.getResourceType());
 			boolean isSimilarityHit = doc.getResourceUuid() != null && similarityUuids.contains(doc.getResourceUuid());
-			if (isAnchor || isPatientRecord || inTypedScope || isSimilarityHit) {
+			boolean isConceptExpansion = doc.getResourceUuid() != null && expansionUuids.contains(doc.getResourceUuid());
+			if (isAnchor || isPatientRecord || inTypedScope || isSimilarityHit || isConceptExpansion) {
 				sliceDocs.add(doc);
 				if (doc.getResourceUuid() != null) {
 					sliceUuids.add(doc.getResourceUuid());
@@ -284,9 +299,9 @@ class QueryStoreChartBuilder {
 		PatientChart chart = chartSerializer.serialize(patient, records,
 				Collections.<String>emptySet(), false, false);
 		long serializeMs = System.currentTimeMillis() - serializeStart;
-		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} simHits={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
-				patient.getPatientId(), intentLabel, chartDocs.size(), similarityUuids.size(), records.size(),
-				rpcMs, serializeMs, System.currentTimeMillis() - buildStart);
+		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} simHits={} expand={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
+				patient.getPatientId(), intentLabel, chartDocs.size(), similarityUuids.size(), expansionUuids.size(),
+				records.size(), rpcMs, serializeMs, System.currentTimeMillis() - buildStart);
 		return markScoped(chart);
 	}
 
@@ -462,20 +477,196 @@ class QueryStoreChartBuilder {
 	 */
 	private Set<String> searchSimilarityUuids(QueryStoreService queryStore, Patient patient,
 			String preprocessedQuestion, String degradeWarning) {
+		// The uuid-only focus path is just the ranked-hit path with the ranking discarded — delegate
+		// so the search + degrade-to-empty contract lives in one place.
+		return collectFocusUuids(searchSimilarityHits(queryStore, patient, preprocessedQuestion, degradeWarning));
+	}
+
+	/** As {@link #searchSimilarityUuids} but preserves the ranked hit list (buildScoped needs the
+	 *  ranking for {@link #dominantConceptExpansion}); degrades to an empty list on failure. */
+	private List<QueryDocument> searchSimilarityHits(QueryStoreService queryStore, Patient patient,
+			String preprocessedQuestion, String degradeWarning) {
 		try {
 			List<QueryDocument> hits = queryStore.searchByPatient(patient.getUuid(),
 					preprocessedQuestion, resolveQueryStoreTopK());
-			return collectFocusUuids(hits);
+			return hits != null ? hits : Collections.<QueryDocument>emptyList();
 		}
 		catch (RuntimeException e) {
 			log.warn(degradeWarning, patient.getUuid(), e);
-			return Collections.<String>emptySet();
+			return Collections.<QueryDocument>emptyList();
 		}
 	}
 
-	/** Collects {@code resource_uuid}s from a hit list, skipping nulls and malformed docs.
-	 *  These uuids are mapped to 1-based chart indices in {@code PatientChartSerializer.serialize}
-	 *  to render the LLM-facing focus hint. */
+	/** Test seam: whether dominant-concept expansion is enabled (GP
+	 *  {@code chartsearchai.slice.conceptExpansion}, default true). */
+	protected boolean resolveConceptExpansionEnabled() {
+		return PipelineSettings.conceptExpansionEnabled();
+	}
+
+	/** A run of digits, with an optional leading sign and optional decimal part — the "value" part of
+	 *  a record's text. Precompiled: {@link #conceptKey} runs it once per chart record during the
+	 *  expansion scan (up to the chart cap), so {@code String.replaceAll}'s per-call recompile would
+	 *  be thousands of needless compilations on the scoped hot path. */
+	private static final Pattern VALUE_DIGITS = Pattern.compile("-?[0-9]+(?:\\.[0-9]+)?");
+
+	/**
+	 * Generic concept key for a record: its text with numeric values (including a leading sign)
+	 * normalized to {@code #}, lower-cased. Repeated measurements of one concept that differ only by
+	 * value (e.g. successive blood-pressure readings, or a lab that swings negative) collapse to a
+	 * single key, while distinct concepts stay separate. Purely value-agnostic — no clinical
+	 * vocabulary — so it cannot encode domain knowledge.
+	 *
+	 * <p>Known limitation: a concept whose identity IS a number (e.g. "Type 1" vs "Type 2" of a
+	 * disease) collapses to one key. That is acceptable for the plurality count, but it can make the
+	 * condition-guard under-count two such conditions as one — see {@link #dominantConceptExpansion}.
+	 */
+	static String conceptKey(String text) {
+		if (text == null) {
+			return "";
+		}
+		return VALUE_DIGITS.matcher(text).replaceAll("#").trim().toLowerCase();
+	}
+
+	/** Minimum times the plurality concept must recur among the ranked hits to be judged a
+	 *  repeated-measure enumeration. A raw recurrence count — not a fraction of the top-K — is the
+	 *  right gate: a run of blood-pressure readings signals enumeration even when systolic/diastolic
+	 *  split the hits so no single concept reaches a majority. Diverse condition rankings have every
+	 *  concept at count 1, so their plurality never reaches this floor; the condition-guard
+	 *  ({@link #CONDITION_GUARD}) is the second, independent brake for condition queries where a
+	 *  vital nonetheless recurs. */
+	static final int DOMINANCE_MIN = 4;
+
+	/** Cap on records added by one expansion: at most the 40 most-recent records of the concept
+	 *  (the chart is date-desc, so the loop keeps the newest). This bounds the enumerated series
+	 *  itself; obs-group completion downstream ({@code completeObsGroupFamilies}) may still pull each
+	 *  kept record's group family (e.g. the diastolic sibling of an expanded systolic), so the net
+	 *  slice growth is 40 times the family size — still far below fullChart, and only for a concept
+	 *  with more than 40 records. */
+	static final int EXPANSION_CAP = 40;
+
+	/** Distinct condition/diagnosis concepts among the top hits that mark the query as
+	 *  condition-oriented (not a measure enumeration), at or above which expansion is suppressed.
+	 *  Two, so a single incidental comorbidity alongside a genuine measure run still expands, while
+	 *  a spread of distinct conditions (a "what problems?" ranking) does not. See the condition-guard
+	 *  in {@link #dominantConceptExpansion}. */
+	static final int CONDITION_GUARD = 2;
+
+	/**
+	 * When the similarity ranking's <em>plurality</em> concept recurs at least {@link #DOMINANCE_MIN}
+	 * times among the top hits — a repeated-measure enumeration such as a run of blood-pressure
+	 * readings — return every chart record sharing that concept, so a fixed top-K cannot arbitrarily
+	 * truncate the series. Returns empty when the top hits are diverse (the common case:
+	 * conditions/diagnoses each appearing once), leaving those queries untouched.
+	 *
+	 * <p>Two guards keep it from firing on condition queries. (1) The recurrence gate: a diverse
+	 * condition/diagnosis ranking has every concept at count 1, so its plurality never reaches
+	 * {@code DOMINANCE_MIN} and nothing expands. (2) The condition-guard ({@link #CONDITION_GUARD}):
+	 * when the top hits carry two or more distinct condition/diagnosis concepts the query is
+	 * condition-oriented (e.g. "any heart problems?", where the diverse conditions ARE the answer and
+	 * a recurring vital that happens to be the plurality is noise), so expansion is suppressed even if
+	 * a measure recurs. Plurality (most frequent) rather than the rank-1 hit's concept, because
+	 * retrieval can rank a spurious record first (a glucose reading ahead of the blood-pressure run
+	 * for "is she hypertensive?"). Fully generic: keyed on {@link #conceptKey} (value-normalized text)
+	 * and resource type, never on clinical meaning.
+	 */
+	static Set<String> dominantConceptExpansion(List<QueryDocument> rankedHits,
+			List<QueryDocument> chartDocs) {
+		if (rankedHits == null || rankedHits.isEmpty() || chartDocs == null) {
+			return Collections.<String>emptySet();
+		}
+		// The similarity search returns ranking payloads whose resourceType is typically unset; the
+		// chart docs carry the authoritative type (they are what the response references are built
+		// from). Resolve type from the chart only for the few ranked hits that lack it — collect
+		// those UUIDs first so the chart pass populates a map bounded by the hit count, not the whole
+		// (up-to-10k) chart. A hit whose UUID is absent from the chart (possible past the chart cap,
+		// see QUERYSTORE_ES_CHART_CAP) stays unresolved; the guard then under-counts it, one facet of
+		// the cap's already-warned "typed slices may omit older records" degradation.
+		Set<String> unresolvedTypeUuids = new HashSet<String>();
+		for (QueryDocument h : rankedHits) {
+			if (h != null && h.getResourceType() == null && h.getResourceUuid() != null) {
+				unresolvedTypeUuids.add(h.getResourceUuid());
+			}
+		}
+		Map<String, String> typeByUuid = Collections.<String, String>emptyMap();
+		if (!unresolvedTypeUuids.isEmpty()) {
+			typeByUuid = new java.util.HashMap<String, String>();
+			for (QueryDocument c : chartDocs) {
+				if (c != null && unresolvedTypeUuids.contains(c.getResourceUuid())) {
+					typeByUuid.put(c.getResourceUuid(), c.getResourceType());
+				}
+			}
+		}
+		int total = 0;
+		java.util.Map<String, Integer> hist = new java.util.LinkedHashMap<String, Integer>();
+		java.util.Set<String> conditionConcepts = new java.util.HashSet<String>();
+		for (QueryDocument h : rankedHits) {
+			if (h == null || h.getText() == null) {
+				continue;
+			}
+			total++;
+			String key = conceptKey(h.getText());
+			hist.put(key, hist.getOrDefault(key, 0) + 1);
+			String rt = h.getResourceType();
+			if (rt == null && h.getResourceUuid() != null) {
+				rt = typeByUuid.get(h.getResourceUuid());
+			}
+			if ("condition".equals(rt) || "diagnosis".equals(rt)) {
+				conditionConcepts.add(key);
+			}
+		}
+		// Condition-guard: when the top hits carry two or more distinct condition/diagnosis concepts,
+		// the query is condition-oriented (e.g. "any heart problems?" — diverse cardiac conditions
+		// ARE the answer) and a recurring vital that happens to be the plurality is noise. Suppress
+		// expansion so it fires only on genuine measure-enumeration queries (whose top hits are
+		// observations, not a spread of conditions). Structural (resource type), not clinical.
+		// Limitation: distinctness is by conceptKey, which normalizes digits away, so two conditions
+		// separated only by a number (e.g. "Type 1" vs "Type 2" of a disease) count as one. Narrow —
+		// it needs both to co-occur in the top hits alongside a recurring vital — and it only risks a
+		// few extra citations on that query, so it is accepted rather than special-cased (which would
+		// require clinical vocabulary the module forbids).
+		if (conditionConcepts.size() >= CONDITION_GUARD) {
+			log.debug("[conceptExpansion] fire=false reason=conditionGuard distinctConditions={} total={}",
+					conditionConcepts.size(), total);
+			return Collections.<String>emptySet();
+		}
+		// Plurality concept — the most frequent among the top hits (tie → first seen). Not the
+		// rank-1 hit's concept: retrieval can rank a spurious record first (e.g. a glucose reading
+		// ahead of the blood-pressure run for "is she hypertensive?"), so recurrence, not position,
+		// identifies the enumerated measure.
+		String topKey = null;
+		int topCount = 0;
+		for (java.util.Map.Entry<String, Integer> e : hist.entrySet()) {
+			if (e.getValue() > topCount) {
+				topCount = e.getValue();
+				topKey = e.getKey();
+			}
+		}
+		boolean fire = topKey != null && total > 0 && topCount >= DOMINANCE_MIN;
+		log.debug("[conceptExpansion] fire={} topConcept='{}' topCount={} total={} hist={}",
+				fire, topKey, topCount, total, hist);
+		if (!fire) {
+			return Collections.<String>emptySet();
+		}
+		Set<String> out = new LinkedHashSet<String>();
+		for (QueryDocument d : chartDocs) {
+			if (d == null || d.getText() == null || d.getResourceUuid() == null) {
+				continue;
+			}
+			if (conceptKey(d.getText()).equals(topKey)) {
+				out.add(d.getResourceUuid());
+				if (out.size() >= EXPANSION_CAP) {
+					log.debug("[conceptExpansion] capped at {} records for concept '{}' — older "
+							+ "records of this concept are omitted from the slice", EXPANSION_CAP, topKey);
+					break;
+				}
+			}
+		}
+		return out;
+	}
+
+	/** Collects {@code resource_uuid}s from a hit list, skipping nulls and malformed docs. These
+	 *  uuids are mapped to 1-based chart indices in {@code PatientChartSerializer.serialize} to
+	 *  render the LLM-facing focus hint. */
 	private Set<String> collectFocusUuids(List<QueryDocument> hits) {
 		if (hits == null || hits.isEmpty()) {
 			return Collections.<String>emptySet();

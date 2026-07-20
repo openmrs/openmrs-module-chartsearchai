@@ -79,6 +79,19 @@ public class ChartSearchServiceRouterTest {
 	}
 
 	@Test
+	public void buildCacheKey_changesWhenConceptExpansionToggles() {
+		// conceptExpansion changes the queryScoped slice contents (a repeated-measure series surfaced
+		// in full vs truncated by topK), so — like topK — it changes what the LLM sees and must vary
+		// the key, else disabling it while caching is on serves the expanded answer until the TTL.
+		StubRouter router = new StubRouter();
+		Patient p = patient("p1");
+		String withDefault = router.buildCacheKey(p, "q");
+		router.gps.put(ChartSearchAiConstants.GP_CONCEPT_EXPANSION, "false");
+		assertNotEquals(withDefault, router.buildCacheKey(p, "q"),
+				"toggling conceptExpansion changes the slice, so it must change the key");
+	}
+
+	@Test
 	public void buildCacheKey_changesWhenChartModeChanges() {
 		// chartMode swaps the ENTIRE context the LLM sees (full chart vs query-scoped slice), so
 		// it must be in the key — otherwise flipping the mode while caching is on serves the other

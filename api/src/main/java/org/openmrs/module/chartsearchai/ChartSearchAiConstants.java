@@ -90,6 +90,16 @@ public class ChartSearchAiConstants {
 	 */
 	public static final String CHART_MODE_DEFAULT = CHART_MODE_QUERY_SCOPED;
 
+	/**
+	 * Toggles dominant-concept slice expansion in queryScoped mode ({@code default true}). When one
+	 * concept recurs (the plurality) across the similarity ranking (a repeated-measure enumeration
+	 * such as a run of blood-pressure readings), the slice includes every chart record of that
+	 * concept instead of an arbitrary top-K truncation. Value-agnostic and twice-gated (the plurality
+	 * must recur, and a spread of distinct conditions/diagnoses suppresses it), so it fires only on
+	 * genuine single-measure queries; set to {@code false} to disable.
+	 */
+	public static final String GP_CONCEPT_EXPANSION = "chartsearchai.slice.conceptExpansion";
+
 	public static final String GP_AUDIT_LOG_RETENTION_DAYS = "chartsearchai.auditLogRetentionDays";
 
 	public static final int DEFAULT_AUDIT_LOG_RETENTION_DAYS = 90;

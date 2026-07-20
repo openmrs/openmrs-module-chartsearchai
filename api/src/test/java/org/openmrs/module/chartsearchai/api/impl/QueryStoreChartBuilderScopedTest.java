@@ -344,6 +344,41 @@ public class QueryStoreChartBuilderScopedTest {
 	}
 
 	@Test
+	public void buildScoped_shouldSurfaceTruncatedRepeatedMeasure_viaConceptExpansion() {
+		// A repeated-measure series (6 systolic BP) that a fixed top-K truncates: similarity surfaces
+		// only 4 of them. Concept expansion must add the 2 the ranking dropped, so a trend/enumeration
+		// answer sees the whole series. Exercised through the composed buildScoped path (not the
+		// dominantConceptExpansion unit), per the "test the composed pipeline" rule.
+		queryStore.stubChart = new ArrayList<QueryDocument>(Arrays.asList(
+				doc("patient", "p-1", "Patient: Jane Doe", LocalDate.of(2026, 7, 1)),
+				doc("obs", "bp-1", "Systolic blood pressure: 159 mmHg", LocalDate.of(2026, 6, 30)),
+				doc("obs", "bp-2", "Systolic blood pressure: 145 mmHg", LocalDate.of(2026, 6, 20)),
+				doc("obs", "bp-3", "Systolic blood pressure: 138 mmHg", LocalDate.of(2026, 6, 10)),
+				doc("obs", "bp-4", "Systolic blood pressure: 152 mmHg", LocalDate.of(2026, 5, 30)),
+				doc("obs", "bp-5", "Systolic blood pressure: 141 mmHg", LocalDate.of(2026, 5, 20)),
+				doc("obs", "bp-6", "Systolic blood pressure: 156 mmHg", LocalDate.of(2026, 5, 10)),
+				doc("obs", "w-1", "Weight: 70 kg", LocalDate.of(2026, 4, 1))));
+		// top-K surfaced only 4 of the 6 (the truncation this feature fixes).
+		queryStore.stubHits = new ArrayList<QueryDocument>(Arrays.asList(
+				queryStore.stubChart.get(1), queryStore.stubChart.get(2),
+				queryStore.stubChart.get(3), queryStore.stubChart.get(4)));
+
+		List<String> withExpansion = mappedUuids(
+				builder.buildScoped(patient(1), "Does the patient have high blood pressure?"));
+		assertTrue(withExpansion.containsAll(Arrays.asList("bp-1", "bp-2", "bp-3", "bp-4", "bp-5", "bp-6")),
+				"expansion must surface every systolic-BP record, including the 2 the top-K dropped; got "
+						+ withExpansion);
+
+		// Control: with expansion off, the two dropped readings stay out — proving expansion (not a
+		// typed scope or the recency anchor) is what surfaced bp-5/bp-6 above.
+		builder.conceptExpansion = false;
+		List<String> withoutExpansion = mappedUuids(
+				builder.buildScoped(patient(1), "Does the patient have high blood pressure?"));
+		assertFalse(withoutExpansion.contains("bp-5") || withoutExpansion.contains("bp-6"),
+				"without expansion the top-K-dropped readings must not appear; got " + withoutExpansion);
+	}
+
+	@Test
 	public void buildScoped_shouldSkipSimilarity_whenQuestionIsBlank() {
 		builder.recencyAnchor = 0;
 
@@ -361,8 +396,15 @@ public class QueryStoreChartBuilderScopedTest {
 
 		int recencyAnchor = 0;
 
+		boolean conceptExpansion = true;
+
 		TestableScopedBuilder(QueryStoreService stub) {
 			this.stub = stub;
+		}
+
+		@Override
+		protected boolean resolveConceptExpansionEnabled() {
+			return conceptExpansion;
 		}
 
 		@Override

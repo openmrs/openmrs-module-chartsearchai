@@ -35,6 +35,16 @@ final class PipelineSettings {
 		return !"false".equalsIgnoreCase(mode.trim());
 	}
 
+	/** Whether queryScoped dominant-concept slice expansion is enabled
+	 *  ({@code chartsearchai.slice.conceptExpansion}). Default-true opt-out (mirrors
+	 *  {@link #usePreFilter}'s {@code !"false"} idiom): only an explicit {@code false} disables it,
+	 *  so a typo'd value still leaves the feature on. */
+	static boolean conceptExpansionEnabled() {
+		String mode = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_CONCEPT_EXPANSION, "true");
+		return !"false".equalsIgnoreCase(mode.trim());
+	}
+
 	static boolean dedupGroupLabels() {
 		String mode = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_SERIALIZER_DEDUP_GROUP_LABELS, "false");

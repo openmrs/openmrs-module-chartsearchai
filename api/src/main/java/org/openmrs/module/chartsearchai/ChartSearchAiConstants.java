@@ -42,6 +42,17 @@ public class ChartSearchAiConstants {
 	public static final String GP_QUERYSTORE_TOP_K = "chartsearchai.querystore.topK";
 
 	/**
+	 * Toggles data-driven repeated-measure completion in queryScoped mode ({@code default true}).
+	 * When one concept dominates the similarity hits — the signature of a series a fixed top-K
+	 * truncates — the slice includes EVERY chart record of that concept (keyed on its
+	 * {@code concept_uuid}), so an enumeration/trend/extreme answer sees the whole series. Entirely
+	 * retrieval-driven: no query keywords (catches "is she hypertensive?" and "sugar levels" alike)
+	 * and no fixed slice size (self-sizes to the concept's actual record count, capped only for
+	 * safety). Set {@code false} to disable.
+	 */
+	public static final String GP_SERIES_COMPLETION = "chartsearchai.slice.seriesCompletion";
+
+	/**
 	 * Default similarity budget for the queryScoped slice. Lowered 30 → 12 in 2026-07 after a topK
 	 * sweep on the 22-patient drift-metric gold and a 36-patient sweep on the demo instance: 12
 	 * holds recall/F1 at the plateau (meanF1 ≈ 0.746 vs 0.748 at 30) while IMPROVING abstention

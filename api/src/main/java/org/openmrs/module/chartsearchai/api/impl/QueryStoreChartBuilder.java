@@ -14,7 +14,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.openmrs.Patient;
@@ -247,6 +250,14 @@ class QueryStoreChartBuilder {
 							QueryPreprocessor.expandLabPanelAbbreviations(question)),
 					"QueryStore.searchByPatient failed for scoped build [uuid={}] — proceeding with the typed slice only");
 		}
+		// Data-driven series completion: if one concept DOMINATES the similarity hits (a repeated
+		// measure whose series a fixed top-K truncates), pull every chart record of that concept.
+		// Purely from the retrieval distribution + the record's own concept_uuid — no query keywords
+		// (so it catches "is she hypertensive?" and "sugar levels" alike) and no fixed slice size
+		// (it self-sizes to the actual series). See dominantConceptCompletion.
+		Set<String> completionUuids = resolveSeriesCompletionEnabled()
+				? dominantConceptCompletion(similarityUuids, chartDocs)
+				: Collections.<String>emptySet();
 		long rpcMs = System.currentTimeMillis() - rpcStart;
 
 		// Filter the chart (already most-recent-first) down to the slice, preserving its order.
@@ -268,7 +279,8 @@ class QueryStoreChartBuilder {
 			boolean isPatientRecord = PATIENT_RESOURCE_TYPE.equals(doc.getResourceType());
 			boolean inTypedScope = doc.getResourceType() != null && typedScope.contains(doc.getResourceType());
 			boolean isSimilarityHit = doc.getResourceUuid() != null && similarityUuids.contains(doc.getResourceUuid());
-			if (isAnchor || isPatientRecord || inTypedScope || isSimilarityHit) {
+			boolean isCompletion = doc.getResourceUuid() != null && completionUuids.contains(doc.getResourceUuid());
+			if (isAnchor || isPatientRecord || inTypedScope || isSimilarityHit || isCompletion) {
 				sliceDocs.add(doc);
 				if (doc.getResourceUuid() != null) {
 					sliceUuids.add(doc.getResourceUuid());
@@ -284,9 +296,9 @@ class QueryStoreChartBuilder {
 		PatientChart chart = chartSerializer.serialize(patient, records,
 				Collections.<String>emptySet(), false, false);
 		long serializeMs = System.currentTimeMillis() - serializeStart;
-		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} simHits={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
-				patient.getPatientId(), intentLabel, chartDocs.size(), similarityUuids.size(), records.size(),
-				rpcMs, serializeMs, System.currentTimeMillis() - buildStart);
+		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} simHits={} complete={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
+				patient.getPatientId(), intentLabel, chartDocs.size(), similarityUuids.size(), completionUuids.size(),
+				records.size(), rpcMs, serializeMs, System.currentTimeMillis() - buildStart);
 		return markScoped(chart);
 	}
 
@@ -471,6 +483,119 @@ class QueryStoreChartBuilder {
 			log.warn(degradeWarning, patient.getUuid(), e);
 			return Collections.<String>emptySet();
 		}
+	}
+
+	/** querystore's per-record concept-identity metadata key (its {@code FIELD_CONCEPT_UUID}). */
+	static final String CONCEPT_UUID_KEY = "concept_uuid";
+
+	/** The record's concept identity ({@code concept_uuid}), trimmed, or {@code null} when absent,
+	 *  non-string, or blank — the single read used by both passes of {@link #dominantConceptCompletion}. */
+	private static String conceptUuidOf(QueryDocument doc) {
+		Object cuuid = doc.getMetadata().get(CONCEPT_UUID_KEY);
+		if (cuuid instanceof String) {
+			String s = ((String) cuuid).trim();
+			if (!s.isEmpty()) {
+				return s;
+			}
+		}
+		return null;
+	}
+
+	/** Minimum number of a concept's records among the similarity hits for it to count as the
+	 *  DOMINANT concept — the signal that a repeated-measure series is being truncated by the fixed
+	 *  top-K. A pure count, not a fraction of K: a run of blood-pressure readings signals a series
+	 *  even when systolic/diastolic split the hits so no single concept is a majority. Below this a
+	 *  concept is a one-off, not a series, and nothing is completed. This is a DETECTION threshold,
+	 *  not an output size — the completion self-sizes to the actual series (see below). */
+	static final int DOMINANCE_MIN = 4;
+
+	/** Safety cap on records added by one completion, so a pathologically long series cannot blow up
+	 *  the slice. NOT the operating size — a completion adds exactly the concept's record count, up
+	 *  to this bound; the chart is date-desc so the cap keeps the most-recent. Bounds the series
+	 *  itself; {@code completeObsGroupFamilies} runs downstream and may still pull each kept record's
+	 *  group family (e.g. the diastolic sibling of a completed systolic), so net slice growth is up
+	 *  to the cap times the family size — still far below fullChart, and only for a &gt;40-record concept. */
+	static final int COMPLETION_CAP = 40;
+
+	/** Test seam: whether data-driven series completion is enabled (GP
+	 *  {@code chartsearchai.slice.seriesCompletion}, default true). */
+	protected boolean resolveSeriesCompletionEnabled() {
+		return PipelineSettings.seriesCompletionEnabled();
+	}
+
+	/**
+	 * Data-driven repeated-measure completion. When one concept dominates the similarity hits — the
+	 * signature of a series a fixed top-K truncates (many blood-pressure readings, a glucose run) —
+	 * returns every chart record of that concept so the whole series reaches the LLM.
+	 *
+	 * <p>Entirely retrieval-driven, keyed on the record's own {@code concept_uuid}: no query text
+	 * (so it fires the same on "is she hypertensive?", "sugar levels", and "list all readings" — the
+	 * phrasings a lexical trigger misses) and no fixed slice size (it self-sizes to the concept's
+	 * actual record count, capped only for safety). Concept identity and the completion set both come
+	 * from {@code chartDocs}, the authoritative full chart (its docs carry {@code concept_uuid} in
+	 * metadata; the light similarity hits may not) — hits are mapped to concepts by resource uuid.
+	 *
+	 * <p>Completion fills the single PLURALITY concept. When a measure splits across concepts that
+	 * co-occur (systolic vs diastolic blood pressure — distinct {@code concept_uuid}s), only the
+	 * plurality (e.g. systolic) is completed directly; its co-recorded sibling is rescued downstream
+	 * by {@code completeObsGroupFamilies} pulling the shared obs-group family. The pure-count
+	 * {@link #DOMINANCE_MIN} is what lets the split still fire (systolic alone reaches the floor).
+	 *
+	 * <p>Known residual (accepted, measured): a condition question on a patient who lacks that
+	 * condition can have a vital dominate retrieval and get completed (e.g. "any heart problems?" →
+	 * the BP series). Cost was +10 gold drift, F1/abstention unchanged; the answer still abstains.
+	 * A structural condition-guard can suppress it if that drift matters, but it is not added by
+	 * default.
+	 */
+	static Set<String> dominantConceptCompletion(Set<String> hitUuids, List<QueryDocument> chartDocs) {
+		if (hitUuids == null || hitUuids.isEmpty() || chartDocs == null) {
+			return Collections.<String>emptySet();
+		}
+		// Pass 1 (bounded to the hits): resolve each similarity hit's concept from the chart — the
+		// chart is authoritative for concept_uuid (the light search hits may lack metadata). Only hit
+		// records are mapped, so this stays O(hits) memory regardless of chart size.
+		Map<String, Integer> hist = new LinkedHashMap<String, Integer>();
+		for (QueryDocument d : chartDocs) {
+			if (d == null || d.getResourceUuid() == null || !hitUuids.contains(d.getResourceUuid())) {
+				continue;
+			}
+			String concept = conceptUuidOf(d);
+			if (concept != null) {
+				hist.put(concept, hist.getOrDefault(concept, 0) + 1);
+			}
+		}
+		// The plurality concept among the hits (tie -> first encountered). A pure count, not a
+		// fraction of K: systolic/diastolic can split the hits so no concept is a majority.
+		String topConcept = null;
+		int topCount = 0;
+		for (Map.Entry<String, Integer> e : hist.entrySet()) {
+			if (e.getValue() > topCount) {
+				topCount = e.getValue();
+				topConcept = e.getKey();
+			}
+		}
+		boolean fire = topConcept != null && topCount >= DOMINANCE_MIN;
+		log.debug("[seriesCompletion] fire={} concept={} count={} distinctConcepts={}",
+				fire, topConcept, topCount, hist.size());
+		if (!fire) {
+			return Collections.<String>emptySet();
+		}
+		// Pass 2 (bounded to the dominant series): collect every chart record of that concept, in
+		// chart order (date-desc), capped so the newest are kept.
+		Set<String> out = new LinkedHashSet<String>();
+		for (QueryDocument d : chartDocs) {
+			if (d == null || d.getResourceUuid() == null) {
+				continue;
+			}
+			if (topConcept.equals(conceptUuidOf(d))) {
+				out.add(d.getResourceUuid());
+				if (out.size() >= COMPLETION_CAP) {
+					log.debug("[seriesCompletion] capped at {} for concept {}", COMPLETION_CAP, topConcept);
+					break;
+				}
+			}
+		}
+		return out;
 	}
 
 	/** Collects {@code resource_uuid}s from a hit list, skipping nulls and malformed docs.

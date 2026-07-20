@@ -355,14 +355,56 @@ public class QueryStoreChartBuilderScopedTest {
 				"blank topical question reduces to the demographics record");
 	}
 
+	@Test
+	public void buildScoped_shouldCompleteADominantConceptSeries_dataDriven() {
+		// A repeated-measure series (6 systolic BP, concept cbp) in a topical question. Similarity
+		// surfaces only 4; data-driven completion must pull the other 2 from the chart by concept —
+		// no keyword in the question, exercised through the composed buildScoped path.
+		QueryDocument p = doc("patient", "p-1", "Patient: Jane Doe", LocalDate.of(2026, 7, 1));
+		List<QueryDocument> bp = new ArrayList<QueryDocument>();
+		for (int i = 1; i <= 6; i++) {
+			QueryDocument d = doc("obs", "bp-" + i, "Systolic blood pressure: " + (150 + i) + " mmHg",
+					LocalDate.of(2026, 6, 30 - i));
+			d.putMetadata(QueryStoreChartBuilder.CONCEPT_UUID_KEY, "cbp");
+			bp.add(d);
+		}
+		QueryDocument wt = doc("obs", "wt-1", "Weight: 70 kg", LocalDate.of(2026, 4, 1));
+		wt.putMetadata(QueryStoreChartBuilder.CONCEPT_UUID_KEY, "cwt");
+		queryStore.stubChart = new ArrayList<QueryDocument>();
+		queryStore.stubChart.add(p);
+		queryStore.stubChart.addAll(bp);
+		queryStore.stubChart.add(wt);
+		// top-K surfaced only 4 of the 6 BP.
+		queryStore.stubHits = new ArrayList<QueryDocument>(bp.subList(0, 4));
+
+		List<String> withCompletion = mappedUuids(
+				builder.buildScoped(patient(1), "Is the patient hypertensive?"));
+		assertTrue(withCompletion.containsAll(Arrays.asList("bp-1", "bp-2", "bp-3", "bp-4", "bp-5", "bp-6")),
+				"completion must surface the whole BP series, incl. the 2 the top-K dropped; got " + withCompletion);
+
+		// Control: with completion off, the two dropped readings stay out — proving completion (not a
+		// typed scope or the anchor) surfaced them, and that the question carried no keyword trigger.
+		builder.seriesCompletion = false;
+		List<String> without = mappedUuids(builder.buildScoped(patient(1), "Is the patient hypertensive?"));
+		assertFalse(without.contains("bp-5") || without.contains("bp-6"),
+				"without completion the top-K-dropped readings must not appear; got " + without);
+	}
+
 	private static final class TestableScopedBuilder extends QueryStoreChartBuilder {
 
 		private final QueryStoreService stub;
 
 		int recencyAnchor = 0;
 
+		boolean seriesCompletion = true;
+
 		TestableScopedBuilder(QueryStoreService stub) {
 			this.stub = stub;
+		}
+
+		@Override
+		protected boolean resolveSeriesCompletionEnabled() {
+			return seriesCompletion;
 		}
 
 		@Override

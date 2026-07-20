@@ -79,6 +79,18 @@ public class ChartSearchServiceRouterTest {
 	}
 
 	@Test
+	public void buildCacheKey_changesWhenSeriesCompletionToggles() {
+		// seriesCompletion changes the queryScoped slice (whether a dominant concept's full series is
+		// surfaced), so — like topK — it changes what the LLM sees and must vary the key.
+		StubRouter router = new StubRouter();
+		Patient p = patient("p1");
+		String before = router.buildCacheKey(p, "q");
+		router.gps.put(ChartSearchAiConstants.GP_SERIES_COMPLETION, "false");
+		assertNotEquals(before, router.buildCacheKey(p, "q"),
+				"toggling seriesCompletion must change the cache key");
+	}
+
+	@Test
 	public void buildCacheKey_changesWhenChartModeChanges() {
 		// chartMode swaps the ENTIRE context the LLM sees (full chart vs query-scoped slice), so
 		// it must be in the key — otherwise flipping the mode while caching is on serves the other

@@ -205,6 +205,9 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		// longer belong in the key.
 		String preFilter = gp(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
 		String queryStoreTopK = gp(ChartSearchAiConstants.GP_QUERYSTORE_TOP_K, "");
+		// seriesCompletion changes the queryScoped slice contents (whether a dominant concept's full
+		// series is surfaced), so — like topK — it changes what the LLM sees and must vary the key.
+		String seriesCompletion = gp(ChartSearchAiConstants.GP_SERIES_COMPLETION, "");
 		// chartMode swaps the entire context (full chart vs query-scoped slice) — the largest
 		// possible "changes what the LLM sees", so a mode flip must miss rather than serve the
 		// other mode's answers until TTL.
@@ -219,6 +222,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		return patient.getUuid() + "::" + preFilter.trim().toLowerCase()
 				+ "::" + chartMode.trim().toLowerCase()
 				+ "::" + queryStoreTopK.trim()
+				+ "::" + seriesCompletion.trim().toLowerCase()
 				+ "::" + grounding.trim().toLowerCase()
 				+ "::" + groundingMinCosine.trim()
 				+ "::" + groundingEntailment.trim().toLowerCase()

@@ -41,6 +41,15 @@ final class PipelineSettings {
 		return "true".equalsIgnoreCase(mode.trim());
 	}
 
+	/** Whether data-driven repeated-measure completion is enabled
+	 *  ({@code chartsearchai.slice.seriesCompletion}). Default-true opt-out via the fail-safe
+	 *  {@link ChartSearchAiUtils#getStringGlobalProperty} reader (like {@link #queryScopedMode}): an
+	 *  unreadable GP resolves to on, and only an explicit {@code false} disables it. */
+	static boolean seriesCompletionEnabled() {
+		return !"false".equalsIgnoreCase(org.openmrs.module.chartsearchai.ChartSearchAiUtils
+				.getStringGlobalProperty(ChartSearchAiConstants.GP_SERIES_COMPLETION, "true").trim());
+	}
+
 	/** True when {@code chartsearchai.chartMode} selects the query-scoped slice (the
 	 *  {@link ChartSearchAiConstants#CHART_MODE_DEFAULT default} since 2026-07): prompts carry a
 	 *  query-scoped record slice instead of the whole chart, and the full-chart prefill machinery

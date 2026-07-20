@@ -246,7 +246,7 @@ public class ChartSearchAiConstants {
 	 * Number of top-ranked querystore records the progressive-reasoning preview pass reasons over.
 	 * Smaller = faster preview prefill but less context for the preliminary reasoning; the committed
 	 * full-chart answer is unaffected either way. Kept distinct from {@link #GP_QUERYSTORE_TOP_K}
-	 * (the focus-hint size) so the two can be tuned independently.
+	 * (the queryScoped slice size / fullChart focus-hint size) so the two can be tuned independently.
 	 */
 	public static final String GP_PROGRESSIVE_REASONING_TOP_K = "chartsearchai.progressiveReasoning.topK";
 

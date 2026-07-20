@@ -199,7 +199,8 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 
 	protected String buildCacheKey(Patient patient, String question) {
 		// Retrieval GPs that change what the LLM sees, post-querystore-migration (#51): preFilter
-		// toggles the focus-hint pass and querystore.topK sizes the focus hint. The legacy
+		// toggles the fullChart focus-hint pass, and querystore.topK sizes the queryScoped slice
+		// (and, in fullChart+preFilter, the focus hint). The legacy
 		// embedding/Lucene/ES pipeline-tuning GPs were removed with that pipeline, so they no
 		// longer belong in the key.
 		String preFilter = gp(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");

@@ -39,6 +39,15 @@ public class PipelineSettingsDefaultTest {
 	}
 
 	@Test
+	public void seriesCompletionEnabled_defaultsToTrue_whenGpUnsetOrUnreadable() {
+		// Same no-Context mechanism as queryScopedMode: getStringGlobalProperty returns the "true"
+		// default. Locks the shipped default-ON contract for data-driven series completion; a silent
+		// revert to off would disable the repeated-measure fix for everyone.
+		assertTrue(PipelineSettings.seriesCompletionEnabled(),
+				"seriesCompletion must default to true when chartsearchai.slice.seriesCompletion is unset");
+	}
+
+	@Test
 	public void chartModeDefault_constant_isQueryScoped() {
 		// Single source of truth both readers point at; guards against a silent revert.
 		assertTrue(ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED

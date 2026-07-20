@@ -55,6 +55,14 @@ public class PipelineSettingsDefaultTest {
 	}
 
 	@Test
+	public void enumerationTopKDefault_isForty() {
+		// Need-driven adaptive-K budget for enumeration/extreme questions. Guards against a silent
+		// change: on the answer-level probe, 40 lifted extreme-reporting 87%->94%.
+		assertEquals(40, ChartSearchAiConstants.DEFAULT_ENUMERATION_TOP_K,
+				"DEFAULT_ENUMERATION_TOP_K must be 40");
+	}
+
+	@Test
 	public void isQueryScoped_optOutAndTypoSafety() {
 		// Locks the documented contract: flipping the default did NOT change how a set value is
 		// read — scoped requires an exact (case-insensitive) queryScoped match, so an operator can

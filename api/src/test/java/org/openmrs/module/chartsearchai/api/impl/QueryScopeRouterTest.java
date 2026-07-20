@@ -189,6 +189,51 @@ public class QueryScopeRouterTest {
 	}
 
 	@Test
+	public void wantsCompleteSeries_matchesExplicitEnumerationAndExtremePhrasing() {
+		for (String q : new String[] {
+				"What is the patient's highest recorded blood pressure?",
+				"list all the patient's blood pressure readings",
+				"show the weight trend over time",
+				"how many times was the temperature taken",
+				"what are the glucose values" }) {
+			assertTrue(QueryScopeRouter.wantsCompleteSeries(q), "should be enumeration: " + q);
+		}
+	}
+
+	@Test
+	public void wantsCompleteSeries_doesNotMatchTypedOrImplicitQuestions() {
+		// The drift-metric gold's query shapes plus the implicit series-need case — none must match,
+		// which is what keeps the adaptive-K bump off the precision-sensitive questions (gold-safe).
+		for (String q : new String[] {
+				"Is the patient enrolled in any programs?",
+				"Does the patient have any allergies?",
+				"Does the patient have any drug allergies?",
+				"What medications is the patient taking?",
+				"Does the patient have any eye problems?",
+				"Does the patient have any heart or cardiac problems?",
+				"Has the patient had any fractures or broken bones?",
+				"Does the patient have any kidney problems?",
+				"Does the patient have any mental health or psychiatric conditions?",
+				"is she hypertensive?",
+				// lab-VALUE questions whose names contain "count" must NOT trigger the bump — "count"
+				// is intentionally not a cue (it collides with these); "how many" carries that intent.
+				"What is the patient's platelet count?",
+				"What is the white cell count?",
+				"What was the last blood count?",
+				// absent-topic yes/no phrasings that must NOT bump K (would feed the model off-topic
+				// nearest-neighbours — the regression the precision-biased cue set exists to avoid):
+				"Does the patient have a history of kidney problems?",
+				"Does the patient have any drug allergies at all?",
+				"Does the patient have seizures every day?",
+				"Is the patient seen each week?",
+				// "series" is not a cue — it collides with radiology order names.
+				"Was an obstruction series ordered?" }) {
+			assertFalse(QueryScopeRouter.wantsCompleteSeries(q), "should NOT be enumeration: " + q);
+		}
+		assertFalse(QueryScopeRouter.wantsCompleteSeries(null), "null is not enumeration");
+	}
+
+	@Test
 	public void typedSlice_shouldUnionTheTypesOfEveryMatchedIntent() {
 		assertEquals(new java.util.HashSet<String>(
 						java.util.Arrays.asList("drug_order", "medication_dispense", "allergy")),

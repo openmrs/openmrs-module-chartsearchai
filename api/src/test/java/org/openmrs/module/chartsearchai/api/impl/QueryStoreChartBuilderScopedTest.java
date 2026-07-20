@@ -344,6 +344,30 @@ public class QueryStoreChartBuilderScopedTest {
 	}
 
 	@Test
+	public void buildScoped_shouldUseEnumerationTopK_forEnumerationQuestions() {
+		// Need-driven adaptive-K: an enumeration/extreme question gets the larger K (40); a plain
+		// question keeps the base K (10). Asserted at the querystore boundary (lastSearchTopK), so a
+		// regression that dropped the bump — or applied it to every question — fails here.
+		builder.buildScoped(patient(1), "What are the patient's blood pressure readings?");
+		assertEquals(40, queryStore.lastSearchTopK,
+				"an enumeration question must request the larger enumeration top-K");
+
+		builder.buildScoped(patient(1), "any allergies?");
+		assertEquals(10, queryStore.lastSearchTopK,
+				"a non-enumeration question must keep the base top-K");
+	}
+
+	@Test
+	public void buildScoped_adaptiveTopK_neverShrinksBelowBase_whenEnumerationKMisconfiguredLow() {
+		// enumerationTopK set below the base (5 < 10): the bump must never make an enum slice SMALLER
+		// than a normal one — it clamps up to the base (disabled), not down.
+		builder.enumTopK = 5;
+		builder.buildScoped(patient(1), "list all the patient's blood pressure readings");
+		assertEquals(10, queryStore.lastSearchTopK,
+				"a below-base enumerationTopK must clamp up to the base, never shrink the enum slice");
+	}
+
+	@Test
 	public void buildScoped_shouldSkipSimilarity_whenQuestionIsBlank() {
 		builder.recencyAnchor = 0;
 
@@ -361,6 +385,8 @@ public class QueryStoreChartBuilderScopedTest {
 
 		int recencyAnchor = 0;
 
+		int enumTopK = 40;
+
 		TestableScopedBuilder(QueryStoreService stub) {
 			this.stub = stub;
 		}
@@ -373,6 +399,11 @@ public class QueryStoreChartBuilderScopedTest {
 		@Override
 		protected int resolveQueryStoreTopK() {
 			return 10;
+		}
+
+		@Override
+		protected int resolveEnumerationTopK() {
+			return enumTopK;
 		}
 
 		@Override

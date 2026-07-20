@@ -54,6 +54,22 @@ public class ChartSearchAiConstants {
 	public static final int DEFAULT_QUERYSTORE_TOP_K = 12;
 
 	/**
+	 * Larger similarity budget used for the queryScoped slice ONLY when the question is an
+	 * enumeration/aggregate/extreme query ("list all X", "highest X", "X trend" — see
+	 * {@code QueryScopeRouter.wantsCompleteSeries}). Such questions need the whole series, which the
+	 * default top-K ({@link #DEFAULT_QUERYSTORE_TOP_K}) truncates; bumping K only for them recovers
+	 * the series (answer-level extreme-reporting 87%→94% on a 22-patient×4-concept probe) without the
+	 * abstention/drift regression a GLOBAL bump caused (topK=30 dropped gold abstention 0.93→0.86,
+	 * drift 112→181) — because focused enumeration queries retrieve on-topic records, whereas a
+	 * global bump fed the small model noise on absent-topic questions. Need-driven, not global: every
+	 * non-enumeration question keeps {@link #DEFAULT_QUERYSTORE_TOP_K}, so the gold is untouched by
+	 * construction. Set equal to (or below) the base top-K to disable the bump.
+	 */
+	public static final String GP_ENUMERATION_TOP_K = "chartsearchai.querystore.enumerationTopK";
+
+	public static final int DEFAULT_ENUMERATION_TOP_K = 40;
+
+	/**
 	 * How the LLM prompt's chart context is assembled per query.
 	 * <ul>
 	 *   <li>{@link #CHART_MODE_QUERY_SCOPED} ({@link #CHART_MODE_DEFAULT default}) — the prompt carries

@@ -107,6 +107,46 @@ final class QueryScopeRouter {
 		return question != null && TEMPORAL_CUES.matcher(question).find();
 	}
 
+	/** Enumeration/aggregate/extreme cues: the question asks for the WHOLE series of a concept or an
+	 *  aggregate/extreme over it ("list all X", "highest X", "X trend", "how many X"). These are the
+	 *  questions a fixed similarity top-K truncates, so the slice builder gives them a larger K.
+	 *  Deliberately matches only EXPLICIT series phrasing: a yes/no question that implicitly needs the
+	 *  series ("is she hypertensive?") carries no such cue and is NOT matched — recognizing it would
+	 *  require clinical knowledge (hypertensive → blood pressure), which this router never encodes.
+	 *
+	 *  <p>The cue set is PRECISION-biased, NOT liberal. A false negative merely keeps the default K
+	 *  (today's behaviour, safe); a false POSITIVE on an ABSENT-topic question bumps K and feeds the
+	 *  small model off-topic nearest-neighbours — the exact abstention/drift regression a GLOBAL bump
+	 *  caused. So a cue must be a phrasing that essentially never occurs in a "does the patient have
+	 *  X?" yes/no question (see the exclusion list below). Two residuals are ACCEPTED, not solved:
+	 *  (1) enumeration phrasing over an absent condition ("list all her heart problems" on a patient
+	 *  who has none) still bumps — concept absence is unknowable before retrieval, so it is not
+	 *  lexically fixable; it is far narrower than the global bump and the answer still abstains.
+	 *  (2) some genuine enumeration phrasings are missed ("lab results" — "results" is not a cue): an
+	 *  accepted safe false-negative, not risked as a new cue without its own leak analysis. */
+	private static final Pattern ENUMERATION_CUES = cues(
+			"list", "listing", "trend", "trends", "over time", "highest", "lowest", "maximum",
+			"minimum", "average", "averages", "readings", "values", "how many", "how often");
+	// Only phrasings that essentially never occur in "does the patient have X?" yes/no questions are
+	// cues (see the precision rationale above). Deliberately EXCLUDED because they collide with such
+	// phrasings and their enumeration intent is already carried by a kept cue:
+	//   "history"  — "history of kidney problems" (condition yes/no); "trend"/"over time" carry the
+	//                genuine measure-history intent.
+	//   "all"      — "any allergies at all?" ("\ball\b" fires inside "at all"); "list" carries
+	//                "list all X".
+	//   "every"/"each" — "every day"/"each week" (frequency yes/no, e.g. "seizures every day?").
+	//   "min"/"max"    — "every 30 min" (minutes), "max dose"; covered by minimum/maximum/lowest/highest.
+	//   "count"        — "platelet count"/"blood count" (lab names); covered by "how many"/"how often".
+	//   "series"       — radiology order names ("rib series", "obstruction series", "acute abdominal
+	//                    series"); its rare enumeration sense is covered by the other cues.
+
+	/** True when the question asks for a concept's complete series or an aggregate/extreme over it
+	 *  (see {@link #ENUMERATION_CUES}) — the class a fixed top-K truncates. Purely lexical, no
+	 *  clinical vocabulary. */
+	static boolean wantsCompleteSeries(String question) {
+		return question != null && ENUMERATION_CUES.matcher(question).find();
+	}
+
 	/**
 	 * Every enumeration intent whose cues match {@code question}, in {@link Intent} declaration
 	 * order; empty for null/blank/cue-free questions (the TOPICAL, similarity-only case). The

@@ -156,7 +156,7 @@ class QueryStoreChartBuilder {
 		Set<String> focusUuids = Collections.<String>emptySet();
 		if (usePreFilter && question != null && !question.trim().isEmpty()) {
 			focusUuids = searchSimilarityUuids(queryStore, patient,
-					QueryPreprocessor.stripQueryStopwords(question),
+					QueryPreprocessor.stripQueryStopwords(question), resolveQueryStoreTopK(),
 					"QueryStore.searchByPatient failed for patient [uuid={}] — proceeding without focus hint");
 		}
 		int focusHits = focusUuids.size();
@@ -240,11 +240,22 @@ class QueryStoreChartBuilder {
 		// abbreviations are expanded first ("BMP" → "+ basic metabolic panel") so the retrieval
 		// text carries the full concept name querystore indexed. Failure degrades to the typed
 		// slice alone (never blocks the answer), mirroring build()'s focus-hint contract.
+		// Need-driven adaptive-K: enumeration/extreme questions ("list all X", "highest X") need the
+		// whole series, which the default top-K truncates — give only those a larger K. Non-enumeration
+		// questions keep the default, so the precision-sensitive typed/condition queries (and the gold)
+		// are untouched. This is why it works where a GLOBAL bump did not (see GP_ENUMERATION_TOP_K).
+		int baseTopK = resolveQueryStoreTopK();
+		// Adaptive-K only ever RAISES K for enumeration questions — max() so a misconfigured
+		// enumerationTopK below the base can never shrink an enum slice below a normal one (setting
+		// it <= base simply disables the bump, matching the GP doc).
+		int sliceTopK = QueryScopeRouter.wantsCompleteSeries(question)
+				? Math.max(baseTopK, resolveEnumerationTopK()) : baseTopK;
 		Set<String> similarityUuids = Collections.<String>emptySet();
 		if (question != null && !question.trim().isEmpty()) {
 			similarityUuids = searchSimilarityUuids(queryStore, patient,
 					QueryPreprocessor.stripQueryStopwords(
 							QueryPreprocessor.expandLabPanelAbbreviations(question)),
+					sliceTopK,
 					"QueryStore.searchByPatient failed for scoped build [uuid={}] — proceeding with the typed slice only");
 		}
 		long rpcMs = System.currentTimeMillis() - rpcStart;
@@ -284,8 +295,8 @@ class QueryStoreChartBuilder {
 		PatientChart chart = chartSerializer.serialize(patient, records,
 				Collections.<String>emptySet(), false, false);
 		long serializeMs = System.currentTimeMillis() - serializeStart;
-		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} simHits={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
-				patient.getPatientId(), intentLabel, chartDocs.size(), similarityUuids.size(), records.size(),
+		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} topK={} simHits={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
+				patient.getPatientId(), intentLabel, chartDocs.size(), sliceTopK, similarityUuids.size(), records.size(),
 				rpcMs, serializeMs, System.currentTimeMillis() - buildStart);
 		return markScoped(chart);
 	}
@@ -461,10 +472,10 @@ class QueryStoreChartBuilder {
 	 * search→collect→degrade shape stays identical across modes.
 	 */
 	private Set<String> searchSimilarityUuids(QueryStoreService queryStore, Patient patient,
-			String preprocessedQuestion, String degradeWarning) {
+			String preprocessedQuestion, int topK, String degradeWarning) {
 		try {
 			List<QueryDocument> hits = queryStore.searchByPatient(patient.getUuid(),
-					preprocessedQuestion, resolveQueryStoreTopK());
+					preprocessedQuestion, topK);
 			return collectFocusUuids(hits);
 		}
 		catch (RuntimeException e) {
@@ -571,6 +582,11 @@ class QueryStoreChartBuilder {
 	/** Seam for tests: production reads the global property. */
 	protected int resolveQueryStoreTopK() {
 		return PipelineSettings.getQueryStoreTopK();
+	}
+
+	/** Seam for tests: the larger slice top-K for enumeration/extreme questions (adaptive-K). */
+	protected int resolveEnumerationTopK() {
+		return PipelineSettings.getEnumerationTopK();
 	}
 
 	/** The query-scoped slice's recency anchor: the chart's N most recent records are always in

@@ -79,6 +79,19 @@ public class ChartSearchServiceRouterTest {
 	}
 
 	@Test
+	public void buildCacheKey_changesWhenEnumerationTopKChanges() {
+		// enumerationTopK resizes the queryScoped slice for enumeration questions, so — like the base
+		// topK — it changes what the LLM sees and must vary the key; else changing it with caching on
+		// would serve a stale enum-query slice until the TTL.
+		StubRouter router = new StubRouter();
+		Patient p = patient("p1");
+		String before = router.buildCacheKey(p, "q");
+		router.gps.put(ChartSearchAiConstants.GP_ENUMERATION_TOP_K, "60");
+		assertNotEquals(before, router.buildCacheKey(p, "q"),
+				"changing enumerationTopK must change the cache key");
+	}
+
+	@Test
 	public void buildCacheKey_changesWhenChartModeChanges() {
 		// chartMode swaps the ENTIRE context the LLM sees (full chart vs query-scoped slice), so
 		// it must be in the key — otherwise flipping the mode while caching is on serves the other

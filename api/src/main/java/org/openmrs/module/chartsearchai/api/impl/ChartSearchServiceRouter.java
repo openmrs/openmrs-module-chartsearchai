@@ -205,6 +205,10 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		// longer belong in the key.
 		String preFilter = gp(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
 		String queryStoreTopK = gp(ChartSearchAiConstants.GP_QUERYSTORE_TOP_K, "");
+		// enumerationTopK sizes the queryScoped slice for enumeration questions, so — like
+		// querystore.topK — it changes what the LLM sees for that class of question and must vary the
+		// key (else changing it while caching is on serves a stale enum-query slice until TTL).
+		String enumerationTopK = gp(ChartSearchAiConstants.GP_ENUMERATION_TOP_K, "");
 		// chartMode swaps the entire context (full chart vs query-scoped slice) — the largest
 		// possible "changes what the LLM sees", so a mode flip must miss rather than serve the
 		// other mode's answers until TTL.
@@ -219,6 +223,7 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		return patient.getUuid() + "::" + preFilter.trim().toLowerCase()
 				+ "::" + chartMode.trim().toLowerCase()
 				+ "::" + queryStoreTopK.trim()
+				+ "::" + enumerationTopK.trim()
 				+ "::" + grounding.trim().toLowerCase()
 				+ "::" + groundingMinCosine.trim()
 				+ "::" + groundingEntailment.trim().toLowerCase()

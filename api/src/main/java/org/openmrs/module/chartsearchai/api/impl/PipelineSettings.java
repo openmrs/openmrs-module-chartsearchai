@@ -70,6 +70,14 @@ final class PipelineSettings {
 				ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K, "queryStoreTopK");
 	}
 
+	/** The larger slice top-K used for enumeration/extreme questions (need-driven adaptive-K). Same
+	 *  validated positive-int contract as {@link #getQueryStoreTopK}; default
+	 *  {@link ChartSearchAiConstants#DEFAULT_ENUMERATION_TOP_K}. */
+	static int getEnumerationTopK() {
+		return readPositiveInt(ChartSearchAiConstants.GP_ENUMERATION_TOP_K,
+				ChartSearchAiConstants.DEFAULT_ENUMERATION_TOP_K, "enumerationTopK");
+	}
+
 	static boolean progressiveReasoningEnabled() {
 		String mode = Context.getAdministrationService().getGlobalProperty(
 				ChartSearchAiConstants.GP_PROGRESSIVE_REASONING_ENABLED,

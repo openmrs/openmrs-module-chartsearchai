@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -190,16 +191,25 @@ public class QueryStoreChartBuilderConceptExpansionTest {
 	}
 
 	@Test
-	public void dominantExpansion_capsHugeSeries() {
+	public void dominantExpansion_capsHugeSeries_keepingTheNewest() {
 		List<QueryDocument> hits = new ArrayList<QueryDocument>();
 		for (int i = 0; i < 6; i++) {
 			hits.add(doc("h" + i, "obs", "Systolic blood pressure: " + (100 + i) + " mmHg"));
 		}
+		// Chart is date-desc (production contract), so bp0 is the newest and bp99 the oldest.
 		List<QueryDocument> chart = new ArrayList<QueryDocument>();
 		for (int i = 0; i < 100; i++) {
 			chart.add(doc("bp" + i, "obs", "Systolic blood pressure: " + (100 + i) + " mmHg"));
 		}
 		Set<String> exp = QueryStoreChartBuilder.dominantConceptExpansion(hits, chart);
 		assertEquals(QueryStoreChartBuilder.EXPANSION_CAP, exp.size(), "must cap the expansion");
+		// Pin the ordering contract in EXPANSION_CAP's javadoc: keep the NEWEST 40 (head of the
+		// date-desc chart), not just any 40. A reverse scan would keep bp60..bp99 at the same size.
+		for (int i = 0; i < QueryStoreChartBuilder.EXPANSION_CAP; i++) {
+			assertTrue(exp.contains("bp" + i), "must keep the newest record bp" + i + "; got " + exp);
+		}
+		assertFalse(exp.contains("bp" + QueryStoreChartBuilder.EXPANSION_CAP),
+				"must drop records older than the newest " + QueryStoreChartBuilder.EXPANSION_CAP
+						+ " (bp" + QueryStoreChartBuilder.EXPANSION_CAP + " is past the cap)");
 	}
 }

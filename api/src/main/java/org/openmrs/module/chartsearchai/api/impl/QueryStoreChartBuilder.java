@@ -596,6 +596,8 @@ class QueryStoreChartBuilder {
 				}
 			}
 		}
+		// Histogram counts hit OCCURRENCES per concept; searchByPatient's top-K contract returns
+		// distinct records, so an occurrence count equals the distinct-record count for a concept.
 		int total = 0;
 		java.util.Map<String, Integer> hist = new java.util.LinkedHashMap<String, Integer>();
 		java.util.Set<String> conditionConcepts = new java.util.HashSet<String>();

@@ -85,7 +85,7 @@ final class PipelineSettings {
 	/** Reads a strictly-positive integer global property, or returns {@code defaultValue} when the
 	 *  property is unset, blank, non-numeric, or not positive. A non-numeric value is logged at WARN
 	 *  ({@code label} names the setting). The parse/validation contract lives here so the two topK
-	 *  getters (querystore focus-hint and progressive-reasoning preview) cannot drift apart. */
+	 *  getters (querystore slice/focus-hint and progressive-reasoning preview) cannot drift apart. */
 	private static int readPositiveInt(String gpKey, int defaultValue, String label) {
 		String value = Context.getAdministrationService().getGlobalProperty(gpKey);
 		if (value != null && !value.trim().isEmpty()) {

@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -43,6 +44,14 @@ public class PipelineSettingsDefaultTest {
 		assertTrue(ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED
 				.equals(ChartSearchAiConstants.CHART_MODE_DEFAULT),
 				"CHART_MODE_DEFAULT must be queryScoped");
+	}
+
+	@Test
+	public void queryStoreTopKDefault_isTwelve() {
+		// Tuned default for the queryScoped slice (2026-07 topK sweep: knee ~12-15). Guards against
+		// a silent revert to 30, which restored the abstention/drift/latency regression on CPU.
+		assertEquals(12, ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K,
+				"DEFAULT_QUERYSTORE_TOP_K must be 12");
 	}
 
 	@Test

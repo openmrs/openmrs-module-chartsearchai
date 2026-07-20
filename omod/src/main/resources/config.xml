@@ -188,8 +188,8 @@
 
 	<globalProperty>
 		<property>chartsearchai.querystore.topK</property>
-		<defaultValue>30</defaultValue>
-		<description>Number of top results to request from querystore.searchByPatient when chartsearchai.embedding.preFilter is true, used to build the LLM focus hint. Default: 30.</description>
+		<defaultValue>12</defaultValue>
+		<description>Number of similarity records requested from querystore.searchByPatient. In queryScoped mode (the default chartMode) this sizes the query-scoped slice the LLM actually sees, alongside the question's complete typed scope; in fullChart mode it only sizes the optional focus hint when chartsearchai.embedding.preFilter is true (and is unused when preFilter is false, so it has no effect on the default fullChart path). Default lowered 30 -> 12 in 2026-07: on a topK sweep (22-patient drift-metric gold + a 36-patient sweep on demo data) 12 holds recall/F1 at the plateau (meanF1 ~0.746 vs 0.748 at 30) while improving abstention (0.93 vs 0.86) and roughly halving off-topic drift (~100 vs 181) — a smaller, less-noisy slice stops the small model over-citing vitals on absent-topic questions — and cuts CPU time-to-first-token ~2.4x. The knee is ~12-15; below ~12 recall erodes, above ~15 abstention/drift degrade with no F1 gain. Changing this takes effect on the next query.</description>
 	</globalProperty>
 
 	<globalProperty>

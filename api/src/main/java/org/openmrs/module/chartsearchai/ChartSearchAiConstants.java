@@ -36,11 +36,22 @@ public class ChartSearchAiConstants {
 	 */
 	public static final String GP_SERIALIZER_DEDUP_GROUP_LABELS = "chartsearchai.serializer.dedupGroupLabels";
 
-	/** Number of top results the querystore retrieval path requests for the
-	 *  focus-hint pass; tunes that path independently of any default. */
+	/** Number of similarity records the querystore retrieval path requests. In queryScoped mode
+	 *  (the default) this sizes the query slice the LLM actually sees; in fullChart mode it only
+	 *  sizes the optional focus-hint (and is unused when {@code embedding.preFilter=false}). */
 	public static final String GP_QUERYSTORE_TOP_K = "chartsearchai.querystore.topK";
 
-	public static final int DEFAULT_QUERYSTORE_TOP_K = 30;
+	/**
+	 * Default similarity budget for the queryScoped slice. Lowered 30 → 12 in 2026-07 after a topK
+	 * sweep on the 22-patient drift-metric gold and a 36-patient sweep on the demo instance: 12
+	 * holds recall/F1 at the plateau (meanF1 ≈ 0.746 vs 0.748 at 30) while IMPROVING abstention
+	 * (0.93 vs 0.86) and roughly halving off-topic drift (≈100 vs 181) — the smaller, less noisy
+	 * slice stops the small model over-citing vitals on absent-topic questions — and cutting CPU
+	 * time-to-first-token ~2.4× (≈3.5s vs 8.3s). The knee is ~12–15 (below ~12 recall erodes;
+	 * above ~15 abstention/drift degrade with no F1 gain). Only material in queryScoped; fullChart
+	 * ignores it with preFilter off.
+	 */
+	public static final int DEFAULT_QUERYSTORE_TOP_K = 12;
 
 	/**
 	 * How the LLM prompt's chart context is assembled per query.
@@ -235,7 +246,7 @@ public class ChartSearchAiConstants {
 	 * Number of top-ranked querystore records the progressive-reasoning preview pass reasons over.
 	 * Smaller = faster preview prefill but less context for the preliminary reasoning; the committed
 	 * full-chart answer is unaffected either way. Kept distinct from {@link #GP_QUERYSTORE_TOP_K}
-	 * (the focus-hint size) so the two can be tuned independently.
+	 * (the queryScoped slice size / fullChart focus-hint size) so the two can be tuned independently.
 	 */
 	public static final String GP_PROGRESSIVE_REASONING_TOP_K = "chartsearchai.progressiveReasoning.topK";
 

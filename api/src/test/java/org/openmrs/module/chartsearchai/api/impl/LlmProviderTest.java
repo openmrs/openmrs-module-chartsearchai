@@ -64,6 +64,22 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void defaultSystemPrompt_shouldRequireVerdictLeadOnYesNoQuestions() {
+		// Measured on the rc.2 standalone (2026-07-21, probe-yesno-baseline-20260721): on
+		// short-register yes/no questions ("any heart problems", "is she hypertensive") only
+		// 47% of answers opened with a verdict — the rest enumerated findings without ever
+		// answering the question. The prompt must demand a record-grounded verdict lead.
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("yes/no question"),
+				"System prompt must address yes/no questions explicitly");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("begin the answer with an explicit verdict"),
+				"System prompt must require answers to yes/no questions to open with a verdict");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("is recorded"),
+				"System prompt must teach the record-grounded \"No <condition> is recorded\" verdict form");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("Never infer"),
+				"The verdict instruction must not displace the no-inference rule");
+	}
+
+	@Test
 	public void defaultSystemPrompt_shouldInstructAbstentionWhenNoRecordsRelevant() {
 		// The few-shot demonstrates abstention in FOCUS mode (a "Records ranked by
 		// similarity..." line followed by an empty-citations answer). On the non-focus path
@@ -345,6 +361,51 @@ public class LlmProviderTest {
 		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
 		assertEquals("Infections [7], [13] and HIV [4], [11].", result.getAnswer());
 		assertEquals(Arrays.asList(7, 13, 4, 11), result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldNormalizeCorroboratedCommaCitationsInAnswer() {
+		// The compact comma form is the measured failure shape (rc.2 standalone, 2026-07-21,
+		// bc4ba445|heart): "[6, 7]" was unrecognized inline, so the #76 guard dropped every
+		// reference from a fully-cited answer. Groups corroborated by the structured citations
+		// array are rewritten exactly like slash shorthand; the array stays the authority.
+		String response = "{\"answer\": \"Circulation [6, 7] and cardiomyopathy [11,12].\", "
+				+ "\"citations\": [6, 7, 11, 12]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals("Circulation [6], [7] and cardiomyopathy [11], [12].", result.getAnswer());
+		assertEquals(Arrays.asList(6, 7, 11, 12), result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldSurviveOverlongDigitRunsInTruncatedCitationsArray() {
+		// The truncation fallback exists to salvage answers from responses cut off by the
+		// output-token cap — including degenerate digit runs the citations schema's
+		// "type":"integer" does not bound. An unguarded Integer.parseInt turned exactly the
+		// responses the fallback exists for into HTTP 500s.
+		String truncated = "{\"reasoning\":\"r\",\"answer\":\"Condition [1].\", \"citations\": [1, 22222222222";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(truncated);
+		assertEquals("Condition [1].", result.getAnswer());
+		assertTrue(result.getCitations().contains(1),
+				"salvageable in-range citation must survive: " + result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldLeaveUncorroboratedCommaBracketsIntact() {
+		// A numeric comma bracket the model did NOT list in its citations array is a clinical
+		// value, not citation shorthand — splitting it would fabricate references (a
+		// "[120, 80]" reading resolving to records 120 and 80 on a large chart). Mirrors the
+		// slash rule for "[120/80]".
+		String response = "{\"answer\": \"Readings were [120, 80] throughout.\", \"citations\": [3]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals("Readings were [120, 80] throughout.", result.getAnswer());
+		assertEquals(Arrays.asList(3), result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldNormalizeMixedSlashAndCommaShorthand() {
+		String response = "{\"answer\": \"TB [1/2] and anemia [5, 6].\", \"citations\": [1, 2, 5, 6]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals("TB [1], [2] and anemia [5], [6].", result.getAnswer());
 	}
 
 	@Test

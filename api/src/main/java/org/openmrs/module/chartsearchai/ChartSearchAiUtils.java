@@ -38,6 +38,15 @@ public class ChartSearchAiUtils {
 	 * single source of truth for citation-marker parsing, shared by citation
 	 * extraction ({@code LlmInferenceService}) and grounding
 	 * ({@code CitationGroundingVerifier}) so the two cannot drift apart.
+	 *
+	 * <p>Deliberately single-index. Small local models also emit compact shorthand —
+	 * {@code [6, 7]} (measured on the rc.2 standalone, 2026-07-21: the #76 guard read such
+	 * an answer as citing nothing inline and dropped every reference) and {@code [6/7]} —
+	 * but that shorthand is rewritten into single-index markers UPSTREAM by
+	 * {@code LlmAnswerExtractor.normalizeSlashCitations}, and only when the structured
+	 * citations array corroborates the group. Matching compact forms here instead would
+	 * turn bracketed numeric VALUES ({@code [120, 80]}) into phantom citations in
+	 * extraction and strip them from grounding claim text before entailment.
 	 */
 	public static final Pattern INLINE_CITATION = Pattern.compile("\\[(\\d{1,9})\\]");
 

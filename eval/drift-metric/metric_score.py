@@ -77,21 +77,21 @@ def selftest():
     print('selftest OK')
 
 
-def main():
-    cap = sys.argv[1]
-    adj_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, 'offtopic_adj.json')
-    gold_path = sys.argv[3] if len(sys.argv) > 3 else os.path.join(HERE, 'metric_gold.json')
-    gold = json.load(open(gold_path))
-    adj = json.load(open(adj_path)) if os.path.exists(adj_path) else {}
-    adj_on = adj.get('_ontopic', {})
-    f1s = []; absent_ok = 0; absent_tot = 0; drift_total = 0; unknowns = []; rows = []; scored = set(); skipped = 0
+def load_captures(cap, want=None):
+    """Shared capture-dir ingestion (also used by score_directness.py — keep the skip rules in
+    ONE place so the gate's two scorers can never score different cell subsets of a capture).
+    Returns parsed per-cell responses as (rows, skipped): rows = [(uuid, topic, dict)]. Files
+    whose cell fails the `want` predicate are skipped UNPARSED (mixed dirs stay cheap and a
+    foreign file can't emit spurious WARNs); unreadable files and curl error bodies are
+    WARNed and counted, matching the historical inline behavior byte for byte."""
+    rows = []
+    skipped = 0
     for f in sorted(glob.glob(cap + '/*.json')):
         base = os.path.basename(f)[:-5]
         if '__' not in base:
             continue
-        uuid, topic = base.split('__', 1); cell = uuid + '|' + topic
-        g = gold.get(cell)
-        if not g:
+        uuid, topic = base.split('__', 1)
+        if want is not None and not want(uuid + '|' + topic):
             continue
         try:
             d = json.load(open(f))
@@ -100,6 +100,22 @@ def main():
         if 'references' not in d and 'answer' not in d:
             # e.g. an HTTP error body ({"error":{...}}) written by a failed curl — not a real answer.
             print('WARN: capture %s has neither references nor answer (error body?) — skipped' % base); skipped += 1; continue
+        rows.append((uuid, topic, d))
+    return rows, skipped
+
+
+def main():
+    cap = sys.argv[1]
+    adj_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, 'offtopic_adj.json')
+    gold_path = sys.argv[3] if len(sys.argv) > 3 else os.path.join(HERE, 'metric_gold.json')
+    gold = json.load(open(gold_path))
+    adj = json.load(open(adj_path)) if os.path.exists(adj_path) else {}
+    adj_on = adj.get('_ontopic', {})
+    f1s = []; absent_ok = 0; absent_tot = 0; drift_total = 0; unknowns = []; rows = []; scored = set()
+    cells, skipped = load_captures(cap, lambda cell: cell in gold)
+    for uuid, topic, d in cells:
+        cell = uuid + '|' + topic
+        g = gold[cell]
         refs = d.get('references', []); ans = d.get('answer', '') or ''
         cited = list(dict.fromkeys(r.get('resourceUuid') for r in refs if r.get('resourceUuid')))
         s = score_cell(cited, g['present'], set(g['ontopic']), set(g['focus_uuids']),

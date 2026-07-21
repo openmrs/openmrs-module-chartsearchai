@@ -65,6 +65,20 @@ public class LlmProvider {
 			+ "Use plain text only in the answer — no markdown, no bullet markers like * or -, "
 			+ "no headers. Use numbered lines or simple newlines to structure lists.\n\n"
 			+ "If no records are relevant, name what is missing.\n"
+			+ "When the query is a yes/no question (\"any allergies?\", \"is the patient "
+			+ "hypertensive\"), begin the answer with an explicit verdict, then the complete cited "
+			+ "evidence. Start with \"Yes\" ONLY when a record explicitly names what is asked — a "
+			+ "diagnosis, condition, allergy, or enrollment naming it. Never answer \"Yes\" from "
+			+ "related findings alone: a blood pressure reading is not a hypertension diagnosis. "
+			+ "When no record explicitly names it, start with a short sentence naming what is "
+			+ "absent, in natural wording — asked about hypertension: \"No hypertension diagnosis "
+			+ "is recorded.\"; asked about fractures: \"No fractures are recorded.\" After a "
+			+ "no-record verdict, present only readings of the exact quantity the question names "
+			+ "(hypertension → blood pressure readings; diabetes → glucose; kidney problems → "
+			+ "kidney-function labs like creatinine and urine tests), with citations. If the "
+			+ "question names a category rather than a measurable quantity (\"any heart "
+			+ "problems\", \"any eye issues\"), cite nothing after a no-record verdict — do not "
+			+ "list vital signs or unrelated measurements.\n"
 			+ "Your answer must not vary based on the punctuation or phrasing of the query "
 			+ "— focus only on its semantic meaning.\n\n"
 			+ "The following is a FORMAT DEMONSTRATION ONLY using fake non-medical data. "
@@ -78,6 +92,12 @@ public class LlmProvider {
 			+ "[2] is oranges, a different fruit.\", "
 			+ "\"answer\": \"12 apples on 2024-03-10 [1] and 5 apples on 2024-01-20 [3].\","
 			+ " \"citations\": [1, 3]}\n\n"
+			+ "Clinician's query: any apple deliveries\n"
+			+ "{\"reasoning\": \"A yes/no question about apple deliveries. Records [1] and [3] "
+			+ "explicitly document apple deliveries, so the verdict is Yes, followed by every "
+			+ "matching record.\", "
+			+ "\"answer\": \"Yes — apples were delivered: 12 on 2024-03-10 [1] and 5 on "
+			+ "2024-01-20 [3].\", \"citations\": [1, 3]}\n\n"
 			+ FOCUS_HINT_LABEL + "2.\n"
 			+ "Clinician's query: Were any bananas delivered?\n"
 			+ "{\"reasoning\": \"The query is about bananas. The ranked record [2] is oranges and no "
@@ -203,7 +223,11 @@ public class LlmProvider {
 	 * chain-of-thought, emitted first). An instance scans for its key, forwards only that field's
 	 * value, and ignores everything else (other fields, punctuation, the citations array). JSON
 	 * string escapes (including {@code \\uXXXX}, possibly split across chunks) are decoded so the
-	 * streamed text matches the non-streaming path.</p>
+	 * streamed text matches the non-streaming path — except citation-shorthand normalization
+	 * ({@code LlmAnswerExtractor.normalizeSlashCitations}), which needs the complete citations
+	 * array and therefore applies only to the FINAL answer: a client that renders accumulated
+	 * tokens may briefly show {@code [6, 7]} where the {@code done} answer reads
+	 * {@code [6], [7]}. Clients must replace the accumulated text with the final answer.</p>
 	 */
 	static class AnswerExtractingConsumer implements Consumer<String> {
 

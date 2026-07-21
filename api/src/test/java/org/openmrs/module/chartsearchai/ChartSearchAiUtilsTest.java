@@ -29,6 +29,17 @@ public class ChartSearchAiUtilsTest extends BaseModuleContextSensitiveTest {
 	private static final String GP_NAME = "chartsearchai.test.modelPath";
 
 	@Test
+	public void inlineCitation_shouldStaySingleIndexAndNotMatchCommaBrackets() {
+		// Compact shorthand ("[6, 7]", "[6/7]") is normalized UPSTREAM — LlmAnswerExtractor
+		// rewrites groups corroborated by the structured citations array into single-index
+		// markers — precisely so this pattern can stay single-index. Matching comma groups
+		// here would turn numeric values ("[120, 80]") into phantom citations in extraction
+		// and strip them from grounding claim text before entailment.
+		assertFalse(ChartSearchAiUtils.INLINE_CITATION.matcher("Readings [120, 80] today").find());
+		assertTrue(ChartSearchAiUtils.INLINE_CITATION.matcher("Condition [7].").find());
+	}
+
+	@Test
 	public void resolveModelPath_shouldRejectPathContainingDotDot() {
 		assertThrows(IllegalStateException.class,
 				() -> ChartSearchAiUtils.resolveModelPath("../etc/passwd", GP_NAME));

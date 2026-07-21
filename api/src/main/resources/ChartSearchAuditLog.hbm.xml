@@ -35,6 +35,14 @@
 
 		<property name="feedbackComment" column="feedback_comment" type="text"/>
 
+		<property name="providerId" column="provider_id" type="string" length="64"/>
+
+		<property name="providerMode" column="provider_mode" type="string" length="64"/>
+
+		<property name="conversationUuid" column="conversation_uuid" type="string" length="38"/>
+
+		<property name="requestId" column="request_id" type="string" length="100"/>
+
 	</class>
 
 </hibernate-mapping>

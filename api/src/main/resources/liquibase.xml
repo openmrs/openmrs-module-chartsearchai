@@ -70,4 +70,130 @@
 		</createIndex>
 	</changeSet>
 
+	<changeSet id="chartsearchai-010" author="openmrs">
+		<comment>
+			Provider-neutral clinical conversations. A conversation is bound to one provider and
+			mode; selecting another provider or mode creates a new header while preserving history.
+			Each turn stores canonical answer text plus the complete provider envelope as opaque JSON.
+			Audit rows copy provider, mode, conversation, and request attribution so regulatory
+			history remains self-describing after shorter-lived conversation rows are purged.
+		</comment>
+
+		<addColumn tableName="chartsearchai_audit_log">
+			<column name="provider_id" type="varchar(64)"/>
+			<column name="provider_mode" type="varchar(64)"/>
+			<column name="conversation_uuid" type="char(38)"/>
+			<column name="request_id" type="varchar(100)"/>
+		</addColumn>
+		<createIndex tableName="chartsearchai_audit_log"
+				indexName="idx_chartsearchai_audit_log_conversation">
+			<column name="conversation_uuid"/>
+		</createIndex>
+		<createIndex tableName="chartsearchai_audit_log"
+				indexName="idx_chartsearchai_audit_log_request">
+			<column name="request_id"/>
+		</createIndex>
+
+		<createTable tableName="chartsearchai_conversation">
+			<column name="conversation_id" type="int" autoIncrement="true">
+				<constraints primaryKey="true" nullable="false"/>
+			</column>
+			<column name="uuid" type="char(38)">
+				<constraints nullable="false" unique="true"
+						uniqueConstraintName="uk_chartsearchai_conversation_uuid"/>
+			</column>
+			<column name="patient_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="user_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="provider_id" type="varchar(64)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="provider_mode" type="varchar(64)"/>
+			<column name="started_at" type="datetime">
+				<constraints nullable="false"/>
+			</column>
+			<column name="last_activity_at" type="datetime">
+				<constraints nullable="false"/>
+			</column>
+			<column name="ended_at" type="datetime"/>
+			<column name="title" type="varchar(200)"/>
+			<column name="status" type="varchar(20)" defaultValue="active">
+				<constraints nullable="false"/>
+			</column>
+		</createTable>
+		<addForeignKeyConstraint baseTableName="chartsearchai_conversation"
+				baseColumnNames="patient_id" referencedTableName="patient"
+				referencedColumnNames="patient_id"
+				constraintName="fk_chartsearchai_conversation_patient"/>
+		<addForeignKeyConstraint baseTableName="chartsearchai_conversation"
+				baseColumnNames="user_id" referencedTableName="users"
+				referencedColumnNames="user_id"
+				constraintName="fk_chartsearchai_conversation_user"/>
+		<createIndex tableName="chartsearchai_conversation"
+				indexName="idx_chartsearchai_conversation_lookup">
+			<column name="patient_id"/>
+			<column name="user_id"/>
+			<column name="status"/>
+			<column name="last_activity_at"/>
+		</createIndex>
+
+		<createTable tableName="chartsearchai_conversation_turn">
+			<column name="turn_id" type="int" autoIncrement="true">
+				<constraints primaryKey="true" nullable="false"/>
+			</column>
+			<column name="uuid" type="char(38)">
+				<constraints nullable="false" unique="true"
+						uniqueConstraintName="uk_chartsearchai_conversation_turn_uuid"/>
+			</column>
+			<column name="conversation_id" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="ordinal" type="int">
+				<constraints nullable="false"/>
+			</column>
+			<column name="request_id" type="varchar(100)">
+				<constraints nullable="false"/>
+			</column>
+			<column name="question" type="text">
+				<constraints nullable="false"/>
+			</column>
+			<column name="answer_text" type="mediumtext"/>
+			<column name="provider_payload" type="mediumtext"/>
+			<column name="payload_media_type" type="varchar(100)"/>
+			<column name="terminal_state" type="varchar(32)"/>
+			<column name="problem_code" type="varchar(100)"/>
+			<column name="started_at" type="datetime">
+				<constraints nullable="false"/>
+			</column>
+			<column name="completed_at" type="datetime"/>
+			<column name="audit_log_id" type="int"/>
+		</createTable>
+		<addForeignKeyConstraint baseTableName="chartsearchai_conversation_turn"
+				baseColumnNames="conversation_id"
+				referencedTableName="chartsearchai_conversation"
+				referencedColumnNames="conversation_id"
+				constraintName="fk_chartsearchai_conversation_turn_conversation"/>
+		<addForeignKeyConstraint baseTableName="chartsearchai_conversation_turn"
+				baseColumnNames="audit_log_id"
+				referencedTableName="chartsearchai_audit_log"
+				referencedColumnNames="audit_log_id"
+				constraintName="fk_chartsearchai_conversation_turn_audit"
+				onDelete="SET NULL"/>
+		<addUniqueConstraint tableName="chartsearchai_conversation_turn"
+				columnNames="conversation_id,ordinal"
+				constraintName="uk_chartsearchai_conversation_turn_ordinal"/>
+		<createIndex tableName="chartsearchai_conversation_turn"
+				indexName="idx_chartsearchai_conversation_turn_history">
+			<column name="conversation_id"/>
+			<column name="completed_at"/>
+		</createIndex>
+		<createIndex tableName="chartsearchai_conversation_turn"
+				indexName="idx_chartsearchai_conversation_turn_request">
+			<column name="request_id"/>
+		</createIndex>
+	</changeSet>
+
 </databaseChangeLog>

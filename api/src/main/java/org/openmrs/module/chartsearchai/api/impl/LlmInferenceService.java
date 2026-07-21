@@ -504,7 +504,7 @@ public class LlmInferenceService implements ChartSearchService {
 			Set<Integer> inline = new LinkedHashSet<Integer>();
 			Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(answer);
 			while (marker.find()) {
-				inline.add(Integer.valueOf(marker.group(1)));
+				inline.addAll(ChartSearchAiUtils.parseCitationIndices(marker.group(1)));
 			}
 			// Real answer prose that anchors NO citation inline: the structured
 			// array is unanchored (the abstention-dump failure mode), so surface

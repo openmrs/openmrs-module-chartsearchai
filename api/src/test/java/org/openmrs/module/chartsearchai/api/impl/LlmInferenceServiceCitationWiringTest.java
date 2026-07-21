@@ -91,6 +91,18 @@ public class LlmInferenceServiceCitationWiringTest {
 		assertReferencesInclude(answer, 8);
 	}
 
+	@Test
+	public void search_shouldResolveMultiIndexInlineCitations() {
+		// Reproduces the rc.2 capture failure (bc4ba445|heart, 2026-07-21): the model cited
+		// "[6, 7]" inline with an empty structured array; the single-index-only marker pattern
+		// saw no inline citations, so the #76 abstention-dump guard dropped every reference.
+		service.setChartBuildingStrategy(new MultiIndexStubStrategy());
+		service.setLlmProvider(new MultiIndexStubProvider());
+		ChartAnswer answer = service.search(patient(), "any heart problems?");
+		assertReferencesInclude(answer, 6);
+		assertReferencesInclude(answer, 7);
+	}
+
 	private static void assertReferencesInclude(ChartAnswer answer, int index) {
 		boolean found = false;
 		for (RecordReference ref : answer.getReferences()) {
@@ -127,6 +139,45 @@ public class LlmInferenceServiceCitationWiringTest {
 		@Override
 		boolean usePreFilter() {
 			return false;
+		}
+	}
+
+	private static final class MultiIndexStubStrategy extends ChartBuildingStrategy {
+
+		@Override
+		PatientChart buildChart(Patient patient, String question) {
+			List<RecordMapping> mappings = Arrays.asList(
+					new RecordMapping(6, "obs", "00000000-0000-0000-0000-000000000006", null),
+					new RecordMapping(7, "condition", "00000000-0000-0000-0000-000000000007", null));
+			return new PatientChart("6. Persistent fetal circulation\n7. Congestive cardiomyopathy",
+					mappings, Collections.<Integer>emptyList());
+		}
+
+		@Override
+		boolean usePreFilter() {
+			return false;
+		}
+	}
+
+	/** Cites a compact multi-index marker inline with an EMPTY structured array. */
+	private static final class MultiIndexStubProvider extends LlmProvider {
+
+		private static LlmResponse canned() {
+			return new LlmResponse("Persistent fetal circulation [6, 7].",
+					Collections.<Integer>emptyList());
+		}
+
+		@Override
+		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
+				String question) {
+			return canned();
+		}
+
+		@Override
+		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
+				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				String cacheScope) {
+			return canned();
 		}
 	}
 

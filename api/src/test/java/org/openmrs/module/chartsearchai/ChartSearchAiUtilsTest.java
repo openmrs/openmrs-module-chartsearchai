@@ -29,6 +29,24 @@ public class ChartSearchAiUtilsTest extends BaseModuleContextSensitiveTest {
 	private static final String GP_NAME = "chartsearchai.test.modelPath";
 
 	@Test
+	public void parseCitationIndices_shouldParseSingleIndex() {
+		assertEquals(Arrays.asList(8), ChartSearchAiUtils.parseCitationIndices("8"));
+	}
+
+	@Test
+	public void parseCitationIndices_shouldParseCompactCommaSeparatedIndices() {
+		assertEquals(Arrays.asList(6, 7), ChartSearchAiUtils.parseCitationIndices("6, 7"));
+		assertEquals(Arrays.asList(11, 12), ChartSearchAiUtils.parseCitationIndices("11,12"));
+	}
+
+	@Test
+	public void inlineCitation_shouldMatchCompactMultiIndexMarker() {
+		java.util.regex.Matcher m = ChartSearchAiUtils.INLINE_CITATION.matcher("Cardiomyopathy [11, 12].");
+		assertTrue(m.find());
+		assertEquals("11, 12", m.group(1));
+	}
+
+	@Test
 	public void resolveModelPath_shouldRejectPathContainingDotDot() {
 		assertThrows(IllegalStateException.class,
 				() -> ChartSearchAiUtils.resolveModelPath("../etc/passwd", GP_NAME));

@@ -434,7 +434,36 @@ public class CitationGroundingVerifierTest {
 		assertTrue(sentences.get(1).cites(3));
 	}
 
+	@Test
+	public void splitIntoCitedSentences_parsesMultiIndexMarker() {
+		// Small local models emit compact multi-index markers ("[11, 12]") despite the
+		// few-shot showing "[11], [12]" — measured on the rc.2 standalone (bc4ba445|heart,
+		// 2026-07-21), where the unrecognized marker made the #76 guard treat the answer
+		// as citing nothing inline and drop every reference.
+		List<CitationGroundingVerifier.Sentence> sentences =
+				CitationGroundingVerifier.splitIntoCitedSentences("Congestive cardiomyopathy [11, 12].");
+
+		assertEquals(1, sentences.size());
+		assertTrue(sentences.get(0).cites(11));
+		assertTrue(sentences.get(0).cites(12));
+	}
+
 	// ---- clause-scoped grounding ----
+
+	@Test
+	public void splitIntoClauseScopedSentences_multiIndexMarkerYieldsClausePerIndex() {
+		List<CitationGroundingVerifier.Sentence> clauses =
+				CitationGroundingVerifier.splitIntoClauseScopedSentences(
+						"A condition [1, 2] and a diagnosis [3].");
+		assertEquals(3, clauses.size());
+		assertEquals("A condition [1, 2]", clauses.get(0).text);
+		assertTrue(clauses.get(0).cites(1));
+		assertFalse(clauses.get(0).cites(2), "each index gets its own isolated clause");
+		assertEquals("A condition [1, 2]", clauses.get(1).text);
+		assertTrue(clauses.get(1).cites(2));
+		assertEquals("A condition [1, 2] and a diagnosis [3]", clauses.get(2).text);
+		assertTrue(clauses.get(2).cites(3));
+	}
 
 	@Test
 	public void splitIntoClauseScopedSentences_cumulativePrefixAttributedToOneCitation() {

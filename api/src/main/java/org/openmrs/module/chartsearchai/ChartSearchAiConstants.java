@@ -472,6 +472,18 @@ public class ChartSearchAiConstants {
 	/** Reference data, not patient data — injected by {@link org.openmrs.module.chartsearchai.reference.DrugReferenceInjector}. */
 	public static final String RESOURCE_TYPE_DRUG_REFERENCE = "drug_reference";
 
+	/**
+	 * Fixed med-agent-hub chat-completions endpoint used by {@code HubClinicalAnswerProvider}.
+	 * Must end with {@code /v1/chat/completions}. Empty/unset means the hub provider is not ready.
+	 */
+	public static final String GP_HUB_ENDPOINT_URL = "chartsearchai.hub.endpointUrl";
+
+	/**
+	 * Optional runtime-property Bearer token for the hub endpoint
+	 * ({@code chartsearchai.hub.apikey} in OpenMRS runtime properties — never a global property).
+	 */
+	public static final String RP_HUB_API_KEY = "chartsearchai.hub.apikey";
+
 	private ChartSearchAiConstants() {
 	}
 }

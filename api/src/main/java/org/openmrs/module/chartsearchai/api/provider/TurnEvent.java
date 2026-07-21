@@ -9,8 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.api.provider;
 
-import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
-
 /**
  * One event in a provider turn's canonical lifecycle, as delivered to a {@link TurnEventSink}.
  * Which payload field is populated depends on the {@link TurnEventType}: delta events carry
@@ -28,12 +26,12 @@ public final class TurnEvent {
 
 	private final String textDelta;
 
-	private final ChartAnswer answer;
+	private final AnswerEnvelope answer;
 
 	private final String problemCode;
 
 	private TurnEvent(TurnEventType type, int sequence, String providerId, String textDelta,
-			ChartAnswer answer, String problemCode) {
+			AnswerEnvelope answer, String problemCode) {
 		this.type = type;
 		this.sequence = sequence;
 		this.providerId = providerId;
@@ -51,7 +49,7 @@ public final class TurnEvent {
 	}
 
 	public static TurnEvent withAnswer(TurnEventType type, int sequence, String providerId,
-			ChartAnswer answer) {
+			AnswerEnvelope answer) {
 		return new TurnEvent(type, sequence, providerId, null, answer, null);
 	}
 
@@ -77,7 +75,7 @@ public final class TurnEvent {
 	}
 
 	/** The answer as of this event; populated on {@code answer_done} and {@code evidence_updated}. */
-	public ChartAnswer getAnswer() {
+	public AnswerEnvelope getAnswer() {
 		return answer;
 	}
 

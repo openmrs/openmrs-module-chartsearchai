@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -134,6 +135,11 @@ public class BundledClinicalAnswerProviderTest {
 		return new ChartSearchService.ChartAnswer(text, references, 100, 20, 5);
 	}
 
+	@SuppressWarnings("unchecked")
+	private static List<Map<String, Object>> references(AnswerEnvelope answer) {
+		return (List<Map<String, Object>>) answer.getPayload().get("references");
+	}
+
 	/** Provider with grounding enabled so the full canonical lifecycle (evidence_updated) runs. */
 	private static BundledClinicalAnswerProvider provider(ChartSearchService service) {
 		return new BundledClinicalAnswerProvider(service) {
@@ -180,16 +186,19 @@ public class BundledClinicalAnswerProviderTest {
 
 		assertEquals("Aspirin ", sink.events.get(3).getTextDelta());
 		TurnEvent answerDone = sink.single(TurnEventType.ANSWER_DONE);
-		assertEquals("Aspirin 81mg [1]", answerDone.getAnswer().getAnswer());
-		assertNull(answerDone.getAnswer().getReferences().get(0).getGrounded(),
+		assertEquals("Aspirin 81mg [1]", answerDone.getAnswer().getText());
+		assertNull(references(answerDone.getAnswer()).get(0).get("grounded"),
 				"answer_done fires before grounding, so verdicts are still null");
 		TurnEvent evidence = sink.single(TurnEventType.EVIDENCE_UPDATED);
-		assertEquals(Boolean.TRUE, evidence.getAnswer().getReferences().get(0).getGrounded());
+		assertEquals(Boolean.TRUE, references(evidence.getAnswer()).get(0).get("grounded"));
 
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
 		assertEquals(BundledClinicalAnswerProvider.PROVIDER_ID, result.getProviderId());
-		assertEquals(Boolean.TRUE, result.getAnswer().getReferences().get(0).getGrounded(),
+		assertEquals(Boolean.TRUE, references(result.getAnswer()).get(0).get("grounded"),
 				"the result carries the grounded answer");
+		assertEquals(100, result.getAnswer().getPayload().get("inputTokens"));
+		assertEquals(20, result.getAnswer().getPayload().get("outputTokens"));
+		assertEquals(5, result.getAnswer().getPayload().get("cachedTokens"));
 		assertNull(result.getProblemCode());
 	}
 
@@ -224,8 +233,8 @@ public class BundledClinicalAnswerProviderTest {
 				.toCompletableFuture().get();
 
 		TurnEvent answerDone = sink.single(TurnEventType.ANSWER_DONE);
-		assertEquals("cached [1]", answerDone.getAnswer().getAnswer());
-		assertEquals(Boolean.TRUE, answerDone.getAnswer().getReferences().get(0).getGrounded(),
+		assertEquals("cached [1]", answerDone.getAnswer().getText());
+		assertEquals(Boolean.TRUE, references(answerDone.getAnswer()).get(0).get("grounded"),
 				"a cached answer is already final, so answer_done carries its grounded verdicts");
 		assertFalse(sink.types().contains(TurnEventType.EVIDENCE_UPDATED),
 				"no separate evidence event when the answer arrived final");

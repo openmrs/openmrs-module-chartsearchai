@@ -9,8 +9,12 @@
  */
 package org.openmrs.module.chartsearchai.api.provider;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -20,7 +24,10 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,7 +119,7 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 					}, ungrounded -> {
 						answerDoneEmitted[0] = true;
 						events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE,
-								sequence.getAndIncrement(), PROVIDER_ID, ungrounded));
+								sequence.getAndIncrement(), PROVIDER_ID, toAnswerEnvelope(ungrounded)));
 					}, preliminary -> events.accept(TurnEvent.delta(TurnEventType.REASONING_DELTA,
 							sequence.getAndIncrement(), PROVIDER_ID, preliminary)));
 		}
@@ -124,19 +131,20 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 			return failed(events, sequence, configuredMode, PROBLEM_PROVIDER_FAILURE);
 		}
 
+		AnswerEnvelope finalEnvelope = toAnswerEnvelope(finalAnswer);
 		if (answerDoneEmitted[0]) {
 			if (groundingEnabled()) {
 				events.accept(TurnEvent.withAnswer(TurnEventType.EVIDENCE_UPDATED,
-						sequence.getAndIncrement(), PROVIDER_ID, finalAnswer));
+						sequence.getAndIncrement(), PROVIDER_ID, finalEnvelope));
 			}
 		} else {
 			// The ungrounded seam did not fire, so the returned answer was already final
 			// (e.g. cached with verdicts attached when first computed).
 			events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, sequence.getAndIncrement(),
-					PROVIDER_ID, finalAnswer));
+					PROVIDER_ID, finalEnvelope));
 		}
 		events.accept(TurnEvent.of(TurnEventType.TURN_DONE, sequence.getAndIncrement(), PROVIDER_ID));
-		return CompletableFuture.completedFuture(TurnResult.done(PROVIDER_ID, configuredMode, finalAnswer));
+		return CompletableFuture.completedFuture(TurnResult.done(PROVIDER_ID, configuredMode, finalEnvelope));
 	}
 
 	private CompletionStage<TurnResult> failed(TurnEventSink events, AtomicInteger sequence,
@@ -148,6 +156,39 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 	private boolean groundingEnabled() {
 		return Boolean.parseBoolean(gp(ChartSearchAiConstants.GP_GROUNDING_ENABLED,
 				String.valueOf(ChartSearchAiConstants.DEFAULT_GROUNDING_ENABLED)));
+	}
+
+	private static AnswerEnvelope toAnswerEnvelope(ChartAnswer answer) {
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", answer.getAnswer());
+
+		List<Map<String, Object>> references = new ArrayList<>();
+		for (RecordReference reference : answer.getReferences()) {
+			Map<String, Object> value = new LinkedHashMap<>();
+			value.put("index", reference.getIndex());
+			value.put("resourceType", reference.getResourceType());
+			value.put("resourceUuid", reference.getResourceUuid());
+			value.put("date", reference.getDate() == null ? null
+					: DateFormatUtil.formatDate(reference.getDate()));
+			value.put("grounded", reference.getGrounded());
+			references.add(value);
+		}
+		payload.put("references", references);
+
+		List<Map<String, Object>> warnings = new ArrayList<>();
+		for (SafetyWarning warning : answer.getSafetyWarnings()) {
+			Map<String, Object> value = new LinkedHashMap<>();
+			value.put("type", warning.getType());
+			value.put("drug", warning.getDrug());
+			value.put("detail", warning.getDetail());
+			warnings.add(value);
+		}
+		payload.put("safetyWarnings", warnings);
+		payload.put("blocks", Collections.emptyList());
+		payload.put("inputTokens", answer.getInputTokens());
+		payload.put("outputTokens", answer.getOutputTokens());
+		payload.put("cachedTokens", answer.getCachedTokens());
+		return AnswerEnvelope.fromPayload(payload);
 	}
 
 	private ProviderMode configuredMode() {

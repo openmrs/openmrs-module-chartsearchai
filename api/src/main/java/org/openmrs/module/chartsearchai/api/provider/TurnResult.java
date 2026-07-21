@@ -9,8 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.api.provider;
 
-import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
-
 /**
  * The final outcome of one provider turn: the terminal state, the final answer when the turn
  * completed, and the normalized problem code when it failed. This is what the common layer
@@ -24,12 +22,12 @@ public final class TurnResult {
 
 	private final TurnEventType terminalState;
 
-	private final ChartAnswer answer;
+	private final AnswerEnvelope answer;
 
 	private final String problemCode;
 
 	private TurnResult(String providerId, ProviderMode mode, TurnEventType terminalState,
-			ChartAnswer answer, String problemCode) {
+			AnswerEnvelope answer, String problemCode) {
 		this.providerId = providerId;
 		this.mode = mode;
 		this.terminalState = terminalState;
@@ -37,7 +35,7 @@ public final class TurnResult {
 		this.problemCode = problemCode;
 	}
 
-	public static TurnResult done(String providerId, ProviderMode mode, ChartAnswer answer) {
+	public static TurnResult done(String providerId, ProviderMode mode, AnswerEnvelope answer) {
 		return new TurnResult(providerId, mode, TurnEventType.TURN_DONE, answer, null);
 	}
 
@@ -60,7 +58,7 @@ public final class TurnResult {
 	}
 
 	/** The final (grounded, when grounding ran) answer; {@code null} on a failed turn. */
-	public ChartAnswer getAnswer() {
+	public AnswerEnvelope getAnswer() {
 		return answer;
 	}
 

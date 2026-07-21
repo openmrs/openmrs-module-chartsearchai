@@ -1,5 +1,5 @@
 {
- "_comment": "Expected-verdict overrides for yes/no scoring (2026-07-21, user-approved amendment): present cells whose ENTIRE on-topic universe is obs/lab records (no Condition:/Diagnosis:/Allergy/Program record) expect a record-grounded NO-family verdict lead (e.g. 'No kidney problem diagnosis is recorded.') with the labs still cited \u2014 matching the approved verdict rule instead of raw topic-presence. Generated rule-based over all present cells, not per-failure. Regenerate by re-running the sweep in this file's git-log entry.",
+ "_comment": "Expected-verdict overrides for yes/no scoring (user-approved amendment, 2026-07-21): present cells whose ENTIRE on-topic universe is obs/lab records (no Condition:/Diagnosis:/Allergy/Program/Enrolled record) expect a record-grounded NO-family verdict lead (e.g. 'No kidney problem diagnosis is recorded.') with the labs still cited \u2014 matching the approved verdict rule instead of raw topic-presence. Generated rule-based over ALL present cells by build_verdict_gold_yesno.py; do not hand-edit.",
  "007e38b8-1344-4ea9-a790-a3f078471db3|kidney": "NO",
  "072f69ce-f25a-4ca0-b2ff-4a7a4325ddd9|kidney": "NO",
  "089f766b-943c-427b-a039-672f90b0a49e|kidney": "NO",

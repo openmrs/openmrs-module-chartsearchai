@@ -29,7 +29,9 @@ record-grounded NO-family lead instead — topic-presence is not verdict truth t
 The regexes are the gate's metric definition — versioned here on purpose. Changing them
 invalidates any thresholds locked against them; re-quote baselines after any edit.
 """
-import json, sys, glob, os, re
+import json, sys, os, re
+
+from metric_score import load_captures
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 YESNO_TOPICS = {"programs", "allergies", "drug-allergies", "eye", "heart", "fractures", "kidney", "mental"}
@@ -75,33 +77,39 @@ def selftest():
 
 
 def main():
+    if len(sys.argv) < 2:
+        sys.exit("usage: score_directness.py <capture_dir> [metric_gold.rc2.json] [probe_gold_yesno.json]")
     cap = sys.argv[1]
     gold_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "metric_gold.rc2.json")
     probe_path = sys.argv[3] if len(sys.argv) > 3 else os.path.join(HERE, "probe_gold_yesno.json")
+    if not os.path.exists(gold_path):
+        sys.exit("gold file not found: %s (pass it as the second argument)" % gold_path)
     gold = json.load(open(gold_path))
+    if not os.path.exists(probe_path):
+        if len(sys.argv) > 3:
+            sys.exit("probe gold not found: %s" % probe_path)
+        print("WARN: %s not found — Tier-B probes will not be scored" % os.path.basename(probe_path))
     probes = {k: v for k, v in json.load(open(probe_path)).items() if not k.startswith("_")} \
         if os.path.exists(probe_path) else {}
     override_path = os.path.join(HERE, "verdict_gold_yesno.json")
+    if not os.path.exists(override_path):
+        # The overrides are part of the LOCKED metric definition (2026-07-21 amendment):
+        # without them, verdict accuracy silently reverts to raw present->YES and is NOT
+        # comparable to any gated baseline.
+        print("WARN: verdict_gold_yesno.json not found — verdict accuracy will NOT be "
+              "comparable to gated baselines (lab-only cells revert to expected YES)")
     verdict_override = {k: v for k, v in json.load(open(override_path)).items() if not k.startswith("_")} \
         if os.path.exists(override_path) else {}
 
     a_n = a_direct = a_correct = 0
     b_n = b_direct = b_match = 0
     a_fail, b_fail, safety_viol = [], [], []
-    for f in sorted(glob.glob(cap + "/*.json")):
-        base = os.path.basename(f)[:-5]
-        if "__" not in base:
-            continue
-        uuid, topic = base.split("__", 1)
+    def scoreable(cell):
+        return cell in probes or (cell.split("|", 1)[1] in YESNO_TOPICS and cell in gold)
+
+    cells, _skipped = load_captures(cap, scoreable)
+    for uuid, topic, d in cells:
         cell = uuid + "|" + topic
-        try:
-            d = json.load(open(f))
-        except (ValueError, OSError) as e:
-            print("WARN: unreadable capture %s (%s) — skipped" % (base, e))
-            continue
-        if "references" not in d and "answer" not in d:
-            print("WARN: capture %s has neither references nor answer (error body?) — skipped" % base)
-            continue
         lead = classify(d.get("answer"))
         snippet = (d.get("answer") or "").strip().replace("\n", " ")[:90]
         if cell in probes:
@@ -131,6 +139,18 @@ def main():
               % (b_n, b_direct, b_n, b_direct / b_n, b_match, b_n, b_match / b_n, len(safety_viol)))
     if not a_n and not b_n:
         print("no scoreable cells found in %s" % cap)
+    # Completeness accounting: a capture killed mid-run (it happened — background timeout,
+    # 2026-07-22) otherwise produces gate-shaped numbers over a biased pinned-order prefix.
+    expected_a = sum(1 for c in gold if c.split("|", 1)[1] in YESNO_TOPICS)
+    if 0 < a_n < expected_a:
+        print("WARN: scored %d/%d gold yes/no cells — capture incomplete; aggregates NOT gate-comparable"
+              % (a_n, expected_a))
+    if probes and 0 < b_n < len(probes):
+        print("WARN: scored %d/%d Tier-B probes — capture incomplete; Tier-B verdict NOT gate-comparable"
+              % (b_n, len(probes)))
+    if probes and b_n == 0 and a_n:
+        print("note: no Tier-B probe cells in this capture (0/%d) — expected for regression-arm dirs"
+              % len(probes))
     for label, fails in (("TIER-A", a_fail), ("TIER-B", b_fail)):
         if fails:
             print("\n%s misses (expected != lead):" % label)

@@ -25,6 +25,8 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 /**
  * Relays one med-agent-hub product-profile request and maps the hub's staged SSE wire onto the
@@ -35,6 +37,7 @@ import org.slf4j.LoggerFactory;
  * <p>There is never a silent fallback to the bundled provider. Failures end in one
  * {@code turn_error} with a normalized problem code.</p>
  */
+@Service("chartSearchAi.hubClinicalAnswerProvider")
 public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 	public static final String PROVIDER_ID = "hub";
@@ -55,6 +58,7 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 	private final HubStreamTransport transport;
 
+	@Autowired
 	public HubClinicalAnswerProvider(HubStreamTransport transport) {
 		this.transport = transport;
 	}
@@ -62,6 +66,11 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 	/** Global-property read seam, overridable in tests. */
 	protected String gp(String property, String defaultValue) {
 		return Context.getAdministrationService().getGlobalProperty(property, defaultValue);
+	}
+
+	@Override
+	public String id() {
+		return PROVIDER_ID;
 	}
 
 	@Override

@@ -30,6 +30,9 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
 
 /**
  * Adapts the bundled ChartSearchAI pipeline (the {@link ChartSearchService} caching router and
@@ -49,6 +52,7 @@ import org.slf4j.LoggerFactory;
  *
  * Failures are normalized to one problem code and never fall back to another provider.
  */
+@Service("chartSearchAi.bundledClinicalAnswerProvider")
 public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 	public static final String PROVIDER_ID = "bundled";
@@ -65,13 +69,20 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 	private final ChartSearchService chartSearchService;
 
-	public BundledClinicalAnswerProvider(ChartSearchService chartSearchService) {
+	@Autowired
+	public BundledClinicalAnswerProvider(
+			@Qualifier("chartSearchAi.chartSearchServiceRouter") ChartSearchService chartSearchService) {
 		this.chartSearchService = chartSearchService;
 	}
 
 	/** Global-property read seam, overridable in tests (same pattern as the caching router). */
 	protected String gp(String property, String defaultValue) {
 		return Context.getAdministrationService().getGlobalProperty(property, defaultValue);
+	}
+
+	@Override
+	public String id() {
+		return PROVIDER_ID;
 	}
 
 	@Override

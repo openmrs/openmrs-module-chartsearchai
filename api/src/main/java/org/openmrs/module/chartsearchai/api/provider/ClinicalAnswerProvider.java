@@ -25,6 +25,12 @@ import java.util.concurrent.CompletionStage;
  */
 public interface ClinicalAnswerProvider {
 
+	/**
+	 * Stable provider identity used for registry keys and persistence. Must not read OpenMRS
+	 * configuration — Spring constructs the registry before the OpenMRS Context is available.
+	 */
+	String id();
+
 	/** The provider's truthful self-description: identity, readiness, modes, and capabilities. */
 	ProviderDescriptor descriptor();
 

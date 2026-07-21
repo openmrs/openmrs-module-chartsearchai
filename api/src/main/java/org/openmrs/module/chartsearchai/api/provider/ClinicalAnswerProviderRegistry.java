@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.openmrs.api.context.Context;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 /**
  * Resolves which {@link ClinicalAnswerProvider}s OpenMRS configuration enables and which one is
@@ -31,6 +33,7 @@ import org.openmrs.api.context.Context;
  *       that produced them.</li>
  * </ul>
  */
+@Service("chartSearchAi.clinicalAnswerProviderRegistry")
 public class ClinicalAnswerProviderRegistry {
 
 	/** Comma-separated ordered provider ids configuration enables. Fresh-install default: bundled only. */
@@ -43,9 +46,12 @@ public class ClinicalAnswerProviderRegistry {
 
 	private final Map<String, ClinicalAnswerProvider> providersById = new LinkedHashMap<>();
 
+	@Autowired
 	public ClinicalAnswerProviderRegistry(List<ClinicalAnswerProvider> providers) {
 		for (ClinicalAnswerProvider provider : providers) {
-			providersById.put(provider.descriptor().getId(), provider);
+			// Use id(), not descriptor(): descriptor() may read global properties, and Spring
+			// constructs this registry before the OpenMRS Context is available.
+			providersById.put(provider.id(), provider);
 		}
 	}
 

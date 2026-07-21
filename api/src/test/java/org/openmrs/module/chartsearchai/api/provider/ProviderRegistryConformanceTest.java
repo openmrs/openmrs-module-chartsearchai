@@ -53,6 +53,11 @@ public class ProviderRegistryConformanceTest {
 		}
 
 		@Override
+		public String id() {
+			return id;
+		}
+
+		@Override
 		public ProviderDescriptor descriptor() {
 			return new ProviderDescriptor(id, id + " provider", true, ready, false,
 					Collections.singletonList(ProviderMode.QUERY_SCOPED),

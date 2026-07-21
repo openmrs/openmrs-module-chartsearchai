@@ -67,6 +67,22 @@ public class ConversationServiceImpl implements ConversationService {
 				&& Objects.equals(modeName, current.getProviderMode())) {
 			return current;
 		}
+		return closeAndCreate(patient, user, providerId, modeName, current);
+	}
+
+	@Override
+	public ClinicalConversation startNew(Patient patient, String providerId, ProviderMode mode) {
+		require(patient != null, "patient is required");
+		require(providerId != null && !providerId.trim().isEmpty(), "providerId is required");
+		User user = Context.getAuthenticatedUser();
+		require(user != null, "an authenticated user is required");
+		String modeName = mode == null ? null : mode.getWireName();
+		ClinicalConversation current = conversationDAO.getLatestActiveConversation(patient, user);
+		return closeAndCreate(patient, user, providerId, modeName, current);
+	}
+
+	private ClinicalConversation closeAndCreate(Patient patient, User user, String providerId,
+			String modeName, ClinicalConversation current) {
 		Date now = new Date();
 		if (current != null) {
 			current.setStatus(ClinicalConversation.STATUS_CLOSED);

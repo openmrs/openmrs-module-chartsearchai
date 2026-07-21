@@ -90,6 +90,18 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 	}
 
 	@Test
+	public void startNewAlwaysClosesActiveConversationEvenWhenProviderAndModeMatch() {
+		ClinicalConversation first = conversationService.openOrCreate(patient, "bundled",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversation fresh = conversationService.startNew(patient, "bundled",
+				ProviderMode.QUERY_SCOPED);
+		assertNotEquals(first.getUuid(), fresh.getUuid());
+		assertEquals(ClinicalConversation.STATUS_CLOSED, first.getStatus());
+		assertEquals(ClinicalConversation.STATUS_ACTIVE, fresh.getStatus());
+		assertEquals("bundled", fresh.getProviderId());
+	}
+
+	@Test
 	public void completedTurnPersistsOpaquePayloadAndIndependentAuditAttribution() throws Exception {
 		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
 				ProviderMode.QUERY_SCOPED);

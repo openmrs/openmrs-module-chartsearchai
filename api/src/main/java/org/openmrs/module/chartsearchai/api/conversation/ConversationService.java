@@ -30,6 +30,12 @@ public interface ConversationService {
 	 */
 	ClinicalConversation openOrCreate(Patient patient, String providerId, ProviderMode mode);
 
+	/**
+	 * Always closes any active conversation for the current user/patient and opens a fresh empty
+	 * one for the given provider/mode. Used by {@code POST /chat/new}.
+	 */
+	ClinicalConversation startNew(Patient patient, String providerId, ProviderMode mode);
+
 	ClinicalConversation getByUuid(String uuid);
 
 	List<ClinicalConversationTurn> getTurns(ClinicalConversation conversation);

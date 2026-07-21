@@ -610,7 +610,7 @@ public class CitationGroundingVerifier {
 			Sentence sentence = new Sentence(raw);
 			Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(raw);
 			while (marker.find()) {
-				sentence.citedIndexes.addAll(ChartSearchAiUtils.parseCitationIndices(marker.group(1)));
+				sentence.citedIndexes.add(Integer.valueOf(marker.group(1)));
 			}
 			sentences.add(sentence);
 		}
@@ -643,12 +643,9 @@ public class CitationGroundingVerifier {
 			}
 			Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(sentence.text);
 			while (marker.find()) {
-				// A compact multi-index marker ([6, 7]) still yields one isolated clause per
-				// index — the indices share a marker, so they share the same cumulative prefix.
-				for (Integer idx : ChartSearchAiUtils.parseCitationIndices(marker.group(1))) {
-					clauses.add(new Sentence(sentence.text.substring(0, marker.end()),
-							Collections.singleton(idx), true));
-				}
+				Integer idx = Integer.valueOf(marker.group(1));
+				clauses.add(new Sentence(sentence.text.substring(0, marker.end()),
+						Collections.singleton(idx), true));
 			}
 		}
 		return clauses;

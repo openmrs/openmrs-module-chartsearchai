@@ -364,6 +364,51 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void extractResponse_shouldNormalizeCorroboratedCommaCitationsInAnswer() {
+		// The compact comma form is the measured failure shape (rc.2 standalone, 2026-07-21,
+		// bc4ba445|heart): "[6, 7]" was unrecognized inline, so the #76 guard dropped every
+		// reference from a fully-cited answer. Groups corroborated by the structured citations
+		// array are rewritten exactly like slash shorthand; the array stays the authority.
+		String response = "{\"answer\": \"Circulation [6, 7] and cardiomyopathy [11,12].\", "
+				+ "\"citations\": [6, 7, 11, 12]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals("Circulation [6], [7] and cardiomyopathy [11], [12].", result.getAnswer());
+		assertEquals(Arrays.asList(6, 7, 11, 12), result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldSurviveOverlongDigitRunsInTruncatedCitationsArray() {
+		// The truncation fallback exists to salvage answers from responses cut off by the
+		// output-token cap — including degenerate digit runs the citations schema's
+		// "type":"integer" does not bound. An unguarded Integer.parseInt turned exactly the
+		// responses the fallback exists for into HTTP 500s.
+		String truncated = "{\"reasoning\":\"r\",\"answer\":\"Condition [1].\", \"citations\": [1, 22222222222";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(truncated);
+		assertEquals("Condition [1].", result.getAnswer());
+		assertTrue(result.getCitations().contains(1),
+				"salvageable in-range citation must survive: " + result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldLeaveUncorroboratedCommaBracketsIntact() {
+		// A numeric comma bracket the model did NOT list in its citations array is a clinical
+		// value, not citation shorthand — splitting it would fabricate references (a
+		// "[120, 80]" reading resolving to records 120 and 80 on a large chart). Mirrors the
+		// slash rule for "[120/80]".
+		String response = "{\"answer\": \"Readings were [120, 80] throughout.\", \"citations\": [3]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals("Readings were [120, 80] throughout.", result.getAnswer());
+		assertEquals(Arrays.asList(3), result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldNormalizeMixedSlashAndCommaShorthand() {
+		String response = "{\"answer\": \"TB [1/2] and anemia [5, 6].\", \"citations\": [1, 2, 5, 6]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals("TB [1], [2] and anemia [5], [6].", result.getAnswer());
+	}
+
+	@Test
 	public void extractResponse_shouldPreserveClinicalSlashTerms() {
 		String response = "{\"answer\": \"The patient has HIV/AIDS [1] and nausea/vomiting [2].\", \"citations\": [1, 2]}";
 		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);

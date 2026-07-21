@@ -29,21 +29,14 @@ public class ChartSearchAiUtilsTest extends BaseModuleContextSensitiveTest {
 	private static final String GP_NAME = "chartsearchai.test.modelPath";
 
 	@Test
-	public void parseCitationIndices_shouldParseSingleIndex() {
-		assertEquals(Arrays.asList(8), ChartSearchAiUtils.parseCitationIndices("8"));
-	}
-
-	@Test
-	public void parseCitationIndices_shouldParseCompactCommaSeparatedIndices() {
-		assertEquals(Arrays.asList(6, 7), ChartSearchAiUtils.parseCitationIndices("6, 7"));
-		assertEquals(Arrays.asList(11, 12), ChartSearchAiUtils.parseCitationIndices("11,12"));
-	}
-
-	@Test
-	public void inlineCitation_shouldMatchCompactMultiIndexMarker() {
-		java.util.regex.Matcher m = ChartSearchAiUtils.INLINE_CITATION.matcher("Cardiomyopathy [11, 12].");
-		assertTrue(m.find());
-		assertEquals("11, 12", m.group(1));
+	public void inlineCitation_shouldStaySingleIndexAndNotMatchCommaBrackets() {
+		// Compact shorthand ("[6, 7]", "[6/7]") is normalized UPSTREAM — LlmAnswerExtractor
+		// rewrites groups corroborated by the structured citations array into single-index
+		// markers — precisely so this pattern can stay single-index. Matching comma groups
+		// here would turn numeric values ("[120, 80]") into phantom citations in extraction
+		// and strip them from grounding claim text before entailment.
+		assertFalse(ChartSearchAiUtils.INLINE_CITATION.matcher("Readings [120, 80] today").find());
+		assertTrue(ChartSearchAiUtils.INLINE_CITATION.matcher("Condition [7].").find());
 	}
 
 	@Test

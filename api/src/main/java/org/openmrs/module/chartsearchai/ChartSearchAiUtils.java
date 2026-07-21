@@ -34,30 +34,21 @@ public class ChartSearchAiUtils {
 	private static final Logger log = LoggerFactory.getLogger(ChartSearchAiUtils.class);
 
 	/**
-	 * Matches an inline {@code [N]} or compact {@code [N, M]} citation marker in LLM answer
-	 * prose. The single source of truth for citation-marker parsing, shared by citation
+	 * Matches an inline {@code [N]} citation marker in LLM answer prose. The
+	 * single source of truth for citation-marker parsing, shared by citation
 	 * extraction ({@code LlmInferenceService}) and grounding
-	 * ({@code CitationGroundingVerifier}) so the two cannot drift apart. Small local models
-	 * emit the compact multi-index form despite the few-shot demonstrating {@code [N], [M]}
-	 * (measured on the rc.2 standalone, 2026-07-21): under the single-index-only pattern such
-	 * an answer appeared to cite nothing inline, so the abstention-dump guard (#76) dropped
-	 * every reference. Group 1 is the digits-and-commas payload; decode it with
-	 * {@link #parseCitationIndices(String)}, never {@code Integer.parseInt} directly.
+	 * ({@code CitationGroundingVerifier}) so the two cannot drift apart.
+	 *
+	 * <p>Deliberately single-index. Small local models also emit compact shorthand —
+	 * {@code [6, 7]} (measured on the rc.2 standalone, 2026-07-21: the #76 guard read such
+	 * an answer as citing nothing inline and dropped every reference) and {@code [6/7]} —
+	 * but that shorthand is rewritten into single-index markers UPSTREAM by
+	 * {@code LlmAnswerExtractor.normalizeSlashCitations}, and only when the structured
+	 * citations array corroborates the group. Matching compact forms here instead would
+	 * turn bracketed numeric VALUES ({@code [120, 80]}) into phantom citations in
+	 * extraction and strip them from grounding claim text before entailment.
 	 */
-	public static final Pattern INLINE_CITATION =
-			Pattern.compile("\\[(\\d{1,9}(?:\\s*,\\s*\\d{1,9})*)\\]");
-
-	/**
-	 * Decodes {@link #INLINE_CITATION}'s group 1 — one index ({@code "8"}) or a compact
-	 * comma-separated run ({@code "6, 7"}) — into record indices, in written order.
-	 */
-	public static List<Integer> parseCitationIndices(String citationGroup) {
-		List<Integer> indices = new ArrayList<Integer>();
-		for (String part : citationGroup.split(",")) {
-			indices.add(Integer.valueOf(part.trim()));
-		}
-		return indices;
-	}
+	public static final Pattern INLINE_CITATION = Pattern.compile("\\[(\\d{1,9})\\]");
 
 	/**
 	 * Builds a composite key from a resource type and resource UUID.

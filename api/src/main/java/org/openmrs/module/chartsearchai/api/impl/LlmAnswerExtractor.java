@@ -42,9 +42,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *       array, so a token-cap cutoff still returns useful content.</li>
  * </ol>
  *
- * <p>Also normalizes shorthand citation syntax: {@code [1/2/3]} → {@code [1], [2], [3]} —
- * but only when every number in the group is a record the model actually cited, so a
- * slash-separated clinical value like {@code [120/80]} is left intact.</p>
+ * <p>Also normalizes shorthand citation syntax: {@code [1/2/3]} and compact comma groups
+ * {@code [1, 2]} → {@code [1], [2], [3]} — but only when every number in the group is a
+ * record the model actually cited, so a bracketed clinical value like {@code [120/80]}
+ * or {@code [120, 80]} is left intact.</p>
  */
 final class LlmAnswerExtractor {
 
@@ -56,6 +57,12 @@ final class LlmAnswerExtractor {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private static final Pattern SLASH_CITATION = Pattern.compile("\\[(\\d+(?:/\\d+)+)\\]");
+
+	/** Compact comma shorthand: {@code [6, 7]} — two or more indices in one bracket. Measured
+	 *  on the rc.2 standalone (2026-07-21, bc4ba445|heart): unrecognized by the single-index
+	 *  {@code INLINE_CITATION} pattern, the #76 guard read the answer as citing nothing inline
+	 *  and dropped every reference. Normalized like slash shorthand, corroborated-only. */
+	private static final Pattern COMMA_CITATION = Pattern.compile("\\[(\\d{1,9}(?:\\s*,\\s*\\d{1,9})+)\\]");
 
 	/**
 	 * Matches the JSON "answer" value — captures the string content (may be truncated).
@@ -142,7 +149,17 @@ final class LlmAnswerExtractor {
 					Matcher numMatcher = CITATION_NUMBER.matcher(
 							trimmed.substring(citationsStart));
 					while (numMatcher.find()) {
-						citations.add(Integer.parseInt(numMatcher.group(1)));
+						// The schema's "type":"integer" bounds shape, not digit count — a
+						// truncation-era degenerate digit run must not NumberFormatException
+						// the very salvage path that exists for truncated output. Skip
+						// unparseable runs; keep salvaging the rest.
+						try {
+							citations.add(Integer.parseInt(numMatcher.group(1)));
+						}
+						catch (NumberFormatException e) {
+							log.warn("Skipping unparseable citation number in truncated response: {}…",
+									numMatcher.group(1).substring(0, Math.min(20, numMatcher.group(1).length())));
+						}
 					}
 				}
 				answer = normalizeSlashCitations(answer.trim(), citations);
@@ -170,28 +187,52 @@ final class LlmAnswerExtractor {
 	}
 
 	/**
-	 * Rewrites citation shorthand {@code [a/b/...]} into {@code [a], [b], ...}, but only for
-	 * groups whose every part appears in {@code validCitations}. This keeps a slash-separated
-	 * clinical value the model bracketed — e.g. a blood pressure {@code [120/80]} — intact,
-	 * since 120 and 80 are not record numbers the model cited. When {@code validCitations} is
-	 * {@code null} the split is unconditional (no context to validate against).
+	 * Rewrites citation shorthand — slash groups {@code [a/b/...]} and compact comma groups
+	 * {@code [a, b]} — into {@code [a], [b], ...}, but only for groups whose every part appears
+	 * in {@code validCitations}. This keeps a bracketed clinical value the model wrote — e.g. a
+	 * blood pressure {@code [120/80]} or a value pair {@code [120, 80]} — intact, since 120 and
+	 * 80 are not record numbers the model cited. When {@code validCitations} is {@code null}
+	 * the slash split is unconditional (no context to validate against; the historical
+	 * contract of this overload) and comma groups are left untouched — a comma group is only
+	 * ever citation shorthand when the array corroborates it.
 	 *
-	 * <p>Trade-off: if the model writes {@code [5/12]} inline but omits 5/12 from its citations
-	 * array, the group is left as-is rather than risk mangling a value. The structured citations
-	 * array is the authority — chart size is irrelevant, unlike validating against record
-	 * indices (where a 150-record chart would wrongly split a {@code [120/80]} value).
+	 * <p>Trade-off: if the model writes {@code [5/12]} or {@code [5, 12]} inline but omits 5/12
+	 * from its citations array, the group is left as-is rather than risk mangling a value. The
+	 * structured citations array is the authority — chart size is irrelevant, unlike validating
+	 * against record indices (where a 150-record chart would wrongly split a {@code [120/80]}
+	 * value). Downstream, the single-index {@code INLINE_CITATION} pattern sees no marker in an
+	 * untouched group — and when the answer contains NO other single-index marker, the #76
+	 * unanchored-array guard then surfaces no references at all for that answer, including any
+	 * array entries the group only partially matched. That total blast radius is the accepted
+	 * conservative trade-off: an uncorroborated bracket is presumed a value, and a value-bearing
+	 * answer with no anchored citations must not ship the model's unanchored review list.
 	 */
 	static String normalizeSlashCitations(String text, Collection<Integer> validCitations) {
-		Matcher matcher = SLASH_CITATION.matcher(text);
+		String normalized = rewriteShorthand(text, SLASH_CITATION, "/", validCitations, validCitations != null);
+		if (validCitations != null) {
+			normalized = rewriteShorthand(normalized, COMMA_CITATION, ",", validCitations, true);
+		}
+		return normalized;
+	}
+
+	/** One shorthand pass: every {@code pattern} group is split on {@code separator} and, when
+	 *  {@code corroborate} is set, rewritten only if {@link #allCited} against
+	 *  {@code validCitations}; otherwise left byte-identical. */
+	private static String rewriteShorthand(String text, Pattern pattern, String separator,
+			Collection<Integer> validCitations, boolean corroborate) {
+		Matcher matcher = pattern.matcher(text);
 		if (!matcher.find()) {
 			return text;
 		}
 		StringBuffer sb = new StringBuffer();
 		matcher.reset();
 		while (matcher.find()) {
-			String[] parts = matcher.group(1).split("/");
-			if (validCitations != null && !allCited(parts, validCitations)) {
-				// Not citation shorthand — a slash-separated value. Leave it untouched.
+			String[] parts = matcher.group(1).split(separator);
+			for (int i = 0; i < parts.length; i++) {
+				parts[i] = parts[i].trim();
+			}
+			if (corroborate && !allCited(parts, validCitations)) {
+				// Not citation shorthand — a bracketed value. Leave it untouched.
 				matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0)));
 				continue;
 			}

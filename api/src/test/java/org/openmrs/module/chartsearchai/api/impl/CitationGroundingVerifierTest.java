@@ -435,35 +435,23 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
-	public void splitIntoCitedSentences_parsesMultiIndexMarker() {
-		// Small local models emit compact multi-index markers ("[11, 12]") despite the
-		// few-shot showing "[11], [12]" — measured on the rc.2 standalone (bc4ba445|heart,
-		// 2026-07-21), where the unrecognized marker made the #76 guard treat the answer
-		// as citing nothing inline and drop every reference.
+	public void commaBracketValues_areIgnoredBySplitAndPreservedByStrip() {
+		// Grounding consumes the POST-normalization answer (LlmAnswerExtractor rewrites
+		// corroborated comma shorthand into single-index markers), so a comma bracket that
+		// survives to this layer is a clinical value ("[120, 80]") — it must not be scored
+		// as citations, and stripCitationMarkers must not delete it from the claim text.
 		List<CitationGroundingVerifier.Sentence> sentences =
-				CitationGroundingVerifier.splitIntoCitedSentences("Congestive cardiomyopathy [11, 12].");
+				CitationGroundingVerifier.splitIntoCitedSentences("BP was [120, 80] at rest [3].");
 
 		assertEquals(1, sentences.size());
-		assertTrue(sentences.get(0).cites(11));
-		assertTrue(sentences.get(0).cites(12));
+		assertTrue(sentences.get(0).cites(3));
+		assertFalse(sentences.get(0).cites(120));
+		assertFalse(sentences.get(0).cites(80));
+		assertEquals("BP was [120, 80] at rest",
+				CitationGroundingVerifier.stripCitationMarkers("BP was [120, 80] at rest [3]"));
 	}
 
 	// ---- clause-scoped grounding ----
-
-	@Test
-	public void splitIntoClauseScopedSentences_multiIndexMarkerYieldsClausePerIndex() {
-		List<CitationGroundingVerifier.Sentence> clauses =
-				CitationGroundingVerifier.splitIntoClauseScopedSentences(
-						"A condition [1, 2] and a diagnosis [3].");
-		assertEquals(3, clauses.size());
-		assertEquals("A condition [1, 2]", clauses.get(0).text);
-		assertTrue(clauses.get(0).cites(1));
-		assertFalse(clauses.get(0).cites(2), "each index gets its own isolated clause");
-		assertEquals("A condition [1, 2]", clauses.get(1).text);
-		assertTrue(clauses.get(1).cites(2));
-		assertEquals("A condition [1, 2] and a diagnosis [3]", clauses.get(2).text);
-		assertTrue(clauses.get(2).cites(3));
-	}
 
 	@Test
 	public void splitIntoClauseScopedSentences_cumulativePrefixAttributedToOneCitation() {

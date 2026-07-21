@@ -223,7 +223,11 @@ public class LlmProvider {
 	 * chain-of-thought, emitted first). An instance scans for its key, forwards only that field's
 	 * value, and ignores everything else (other fields, punctuation, the citations array). JSON
 	 * string escapes (including {@code \\uXXXX}, possibly split across chunks) are decoded so the
-	 * streamed text matches the non-streaming path.</p>
+	 * streamed text matches the non-streaming path — except citation-shorthand normalization
+	 * ({@code LlmAnswerExtractor.normalizeSlashCitations}), which needs the complete citations
+	 * array and therefore applies only to the FINAL answer: a client that renders accumulated
+	 * tokens may briefly show {@code [6, 7]} where the {@code done} answer reads
+	 * {@code [6], [7]}. Clients must replace the accumulated text with the final answer.</p>
 	 */
 	static class AnswerExtractingConsumer implements Consumer<String> {
 

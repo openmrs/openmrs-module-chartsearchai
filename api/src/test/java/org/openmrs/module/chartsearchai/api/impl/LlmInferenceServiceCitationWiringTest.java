@@ -78,6 +78,13 @@ public class LlmInferenceServiceCitationWiringTest {
 		return p;
 	}
 
+	/** The measured rc.2 incident shape (bc4ba445|heart, 2026-07-21): compact comma
+	 *  shorthand corroborated by the structured citations array. Shared by the
+	 *  search/searchStreaming twins so the two paths always assert the same input. */
+	private static final String COMMA_SHORTHAND_FIXTURE =
+			"{\"reasoning\": \"r\", \"answer\": \"Persistent fetal circulation [6, 7].\", "
+					+ "\"citations\": [6, 7]}";
+
 	@Test
 	public void search_shouldResolveInlineOnlyCitationToReference() {
 		ChartAnswer answer = service.search(patient(), "any infections?");
@@ -92,15 +99,50 @@ public class LlmInferenceServiceCitationWiringTest {
 	}
 
 	@Test
-	public void search_shouldResolveMultiIndexInlineCitations() {
-		// Reproduces the rc.2 capture failure (bc4ba445|heart, 2026-07-21): the model cited
-		// "[6, 7]" inline with an empty structured array; the single-index-only marker pattern
-		// saw no inline citations, so the #76 abstention-dump guard dropped every reference.
-		service.setChartBuildingStrategy(new MultiIndexStubStrategy());
-		service.setLlmProvider(new MultiIndexStubProvider());
+	public void search_shouldResolveCorroboratedCommaShorthandFromRawEngineOutput() {
+		// The measured rc.2 failure shape (bc4ba445|heart, 2026-07-21) end-to-end through the
+		// REAL provider: raw engine JSON citing compact "[6, 7]" corroborated by the structured
+		// array must be normalized to "[6], [7]" and resolve to references. (That capture's
+		// resolved refs [6, 7, ...] prove the model populates the array for comma-cited
+		// records — corroboration, not pattern-widening, is what fixes the incident.)
+		service.setChartBuildingStrategy(new HeartRecordsStubStrategy());
+		service.setLlmProvider(new RawJsonEngineProvider(COMMA_SHORTHAND_FIXTURE));
 		ChartAnswer answer = service.search(patient(), "any heart problems?");
 		assertReferencesInclude(answer, 6);
 		assertReferencesInclude(answer, 7);
+		assertTrue(answer.getAnswer().contains("[6], [7]"),
+				"corroborated shorthand must be normalized in the display answer; got: "
+						+ answer.getAnswer());
+	}
+
+	@Test
+	public void searchStreaming_shouldResolveCorroboratedCommaShorthandFromRawEngineOutput() {
+		// Twin of the search() test on the PRIMARY production path (see class javadoc): the
+		// streaming LlmResponse must also be built from extractResponse(result.getText()) —
+		// a refactor that assembled it from the AnswerExtractingConsumer's accumulated tokens
+		// would silently drop shorthand normalization exactly where users hit it.
+		service.setChartBuildingStrategy(new HeartRecordsStubStrategy());
+		service.setLlmProvider(new RawJsonEngineProvider(COMMA_SHORTHAND_FIXTURE));
+		ChartAnswer answer = service.searchStreaming(patient(), "any heart problems?", token -> { });
+		assertReferencesInclude(answer, 6);
+		assertReferencesInclude(answer, 7);
+		assertTrue(answer.getAnswer().contains("[6], [7]"),
+				"corroborated shorthand must be normalized on the streaming path; got: "
+						+ answer.getAnswer());
+	}
+
+	@Test
+	public void search_shouldNotFabricateReferencesFromCommaBracketValues() {
+		// A comma bracket reaching this layer is NOT citation shorthand: corroborated groups
+		// were already normalized to single-index markers upstream (LlmAnswerExtractor), so a
+		// survivor is a clinical value. The stub chart deliberately maps records 6 and 7 —
+		// a parser that treated "[6, 7]" as citations would attach both; the #76 guard must
+		// instead see an answer with no inline markers and surface nothing.
+		service.setChartBuildingStrategy(new HeartRecordsStubStrategy());
+		service.setLlmProvider(new UncorroboratedCommaBracketProvider());
+		ChartAnswer answer = service.search(patient(), "any heart problems?");
+		assertTrue(answer.getReferences().isEmpty(),
+				"comma-bracket values must not resolve to references; got " + answer.getReferences());
 	}
 
 	private static void assertReferencesInclude(ChartAnswer answer, int index) {
@@ -142,7 +184,7 @@ public class LlmInferenceServiceCitationWiringTest {
 		}
 	}
 
-	private static final class MultiIndexStubStrategy extends ChartBuildingStrategy {
+	private static final class HeartRecordsStubStrategy extends ChartBuildingStrategy {
 
 		@Override
 		PatientChart buildChart(Patient patient, String question) {
@@ -159,8 +201,67 @@ public class LlmInferenceServiceCitationWiringTest {
 		}
 	}
 
-	/** Cites a compact multi-index marker inline with an EMPTY structured array. */
-	private static final class MultiIndexStubProvider extends LlmProvider {
+	/** A REAL LlmProvider whose engine returns canned raw JSON — exercises the full composed
+	 *  parse → normalize → extract chain that provider-level canned-LlmResponse stubs bypass.
+	 *  Context-backed prompt/timeout resolvers are overridden so no OpenMRS runtime is needed. */
+	private static final class RawJsonEngineProvider extends LlmProvider {
+
+		private final String rawJson;
+
+		RawJsonEngineProvider(String rawJson) {
+			this.rawJson = rawJson;
+		}
+
+		@Override
+		LlmEngine getActiveEngine() {
+			return new LlmEngine() {
+
+				@Override
+				public InferenceResult infer(String systemPrompt, String userMessage,
+						int timeoutSeconds) {
+					return new InferenceResult(rawJson, 0, 0);
+				}
+
+				@Override
+				public InferenceResult inferStreaming(String systemPrompt, String userMessage,
+						int timeoutSeconds, Consumer<String> tokenConsumer) {
+					// Real engines stream every token through the consumer; mirroring that keeps
+					// this stub honest — a refactor that assembled the streaming answer from the
+					// accumulated token buffer instead of extractResponse(result.getText()) must
+					// fail the reference assertions with the true incident signature, not slip
+					// through on an accidentally-empty buffer.
+					tokenConsumer.accept(rawJson);
+					return new InferenceResult(rawJson, 0, 0);
+				}
+
+				@Override
+				public void warmup(String systemPrompt, String userMessage, int timeoutSeconds) {
+				}
+
+				@Override
+				public void close() {
+				}
+
+				@Override
+				public void shutdown() {
+				}
+			};
+		}
+
+		@Override
+		protected String getSystemPrompt() {
+			return DEFAULT_SYSTEM_PROMPT;
+		}
+
+		@Override
+		protected int getTimeoutSeconds() {
+			return 5;
+		}
+	}
+
+	/** Emits an UNCORROBORATED comma bracket (empty structured array by construction): per the
+	 *  normalization contract this is a value, not citation shorthand — nothing must resolve. */
+	private static final class UncorroboratedCommaBracketProvider extends LlmProvider {
 
 		private static LlmResponse canned() {
 			return new LlmResponse("Persistent fetal circulation [6, 7].",

@@ -16,11 +16,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -355,14 +359,137 @@ public class QueryStoreChartBuilderScopedTest {
 				"blank topical question reduces to the demographics record");
 	}
 
+	/** A test contributor claiming a fixed type set when the question contains a cue word. */
+	private static QueryScopeContributor contributor(
+			final String cue, final String... types) {
+		return new QueryScopeContributor() {
+
+			@Override
+			public Set<String> scopedResourceTypes(String question) {
+				if (question != null && question.toLowerCase().contains(cue)) {
+					return new HashSet<String>(Arrays.asList(types));
+				}
+				return Collections.<String> emptySet();
+			}
+		};
+	}
+
+	@Test
+	public void buildScoped_shouldIncludeContributorClaimedTypes_complete() {
+		// A module (e.g. billing) registers a contributor claiming its resourceType for questions it
+		// recognizes. Those records must join the slice COMPLETE, exactly like a built-in typed scope.
+		builder.contributors.add(contributor("bill", "billing"));
+		queryStore.stubChart = new ArrayList<QueryDocument>(Arrays.asList(
+				doc("patient", "p-1", "Patient: Jane Doe", LocalDate.of(2026, 7, 1)),
+				doc("billing", "b-1", "Bill: consultation, 20 USD, UNPAID", LocalDate.of(2026, 6, 30)),
+				doc("billing", "b-2", "Bill: lab, 5 USD, PAID", LocalDate.of(2026, 5, 1)),
+				doc("obs", "o-1", "Weight: 70 kg", LocalDate.of(2026, 4, 2))));
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "does the patient have any outstanding bills?");
+
+		List<String> uuids = mappedUuids(chart);
+		assertTrue(uuids.containsAll(Arrays.asList("p-1", "b-1", "b-2")),
+				"contributor-claimed billing records must be in the slice, complete; got " + uuids);
+		assertFalse(uuids.contains("o-1"), "records outside the contributed scope and similarity are excluded");
+	}
+
+	@Test
+	public void buildScoped_shouldUnionContributorScope_withBuiltInScope() {
+		// A contributor's claim is ADDITIVE on top of the built-in typed scope, never a replacement:
+		// a medications question still gets every drug_order AND the contributor's billing records.
+		builder.contributors.add(contributor("bill", "billing"));
+		queryStore.stubChart = new ArrayList<QueryDocument>(Arrays.asList(
+				doc("patient", "p-1", "Patient: Jane Doe", LocalDate.of(2026, 7, 1)),
+				doc("drug_order", "d-1", "Drug order: Lisinopril 10 mg", LocalDate.of(2026, 6, 30)),
+				doc("billing", "b-1", "Bill: pharmacy, UNPAID", LocalDate.of(2026, 6, 29))));
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1),
+				"what medications and unpaid bills does the patient have?");
+
+		assertTrue(mappedUuids(chart).containsAll(Arrays.asList("p-1", "d-1", "b-1")),
+				"union must carry both the built-in drug_order scope and the contributed billing scope; got "
+						+ mappedUuids(chart));
+	}
+
+	@Test
+	public void buildScoped_shouldExcludeContributorScope_whenNoContributorRegistered() {
+		// Negative control: with no contributor, billing records are unknown to routing and only reach
+		// the slice via similarity — proving the contributor is what pulls them in above.
+		queryStore.stubChart = new ArrayList<QueryDocument>(Arrays.asList(
+				doc("patient", "p-1", "Patient: Jane Doe", LocalDate.of(2026, 7, 1)),
+				doc("billing", "b-1", "Bill: consultation, UNPAID", LocalDate.of(2026, 6, 30))));
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "does the patient have any outstanding bills?");
+
+		assertFalse(mappedUuids(chart).contains("b-1"),
+				"without a registered contributor, billing is not a routed scope; got " + mappedUuids(chart));
+	}
+
+	@Test
+	public void buildScoped_shouldSurviveThrowingContributor() {
+		// A misbehaving contributor must never break chart assembly — it forfeits its claim, the rest
+		// of the slice (built-in scope + similarity + patient) is built normally.
+		builder.contributors.add(new QueryScopeContributor() {
+
+			@Override
+			public Set<String> scopedResourceTypes(String question) {
+				throw new RuntimeException("contributor boom");
+			}
+		});
+		builder.contributors.add(contributor("bill", "billing"));
+		queryStore.stubChart = new ArrayList<QueryDocument>(Arrays.asList(
+				doc("patient", "p-1", "Patient: Jane Doe", LocalDate.of(2026, 7, 1)),
+				doc("billing", "b-1", "Bill: consultation, UNPAID", LocalDate.of(2026, 6, 30))));
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "any outstanding bills?");
+
+		List<String> uuids = mappedUuids(chart);
+		assertTrue(uuids.contains("p-1"), "a throwing contributor must not break the slice; got " + uuids);
+		assertTrue(uuids.contains("b-1"),
+				"the surviving contributor's claim must still apply after another throws; got " + uuids);
+	}
+
+	@Test
+	public void buildScoped_shouldSurvive_whenContributorResolutionItselfFails() {
+		// Beyond a single contributor throwing: resolving the contributor beans can itself fail
+		// (e.g. no OpenMRS service context). buildScoped must degrade to the built-in scope, not break.
+		builder.throwOnResolveContributors = true;
+		queryStore.stubChart = new ArrayList<QueryDocument>(Arrays.asList(
+				doc("patient", "p-1", "Patient: Jane Doe", LocalDate.of(2026, 7, 1)),
+				doc("drug_order", "d-1", "Drug order: Lisinopril 10 mg", LocalDate.of(2026, 6, 30))));
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "What medications is the patient taking?");
+
+		assertTrue(mappedUuids(chart).containsAll(Arrays.asList("p-1", "d-1")),
+				"contributor-resolution failure must still yield the built-in typed slice; got " + mappedUuids(chart));
+	}
+
 	private static final class TestableScopedBuilder extends QueryStoreChartBuilder {
 
 		private final QueryStoreService stub;
 
 		int recencyAnchor = 0;
 
+		boolean throwOnResolveContributors = false;
+
+		List<QueryScopeContributor> contributors =
+				new ArrayList<QueryScopeContributor>();
+
 		TestableScopedBuilder(QueryStoreService stub) {
 			this.stub = stub;
+		}
+
+		@Override
+		protected List<QueryScopeContributor> resolveScopeContributors() {
+			if (throwOnResolveContributors) {
+				throw new RuntimeException("simulated getRegisteredComponents failure");
+			}
+			return contributors;
 		}
 
 		@Override

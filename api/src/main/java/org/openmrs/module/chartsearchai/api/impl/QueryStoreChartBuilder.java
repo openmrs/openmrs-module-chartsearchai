@@ -20,6 +20,7 @@ import java.util.Set;
 import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
@@ -202,7 +203,13 @@ class QueryStoreChartBuilder {
 		// Every matched intent contributes its types (union): completeness must hold for
 		// whichever intent a multi-cue question ("any drug allergies?") actually meant.
 		Set<QueryScopeRouter.Intent> intents = QueryScopeRouter.matchedIntents(question);
-		Set<String> typedScope = QueryScopeRouter.typedSlice(intents);
+		// The built-in typed scope, additionally UNIONed with any module-contributed scopes
+		// (billing, appointments, …). typedSlice(...) is unmodifiable, so wrap it before adding.
+		// The union is additive: with zero contributors this is exactly the built-in behaviour, and
+		// a contributor can only add its own domain's records — never perturb another domain's
+		// routing. See QueryScopeContributor.
+		Set<String> typedScope = new HashSet<String>(QueryScopeRouter.typedSlice(intents));
+		typedScope.addAll(contributedResourceTypes(question));
 		String intentLabel = intentLabel(intents);
 
 		QueryStoreService queryStore = resolveQueryStoreOrNull();
@@ -571,6 +578,71 @@ class QueryStoreChartBuilder {
 	/** Seam for tests: production reads the global property. */
 	protected int resolveQueryStoreTopK() {
 		return PipelineSettings.getQueryStoreTopK();
+	}
+
+	/** Seam for tests: production resolves the registered {@link QueryScopeContributor} beans LIVE
+	 *  via the OpenMRS context on each call — the same lazy-resolution posture this class uses for
+	 *  {@link QueryStoreService} (see the class javadoc), NOT a cached {@code @Autowired} snapshot
+	 *  that would silently miss a contributor module started after this singleton was wired.
+	 *  {@link Context#getRegisteredComponents} returns an empty list when none are registered. */
+	protected List<QueryScopeContributor> resolveScopeContributors() {
+		return Context.getRegisteredComponents(QueryScopeContributor.class);
+	}
+
+	/**
+	 * Union of every registered {@link QueryScopeContributor}'s claimed resourceTypes for this
+	 * question — the module-extension point unioned into {@link #buildScoped}'s typed scope.
+	 * Fail-safe throughout: resolving the contributor beans, and each contributor's own claim, are
+	 * both guarded — a failure (or a null return) is logged and skipped, never breaking chart
+	 * assembly (the same defense-in-depth as querystore resolution). Returns an empty set when no
+	 * contributor claims anything.
+	 */
+	private Set<String> contributedResourceTypes(String question) {
+		List<QueryScopeContributor> contributors;
+		try {
+			contributors = resolveScopeContributors();
+		}
+		catch (RuntimeException e) {
+			log.warn("Resolving QueryScopeContributor beans failed; proceeding with the built-in scope only", e);
+			return Collections.<String> emptySet();
+		}
+		if (contributors == null || contributors.isEmpty()) {
+			return Collections.<String> emptySet();
+		}
+		Set<String> types = new HashSet<String>();
+		for (QueryScopeContributor contributor : contributors) {
+			if (contributor == null) {
+				continue;
+			}
+			try {
+				Set<String> claimed = contributor.scopedResourceTypes(question);
+				if (claimed != null && !claimed.isEmpty()) {
+					types.addAll(claimed);
+					if (log.isDebugEnabled()) {
+						log.debug("QueryScopeContributor [{}] claimed {} for this query",
+								domainName(contributor), claimed);
+					}
+				}
+			}
+			catch (RuntimeException e) {
+				// A misbehaving contributor must never break the answer path.
+				log.warn("QueryScopeContributor [{}] failed; ignoring its scope claim for this query",
+						contributor.getClass().getName(), e);
+			}
+		}
+		return types;
+	}
+
+	/** The contributor's self-reported domain name for logging, falling back to the class name if the
+	 *  contributor's own {@code getDomainName()} misbehaves — so a diagnostic log can never corrupt
+	 *  the (already-applied) claim or emit a misleading "claim ignored" message. */
+	private static String domainName(QueryScopeContributor contributor) {
+		try {
+			return contributor.getDomainName();
+		}
+		catch (RuntimeException e) {
+			return contributor.getClass().getName();
+		}
 	}
 
 	/** The query-scoped slice's recency anchor: the chart's N most recent records are always in

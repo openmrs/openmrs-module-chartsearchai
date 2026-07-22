@@ -1,0 +1,1967 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "OpenMRS DDI knowledge base — bundled sample",
+  "note": "Small representative default (16 common drugs, self-contained). Point chartsearchai.drugReference.dataFilePath at the full ddi_knowledge_base.json from openmrs-ddi-knowledge-base for full coverage.",
+  "source": {
+   "name": "DDInter 2.0",
+   "url": "https://ddinter2.scbdd.com/",
+   "normalization": "RxNorm (NLM)",
+   "bridge": "CIEL v2026-07-20"
+  },
+  "shape": {
+   "drugs": 16,
+   "mechanisms": 60,
+   "interactions": 120
+  }
+ },
+ "mechanisms": {
+  "4875": {
+   "text": "Coadministration with proton pump inhibitors (PPIs) may increase the serum concentrations of methotrexate (MTX) and its potentially active 7-hydroxy metabolite. The proposed mechanism is PPI inhibition of the active tubular secretion of MTX and 7-hydroxymethotrexate via renal H+/K+ ATPase pumps. Inhibition of the breast cancer resistance protein (BCRP)-mediated transport of methotrexate and 7-hydroxymethotrexate by the proton pump inhibitors has also been suggested.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "2712": {
+   "text": "Simvastatin may slightly increase the anticoagulant response to warfarin. The mechanism may be warfarin displacement from protein binding sites. The clinical significance of this interaction has not been established, however, clinical monitoring of patient warfarin response and tolerance is recommended. Simvastatin may interact in a similar way with other oral anticoagulants. Patients should be advised to promptly report any signs of bleeding to their physician, including pain, swelling, headache, dizziness, weakness, prolonged bleeding from cuts, increased menstrual flow, vaginal bleeding, nosebleeds, bleeding of gums from brushing, unusual bleeding or bruising, red or brown urine, or red or black stools.",
+   "categories": [
+    "distribution"
+   ]
+  },
+  "3919": {
+   "text": "The use of some macrolide antibiotics has been associated with increased blood levels of some selective serotonin reuptake inhibitors (SSRIs), resulting in excessive serotonergic effects or serotonin syndrome. The mechanism is inhibition of the CYP450 3A4 isoenzyme, which metabolizes SSRIs.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "1077": {
+   "text": "Due to its serotonergic activity, coadministration of tramadol with selective serotonin reuptake inhibitors (SSRIs) may potentiate the risk of serotonin syndrome, which is a rare but serious and potentially fatal condition thought to result from hyperstimulation of brainstem 5-HT1A and 2A receptors. Symptoms of the serotonin syndrome may include mental status changes such as irritability, altered consciousness, confusion, hallucinations, and coma; autonomic dysfunction such as tachycardia, hyperthermia, diaphoresis, shivering, blood pressure lability, and mydriasis; neuromuscular abnormalities such as hyperreflexia, myoclonus, tremor, rigidity, and ataxia; and gastrointestinal symptoms such as abdominal cramping, nausea, vomiting, and diarrhea. Patients receiving tramadol with SSRIs may also have an increased risk of seizures due to additive epileptogenic effects of these agents. Pharmacokinetically, coadministration with certain SSRIs, namely fluoxetine, paroxetine and possibly sertraline, may decrease the plasma concentrations of the active O-demethylated (M1) metabolite of tramadol due to inhibition of CYP450 2D6, the isoenzyme responsible for the formation of the metabolite.",
+   "categories": [
+    "synergistic_effect",
+    "metabolism"
+   ]
+  },
+  "338": {
+   "text": "Amiodarone can cause dose-related prolongation of the QT interval. Coadministration with other agents that can prolong the QT interval such as macrolide antibiotics may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.In general, the risk of an individual agent or a combination of agents causing ventricular arrhythmia in association with QT prolongation is largely unpredictable but may be increased by certain underlying risk factors such as congenital long QT syndrome, cardiac disease, and electrolyte disturbances (e.g., hypokalemia, hypomagnesemia). Some macrolides such as clarithromycin, erythromycin, and troleandomycin are also potent inhibitors of CYP450 3A4 and may significantly inhibit the metabolism of amiodarone, which is primarily metabolized by the isoenzyme.",
+   "categories": [
+    "synergistic_effect",
+    "metabolism"
+   ]
+  },
+  "3689": {
+   "text": "Nonsteroidal anti-inflammatory drugs (NSAIDs) may increase plasma digoxin concentrations and half-life. The exact mechanism is unknown, but may be related to reduced renal clearance of digoxin. The interaction has been reported with indomethacin and ibuprofen, but data for other NSAIDs are not available.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "2401": {
+   "text": "Rare cases of digoxin toxicity have been reported with concomitant use of tramadol. The mechanism of the interaction has not been described.",
+   "categories": [
+    "others"
+   ]
+  },
+  "5547": {
+   "text": "Coadministration with azole antifungal agents may significantly increase the plasma concentrations of amiodarone. The proposed mechanism is azole inhibition of CYP450 3A4, the isoenzyme responsible for the metabolic clearance of amiodarone. The use of amiodarone has been associated with prolongation of the QT interval, thus elevated plasma levels of the drug may potentiate the risk of ventricular arrhythmias such as ventricular tachycardia and torsade de pointes as well as cardiac arrest and sudden death. Within the azole class, ketoconazole and itraconazole are considered potent inhibitors, while fluconazole is comparatively weak and generally causes clinically significant interactions with CYP450 3A4 substrates only at dosages of 200 mg/day or more.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3474": {
+   "text": "Coadministration with nonsteroidal anti-inflammatory drugs (NSAIDs) may increase the plasma concentrations and toxicities of methotrexate. The proposed mechanism is NSAID inhibition of the renal elimination of methotrexate and its metabolite, 7-hydroxymethotrexate, although data from pharmacokinetic studies are inconsistent and conflicting. Displacement of methotrexate binding to serum albumin by certain NSAIDs may also play a secondary role. Unexpectedly severe and sometimes fatal bone marrow suppression, aplastic anemia, gastrointestinal toxicity, and nephrotoxicity have been reported during concomitant administration of methotrexate with NSAIDs. The risk is greatest in patients receiving high dosages of methotrexate and those with renal impairment.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "2167": {
+   "text": "Coadministration with amiodarone may increase serum digoxin concentrations by up to 100%, frequently resulting in clinical toxicity. In children, this percentage may be even higher. Amiodarone has been suggested to increase intestinal transit time, reduce renal clearance and volume of distribution, displace digoxin from protein binding sites, as well as induce hypothyroidism, all of which may contribute to increased serum digoxin levels. In addition, both drugs may have additive bradycardic effects. Torsade de pointes cardiac arrhythmia has been reported. The interaction also has occurred with digitoxin.",
+   "categories": [
+    "distribution"
+   ]
+  },
+  "1403": {
+   "text": "Coadministration with clarithromycin may significantly increase the plasma concentrations of digoxin. The proposed mechanism is clarithromycin inhibition of the P-glycoprotein-mediated intestinal efflux and/or renal tubular secretion of digoxin.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "2910": {
+   "text": "Clarithromycin may increase and prolong the omeprazole plasma concentration. The mechanism may be related to clarithromycin inhibition of hepatic cytochrome P450 enzymes responsible for omeprazole metabolism. Coadministration of omeprazole may result in an increase in clarithromycin and 14-(R)-hydroxyclarithromycin plasma concentrations. These increases may be due to the effect of omeprazole on gastric pH.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3189": {
+   "text": "Coadministration with inhibitors of CYP450 3A4 may increase the plasma concentrations of HMG-CoA reductase inhibitors (i.e., statins) that are metabolized by the isoenzyme. Lovastatin and simvastatin are particularly susceptible because of their low oral bioavailability, but others such as atorvastatin and cerivastatin may also be affected.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "2704": {
+   "text": "Proton pump inhibitors may increase the bioavailability of digoxin. The mechanism may involve a pH-dependent increase in gastrointestinal absorption of digoxin and/or inhibition by PPIs of the P-glycoprotein-mediated intestinal transport of digoxin. Coadministration with proton pump inhibitors (PPIs) for prolonged periods may increase the risk of digoxin toxicity. Chronic use of PPIs can induce hypomagnesemia. In patients with hypomagnesemia, toxicity may occur despite serum digoxin concentrations below 2.0 ng/mL because magnesium depletion sensitizes the myocardium to digoxin. The mechanism via which hypomagnesemia may occur during long-term PPI use is unknown, although changes in intestinal absorption of magnesium may be involved. Hypomagnesemia has been reported rarely in patients treated with PPIs for at least three months, but in most cases, after a year or more. Serious adverse events include tetany, seizures, tremor, carpopedal spasm, atrial fibrillation, supraventricular tachycardia, and abnormal QT interval; however, patients do not always exhibit these symptoms.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "3230": {
+   "text": "The use of some antineoplastic agents has been associated with decreased gastrointestinal absorption of digoxin. The suspected mechanism is alteration of the gastrointestinal mucosa. The risk of an interaction is expected to be less with digoxin solution in capsules because absorption occurs rapidly in the upper GI tract.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "2958": {
+   "text": "Coadministration with metformin may decrease the anticoagulant effects of vitamin K antagonists (VKAs). The mechanism has not been delineated, but it may involve metformin-mediated increase in the elimination rate of VKAs. In addition, concomitant use of VKAs with metformin may increase the risk of severe hypoglycemia. The clinical significance of this interaction is unknown.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "419": {
+   "text": "Coadministration with proton pump inhibitors may decrease the oral bioavailability of aspirin and other salicylates. Proton pump inhibitors may enhance the release rate of salicylates from enteric-coated formulations due to premature disruption of the coating and intragastric release of the drug secondary to an increase in gastric pH. The clinical significance of this interaction is unknown. Theoretically, it may increase the risk of gastric adverse effects associated with salicylates.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "4978": {
+   "text": "Coadministration with proton pump inhibitors (PPIs) has occasionally been associated with enhanced hypoprothrombinemic effect of warfarin. The exact mechanism is unknown but may involve PPI inhibition of CYP450 2C19 and/or 3A4, the isoenzymes partially responsible for the metabolic clearance of the biologically less active R(+) enantiomer of warfarin.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "1430": {
+   "text": "Digoxin is a cationic drug and theoretically could decrease the excretion of metformin by competing for renal tubular transport. In addition, patients who are being pharmacologically treated for congestive heart failure appear to be at greater risk of developing lactic acidosis.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "165": {
+   "text": "Coadministration with nonsteroidal anti-inflammatory drugs (NSAIDs) may potentiate the risk of central nervous system toxicity sometimes associated with fluoroquinolone use. Some investigators suggest that the piperazine ring of fluoroquinolones may inhibit the binding of gamma-aminobutyric acid (GABA) to brain receptors and that NSAIDs may synergistically add to this effect. Patients with a history of seizures may be at greater risk.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "58": {
+   "text": "The use of amiodarone with higher dosages of simvastatin or lovastatin may be associated with an increased risk of myopathy. The proposed mechanism is inhibition by amiodarone of intestinal and hepatic CYP450 3A4, resulting in enhanced bioavailability as well as reduced clearance of simvastatin and its active metabolite, simvastatin acid. Although not studied, the interaction is also expected to occur with lovastatin due to its similar metabolic profile to simvastatin. In general, the risk of myopathy associated with the statin class of drugs is thought to be dose-related and increased by high levels of HMG-CoA reductase inhibitory activity in plasma. Myopathy manifested as muscle pain and/or weakness associated with grossly elevated creatine kinase exceeding ten times the upper limit of normal has been reported occasionally. Rhabdomyolysis has also occurred rarely, which may be accompanied by acute renal failure secondary to myoglobinuria and may result in death.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "1374": {
+   "text": "Quinolone antibiotics may interfere with the therapeutic effects of insulin and other antidiabetic agents. The use of quinolones has been associated with disturbances in blood glucose homeostasis possibly stemming from effects on pancreatic beta cell ATP-sensitive potassium channels that regulate insulin secretion. Both hyperglycaemia and hypoglycemia have been reported, usually in diabetic patients receiving concomitant treatment with an oral hypoglycemic agent (e.g., sulfonylurea) or insulin. Although hyperglycaemia is significantly more common and infection itself may be an underlying risk factor, hypoglycemia may cause greater morbidity and mortality.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
+  "812": {
+   "text": "Salicylates may interfere with the renal elimination of methotrexate and may displace it from binding sites. The pharmacologic effect and toxicity of methotrexate may be increased. Patients receiving high-dose methotrexate are at a greater risk of developing toxicity.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "2515": {
+   "text": "Coadministration with tramadol may potentiate the hypoprothrombinemic effect of warfarin. There have been rare reports of elevated prothrombin time or INR and bleeding in warfarin patients taking tramadol, and a return to normal anticoagulation following its discontinuation. The exact mechanism is unknown but may be related to reduced activity of CYP450 2D6, which can lead to increased plasma concentrations of tramadol.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "2845": {
+   "text": "Spironolactone may reduce the tubular secretion of digoxin. Plasma clearance of digoxin may be decreased, and plasma levels may increase. Also, limited data indicate that spironolactone may have a negative inotropic side effect. Finally, spironolactone may interfere with some digoxin radioimmunoassays, and digoxin concentrations may be overestimated. During coadministration, the patient should be monitored for signs and symptoms of digoxin toxicity, levels should be checked when necessary, and the clinician should keep in mind the possibility that digoxin levels may falsely appear to be elevated. Patients should be advised to notify their physician if they experience nausea, anorexia, visual changes, or irregular heartbeats.",
+   "categories": [
+    "antagonistic_effect",
+    "excretion"
+   ]
+  },
+  "4837": {
+   "text": "Coadministration of methotrexate with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Methotrexate, especially at higher doses or with prolonged treatment, has been associated with hepatotoxicity including acute hepatitis, chronic fibrosis, necrosis, cirrhosis, and liver enzyme elevations.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "4642": {
+   "text": "Fluconazole may increase plasma concentrations of clarithromycin when coadministered. The mechanism of the interaction is unknown. Observation for clarithromycin adverse effects is recommended if these drugs are given together.",
+   "categories": [
+    "others"
+   ]
+  },
+  "4540": {
+   "text": "Concomitant use of nonsteroidal anti-inflammatory drugs (NSAIDs) and diuretics may adversely affect renal function due to NSAID inhibition of the renal synthesis of prostaglandins that help maintain renal perfusion in dehydrated states. The risk may be increased in patients on dietary sodium restriction. At the same time, hypotensive effect of the diuretics may be reduced because inhibition of prostaglandins can lead to unopposed pressor activity and, consequently, elevation in blood pressure. Natriuretic and diuretic effects may also be reduced, as NSAIDs have been reported to cause sodium and water retention, which may account for the increased risk of congestive heart failure associated with the combination. NSAIDs may also increase the risk of hyperkalemia associated with potassium-sparing diuretics.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
+  "5419": {
+   "text": "Coadministration with diuretics may potentiate the risk of hyponatremia associated with the use of selective serotonin reuptake inhibitors (SSRIs) and serotonin-norepinephrine reuptake inhibitors (SNRIs). Elderly patients and patients taking diuretics or who are otherwise volume-depleted may be at greater risk of developing hyponatremia with SSRIs and SNRIs. Antihypertensive agents such as diuretics may potentiate the orthostatic effect that is occasionally observed upon the initiation of SSRI or SNRI therapy. Syncope and orthostatic hypotension tend to occur within the first week of SNRI/SSRI therapy but can occur at any time during treatment, particularly after a dosage increase. The use of SSRIs or SNRIs may also cause sustained increases in blood pressure and heart rate, which may antagonize the therapeutic effects of antihypertensive medications.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3456": {
+   "text": "Spironolactone may cause diuresis and hemoconcentration of clotting factors. The effects of some anticoagulants may be decreased. Data are available for warfarin. The INR or PT should be monitored, and oral coagulant dosage should be increased as needed.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
+  "4651": {
+   "text": "Coadministration with fluconazole may significantly increase the plasma concentrations and hypoprothrombinemic effect of warfarin. The mechanism is fluconazole inhibition of CYP450 2C9, the isoenzyme responsible for the metabolic clearance of the biologically more active S(-) enantiomer of warfarin. Additionally, fluconazole inhibits CYP450 2C19 and 3A4, which are responsible for the metabolism of R(+) warfarin.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3906": {
+   "text": "Coadministration with ciprofloxacin or other quinolones may increase the plasma concentrations of methotrexate. The exact mechanism of interaction is unknown but may involve competitive inhibition of the renal tubular secretion of methotrexate.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "2857": {
+   "text": "Amiodarone may increase the pharmacologic effects of warfarin by inhibiting CYP450 2C9 hepatic metabolism of S-warfarin. Similar effects may also occur with other oral anticoagulants, resulting in significant hypoprothrombinemia and bleeding. When amiodarone is added to an anticoagulant regimen, increased anticoagulant effects may become apparent within one to several weeks and may persist for months after the amiodarone is discontinued. The effects of this interaction are highly variable - while some patients are asymptomatic, serious and life-threatening bleeding complications have been reported in others. Patients who are poor CYP450 2C9 metabolizers may have a higher risk of bleeding and a faster onset of the interaction.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "2136": {
+   "text": "The antiplatelet and cardioprotective effect of low-dose aspirin may be antagonized by coadministration of some nonsteroidal anti-inflammatory drugs (NSAIDs). Ibuprofen has been specifically implicated, and there is evidence that others including indomethacin, naproxen, and tiaprofenic acid may also interact. The mechanism is competitive inhibition of platelet cyclooxygenase by certain NSAIDs, which, unlike aspirin, bind reversibly at the active site of the enzyme and cause a temporary rather than persistent depression of thromboxane formation and thromboxane-dependent platelet function. The combined use of aspirin with NSAIDs in general may increase the potential for serious gastrointestinal (GI) toxicity, including inflammation, bleeding, ulceration, and perforation.",
+   "categories": [
+    "antagonistic_effect",
+    "synergistic_effect"
+   ]
+  },
+  "1149": {
+   "text": "Coadministration with fluconazole may significantly increase the plasma concentrations of omeprazole and other proton pump inhibitors (PPIs). The proposed mechanism is fluconazole inhibition of PPI metabolism via CYP450 2C19 and 3A4.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4242": {
+   "text": "Some ACE inhibitors may decrease the renal clearance of digoxin. Increased plasma digoxin levels may result. The proposed mechanism is reduced tubular secretion of digoxin. Patients with congestive heart failure (CHF) or renal impairment may have a greater risk of developing digoxin toxicity.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "4390": {
+   "text": "Concomitant use of insulin and other antidiabetic agents with clarithromycin may cause significant hypoglycemia. There have been rare reports of hypoglycemia in patients treated with clarithromycin, some of whom were taking oral hypoglycemic agents or insulin. The exact mechanism of interaction has not been established. With certain hypoglycemic drugs such as nateglinide, pioglitazone, repaglinide and rosiglitazone, inhibition of the CYP450 3A4 isoenzyme by clarithromycin may be involved.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4172": {
+   "text": "A case report has suggested that amiodarone may increase the risk of methotrexate toxicity (particularly skin necrosis). The mechanism is unknown and causality could not be definitely determined.",
+   "categories": [
+    "others"
+   ]
+  },
+  "363": {
+   "text": "Class IA (e.g., disopyramide, quinidine, procainamide) and class III (e.g., amiodarone, dofetilide, sotalol) antiarrhythmic agents can cause dose-related prolongation of the QT interval. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "211": {
+   "text": "Some quinolone antibiotics have been reported to potentiate the hypoprothrombinemic effect of warfarin and other coumarin anticoagulants. The exact mechanism is unknown but may involve inhibition of coumarin metabolism and/or depletion of certain clotting factors due to suppression of vitamin K-producing intestinal flora.",
+   "categories": [
+    "others"
+   ]
+  },
+  "597": {
+   "text": "According to the product labeling, absorption of the extended-release formulation of ciprofloxacin was slightly diminished (20%) when given concomitantly with omeprazole. The mechanism and clinical significance of this interaction are unknown.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "3643": {
+   "text": "Nonsteroidal anti-inflammatory drugs (NSAIDs) may attenuate the antihypertensive effects of ACE inhibitors. The proposed mechanism is NSAID-induced inhibition of renal prostaglandin synthesis, which results in unopposed pressor activity producing hypertension. In addition, NSAIDs can cause fluid retention, which also affects blood pressure. Concomitant use of NSAIDs and ACE inhibitors may also cause deterioration in renal function, particularly in patients who are elderly or volume-depleted (including those on diuretic therapy) or have compromised renal function. Acute renal failure may occur, although effects are usually reversible. Chronic use of NSAIDs alone may be associated with renal toxicities, including elevations in serum creatinine and BUN, tubular necrosis, glomerulitis, renal papillary necrosis, acute interstitial nephritis, nephrotic syndrome, and renal failure.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
+  "5120": {
+   "text": "Theoretically, concurrent use of two or more drugs that can cause QT interval prolongation may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. The risk of an individual agent or a combination of these agents causing ventricular arrhythmia in association with QT prolongation is largely unpredictable but may be increased by certain underlying risk factors such as congenital long QT syndrome, cardiac disease, and electrolyte disturbances.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3602": {
+   "text": "Serotonin reuptake inhibitors (SRIs) may potentiate the risk of bleeding in patients treated with ulcerogenic agents and agents that affect hemostasis such as anticoagulants, platelet inhibitors, thrombin inhibitors, thrombolytic agents, or agents that commonly cause thrombocytopenia. The tricyclic antidepressant, clomipramine, is also a strong SRI and may interact similarly. Serotonin release by platelets plays an important role in hemostasis, thus SRIs may alter platelet function and induce bleeding.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "615": {
+   "text": "Coadministration with clarithromycin or erythromycin may infrequently but substantially enhance the hypoprothrombinemic effect of warfarin and other coumarin anticoagulants. The exact mechanism of interaction is unknown. Data from clinical studies have not supported a significant, predictable pharmacodynamic or pharmacokinetic interaction in general. Although both macrolides are potent inhibitors of CYP450 3A4 and can inhibit metabolism of the R(+) enantiomer of warfarin, the overall effect on racemic warfarin pharmacokinetics appears to be minor.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4343": {
+   "text": "Quinolones such as ciprofloxacin, gatifloxacin, gemifloxacin, levofloxacin, lomefloxacin, moxifloxacin, norfloxacin, ofloxacin, and sparfloxacin may cause dose-related prolongation of the QT interval in some patients. Coadministration with other agents that can prolong the QT interval may result in elevated risk of ventricular arrhythmias, including ventricular tachycardia and torsade de pointes, because of additive arrhythmogenic potential related to their effects on cardiac conduction.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "2085": {
+   "text": "Coadministration with potent inhibitors of CYP450 3A4 may significantly increase the plasma concentrations of simvastatin and lovastatin and their active acid metabolites, all of which are primarily metabolized by the isoenzyme.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "749": {
+   "text": "Aspirin, even in small doses, may increase the risk of bleeding in patients on oral anticoagulants by inhibiting platelet aggregation, prolonging bleeding time, and inducing gastrointestinal lesions. Analgesic/antipyretic doses of aspirin increase the risk of major bleeding more than low-dose aspirin; however bleeding has also occurred with low-dose aspirin.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "2332": {
+   "text": "Nonsteroidal anti-inflammatory drugs (NSAIDs) may potentiate the hypoprothrombinemic effect and bleeding risk associated with oral anticoagulants.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "2325": {
+   "text": "A case report suggests that coadministration with esomeprazole may increase the plasma concentrations of atorvastatin and the associated risk of myopathy. The proposed mechanism is competitive inhibition of intestinal P-glycoprotein, resulting in decreased drug secretion into the intestinal lumen and increased drug bioavailability. Another, perhaps minor mechanism is competitive inhibition of CYP450 3A4 metabolism.",
+   "categories": [
+    "absorption",
+    "metabolism"
+   ]
+  },
+  "4500": {
+   "text": "Limited data suggest that ACE inhibitors may potentiate the hypoglycemic effects of oral antidiabetic drugs, including metformin. The mechanism is unknown. Symptomatic and sometimes severe hypoglycemia has occurred.",
+   "categories": [
+    "others"
+   ]
+  },
+  "616": {
+   "text": "Coadministration with potent inhibitors of CYP450 3A4 including azole antifungal agents may significantly increase the plasma concentrations of HMG-CoA reductase inhibitors (statins) that are substrates of the isoenzyme. High levels of HMG-CoA reductase inhibitory activity in plasma is associated with an increased risk of musculoskeletal toxicity. Myopathy manifested as muscle pain and/or weakness associated with grossly elevated creatine kinase exceeding ten times the upper limit of normal has been reported occasionally. Rhabdomyolysis has also occurred rarely, which may be accompanied by acute renal failure secondary to myoglobinuria and may result in death.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4247": {
+   "text": "Some salicylates may impair the tubular secretion of canrenone, the main active metabolite of spironolactone. This effect could inhibit the natriuretic properties of spironolactone. Data are available for aspirin. If diuresis is inadequate, the clinician should consider discontinuing the salicylate or increasing spironolactone dosage while paying careful attention to the patient's serum potassium concentration.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "599": {
+   "text": "Concomitant use of angiotensin converting enzyme (ACE) inhibitors and potassium-sparing diuretics may increase the risk of hyperkalemia. Inhibition of ACE results in decreased aldosterone secretion, which can lead to increases in serum potassium that may be additive with that induced by potassium-sparing diuretics. ACE inhibitors may also cause deterioration of renal function in patients with chronic heart failure, and the risk is increased if they are sodium-depleted or dehydrated after excessive diuresis.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "5621": {
+   "text": "case report describes a 62-year-old man treated with warfarin whose prothrombin times increased by 50% to 100% during three cycles of a chemotherapeutic regimen consisting of cyclophosphamide, doxorubicin, etoposide, mechlorethamine, vincristine, procarbazine, methotrexate, and prednisone. He developed a subconjunctival hemorrhage on day 1 of the first cycle. The prothrombin time returned to normal within one week of discontinuation of warfarin. Due to the complexity of the chemotherapeutic regimen, a causal relationship to any of the medications or combination of medications cannot be established.",
+   "categories": [
+    "others"
+   ]
+  },
+  "4328": {
+   "text": "Coadministration with nonsteroidal anti-inflammatory drugs (NSAIDs) may potentiate the risk of lactic acidosis associated with the use of metformin. The precise mechanism for this interaction has not been clearly delineated. Since NSAIDs have been shown to cause a deterioration in renal function, the likelihood of lactic acidosis occurring may be increased in patients with preexisting renal impairment.",
+   "categories": [
+    "others"
+   ]
+  },
+  "2938": {
+   "text": "The risk of seizures may be increased during coadministration of tramadol with any substance that can reduce the seizure threshold, such as selective serotonin reuptake inhibitors (SSRI antidepressants or anorectics), monoamine oxidase inhibitors, neuroleptic agents, central nervous system stimulants, opioids, tricyclic antidepressants, other tricyclic compounds (e.g., cyclobenzaprine, phenothiazines), carbapenems, cholinergic agents, fluoroquinolones, interferons, chloroquine, mefloquine, lindane, and theophylline. These agents are often individually epileptogenic and may have additive effects when combined. Many of these agents also exhibit CNS- and/or respiratory-depressant effects, which may be enhanced during their concomitant use with tramadol.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "5450": {
+   "text": "Some investigators suggest that coadministration with aspirin may attenuate the vasodilator and hypotensive effects of ACE inhibitors. In addition, some have found that the benefits of ACE inhibitors on morbidity and mortality in post-acute myocardial infarction, coronary heart disease, and particularly congestive heart failure may be compromised or even nullified by aspirin. The proposed mechanism is aspirin inhibition of cyclooxygenase, resulting in suppression of prostaglandin synthesis and prostaglandin-mediated hemodynamic effects of ACE inhibitors. However, evidence of a negative interaction is largely contradictory, and interpretation of relevant data has often been complicated by multiple confounding elements as well as the retrospective or post hoc nature of most studies.",
+   "categories": [
+    "others"
+   ]
+  },
+  "5271": {
+   "text": "Diuretic-induced renal impairment and dehydration may increase the risk of lactic acidosis in patients who are concomitantly taking metformin. In addition, thiazides and other diuretics may interfere with glucose control by causing hyperglycemia, glucose intolerance, new-onset diabetes mellitus, and/or exacerbation of preexisting diabetes.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1079",
+   "name": "Lisinopril",
+   "rxcui": "29046",
+   "rxnorm_name": "lisinopril",
+   "drugbank_id": "DB00722",
+   "atc": [
+    "C09AA"
+   ],
+   "ciel": [
+    {
+     "code": "104833",
+     "uuid": "104833AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrochlorothiazide / lisinopril"
+    },
+    {
+     "code": "78945",
+     "uuid": "78945AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lisinopril"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1164",
+   "name": "Metformin",
+   "rxcui": "6809",
+   "rxnorm_name": "metformin",
+   "drugbank_id": "DB00331",
+   "atc": [
+    "A10BD",
+    "A10BA"
+   ],
+   "ciel": [
+    {
+     "code": "104722",
+     "uuid": "104722AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Glipizide / metformin"
+    },
+    {
+     "code": "104747",
+     "uuid": "104747AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Glyburide / metformin"
+    },
+    {
+     "code": "105054",
+     "uuid": "105054AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Metformin / pioglitazone"
+    },
+    {
+     "code": "105055",
+     "uuid": "105055AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Metformin / ropinirole"
+    },
+    {
+     "code": "105056",
+     "uuid": "105056AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Metformin / rosiglitazone"
+    },
+    {
+     "code": "165456",
+     "uuid": "165456AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Linagliptin / metformin"
+    },
+    {
+     "code": "165463",
+     "uuid": "165463AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Metformin / sitagliptin"
+    },
+    {
+     "code": "167910",
+     "uuid": "36b587d7-38c2-467f-ab5c-2b1426e482a3",
+     "name": "Alogliptin / metformin"
+    },
+    {
+     "code": "167912",
+     "uuid": "229af724-b07a-4954-b5cc-209e01c6cdd7",
+     "name": "Canagliflozin / metformin"
+    },
+    {
+     "code": "167922",
+     "uuid": "07f8df29-e291-4113-aa7f-2f0b65a6d6b8",
+     "name": "Empagliflozin / linagliptin / metformin"
+    },
+    {
+     "code": "167923",
+     "uuid": "1672d9f0-f214-422f-995e-a534b9f7a782",
+     "name": "Empagliflozin / metformin"
+    },
+    {
+     "code": "167924",
+     "uuid": "24d51a45-730f-4077-81e1-dc494d0e8257",
+     "name": "Ertugliflozin / metformin"
+    },
+    {
+     "code": "167926",
+     "uuid": "a7ceb840-0e35-41b1-bc8c-e6fac84e06b9",
+     "name": "Metformin / repaglinide"
+    },
+    {
+     "code": "167927",
+     "uuid": "e6d393f4-7bc6-4614-a4e6-ae95fdbc3c42",
+     "name": "Metformin / saxagliptin"
+    },
+    {
+     "code": "167981",
+     "uuid": "62ea33ca-e91b-4710-afa3-430c258115c7",
+     "name": "Metformin / vildagliptin"
+    },
+    {
+     "code": "167982",
+     "uuid": "895cea55-ec68-4892-91c9-fc90b1a38987",
+     "name": "Metformin / remogliflozin etabonate / vildagliptin"
+    },
+    {
+     "code": "168009",
+     "uuid": "caa3c8be-cb6c-4626-b272-eaaa6551d85d",
+     "name": "Glimepiride / metformin"
+    },
+    {
+     "code": "170534",
+     "uuid": "49b805a0-d177-4243-9206-72fcedeeed64",
+     "name": "Dapagliflozin / metformin / sitagliptin"
+    },
+    {
+     "code": "79651",
+     "uuid": "79651AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Metformin"
+    },
+    {
+     "code": "79652",
+     "uuid": "79652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Metformin hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1174",
+   "name": "Methotrexate",
+   "rxcui": "6851",
+   "rxnorm_name": "methotrexate",
+   "drugbank_id": "DB00563",
+   "atc": [
+    "L01BA",
+    "L04AX"
+   ],
+   "ciel": [
+    {
+     "code": "79700",
+     "uuid": "79700AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methotrexate"
+    },
+    {
+     "code": "79701",
+     "uuid": "79701AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methotrexate, sodium salt"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1340",
+   "name": "Omeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00338",
+   "atc": [
+    "A02BC",
+    "M01AE"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1662",
+   "name": "Sertraline",
+   "rxcui": "36437",
+   "rxnorm_name": "sertraline",
+   "drugbank_id": "DB01104",
+   "atc": [
+    "N06AB"
+   ],
+   "ciel": [
+    {
+     "code": "83865",
+     "uuid": "83865AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sertraline"
+    },
+    {
+     "code": "83866",
+     "uuid": "83866AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sertraline hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1675",
+   "name": "Simvastatin",
+   "rxcui": "36567",
+   "rxnorm_name": "simvastatin",
+   "drugbank_id": "DB00641",
+   "atc": [
+    "A10BH",
+    "C10BA",
+    "C10AA"
+   ],
+   "ciel": [
+    {
+     "code": "104633",
+     "uuid": "104633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ezetimibe / simvastatin"
+    },
+    {
+     "code": "83936",
+     "uuid": "83936AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Simvastatin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1707",
+   "name": "Spironolactone",
+   "rxcui": "9997",
+   "rxnorm_name": "spironolactone",
+   "drugbank_id": "DB00421",
+   "atc": [
+    "C03DA"
+   ],
+   "ciel": [
+    {
+     "code": "104694",
+     "uuid": "104694AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Furosemide / spironolactone"
+    },
+    {
+     "code": "104842",
+     "uuid": "104842AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrochlorothiazide / spironolactone"
+    },
+    {
+     "code": "104871",
+     "uuid": "104871AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydroflumethiazide / spironolactone"
+    },
+    {
+     "code": "84239",
+     "uuid": "84239AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Spironolactone"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1841",
+   "name": "Tramadol",
+   "rxcui": "10689",
+   "rxnorm_name": "tramadol",
+   "drugbank_id": "DB00193",
+   "atc": [
+    "N02AX",
+    "N02AJ"
+   ],
+   "ciel": [
+    {
+     "code": "103303",
+     "uuid": "103303AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / tramadol"
+    },
+    {
+     "code": "85275",
+     "uuid": "85275AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tramadol"
+    },
+    {
+     "code": "85276",
+     "uuid": "85276AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tramadol hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1951",
+   "name": "Warfarin",
+   "rxcui": "11289",
+   "rxnorm_name": "warfarin",
+   "drugbank_id": "DB00682",
+   "atc": [
+    "B01AA"
+   ],
+   "ciel": [
+    {
+     "code": "86415",
+     "uuid": "86415AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin"
+    },
+    {
+     "code": "86416",
+     "uuid": "86416AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin potassium"
+    },
+    {
+     "code": "86417",
+     "uuid": "86417AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin sodium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter20",
+   "name": "Acetylsalicylic acid",
+   "rxcui": "1191",
+   "rxnorm_name": "aspirin",
+   "drugbank_id": "DB00945",
+   "atc": [
+    "A01AD",
+    "B01AC",
+    "N02BA",
+    "N02AJ"
+   ],
+   "ciel": [
+    {
+     "code": "103170",
+     "uuid": "103170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / caffeine / magnesium hydroxide"
+    },
+    {
+     "code": "103171",
+     "uuid": "103171AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / salicylamide"
+    },
+    {
+     "code": "103172",
+     "uuid": "103172AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin"
+    },
+    {
+     "code": "103173",
+     "uuid": "103173AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine"
+    },
+    {
+     "code": "103174",
+     "uuid": "103174AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / calcium gluconate"
+    },
+    {
+     "code": "103175",
+     "uuid": "103175AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / codeine / salicylamide"
+    },
+    {
+     "code": "103176",
+     "uuid": "103176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / hydrocodone"
+    },
+    {
+     "code": "103177",
+     "uuid": "103177AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / salicylamide"
+    },
+    {
+     "code": "103178",
+     "uuid": "103178AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / codeine"
+    },
+    {
+     "code": "103179",
+     "uuid": "103179AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / phenylpropanolamine"
+    },
+    {
+     "code": "103304",
+     "uuid": "103304AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetanilide / aspirin / caffeine / ephedrine"
+    },
+    {
+     "code": "103520",
+     "uuid": "103520AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / calcium carbonate / magnesium hydroxide"
+    },
+    {
+     "code": "103521",
+     "uuid": "103521AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / codeine / magnesium hydroxide"
+    },
+    {
+     "code": "103522",
+     "uuid": "103522AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / magnesium hydroxide"
+    },
+    {
+     "code": "103680",
+     "uuid": "103680AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / brompheniramine / dextromethorphan / phenylpropanolamine"
+    },
+    {
+     "code": "103681",
+     "uuid": "103681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital"
+    },
+    {
+     "code": "103683",
+     "uuid": "103683AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital / caffeine / codeine"
+    },
+    {
+     "code": "103684",
+     "uuid": "103684AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital / caffeine / phenacetin"
+    },
+    {
+     "code": "103685",
+     "uuid": "103685AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine"
+    },
+    {
+     "code": "103686",
+     "uuid": "103686AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / chlorpheniramine"
+    },
+    {
+     "code": "103687",
+     "uuid": "103687AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / cinnamedrine"
+    },
+    {
+     "code": "103688",
+     "uuid": "103688AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / codeine"
+    },
+    {
+     "code": "103689",
+     "uuid": "103689AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / dihydrocodeine"
+    },
+    {
+     "code": "103690",
+     "uuid": "103690AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / dihydrocodeine / promethazine"
+    },
+    {
+     "code": "103691",
+     "uuid": "103691AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / hydrocodone"
+    },
+    {
+     "code": "103692",
+     "uuid": "103692AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / ipecac / opium"
+    },
+    {
+     "code": "103693",
+     "uuid": "103693AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / magnesium salicylate"
+    },
+    {
+     "code": "103694",
+     "uuid": "103694AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / orphenadrine"
+    },
+    {
+     "code": "103695",
+     "uuid": "103695AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / propoxyphene"
+    },
+    {
+     "code": "103696",
+     "uuid": "103696AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / salicylamide"
+    },
+    {
+     "code": "103697",
+     "uuid": "103697AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / calcium carbonate"
+    },
+    {
+     "code": "103699",
+     "uuid": "103699AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / carisoprodol"
+    },
+    {
+     "code": "103700",
+     "uuid": "103700AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / carisoprodol / codeine"
+    },
+    {
+     "code": "103701",
+     "uuid": "103701AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine"
+    },
+    {
+     "code": "103702",
+     "uuid": "103702AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / dextromethorphan"
+    },
+    {
+     "code": "103703",
+     "uuid": "103703AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / dextromethorphan / phenylpropanolamine"
+    },
+    {
+     "code": "103704",
+     "uuid": "103704AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / phenylpropanolamine"
+    },
+    {
+     "code": "103705",
+     "uuid": "103705AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / pseudoephedrine"
+    },
+    {
+     "code": "103706",
+     "uuid": "103706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / citric acid / sodium bicarbonate"
+    },
+    {
+     "code": "103707",
+     "uuid": "103707AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / codeine"
+    },
+    {
+     "code": "103709",
+     "uuid": "103709AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / diphenhydramine"
+    },
+    {
+     "code": "103710",
+     "uuid": "103710AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / diphenhydramine / phenylpropanolamine"
+    },
+    {
+     "code": "103711",
+     "uuid": "103711AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / dipyridamole"
+    },
+    {
+     "code": "103712",
+     "uuid": "103712AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / ethoheptazine / meprobamate"
+    },
+    {
+     "code": "103713",
+     "uuid": "103713AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / glycine"
+    },
+    {
+     "code": "103714",
+     "uuid": "103714AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / hydrocodone"
+    },
+    {
+     "code": "103715",
+     "uuid": "103715AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / isosorbide"
+    },
+    {
+     "code": "103716",
+     "uuid": "103716AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / meprobamate"
+    },
+    {
+     "code": "103717",
+     "uuid": "103717AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / methocarbamol"
+    },
+    {
+     "code": "103718",
+     "uuid": "103718AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / oxycodone"
+    },
+    {
+     "code": "103720",
+     "uuid": "103720AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pentazocine"
+    },
+    {
+     "code": "103721",
+     "uuid": "103721AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenobarbital"
+    },
+    {
+     "code": "103722",
+     "uuid": "103722AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenylephrine"
+    },
+    {
+     "code": "103723",
+     "uuid": "103723AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenylpropanolamine"
+    },
+    {
+     "code": "103724",
+     "uuid": "103724AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenyltoloxamine"
+    },
+    {
+     "code": "103725",
+     "uuid": "103725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pravastatin"
+    },
+    {
+     "code": "103726",
+     "uuid": "103726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / promethazine / pseudoephedrine"
+    },
+    {
+     "code": "103727",
+     "uuid": "103727AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / propoxyphene"
+    },
+    {
+     "code": "103728",
+     "uuid": "103728AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pseudoephedrine"
+    },
+    {
+     "code": "169229",
+     "uuid": "1304b943-339f-403f-aca9-c47b7779c9c7",
+     "name": "Aspirin / clopidogrel"
+    },
+    {
+     "code": "71617",
+     "uuid": "71617AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin"
+    },
+    {
+     "code": "72488",
+     "uuid": "72488AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Buffered aspirin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter384",
+   "name": "Ciprofloxacin",
+   "rxcui": "2551",
+   "rxnorm_name": "ciprofloxacin",
+   "drugbank_id": "DB00537",
+   "atc": [
+    "J01MA",
+    "S01AE",
+    "S02AA",
+    "S03AA"
+   ],
+   "ciel": [
+    {
+     "code": "104317",
+     "uuid": "104317AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / dexamethasone"
+    },
+    {
+     "code": "104318",
+     "uuid": "104318AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / hydrocortisone"
+    },
+    {
+     "code": "73449",
+     "uuid": "73449AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin"
+    },
+    {
+     "code": "73450",
+     "uuid": "73450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin hydrochloride"
+    },
+    {
+     "code": "73451",
+     "uuid": "73451AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin lactate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter393",
+   "name": "Clarithromycin",
+   "rxcui": "21212",
+   "rxnorm_name": "clarithromycin",
+   "drugbank_id": "DB01211",
+   "atc": [
+    "J01FA"
+   ],
+   "ciel": [
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "168663",
+     "uuid": "39559906-b467-47a7-abaa-499cf6b51562",
+     "name": "Amoxicillin / clarithromycin / vonoprazan combination kit"
+    },
+    {
+     "code": "73498",
+     "uuid": "73498AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clarithromycin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter554",
+   "name": "Digoxin",
+   "rxcui": "3407",
+   "rxnorm_name": "digoxin",
+   "drugbank_id": "DB00390",
+   "atc": [
+    "C01AA"
+   ],
+   "ciel": [
+    {
+     "code": "74860",
+     "uuid": "74860AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Digoxin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter743",
+   "name": "Fluconazole",
+   "rxcui": "4450",
+   "rxnorm_name": "fluconazole",
+   "drugbank_id": "DB00196",
+   "atc": [
+    "D01AC",
+    "J02AC"
+   ],
+   "ciel": [
+    {
+     "code": "167983",
+     "uuid": "3a31f7c2-a39d-4a50-b79e-6be87ea6d8a4",
+     "name": "Azithromycin / fluconazole / ornidazole"
+    },
+    {
+     "code": "76488",
+     "uuid": "76488AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fluconazole"
+    }
+   ]
+  },
+  {
+   "id": "DDInter76",
+   "name": "Amiodarone",
+   "rxcui": "703",
+   "rxnorm_name": "amiodarone",
+   "drugbank_id": "DB01118",
+   "atc": [
+    "C01BD"
+   ],
+   "ciel": [
+    {
+     "code": "71118",
+     "uuid": "71118AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amiodarone"
+    },
+    {
+     "code": "71119",
+     "uuid": "71119AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amiodarone hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter900",
+   "name": "Ibuprofen",
+   "rxcui": "5640",
+   "rxnorm_name": "ibuprofen",
+   "drugbank_id": "DB01050",
+   "atc": [
+    "N02AJ",
+    "C01EB",
+    "G02CC",
+    "M01AE",
+    "M02AA",
+    "R02AX"
+   ],
+   "ciel": [
+    {
+     "code": "104246",
+     "uuid": "104246AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / ibuprofen / pseudoephedrine"
+    },
+    {
+     "code": "104370",
+     "uuid": "104370AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Codeine / ibuprofen"
+    },
+    {
+     "code": "104513",
+     "uuid": "104513AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diphenhydramine / ibuprofen"
+    },
+    {
+     "code": "104847",
+     "uuid": "104847AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocodone / ibuprofen"
+    },
+    {
+     "code": "104893",
+     "uuid": "104893AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / levomenthol"
+    },
+    {
+     "code": "104894",
+     "uuid": "104894AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / oxycodone"
+    },
+    {
+     "code": "104895",
+     "uuid": "104895AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / pseudoephedrine"
+    },
+    {
+     "code": "104896",
+     "uuid": "104896AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen / pseudoisocytidine"
+    },
+    {
+     "code": "170013",
+     "uuid": "58b26824-eb90-4585-abd3-e9ce096e2010",
+     "name": "Acetaminophen / ibuprofen"
+    },
+    {
+     "code": "77897",
+     "uuid": "77897AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen"
+    },
+    {
+     "code": "84137",
+     "uuid": "84137AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Solufenum"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1079",
+   "DDInter1164",
+   "Moderate",
+   "4500"
+  ],
+  [
+   "DDInter1079",
+   "DDInter1174",
+   "Moderate",
+   "4837"
+  ],
+  [
+   "DDInter1079",
+   "DDInter1340",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1079",
+   "DDInter1662",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1079",
+   "DDInter1675",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1079",
+   "DDInter1707",
+   "Major",
+   "599"
+  ],
+  [
+   "DDInter1079",
+   "DDInter1841",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1079",
+   "DDInter1951",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1079",
+   "DDInter20",
+   "Moderate",
+   "5450"
+  ],
+  [
+   "DDInter1079",
+   "DDInter384",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1079",
+   "DDInter393",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1079",
+   "DDInter554",
+   "Moderate",
+   "4242"
+  ],
+  [
+   "DDInter1079",
+   "DDInter743",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1079",
+   "DDInter76",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1079",
+   "DDInter900",
+   "Moderate",
+   "3643"
+  ],
+  [
+   "DDInter1164",
+   "DDInter1174",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1164",
+   "DDInter1340",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1164",
+   "DDInter1662",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1164",
+   "DDInter1675",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1164",
+   "DDInter1707",
+   "Moderate",
+   "5271"
+  ],
+  [
+   "DDInter1164",
+   "DDInter1841",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1164",
+   "DDInter1951",
+   "Moderate",
+   "2958"
+  ],
+  [
+   "DDInter1164",
+   "DDInter20",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1164",
+   "DDInter384",
+   "Moderate",
+   "1374"
+  ],
+  [
+   "DDInter1164",
+   "DDInter393",
+   "Moderate",
+   "4390"
+  ],
+  [
+   "DDInter1164",
+   "DDInter554",
+   "Moderate",
+   "1430"
+  ],
+  [
+   "DDInter1164",
+   "DDInter743",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1164",
+   "DDInter76",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1164",
+   "DDInter900",
+   "Moderate",
+   "4328"
+  ],
+  [
+   "DDInter1174",
+   "DDInter1340",
+   "Major",
+   "4875"
+  ],
+  [
+   "DDInter1174",
+   "DDInter1662",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1174",
+   "DDInter1675",
+   "Moderate",
+   "4837"
+  ],
+  [
+   "DDInter1174",
+   "DDInter1707",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1174",
+   "DDInter1841",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1174",
+   "DDInter1951",
+   "Minor",
+   "5621"
+  ],
+  [
+   "DDInter1174",
+   "DDInter20",
+   "Major",
+   "812"
+  ],
+  [
+   "DDInter1174",
+   "DDInter384",
+   "Moderate",
+   "3906"
+  ],
+  [
+   "DDInter1174",
+   "DDInter393",
+   "Moderate",
+   "4837"
+  ],
+  [
+   "DDInter1174",
+   "DDInter554",
+   "Moderate",
+   "3230"
+  ],
+  [
+   "DDInter1174",
+   "DDInter743",
+   "Moderate",
+   "4837"
+  ],
+  [
+   "DDInter1174",
+   "DDInter76",
+   "Moderate",
+   "4172"
+  ],
+  [
+   "DDInter1174",
+   "DDInter900",
+   "Major",
+   "3474"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1662",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1675",
+   "Moderate",
+   "2325"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1707",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1841",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1951",
+   "Moderate",
+   "4978"
+  ],
+  [
+   "DDInter1340",
+   "DDInter20",
+   "Minor",
+   "419"
+  ],
+  [
+   "DDInter1340",
+   "DDInter384",
+   "Minor",
+   "597"
+  ],
+  [
+   "DDInter1340",
+   "DDInter393",
+   "Minor",
+   "2910"
+  ],
+  [
+   "DDInter1340",
+   "DDInter554",
+   "Moderate",
+   "2704"
+  ],
+  [
+   "DDInter1340",
+   "DDInter743",
+   "Moderate",
+   "1149"
+  ],
+  [
+   "DDInter1340",
+   "DDInter76",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter900",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1662",
+   "DDInter1675",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1662",
+   "DDInter1707",
+   "Moderate",
+   "5419"
+  ],
+  [
+   "DDInter1662",
+   "DDInter1841",
+   "Major",
+   "1077"
+  ],
+  [
+   "DDInter1662",
+   "DDInter1951",
+   "Moderate",
+   "3602"
+  ],
+  [
+   "DDInter1662",
+   "DDInter20",
+   "Moderate",
+   "3602"
+  ],
+  [
+   "DDInter1662",
+   "DDInter384",
+   "Moderate",
+   "5120"
+  ],
+  [
+   "DDInter1662",
+   "DDInter393",
+   "Moderate",
+   "3919"
+  ],
+  [
+   "DDInter1662",
+   "DDInter554",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1662",
+   "DDInter743",
+   "Moderate",
+   "5120"
+  ],
+  [
+   "DDInter1662",
+   "DDInter76",
+   "Major",
+   "363"
+  ],
+  [
+   "DDInter1662",
+   "DDInter900",
+   "Moderate",
+   "3602"
+  ],
+  [
+   "DDInter1675",
+   "DDInter1707",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1675",
+   "DDInter1841",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1675",
+   "DDInter1951",
+   "Minor",
+   "2712"
+  ],
+  [
+   "DDInter1675",
+   "DDInter20",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1675",
+   "DDInter384",
+   "Moderate",
+   "3189"
+  ],
+  [
+   "DDInter1675",
+   "DDInter393",
+   "Major",
+   "2085"
+  ],
+  [
+   "DDInter1675",
+   "DDInter554",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1675",
+   "DDInter743",
+   "Major",
+   "616"
+  ],
+  [
+   "DDInter1675",
+   "DDInter76",
+   "Major",
+   "58"
+  ],
+  [
+   "DDInter1675",
+   "DDInter900",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1707",
+   "DDInter1841",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1707",
+   "DDInter1951",
+   "Minor",
+   "3456"
+  ],
+  [
+   "DDInter1707",
+   "DDInter20",
+   "Minor",
+   "4247"
+  ],
+  [
+   "DDInter1707",
+   "DDInter384",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1707",
+   "DDInter393",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1707",
+   "DDInter554",
+   "Minor",
+   "2845"
+  ],
+  [
+   "DDInter1707",
+   "DDInter743",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1707",
+   "DDInter76",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1707",
+   "DDInter900",
+   "Moderate",
+   "4540"
+  ],
+  [
+   "DDInter1841",
+   "DDInter1951",
+   "Moderate",
+   "2515"
+  ],
+  [
+   "DDInter1841",
+   "DDInter20",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1841",
+   "DDInter384",
+   "Major",
+   "2938"
+  ],
+  [
+   "DDInter1841",
+   "DDInter393",
+   "Moderate",
+   "5120"
+  ],
+  [
+   "DDInter1841",
+   "DDInter554",
+   "Moderate",
+   "2401"
+  ],
+  [
+   "DDInter1841",
+   "DDInter743",
+   "Moderate",
+   "5120"
+  ],
+  [
+   "DDInter1841",
+   "DDInter76",
+   "Major",
+   "363"
+  ],
+  [
+   "DDInter1841",
+   "DDInter900",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1951",
+   "DDInter20",
+   "Major",
+   "749"
+  ],
+  [
+   "DDInter1951",
+   "DDInter384",
+   "Major",
+   "211"
+  ],
+  [
+   "DDInter1951",
+   "DDInter393",
+   "Major",
+   "615"
+  ],
+  [
+   "DDInter1951",
+   "DDInter554",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1951",
+   "DDInter743",
+   "Major",
+   "4651"
+  ],
+  [
+   "DDInter1951",
+   "DDInter76",
+   "Major",
+   "2857"
+  ],
+  [
+   "DDInter1951",
+   "DDInter900",
+   "Major",
+   "2332"
+  ],
+  [
+   "DDInter20",
+   "DDInter384",
+   "Moderate",
+   "165"
+  ],
+  [
+   "DDInter20",
+   "DDInter393",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter20",
+   "DDInter554",
+   "Moderate",
+   "3689"
+  ],
+  [
+   "DDInter20",
+   "DDInter743",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter20",
+   "DDInter76",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter20",
+   "DDInter900",
+   "Major",
+   "2136"
+  ],
+  [
+   "DDInter384",
+   "DDInter393",
+   "Moderate",
+   "5120"
+  ],
+  [
+   "DDInter384",
+   "DDInter554",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter384",
+   "DDInter743",
+   "Moderate",
+   "5120"
+  ],
+  [
+   "DDInter384",
+   "DDInter76",
+   "Major",
+   "4343"
+  ],
+  [
+   "DDInter384",
+   "DDInter900",
+   "Moderate",
+   "165"
+  ],
+  [
+   "DDInter393",
+   "DDInter554",
+   "Major",
+   "1403"
+  ],
+  [
+   "DDInter393",
+   "DDInter743",
+   "Minor",
+   "4642"
+  ],
+  [
+   "DDInter393",
+   "DDInter76",
+   "Major",
+   "338"
+  ],
+  [
+   "DDInter393",
+   "DDInter900",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter554",
+   "DDInter743",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter554",
+   "DDInter76",
+   "Major",
+   "2167"
+  ],
+  [
+   "DDInter554",
+   "DDInter900",
+   "Moderate",
+   "3689"
+  ],
+  [
+   "DDInter743",
+   "DDInter76",
+   "Major",
+   "5547"
+  ],
+  [
+   "DDInter743",
+   "DDInter900",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter76",
+   "DDInter900",
+   "Unknown",
+   "-1"
+  ]
+ ]
+}

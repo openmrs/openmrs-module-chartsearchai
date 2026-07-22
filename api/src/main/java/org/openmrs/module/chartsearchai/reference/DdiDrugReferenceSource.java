@@ -1,0 +1,241 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.reference;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * {@link DrugReferenceSource} backed by the DDInter 2.0 drug-drug interaction knowledge
+ * base ({@code ddi-knowledge-base.json} from the openmrs-ddi-knowledge-base data project):
+ * structured DDIs with severity and a mechanism description, normalized to RxNorm and
+ * cross-walked to CIEL. Selected by {@code sourceFormat=ddinter}. See ADR Decision 24.
+ *
+ * <p>The dataset is <em>normalized</em> — three tables joined by id, so nothing is
+ * duplicated:
+ * <ul>
+ *   <li>{@code mechanisms}: {@code {groupId: {text, categories}}}, each description stored once;</li>
+ *   <li>{@code drugs}: {@code {id, name, rxcui, rxnorm_name, drugbank_id, atc[], ciel[]}};</li>
+ *   <li>{@code interactions}: rows {@code [drug_a_id, drug_b_id, severity, group_id]}.</li>
+ * </ul>
+ * This source expands that into the module's drug-centric {@link DrugReference} model: one
+ * entry per drug, whose {@code interactions[]} are its partners with a {@code severity + mechanism}
+ * note. Because the interaction rows are symmetric, each pair contributes to both drugs'
+ * entries, which is what the validator's from-either-side matching expects.
+ *
+ * <p>Memory: there are far fewer distinct mechanism descriptions than pairs, so the
+ * per-partner notes are interned (one shared {@link String} per {@code severity + group}),
+ * bounding note cost to the unique set rather than the pair count.
+ *
+ * <p>Resolution mirrors {@link JsonDrugReferenceSource}: prefer the operator file at
+ * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH}, else the dataset bundled
+ * on the classpath at {@code /chartsearchai/ddi-knowledge-base.json}; any failure degrades
+ * to an empty list (fail-safe), so the feature stays an additive net.
+ *
+ * <p><b>Scope.</b> V1 carries drug-drug interactions only: entries expose {@code interactions},
+ * never {@code ageBands} or {@code contraindications} (dosing and drug-allergy/condition are
+ * out of scope). {@code management} is not a discrete DDInter field, so it is folded into the
+ * interaction note rather than invented.
+ */
+public class DdiDrugReferenceSource implements DrugReferenceSource {
+
+	private static final Logger log = LoggerFactory.getLogger(DdiDrugReferenceSource.class);
+
+	static final String CLASSPATH_DEFAULT = "/chartsearchai/ddi-knowledge-base.json";
+
+	private static final ObjectMapper MAPPER = new ObjectMapper();
+
+	private static final String SOURCE = "DDInter 2.0 (via openmrs-ddi-knowledge-base)";
+
+	@Override
+	public List<DrugReference> load() {
+		return ReferenceDataFiles.loadWithClasspathFallback(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, CLASSPATH_DEFAULT,
+				"DDInter drug-reference entries", DdiDrugReferenceSource::parse);
+	}
+
+	/**
+	 * Parse the normalized DDI knowledge base into drug-centric {@link DrugReference} entries.
+	 * Package-private and static so tests exercise the real parser against a real dataset.
+	 */
+	static List<DrugReference> parse(InputStream in) throws IOException {
+		JsonNode root = MAPPER.readTree(in);
+		if (root == null || !root.hasNonNull("drugs") || !root.hasNonNull("interactions")) {
+			return Collections.emptyList();
+		}
+
+		// drugs table, indexed by id
+		Map<String, DrugRow> byId = new HashMap<String, DrugRow>();
+		List<DrugRow> order = new ArrayList<DrugRow>();
+		for (JsonNode d : root.get("drugs")) {
+			DrugRow row = DrugRow.of(d);
+			if (row != null) {
+				byId.put(row.id, row);
+				order.add(row);
+			}
+		}
+
+		// mechanisms table (text stored once); note strings interned per severity+group
+		JsonNode mech = root.path("mechanisms");
+		Map<String, String> noteCache = new HashMap<String, String>();
+
+		// group interaction rows by drug id -> partner links
+		Map<String, List<Link>> partners = new HashMap<String, List<Link>>();
+		for (JsonNode row : root.get("interactions")) {
+			if (row == null || !row.isArray() || row.size() < 4) {
+				continue;
+			}
+			String a = row.get(0).asText();
+			String b = row.get(1).asText();
+			String severity = row.get(2).asText();
+			String gid = row.get(3).asText();
+			if (!byId.containsKey(a) || !byId.containsKey(b)) {
+				continue;
+			}
+			String note = noteFor(severity, gid, mech, noteCache);
+			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, note));
+			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, note));
+		}
+
+		// build one entry per drug, in dataset order
+		List<DrugReference> out = new ArrayList<DrugReference>();
+		for (DrugRow row : order) {
+			List<Link> links = partners.get(row.id);
+			DrugReference ref = new DrugReference();
+			// prefer the RxCUI as the stable, cross-source id; fall back to the DDInter id
+			ref.setId(row.rxcui != null && !row.rxcui.isEmpty() ? row.rxcui : row.id);
+			ref.setName(row.name);
+			ref.setAliases(row.aliases);
+			ref.setAtcCodes(row.atc);
+			ref.setInteractions(interactionsFor(links, byId));
+			ref.setSource(SOURCE);
+			out.add(ref);
+		}
+		log.info("Parsed {} DDInter drug-reference entries", out.size());
+		return out;
+	}
+
+	private static List<DrugReference.Interaction> interactionsFor(List<Link> links, Map<String, DrugRow> byId) {
+		if (links == null || links.isEmpty()) {
+			return Collections.emptyList();
+		}
+		List<DrugReference.Interaction> out = new ArrayList<DrugReference.Interaction>();
+		for (Link link : links) {
+			DrugRow p = byId.get(link.partnerId);
+			if (p == null) {
+				continue;
+			}
+			DrugReference.Interaction i = new DrugReference.Interaction();
+			i.setToken(p.name.toLowerCase(Locale.ROOT));
+			i.setAtc(p.atc.isEmpty() ? null : p.atc.get(0));
+			i.setNote(link.note);
+			out.add(i);
+		}
+		return out;
+	}
+
+	/** Interned note: one shared string per (severity, group). */
+	private static String noteFor(String severity, String gid, JsonNode mech, Map<String, String> cache) {
+		String key = severity + " " + gid;
+		String cached = cache.get(key);
+		if (cached != null) {
+			return cached;
+		}
+		String text = mech.path(gid).path("text").isTextual() ? mech.path(gid).path("text").asText() : null;
+		String note = (text != null && !text.isEmpty())
+				? severity + ". " + text
+				: severity + " severity interaction (DDInter 2.0; no mechanism description on file).";
+		cache.put(key, note);
+		return note;
+	}
+
+	/** A drug row from the {@code drugs} table. */
+	private static final class DrugRow {
+
+		final String id;
+
+		final String name;
+
+		final String rxcui;
+
+		final List<String> atc;
+
+		final List<String> aliases;
+
+		private DrugRow(String id, String name, String rxcui, List<String> atc, List<String> aliases) {
+			this.id = id;
+			this.name = name;
+			this.rxcui = rxcui;
+			this.atc = atc;
+			this.aliases = aliases;
+		}
+
+		static DrugRow of(JsonNode d) {
+			String id = d.path("id").asText(null);
+			String name = d.path("name").asText(null);
+			if (id == null || id.isEmpty() || name == null || name.isEmpty()) {
+				return null;
+			}
+			String rxcui = d.path("rxcui").isTextual() ? d.get("rxcui").asText() : null;
+			List<String> atc = new ArrayList<String>();
+			for (JsonNode a : d.path("atc")) {
+				atc.add(a.asText());
+			}
+			// aliases: name + RxNorm name + CIEL concept names, lowercased and de-duplicated
+			List<String> aliases = new ArrayList<String>();
+			addAlias(aliases, name);
+			if (d.path("rxnorm_name").isTextual()) {
+				addAlias(aliases, d.get("rxnorm_name").asText());
+			}
+			for (JsonNode c : d.path("ciel")) {
+				if (c.path("name").isTextual()) {
+					addAlias(aliases, c.get("name").asText());
+				}
+			}
+			return new DrugRow(id, name, rxcui, atc, aliases);
+		}
+
+		private static void addAlias(List<String> aliases, String value) {
+			if (value == null) {
+				return;
+			}
+			String a = value.trim().toLowerCase(Locale.ROOT);
+			if (!a.isEmpty() && !aliases.contains(a)) {
+				aliases.add(a);
+			}
+		}
+	}
+
+	/** A partner link: the other drug's id and the shared interaction note. */
+	private static final class Link {
+
+		final String partnerId;
+
+		final String note;
+
+		Link(String partnerId, String note) {
+			this.partnerId = partnerId;
+			this.note = note;
+		}
+	}
+}

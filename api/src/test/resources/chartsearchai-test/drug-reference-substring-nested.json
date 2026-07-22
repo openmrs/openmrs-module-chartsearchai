@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "source": "test fixture — substring-nested drug names",
+  "entries": [
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": ["ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "interactions": [
+        { "token": "hydrochlorothiazide", "atc": "C03AA03", "note": "NSAIDs may blunt the diuretic/antihypertensive effect" },
+        { "token": "chlorothiazide", "atc": "C03AA04", "note": "NSAIDs may blunt the diuretic/antihypertensive effect" }
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

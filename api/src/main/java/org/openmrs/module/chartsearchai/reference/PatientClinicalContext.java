@@ -114,9 +114,11 @@ public class PatientClinicalContext {
 	/** @return true when any active-order name or ATC code matches the given interaction rule. */
 	boolean hasActiveDrug(String nameToken, String atcCode) {
 		if (nameToken != null && !nameToken.trim().isEmpty()) {
-			String n = nameToken.trim().toLowerCase(Locale.ROOT);
+			String n = nameToken.trim();
 			for (String drug : activeDrugNames) {
-				if (drug.contains(n)) {
+				// Whole-word, not substring: an interaction token that is a sub-token of a longer
+				// order name (e.g. "chlorothiazide" inside "hydrochlorothiazide") must not match.
+				if (DrugReference.containsWord(drug, n)) {
 					return true;
 				}
 			}

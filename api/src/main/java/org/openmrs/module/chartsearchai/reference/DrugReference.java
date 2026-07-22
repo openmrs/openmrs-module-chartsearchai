@@ -228,20 +228,38 @@ public class DrugReference {
 			return false;
 		}
 		for (String alias : aliases) {
-			if (alias == null || alias.isEmpty()) {
-				continue;
+			if (containsWord(lowerText, alias)) {
+				return true;
 			}
-			String a = alias.toLowerCase(Locale.ROOT);
-			int idx = lowerText.indexOf(a);
-			while (idx >= 0) {
-				boolean leftOk = idx == 0 || !Character.isLetterOrDigit(lowerText.charAt(idx - 1));
-				int end = idx + a.length();
-				boolean rightOk = end >= lowerText.length() || !Character.isLetterOrDigit(lowerText.charAt(end));
-				if (leftOk && rightOk) {
-					return true;
-				}
-				idx = lowerText.indexOf(a, idx + 1);
+		}
+		return false;
+	}
+
+	/**
+	 * @return true when {@code word} occurs in {@code text} as a <em>whole word</em> — bounded on
+	 *         each side by a non-alphanumeric character or the string edge. Whole-word, not
+	 *         substring, so a drug name nested inside a longer one does not spuriously match
+	 *         ("chlorothiazide" is not a whole word in "hydrochlorothiazide"), while a real token
+	 *         still matches ("aspirin" in "Aspirin 81 mg"). Case-insensitive; a null/blank word
+	 *         never matches. This is the one matcher shared by {@link #matchesText}
+	 *         (alias-in-question) and {@link PatientClinicalContext#hasActiveDrug}
+	 *         (token-in-order-name), so the two cannot drift.
+	 */
+	static boolean containsWord(String text, String word) {
+		if (text == null || word == null || word.isEmpty()) {
+			return false;
+		}
+		String t = text.toLowerCase(Locale.ROOT);
+		String w = word.toLowerCase(Locale.ROOT);
+		int idx = t.indexOf(w);
+		while (idx >= 0) {
+			boolean leftOk = idx == 0 || !Character.isLetterOrDigit(t.charAt(idx - 1));
+			int end = idx + w.length();
+			boolean rightOk = end >= t.length() || !Character.isLetterOrDigit(t.charAt(end));
+			if (leftOk && rightOk) {
+				return true;
 			}
+			idx = t.indexOf(w, idx + 1);
 		}
 		return false;
 	}

@@ -16,167 +16,8 @@
   }
  },
  "mechanisms": {
-  "4875": {
-   "text": "Coadministration with proton pump inhibitors (PPIs) may increase the serum concentrations of methotrexate (MTX) and its potentially active 7-hydroxy metabolite. The proposed mechanism is PPI inhibition of the active tubular secretion of MTX and 7-hydroxymethotrexate via renal H+/K+ ATPase pumps. Inhibition of the breast cancer resistance protein (BCRP)-mediated transport of methotrexate and 7-hydroxymethotrexate by the proton pump inhibitors has also been suggested.",
-   "categories": [
-    "excretion"
-   ]
-  },
-  "2712": {
-   "text": "Simvastatin may slightly increase the anticoagulant response to warfarin. The mechanism may be warfarin displacement from protein binding sites. The clinical significance of this interaction has not been established, however, clinical monitoring of patient warfarin response and tolerance is recommended. Simvastatin may interact in a similar way with other oral anticoagulants. Patients should be advised to promptly report any signs of bleeding to their physician, including pain, swelling, headache, dizziness, weakness, prolonged bleeding from cuts, increased menstrual flow, vaginal bleeding, nosebleeds, bleeding of gums from brushing, unusual bleeding or bruising, red or brown urine, or red or black stools.",
-   "categories": [
-    "distribution"
-   ]
-  },
-  "3919": {
-   "text": "The use of some macrolide antibiotics has been associated with increased blood levels of some selective serotonin reuptake inhibitors (SSRIs), resulting in excessive serotonergic effects or serotonin syndrome. The mechanism is inhibition of the CYP450 3A4 isoenzyme, which metabolizes SSRIs.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "1077": {
-   "text": "Due to its serotonergic activity, coadministration of tramadol with selective serotonin reuptake inhibitors (SSRIs) may potentiate the risk of serotonin syndrome, which is a rare but serious and potentially fatal condition thought to result from hyperstimulation of brainstem 5-HT1A and 2A receptors. Symptoms of the serotonin syndrome may include mental status changes such as irritability, altered consciousness, confusion, hallucinations, and coma; autonomic dysfunction such as tachycardia, hyperthermia, diaphoresis, shivering, blood pressure lability, and mydriasis; neuromuscular abnormalities such as hyperreflexia, myoclonus, tremor, rigidity, and ataxia; and gastrointestinal symptoms such as abdominal cramping, nausea, vomiting, and diarrhea. Patients receiving tramadol with SSRIs may also have an increased risk of seizures due to additive epileptogenic effects of these agents. Pharmacokinetically, coadministration with certain SSRIs, namely fluoxetine, paroxetine and possibly sertraline, may decrease the plasma concentrations of the active O-demethylated (M1) metabolite of tramadol due to inhibition of CYP450 2D6, the isoenzyme responsible for the formation of the metabolite.",
-   "categories": [
-    "synergistic_effect",
-    "metabolism"
-   ]
-  },
-  "338": {
-   "text": "Amiodarone can cause dose-related prolongation of the QT interval. Coadministration with other agents that can prolong the QT interval such as macrolide antibiotics may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.In general, the risk of an individual agent or a combination of agents causing ventricular arrhythmia in association with QT prolongation is largely unpredictable but may be increased by certain underlying risk factors such as congenital long QT syndrome, cardiac disease, and electrolyte disturbances (e.g., hypokalemia, hypomagnesemia). Some macrolides such as clarithromycin, erythromycin, and troleandomycin are also potent inhibitors of CYP450 3A4 and may significantly inhibit the metabolism of amiodarone, which is primarily metabolized by the isoenzyme.",
-   "categories": [
-    "synergistic_effect",
-    "metabolism"
-   ]
-  },
-  "3689": {
-   "text": "Nonsteroidal anti-inflammatory drugs (NSAIDs) may increase plasma digoxin concentrations and half-life. The exact mechanism is unknown, but may be related to reduced renal clearance of digoxin. The interaction has been reported with indomethacin and ibuprofen, but data for other NSAIDs are not available.",
-   "categories": [
-    "excretion"
-   ]
-  },
   "2401": {
    "text": "Rare cases of digoxin toxicity have been reported with concomitant use of tramadol. The mechanism of the interaction has not been described.",
-   "categories": [
-    "others"
-   ]
-  },
-  "5547": {
-   "text": "Coadministration with azole antifungal agents may significantly increase the plasma concentrations of amiodarone. The proposed mechanism is azole inhibition of CYP450 3A4, the isoenzyme responsible for the metabolic clearance of amiodarone. The use of amiodarone has been associated with prolongation of the QT interval, thus elevated plasma levels of the drug may potentiate the risk of ventricular arrhythmias such as ventricular tachycardia and torsade de pointes as well as cardiac arrest and sudden death. Within the azole class, ketoconazole and itraconazole are considered potent inhibitors, while fluconazole is comparatively weak and generally causes clinically significant interactions with CYP450 3A4 substrates only at dosages of 200 mg/day or more.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "3474": {
-   "text": "Coadministration with nonsteroidal anti-inflammatory drugs (NSAIDs) may increase the plasma concentrations and toxicities of methotrexate. The proposed mechanism is NSAID inhibition of the renal elimination of methotrexate and its metabolite, 7-hydroxymethotrexate, although data from pharmacokinetic studies are inconsistent and conflicting. Displacement of methotrexate binding to serum albumin by certain NSAIDs may also play a secondary role. Unexpectedly severe and sometimes fatal bone marrow suppression, aplastic anemia, gastrointestinal toxicity, and nephrotoxicity have been reported during concomitant administration of methotrexate with NSAIDs. The risk is greatest in patients receiving high dosages of methotrexate and those with renal impairment.",
-   "categories": [
-    "excretion"
-   ]
-  },
-  "2167": {
-   "text": "Coadministration with amiodarone may increase serum digoxin concentrations by up to 100%, frequently resulting in clinical toxicity. In children, this percentage may be even higher. Amiodarone has been suggested to increase intestinal transit time, reduce renal clearance and volume of distribution, displace digoxin from protein binding sites, as well as induce hypothyroidism, all of which may contribute to increased serum digoxin levels. In addition, both drugs may have additive bradycardic effects. Torsade de pointes cardiac arrhythmia has been reported. The interaction also has occurred with digitoxin.",
-   "categories": [
-    "distribution"
-   ]
-  },
-  "1403": {
-   "text": "Coadministration with clarithromycin may significantly increase the plasma concentrations of digoxin. The proposed mechanism is clarithromycin inhibition of the P-glycoprotein-mediated intestinal efflux and/or renal tubular secretion of digoxin.",
-   "categories": [
-    "excretion"
-   ]
-  },
-  "2910": {
-   "text": "Clarithromycin may increase and prolong the omeprazole plasma concentration. The mechanism may be related to clarithromycin inhibition of hepatic cytochrome P450 enzymes responsible for omeprazole metabolism. Coadministration of omeprazole may result in an increase in clarithromycin and 14-(R)-hydroxyclarithromycin plasma concentrations. These increases may be due to the effect of omeprazole on gastric pH.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "3189": {
-   "text": "Coadministration with inhibitors of CYP450 3A4 may increase the plasma concentrations of HMG-CoA reductase inhibitors (i.e., statins) that are metabolized by the isoenzyme. Lovastatin and simvastatin are particularly susceptible because of their low oral bioavailability, but others such as atorvastatin and cerivastatin may also be affected.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "2704": {
-   "text": "Proton pump inhibitors may increase the bioavailability of digoxin. The mechanism may involve a pH-dependent increase in gastrointestinal absorption of digoxin and/or inhibition by PPIs of the P-glycoprotein-mediated intestinal transport of digoxin. Coadministration with proton pump inhibitors (PPIs) for prolonged periods may increase the risk of digoxin toxicity. Chronic use of PPIs can induce hypomagnesemia. In patients with hypomagnesemia, toxicity may occur despite serum digoxin concentrations below 2.0 ng/mL because magnesium depletion sensitizes the myocardium to digoxin. The mechanism via which hypomagnesemia may occur during long-term PPI use is unknown, although changes in intestinal absorption of magnesium may be involved. Hypomagnesemia has been reported rarely in patients treated with PPIs for at least three months, but in most cases, after a year or more. Serious adverse events include tetany, seizures, tremor, carpopedal spasm, atrial fibrillation, supraventricular tachycardia, and abnormal QT interval; however, patients do not always exhibit these symptoms.",
-   "categories": [
-    "absorption"
-   ]
-  },
-  "3230": {
-   "text": "The use of some antineoplastic agents has been associated with decreased gastrointestinal absorption of digoxin. The suspected mechanism is alteration of the gastrointestinal mucosa. The risk of an interaction is expected to be less with digoxin solution in capsules because absorption occurs rapidly in the upper GI tract.",
-   "categories": [
-    "absorption"
-   ]
-  },
-  "2958": {
-   "text": "Coadministration with metformin may decrease the anticoagulant effects of vitamin K antagonists (VKAs). The mechanism has not been delineated, but it may involve metformin-mediated increase in the elimination rate of VKAs. In addition, concomitant use of VKAs with metformin may increase the risk of severe hypoglycemia. The clinical significance of this interaction is unknown.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "419": {
-   "text": "Coadministration with proton pump inhibitors may decrease the oral bioavailability of aspirin and other salicylates. Proton pump inhibitors may enhance the release rate of salicylates from enteric-coated formulations due to premature disruption of the coating and intragastric release of the drug secondary to an increase in gastric pH. The clinical significance of this interaction is unknown. Theoretically, it may increase the risk of gastric adverse effects associated with salicylates.",
-   "categories": [
-    "absorption"
-   ]
-  },
-  "4978": {
-   "text": "Coadministration with proton pump inhibitors (PPIs) has occasionally been associated with enhanced hypoprothrombinemic effect of warfarin. The exact mechanism is unknown but may involve PPI inhibition of CYP450 2C19 and/or 3A4, the isoenzymes partially responsible for the metabolic clearance of the biologically less active R(+) enantiomer of warfarin.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "1430": {
-   "text": "Digoxin is a cationic drug and theoretically could decrease the excretion of metformin by competing for renal tubular transport. In addition, patients who are being pharmacologically treated for congestive heart failure appear to be at greater risk of developing lactic acidosis.",
-   "categories": [
-    "excretion"
-   ]
-  },
-  "165": {
-   "text": "Coadministration with nonsteroidal anti-inflammatory drugs (NSAIDs) may potentiate the risk of central nervous system toxicity sometimes associated with fluoroquinolone use. Some investigators suggest that the piperazine ring of fluoroquinolones may inhibit the binding of gamma-aminobutyric acid (GABA) to brain receptors and that NSAIDs may synergistically add to this effect. Patients with a history of seizures may be at greater risk.",
-   "categories": [
-    "synergistic_effect"
-   ]
-  },
-  "58": {
-   "text": "The use of amiodarone with higher dosages of simvastatin or lovastatin may be associated with an increased risk of myopathy. The proposed mechanism is inhibition by amiodarone of intestinal and hepatic CYP450 3A4, resulting in enhanced bioavailability as well as reduced clearance of simvastatin and its active metabolite, simvastatin acid. Although not studied, the interaction is also expected to occur with lovastatin due to its similar metabolic profile to simvastatin. In general, the risk of myopathy associated with the statin class of drugs is thought to be dose-related and increased by high levels of HMG-CoA reductase inhibitory activity in plasma. Myopathy manifested as muscle pain and/or weakness associated with grossly elevated creatine kinase exceeding ten times the upper limit of normal has been reported occasionally. Rhabdomyolysis has also occurred rarely, which may be accompanied by acute renal failure secondary to myoglobinuria and may result in death.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "1374": {
-   "text": "Quinolone antibiotics may interfere with the therapeutic effects of insulin and other antidiabetic agents. The use of quinolones has been associated with disturbances in blood glucose homeostasis possibly stemming from effects on pancreatic beta cell ATP-sensitive potassium channels that regulate insulin secretion. Both hyperglycaemia and hypoglycemia have been reported, usually in diabetic patients receiving concomitant treatment with an oral hypoglycemic agent (e.g., sulfonylurea) or insulin. Although hyperglycaemia is significantly more common and infection itself may be an underlying risk factor, hypoglycemia may cause greater morbidity and mortality.",
-   "categories": [
-    "antagonistic_effect"
-   ]
-  },
-  "812": {
-   "text": "Salicylates may interfere with the renal elimination of methotrexate and may displace it from binding sites. The pharmacologic effect and toxicity of methotrexate may be increased. Patients receiving high-dose methotrexate are at a greater risk of developing toxicity.",
-   "categories": [
-    "excretion"
-   ]
-  },
-  "2515": {
-   "text": "Coadministration with tramadol may potentiate the hypoprothrombinemic effect of warfarin. There have been rare reports of elevated prothrombin time or INR and bleeding in warfarin patients taking tramadol, and a return to normal anticoagulation following its discontinuation. The exact mechanism is unknown but may be related to reduced activity of CYP450 2D6, which can lead to increased plasma concentrations of tramadol.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "2845": {
-   "text": "Spironolactone may reduce the tubular secretion of digoxin. Plasma clearance of digoxin may be decreased, and plasma levels may increase. Also, limited data indicate that spironolactone may have a negative inotropic side effect. Finally, spironolactone may interfere with some digoxin radioimmunoassays, and digoxin concentrations may be overestimated. During coadministration, the patient should be monitored for signs and symptoms of digoxin toxicity, levels should be checked when necessary, and the clinician should keep in mind the possibility that digoxin levels may falsely appear to be elevated. Patients should be advised to notify their physician if they experience nausea, anorexia, visual changes, or irregular heartbeats.",
-   "categories": [
-    "antagonistic_effect",
-    "excretion"
-   ]
-  },
-  "4837": {
-   "text": "Coadministration of methotrexate with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Methotrexate, especially at higher doses or with prolonged treatment, has been associated with hepatotoxicity including acute hepatitis, chronic fibrosis, necrosis, cirrhosis, and liver enzyme elevations.",
-   "categories": [
-    "synergistic_effect"
-   ]
-  },
-  "4642": {
-   "text": "Fluconazole may increase plasma concentrations of clarithromycin when coadministered. The mechanism of the interaction is unknown. Observation for clarithromycin adverse effects is recommended if these drugs are given together.",
    "categories": [
     "others"
    ]
@@ -187,32 +28,38 @@
     "antagonistic_effect"
    ]
   },
-  "5419": {
-   "text": "Coadministration with diuretics may potentiate the risk of hyponatremia associated with the use of selective serotonin reuptake inhibitors (SSRIs) and serotonin-norepinephrine reuptake inhibitors (SNRIs). Elderly patients and patients taking diuretics or who are otherwise volume-depleted may be at greater risk of developing hyponatremia with SSRIs and SNRIs. Antihypertensive agents such as diuretics may potentiate the orthostatic effect that is occasionally observed upon the initiation of SSRI or SNRI therapy. Syncope and orthostatic hypotension tend to occur within the first week of SNRI/SSRI therapy but can occur at any time during treatment, particularly after a dosage increase. The use of SSRIs or SNRIs may also cause sustained increases in blood pressure and heart rate, which may antagonize the therapeutic effects of antihypertensive medications.",
-   "categories": [
-    "synergistic_effect"
-   ]
-  },
-  "3456": {
-   "text": "Spironolactone may cause diuresis and hemoconcentration of clotting factors. The effects of some anticoagulants may be decreased. Data are available for warfarin. The INR or PT should be monitored, and oral coagulant dosage should be increased as needed.",
-   "categories": [
-    "antagonistic_effect"
-   ]
-  },
-  "4651": {
-   "text": "Coadministration with fluconazole may significantly increase the plasma concentrations and hypoprothrombinemic effect of warfarin. The mechanism is fluconazole inhibition of CYP450 2C9, the isoenzyme responsible for the metabolic clearance of the biologically more active S(-) enantiomer of warfarin. Additionally, fluconazole inhibits CYP450 2C19 and 3A4, which are responsible for the metabolism of R(+) warfarin.",
+  "2085": {
+   "text": "Coadministration with potent inhibitors of CYP450 3A4 may significantly increase the plasma concentrations of simvastatin and lovastatin and their active acid metabolites, all of which are primarily metabolized by the isoenzyme.",
    "categories": [
     "metabolism"
    ]
   },
-  "3906": {
-   "text": "Coadministration with ciprofloxacin or other quinolones may increase the plasma concentrations of methotrexate. The exact mechanism of interaction is unknown but may involve competitive inhibition of the renal tubular secretion of methotrexate.",
+  "599": {
+   "text": "Concomitant use of angiotensin converting enzyme (ACE) inhibitors and potassium-sparing diuretics may increase the risk of hyperkalemia. Inhibition of ACE results in decreased aldosterone secretion, which can lead to increases in serum potassium that may be additive with that induced by potassium-sparing diuretics. ACE inhibitors may also cause deterioration of renal function in patients with chronic heart failure, and the risk is increased if they are sodium-depleted or dehydrated after excessive diuresis.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "4247": {
+   "text": "Some salicylates may impair the tubular secretion of canrenone, the main active metabolite of spironolactone. This effect could inhibit the natriuretic properties of spironolactone. Data are available for aspirin. If diuresis is inadequate, the clinician should consider discontinuing the salicylate or increasing spironolactone dosage while paying careful attention to the patient's serum potassium concentration.",
    "categories": [
     "excretion"
    ]
   },
-  "2857": {
-   "text": "Amiodarone may increase the pharmacologic effects of warfarin by inhibiting CYP450 2C9 hepatic metabolism of S-warfarin. Similar effects may also occur with other oral anticoagulants, resulting in significant hypoprothrombinemia and bleeding. When amiodarone is added to an anticoagulant regimen, increased anticoagulant effects may become apparent within one to several weeks and may persist for months after the amiodarone is discontinued. The effects of this interaction are highly variable - while some patients are asymptomatic, serious and life-threatening bleeding complications have been reported in others. Patients who are poor CYP450 2C9 metabolizers may have a higher risk of bleeding and a faster onset of the interaction.",
+  "749": {
+   "text": "Aspirin, even in small doses, may increase the risk of bleeding in patients on oral anticoagulants by inhibiting platelet aggregation, prolonging bleeding time, and inducing gastrointestinal lesions. Analgesic/antipyretic doses of aspirin increase the risk of major bleeding more than low-dose aspirin; however bleeding has also occurred with low-dose aspirin.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "616": {
+   "text": "Coadministration with potent inhibitors of CYP450 3A4 including azole antifungal agents may significantly increase the plasma concentrations of HMG-CoA reductase inhibitors (statins) that are substrates of the isoenzyme. High levels of HMG-CoA reductase inhibitory activity in plasma is associated with an increased risk of musculoskeletal toxicity. Myopathy manifested as muscle pain and/or weakness associated with grossly elevated creatine kinase exceeding ten times the upper limit of normal has been reported occasionally. Rhabdomyolysis has also occurred rarely, which may be accompanied by acute renal failure secondary to myoglobinuria and may result in death.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4978": {
+   "text": "Coadministration with proton pump inhibitors (PPIs) has occasionally been associated with enhanced hypoprothrombinemic effect of warfarin. The exact mechanism is unknown but may involve PPI inhibition of CYP450 2C19 and/or 3A4, the isoenzymes partially responsible for the metabolic clearance of the biologically less active R(+) enantiomer of warfarin.",
    "categories": [
     "metabolism"
    ]
@@ -224,62 +71,16 @@
     "synergistic_effect"
    ]
   },
-  "1149": {
-   "text": "Coadministration with fluconazole may significantly increase the plasma concentrations of omeprazole and other proton pump inhibitors (PPIs). The proposed mechanism is fluconazole inhibition of PPI metabolism via CYP450 2C19 and 3A4.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "4242": {
-   "text": "Some ACE inhibitors may decrease the renal clearance of digoxin. Increased plasma digoxin levels may result. The proposed mechanism is reduced tubular secretion of digoxin. Patients with congestive heart failure (CHF) or renal impairment may have a greater risk of developing digoxin toxicity.",
-   "categories": [
-    "excretion"
-   ]
-  },
-  "4390": {
-   "text": "Concomitant use of insulin and other antidiabetic agents with clarithromycin may cause significant hypoglycemia. There have been rare reports of hypoglycemia in patients treated with clarithromycin, some of whom were taking oral hypoglycemic agents or insulin. The exact mechanism of interaction has not been established. With certain hypoglycemic drugs such as nateglinide, pioglitazone, repaglinide and rosiglitazone, inhibition of the CYP450 3A4 isoenzyme by clarithromycin may be involved.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "4172": {
-   "text": "A case report has suggested that amiodarone may increase the risk of methotrexate toxicity (particularly skin necrosis). The mechanism is unknown and causality could not be definitely determined.",
-   "categories": [
-    "others"
-   ]
-  },
-  "363": {
-   "text": "Class IA (e.g., disopyramide, quinidine, procainamide) and class III (e.g., amiodarone, dofetilide, sotalol) antiarrhythmic agents can cause dose-related prolongation of the QT interval. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.",
-   "categories": [
-    "synergistic_effect"
-   ]
-  },
-  "-1": {
-   "text": null,
-   "categories": []
-  },
-  "211": {
-   "text": "Some quinolone antibiotics have been reported to potentiate the hypoprothrombinemic effect of warfarin and other coumarin anticoagulants. The exact mechanism is unknown but may involve inhibition of coumarin metabolism and/or depletion of certain clotting factors due to suppression of vitamin K-producing intestinal flora.",
-   "categories": [
-    "others"
-   ]
-  },
-  "597": {
-   "text": "According to the product labeling, absorption of the extended-release formulation of ciprofloxacin was slightly diminished (20%) when given concomitantly with omeprazole. The mechanism and clinical significance of this interaction are unknown.",
+  "419": {
+   "text": "Coadministration with proton pump inhibitors may decrease the oral bioavailability of aspirin and other salicylates. Proton pump inhibitors may enhance the release rate of salicylates from enteric-coated formulations due to premature disruption of the coating and intragastric release of the drug secondary to an increase in gastric pH. The clinical significance of this interaction is unknown. Theoretically, it may increase the risk of gastric adverse effects associated with salicylates.",
    "categories": [
     "absorption"
    ]
   },
-  "3643": {
-   "text": "Nonsteroidal anti-inflammatory drugs (NSAIDs) may attenuate the antihypertensive effects of ACE inhibitors. The proposed mechanism is NSAID-induced inhibition of renal prostaglandin synthesis, which results in unopposed pressor activity producing hypertension. In addition, NSAIDs can cause fluid retention, which also affects blood pressure. Concomitant use of NSAIDs and ACE inhibitors may also cause deterioration in renal function, particularly in patients who are elderly or volume-depleted (including those on diuretic therapy) or have compromised renal function. Acute renal failure may occur, although effects are usually reversible. Chronic use of NSAIDs alone may be associated with renal toxicities, including elevations in serum creatinine and BUN, tubular necrosis, glomerulitis, renal papillary necrosis, acute interstitial nephritis, nephrotic syndrome, and renal failure.",
+  "2167": {
+   "text": "Coadministration with amiodarone may increase serum digoxin concentrations by up to 100%, frequently resulting in clinical toxicity. In children, this percentage may be even higher. Amiodarone has been suggested to increase intestinal transit time, reduce renal clearance and volume of distribution, displace digoxin from protein binding sites, as well as induce hypothyroidism, all of which may contribute to increased serum digoxin levels. In addition, both drugs may have additive bradycardic effects. Torsade de pointes cardiac arrhythmia has been reported. The interaction also has occurred with digitoxin.",
    "categories": [
-    "antagonistic_effect"
-   ]
-  },
-  "5120": {
-   "text": "Theoretically, concurrent use of two or more drugs that can cause QT interval prolongation may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. The risk of an individual agent or a combination of these agents causing ventricular arrhythmia in association with QT prolongation is largely unpredictable but may be increased by certain underlying risk factors such as congenital long QT syndrome, cardiac disease, and electrolyte disturbances.",
-   "categories": [
-    "synergistic_effect"
+    "distribution"
    ]
   },
   "3602": {
@@ -288,28 +89,10 @@
     "synergistic_effect"
    ]
   },
-  "615": {
-   "text": "Coadministration with clarithromycin or erythromycin may infrequently but substantially enhance the hypoprothrombinemic effect of warfarin and other coumarin anticoagulants. The exact mechanism of interaction is unknown. Data from clinical studies have not supported a significant, predictable pharmacodynamic or pharmacokinetic interaction in general. Although both macrolides are potent inhibitors of CYP450 3A4 and can inhibit metabolism of the R(+) enantiomer of warfarin, the overall effect on racemic warfarin pharmacokinetics appears to be minor.",
+  "3230": {
+   "text": "The use of some antineoplastic agents has been associated with decreased gastrointestinal absorption of digoxin. The suspected mechanism is alteration of the gastrointestinal mucosa. The risk of an interaction is expected to be less with digoxin solution in capsules because absorption occurs rapidly in the upper GI tract.",
    "categories": [
-    "metabolism"
-   ]
-  },
-  "4343": {
-   "text": "Quinolones such as ciprofloxacin, gatifloxacin, gemifloxacin, levofloxacin, lomefloxacin, moxifloxacin, norfloxacin, ofloxacin, and sparfloxacin may cause dose-related prolongation of the QT interval in some patients. Coadministration with other agents that can prolong the QT interval may result in elevated risk of ventricular arrhythmias, including ventricular tachycardia and torsade de pointes, because of additive arrhythmogenic potential related to their effects on cardiac conduction.",
-   "categories": [
-    "synergistic_effect"
-   ]
-  },
-  "2085": {
-   "text": "Coadministration with potent inhibitors of CYP450 3A4 may significantly increase the plasma concentrations of simvastatin and lovastatin and their active acid metabolites, all of which are primarily metabolized by the isoenzyme.",
-   "categories": [
-    "metabolism"
-   ]
-  },
-  "749": {
-   "text": "Aspirin, even in small doses, may increase the risk of bleeding in patients on oral anticoagulants by inhibiting platelet aggregation, prolonging bleeding time, and inducing gastrointestinal lesions. Analgesic/antipyretic doses of aspirin increase the risk of major bleeding more than low-dose aspirin; however bleeding has also occurred with low-dose aspirin.",
-   "categories": [
-    "synergistic_effect"
+    "absorption"
    ]
   },
   "2332": {
@@ -318,33 +101,56 @@
     "synergistic_effect"
    ]
   },
-  "2325": {
-   "text": "A case report suggests that coadministration with esomeprazole may increase the plasma concentrations of atorvastatin and the associated risk of myopathy. The proposed mechanism is competitive inhibition of intestinal P-glycoprotein, resulting in decreased drug secretion into the intestinal lumen and increased drug bioavailability. Another, perhaps minor mechanism is competitive inhibition of CYP450 3A4 metabolism.",
+  "2712": {
+   "text": "Simvastatin may slightly increase the anticoagulant response to warfarin. The mechanism may be warfarin displacement from protein binding sites. The clinical significance of this interaction has not been established, however, clinical monitoring of patient warfarin response and tolerance is recommended. Simvastatin may interact in a similar way with other oral anticoagulants. Patients should be advised to promptly report any signs of bleeding to their physician, including pain, swelling, headache, dizziness, weakness, prolonged bleeding from cuts, increased menstrual flow, vaginal bleeding, nosebleeds, bleeding of gums from brushing, unusual bleeding or bruising, red or brown urine, or red or black stools.",
    "categories": [
-    "absorption",
-    "metabolism"
+    "distribution"
    ]
   },
-  "4500": {
-   "text": "Limited data suggest that ACE inhibitors may potentiate the hypoglycemic effects of oral antidiabetic drugs, including metformin. The mechanism is unknown. Symptomatic and sometimes severe hypoglycemia has occurred.",
-   "categories": [
-    "others"
-   ]
-  },
-  "616": {
-   "text": "Coadministration with potent inhibitors of CYP450 3A4 including azole antifungal agents may significantly increase the plasma concentrations of HMG-CoA reductase inhibitors (statins) that are substrates of the isoenzyme. High levels of HMG-CoA reductase inhibitory activity in plasma is associated with an increased risk of musculoskeletal toxicity. Myopathy manifested as muscle pain and/or weakness associated with grossly elevated creatine kinase exceeding ten times the upper limit of normal has been reported occasionally. Rhabdomyolysis has also occurred rarely, which may be accompanied by acute renal failure secondary to myoglobinuria and may result in death.",
+  "2958": {
+   "text": "Coadministration with metformin may decrease the anticoagulant effects of vitamin K antagonists (VKAs). The mechanism has not been delineated, but it may involve metformin-mediated increase in the elimination rate of VKAs. In addition, concomitant use of VKAs with metformin may increase the risk of severe hypoglycemia. The clinical significance of this interaction is unknown.",
    "categories": [
     "metabolism"
    ]
   },
-  "4247": {
-   "text": "Some salicylates may impair the tubular secretion of canrenone, the main active metabolite of spironolactone. This effect could inhibit the natriuretic properties of spironolactone. Data are available for aspirin. If diuresis is inadequate, the clinician should consider discontinuing the salicylate or increasing spironolactone dosage while paying careful attention to the patient's serum potassium concentration.",
+  "4390": {
+   "text": "Concomitant use of insulin and other antidiabetic agents with clarithromycin may cause significant hypoglycemia. There have been rare reports of hypoglycemia in patients treated with clarithromycin, some of whom were taking oral hypoglycemic agents or insulin. The exact mechanism of interaction has not been established. With certain hypoglycemic drugs such as nateglinide, pioglitazone, repaglinide and rosiglitazone, inhibition of the CYP450 3A4 isoenzyme by clarithromycin may be involved.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4875": {
+   "text": "Coadministration with proton pump inhibitors (PPIs) may increase the serum concentrations of methotrexate (MTX) and its potentially active 7-hydroxy metabolite. The proposed mechanism is PPI inhibition of the active tubular secretion of MTX and 7-hydroxymethotrexate via renal H+/K+ ATPase pumps. Inhibition of the breast cancer resistance protein (BCRP)-mediated transport of methotrexate and 7-hydroxymethotrexate by the proton pump inhibitors has also been suggested.",
    "categories": [
     "excretion"
    ]
   },
-  "599": {
-   "text": "Concomitant use of angiotensin converting enzyme (ACE) inhibitors and potassium-sparing diuretics may increase the risk of hyperkalemia. Inhibition of ACE results in decreased aldosterone secretion, which can lead to increases in serum potassium that may be additive with that induced by potassium-sparing diuretics. ACE inhibitors may also cause deterioration of renal function in patients with chronic heart failure, and the risk is increased if they are sodium-depleted or dehydrated after excessive diuresis.",
+  "1430": {
+   "text": "Digoxin is a cationic drug and theoretically could decrease the excretion of metformin by competing for renal tubular transport. In addition, patients who are being pharmacologically treated for congestive heart failure appear to be at greater risk of developing lactic acidosis.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "1149": {
+   "text": "Coadministration with fluconazole may significantly increase the plasma concentrations of omeprazole and other proton pump inhibitors (PPIs). The proposed mechanism is fluconazole inhibition of PPI metabolism via CYP450 2C19 and 3A4.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "58": {
+   "text": "The use of amiodarone with higher dosages of simvastatin or lovastatin may be associated with an increased risk of myopathy. The proposed mechanism is inhibition by amiodarone of intestinal and hepatic CYP450 3A4, resulting in enhanced bioavailability as well as reduced clearance of simvastatin and its active metabolite, simvastatin acid. Although not studied, the interaction is also expected to occur with lovastatin due to its similar metabolic profile to simvastatin. In general, the risk of myopathy associated with the statin class of drugs is thought to be dose-related and increased by high levels of HMG-CoA reductase inhibitory activity in plasma. Myopathy manifested as muscle pain and/or weakness associated with grossly elevated creatine kinase exceeding ten times the upper limit of normal has been reported occasionally. Rhabdomyolysis has also occurred rarely, which may be accompanied by acute renal failure secondary to myoglobinuria and may result in death.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4651": {
+   "text": "Coadministration with fluconazole may significantly increase the plasma concentrations and hypoprothrombinemic effect of warfarin. The mechanism is fluconazole inhibition of CYP450 2C9, the isoenzyme responsible for the metabolic clearance of the biologically more active S(-) enantiomer of warfarin. Additionally, fluconazole inhibits CYP450 2C19 and 3A4, which are responsible for the metabolism of R(+) warfarin.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "5419": {
+   "text": "Coadministration with diuretics may potentiate the risk of hyponatremia associated with the use of selective serotonin reuptake inhibitors (SSRIs) and serotonin-norepinephrine reuptake inhibitors (SNRIs). Elderly patients and patients taking diuretics or who are otherwise volume-depleted may be at greater risk of developing hyponatremia with SSRIs and SNRIs. Antihypertensive agents such as diuretics may potentiate the orthostatic effect that is occasionally observed upon the initiation of SSRI or SNRI therapy. Syncope and orthostatic hypotension tend to occur within the first week of SNRI/SSRI therapy but can occur at any time during treatment, particularly after a dosage increase. The use of SSRIs or SNRIs may also cause sustained increases in blood pressure and heart rate, which may antagonize the therapeutic effects of antihypertensive medications.",
    "categories": [
     "synergistic_effect"
    ]
@@ -355,10 +161,11 @@
     "others"
    ]
   },
-  "4328": {
-   "text": "Coadministration with nonsteroidal anti-inflammatory drugs (NSAIDs) may potentiate the risk of lactic acidosis associated with the use of metformin. The precise mechanism for this interaction has not been clearly delineated. Since NSAIDs have been shown to cause a deterioration in renal function, the likelihood of lactic acidosis occurring may be increased in patients with preexisting renal impairment.",
+  "2325": {
+   "text": "A case report suggests that coadministration with esomeprazole may increase the plasma concentrations of atorvastatin and the associated risk of myopathy. The proposed mechanism is competitive inhibition of intestinal P-glycoprotein, resulting in decreased drug secretion into the intestinal lumen and increased drug bioavailability. Another, perhaps minor mechanism is competitive inhibition of CYP450 3A4 metabolism.",
    "categories": [
-    "others"
+    "absorption",
+    "metabolism"
    ]
   },
   "2938": {
@@ -367,16 +174,209 @@
     "synergistic_effect"
    ]
   },
+  "2704": {
+   "text": "Proton pump inhibitors may increase the bioavailability of digoxin. The mechanism may involve a pH-dependent increase in gastrointestinal absorption of digoxin and/or inhibition by PPIs of the P-glycoprotein-mediated intestinal transport of digoxin. Coadministration with proton pump inhibitors (PPIs) for prolonged periods may increase the risk of digoxin toxicity. Chronic use of PPIs can induce hypomagnesemia. In patients with hypomagnesemia, toxicity may occur despite serum digoxin concentrations below 2.0 ng/mL because magnesium depletion sensitizes the myocardium to digoxin. The mechanism via which hypomagnesemia may occur during long-term PPI use is unknown, although changes in intestinal absorption of magnesium may be involved. Hypomagnesemia has been reported rarely in patients treated with PPIs for at least three months, but in most cases, after a year or more. Serious adverse events include tetany, seizures, tremor, carpopedal spasm, atrial fibrillation, supraventricular tachycardia, and abnormal QT interval; however, patients do not always exhibit these symptoms.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "2845": {
+   "text": "Spironolactone may reduce the tubular secretion of digoxin. Plasma clearance of digoxin may be decreased, and plasma levels may increase. Also, limited data indicate that spironolactone may have a negative inotropic side effect. Finally, spironolactone may interfere with some digoxin radioimmunoassays, and digoxin concentrations may be overestimated. During coadministration, the patient should be monitored for signs and symptoms of digoxin toxicity, levels should be checked when necessary, and the clinician should keep in mind the possibility that digoxin levels may falsely appear to be elevated. Patients should be advised to notify their physician if they experience nausea, anorexia, visual changes, or irregular heartbeats.",
+   "categories": [
+    "antagonistic_effect",
+    "excretion"
+   ]
+  },
+  "3689": {
+   "text": "Nonsteroidal anti-inflammatory drugs (NSAIDs) may increase plasma digoxin concentrations and half-life. The exact mechanism is unknown, but may be related to reduced renal clearance of digoxin. The interaction has been reported with indomethacin and ibuprofen, but data for other NSAIDs are not available.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "363": {
+   "text": "Class IA (e.g., disopyramide, quinidine, procainamide) and class III (e.g., amiodarone, dofetilide, sotalol) antiarrhythmic agents can cause dose-related prolongation of the QT interval. Theoretically, coadministration with other agents that can prolong the QT interval may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3643": {
+   "text": "Nonsteroidal anti-inflammatory drugs (NSAIDs) may attenuate the antihypertensive effects of ACE inhibitors. The proposed mechanism is NSAID-induced inhibition of renal prostaglandin synthesis, which results in unopposed pressor activity producing hypertension. In addition, NSAIDs can cause fluid retention, which also affects blood pressure. Concomitant use of NSAIDs and ACE inhibitors may also cause deterioration in renal function, particularly in patients who are elderly or volume-depleted (including those on diuretic therapy) or have compromised renal function. Acute renal failure may occur, although effects are usually reversible. Chronic use of NSAIDs alone may be associated with renal toxicities, including elevations in serum creatinine and BUN, tubular necrosis, glomerulitis, renal papillary necrosis, acute interstitial nephritis, nephrotic syndrome, and renal failure.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
   "5450": {
    "text": "Some investigators suggest that coadministration with aspirin may attenuate the vasodilator and hypotensive effects of ACE inhibitors. In addition, some have found that the benefits of ACE inhibitors on morbidity and mortality in post-acute myocardial infarction, coronary heart disease, and particularly congestive heart failure may be compromised or even nullified by aspirin. The proposed mechanism is aspirin inhibition of cyclooxygenase, resulting in suppression of prostaglandin synthesis and prostaglandin-mediated hemodynamic effects of ACE inhibitors. However, evidence of a negative interaction is largely contradictory, and interpretation of relevant data has often been complicated by multiple confounding elements as well as the retrospective or post hoc nature of most studies.",
    "categories": [
     "others"
    ]
   },
+  "4500": {
+   "text": "Limited data suggest that ACE inhibitors may potentiate the hypoglycemic effects of oral antidiabetic drugs, including metformin. The mechanism is unknown. Symptomatic and sometimes severe hypoglycemia has occurred.",
+   "categories": [
+    "others"
+   ]
+  },
+  "615": {
+   "text": "Coadministration with clarithromycin or erythromycin may infrequently but substantially enhance the hypoprothrombinemic effect of warfarin and other coumarin anticoagulants. The exact mechanism of interaction is unknown. Data from clinical studies have not supported a significant, predictable pharmacodynamic or pharmacokinetic interaction in general. Although both macrolides are potent inhibitors of CYP450 3A4 and can inhibit metabolism of the R(+) enantiomer of warfarin, the overall effect on racemic warfarin pharmacokinetics appears to be minor.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "5547": {
+   "text": "Coadministration with azole antifungal agents may significantly increase the plasma concentrations of amiodarone. The proposed mechanism is azole inhibition of CYP450 3A4, the isoenzyme responsible for the metabolic clearance of amiodarone. The use of amiodarone has been associated with prolongation of the QT interval, thus elevated plasma levels of the drug may potentiate the risk of ventricular arrhythmias such as ventricular tachycardia and torsade de pointes as well as cardiac arrest and sudden death. Within the azole class, ketoconazole and itraconazole are considered potent inhibitors, while fluconazole is comparatively weak and generally causes clinically significant interactions with CYP450 3A4 substrates only at dosages of 200 mg/day or more.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4837": {
+   "text": "Coadministration of methotrexate with other agents known to induce hepatotoxicity may potentiate the risk of liver injury. Methotrexate, especially at higher doses or with prolonged treatment, has been associated with hepatotoxicity including acute hepatitis, chronic fibrosis, necrosis, cirrhosis, and liver enzyme elevations.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3189": {
+   "text": "Coadministration with inhibitors of CYP450 3A4 may increase the plasma concentrations of HMG-CoA reductase inhibitors (i.e., statins) that are metabolized by the isoenzyme. Lovastatin and simvastatin are particularly susceptible because of their low oral bioavailability, but others such as atorvastatin and cerivastatin may also be affected.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "2515": {
+   "text": "Coadministration with tramadol may potentiate the hypoprothrombinemic effect of warfarin. There have been rare reports of elevated prothrombin time or INR and bleeding in warfarin patients taking tramadol, and a return to normal anticoagulation following its discontinuation. The exact mechanism is unknown but may be related to reduced activity of CYP450 2D6, which can lead to increased plasma concentrations of tramadol.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "2857": {
+   "text": "Amiodarone may increase the pharmacologic effects of warfarin by inhibiting CYP450 2C9 hepatic metabolism of S-warfarin. Similar effects may also occur with other oral anticoagulants, resulting in significant hypoprothrombinemia and bleeding. When amiodarone is added to an anticoagulant regimen, increased anticoagulant effects may become apparent within one to several weeks and may persist for months after the amiodarone is discontinued. The effects of this interaction are highly variable - while some patients are asymptomatic, serious and life-threatening bleeding complications have been reported in others. Patients who are poor CYP450 2C9 metabolizers may have a higher risk of bleeding and a faster onset of the interaction.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3906": {
+   "text": "Coadministration with ciprofloxacin or other quinolones may increase the plasma concentrations of methotrexate. The exact mechanism of interaction is unknown but may involve competitive inhibition of the renal tubular secretion of methotrexate.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "2910": {
+   "text": "Clarithromycin may increase and prolong the omeprazole plasma concentration. The mechanism may be related to clarithromycin inhibition of hepatic cytochrome P450 enzymes responsible for omeprazole metabolism. Coadministration of omeprazole may result in an increase in clarithromycin and 14-(R)-hydroxyclarithromycin plasma concentrations. These increases may be due to the effect of omeprazole on gastric pH.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "597": {
+   "text": "According to the product labeling, absorption of the extended-release formulation of ciprofloxacin was slightly diminished (20%) when given concomitantly with omeprazole. The mechanism and clinical significance of this interaction are unknown.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "4343": {
+   "text": "Quinolones such as ciprofloxacin, gatifloxacin, gemifloxacin, levofloxacin, lomefloxacin, moxifloxacin, norfloxacin, ofloxacin, and sparfloxacin may cause dose-related prolongation of the QT interval in some patients. Coadministration with other agents that can prolong the QT interval may result in elevated risk of ventricular arrhythmias, including ventricular tachycardia and torsade de pointes, because of additive arrhythmogenic potential related to their effects on cardiac conduction.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "211": {
+   "text": "Some quinolone antibiotics have been reported to potentiate the hypoprothrombinemic effect of warfarin and other coumarin anticoagulants. The exact mechanism is unknown but may involve inhibition of coumarin metabolism and/or depletion of certain clotting factors due to suppression of vitamin K-producing intestinal flora.",
+   "categories": [
+    "others"
+   ]
+  },
+  "4328": {
+   "text": "Coadministration with nonsteroidal anti-inflammatory drugs (NSAIDs) may potentiate the risk of lactic acidosis associated with the use of metformin. The precise mechanism for this interaction has not been clearly delineated. Since NSAIDs have been shown to cause a deterioration in renal function, the likelihood of lactic acidosis occurring may be increased in patients with preexisting renal impairment.",
+   "categories": [
+    "others"
+   ]
+  },
+  "4242": {
+   "text": "Some ACE inhibitors may decrease the renal clearance of digoxin. Increased plasma digoxin levels may result. The proposed mechanism is reduced tubular secretion of digoxin. Patients with congestive heart failure (CHF) or renal impairment may have a greater risk of developing digoxin toxicity.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "5120": {
+   "text": "Theoretically, concurrent use of two or more drugs that can cause QT interval prolongation may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death. The risk of an individual agent or a combination of these agents causing ventricular arrhythmia in association with QT prolongation is largely unpredictable but may be increased by certain underlying risk factors such as congenital long QT syndrome, cardiac disease, and electrolyte disturbances.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
   "5271": {
    "text": "Diuretic-induced renal impairment and dehydration may increase the risk of lactic acidosis in patients who are concomitantly taking metformin. In addition, thiazides and other diuretics may interfere with glucose control by causing hyperglycemia, glucose intolerance, new-onset diabetes mellitus, and/or exacerbation of preexisting diabetes.",
    "categories": [
     "synergistic_effect"
+   ]
+  },
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "812": {
+   "text": "Salicylates may interfere with the renal elimination of methotrexate and may displace it from binding sites. The pharmacologic effect and toxicity of methotrexate may be increased. Patients receiving high-dose methotrexate are at a greater risk of developing toxicity.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "3474": {
+   "text": "Coadministration with nonsteroidal anti-inflammatory drugs (NSAIDs) may increase the plasma concentrations and toxicities of methotrexate. The proposed mechanism is NSAID inhibition of the renal elimination of methotrexate and its metabolite, 7-hydroxymethotrexate, although data from pharmacokinetic studies are inconsistent and conflicting. Displacement of methotrexate binding to serum albumin by certain NSAIDs may also play a secondary role. Unexpectedly severe and sometimes fatal bone marrow suppression, aplastic anemia, gastrointestinal toxicity, and nephrotoxicity have been reported during concomitant administration of methotrexate with NSAIDs. The risk is greatest in patients receiving high dosages of methotrexate and those with renal impairment.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "3919": {
+   "text": "The use of some macrolide antibiotics has been associated with increased blood levels of some selective serotonin reuptake inhibitors (SSRIs), resulting in excessive serotonergic effects or serotonin syndrome. The mechanism is inhibition of the CYP450 3A4 isoenzyme, which metabolizes SSRIs.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3456": {
+   "text": "Spironolactone may cause diuresis and hemoconcentration of clotting factors. The effects of some anticoagulants may be decreased. Data are available for warfarin. The INR or PT should be monitored, and oral coagulant dosage should be increased as needed.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
+  "4642": {
+   "text": "Fluconazole may increase plasma concentrations of clarithromycin when coadministered. The mechanism of the interaction is unknown. Observation for clarithromycin adverse effects is recommended if these drugs are given together.",
+   "categories": [
+    "others"
+   ]
+  },
+  "338": {
+   "text": "Amiodarone can cause dose-related prolongation of the QT interval. Coadministration with other agents that can prolong the QT interval such as macrolide antibiotics may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.In general, the risk of an individual agent or a combination of agents causing ventricular arrhythmia in association with QT prolongation is largely unpredictable but may be increased by certain underlying risk factors such as congenital long QT syndrome, cardiac disease, and electrolyte disturbances (e.g., hypokalemia, hypomagnesemia). Some macrolides such as clarithromycin, erythromycin, and troleandomycin are also potent inhibitors of CYP450 3A4 and may significantly inhibit the metabolism of amiodarone, which is primarily metabolized by the isoenzyme.",
+   "categories": [
+    "synergistic_effect",
+    "metabolism"
+   ]
+  },
+  "4172": {
+   "text": "A case report has suggested that amiodarone may increase the risk of methotrexate toxicity (particularly skin necrosis). The mechanism is unknown and causality could not be definitely determined.",
+   "categories": [
+    "others"
+   ]
+  },
+  "1077": {
+   "text": "Due to its serotonergic activity, coadministration of tramadol with selective serotonin reuptake inhibitors (SSRIs) may potentiate the risk of serotonin syndrome, which is a rare but serious and potentially fatal condition thought to result from hyperstimulation of brainstem 5-HT1A and 2A receptors. Symptoms of the serotonin syndrome may include mental status changes such as irritability, altered consciousness, confusion, hallucinations, and coma; autonomic dysfunction such as tachycardia, hyperthermia, diaphoresis, shivering, blood pressure lability, and mydriasis; neuromuscular abnormalities such as hyperreflexia, myoclonus, tremor, rigidity, and ataxia; and gastrointestinal symptoms such as abdominal cramping, nausea, vomiting, and diarrhea. Patients receiving tramadol with SSRIs may also have an increased risk of seizures due to additive epileptogenic effects of these agents. Pharmacokinetically, coadministration with certain SSRIs, namely fluoxetine, paroxetine and possibly sertraline, may decrease the plasma concentrations of the active O-demethylated (M1) metabolite of tramadol due to inhibition of CYP450 2D6, the isoenzyme responsible for the formation of the metabolite.",
+   "categories": [
+    "synergistic_effect",
+    "metabolism"
+   ]
+  },
+  "165": {
+   "text": "Coadministration with nonsteroidal anti-inflammatory drugs (NSAIDs) may potentiate the risk of central nervous system toxicity sometimes associated with fluoroquinolone use. Some investigators suggest that the piperazine ring of fluoroquinolones may inhibit the binding of gamma-aminobutyric acid (GABA) to brain receptors and that NSAIDs may synergistically add to this effect. Patients with a history of seizures may be at greater risk.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "1403": {
+   "text": "Coadministration with clarithromycin may significantly increase the plasma concentrations of digoxin. The proposed mechanism is clarithromycin inhibition of the P-glycoprotein-mediated intestinal efflux and/or renal tubular secretion of digoxin.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "1374": {
+   "text": "Quinolone antibiotics may interfere with the therapeutic effects of insulin and other antidiabetic agents. The use of quinolones has been associated with disturbances in blood glucose homeostasis possibly stemming from effects on pancreatic beta cell ATP-sensitive potassium channels that regulate insulin secretion. Both hyperglycaemia and hypoglycemia have been reported, usually in diabetic patients receiving concomitant treatment with an oral hypoglycemic agent (e.g., sulfonylurea) or insulin. Although hyperglycaemia is significantly more common and infection itself may be an underlying risk factor, hypoglycemia may cause greater morbidity and mortality.",
+   "categories": [
+    "antagonistic_effect"
    ]
   }
  },
@@ -388,7 +388,7 @@
    "rxnorm_name": "lisinopril",
    "drugbank_id": "DB00722",
    "atc": [
-    "C09AA"
+    "C09AA03"
    ],
    "ciel": [
     {
@@ -410,8 +410,7 @@
    "rxnorm_name": "metformin",
    "drugbank_id": "DB00331",
    "atc": [
-    "A10BD",
-    "A10BA"
+    "A10BA02"
    ],
    "ciel": [
     {
@@ -523,8 +522,8 @@
    "rxnorm_name": "methotrexate",
    "drugbank_id": "DB00563",
    "atc": [
-    "L01BA",
-    "L04AX"
+    "L01BA01",
+    "L04AX03"
    ],
    "ciel": [
     {
@@ -546,8 +545,7 @@
    "rxnorm_name": "esomeprazole",
    "drugbank_id": "DB00338",
    "atc": [
-    "A02BC",
-    "M01AE"
+    "A02BC05"
    ],
    "ciel": [
     {
@@ -584,7 +582,7 @@
    "rxnorm_name": "sertraline",
    "drugbank_id": "DB01104",
    "atc": [
-    "N06AB"
+    "N06AB06"
    ],
    "ciel": [
     {
@@ -606,9 +604,7 @@
    "rxnorm_name": "simvastatin",
    "drugbank_id": "DB00641",
    "atc": [
-    "A10BH",
-    "C10BA",
-    "C10AA"
+    "C10AA01"
    ],
    "ciel": [
     {
@@ -630,7 +626,7 @@
    "rxnorm_name": "spironolactone",
    "drugbank_id": "DB00421",
    "atc": [
-    "C03DA"
+    "C03DA01"
    ],
    "ciel": [
     {
@@ -662,8 +658,7 @@
    "rxnorm_name": "tramadol",
    "drugbank_id": "DB00193",
    "atc": [
-    "N02AX",
-    "N02AJ"
+    "N02AX02"
    ],
    "ciel": [
     {
@@ -690,7 +685,7 @@
    "rxnorm_name": "warfarin",
    "drugbank_id": "DB00682",
    "atc": [
-    "B01AA"
+    "B01AA03"
    ],
    "ciel": [
     {
@@ -717,10 +712,9 @@
    "rxnorm_name": "aspirin",
    "drugbank_id": "DB00945",
    "atc": [
-    "A01AD",
-    "B01AC",
-    "N02BA",
-    "N02AJ"
+    "A01AD05",
+    "B01AC06",
+    "N02BA01"
    ],
    "ciel": [
     {
@@ -1042,10 +1036,10 @@
    "rxnorm_name": "ciprofloxacin",
    "drugbank_id": "DB00537",
    "atc": [
-    "J01MA",
-    "S01AE",
-    "S02AA",
-    "S03AA"
+    "J01MA02",
+    "S01AE03",
+    "S02AA15",
+    "S03AA07"
    ],
    "ciel": [
     {
@@ -1082,7 +1076,7 @@
    "rxnorm_name": "clarithromycin",
    "drugbank_id": "DB01211",
    "atc": [
-    "J01FA"
+    "J01FA09"
    ],
    "ciel": [
     {
@@ -1114,7 +1108,7 @@
    "rxnorm_name": "digoxin",
    "drugbank_id": "DB00390",
    "atc": [
-    "C01AA"
+    "C01AA05"
    ],
    "ciel": [
     {
@@ -1131,8 +1125,8 @@
    "rxnorm_name": "fluconazole",
    "drugbank_id": "DB00196",
    "atc": [
-    "D01AC",
-    "J02AC"
+    "D01AC15",
+    "J02AC01"
    ],
    "ciel": [
     {
@@ -1154,7 +1148,7 @@
    "rxnorm_name": "amiodarone",
    "drugbank_id": "DB01118",
    "atc": [
-    "C01BD"
+    "C01BD01"
    ],
    "ciel": [
     {
@@ -1176,12 +1170,11 @@
    "rxnorm_name": "ibuprofen",
    "drugbank_id": "DB01050",
    "atc": [
-    "N02AJ",
-    "C01EB",
-    "G02CC",
-    "M01AE",
-    "M02AA",
-    "R02AX"
+    "C01EB16",
+    "G02CC01",
+    "M01AE01",
+    "M02AA13",
+    "R02AX02"
    ],
    "ciel": [
     {

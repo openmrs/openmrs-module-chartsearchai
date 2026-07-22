@@ -117,13 +117,24 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, note));
 		}
 
+		// RxCUI frequency: some route variants share a RxCUI (e.g. the Lidocaine variants all
+		// map to 6387). The id must be unique — the injector dedups citations by it — so the
+		// RxCUI is used only when it identifies exactly one entry; otherwise the DDInter id.
+		Map<String, Integer> rxcuiCounts = new HashMap<String, Integer>();
+		for (DrugRow row : order) {
+			if (row.rxcui != null && !row.rxcui.isEmpty()) {
+				rxcuiCounts.merge(row.rxcui, 1, Integer::sum);
+			}
+		}
+
 		// build one entry per drug, in dataset order
 		List<DrugReference> out = new ArrayList<DrugReference>();
 		for (DrugRow row : order) {
 			List<Link> links = partners.get(row.id);
 			DrugReference ref = new DrugReference();
-			// prefer the RxCUI as the stable, cross-source id; fall back to the DDInter id
-			ref.setId(row.rxcui != null && !row.rxcui.isEmpty() ? row.rxcui : row.id);
+			boolean uniqueRxcui = row.rxcui != null && !row.rxcui.isEmpty()
+					&& rxcuiCounts.get(row.rxcui) == 1;
+			ref.setId(uniqueRxcui ? row.rxcui : row.id);
 			ref.setName(row.name);
 			ref.setAliases(row.aliases);
 			ref.setAtcCodes(row.atc);
@@ -146,7 +157,11 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 				continue;
 			}
 			DrugReference.Interaction i = new DrugReference.Interaction();
-			i.setToken(p.name.toLowerCase(Locale.ROOT));
+			// Match on the RxNorm generic name (e.g. "aspirin", "acetaminophen") rather than the
+			// DDInter display name ("Acetylsalicylic acid"), since the validator matches this token
+			// as a substring of the order's display name; fall back to the display name.
+			String token = p.rxnormName != null && !p.rxnormName.isEmpty() ? p.rxnormName : p.name;
+			i.setToken(token.toLowerCase(Locale.ROOT));
 			i.setAtc(p.atc.isEmpty() ? null : p.atc.get(0));
 			i.setNote(link.note);
 			out.add(i);
@@ -178,14 +193,17 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 
 		final String rxcui;
 
+		final String rxnormName;
+
 		final List<String> atc;
 
 		final List<String> aliases;
 
-		private DrugRow(String id, String name, String rxcui, List<String> atc, List<String> aliases) {
+		private DrugRow(String id, String name, String rxcui, String rxnormName, List<String> atc, List<String> aliases) {
 			this.id = id;
 			this.name = name;
 			this.rxcui = rxcui;
+			this.rxnormName = rxnormName;
 			this.atc = atc;
 			this.aliases = aliases;
 		}
@@ -197,6 +215,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 				return null;
 			}
 			String rxcui = d.path("rxcui").isTextual() ? d.get("rxcui").asText() : null;
+			String rxnormName = d.path("rxnorm_name").isTextual() ? d.get("rxnorm_name").asText() : null;
 			List<String> atc = new ArrayList<String>();
 			for (JsonNode a : d.path("atc")) {
 				atc.add(a.asText());
@@ -212,7 +231,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 					addAlias(aliases, c.get("name").asText());
 				}
 			}
-			return new DrugRow(id, name, rxcui, atc, aliases);
+			return new DrugRow(id, name, rxcui, rxnormName, atc, aliases);
 		}
 
 		private static void addAlias(List<String> aliases, String value) {

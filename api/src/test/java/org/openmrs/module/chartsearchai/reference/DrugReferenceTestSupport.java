@@ -58,6 +58,11 @@ final class DrugReferenceTestSupport {
 		return new DrugReferenceService();
 	}
 
+	/** A service over the real bundled DDInter sample, parsed by the real {@link DdiDrugReferenceSource}. */
+	static DrugReferenceService ddinterService() {
+		return serviceWith(new DdiDrugReferenceSource().load());
+	}
+
 	/** A service pinned to the given entries (groups pinned empty by the {@code setEntries} seam). */
 	static DrugReferenceService serviceWith(List<DrugReference> entries) {
 		DrugReferenceService svc = new DrugReferenceService();

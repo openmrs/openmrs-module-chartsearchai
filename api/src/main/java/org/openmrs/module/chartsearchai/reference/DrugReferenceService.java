@@ -147,9 +147,10 @@ public class DrugReferenceService {
 	}
 
 	/**
-	 * @return the active source. The {@code sourceFormat} GP selects the adapter;
-	 *         any value other than {@code atc} (including the unset/no-context case)
-	 *         defaults to the curated JSON source.
+	 * @return the active source. The {@code sourceFormat} GP selects the adapter:
+	 *         {@code atc} → {@link AtcDrugReferenceSource}, {@code ddinter} →
+	 *         {@link DdiDrugReferenceSource}; any other value (including the
+	 *         unset/no-context case) defaults to the curated {@link JsonDrugReferenceSource}.
 	 */
 	private DrugReferenceSource source() {
 		if (source != null) {

@@ -51,6 +51,15 @@ public class DrugReferenceInjector {
 
 	private static final Logger log = LoggerFactory.getLogger(DrugReferenceInjector.class);
 
+	/**
+	 * Per-entry character budget for the rendered {@code Interactions:} section. Bounds the
+	 * grounding text a single reference line contributes to the prompt so a broad dataset cannot
+	 * overflow the LLM context window; the deterministic {@link DrugSafetyValidator} still reads
+	 * every interaction off the entry, so nothing is lost from safety checking. At least one
+	 * interaction is always shown; the rest are summarised as "and N more interactions on file".
+	 */
+	static final int MAX_INTERACTION_RENDER_CHARS = 1500;
+
 	@Autowired
 	private DrugReferenceService drugReferenceService;
 
@@ -255,7 +264,26 @@ public class DrugReferenceInjector {
 			}
 		}
 		if (!interactionNotes.isEmpty()) {
-			sb.append(" Interactions: ").append(String.join("; ", interactionNotes)).append(".");
+			// Cap what is *rendered* into the prompt, not what is parsed: a broad interaction
+			// dataset (e.g. the ddinter source's Warfarin, ~934 partners) would otherwise write
+			// tens of thousands of tokens into a single citable line and blow the LLM context
+			// window. The safety validator still reads every interaction off the entry, so this
+			// only bounds the grounding text. A blank tail records how many were withheld.
+			List<String> shown = new ArrayList<String>();
+			int used = 0;
+			for (String n : interactionNotes) {
+				if (!shown.isEmpty() && used + n.length() > MAX_INTERACTION_RENDER_CHARS) {
+					break;
+				}
+				shown.add(n);
+				used += n.length() + 2;
+			}
+			sb.append(" Interactions: ").append(String.join("; ", shown));
+			int withheld = interactionNotes.size() - shown.size();
+			if (withheld > 0) {
+				sb.append("; and ").append(withheld).append(" more interactions on file");
+			}
+			sb.append(".");
 		}
 
 		if (ref.getSource() != null && !ref.getSource().isEmpty()) {

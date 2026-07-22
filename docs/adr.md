@@ -1710,7 +1710,7 @@ So pointing at WHO ATC delivers **class-based contraindication/interaction reaso
 ### Implementation
 
 - `DrugReferenceSource` interface; `JsonDrugReferenceSource` (the bespoke schema, retained as one adapter + bundled fallback); `AtcDrugReferenceSource` (WHO ATC / RxNorm-ATC crosswalk → one classification entry per level-5 substance, `drugClass` derived from the nearest parent group present in the dataset).
-- GP `chartsearchai.drugReference.sourceFormat` (`json` | `atc`) alongside the existing `dataFilePath`.
+- GP `chartsearchai.drugReference.sourceFormat` (`json` | `atc` | `ddinter`) alongside the existing `dataFilePath`.
 - **Class-level contraindication / interaction matching in `DrugSafetyValidator`**, keyed on ATC class rather than per-drug rules, so a rule-less classification source still produces safety reasoning:
   - **Contraindication** — fires when a recorded allergy resolves (by name) to the drug the answer recommends (a direct allergy that the rule-less source would otherwise miss) **or** to a drug sharing its ATC class (cross-reactivity). Deduplicated per resolved allergen, so several aliases of one allergy warn once.
   - **Interaction** — fires when the answer's drug shares an ATC class with an active order (additive effects / duplicate therapy), skipping an order that is the *same* drug (restating existing therapy is not a duplicate).

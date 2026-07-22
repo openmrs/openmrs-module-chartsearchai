@@ -10,9 +10,11 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -182,8 +184,7 @@ public class DrugSafetyValidator {
 				addClassContraindications(warnings, ref, context);
 			}
 			if (warnInteractions) {
-				addInteractions(warnings, ref, context);
-				addClassInteractions(warnings, ref, context);
+				addInteractionWarnings(warnings, ref, context);
 			}
 			if (warnDose) {
 				addOverdose(warnings, ref, context, lower, all);
@@ -218,22 +219,98 @@ public class DrugSafetyValidator {
 		}
 	}
 
-	private void addInteractions(List<SafetyWarning> warnings, DrugReference ref,
+	/**
+	 * Interaction reasoning with both arms coordinated so a co-medication that is BOTH an explicit
+	 * interaction partner AND same-class yields ONE chip, not two (issue #88). Two arms feed it:
+	 * <ul>
+	 *   <li><b>rule</b> — an explicit interaction row matched against an active order (by ATC code or
+	 *       name token);</li>
+	 *   <li><b>class</b> — the drug shares an ATC level-4 subgroup with an active order (duplicate
+	 *       therapy), else a curated {@link CrossReactivityGroup}.</li>
+	 * </ul>
+	 * Correlated by the order's ATC code — the key both arms already share. When both apply to the
+	 * same order the chip <em>folds</em> the class/duplicate-therapy relationship together with the
+	 * rule's mechanism note, so nothing is lost and an Unknown-severity row (whose rule note is
+	 * empty) still surfaces the informative class relationship rather than a bare, contentless rule
+	 * chip. When only one arm applies, its single chip is emitted unchanged. A rule matched only by
+	 * name (no ATC to correlate on) is emitted standalone.
+	 */
+	private void addInteractionWarnings(List<SafetyWarning> warnings, DrugReference ref,
 			PatientClinicalContext context) {
 		if (context == null) {
 			return;
 		}
+		Set<String> activeCodes = context.getActiveDrugAtcCodes();
+
+		// Explicit-interaction rules: those correlated to an active order by ATC code (which may also
+		// hit the class arm, so they are resolved in the loop below) vs name-only matches (standalone).
+		Map<String, DrugReference.Interaction> ruleByOrderCode = new LinkedHashMap<String, DrugReference.Interaction>();
 		for (DrugReference.Interaction i : ref.getInteractions()) {
-			if (context.hasActiveDrug(i.getToken(), i.getAtc())) {
-				// A matched rule has a non-blank token or ATC, so the coalesce never yields null.
-				String detail = "interacts with active order "
-						+ ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
-				if (i.getNote() != null && !i.getNote().isEmpty()) {
-					detail += " — " + i.getNote();
+			String code = DrugReference.normalizeAtcToken(i.getAtc());
+			if (code != null && activeCodes.contains(code)) {
+				if (!ruleByOrderCode.containsKey(code)) {
+					ruleByOrderCode.put(code, i);
 				}
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(), detail));
+			} else if (context.hasActiveDrug(i.getToken(), null)) {
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(), ruleDetail(i)));
 			}
 		}
+
+		Set<String> refClasses = ref.atcSubgroups();
+		List<CrossReactivityGroup> refGroups = CrossReactivityGroup.groupsOf(ref,
+				drugReferenceService.getCrossReactivityGroups());
+		Set<String> refCodes = ref.normalizedAtcCodes();
+
+		for (String orderCode : activeCodes) {
+			if (refCodes.contains(orderCode)) {
+				// The active order is the same drug — restating existing therapy is not a duplicate,
+				// and a drug does not interact with itself, so neither arm should fire.
+				continue;
+			}
+			DrugReference.Interaction rule = ruleByOrderCode.remove(orderCode);
+			String classNote = classRelationship(orderCode, refClasses, refGroups);
+			if (classNote != null) {
+				String detail = classNote;
+				if (rule != null && rule.getNote() != null && !rule.getNote().isEmpty()) {
+					detail += "; explicit interaction: " + rule.getNote();
+				}
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(), detail));
+			} else if (rule != null) {
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(), ruleDetail(rule)));
+			}
+		}
+	}
+
+	/** The rule-arm chip detail: "interacts with active order X", plus the mechanism note when present. */
+	private static String ruleDetail(DrugReference.Interaction i) {
+		String detail = "interacts with active order " + ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
+		if (i.getNote() != null && !i.getNote().isEmpty()) {
+			detail += " — " + i.getNote();
+		}
+		return detail;
+	}
+
+	/**
+	 * @return the class-arm relationship phrasing for an active order code — a shared ATC level-4
+	 *         subgroup (duplicate therapy), else a curated cross-reactivity group — or {@code null}
+	 *         when neither applies.
+	 */
+	private String classRelationship(String orderCode, Set<String> refClasses,
+			List<CrossReactivityGroup> refGroups) {
+		if (refClasses.isEmpty() && refGroups.isEmpty()) {
+			return null;
+		}
+		if (orderCode.length() >= DrugReference.ATC_SUBGROUP_PREFIX_LENGTH && refClasses
+				.contains(orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH))) {
+			return "same ATC class (" + orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH)
+					+ ") as active order " + displayNameForAtcCode(orderCode) + " — possible duplicate therapy";
+		}
+		CrossReactivityGroup group = CrossReactivityGroup.sharedGroupForCode(refGroups, orderCode);
+		if (group != null) {
+			return "same cross-reactivity group (" + group.getName() + ") as active order "
+					+ displayNameForAtcCode(orderCode) + " — possible additive or duplicate-class therapy";
+		}
+		return null;
 	}
 
 	/**
@@ -295,40 +372,6 @@ public class DrugSafetyValidator {
 	 * matches on codes directly and names the order from the dataset; the most specific match wins,
 	 * so a subgroup + group double-match warns once.
 	 */
-	private void addClassInteractions(List<SafetyWarning> warnings, DrugReference ref,
-			PatientClinicalContext context) {
-		if (context == null) {
-			return;
-		}
-		Set<String> refClasses = ref.atcSubgroups();
-		List<CrossReactivityGroup> refGroups = CrossReactivityGroup.groupsOf(ref,
-				drugReferenceService.getCrossReactivityGroups());
-		if (refClasses.isEmpty() && refGroups.isEmpty()) {
-			return;
-		}
-		Set<String> refCodes = ref.normalizedAtcCodes();
-		for (String orderCode : context.getActiveDrugAtcCodes()) {
-			if (refCodes.contains(orderCode)) {
-				// Restating existing therapy is not a duplicate.
-				continue;
-			}
-			if (orderCode.length() >= DrugReference.ATC_SUBGROUP_PREFIX_LENGTH && refClasses
-					.contains(orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH))) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(),
-						"same ATC class (" + orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH)
-								+ ") as active order " + displayNameForAtcCode(orderCode)
-								+ " — possible duplicate therapy"));
-				continue;
-			}
-			CrossReactivityGroup group = CrossReactivityGroup.sharedGroupForCode(refGroups, orderCode);
-			if (group != null) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(),
-						"same cross-reactivity group (" + group.getName() + ") as active order "
-								+ displayNameForAtcCode(orderCode) + " — possible additive or duplicate-class therapy"));
-			}
-		}
-	}
-
 	/** @return the ATC level-4 subgroup {@code other} shares with {@code refClasses}, or null when none. */
 	private static String sharedClass(Set<String> refClasses, DrugReference other) {
 		for (String cls : other.atcSubgroups()) {

@@ -151,6 +151,10 @@ public class ChartSearchAiRestController {
 	@Qualifier("chartSearchAi.conversationService")
 	private ConversationService conversationService;
 
+	@Autowired
+	@Qualifier("chartSearchAi.hubProfileService")
+	private org.openmrs.module.chartsearchai.api.impl.HubProfileService hubProfileService;
+
 	/**
 	 * Provider discovery for the ESM picker. Fresh installs return only bundled with
 	 * {@code pickerVisible=false}; an enabled-but-unready hub stays listed with its reason.
@@ -163,6 +167,26 @@ public class ChartSearchAiRestController {
 				providersResponse(providerRegistry.descriptors(), providerRegistry.isPickerVisible(),
 						providerRegistry.getDefaultProviderId()),
 				HttpStatus.OK);
+	}
+
+	/**
+	 * Relay med-agent-hub's authoritative product-profile metadata for the ESM profile picker.
+	 * ChartSearchAI does not merge, curate, or reinterpret the list; labels, availability,
+	 * capabilities, and the default marker all come from the hub.
+	 */
+	@RequestMapping(value = "/models", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> listModels() {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+		try {
+			return new ResponseEntity<Object>(hubProfileService.listProfiles(), HttpStatus.OK);
+		}
+		catch (Exception e) {
+			log.warn("Failed to list hub profiles: {}", e.getMessage());
+			return new ResponseEntity<Object>(
+					errorResponse("Hub profile discovery is unavailable."),
+					HttpStatus.SERVICE_UNAVAILABLE);
+		}
 	}
 
 	/**

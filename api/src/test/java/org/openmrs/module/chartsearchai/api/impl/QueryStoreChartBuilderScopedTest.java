@@ -216,10 +216,11 @@ public class QueryStoreChartBuilderScopedTest {
 	}
 
 	@Test
-	public void buildScoped_delegatesSelectionToTheSharedQuerystoreSlice() {
-		// The shared context-selection contract (querystore ADR Decision 17; roadmap amendment
-		// 2026-07-22): selection runs ONCE in querystore's getContextSlice; this builder's job
-		// shrinks to question interpretation (intent types + temporal flag) and serialization.
+	public void buildScoped_delegatesSelectionAndInterpretationToTheSharedQuerystoreSlice() {
+		// The shared context contract (querystore ADR Decisions 17+18): selection AND question
+		// interpretation run ONCE in querystore — the RAW question goes over with
+		// interpretQuestion set, so cue routing and retrieval preprocessing cannot drift between
+		// consumers. This builder's own contributions: contributed scopes + the anchor knob.
 		queryStore.stubHits = new ArrayList<QueryDocument>();
 		builder.recencyAnchor = 3;
 
@@ -227,11 +228,13 @@ public class QueryStoreChartBuilderScopedTest {
 
 		assertEquals(1, queryStore.getContextSliceCalls,
 				"selection must go through the shared querystore slice contract");
-		assertTrue(queryStore.lastSliceRequest.getTypes().contains("drug_order"),
-				"the MEDICATIONS intent's typed scope rides the request; got "
+		assertTrue(queryStore.lastSliceRequest.isInterpretQuestion(),
+				"interpretation is querystore's — the request opts into server-side cues");
+		assertEquals("What is the patient's most recent medication?", queryStore.lastSliceQuestion,
+				"the RAW question goes over; preprocessing is querystore's now");
+		assertTrue(queryStore.lastSliceRequest.getTypes().isEmpty(),
+				"no locally-derived types — only contributed scopes would ride here; got "
 						+ queryStore.lastSliceRequest.getTypes());
-		assertTrue(queryStore.lastSliceRequest.isTemporal(),
-				"temporal phrasing rides the request as the caller's interpretation");
 		assertEquals(3, queryStore.lastSliceRequest.getRecencyAnchorSize());
 	}
 

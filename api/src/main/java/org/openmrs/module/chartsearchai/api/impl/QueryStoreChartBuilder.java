@@ -200,49 +200,38 @@ class QueryStoreChartBuilder {
 	PatientChart buildScoped(Patient patient, String question) {
 		long buildStart = System.currentTimeMillis();
 		if (patient == null || patient.getUuid() == null) {
-			log.info("[timing] querystoreScopedBuild patient={} intent=unknown chartDocs=0 simHits=0 slice=0 rpcMs=0 serializeMs=0 totalMs={} outcome=skipped",
+			log.info("[timing] querystoreScopedBuild patient={} types=unresolved chartDocs=0 simHits=0 slice=0 rpcMs=0 serializeMs=0 totalMs={} outcome=skipped",
 					patient == null ? null : patient.getPatientId(), System.currentTimeMillis() - buildStart);
 			return markScoped(emptyChart(patient));
 		}
 
-		// Every matched intent contributes its types (union): completeness must hold for
-		// whichever intent a multi-cue question ("any drug allergies?") actually meant.
-		Set<QueryScopeRouter.Intent> intents = QueryScopeRouter.matchedIntents(question);
-		// The built-in typed scope, additionally UNIONed with any module-contributed scopes
-		// (billing, appointments, …). typedSlice(...) is unmodifiable, so wrap it before adding.
-		// The union is additive: with zero contributors this is exactly the built-in behaviour, and
-		// a contributor can only add its own domain's records — never perturb another domain's
-		// routing. See QueryScopeContributor.
-		Set<String> typedScope = new HashSet<String>(QueryScopeRouter.typedSlice(intents));
-		typedScope.addAll(contributedResourceTypes(question));
-		String intentLabel = intentLabel(intents);
-
 		QueryStoreService queryStore = resolveQueryStoreOrNull();
 		if (queryStore == null) {
 			log.warn(QUERYSTORE_UNAVAILABLE_MSG);
-			log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs=0 simHits=0 slice=0 rpcMs=0 serializeMs=0 totalMs={} outcome=unavailable",
-					patient.getPatientId(), intentLabel, System.currentTimeMillis() - buildStart);
+			log.info("[timing] querystoreScopedBuild patient={} types=unresolved chartDocs=0 simHits=0 slice=0 rpcMs=0 serializeMs=0 totalMs={} outcome=unavailable",
+					patient.getPatientId(), System.currentTimeMillis() - buildStart);
 			return markScoped(emptyChart(patient));
 		}
 
-		// The caller's question interpretation rides the request; selection is querystore's.
-		// Lab-panel abbreviations are expanded before the similarity leg ("BMP" → "+ basic
-		// metabolic panel") so the retrieval text carries the full concept name querystore indexed.
-		ContextSliceRequest request = new ContextSliceRequest(typedScope, QueryScopeRouter.isTemporal(question));
+		// Question interpretation and retrieval preprocessing are querystore's now (its ADR
+		// Decision 18): the RAW question goes over with interpretQuestion set, so the typed
+		// scope, the temporal gate, panel expansion, and stopword stripping run once, at the
+		// data owner, identically for every consumer. This builder contributes only what is
+		// genuinely its own: module-contributed scopes (QueryScopeContributor SPI, unioned
+		// server-side with the derived types) and its recency-anchor deployment knob.
+		ContextSliceRequest request = new ContextSliceRequest(contributedResourceTypes(question), false);
+		request.setInterpretQuestion(true);
 		request.setRecencyAnchorSize(resolveScopedRecencyAnchor());
-		request.setSimilarityLimit(resolveQueryStoreTopK());
-		String preprocessed = question == null ? null
-				: QueryPreprocessor.stripQueryStopwords(QueryPreprocessor.expandLabPanelAbbreviations(question));
 
 		long rpcStart = System.currentTimeMillis();
 		ContextSlice slice;
 		try {
-			slice = queryStore.getContextSlice(patient.getUuid(), preprocessed, request);
+			slice = queryStore.getContextSlice(patient.getUuid(), question, request);
 		}
 		catch (RuntimeException e) {
 			log.error("QueryStore.getContextSlice failed for patient [uuid={}]", patient.getUuid(), e);
-			log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs=0 simHits=0 slice=0 rpcMs={} serializeMs=0 totalMs={} outcome=error errorClass={}",
-					patient.getPatientId(), intentLabel, System.currentTimeMillis() - rpcStart,
+			log.info("[timing] querystoreScopedBuild patient={} types=unresolved chartDocs=0 simHits=0 slice=0 rpcMs={} serializeMs=0 totalMs={} outcome=error errorClass={}",
+					patient.getPatientId(), System.currentTimeMillis() - rpcStart,
 					System.currentTimeMillis() - buildStart, e.getClass().getSimpleName());
 			return markScoped(emptyChart(patient));
 		}
@@ -270,8 +259,9 @@ class QueryStoreChartBuilder {
 		PatientChart chart = chartSerializer.serialize(patient, records,
 				Collections.<String>emptySet(), false, false);
 		long serializeMs = System.currentTimeMillis() - serializeStart;
-		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} simHits={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
-				patient.getPatientId(), intentLabel, slice.getChartSize(), simHits, records.size(),
+		log.info("[timing] querystoreScopedBuild patient={} types={} temporal={} chartDocs={} simHits={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
+				patient.getPatientId(), typesLabel(slice.getEffectiveTypes()), slice.isTemporalApplied(),
+				slice.getChartSize(), simHits, records.size(),
 				rpcMs, serializeMs, System.currentTimeMillis() - buildStart);
 		return markScoped(chart);
 	}
@@ -285,21 +275,16 @@ class QueryStoreChartBuilder {
 	}
 
 
-	/** The [timing] log label for the slice's matched intents: {@code TOPICAL} when none matched,
-	 *  else the names joined with {@code +} in declaration order (e.g.
-	 *  {@code MEDICATIONS+ALLERGIES}) — one greppable token per line either way. */
-	private static String intentLabel(Set<QueryScopeRouter.Intent> intents) {
-		if (intents.isEmpty()) {
-			return QueryScopeRouter.Intent.TOPICAL.name();
+	/** The [timing] log label for the slice's effective typed scope (querystore's derived
+	 *  interpretation unioned with contributed types): {@code TOPICAL} when empty, else the
+	 *  sorted types joined with {@code +} — one greppable token per line either way. */
+	private static String typesLabel(Set<String> effectiveTypes) {
+		if (effectiveTypes == null || effectiveTypes.isEmpty()) {
+			return "TOPICAL";
 		}
-		StringBuilder label = new StringBuilder();
-		for (QueryScopeRouter.Intent intent : intents) {
-			if (label.length() > 0) {
-				label.append('+');
-			}
-			label.append(intent.name());
-		}
-		return label.toString();
+		List<String> sorted = new ArrayList<String>(effectiveTypes);
+		Collections.sort(sorted);
+		return String.join("+", sorted);
 	}
 
 

@@ -155,11 +155,12 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 	}
 
 	/**
-	 * Whether the remote engine endpoint answers HTTP at all — any status code counts (a
-	 * chat-completions URL answers GET with 405), only connect/read failures do not. Probes
-	 * are cached briefly so per-turn readiness gates and the providers endpoint stay cheap.
-	 * Seam overridable in tests; the ready-path test exercises this real implementation
-	 * against a live local server.
+	 * Whether the remote engine endpoint can serve: it must answer HTTP with a non-5xx
+	 * status (a chat-completions URL answers GET with 405, which counts). Connect/read
+	 * failures AND 5xx both mean not-ready — a relay in front of a dead engine answers 502,
+	 * which must not hide the outage. Probes are cached briefly so per-turn readiness gates
+	 * and the providers endpoint stay cheap. Seam overridable in tests; the ready-path and
+	 * proxy-502 tests exercise this real implementation against live local servers.
 	 */
 	protected boolean engineReachable(String endpointUrl) {
 		long now = System.currentTimeMillis();
@@ -172,9 +173,9 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 			java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
 					.uri(java.net.URI.create(endpointUrl))
 					.timeout(java.time.Duration.ofSeconds(2)).GET().build();
-			REACHABILITY_CLIENT.send(request,
+			java.net.http.HttpResponse<Void> response = REACHABILITY_CLIENT.send(request,
 					java.net.http.HttpResponse.BodyHandlers.discarding());
-			reachable = true;
+			reachable = response.statusCode() < 500;
 		}
 		catch (java.io.IOException | IllegalArgumentException e) {
 			reachable = false;

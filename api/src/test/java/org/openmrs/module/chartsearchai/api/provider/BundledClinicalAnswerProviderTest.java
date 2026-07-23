@@ -479,6 +479,49 @@ public class BundledClinicalAnswerProviderTest {
 	}
 
 	@Test
+	public void remoteEngineBehindAProxyWhoseUpstreamIsDownIsNotReady() throws Exception {
+		// A relay in front of the engine (tap/gateway) answers 502 when the engine is down —
+		// an HTTP response that must still count as NOT ready, or a dead engine hides behind
+		// its proxy.
+		com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer
+				.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/", exchange -> {
+			exchange.sendResponseHeaders(502, -1);
+			exchange.close();
+		});
+		server.start();
+		try {
+			String endpoint = "http://127.0.0.1:" + server.getAddress().getPort()
+					+ "/v1/chat/completions";
+			BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(
+					new ScriptedChartSearchService()) {
+
+				@Override
+				protected String gp(String property, String defaultValue) {
+					if (ChartSearchAiConstants.GP_LLM_ENGINE.equals(property)) {
+						return ChartSearchAiConstants.LLM_ENGINE_REMOTE;
+					}
+					if (ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL.equals(property)) {
+						return endpoint;
+					}
+					if (ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME.equals(property)) {
+						return "gemma-e4b";
+					}
+					return defaultValue;
+				}
+			};
+
+			ProviderDescriptor descriptor = provider.descriptor();
+			assertFalse(descriptor.isReady(),
+					"a 5xx from the engine endpoint means the engine cannot serve");
+			assertTrue(descriptor.getUnavailableReason().contains("unreachable"));
+		}
+		finally {
+			server.stop(0);
+		}
+	}
+
+	@Test
 	public void localEngineWithAMissingModelFileIsNotReady() {
 		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(
 				new ScriptedChartSearchService()) {

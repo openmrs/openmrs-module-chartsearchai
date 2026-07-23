@@ -176,11 +176,12 @@ class QueryStoreChartBuilder {
 	/**
 	 * Builds the query-scoped slice chart for {@code chartsearchai.chartMode=queryScoped}: every
 	 * record of the question's typed scope (complete by construction — see {@link QueryScopeRouter}),
-	 * unioned with the querystore similarity top-K (the semantic catch-all), plus the demographics
-	 * {@code patient} record — all in the CHART's most-recent-first order, never the similarity
-	 * ranking's, because the system prompt asserts "sorted most recent first". The slice renders no
-	 * focus hint: the slice IS the scope. A similarity failure degrades to the typed slice alone; a
-	 * null patient degrades to an empty chart, exactly like {@link #build}.
+	 * unioned with the querystore similarity top-K (the semantic catch-all), the mandatory clinical
+	 * core (allergies + active conditions — see {@link #isMandatoryClinicalCore}), plus the
+	 * demographics {@code patient} record — all in the CHART's most-recent-first order, never the
+	 * similarity ranking's, because the system prompt asserts "sorted most recent first". The slice
+	 * renders no focus hint: the slice IS the scope. A similarity failure degrades to the typed
+	 * slice alone; a null patient degrades to an empty chart, exactly like {@link #build}.
 	 *
 	 * <p>The slice is question-dependent, so callers must not attach a KV-cache scope to it (see
 	 * {@code LlmInferenceService.kvCacheScopeFor}); its latency contract is the opposite of
@@ -273,9 +274,10 @@ class QueryStoreChartBuilder {
 			}
 			boolean isAnchor = i < recencyAnchor;
 			boolean isPatientRecord = PATIENT_RESOURCE_TYPE.equals(doc.getResourceType());
+			boolean isMandatoryCore = isMandatoryClinicalCore(doc);
 			boolean inTypedScope = doc.getResourceType() != null && typedScope.contains(doc.getResourceType());
 			boolean isSimilarityHit = doc.getResourceUuid() != null && similarityUuids.contains(doc.getResourceUuid());
-			if (isAnchor || isPatientRecord || inTypedScope || isSimilarityHit) {
+			if (isAnchor || isPatientRecord || isMandatoryCore || inTypedScope || isSimilarityHit) {
 				sliceDocs.add(doc);
 				if (doc.getResourceUuid() != null) {
 					sliceUuids.add(doc.getResourceUuid());
@@ -303,6 +305,27 @@ class QueryStoreChartBuilder {
 	private static PatientChart markScoped(PatientChart chart) {
 		chart.markQueryScoped();
 		return chart;
+	}
+
+	/**
+	 * Mandatory clinical core: allergies and ACTIVE conditions ride EVERY scoped slice regardless
+	 * of matched intent (conformance fixture {@code context.enumerated-medications-are-complete}
+	 * pins the allergy record as mandatory for a medication question). A medication answer
+	 * composed without the patient's allergy list — measured on the live parity harness — is the
+	 * safety omission this guards against. Active status is read from the serialized text
+	 * ("Status: ACTIVE"), the same signal querystore's condition serializer emits and the hub's
+	 * context policy matches on; inactive/resolved problems stay subject to normal scoping.
+	 */
+	private static boolean isMandatoryClinicalCore(QueryDocument doc) {
+		String type = doc.getResourceType();
+		if ("allergy".equals(type)) {
+			return true;
+		}
+		if ("condition".equals(type) || "diagnosis".equals(type)) {
+			String text = doc.getText();
+			return text != null && text.toLowerCase(java.util.Locale.ROOT).contains("status: active");
+		}
+		return false;
 	}
 
 	/** The [timing] log label for the slice's matched intents: {@code TOPICAL} when none matched,

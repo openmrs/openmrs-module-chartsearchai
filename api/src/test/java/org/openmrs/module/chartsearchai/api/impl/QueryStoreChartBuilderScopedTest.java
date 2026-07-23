@@ -38,7 +38,9 @@ import org.openmrs.module.querystore.model.QueryDocument;
  * <p>Contract under test:
  * <ul>
  *   <li>The slice = ALL records of the intent's typed scope (complete by construction)
- *       ∪ the similarity top-K ∪ the patient demographics record.</li>
+ *       ∪ the similarity top-K ∪ the mandatory clinical core (allergies + active conditions,
+ *       fixture {@code context.enumerated-medications-are-complete}) ∪ the patient
+ *       demographics record.</li>
  *   <li>Slice records keep the CHART's date-desc order (the "most recent first" contract the
  *       system prompt asserts), never the similarity ranking's order.</li>
  *   <li>A similarity failure degrades to the typed slice alone (never blocks the answer).</li>
@@ -103,7 +105,8 @@ public class QueryStoreChartBuilderScopedTest {
 		List<String> uuids = mappedUuids(chart);
 		assertTrue(uuids.containsAll(Arrays.asList("p-1", "o-1", "d-1", "d-2")),
 				"slice must carry the patient record, the similarity hit, and EVERY drug_order; got " + uuids);
-		assertFalse(uuids.contains("c-1"), "conditions are outside the medications scope");
+		assertTrue(uuids.containsAll(Arrays.asList("a-1", "c-1")),
+				"the mandatory clinical core (allergy + active condition) rides every slice; got " + uuids);
 		assertFalse(uuids.contains("o-3"), "records outside typed scope and similarity hits are excluded");
 		assertEquals(1, queryStore.getPatientChartCalls, "slice is filtered from the one chart fetch");
 	}
@@ -126,7 +129,7 @@ public class QueryStoreChartBuilderScopedTest {
 						+ "a medications cue matched too; got " + uuids);
 		assertTrue(uuids.containsAll(Arrays.asList("d-1", "d-2")),
 				"the medications side of the union stays complete as well; got " + uuids);
-		assertFalse(uuids.contains("c-1"), "unmatched types stay outside the union; got " + uuids);
+		assertFalse(uuids.contains("o-2"), "unmatched plain obs stay outside the union; got " + uuids);
 	}
 
 	@Test
@@ -181,9 +184,10 @@ public class QueryStoreChartBuilderScopedTest {
 
 		PatientChart chart = builder.buildScoped(patient(1), "What is the patient's most recent weight?");
 
-		assertEquals(Arrays.asList("p-1", "o-1", "d-1"), mappedUuids(chart),
+		assertEquals(Arrays.asList("p-1", "o-1", "d-1", "c-1", "a-1"), mappedUuids(chart),
 				"temporal slice must carry the 3 most recent chart records (the demographics "
-						+ "record is itself the newest, so it sits inside the anchor)");
+						+ "record is itself the newest, so it sits inside the anchor) plus the "
+						+ "mandatory clinical core, in chart date order");
 	}
 
 	@Test
@@ -196,8 +200,34 @@ public class QueryStoreChartBuilderScopedTest {
 
 		PatientChart chart = builder.buildScoped(patient(1), "Does the patient have any eye problems?");
 
-		assertEquals(Arrays.asList("p-1"), mappedUuids(chart),
-				"non-temporal topical question with no similarity hits reduces to demographics");
+		assertEquals(Arrays.asList("p-1", "c-1", "a-1"), mappedUuids(chart),
+				"non-temporal topical question carries no anchored vitals — only demographics "
+						+ "plus the mandatory clinical core");
+	}
+
+	@Test
+	public void buildScoped_shouldAlwaysCarryTheMandatoryClinicalCore() {
+		// Fixture context.enumerated-medications-are-complete (dual-provider-conformance.v1)
+		// pins mandatory_ids: patient + allergy for a MEDICATION question — the mandatory
+		// clinical core (allergies + ACTIVE conditions) is safety context every scoped slice
+		// carries regardless of matched intent. Measured 2026-07-22: a medication slice
+		// without the penicillin allergy record. Similarity returns NOTHING, so the core can
+		// only arrive via its mandatory status.
+		queryStore.stubChart.add(
+				doc("condition", "c-2", "Condition: Asthma. Status: INACTIVE", LocalDate.of(2026, 2, 1)));
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "What medications is the patient taking?");
+
+		List<String> uuids = mappedUuids(chart);
+		assertTrue(uuids.contains("a-1"),
+				"the allergy record is mandatory clinical core in every slice; got " + uuids);
+		assertTrue(uuids.contains("c-1"),
+				"an ACTIVE condition is mandatory clinical core in every slice; got " + uuids);
+		assertFalse(uuids.contains("c-2"),
+				"an INACTIVE condition is not mandatory — only active problems ride every slice; got " + uuids);
+		assertFalse(uuids.contains("o-3"),
+				"plain obs outside typed scope and similarity stay excluded; got " + uuids);
 	}
 
 	@Test
@@ -355,8 +385,8 @@ public class QueryStoreChartBuilderScopedTest {
 
 		assertEquals(0, queryStore.searchByPatientCalls,
 				"blank question has no ranking signal — no similarity RPC");
-		assertEquals(Arrays.asList("p-1"), mappedUuids(chart),
-				"blank topical question reduces to the demographics record");
+		assertEquals(Arrays.asList("p-1", "c-1", "a-1"), mappedUuids(chart),
+				"blank topical question reduces to demographics plus the mandatory clinical core");
 	}
 
 	/** A test contributor claiming a fixed type set when the question contains a cue word. */

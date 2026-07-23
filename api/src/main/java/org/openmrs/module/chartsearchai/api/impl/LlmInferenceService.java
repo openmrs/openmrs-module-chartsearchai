@@ -21,6 +21,7 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
@@ -67,6 +68,9 @@ public class LlmInferenceService implements ChartSearchService {
 	private CitationGroundingVerifier citationGroundingVerifier;
 
 	@Autowired
+	private VerdictEntailmentArbiter verdictEntailmentArbiter;
+
+	@Autowired
 	private DrugReferenceInjector drugReferenceInjector;
 
 	@Autowired
@@ -75,6 +79,11 @@ public class LlmInferenceService implements ChartSearchService {
 	/** Test seam: production wires {@link CitationGroundingVerifier} via {@link Autowired}. */
 	void setCitationGroundingVerifier(CitationGroundingVerifier citationGroundingVerifier) {
 		this.citationGroundingVerifier = citationGroundingVerifier;
+	}
+
+	/** Test seam: production wires {@link VerdictEntailmentArbiter} via {@link Autowired}. */
+	void setVerdictEntailmentArbiter(VerdictEntailmentArbiter verdictEntailmentArbiter) {
+		this.verdictEntailmentArbiter = verdictEntailmentArbiter;
 	}
 
 	/** Test seam: production wires {@link DrugReferenceInjector} via {@link Autowired}. */
@@ -127,12 +136,16 @@ public class LlmInferenceService implements ChartSearchService {
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
 
-			List<RecordReference> references = groundReferences(response.getAnswer(),
-					extractCitedReferences(response.getAnswer(), response.getCitations(),
-							chart.getMappings()),
+			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
+					response.getCitations(), chart.getMappings());
+			// Verdict entailment (opt-in) may rewrite the leading "Yes" to a NO-family lead when no
+			// cited record entails a diagnosis of the asked problem. The rewrite is citation-neutral,
+			// so `cited` stays valid and grounding runs against the corrected answer text.
+			String finalAnswer = arbitrateVerdict(response.getAnswer(), question, cited,
 					chart.getMappings());
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question, patient);
-			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
+			List<RecordReference> references = groundReferences(finalAnswer, cited, chart.getMappings());
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(finalAnswer, question, patient);
+			ChartAnswer answer = new ChartAnswer(finalAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings);
 			outcome = "ok";
@@ -194,6 +207,40 @@ public class LlmInferenceService implements ChartSearchService {
 	 *  delegates, tests override to exercise the grounding path without an OpenMRS context. */
 	protected boolean resolveGroundingEnabled() {
 		return ChartSearchAiUtils.isGroundingEnabled();
+	}
+
+	/** Overridable test seam for the verdict-entailment kill switch. */
+	protected boolean resolveVerdictEntailmentEnabled() {
+		return isVerdictEntailmentEnabled();
+	}
+
+	/**
+	 * Reads the {@code chartsearchai.verdictEntailment.enabled} global property (default off). A
+	 * {@link RuntimeException} — e.g. no OpenMRS context in a unit test — degrades to {@code false}
+	 * so the arbiter is simply skipped, exactly as if the flag were unset.
+	 */
+	static boolean isVerdictEntailmentEnabled() {
+		try {
+			String value = Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_VERDICT_ENTAILMENT_ENABLED, "false");
+			return "true".equalsIgnoreCase(value == null ? "" : value.trim());
+		}
+		catch (RuntimeException e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Arbitrates the answer's yes/no verdict lead via {@link VerdictEntailmentArbiter} when the
+	 * feature is enabled, otherwise returns the answer unchanged. The rewrite (when it fires) is
+	 * citation-neutral, so the {@code cited} references stay valid for the returned answer.
+	 */
+	private String arbitrateVerdict(String answer, String question, List<RecordReference> cited,
+			List<RecordMapping> mappings) {
+		if (!resolveVerdictEntailmentEnabled()) {
+			return answer;
+		}
+		return verdictEntailmentArbiter.arbitrate(answer, question, cited, mappings);
 	}
 
 	/**
@@ -397,21 +444,29 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCitations(), chart.getMappings());
 			citationsConsumer.accept(cited);
 
+			// Verdict entailment (opt-in) may rewrite a lab-only "Yes" lead to a NO-family lead. It is
+			// applied to the finalized answer BEFORE the "done" hand-off so the committed answer (and
+			// the audit row) carry the corrected verdict — the streamed `token`s already emitted the
+			// raw lead, so the finalized done.answer can differ from the concatenated stream (the REST
+			// SSE contract notes this). The rewrite is citation-neutral, so `cited` stays valid.
+			String finalAnswer = arbitrateVerdict(response.getAnswer(), question, cited,
+					chart.getMappings());
+
 			// The answer is complete: hand the whole (not yet grounding-verified) result to the
 			// caller before the grounding pass, so the REST layer can finish the user-visible
 			// response (emit "done", persist the audit row) without waiting out the Tier-2 tail.
 			// Fires regardless of whether grounding is enabled — see the interface contract.
-			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
+			ungroundedAnswerConsumer.accept(new ChartAnswer(finalAnswer, cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens()));
 
 			long groundStart = System.currentTimeMillis();
-			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
+			List<RecordReference> references = groundReferences(finalAnswer, cited,
 					chart.getMappings());
 			groundMs = System.currentTimeMillis() - groundStart;
 
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question, patient);
-			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(finalAnswer, question, patient);
+			ChartAnswer answer = new ChartAnswer(finalAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings);
 			outcome = "ok";

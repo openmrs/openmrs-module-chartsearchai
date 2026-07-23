@@ -453,6 +453,38 @@ public class LlmProvider {
 		return parseEntailmentVerdict(result == null ? null : result.getText());
 	}
 
+	/** Intent classifier for the verdict arbiter: is a yes/no question asking whether the patient HAS
+	 *  a diagnosed condition/disease/disorder — the only intent for which a finding-vs-diagnosis
+	 *  over-affirmation downgrade is appropriate. Written generally (a problem/disorder of any body
+	 *  part or organ system counts), NOT as a per-topic list, so it transfers to questions the eval
+	 *  never contains. Validated on held-out systems (liver, skin, thyroid, lung, anemia) as well as
+	 *  the eval topics, and correctly excludes enrollment/allergy/medication/test-performed/value
+	 *  questions. */
+	static final String CONDITION_INTENT_SYSTEM_PROMPT = "You classify a clinician's yes/no question "
+			+ "by what kind of record would make the answer YES. Answer YES if the question asks "
+			+ "whether the patient HAS a medical condition, disease, disorder, or diagnosis — INCLUDING "
+			+ "any problem, issue, or disorder affecting a body part or organ system (e.g. 'any liver "
+			+ "issues', 'heart problems', 'eye disease'). Answer NO if it asks about anything else: a "
+			+ "program or treatment enrollment, an allergy, a medication, whether a test/measurement "
+			+ "was performed, or a specific numeric value. Briefly reason, then put YES or NO in the "
+			+ "\"answer\" field with an empty \"citations\" array.";
+
+	/**
+	 * Classifies whether {@code question} asks about the presence of a diagnosed condition/disease.
+	 * Uses the same reason-then-verdict path (and {@link #parseEntailmentVerdict}) as {@link
+	 * #entails}. Returns {@code TRUE}/{@code FALSE} on a parseable YES/NO, {@code null} when the
+	 * answer is empty or unparseable — the arbiter treats {@code null} as "do not act", so a failed
+	 * classification degrades safely to leaving the model's verdict untouched.
+	 */
+	public Boolean isConditionPresenceQuestion(String question) {
+		if (question == null || question.trim().isEmpty()) {
+			return null;
+		}
+		LlmEngine.InferenceResult result = getActiveEngine().infer(
+				CONDITION_INTENT_SYSTEM_PROMPT, "Question: " + question.trim(), getTimeoutSeconds());
+		return parseEntailmentVerdict(result == null ? null : result.getText());
+	}
+
 	static final String ENTAILMENT_BATCH_SYSTEM_PROMPT = "You are a strict clinical fact-checker. "
 			+ "For EACH numbered pair you are given a SOURCE record and a STATEMENT. A SOURCE "
 			+ "supports its STATEMENT only if it explicitly states it. It does NOT support the "

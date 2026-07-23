@@ -310,6 +310,32 @@ public class ChartSearchAiConstants {
 	public static final boolean DEFAULT_GROUNDING_ENTAILMENT_ENABLED = false;
 
 	/**
+	 * When {@code true}, the yes/no verdict lead is arbitrated by a Tier-2 entailment check instead
+	 * of trusting the model's free-form chart synthesis. When an answer leads "Yes" but NONE of its
+	 * cited records entail a <em>diagnosis</em> of what the question asks about (verified via
+	 * {@link org.openmrs.module.chartsearchai.api.impl.LlmProvider#entailsBatch} against a statement
+	 * derived from the question), the affirmation is unsupported and the verdict lead is rewritten to
+	 * a NO-family lead — leaving every inline {@code [N]} citation marker untouched, so the reference
+	 * set (and the recall/drift/abstention the metrics measure) is unchanged by construction.
+	 *
+	 * <p>This is the semantic, question-aware successor to {@code chartsearchai.verdictGuard.enabled}:
+	 * the guard fired on a blind {@code resourceType} whitelist (obs/test_order) and so missed a
+	 * "Yes" cited by a non-matching <em>condition</em> (e.g. "peripheral vascular disease" cited for a
+	 * heart-problems question) and could not tell an existence/order question from a diagnosis-presence
+	 * one. The entailment check keys off the clinical meaning of each cited record against the actual
+	 * question, so it catches the condition-typed over-affirmations the guard could not and does not
+	 * negate a "Yes" whose cited records genuinely name the asked problem.
+	 *
+	 * <p>Opt-in and default {@code false}: it costs one batched LLM round-trip per yes/no answer, and
+	 * v1 corrects only the over-affirmation ("Yes" → "No") direction — the under-recognition
+	 * ("No" → "Yes") direction, which must surface previously-uncited evidence, is deliberately out of
+	 * scope here. Certified by the yes/no verdict gate in {@code eval/drift-metric/} before enabling.
+	 */
+	public static final String GP_VERDICT_ENTAILMENT_ENABLED = "chartsearchai.verdictEntailment.enabled";
+
+	public static final boolean DEFAULT_VERDICT_ENTAILMENT_ENABLED = false;
+
+	/**
 	 * When set, citation grounding is clause-scoped: a sentence citing multiple records checks each
 	 * citation against the answer text up to and including its own {@code [N]} marker, not the whole
 	 * compound sentence. This grounds a citation that supports its own clause but not a later clause

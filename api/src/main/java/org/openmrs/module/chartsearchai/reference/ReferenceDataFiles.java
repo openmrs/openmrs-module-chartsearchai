@@ -22,13 +22,13 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The one operator-path → classpath-fallback resolution used by the drug-reference data
- * files ({@link JsonDrugReferenceSource} and {@link CrossReactivityGroupsLoader}): prefer
- * the file the GP points at (relative to the OpenMRS application data directory), fall
- * back to the dataset bundled on the module classpath, and degrade every failure to an
- * empty list — the drug-reference feature is an additive net that must never break the
- * answer path. Shared so the fallback/logging/exception contract cannot drift between
- * the two datasets. ({@link AtcDrugReferenceSource} deliberately stays out: it has no
- * bundled fallback — the operator must point at an obtained ATC export.)
+ * files ({@link JsonDrugReferenceSource}, {@link DdiDrugReferenceSource} and
+ * {@link CrossReactivityGroupsLoader}): prefer the file the GP points at (relative to the
+ * OpenMRS application data directory), fall back to the dataset bundled on the module
+ * classpath, and degrade every failure to an empty list — the drug-reference feature is an
+ * additive net that must never break the answer path. Shared so the fallback/logging/exception
+ * contract cannot drift between these datasets. ({@link AtcDrugReferenceSource} deliberately
+ * stays out: it has no bundled fallback — the operator must point at an obtained ATC export.)
  */
 final class ReferenceDataFiles {
 

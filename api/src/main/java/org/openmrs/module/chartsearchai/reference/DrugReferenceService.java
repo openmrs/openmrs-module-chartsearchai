@@ -24,8 +24,10 @@ import org.springframework.stereotype.Service;
  * pluggable: the active {@link DrugReferenceSource} is selected by
  * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_SOURCE_FORMAT}
  * ({@code json} = the curated {@link JsonDrugReferenceSource}, {@code atc} = the
- * authoritative {@link AtcDrugReferenceSource}); both resolve their file from
- * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH}. This lets the
+ * authoritative {@link AtcDrugReferenceSource}, {@code ddinter} = the DDInter-backed
+ * {@link DdiDrugReferenceSource}); each resolves its file from
+ * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH}, with a bundled
+ * classpath default. This lets the
  * feature consume authoritative datasets by pointing at them, rather than
  * hand-maintaining a chartsearchai-specific file. See ADR Decision 24.
  *
@@ -145,9 +147,10 @@ public class DrugReferenceService {
 	}
 
 	/**
-	 * @return the active source. The {@code sourceFormat} GP selects the adapter;
-	 *         any value other than {@code atc} (including the unset/no-context case)
-	 *         defaults to the curated JSON source.
+	 * @return the active source. The {@code sourceFormat} GP selects the adapter:
+	 *         {@code atc} → {@link AtcDrugReferenceSource}, {@code ddinter} →
+	 *         {@link DdiDrugReferenceSource}; any other value (including the
+	 *         unset/no-context case) defaults to the curated {@link JsonDrugReferenceSource}.
 	 */
 	private DrugReferenceSource source() {
 		if (source != null) {
@@ -158,6 +161,9 @@ public class DrugReferenceService {
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
 		if (ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC.equalsIgnoreCase(format)) {
 			return new AtcDrugReferenceSource();
+		}
+		if (ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER.equalsIgnoreCase(format)) {
+			return new DdiDrugReferenceSource();
 		}
 		return new JsonDrugReferenceSource();
 	}

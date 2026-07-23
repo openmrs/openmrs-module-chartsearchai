@@ -367,6 +367,11 @@ public class ChartSearchAiConstants {
 	/** Value of {@link #GP_DRUG_REFERENCE_SOURCE_FORMAT} that selects the ATC classification source. */
 	public static final String DRUG_REFERENCE_SOURCE_ATC = "atc";
 
+	/** Value of {@link #GP_DRUG_REFERENCE_SOURCE_FORMAT} that selects the DDInter-backed source
+	 *  (structured drug-drug interactions with severity and mechanism, normalized to RxNorm and
+	 *  cross-walked to CIEL). See ADR Decision 24 and the openmrs-ddi-knowledge-base data project. */
+	public static final String DRUG_REFERENCE_SOURCE_DDINTER = "ddinter";
+
 	/** Path (relative to the OpenMRS application data directory) to the curated cross-reactivity
 	 *  groups dataset, loaded alongside EITHER source format. When absent, the groups bundled on
 	 *  the module classpath are used. Closes the ADR Decision 24 cross-branch boundary as data. */

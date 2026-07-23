@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
@@ -96,9 +97,108 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 				String.valueOf(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_ENABLED)))) {
 			capabilities.add(ProviderCapability.DRUG_SAFETY);
 		}
-		return new ProviderDescriptor(PROVIDER_ID, "ChartSearchAI (bundled)", true, true, true,
-				Collections.singletonList(configuredMode()), capabilities, null);
+		String unavailableReason = engineUnavailableReason();
+		return new ProviderDescriptor(PROVIDER_ID, "ChartSearchAI (bundled)", true,
+				unavailableReason == null, true, Collections.singletonList(configuredMode()),
+				capabilities, unavailableReason);
 	}
+
+	/**
+	 * Why the configured LLM engine cannot serve right now, or {@code null} when it can.
+	 * Readiness must be truthful: an unusable engine (missing model file, unset or
+	 * unreachable remote endpoint) reports {@code ready:false} with the reason, so the
+	 * picker disables the provider and {@code registry.require} rejects with
+	 * {@code provider_not_ready} instead of every turn dying mid-stream with
+	 * {@code provider_failure}.
+	 */
+	private String engineUnavailableReason() {
+		String engine = gp(ChartSearchAiConstants.GP_LLM_ENGINE,
+				ChartSearchAiConstants.LLM_ENGINE_LOCAL);
+		if (ChartSearchAiConstants.LLM_ENGINE_REMOTE.equals(engine)) {
+			String endpoint = trimToNull(gp(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL, null));
+			if (endpoint == null) {
+				return ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL + " is not set";
+			}
+			if (trimToNull(gp(ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME, null)) == null) {
+				return ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME + " is not set";
+			}
+			if (!engineReachable(endpoint)) {
+				return "remote engine unreachable: " + endpoint;
+			}
+			return null;
+		}
+		try {
+			requireLocalModel(gp(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH, null));
+			return null;
+		}
+		catch (IllegalStateException e) {
+			return e.getMessage();
+		}
+	}
+
+	private static String trimToNull(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed;
+	}
+
+	/**
+	 * Resolve the local engine's model file, throwing {@link IllegalStateException} with the
+	 * reason when it is missing or misconfigured. Seam overridable in tests (same pattern as
+	 * {@link #gp}); production delegates to the canonical resolver.
+	 */
+	protected String requireLocalModel(String configuredPath) {
+		return ChartSearchAiUtils.resolveModelPath(configuredPath,
+				ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
+	}
+
+	/**
+	 * Whether the remote engine endpoint answers HTTP at all — any status code counts (a
+	 * chat-completions URL answers GET with 405), only connect/read failures do not. Probes
+	 * are cached briefly so per-turn readiness gates and the providers endpoint stay cheap.
+	 * Seam overridable in tests; the ready-path test exercises this real implementation
+	 * against a live local server.
+	 */
+	protected boolean engineReachable(String endpointUrl) {
+		long now = System.currentTimeMillis();
+		if (endpointUrl.equals(reachabilityEndpoint)
+				&& now - reachabilityProbedAtMs < REACHABILITY_TTL_MS) {
+			return reachabilityResult;
+		}
+		boolean reachable;
+		try {
+			java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+					.uri(java.net.URI.create(endpointUrl))
+					.timeout(java.time.Duration.ofSeconds(2)).GET().build();
+			REACHABILITY_CLIENT.send(request,
+					java.net.http.HttpResponse.BodyHandlers.discarding());
+			reachable = true;
+		}
+		catch (java.io.IOException | IllegalArgumentException e) {
+			reachable = false;
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			reachable = false;
+		}
+		reachabilityEndpoint = endpointUrl;
+		reachabilityProbedAtMs = now;
+		reachabilityResult = reachable;
+		return reachable;
+	}
+
+	private static final long REACHABILITY_TTL_MS = 10_000L;
+
+	private static final java.net.http.HttpClient REACHABILITY_CLIENT = java.net.http.HttpClient
+			.newBuilder().connectTimeout(java.time.Duration.ofSeconds(2)).build();
+
+	private volatile String reachabilityEndpoint;
+
+	private volatile long reachabilityProbedAtMs;
+
+	private volatile boolean reachabilityResult;
 
 	@Override
 	public CompletionStage<TurnResult> execute(TurnRequest request, TurnEventSink events,

@@ -380,4 +380,144 @@ public class BundledClinicalAnswerProviderTest {
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_ERROR), sink.types());
 		assertEquals("cancelled", result.getProblemCode());
 	}
+
+	// Readiness must reflect whether the configured engine is actually usable: a provider that
+	// advertises ready:true while its engine cannot serve breaks the picker AND every readiness
+	// gate downstream (registry.require rejects with provider_not_ready instead of failing
+	// mid-turn with provider_failure).
+
+	@Test
+	public void remoteEngineWithoutAnEndpointIsNotReady() {
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(
+				new ScriptedChartSearchService()) {
+
+			@Override
+			protected String gp(String property, String defaultValue) {
+				if (ChartSearchAiConstants.GP_LLM_ENGINE.equals(property)) {
+					return ChartSearchAiConstants.LLM_ENGINE_REMOTE;
+				}
+				return defaultValue;
+			}
+		};
+
+		ProviderDescriptor descriptor = provider.descriptor();
+		assertFalse(descriptor.isReady());
+		assertTrue(descriptor.getUnavailableReason()
+				.contains(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL));
+	}
+
+	@Test
+	public void remoteEngineWithAnUnreachableEndpointIsNotReady() {
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(
+				new ScriptedChartSearchService()) {
+
+			@Override
+			protected String gp(String property, String defaultValue) {
+				if (ChartSearchAiConstants.GP_LLM_ENGINE.equals(property)) {
+					return ChartSearchAiConstants.LLM_ENGINE_REMOTE;
+				}
+				if (ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL.equals(property)) {
+					return "http://127.0.0.1:9/v1/chat/completions";
+				}
+				if (ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME.equals(property)) {
+					return "gemma-e4b";
+				}
+				return defaultValue;
+			}
+
+			@Override
+			protected boolean engineReachable(String endpointUrl) {
+				return false; // deterministic stand-in for a stopped engine server
+			}
+		};
+
+		ProviderDescriptor descriptor = provider.descriptor();
+		assertFalse(descriptor.isReady());
+		assertTrue(descriptor.getUnavailableReason().contains("unreachable"));
+	}
+
+	@Test
+	public void remoteEngineWithAReachableEndpointIsReady() throws Exception {
+		com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer
+				.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+		// Any HTTP response proves the engine endpoint is up — a chat-completions URL
+		// answers GET with 405, which must still count as reachable.
+		server.createContext("/", exchange -> {
+			exchange.sendResponseHeaders(405, -1);
+			exchange.close();
+		});
+		server.start();
+		try {
+			String endpoint = "http://127.0.0.1:" + server.getAddress().getPort()
+					+ "/v1/chat/completions";
+			BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(
+					new ScriptedChartSearchService()) {
+
+				@Override
+				protected String gp(String property, String defaultValue) {
+					if (ChartSearchAiConstants.GP_LLM_ENGINE.equals(property)) {
+						return ChartSearchAiConstants.LLM_ENGINE_REMOTE;
+					}
+					if (ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL.equals(property)) {
+						return endpoint;
+					}
+					if (ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME.equals(property)) {
+						return "gemma-e4b";
+					}
+					return defaultValue;
+				}
+			};
+
+			ProviderDescriptor descriptor = provider.descriptor();
+			assertTrue(descriptor.isReady(),
+					"a live engine endpoint must probe as ready through the real reachability check");
+			assertNull(descriptor.getUnavailableReason());
+		}
+		finally {
+			server.stop(0);
+		}
+	}
+
+	@Test
+	public void localEngineWithAMissingModelFileIsNotReady() {
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(
+				new ScriptedChartSearchService()) {
+
+			@Override
+			protected String gp(String property, String defaultValue) {
+				return defaultValue; // engine defaults to local
+			}
+
+			@Override
+			protected String requireLocalModel(String configuredPath) {
+				throw new IllegalStateException(
+						"Model file not found: /openmrs/data/chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf");
+			}
+		};
+
+		ProviderDescriptor descriptor = provider.descriptor();
+		assertFalse(descriptor.isReady());
+		assertTrue(descriptor.getUnavailableReason().contains("Model file not found"));
+	}
+
+	@Test
+	public void localEngineWithAResolvableModelFileIsReady() {
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(
+				new ScriptedChartSearchService()) {
+
+			@Override
+			protected String gp(String property, String defaultValue) {
+				return defaultValue;
+			}
+
+			@Override
+			protected String requireLocalModel(String configuredPath) {
+				return "/openmrs/data/chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf";
+			}
+		};
+
+		ProviderDescriptor descriptor = provider.descriptor();
+		assertTrue(descriptor.isReady());
+		assertNull(descriptor.getUnavailableReason());
+	}
 }

@@ -10,15 +10,18 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -127,12 +130,16 @@ public class LlmInferenceService implements ChartSearchService {
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
 
-			List<RecordReference> references = groundReferences(response.getAnswer(),
-					extractCitedReferences(response.getAnswer(), response.getCitations(),
-							chart.getMappings()),
-					chart.getMappings());
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question, patient);
-			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
+			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
+					response.getCitations(), chart.getMappings());
+			// Correct an unsupported affirmative verdict (leads "Yes" but cites only measurements) to
+			// a NO-family verdict before grounding and return. Citations are untouched — see
+			// applyVerdictGuard.
+			String guardedAnswer = resolveVerdictGuardEnabled()
+					? applyVerdictGuard(response.getAnswer(), cited) : response.getAnswer();
+			List<RecordReference> references = groundReferences(guardedAnswer, cited, chart.getMappings());
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(guardedAnswer, question, patient);
+			ChartAnswer answer = new ChartAnswer(guardedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings);
 			outcome = "ok";
@@ -397,21 +404,28 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCitations(), chart.getMappings());
 			citationsConsumer.accept(cited);
 
+			// Verdict guard applies to the FINALIZED answer only: the raw verdict has already been
+			// streamed token-by-token to the client above, so an unsupported "Yes" is corrected in
+			// the completed answer the REST layer keeps (audit row, "done" payload) and returns, not
+			// in the live token stream. Citations are untouched — see applyVerdictGuard.
+			String guardedAnswer = resolveVerdictGuardEnabled()
+					? applyVerdictGuard(response.getAnswer(), cited) : response.getAnswer();
+
 			// The answer is complete: hand the whole (not yet grounding-verified) result to the
 			// caller before the grounding pass, so the REST layer can finish the user-visible
 			// response (emit "done", persist the audit row) without waiting out the Tier-2 tail.
 			// Fires regardless of whether grounding is enabled — see the interface contract.
-			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
+			ungroundedAnswerConsumer.accept(new ChartAnswer(guardedAnswer, cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens()));
 
 			long groundStart = System.currentTimeMillis();
-			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
+			List<RecordReference> references = groundReferences(guardedAnswer, cited,
 					chart.getMappings());
 			groundMs = System.currentTimeMillis() - groundStart;
 
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question, patient);
-			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(guardedAnswer, question, patient);
+			ChartAnswer answer = new ChartAnswer(guardedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings);
 			outcome = "ok";
@@ -453,6 +467,97 @@ public class LlmInferenceService implements ChartSearchService {
 			return references;
 		}
 		return citationGroundingVerifier.verify(answer, references, mappings);
+	}
+
+	// ---- Verdict guard ----
+
+	/** Test seam wrapping {@link #isVerdictGuardEnabled()}; production delegates, tests override to
+	 *  exercise the guard path without an OpenMRS context. */
+	protected boolean resolveVerdictGuardEnabled() {
+		return isVerdictGuardEnabled();
+	}
+
+	static boolean isVerdictGuardEnabled() {
+		try {
+			String value = org.openmrs.api.context.Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_VERDICT_GUARD_ENABLED, "false");
+			return "true".equalsIgnoreCase(value.trim());
+		}
+		catch (RuntimeException e) {
+			// No admin service (e.g. context not started) — leave the answer unmodified rather than
+			// break the search path. Mirrors ChartSearchAiUtils.isGroundingEnabled's safe fallback.
+			return false;
+		}
+	}
+
+	/** Leading "Yes" plus its trailing connector punctuation — whitespace and any of {@code — , : . ; -}
+	 *  (— is the em dash) — e.g. "Yes — ", "Yes, ", "Yes: ", "Yes. ". Doubles as the "leads with Yes"
+	 *  gate (the trailing class is zero-or-more, so a bare "Yes" matches). The class stops before "[",
+	 *  so this can never consume an inline citation marker. */
+	private static final Pattern GUARD_YES_CLAUSE =
+			Pattern.compile("^\\s*yes\\b[\\s\\u2014:,.;-]*", Pattern.CASE_INSENSITIVE);
+
+	/** A standalone re-affirming opener the model sometimes places after "Yes" ("there are records
+	 *  of kidney issues."). Removed so the rewritten NO lead is not immediately contradicted. The
+	 *  {@code [^.:\[]} class refuses to span a "[", so a clause carrying a citation never matches and
+	 *  no inline marker can be dropped — the guard stays citation-neutral. */
+	private static final Pattern GUARD_REAFFIRM =
+			Pattern.compile("^there (is|are)\\b[^.:\\[]*[.:]\\s*", Pattern.CASE_INSENSITIVE);
+
+	/** Measurement resource types — a lab/observation or a diagnostic order. Neither NAMES a
+	 *  problem, so a "Yes" whose citations are ALL of these is unsupported per the naming rule in
+	 *  {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} and is the case the guard corrects. The guard fires
+	 *  only when EVERY citation is one of these (a whitelist trigger): any other cited type — a
+	 *  condition/diagnosis/allergy/program, a medication order, an injected {@code drug_reference},
+	 *  a referral/encounter/visit/patient record — leaves the "Yes" untouched, so the guard can never
+	 *  negate a verdict backed by a record it does not positively recognise as a pure measurement. */
+	private static final Set<String> GUARD_MEASUREMENT_TYPES = Collections.unmodifiableSet(new HashSet<String>(
+			Arrays.asList(ChartSearchAiConstants.RESOURCE_TYPE_OBS, ChartSearchAiConstants.RESOURCE_TYPE_TEST_ORDER)));
+
+	/**
+	 * Deterministic verdict guard for the yes/no over-affirmation failure. When an answer leads
+	 * "Yes" but every cited record is a measurement (an {@code obs}/{@code test_order} — none is a
+	 * diagnosis, condition, allergy, enrollment, or medication order that explicitly NAMES the asked
+	 * problem), the affirmative verdict is unsupported per the naming rule the system prompt states.
+	 * This rewrites <em>only</em> the leading verdict clause to a NO-family verdict, preserving the
+	 * evidence and every inline {@code [N]} citation marker — so the reference set, and therefore the
+	 * recall/drift/abstention the metrics measure, are unchanged by construction. The correction is
+	 * for the pure lab-only "Yes"; a "Yes" backed by any naming/order record is left untouched (the
+	 * borderline "is this condition actually kidney disease?" calls are not the guard's job).
+	 *
+	 * <p><strong>Limitations (why it is opt-in — see {@link ChartSearchAiConstants#GP_VERDICT_GUARD_ENABLED}).</strong>
+	 * (1) Question-blind: it assumes the yes/no question asks whether the patient HAS the problem, so
+	 * it wrongly negates a correct "Yes" to an existence/order question ("was a creatinine test
+	 * ordered?" cited by a {@code test_order}, "was blood pressure measured?" cited by an
+	 * {@code obs}). Safe general use needs question-intent gating. (2) The contradiction-avoidance
+	 * strip removes only a leading "there is/are …" clause, so a lab-only "Yes" phrased another way
+	 * ("the patient has diabetes recorded: HbA1c 9.2 [3]") can leave a clause that contradicts the
+	 * rewritten "No" lead.
+	 *
+	 * @param answer the model's answer text
+	 * @param cited the records the answer cites, carrying their resource type
+	 * @return the answer with a corrected verdict lead, or the original answer when the guard does
+	 *         not apply (not a "Yes" lead, no citations, or any non-measurement record is cited)
+	 */
+	static String applyVerdictGuard(String answer, List<RecordReference> cited) {
+		if (answer == null || cited == null || cited.isEmpty() || !GUARD_YES_CLAUSE.matcher(answer).find()) {
+			return answer;
+		}
+		for (RecordReference ref : cited) {
+			if (!GUARD_MEASUREMENT_TYPES.contains(ref.getResourceType())) {
+				// A non-measurement record is cited (a named condition/allergy/program, a medication
+				// order, a drug reference, a referral/encounter, …); the "Yes" may be legitimate —
+				// leave it. A null type is also non-measurement, so it too leaves the answer untouched.
+				return answer;
+			}
+		}
+		String rest = GUARD_YES_CLAUSE.matcher(answer).replaceFirst("");
+		rest = GUARD_REAFFIRM.matcher(rest).replaceFirst("").trim();
+		if (!rest.isEmpty()) {
+			rest = Character.toUpperCase(rest.charAt(0)) + rest.substring(1);
+		}
+		String lead = "No diagnosis explicitly naming this is recorded.";
+		return rest.isEmpty() ? lead : lead + " " + rest;
 	}
 
 	static List<RecordReference> extractCitedReferences(List<Integer> citations,

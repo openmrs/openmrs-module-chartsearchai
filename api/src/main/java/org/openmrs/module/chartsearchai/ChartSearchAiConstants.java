@@ -266,6 +266,24 @@ public class ChartSearchAiConstants {
 	public static final boolean DEFAULT_GROUNDING_ENABLED = false;
 
 	/**
+	 * When {@code true}, a yes/no answer that leads "Yes" but cites ONLY measurement records
+	 * (observations / test orders — no diagnosis, condition, allergy, enrollment, or medication order
+	 * that explicitly names the asked problem) has its leading verdict clause deterministically
+	 * rewritten to a NO-family verdict. Citations are not altered, so the evidence and the reference
+	 * set are unchanged; only the unsupported affirmative verdict is corrected. See
+	 * {@code LlmInferenceService#applyVerdictGuard}.
+	 *
+	 * <p><strong>Opt-in — default {@code false}.</strong> The guard is question-blind: it assumes
+	 * every yes/no question asks whether the patient HAS a named problem. It therefore mis-fires on
+	 * <em>existence/order</em> questions ("was a creatinine test ordered?", "was blood pressure
+	 * measured?"), where a correct "Yes" cited by a test order or observation would be wrongly
+	 * negated — a failure the current diagnosis-presence eval set cannot detect. Enable only for a
+	 * deployment whose yes/no traffic is predominantly diagnosis-presence, and only until
+	 * question-intent gating is added.
+	 */
+	public static final String GP_VERDICT_GUARD_ENABLED = "chartsearchai.verdictGuard.enabled";
+
+	/**
 	 * Minimum cosine similarity between a cited record's text and the answer
 	 * sentence that cites it for the citation to count as grounded. This Tier-1
 	 * check catches grossly off-topic citations (a blood-pressure record cited
@@ -464,6 +482,8 @@ public class ChartSearchAiConstants {
 	public static final String RESOURCE_TYPE_DIAGNOSIS = "diagnosis";
 
 	public static final String RESOURCE_TYPE_ORDER = "order";
+
+	public static final String RESOURCE_TYPE_TEST_ORDER = "test_order";
 
 	public static final String RESOURCE_TYPE_PROGRAM = "program";
 

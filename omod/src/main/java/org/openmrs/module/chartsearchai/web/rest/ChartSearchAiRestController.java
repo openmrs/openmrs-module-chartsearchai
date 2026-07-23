@@ -321,7 +321,12 @@ public class ChartSearchAiRestController {
 	 *       preview can be wrong until the committed full-chart pass corrects it</li>
 	 *   <li>{@code thinking} — a chunk of the model's reasoning (chain-of-thought), emitted
 	 *       before the answer; render distinctly (e.g. a collapsible panel), not as the answer</li>
-	 *   <li>{@code token} — a chunk of the answer text</li>
+	 *   <li>{@code token} — a chunk of the answer text. NOTE: the concatenated tokens are the
+	 *       model's raw answer; the authoritative answer is the one in {@code done}, which may
+	 *       differ — the verdict guard ({@code chartsearchai.verdictGuard.enabled}) can correct an
+	 *       unsupported "Yes" lead to a "No" verdict on the finalized answer, after the raw tokens
+	 *       have already streamed. Clients should render the final answer from {@code done}, not
+	 *       from the accumulated tokens</li>
 	 *   <li>{@code references} — the answer's citations the moment the answer is complete,
 	 *       before grounding verdicts exist; render as unverified until verdicts arrive</li>
 	 *   <li>{@code done} — final JSON with answer, references, questionId, and disclaimer.

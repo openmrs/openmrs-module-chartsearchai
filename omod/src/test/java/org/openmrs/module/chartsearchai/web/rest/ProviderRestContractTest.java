@@ -161,6 +161,64 @@ public class ProviderRestContractTest {
 		assertEquals("profile_required", ssePayload(out, "turn_error").get("problemCode").asText());
 	}
 
+	@Test
+	public void resolveModeReturnsNullWhenTheRequestOmitsMode() {
+		// Mode is a DEPLOYMENT setting (chartsearchai.chartMode), never something callers are
+		// expected to send. resolveMode must return null (not a hardcoded default) so
+		// streamProviderTurn's own fallback — provider.modes().get(0), sourced from the
+		// provider's LIVE configured mode — decides. A hardcoded default here silently
+		// overrides whatever chartMode is actually configured to.
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+
+		assertEquals(null, controller.resolveMode(new HashMap<String, String>()));
+		assertEquals(null, controller.resolveMode(null));
+		Map<String, String> blank = new HashMap<String, String>();
+		blank.put("mode", "   ");
+		assertEquals(null, controller.resolveMode(blank));
+	}
+
+	@Test
+	public void resolveModeHonorsAnExplicitOverride() {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		Map<String, String> body = new HashMap<String, String>();
+		body.put("mode", "full_chart_stable");
+
+		assertEquals(ProviderMode.FULL_CHART_STABLE, controller.resolveMode(body));
+	}
+
+	@Test
+	public void chatStreamWithNoExplicitModeUsesTheProvidersLiveConfiguredMode() throws Exception {
+		// Regression: chartsearchai.chartMode=fullChart previously failed EVERY turn with
+		// unsupported_mode, because resolveMode's hardcoded query_scoped default never matched
+		// the provider's actual configured mode (full_chart_stable) — a mismatch the provider's
+		// own no-silent-fallback guard correctly rejects. With mode UNSPECIFIED (the normal,
+		// only-ever-used-in-practice case — no caller sends "mode"), the turn must succeed using
+		// whatever mode the provider is actually configured for.
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		ScriptedProvider bundled = new ScriptedProvider("bundled", true);
+		bundled.mode = ProviderMode.FULL_CHART_STABLE;
+		bundled.events = Arrays.asList(
+				TurnEvent.of(TurnEventType.TURN_STARTED, 0, "bundled"),
+				TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, 1, "bundled",
+						AnswerEnvelope.fromPayload(answerPayload("Full chart summary."))),
+				TurnEvent.of(TurnEventType.TURN_DONE, 2, "bundled"));
+		bundled.result = TurnResult.done("bundled", ProviderMode.FULL_CHART_STABLE,
+				AnswerEnvelope.fromPayload(answerPayload("Full chart summary.")));
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(bundled));
+
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		Map<String, String> body = new HashMap<String, String>();
+		// No "mode" key — the only shape any real caller sends.
+		ProviderMode resolved = controller.resolveMode(body);
+		controller.streamProviderTurn(out, patient(), "Summarize the chart", "bundled",
+				resolved, null, null);
+
+		assertEquals(Arrays.asList("turn_started", "answer_done", "turn_done"), sseTypes(out));
+		assertEquals("Full chart summary.", ssePayload(out, "answer_done").get("answer").asText());
+	}
+
 	private static Patient patient() {
 		Patient patient = new Patient();
 		patient.setUuid("patient-1");
@@ -232,6 +290,8 @@ public class ProviderRestContractTest {
 
 		private final boolean ready;
 
+		ProviderMode mode = ProviderMode.QUERY_SCOPED;
+
 		private final AtomicInteger calls = new AtomicInteger();
 
 		List<TurnEvent> events = Collections.emptyList();
@@ -251,7 +311,7 @@ public class ProviderRestContractTest {
 		@Override
 		public ProviderDescriptor descriptor() {
 			return new ProviderDescriptor(id, id, true, ready, "bundled".equals(id),
-					Collections.singletonList(ProviderMode.QUERY_SCOPED),
+					Collections.singletonList(mode),
 					EnumSet.of(ProviderCapability.ANSWER, ProviderCapability.TOKEN_STREAMING),
 					ready ? null : "not ready");
 		}

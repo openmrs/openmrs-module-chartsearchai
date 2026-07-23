@@ -1028,10 +1028,21 @@ public class ChartSearchAiRestController {
 		return providerId.trim();
 	}
 
-	private ProviderMode resolveMode(Map<String, String> body) {
+	/**
+	 * The caller's EXPLICIT mode override, or {@code null} when unspecified. Mode is a deployment
+	 * setting ({@code chartsearchai.chartMode}), not something callers normally send — {@code null}
+	 * here lets {@link #streamProviderTurn}'s {@code resolvedMode} fallback
+	 * ({@code provider.modes().get(0)}, sourced from the provider's live-configured mode) take
+	 * over. Hardcoding a literal default here previously pinned every conversation to
+	 * {@code query_scoped} regardless of the configured mode, and made
+	 * {@code chartsearchai.chartMode=fullChart} fail every turn with {@code unsupported_mode} (the
+	 * request's forced default never matched the provider's actual mode). Package-private for
+	 * {@code ProviderRestContractTest}.
+	 */
+	ProviderMode resolveMode(Map<String, String> body) {
 		String mode = body == null ? null : body.get("mode");
 		if (mode == null || mode.trim().isEmpty()) {
-			return ProviderMode.QUERY_SCOPED;
+			return null;
 		}
 		return ProviderMode.fromWireName(mode.trim());
 	}

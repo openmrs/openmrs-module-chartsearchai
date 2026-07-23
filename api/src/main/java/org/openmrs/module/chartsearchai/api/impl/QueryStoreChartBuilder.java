@@ -27,6 +27,9 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.openmrs.module.querystore.QueryStoreConstants;
 import org.openmrs.module.querystore.api.QueryStoreService;
+import org.openmrs.module.querystore.model.ContextSlice;
+import org.openmrs.module.querystore.model.ContextSliceRecord;
+import org.openmrs.module.querystore.model.ContextSliceRequest;
 import org.openmrs.module.querystore.model.QueryDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -174,24 +177,25 @@ class QueryStoreChartBuilder {
 	}
 
 	/**
-	 * Builds the query-scoped slice chart for {@code chartsearchai.chartMode=queryScoped}: every
-	 * record of the question's typed scope (complete by construction — see {@link QueryScopeRouter}),
-	 * unioned with the querystore similarity top-K (the semantic catch-all), the mandatory clinical
-	 * core (allergies + active conditions — see {@link #isMandatoryClinicalCore}), plus the
-	 * demographics {@code patient} record — all in the CHART's most-recent-first order, never the
-	 * similarity ranking's, because the system prompt asserts "sorted most recent first". The slice
-	 * renders no focus hint: the slice IS the scope. A similarity failure degrades to the typed
-	 * slice alone; a null patient degrades to an empty chart, exactly like {@link #build}.
+	 * Builds the query-scoped slice chart for {@code chartsearchai.chartMode=queryScoped} as a
+	 * THIN ADAPTER over querystore's shared context-selection contract (querystore ADR
+	 * Decision 17): this builder interprets the question — intent-typed scope (see
+	 * {@link QueryScopeRouter}), module-contributed types, temporal phrasing, stopword/lab-panel
+	 * preprocessing — and {@code QueryStoreService.getContextSlice} performs the selection
+	 * (mandatory clinical core, temporal recency anchor, typed-complete types, similarity union,
+	 * obs-group panel completion) exactly once for every consumer. Records come back in the
+	 * CHART's most-recent-first order, which the system prompt asserts. The slice renders no
+	 * focus hint: the slice IS the scope. A selection failure degrades to an empty chart; a null
+	 * patient degrades to an empty chart, exactly like {@link #build}.
 	 *
 	 * <p>The slice is question-dependent, so callers must not attach a KV-cache scope to it (see
 	 * {@code LlmInferenceService.kvCacheScopeFor}); its latency contract is the opposite of
 	 * {@link #build}'s — a small fresh prefill every query instead of a big amortized one.
 	 *
-	 * <p>Completeness caveat: querystore's Elasticsearch tier caps {@code getPatientChart} at its
-	 * 10&nbsp;000 most recent documents (silently dropping the older tail). fullChart mode fails
-	 * loud on such patients ({@code ChartTooLargeException} — the chart overflows the context
-	 * window long before 10&nbsp;000 docs); a scoped slice keeps working, so a typed enumeration
-	 * could silently omit pre-cutoff records. WARNed below when the fetch lands on the cap.
+	 * <p>Completeness caveat: querystore's Elasticsearch tier caps the underlying chart at its
+	 * 10&nbsp;000 most recent documents. fullChart mode fails loud on such patients
+	 * ({@code ChartTooLargeException}); a scoped slice keeps working, so the slice contract
+	 * surfaces the cap explicitly ({@code ContextSlice.isChartTruncated}) and it is WARNed below.
 	 */
 	PatientChart buildScoped(Patient patient, String question) {
 		long buildStart = System.currentTimeMillis();
@@ -221,70 +225,43 @@ class QueryStoreChartBuilder {
 			return markScoped(emptyChart(patient));
 		}
 
+		// The caller's question interpretation rides the request; selection is querystore's.
+		// Lab-panel abbreviations are expanded before the similarity leg ("BMP" → "+ basic
+		// metabolic panel") so the retrieval text carries the full concept name querystore indexed.
+		ContextSliceRequest request = new ContextSliceRequest(typedScope, QueryScopeRouter.isTemporal(question));
+		request.setRecencyAnchorSize(resolveScopedRecencyAnchor());
+		request.setSimilarityLimit(resolveQueryStoreTopK());
+		String preprocessed = question == null ? null
+				: QueryPreprocessor.stripQueryStopwords(QueryPreprocessor.expandLabPanelAbbreviations(question));
+
 		long rpcStart = System.currentTimeMillis();
-		List<QueryDocument> chartDocs;
+		ContextSlice slice;
 		try {
-			chartDocs = queryStore.getPatientChart(patient.getUuid());
+			slice = queryStore.getContextSlice(patient.getUuid(), preprocessed, request);
 		}
 		catch (RuntimeException e) {
-			log.error(GET_PATIENT_CHART_FAILED_MSG, patient.getUuid(), e);
+			log.error("QueryStore.getContextSlice failed for patient [uuid={}]", patient.getUuid(), e);
 			log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs=0 simHits=0 slice=0 rpcMs={} serializeMs=0 totalMs={} outcome=error errorClass={}",
 					patient.getPatientId(), intentLabel, System.currentTimeMillis() - rpcStart,
 					System.currentTimeMillis() - buildStart, e.getClass().getSimpleName());
 			return markScoped(emptyChart(patient));
 		}
-
-		// querystore's ES tier returns at most its 10 000 most recent docs (older tail silently
-		// dropped) — at the cap, "complete by construction" typed slices may be missing
-		// pre-cutoff records, and unlike fullChart (which fails loud on context overflow) the
-		// slice keeps working. Surface it for operators.
-		if (chartDocs.size() >= QUERYSTORE_ES_CHART_CAP) {
-			log.warn("getPatientChart returned {} docs for patient [uuid={}] — at querystore's ES "
-					+ "tier cap; typed slices may silently omit records older than the cutoff.",
-					chartDocs.size(), patient.getUuid());
-		}
-
-		// Similarity top-K uuids — the semantic catch-all beyond the typed scope. Lab-panel
-		// abbreviations are expanded first ("BMP" → "+ basic metabolic panel") so the retrieval
-		// text carries the full concept name querystore indexed. Failure degrades to the typed
-		// slice alone (never blocks the answer), mirroring build()'s focus-hint contract.
-		Set<String> similarityUuids = Collections.<String>emptySet();
-		if (question != null && !question.trim().isEmpty()) {
-			similarityUuids = searchSimilarityUuids(queryStore, patient,
-					QueryPreprocessor.stripQueryStopwords(
-							QueryPreprocessor.expandLabPanelAbbreviations(question)),
-					"QueryStore.searchByPatient failed for scoped build [uuid={}] — proceeding with the typed slice only");
-		}
 		long rpcMs = System.currentTimeMillis() - rpcStart;
 
-		// Filter the chart (already most-recent-first) down to the slice, preserving its order.
-		// TEMPORAL questions additionally carry the recency anchor — the first N chart records:
-		// similarity ranks by meaning, not date, so without it "most recent X" can lose the newest
-		// reading to older, better-matching records (measured: a stale systolic quoted). The anchor
-		// is gated purely on temporal phrasing (QueryScopeRouter.isTemporal), independent of typed
-		// scope; non-temporal questions get none, which is what keeps an absent-topic slice from
-		// baiting enumeration.
-		int recencyAnchor = QueryScopeRouter.isTemporal(question) ? resolveScopedRecencyAnchor() : 0;
-		List<QueryDocument> sliceDocs = new ArrayList<QueryDocument>();
-		Set<String> sliceUuids = new HashSet<String>();
-		for (int i = 0; i < chartDocs.size(); i++) {
-			QueryDocument doc = chartDocs.get(i);
-			if (doc == null) {
-				continue;
-			}
-			boolean isAnchor = i < recencyAnchor;
-			boolean isPatientRecord = PATIENT_RESOURCE_TYPE.equals(doc.getResourceType());
-			boolean isMandatoryCore = isMandatoryClinicalCore(doc);
-			boolean inTypedScope = doc.getResourceType() != null && typedScope.contains(doc.getResourceType());
-			boolean isSimilarityHit = doc.getResourceUuid() != null && similarityUuids.contains(doc.getResourceUuid());
-			if (isAnchor || isPatientRecord || isMandatoryCore || inTypedScope || isSimilarityHit) {
-				sliceDocs.add(doc);
-				if (doc.getResourceUuid() != null) {
-					sliceUuids.add(doc.getResourceUuid());
-				}
+		if (slice.isChartTruncated()) {
+			log.warn("Context slice for patient [uuid={}] was built on a chart at querystore's ES "
+					+ "tier cap ({} docs) — typed slices may silently omit records older than the cutoff.",
+					patient.getUuid(), slice.getChartSize());
+		}
+
+		List<QueryDocument> sliceDocs = new ArrayList<QueryDocument>(slice.getRecords().size());
+		int simHits = 0;
+		for (ContextSliceRecord record : slice.getRecords()) {
+			sliceDocs.add(record.getDocument());
+			if (QueryStoreConstants.TIER_SIMILARITY.equals(record.getTier())) {
+				simHits++;
 			}
 		}
-		sliceDocs = completeObsGroupFamilies(chartDocs, sliceDocs, sliceUuids);
 
 		List<SerializedRecord> records = toSerializedRecords(sliceDocs);
 		long serializeStart = System.currentTimeMillis();
@@ -294,7 +271,7 @@ class QueryStoreChartBuilder {
 				Collections.<String>emptySet(), false, false);
 		long serializeMs = System.currentTimeMillis() - serializeStart;
 		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} simHits={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
-				patient.getPatientId(), intentLabel, chartDocs.size(), similarityUuids.size(), records.size(),
+				patient.getPatientId(), intentLabel, slice.getChartSize(), simHits, records.size(),
 				rpcMs, serializeMs, System.currentTimeMillis() - buildStart);
 		return markScoped(chart);
 	}
@@ -307,26 +284,6 @@ class QueryStoreChartBuilder {
 		return chart;
 	}
 
-	/**
-	 * Mandatory clinical core: allergies and ACTIVE conditions ride EVERY scoped slice regardless
-	 * of matched intent (conformance fixture {@code context.enumerated-medications-are-complete}
-	 * pins the allergy record as mandatory for a medication question). A medication answer
-	 * composed without the patient's allergy list — measured on the live parity harness — is the
-	 * safety omission this guards against. Active status is read from the serialized text
-	 * ("Status: ACTIVE"), the same signal querystore's condition serializer emits and the hub's
-	 * context policy matches on; inactive/resolved problems stay subject to normal scoping.
-	 */
-	private static boolean isMandatoryClinicalCore(QueryDocument doc) {
-		String type = doc.getResourceType();
-		if ("allergy".equals(type)) {
-			return true;
-		}
-		if ("condition".equals(type) || "diagnosis".equals(type)) {
-			String text = doc.getText();
-			return text != null && text.toLowerCase(java.util.Locale.ROOT).contains("status: active");
-		}
-		return false;
-	}
 
 	/** The [timing] log label for the slice's matched intents: {@code TOPICAL} when none matched,
 	 *  else the names joined with {@code +} in declaration order (e.g.
@@ -345,53 +302,6 @@ class QueryStoreChartBuilder {
 		return label.toString();
 	}
 
-	/**
-	 * Obs-group family completion for the scoped slice: if a panel PARENT (e.g. "Basic metabolic
-	 * panel") or any MEMBER made the slice, the whole family joins it. The panel's VALUES live in
-	 * member obs whose indexed text carries no panel name ("Serum sodium: 146"), so similarity can
-	 * match the parent and miss every value — measured: "results of the last BMP" answered "no
-	 * records" while the panel existed. One level only (obs groups don't nest in this chart).
-	 *
-	 * <p>Returns a REBUILT list scanned from {@code chartDocs} rather than appending the missing
-	 * family members to {@code sliceDocs}: appending would place them after unrelated newer
-	 * records and violate the most-recent-first chart order {@link #buildScoped}'s contract (and
-	 * the system prompt) asserts. Returns {@code sliceDocs} unchanged when no family is touched.
-	 */
-	private List<QueryDocument> completeObsGroupFamilies(List<QueryDocument> chartDocs,
-			List<QueryDocument> sliceDocs, Set<String> sliceUuids) {
-		Set<String> familyGroups = new HashSet<String>();
-		for (QueryDocument doc : chartDocs) {
-			if (doc == null || doc.getResourceUuid() == null) {
-				continue;
-			}
-			String groupUuid = metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_UUID);
-			if (groupUuid == null) {
-				continue;
-			}
-			// doc is a MEMBER of groupUuid: the family joins the slice when the member itself is
-			// in it, or when its parent (the group record) is.
-			if (sliceUuids.contains(doc.getResourceUuid()) || sliceUuids.contains(groupUuid)) {
-				familyGroups.add(groupUuid);
-			}
-		}
-		if (familyGroups.isEmpty()) {
-			return sliceDocs;
-		}
-		List<QueryDocument> completed = new ArrayList<QueryDocument>();
-		for (QueryDocument doc : chartDocs) {
-			if (doc == null) {
-				continue;
-			}
-			String uuid = doc.getResourceUuid();
-			String groupUuid = metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_UUID);
-			boolean inFamily = (groupUuid != null && familyGroups.contains(groupUuid))
-					|| (uuid != null && familyGroups.contains(uuid));
-			if ((uuid != null && sliceUuids.contains(uuid)) || inFamily) {
-				completed.add(doc);
-			}
-		}
-		return completed;
-	}
 
 	/**
 	 * Builds a focused chart of only the top-K querystore records most relevant to {@code question},
@@ -477,12 +387,6 @@ class QueryStoreChartBuilder {
 	private static final String GET_PATIENT_CHART_FAILED_MSG =
 			"QueryStore.getPatientChart failed for patient [uuid={}]";
 
-	/** querystore's Elasticsearch tier caps {@code getPatientChart} at its most-recent N documents
-	 *  (older tail silently dropped) — mirrors {@code ElasticsearchBackendStore.FULL_CHART_MAX_HITS}
-	 *  in the querystore module. Kept in sync manually: querystore-api exposes no constant for it.
-	 *  A returned size at this value means a scoped typed slice may be missing pre-cutoff records
-	 *  (see {@link #buildScoped}). */
-	private static final int QUERYSTORE_ES_CHART_CAP = 10_000;
 
 	/**
 	 * Runs the similarity search and collects hit uuids, degrading to an empty set on failure with

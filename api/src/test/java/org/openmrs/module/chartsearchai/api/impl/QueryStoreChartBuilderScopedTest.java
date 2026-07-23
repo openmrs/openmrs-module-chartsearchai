@@ -65,6 +65,15 @@ public class QueryStoreChartBuilderScopedTest {
 		return d;
 	}
 
+	/** Condition documents carry their status as {@code clinical_status} METADATA — the real
+	 *  contract querystore's ConditionRecordSerializer emits and the shared slice's mandatory
+	 *  tier reads (no text sniffing). */
+	private static QueryDocument condition(String uuid, String text, LocalDate date, String status) {
+		QueryDocument d = doc("condition", uuid, text, date);
+		d.putMetadata(org.openmrs.module.querystore.QueryStoreConstants.FIELD_CLINICAL_STATUS, status);
+		return d;
+	}
+
 	private CountingQueryStoreStub queryStore;
 	private TestableScopedBuilder builder;
 
@@ -79,7 +88,7 @@ public class QueryStoreChartBuilderScopedTest {
 				doc("obs", "o-1", "Systolic blood pressure: 142 mmHg", LocalDate.of(2026, 6, 30)),
 				doc("drug_order", "d-1", "Drug order: Lisinopril 10 mg daily", LocalDate.of(2026, 6, 29)),
 				doc("obs", "o-2", "Serum creatinine: 90 umol/L", LocalDate.of(2026, 6, 28)),
-				doc("condition", "c-1", "Condition: Essential hypertension. Status: ACTIVE", LocalDate.of(2026, 6, 27)),
+				condition("c-1", "Condition: Essential hypertension. Status: ACTIVE", LocalDate.of(2026, 6, 27), "ACTIVE"),
 				doc("drug_order", "d-2", "Drug order: Amoxicillin 500 mg twice daily", LocalDate.of(2026, 5, 1)),
 				doc("allergy", "a-1", "Allergy: Penicillin. Reaction: rash", LocalDate.of(2026, 4, 2)),
 				doc("obs", "o-3", "Weight: 70 kg", LocalDate.of(2026, 3, 3))));
@@ -108,7 +117,8 @@ public class QueryStoreChartBuilderScopedTest {
 		assertTrue(uuids.containsAll(Arrays.asList("a-1", "c-1")),
 				"the mandatory clinical core (allergy + active condition) rides every slice; got " + uuids);
 		assertFalse(uuids.contains("o-3"), "records outside typed scope and similarity hits are excluded");
-		assertEquals(1, queryStore.getPatientChartCalls, "slice is filtered from the one chart fetch");
+		assertEquals(1, queryStore.getContextSliceCalls,
+				"one slice RPC; selection (and its single chart fetch) is querystore's job");
 	}
 
 	@Test
@@ -206,6 +216,26 @@ public class QueryStoreChartBuilderScopedTest {
 	}
 
 	@Test
+	public void buildScoped_delegatesSelectionToTheSharedQuerystoreSlice() {
+		// The shared context-selection contract (querystore ADR Decision 17; roadmap amendment
+		// 2026-07-22): selection runs ONCE in querystore's getContextSlice; this builder's job
+		// shrinks to question interpretation (intent types + temporal flag) and serialization.
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+		builder.recencyAnchor = 3;
+
+		builder.buildScoped(patient(1), "What is the patient's most recent medication?");
+
+		assertEquals(1, queryStore.getContextSliceCalls,
+				"selection must go through the shared querystore slice contract");
+		assertTrue(queryStore.lastSliceRequest.getTypes().contains("drug_order"),
+				"the MEDICATIONS intent's typed scope rides the request; got "
+						+ queryStore.lastSliceRequest.getTypes());
+		assertTrue(queryStore.lastSliceRequest.isTemporal(),
+				"temporal phrasing rides the request as the caller's interpretation");
+		assertEquals(3, queryStore.lastSliceRequest.getRecencyAnchorSize());
+	}
+
+	@Test
 	public void buildScoped_shouldAlwaysCarryTheMandatoryClinicalCore() {
 		// Fixture context.enumerated-medications-are-complete (dual-provider-conformance.v1)
 		// pins mandatory_ids: patient + allergy for a MEDICATION question — the mandatory
@@ -214,7 +244,7 @@ public class QueryStoreChartBuilderScopedTest {
 		// without the penicillin allergy record. Similarity returns NOTHING, so the core can
 		// only arrive via its mandatory status.
 		queryStore.stubChart.add(
-				doc("condition", "c-2", "Condition: Asthma. Status: INACTIVE", LocalDate.of(2026, 2, 1)));
+				condition("c-2", "Condition: Asthma. Status: INACTIVE", LocalDate.of(2026, 2, 1), "INACTIVE"));
 		queryStore.stubHits = new ArrayList<QueryDocument>();
 
 		PatientChart chart = builder.buildScoped(patient(1), "What medications is the patient taking?");

@@ -77,9 +77,9 @@
       "id": "context.enumerated-medications-are-complete",
       "mode": "query_scoped",
       "question_kind": "medication_enumeration",
-      "mandatory_ids": ["patient", "allergy-1"],
+      "mandatory_ids": ["p-1", "allergy-1", "cond-active"],
       "typed_complete_ids": ["med-1", "med-2", "med-3"],
-      "expected_included": ["patient", "allergy-1", "med-1", "med-2", "med-3"]
+      "expected_included": ["p-1", "allergy-1", "cond-active", "med-1", "med-2", "med-3"]
     },
     {
       "id": "context.temporal-adds-recency-anchor",
@@ -94,6 +94,7 @@
       "question_kind": "medication_enumeration",
       "budget_tokens": 1000,
       "selected_tokens": 420,
+      "must_exclude_ids": ["recent-1", "visit-1"],
       "expected": "accept_without_extra_records"
     },
     {

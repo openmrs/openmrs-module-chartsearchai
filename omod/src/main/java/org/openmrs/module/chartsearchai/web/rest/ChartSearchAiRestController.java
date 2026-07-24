@@ -1067,7 +1067,9 @@ public class ChartSearchAiRestController {
 		}
 	}
 
-	private ClinicalConversation resolveConversation(Patient patient, String providerId,
+	/** Package-private test seam — {@code ResolveConversationTest} exercises this directly rather
+	 *  than through the full SSE streaming path. */
+	ClinicalConversation resolveConversation(Patient patient, String providerId,
 			ProviderMode mode, String conversationUuid) {
 		if (conversationUuid != null && !conversationUuid.trim().isEmpty()) {
 			ClinicalConversation existing = conversationService.getByUuid(conversationUuid.trim());

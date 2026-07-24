@@ -12,17 +12,28 @@ package org.openmrs.module.chartsearchai.api.provider;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
 
@@ -34,6 +45,20 @@ import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
 public class HttpHubStreamTransportTest {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
+
+	private HttpServer server;
+
+	private ExecutorService executor;
+
+	@AfterEach
+	public void tearDown() {
+		if (server != null) {
+			server.stop(0);
+		}
+		if (executor != null) {
+			executor.shutdownNow();
+		}
+	}
 
 	@Test
 	@SuppressWarnings("unchecked")
@@ -82,6 +107,69 @@ public class HttpHubStreamTransportTest {
 		assertEquals("answer_done", events.get(0).getEvent());
 		assertEquals("Aspirin", events.get(0).getPayload().get("answer"));
 		assertEquals("done", events.get(1).getEvent());
+	}
+
+	@Test
+	public void cancellingAnInFlightStreamUnblocksItInsteadOfRunningToTheHubsOwnCompletion() throws Exception {
+		// Reproduces the actual production hang this class exists to fix: a preempted turn must
+		// not keep reading from the hub until the hub decides it's done. Binding the open response
+		// body to a TurnCancellation (see HttpHubStreamTransport#stream) and closing it from another
+		// thread has to unblock the reader's BufferedReader#readLine() promptly.
+		CountDownLatch firstEventSent = new CountDownLatch(1);
+		CountDownLatch serverMayFinish = new CountDownLatch(1);
+		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/stream", exchange -> {
+			exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+			exchange.sendResponseHeaders(200, 0);
+			try (OutputStream body = exchange.getResponseBody()) {
+				body.write("event: reasoning_delta\ndata: {\"delta\":\"thinking\"}\n\n"
+						.getBytes(StandardCharsets.UTF_8));
+				body.flush();
+				firstEventSent.countDown();
+				// Hold the connection open — a real hub still generating In-Depth. If cancellation
+				// does not actually unblock the client, the test below times out waiting on
+				// streamReturned, proving the bug rather than merely asserting it away.
+				serverMayFinish.await(10, TimeUnit.SECONDS);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+		server.start();
+
+		HttpHubStreamTransport transport = new HttpHubStreamTransport();
+		HubCallRequest request = new HubCallRequest(
+				"http://127.0.0.1:" + server.getAddress().getPort() + "/stream", "product-a",
+				"patient-1", "conversation-1", "request-1", "question", Collections.emptyList());
+		TurnCancellation cancellation = new TurnCancellation();
+		List<HubWireEvent> received = Collections.synchronizedList(new ArrayList<>());
+
+		executor = Executors.newSingleThreadExecutor();
+		Future<Exception> streamReturned = executor.submit(() -> {
+			try {
+				transport.stream(request, received::add, cancellation);
+				return null;
+			}
+			catch (Exception e) {
+				return e;
+			}
+		});
+
+		assertTrue(firstEventSent.await(5, TimeUnit.SECONDS), "server never sent its first event");
+		cancellation.cancel();
+
+		Exception thrown;
+		try {
+			thrown = streamReturned.get(5, TimeUnit.SECONDS);
+		}
+		catch (java.util.concurrent.TimeoutException e) {
+			fail("cancel() did not unblock the in-flight hub read within 5s — the connection to the "
+					+ "hub was not actually torn down, so a preempted turn would keep running to the "
+					+ "hub's own completion instead of freeing its router slot");
+			return;
+		}
+		assertTrue(thrown != null, "the interrupted read should surface as a failure, not a silent success");
+		serverMayFinish.countDown();
 	}
 
 	@Test

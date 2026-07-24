@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpServletResponseWrapper;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.openmrs.Patient;
@@ -51,7 +52,6 @@ import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope;
-import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProviderRegistry;
 import org.openmrs.module.chartsearchai.api.provider.HubClinicalAnswerProvider;
@@ -61,6 +61,8 @@ import org.openmrs.module.chartsearchai.api.provider.ProviderMode;
 import org.openmrs.module.chartsearchai.api.provider.ProviderUnavailableException;
 import org.openmrs.module.chartsearchai.api.provider.TurnEvent;
 import org.openmrs.module.chartsearchai.api.provider.TurnEventType;
+import org.openmrs.module.chartsearchai.api.provider.TurnCancellation;
+import org.openmrs.module.chartsearchai.api.provider.TurnPreemptionRegistry;
 import org.openmrs.module.chartsearchai.api.provider.TurnRequest;
 import org.openmrs.module.chartsearchai.api.provider.TurnResult;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
@@ -154,6 +156,12 @@ public class ChartSearchAiRestController {
 	@Autowired
 	@Qualifier("chartSearchAi.hubProfileService")
 	private org.openmrs.module.chartsearchai.api.impl.HubProfileService hubProfileService;
+
+	// A conversation has at most one turn in flight at a time — a new turn starting for the same
+	// conversation always supersedes whatever came before it. This controller is a singleton bean
+	// (default Spring MVC @Controller scope), so one registry instance safely tracks preemption
+	// across every concurrent request.
+	private TurnPreemptionRegistry preemptionRegistry = new TurnPreemptionRegistry();
 
 	/**
 	 * Provider discovery for the ESM picker. Fresh installs return only bundled with
@@ -730,6 +738,11 @@ public class ChartSearchAiRestController {
 		this.conversationService = conversationService;
 	}
 
+	/** Test seam: production uses the default instance constructed above. */
+	void setPreemptionRegistry(TurnPreemptionRegistry preemptionRegistry) {
+		this.preemptionRegistry = preemptionRegistry;
+	}
+
 	/**
 	 * Close the active conversation for the selected provider/mode and open a fresh one.
 	 *
@@ -768,25 +781,55 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Reload an existing conversation's turns for the authenticated user.
+	 * Reload an existing conversation's turns for the authenticated user. {@code session} is
+	 * optional: a fresh page load has no client-side session to send, only the patient it's
+	 * looking at, so an omitted session falls back to the caller's own latest active conversation
+	 * for that patient (see {@link #buildChatHistoryResponse}).
 	 *
 	 * <pre>
-	 * GET /ws/rest/v1/chartsearchai/chat?patient=...&amp;session=...
+	 * GET /ws/rest/v1/chartsearchai/chat?patient=...&amp;session=...?
 	 * </pre>
 	 */
 	@RequestMapping(value = "/chat", method = RequestMethod.GET)
 	@ResponseBody
 	public ResponseEntity<Object> getChat(
 			@RequestParam(value = "patient", required = true) String patientUuid,
-			@RequestParam(value = "session", required = true) String sessionUuid) {
+			@RequestParam(value = "session", required = false) String sessionUuid) {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
 		PatientResolution resolved = resolvePatient(patientUuid);
 		if (resolved.hasError()) {
 			return new ResponseEntity<Object>(errorResponse(resolved.errorMessage), resolved.errorStatus);
 		}
-		ClinicalConversation conversation = conversationService.getByUuid(sessionUuid);
-		if (conversation == null || !resolved.patient.equals(conversation.getPatient())) {
-			return new ResponseEntity<Object>(errorResponse("Conversation not found"), HttpStatus.NOT_FOUND);
+		return buildChatHistoryResponse(resolved.patient, sessionUuid);
+	}
+
+	/**
+	 * Resolves which conversation to show — by explicit session, or the caller's latest active
+	 * conversation for this patient when session is omitted — and serializes its turns, including
+	 * each assistant turn's full persisted answer envelope (references, blocks, safety warnings,
+	 * confidence, answer validation, In-Depth) so a reload restores exactly what was on screen
+	 * before it, not just the bare answer text. Package-private for unit tests.
+	 */
+	ResponseEntity<Object> buildChatHistoryResponse(Patient patient, String sessionUuid) {
+		ClinicalConversation conversation;
+		if (sessionUuid != null && !sessionUuid.trim().isEmpty()) {
+			conversation = conversationService.getByUuid(sessionUuid.trim());
+			if (conversation == null || !patient.equals(conversation.getPatient())) {
+				return new ResponseEntity<Object>(errorResponse("Conversation not found"), HttpStatus.NOT_FOUND);
+			}
+		}
+		else {
+			conversation = conversationService.getLatestActiveConversation(patient);
+			if (conversation == null) {
+				// Nobody has asked anything yet for this patient — a normal empty state, not an
+				// error (the caller has no session to have gotten wrong).
+				Map<String, Object> empty = new LinkedHashMap<String, Object>();
+				empty.put("session", null);
+				empty.put("provider", null);
+				empty.put("mode", null);
+				empty.put("messages", Collections.emptyList());
+				return new ResponseEntity<Object>(empty, HttpStatus.OK);
+			}
 		}
 		List<Map<String, Object>> messages = new ArrayList<Map<String, Object>>();
 		for (ClinicalConversationTurn turn : conversationService.getTurns(conversation)) {
@@ -797,10 +840,16 @@ public class ChartSearchAiRestController {
 			messages.add(user);
 			if (turn.getAnswerText() != null) {
 				Map<String, Object> assistant = new LinkedHashMap<String, Object>();
+				Map<String, Object> payload = parseProviderPayload(turn.getProviderPayload());
+				if (payload != null) {
+					assistant.putAll(payload);
+				}
 				assistant.put("role", "assistant");
 				assistant.put("content", turn.getAnswerText());
 				assistant.put("messageId", turn.getUuid());
-				assistant.put("terminalState", turn.getTerminalState());
+				if (turn.getAuditLog() != null) {
+					assistant.put("auditLogId", turn.getAuditLog().getAuditLogId());
+				}
 				messages.add(assistant);
 			}
 		}
@@ -810,6 +859,19 @@ public class ChartSearchAiRestController {
 		response.put("mode", conversation.getProviderMode());
 		response.put("messages", messages);
 		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	private Map<String, Object> parseProviderPayload(String json) {
+		if (json == null || json.trim().isEmpty()) {
+			return null;
+		}
+		try {
+			return new ObjectMapper().readValue(json, new TypeReference<Map<String, Object>>() {});
+		}
+		catch (IOException e) {
+			log.warn("Could not parse a persisted turn's provider payload; restoring bare content only", e);
+			return null;
+		}
 	}
 
 	/**
@@ -900,6 +962,8 @@ public class ChartSearchAiRestController {
 	 */
 	void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
 			ProviderMode mode, String profileId, String conversationUuid) {
+		ClinicalConversation conversation = null;
+		TurnCancellation cancellation = null;
 		try {
 			ClinicalAnswerProvider provider;
 			try {
@@ -921,19 +985,37 @@ public class ChartSearchAiRestController {
 
 			ProviderMode resolvedMode = mode != null ? mode
 					: (provider.modes().isEmpty() ? ProviderMode.QUERY_SCOPED : provider.modes().get(0));
-			ClinicalConversation conversation = resolveConversation(patient, providerId, resolvedMode,
-					conversationUuid);
+			conversation = resolveConversation(patient, providerId, resolvedMode, conversationUuid);
+			final ClinicalConversation activeConversation = conversation;
 			String requestId = UUID.randomUUID().toString();
-			ClinicalConversationTurn turn = conversationService.startTurn(conversation, requestId,
+			ClinicalConversationTurn turn = conversationService.startTurn(activeConversation, requestId,
 					question);
-			List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(conversation);
-			TurnRequest request = new TurnRequest(patient, question, conversation.getUuid(), requestId,
-					resolvedMode, profileId, prior);
+			List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(activeConversation);
+			TurnRequest request = new TurnRequest(patient, question, activeConversation.getUuid(),
+					requestId, resolvedMode, profileId, prior);
+
+			// A new turn starting for this conversation IS the preempt signal — it cancels
+			// whichever turn currently holds that conversation's slot (see TurnPreemptionRegistry),
+			// forcibly closing that turn's open hub connection instead of letting it run to the
+			// hub's own completion after the browser has already moved on.
+			cancellation = preemptionRegistry.begin(activeConversation.getUuid());
+			final TurnCancellation activeCancellation = cancellation;
 
 			long startNs = System.nanoTime();
 			TurnResult result = provider
-					.execute(request, event -> writeTurnEventOrThrow(out, event, conversation, turn),
-							CancellationSignal.NONE)
+					.execute(request,
+							event -> {
+								// Once THIS turn is the one being cancelled, its browser connection is
+								// already gone by definition — that is what cancellation means. Writing
+								// to it would only throw and abort execute() before it can return a
+								// result to persist (see HubClinicalAnswerProvider's partial-answer
+								// completion), so drop silently rather than propagate.
+								if (activeCancellation.isCancelled()) {
+									return;
+								}
+								writeTurnEventOrThrow(out, event, activeConversation, turn);
+							},
+							cancellation)
 					.toCompletableFuture().get();
 			long responseTimeMs = (System.nanoTime() - startNs) / 1_000_000L;
 			conversationService.finishTurn(turn, result, responseTimeMs);
@@ -950,6 +1032,11 @@ public class ChartSearchAiRestController {
 			}
 			catch (IOException ignored) {
 				log.debug("Could not send turn_error after provider failure");
+			}
+		}
+		finally {
+			if (conversation != null && cancellation != null) {
+				preemptionRegistry.end(conversation.getUuid(), cancellation);
 			}
 		}
 	}

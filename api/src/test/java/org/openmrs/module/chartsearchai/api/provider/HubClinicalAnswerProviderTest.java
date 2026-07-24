@@ -79,18 +79,28 @@ public class HubClinicalAnswerProviderTest {
 
 		String errorBody;
 
+		CancellationSignal lastCancellation;
+
 		@Override
-		public void stream(HubCallRequest request, Consumer<HubWireEvent> sink) {
+		public void stream(HubCallRequest request, Consumer<HubWireEvent> sink, CancellationSignal cancellation) {
 			calls.incrementAndGet();
 			lastRequest = request;
-			if (failure != null) {
-				throw failure;
-			}
+			lastCancellation = cancellation;
 			if (httpStatus < 200 || httpStatus >= 300) {
 				throw new HubTransportException(httpStatus, errorBody == null ? "" : errorBody);
 			}
 			for (HubWireEvent event : events) {
 				sink.accept(event);
+			}
+			// Thrown AFTER emitting events — reproduces a real preempt: the connection is force-closed
+			// mid-stream, after some events (e.g. answer_done) already arrived. Production gets here
+			// because cancel() itself closed the resource; mirror that causality instead of the test
+			// pre-cancelling (which would trip execute()'s own "not started yet" guard).
+			if (failure != null) {
+				if (cancellation instanceof TurnCancellation) {
+					((TurnCancellation) cancellation).cancel();
+				}
+				throw failure;
 			}
 		}
 	}
@@ -224,6 +234,89 @@ public class HubClinicalAnswerProviderTest {
 		assertTrue(sink.types().contains(TurnEventType.ANSWER_DONE));
 		assertTrue(sink.types().contains(TurnEventType.TURN_ERROR));
 		assertFalse(sink.types().contains(TurnEventType.TURN_DONE));
+	}
+
+	@Test
+	public void theCallersCancellationSignalIsHandedToTheTransport() throws Exception {
+		// So a preempting turn can force-close the hub's open response body (via
+		// TurnCancellation.bindCloseable) rather than the hub connection running to its own
+		// natural completion. A silently-dropped cancellation here is exactly what let a
+		// preempted turn keep occupying the hub's router slot indefinitely.
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Collections.singletonList(wire("done", answerPayload("Aspirin 81mg.")));
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+		TurnCancellation cancellation = new TurnCancellation();
+
+		provider.execute(request("product-profile-a"), sink, cancellation).toCompletableFuture().get();
+
+		assertTrue(transport.lastCancellation == cancellation);
+	}
+
+	@Test
+	public void aCancelledStreamThatAlreadyProducedAnAnswerCompletesAsDoneWithThatAnswer() throws Exception {
+		// The real preempt shape: a fast answer already arrived (answer_done/answer_validation),
+		// only In-Depth was still generating when this turn got cancelled. The answer itself is
+		// not wrong just because a later stage got cut short — discarding it as a generic failure
+		// would silently drop a perfectly good answer from history instead of persisting it (with
+		// In-Depth left at whatever partial state it reached).
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		Map<String, Object> answer = answerPayload("Aspirin 81mg.");
+		transport.events = Collections.singletonList(wire("answer_done", answer));
+		transport.failure = new RuntimeException("connection reset");
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+		TurnCancellation cancellation = new TurnCancellation();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink, cancellation)
+				.toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		assertEquals("Aspirin 81mg.", result.getAnswer().getText());
+		assertNull(result.getProblemCode());
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void aCancelledStreamsDanglingPendingInDepthIsPersistedAsFailedNotLeftPending() throws Exception {
+		// The persisted record is the source of truth for every future reader (audit review,
+		// re-hydrating a reload, another UI) — not just this session's frontend, which separately
+		// reinterprets a dangling "pending" as failed on its own hydration path. No further
+		// generation will ever happen for this turn, so the stored record must say so, not claim
+		// forever that In-Depth is still running.
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		Map<String, Object> answer = answerPayload("Aspirin 81mg.");
+		answer.put("inDepth", new LinkedHashMap<>(Collections.singletonMap("status", "pending")));
+		transport.events = Collections.singletonList(wire("indepth_pending", answer));
+		transport.failure = new RuntimeException("connection reset");
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+		TurnCancellation cancellation = new TurnCancellation();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink, cancellation)
+				.toCompletableFuture().get();
+
+		Map<String, Object> inDepth = (Map<String, Object>) result.getAnswer().getPayload().get("inDepth");
+		assertEquals("failed", inDepth.get("status"));
+	}
+
+	@Test
+	public void aCancelledStreamThatNeverProducedAnAnswerStillFailsNormally() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.failure = new RuntimeException("connection reset");
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+		TurnCancellation cancellation = new TurnCancellation();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink, cancellation)
+				.toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+		assertNull(result.getAnswer());
 	}
 
 	@Test

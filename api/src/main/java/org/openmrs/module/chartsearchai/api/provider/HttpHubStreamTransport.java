@@ -58,7 +58,7 @@ public class HttpHubStreamTransport implements HubStreamTransport {
 	}
 
 	@Override
-	public void stream(HubCallRequest request, Consumer<HubWireEvent> sink) {
+	public void stream(HubCallRequest request, Consumer<HubWireEvent> sink, CancellationSignal cancellation) {
 		try {
 			String body = requestJson(request);
 			HttpRequest.Builder builder = HttpRequest.newBuilder()
@@ -76,6 +76,12 @@ public class HttpHubStreamTransport implements HubStreamTransport {
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
 				String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
 				requireSuccess(response.statusCode(), errorBody);
+			}
+			// Bind the open response body so a preempting turn can force it closed from another
+			// thread, unblocking parseSse's readLine() below with an IOException instead of letting
+			// the hub keep generating an abandoned turn to completion (see TurnCancellation).
+			if (cancellation instanceof TurnCancellation) {
+				((TurnCancellation) cancellation).bindCloseable(response.body());
 			}
 			parseSse(response.body(), sink);
 		}

@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,6 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -121,6 +125,106 @@ public class ProviderRestContractTest {
 		assertEquals("Aspirin 81mg.", answerDone.get("answer").asText());
 		assertEquals("turn-uuid-1", answerDone.get("messageId").asText());
 		assertEquals("conversation-uuid-1", answerDone.get("session").asText());
+	}
+
+	@Test
+	public void aNewTurnOnTheSameConversationCancelsThePriorInFlightTurn() throws Exception {
+		// G18: starting a new turn while a prior one on the same conversation is still running
+		// (e.g. its In-Depth is still generating) must cancel that prior turn instead of letting
+		// it run to its provider's own natural completion — otherwise a preempted hub turn keeps
+		// occupying the router slot the whole point of preempting was meant to free.
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		ScriptedProvider provider = new ScriptedProvider("bundled", true);
+		provider.events = Arrays.asList(TurnEvent.of(TurnEventType.TURN_STARTED, 0, "bundled"),
+				TurnEvent.of(TurnEventType.TURN_DONE, 1, "bundled"));
+		provider.result = TurnResult.done("bundled", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(answerPayload("first turn's answer")));
+		provider.blockFirstCallUntilReleased = new CountDownLatch(1);
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(provider));
+
+		Thread firstTurn = new Thread(() -> controller.streamProviderTurn(new ByteArrayOutputStream(),
+				patient(), "First question", "bundled", ProviderMode.QUERY_SCOPED, null,
+				"conversation-uuid-1"));
+		firstTurn.start();
+		// Deterministic handoff: wait for the first turn to actually be inside execute() and have
+		// registered its cancellation signal, rather than racing it with a fixed sleep.
+		long deadline = System.currentTimeMillis() + 2000;
+		while (provider.capturedCancellations.isEmpty() && System.currentTimeMillis() < deadline) {
+			Thread.sleep(5);
+		}
+		assertEquals(1, provider.capturedCancellations.size());
+		CancellationSignal firstCancellation = provider.capturedCancellations.get(0);
+		assertFalse(firstCancellation.isCancelled(), "not cancelled yet — no second turn has started");
+
+		controller.streamProviderTurn(new ByteArrayOutputStream(), patient(), "Second question",
+				"bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1");
+
+		assertTrue(firstCancellation.isCancelled(),
+				"starting a new turn on the same conversation must cancel the prior in-flight turn");
+		assertEquals(2, provider.capturedCancellations.size());
+		assertFalse(provider.capturedCancellations.get(1).isCancelled(), "the new turn is not cancelled");
+
+		provider.blockFirstCallUntilReleased.countDown();
+		firstTurn.join(5000);
+		assertFalse(firstTurn.isAlive(), "first turn's thread should have unblocked and finished");
+	}
+
+	@Test
+	public void aPreemptedTurnsTrailingEventIsSwallowedSoItsAnswerStillPersists() throws Exception {
+		// Mirrors HubClinicalAnswerProvider's cancelled-with-partial-answer completion: once a
+		// turn is known to be cancelled, writing its trailing event must not throw even though
+		// the browser connection is already dead — otherwise execute() never returns a result and
+		// finishTurn is skipped, silently dropping an answer that had already completed before
+		// preemption.
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		ScriptedProvider provider = new ScriptedProvider("bundled", true);
+		provider.blockFirstCallUntilReleased = new CountDownLatch(1);
+		provider.events = Collections.singletonList(TurnEvent.of(TurnEventType.TURN_DONE, 0, "bundled"));
+		provider.result = TurnResult.done("bundled", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(answerPayload("answer before preempt")));
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(provider));
+
+		ThrowingOutputStream deadConnection = new ThrowingOutputStream();
+		Thread firstTurn = new Thread(() -> controller.streamProviderTurn(deadConnection, patient(),
+				"First question", "bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1"));
+		firstTurn.start();
+		long deadline = System.currentTimeMillis() + 2000;
+		while (provider.capturedCancellations.isEmpty() && System.currentTimeMillis() < deadline) {
+			Thread.sleep(5);
+		}
+		assertEquals(1, provider.capturedCancellations.size());
+
+		// The second turn on the same conversation preempts (cancels) the first.
+		controller.streamProviderTurn(new ByteArrayOutputStream(), patient(), "Second question",
+				"bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1");
+		assertTrue(provider.capturedCancellations.get(0).isCancelled());
+
+		// Only now does the first turn's provider emit its trailing event and return — the
+		// connection is dead (deadConnection throws on every write), but that write must be
+		// skipped rather than aborting execute() before it can hand back a persistable result.
+		provider.blockFirstCallUntilReleased.countDown();
+		firstTurn.join(5000);
+
+		assertFalse(firstTurn.isAlive(), "first turn's thread should have unblocked and finished");
+		assertEquals(0, deadConnection.writeAttempts, "a cancelled turn must not attempt to write at all");
+		assertEquals(2, conversations.finished,
+				"both turns should be persisted — the first turn's answer must not vanish just "
+						+ "because its browser connection was already gone when it completed");
+	}
+
+	private static final class ThrowingOutputStream extends java.io.OutputStream {
+
+		int writeAttempts;
+
+		@Override
+		public void write(int b) throws IOException {
+			writeAttempts++;
+			throw new IOException("connection reset by peer");
+		}
 	}
 
 	@Test
@@ -298,6 +402,11 @@ public class ProviderRestContractTest {
 
 		TurnResult result;
 
+		/** Set to make the FIRST call block until released — simulates a turn still in flight. */
+		CountDownLatch blockFirstCallUntilReleased;
+
+		final CopyOnWriteArrayList<CancellationSignal> capturedCancellations = new CopyOnWriteArrayList<>();
+
 		ScriptedProvider(String id, boolean ready) {
 			this.id = id;
 			this.ready = ready;
@@ -319,7 +428,16 @@ public class ProviderRestContractTest {
 		@Override
 		public CompletionStage<TurnResult> execute(TurnRequest request, TurnEventSink sink,
 				CancellationSignal cancellation) {
-			calls.incrementAndGet();
+			int callNumber = calls.incrementAndGet();
+			capturedCancellations.add(cancellation);
+			if (callNumber == 1 && blockFirstCallUntilReleased != null) {
+				try {
+					blockFirstCallUntilReleased.await(5, TimeUnit.SECONDS);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			}
 			if (request.getProfileId() == null && "hub".equals(id)) {
 				sink.accept(TurnEvent.of(TurnEventType.TURN_STARTED, 0, id));
 				sink.accept(TurnEvent.error(1, id, "profile_required"));
@@ -369,6 +487,12 @@ public class ProviderRestContractTest {
 		@Override
 		public ClinicalConversation getByUuid(String uuid) {
 			return openConversation.getUuid().equals(uuid) ? openConversation : null;
+		}
+
+		@Override
+		public ClinicalConversation getLatestActiveConversation(Patient patient) {
+			return ClinicalConversation.STATUS_ACTIVE.equals(openConversation.getStatus())
+					&& patient.equals(openConversation.getPatient()) ? openConversation : null;
 		}
 
 		@Override

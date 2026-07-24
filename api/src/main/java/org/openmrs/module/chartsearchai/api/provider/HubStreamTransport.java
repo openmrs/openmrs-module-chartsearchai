@@ -18,9 +18,12 @@ import java.util.function.Consumer;
 public interface HubStreamTransport {
 
 	/**
-	 * Opens one hub product-profile stream and delivers parsed wire events in order.
+	 * Opens one hub product-profile stream and delivers parsed wire events in order. Implementations
+	 * that hold a genuinely closeable resource (e.g. an open HTTP response body) should bind it to
+	 * {@code cancellation} via {@link TurnCancellation#bindCloseable} so a preempted turn's blocking
+	 * read gets forcibly unblocked instead of running to the hub's own natural completion.
 	 *
 	 * @throws HubTransportException for non-2xx hub HTTP responses
 	 */
-	void stream(HubCallRequest request, Consumer<HubWireEvent> sink);
+	void stream(HubCallRequest request, Consumer<HubWireEvent> sink, CancellationSignal cancellation);
 }

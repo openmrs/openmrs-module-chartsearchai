@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.provider;
 
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -114,12 +115,18 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		boolean[] doneSeen = { false };
 		try {
 			transport.stream(call,
-					wire -> handleWire(wire, events, sequence, latestAnswer, streamError, doneSeen));
+					wire -> handleWire(wire, events, sequence, latestAnswer, streamError, doneSeen), cancellation);
 		}
 		catch (HubTransportException e) {
 			return failed(events, sequence, request.getMode(), problemCodeFromHubBody(e.getBody()));
 		}
 		catch (RuntimeException e) {
+			if (cancellation.isCancelled() && latestAnswer.get() != null) {
+				AnswerEnvelope answer = withInDepthInterrupted(latestAnswer.get());
+				events.accept(TurnEvent.of(TurnEventType.TURN_DONE, sequence.getAndIncrement(), PROVIDER_ID));
+				return CompletableFuture.completedFuture(
+						TurnResult.done(PROVIDER_ID, request.getMode(), answer));
+			}
 			log.warn("Hub provider turn failed for request {}", request.getRequestId(), e);
 			return failed(events, sequence, request.getMode(), PROBLEM_PROVIDER_FAILURE);
 		}
@@ -203,6 +210,26 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 			default:
 				return null;
 		}
+	}
+
+	/**
+	 * Rewrites a dangling {@code inDepth.status == "pending"} to {@code "failed"} before this
+	 * answer is persisted. The persisted record is the source of truth for every future reader
+	 * (audit review, a reload's hydration, another UI) — leaving it saying "pending" forever would
+	 * be a lie, since a cancelled turn's In-Depth will never actually finish generating.
+	 */
+	@SuppressWarnings("unchecked")
+	private static AnswerEnvelope withInDepthInterrupted(AnswerEnvelope answer) {
+		Object inDepth = answer.getPayload().get("inDepth");
+		if (!(inDepth instanceof Map) || !"pending".equals(((Map<String, Object>) inDepth).get("status"))) {
+			return answer;
+		}
+		Map<String, Object> updatedInDepth = new LinkedHashMap<>((Map<String, Object>) inDepth);
+		updatedInDepth.put("status", "failed");
+		updatedInDepth.put("error", "In-Depth was interrupted.");
+		Map<String, Object> updatedPayload = new LinkedHashMap<>(answer.getPayload());
+		updatedPayload.put("inDepth", updatedInDepth);
+		return AnswerEnvelope.fromPayload(updatedPayload);
 	}
 
 	private static AnswerEnvelope envelopeOrNull(Map<String, Object> payload) {

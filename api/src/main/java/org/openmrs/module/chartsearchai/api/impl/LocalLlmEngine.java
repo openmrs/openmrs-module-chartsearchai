@@ -195,6 +195,44 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 	}
 
+	/**
+	 * Exact token count for {@code text} from this engine's own llama-server, via its
+	 * {@code /tokenize} endpoint (llama.cpp server API) — mirrors med-agent-hub's
+	 * {@code RouterTokenCounter.count()}, which likewise delegates counting to the real engine
+	 * rather than approximating in the application layer. Starts the server first if it is not
+	 * already running: a token-budget check only ever precedes a generation call that would need
+	 * the server running anyway, so this adds no new cold-start cost.
+	 */
+	synchronized int countTokens(String text) {
+		ensureServerRunning();
+		ObjectNode body = MAPPER.createObjectNode();
+		body.put("content", text == null ? "" : text);
+		body.put("add_special", false);
+		try {
+			HttpRequest request = HttpRequest.newBuilder()
+					.uri(URI.create("http://127.0.0.1:" + serverPort + "/tokenize"))
+					.timeout(Duration.ofSeconds(30))
+					.header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body),
+							StandardCharsets.UTF_8))
+					.build();
+			HttpResponse<String> response = getHttpClient().send(request,
+					HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			if (response.statusCode() < 200 || response.statusCode() >= 300) {
+				throw new APIException(
+						"Local llama-server /tokenize returned HTTP " + response.statusCode());
+			}
+			return LlmResponseParser.parseTokenizeResponse(response.body());
+		}
+		catch (IOException e) {
+			throw new APIException("Failed to call local llama-server /tokenize: " + e.getMessage(), e);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new APIException("Local llama-server /tokenize call was interrupted", e);
+		}
+	}
+
 	@Override
 	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer) {

@@ -273,6 +273,22 @@ public class BundledClinicalAnswerProviderTest {
 	}
 
 	@Test
+	public void mandatoryContextOverflowMapsToInsufficientContext() throws Exception {
+		ScriptedChartSearchService service = new ScriptedChartSearchService();
+		service.failure = new org.openmrs.module.chartsearchai.api.InsufficientContextException(
+				"mandatory evidence exceeds the model input budget",
+				java.util.Collections.singletonList("allergy-1"));
+		BundledClinicalAnswerProvider provider = provider(service);
+
+		CollectingSink sink = new CollectingSink();
+		TurnResult result = provider.execute(request(), sink, CancellationSignal.NONE)
+				.toCompletableFuture().get();
+
+		assertEquals("insufficient_context", result.getProblemCode());
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+	}
+
+	@Test
 	public void theDescriptorAdvertisesBundledIdentityAndTruthfulDefaultCapabilities() {
 		BundledClinicalAnswerProvider provider = defaultConfigProvider(new ScriptedChartSearchService());
 

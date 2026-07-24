@@ -20,6 +20,7 @@ import java.util.Set;
 import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.api.InsufficientContextException;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -34,6 +35,7 @@ import org.openmrs.module.querystore.model.QueryDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -97,12 +99,21 @@ class QueryStoreChartBuilder {
 	@Autowired
 	private PatientChartSerializer chartSerializer;
 
+	@Autowired(required = false)
+	@Qualifier("chartSearchAi.localLlamaTokenCounter")
+	private TokenCounter tokenCounter;
+
 	/** Test seam: production wires {@link PatientChartSerializer} via {@link Autowired}.
 	 *  Package-private so {@code QueryStoreChartBuilderTest} can inject a real serializer
 	 *  without bringing up Spring; matches the {@code resolveX()} method-override seam
 	 *  pattern used for {@link QueryStoreService} and topK. */
 	void setChartSerializer(PatientChartSerializer chartSerializer) {
 		this.chartSerializer = chartSerializer;
+	}
+
+	/** Test seam: production wires {@link TokenCounter} via {@link Autowired}. */
+	void setTokenCounter(TokenCounter tokenCounter) {
+		this.tokenCounter = tokenCounter;
 	}
 
 	PatientChart build(Patient patient, String question) {
@@ -243,9 +254,11 @@ class QueryStoreChartBuilder {
 					patient.getUuid(), slice.getChartSize());
 		}
 
-		List<QueryDocument> sliceDocs = new ArrayList<QueryDocument>(slice.getRecords().size());
+		List<ContextSliceRecord> budgeted = applyContextBudget(patient, slice.getRecords());
+
+		List<QueryDocument> sliceDocs = new ArrayList<QueryDocument>(budgeted.size());
 		int simHits = 0;
-		for (ContextSliceRecord record : slice.getRecords()) {
+		for (ContextSliceRecord record : budgeted) {
 			sliceDocs.add(record.getDocument());
 			if (QueryStoreConstants.TIER_SIMILARITY.equals(record.getTier())) {
 				simHits++;
@@ -272,6 +285,66 @@ class QueryStoreChartBuilder {
 	private static PatientChart markScoped(PatientChart chart) {
 		chart.markQueryScoped();
 		return chart;
+	}
+
+	/**
+	 * {@code context.mandatory-overflow-abstains}: mandatory clinical evidence (demographics,
+	 * allergies, active conditions) is never droppable (ADR Decision 17), so it either fits the
+	 * model's input budget or the turn abstains — it is never silently trimmed. Mirrors
+	 * med-agent-hub's {@code select_context}: a fast accept when everything fits, otherwise a
+	 * greedy fill of non-mandatory records (kept in chart order, a ceiling never a target) up to
+	 * the budget. Returns {@code records} unchanged when no {@link TokenCounter} is configured or
+	 * available (e.g. a remote engine with no assumed tokenizer route) — this feature can only
+	 * ever tighten behavior, never introduce a new failure mode where none existed.
+	 */
+	private List<ContextSliceRecord> applyContextBudget(Patient patient, List<ContextSliceRecord> records) {
+		TokenCounter counter = tokenCounter;
+		if (counter == null || !counter.isAvailable()) {
+			return records;
+		}
+		int budget = counter.inputBudget();
+
+		List<ContextSliceRecord> mandatory = new ArrayList<ContextSliceRecord>();
+		for (ContextSliceRecord record : records) {
+			if (QueryStoreConstants.TIER_MANDATORY.equals(record.getTier())) {
+				mandatory.add(record);
+			}
+		}
+		int mandatoryTokens = counter.count(renderedTextOf(patient, mandatory));
+		if (mandatoryTokens > budget) {
+			List<String> mandatoryIds = new ArrayList<String>();
+			for (ContextSliceRecord record : mandatory) {
+				mandatoryIds.add(record.getDocument().getResourceUuid());
+			}
+			throw new InsufficientContextException(
+					"Mandatory clinical evidence (" + mandatoryTokens + " tokens) exceeds the "
+							+ budget + "-token model input budget for patient " + patient.getUuid() + ".",
+					mandatoryIds);
+		}
+
+		if (counter.count(renderedTextOf(patient, records)) <= budget) {
+			return records;
+		}
+
+		List<ContextSliceRecord> selected = new ArrayList<ContextSliceRecord>();
+		for (ContextSliceRecord record : records) {
+			List<ContextSliceRecord> candidate = new ArrayList<ContextSliceRecord>(selected);
+			candidate.add(record);
+			if (QueryStoreConstants.TIER_MANDATORY.equals(record.getTier())
+					|| counter.count(renderedTextOf(patient, candidate)) <= budget) {
+				selected = candidate;
+			}
+		}
+		return selected;
+	}
+
+	private String renderedTextOf(Patient patient, List<ContextSliceRecord> records) {
+		List<QueryDocument> docs = new ArrayList<QueryDocument>(records.size());
+		for (ContextSliceRecord record : records) {
+			docs.add(record.getDocument());
+		}
+		return chartSerializer.serialize(patient, toSerializedRecords(docs),
+				Collections.<String>emptySet(), false, false).getText();
 	}
 
 

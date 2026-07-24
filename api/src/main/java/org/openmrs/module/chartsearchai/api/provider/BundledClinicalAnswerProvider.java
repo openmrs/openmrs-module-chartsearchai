@@ -27,6 +27,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.InsufficientContextException;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.slf4j.Logger;
@@ -61,6 +62,11 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 	public static final String PROBLEM_PROVIDER_FAILURE = "provider_failure";
 
 	public static final String PROBLEM_CHART_TOO_LARGE = "chart_too_large";
+
+	/** Same wire string as med-agent-hub's {@code InsufficientContextError} — mandatory evidence
+	 *  alone exceeded the budget, a proactively-diagnosed abstention rather than llama-server's
+	 *  after-the-fact rejection ({@link #PROBLEM_CHART_TOO_LARGE}). */
+	public static final String PROBLEM_INSUFFICIENT_CONTEXT = "insufficient_context";
 
 	public static final String PROBLEM_UNSUPPORTED_MODE = "unsupported_mode";
 
@@ -234,6 +240,9 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 								sequence.getAndIncrement(), PROVIDER_ID, toAnswerEnvelope(ungrounded)));
 					}, preliminary -> events.accept(TurnEvent.delta(TurnEventType.REASONING_DELTA,
 							sequence.getAndIncrement(), PROVIDER_ID, preliminary)));
+		}
+		catch (InsufficientContextException e) {
+			return failed(events, sequence, configuredMode, PROBLEM_INSUFFICIENT_CONTEXT);
 		}
 		catch (ChartTooLargeException e) {
 			return failed(events, sequence, configuredMode, PROBLEM_CHART_TOO_LARGE);

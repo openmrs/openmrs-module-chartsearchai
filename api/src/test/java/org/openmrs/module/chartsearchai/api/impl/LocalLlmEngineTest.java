@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -633,6 +634,24 @@ public class LocalLlmEngineTest {
 		assertFalse(LocalLlmEngine.isContextOverflowError("not json at all"));
 		assertFalse(LocalLlmEngine.isContextOverflowError(""));
 		assertFalse(LocalLlmEngine.isContextOverflowError(null));
+	}
+
+	@Test
+	public void parseTokenizeResponse_countsTheTokensArray() throws Exception {
+		assertEquals(4, LlmResponseParser.parseTokenizeResponse("{\"tokens\":[1,2,3,4]}"));
+		assertEquals(0, LlmResponseParser.parseTokenizeResponse("{\"tokens\":[]}"));
+	}
+
+	@Test
+	public void parseTokenizeResponse_acceptsTheSummaryCountShapes() throws Exception {
+		assertEquals(7, LlmResponseParser.parseTokenizeResponse("{\"n_tokens\":7}"));
+	}
+
+	@Test
+	public void parseTokenizeResponse_rejectsAResponseWithNoTokenCount() {
+		assertThrows(IOException.class,
+				() -> LlmResponseParser.parseTokenizeResponse("{\"unrelated\":true}"));
+		assertThrows(IOException.class, () -> LlmResponseParser.parseTokenizeResponse("not json"));
 	}
 
 	@Test

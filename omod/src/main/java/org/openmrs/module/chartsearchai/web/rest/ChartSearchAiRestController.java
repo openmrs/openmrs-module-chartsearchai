@@ -42,6 +42,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.InsufficientContextException;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
@@ -279,6 +280,15 @@ public class ChartSearchAiRestController {
 			long startTime = System.currentTimeMillis();
 			chartAnswer = chartSearchService.search(patient, question);
 			responseTimeMs = System.currentTimeMillis() - startTime;
+		}
+		catch (InsufficientContextException e) {
+			log.warn("Mandatory clinical evidence exceeded the LLM input budget for patient [id={}]: {}",
+					patient.getPatientId(), e.getMessage());
+			return new ResponseEntity<Object>(
+					errorResponse("This patient's mandatory clinical evidence (demographics, allergies, "
+							+ "active conditions) exceeds the LLM's input budget. Contact your "
+							+ "administrator to increase the LLM context size."),
+					HttpStatus.UNPROCESSABLE_ENTITY);
 		}
 		catch (ChartTooLargeException e) {
 			log.warn("Chart too large for LLM context for patient [id={}]: {}",
@@ -630,6 +640,19 @@ public class ChartSearchAiRestController {
 					groundedData.put("questionId", earlyQuestionId[0]);
 				}
 				writeSseEvent(out, "grounded", new ObjectMapper().writeValueAsString(groundedData));
+			}
+		}
+		catch (InsufficientContextException e) {
+			log.warn("Mandatory clinical evidence exceeded the LLM input budget during streaming for "
+					+ "patient [id={}]: {}", patient.getPatientId(), e.getMessage());
+			try {
+				writeSseEvent(out, "error",
+						"This patient's mandatory clinical evidence (demographics, allergies, active "
+								+ "conditions) exceeds the LLM's input budget. Contact your administrator "
+								+ "to increase the LLM context size.");
+			}
+			catch (IOException ioe) {
+				log.debug("Could not send insufficient-context error event, client likely disconnected");
 			}
 		}
 		catch (ChartTooLargeException e) {

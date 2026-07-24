@@ -102,6 +102,23 @@
       "budget_tokens": 100,
       "mandatory_tokens": 101,
       "expected": "insufficient_context"
+    },
+    {
+      "id": "context.panel-completion-includes-all-members",
+      "similarity_matched_ids": ["panel-1"],
+      "panel_members": {"panel-1": ["member-1", "member-2"]},
+      "expected_included": ["panel-1", "member-1", "member-2"],
+      "expected_tier": {"panel-1": "similarity", "member-1": "panel", "member-2": "panel"}
+    },
+    {
+      "id": "context.stable-ordering-preserves-chart-order-and-highest-tier-wins",
+      "chart_order_ids": ["p-1", "recent-1", "cond-active", "allergy-1"],
+      "mandatory_ids": ["allergy-1"],
+      "typed_complete_ids": ["allergy-1"],
+      "similarity_matched_ids": ["allergy-1"],
+      "expected_no_duplicates": true,
+      "expected_order_precedes": [["p-1", "recent-1"], ["recent-1", "allergy-1"]],
+      "expected_tier": {"allergy-1": "mandatory"}
     }
   ],
   "temporal_gate": [
@@ -119,12 +136,14 @@
     {
       "id": "temporal.date-value-binding-fails",
       "answer": "Weight was 60 kg on 2026-01-01.",
+      "concept": "Weight",
       "numeric_series": [{"date": "2026-01-01", "value": 58}],
       "expected_status": "fail"
     },
     {
       "id": "temporal.single-point-trend-fails",
       "answer": "Weight is increasing.",
+      "concept": "Weight",
       "numeric_series": [{"date": "2026-01-01", "value": 58}],
       "expected_status": "fail"
     }

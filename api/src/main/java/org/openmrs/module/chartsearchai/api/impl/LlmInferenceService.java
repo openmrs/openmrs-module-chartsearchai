@@ -27,7 +27,6 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
-import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
@@ -131,10 +130,11 @@ public class LlmInferenceService implements ChartSearchService {
 					extractCitedReferences(response.getAnswer(), response.getCitations(),
 							chart.getMappings()),
 					chart.getMappings());
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question, patient);
+			DrugSafetyValidator.SafetyCheckResult safetyResult =
+					drugSafetyValidator.validateWithStatus(response.getAnswer(), question, patient);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyWarnings);
+					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus());
 			outcome = "ok";
 			return answer;
 		}
@@ -410,10 +410,11 @@ public class LlmInferenceService implements ChartSearchService {
 					chart.getMappings());
 			groundMs = System.currentTimeMillis() - groundStart;
 
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question, patient);
+			DrugSafetyValidator.SafetyCheckResult safetyResult =
+					drugSafetyValidator.validateWithStatus(response.getAnswer(), question, patient);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyWarnings);
+					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus());
 			outcome = "ok";
 			return answer;
 		}

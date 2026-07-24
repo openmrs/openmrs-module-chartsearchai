@@ -337,6 +337,7 @@ public class ChartSearchAiRestController {
 		}
 		response.put("references", refs);
 		response.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
+		response.put("safetyStatus", chartAnswer.getSafetyStatus());
 		if (auditLog.getAuditLogId() != null) {
 			response.put("questionId", String.valueOf(auditLog.getAuditLogId()));
 		}
@@ -624,6 +625,7 @@ public class ChartSearchAiRestController {
 				Map<String, Object> groundedData = new HashMap<String, Object>();
 				groundedData.put("references", serializeReferences(chartAnswer.getReferences()));
 				groundedData.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
+				groundedData.put("safetyStatus", chartAnswer.getSafetyStatus());
 				if (earlyQuestionId[0] != null) {
 					groundedData.put("questionId", earlyQuestionId[0]);
 				}
@@ -712,6 +714,7 @@ public class ChartSearchAiRestController {
 		doneData.put("disclaimer", DISCLAIMER);
 		doneData.put("references", serializeReferences(answer.getReferences()));
 		doneData.put("safetyWarnings", serializeSafetyWarnings(answer.getSafetyWarnings()));
+		doneData.put("safetyStatus", answer.getSafetyStatus());
 		if (questionId != null) {
 			doneData.put("questionId", questionId);
 		}

@@ -104,12 +104,43 @@ public class DrugSafetyValidator {
 	 *  so a dose far from any drug name is ignored. */
 	private static final int MAX_ALIAS_TO_DOSE_DISTANCE = 120;
 
+	/** checked/limited/unavailable per the conformance contract: an empty warning list must never
+	 *  be read as "checked" when the check could not actually run. */
+	public static final String STATUS_CHECKED = "checked";
+
+	public static final String STATUS_LIMITED = "limited";
+
+	public static final String STATUS_UNAVAILABLE = "unavailable";
+
 	@Autowired
 	private DrugReferenceService drugReferenceService;
 
 	/** Test seam: production wires {@link DrugReferenceService} via {@link Autowired}. */
 	void setDrugReferenceService(DrugReferenceService drugReferenceService) {
 		this.drugReferenceService = drugReferenceService;
+	}
+
+	/** checked/limited/unavailable alongside the raised warnings (dual-provider-conformance.v1
+	 *  drug_safety_status) — the status-carrying superset of {@link #validate}. */
+	public static final class SafetyCheckResult {
+
+		private final String status;
+
+		private final List<SafetyWarning> warnings;
+
+		SafetyCheckResult(String status, List<SafetyWarning> warnings) {
+			this.status = status;
+			this.warnings = warnings;
+		}
+
+		/** One of {@link #STATUS_CHECKED}, {@link #STATUS_LIMITED}, {@link #STATUS_UNAVAILABLE}. */
+		public String getStatus() {
+			return status;
+		}
+
+		public List<SafetyWarning> getWarnings() {
+			return warnings;
+		}
 	}
 
 	/**
@@ -122,20 +153,57 @@ public class DrugSafetyValidator {
 	 * already exists.
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient) {
+		return validateWithStatus(answer, question, patient).getWarnings();
+	}
+
+	/**
+	 * The status-carrying superset of {@link #validate(String, String, Patient)}. Unavailable when
+	 * the feature is disabled, there is no patient to build a clinical context from, or the check
+	 * raised; limited when a per-check GP toggle disabled a subset of dose/interaction/
+	 * contraindication checks; checked only when a full check ran to completion against a real
+	 * patient context.
+	 */
+	public SafetyCheckResult validateWithStatus(String answer, String question, Patient patient) {
 		try {
 			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
 					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
 							ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
 							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
-				return new ArrayList<SafetyWarning>();
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
+			}
+			if (patient == null) {
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-			return validate(answer, question, context);
+			return validateWithStatus(answer, question, context);
 		}
 		catch (RuntimeException e) {
-			log.warn("Drug-safety validation failed; returning no warnings — the answer path is never broken", e);
-			return new ArrayList<SafetyWarning>();
+			log.warn("Drug-safety validation failed; returning unavailable status — the answer path is never broken", e);
+			return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
 		}
+	}
+
+	/** Pure, testable status-aware check: honours all three per-check GP toggles. */
+	SafetyCheckResult validateWithStatus(String answer, String question, PatientClinicalContext context) {
+		boolean warnDose = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_DOSE_EXCESS);
+		boolean warnInteractions = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS);
+		boolean warnContra = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS);
+		return validateWithStatus(answer, question, context, warnDose, warnInteractions, warnContra);
+	}
+
+	/** As above, but with the three per-check toggles supplied explicitly (test seam — lets a
+	 *  fixture-driven "limited" scenario force a partial check without touching global properties). */
+	SafetyCheckResult validateWithStatus(String answer, String question, PatientClinicalContext context,
+			boolean warnDose, boolean warnInteractions, boolean warnContra) {
+		if (context == null) {
+			return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
+		}
+		List<SafetyWarning> warnings = validate(answer, question, context, warnDose, warnInteractions, warnContra);
+		String status = (warnDose && warnInteractions && warnContra) ? STATUS_CHECKED : STATUS_LIMITED;
+		return new SafetyCheckResult(status, warnings);
 	}
 
 	/**
@@ -158,14 +226,19 @@ public class DrugSafetyValidator {
 	 * reads the dose from the answer, so a question-only drug with no stated dose yields no overdose.
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext context) {
-		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
-
 		boolean warnDose = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_DOSE_EXCESS);
 		boolean warnInteractions = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS);
 		boolean warnContra = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS);
+		return validate(answer, question, context, warnDose, warnInteractions, warnContra);
+	}
+
+	/** As above, with the three per-check toggles supplied explicitly rather than read from GPs. */
+	private List<SafetyWarning> validate(String answer, String question, PatientClinicalContext context,
+			boolean warnDose, boolean warnInteractions, boolean warnContra) {
+		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
 
 		String lower = answer == null ? "" : answer.toLowerCase(Locale.ROOT);
 		List<DrugReference> all = drugReferenceService.getAll();

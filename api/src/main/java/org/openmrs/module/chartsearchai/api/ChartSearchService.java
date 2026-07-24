@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 
 /**
@@ -211,6 +212,8 @@ public interface ChartSearchService {
 
 		private final List<SafetyWarning> safetyWarnings;
 
+		private final String safetyStatus;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -229,6 +232,13 @@ public interface ChartSearchService {
 		public ChartAnswer(String answer, List<RecordReference> references,
 				int inputTokens, int outputTokens, int cachedTokens,
 				List<SafetyWarning> safetyWarnings) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings,
+					DrugSafetyValidator.STATUS_UNAVAILABLE);
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String safetyStatus) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -238,6 +248,7 @@ public interface ChartSearchService {
 			this.safetyWarnings = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(safetyWarnings == null
 							? java.util.Collections.<SafetyWarning> emptyList() : safetyWarnings));
+			this.safetyStatus = safetyStatus;
 		}
 
 		/**
@@ -285,6 +296,15 @@ public interface ChartSearchService {
 		 */
 		public List<SafetyWarning> getSafetyWarnings() {
 			return safetyWarnings;
+		}
+
+		/**
+		 * One of {@link DrugSafetyValidator#STATUS_CHECKED}, {@link DrugSafetyValidator#STATUS_LIMITED},
+		 * {@link DrugSafetyValidator#STATUS_UNAVAILABLE} — an empty {@link #getSafetyWarnings()} must
+		 * never be read as "checked" on its own.
+		 */
+		public String getSafetyStatus() {
+			return safetyStatus;
 		}
 	}
 

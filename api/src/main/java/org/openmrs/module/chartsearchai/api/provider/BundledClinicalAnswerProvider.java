@@ -296,6 +296,7 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 			warnings.add(value);
 		}
 		payload.put("safetyWarnings", warnings);
+		payload.put("safetyStatus", answer.getSafetyStatus());
 		payload.put("blocks", Collections.emptyList());
 		payload.put("inputTokens", answer.getInputTokens());
 		payload.put("outputTokens", answer.getOutputTokens());

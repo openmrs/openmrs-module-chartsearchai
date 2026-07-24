@@ -38,6 +38,13 @@ public interface ConversationService {
 
 	ClinicalConversation getByUuid(String uuid);
 
+	/**
+	 * The current authenticated user's active conversation for this patient, or {@code null} if
+	 * none exists. Lets chat history be recovered without a client-supplied session id — a fresh
+	 * page load (reload) has no session to send, only the patient it is looking at.
+	 */
+	ClinicalConversation getLatestActiveConversation(Patient patient);
+
 	List<ClinicalConversationTurn> getTurns(ClinicalConversation conversation);
 
 	ClinicalConversationTurn startTurn(ClinicalConversation conversation, String requestId, String question);

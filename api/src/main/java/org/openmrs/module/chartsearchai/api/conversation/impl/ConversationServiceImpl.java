@@ -102,6 +102,14 @@ public class ConversationServiceImpl implements ConversationService {
 	}
 
 	@Override
+	public ClinicalConversation getLatestActiveConversation(Patient patient) {
+		require(patient != null, "patient is required");
+		User user = Context.getAuthenticatedUser();
+		require(user != null, "an authenticated user is required");
+		return conversationDAO.getLatestActiveConversation(patient, user);
+	}
+
+	@Override
 	public ClinicalConversation getByUuid(String uuid) {
 		if (uuid == null || uuid.trim().isEmpty()) {
 			return null;

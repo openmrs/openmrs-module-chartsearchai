@@ -1,6 +1,6 @@
 #!/bin/bash
 # Fire the local gold's cells at the live REST endpoint (same shape as capture_eval_rc2.sh).
-# Usage: capture_local.sh <outdir> [patients_file]
+# Usage: capture_eval_local.sh <outdir> <patients.txt>   (patients.txt as emitted by build_gold_local.py)
 AUTH="${OPENMRS_AUTH:-admin:Admin123}"; BASE="${OPENMRS_REST:-http://localhost:8081/openmrs/ws/rest/v1}"
 OUT="$1"; PLIST="${2:?usage: capture_eval_local.sh <outdir> <patients.txt>}"; mkdir -p "$OUT"
 PATIENTS=()

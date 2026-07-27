@@ -155,6 +155,52 @@ category boundaries were adjudicated against rc.2's concept names. These assets 
 equivalent gold for whatever install you are pointed at, and run the two probes that gate the
 [ADR Decision 30](../../docs/adr.md) changes.
 
+### Reproducing the Decision 30 numbers exactly
+
+The gold is committed, so scoring needs no database:
+
+```bash
+cd eval/drift-metric
+# 1. capture one arm against a running standalone (~90 min for 270 cells on CPU)
+./capture_eval_local.sh /tmp/cap/main patients.local.txt
+# 2. score it
+python3 metric_score.py /tmp/cap/main offtopic_adj.local.json metric_gold.local.json
+# 3. A/B two arms, per topic and per cell
+python3 compare_arms.py /tmp/cap/main /tmp/cap/arm metric_gold.local.json
+```
+
+Expected on the build this gold was cut against — `main` @ 83cc33e vs PR #93, `chartMode=queryScoped`,
+`querystore.topK=12`, Gemma 4 E4B, `engine=local`:
+
+| | `main` | PR #93 |
+|---|---|---|
+| meanF1 (154 present) | 0.743 | 0.760 |
+| abstention (116 absent) | 0.922 (107/116) | 0.922 (107/116) |
+| off-topic citations | 92 | 74 |
+
+Rebuilding the gold, or pointing it at a different install, needs the database (env as
+`build_gold_rc2.py`: `MARIADB_BIN`, `MYSQL_PWD`, `MARIADB_PORT`) — as do both probes, which derive
+their truth from it:
+
+```bash
+export MARIADB_BIN=<standalone>/database/bin/mariadb MYSQL_PWD=<pw> MARIADB_PORT=3316
+python3 gold_overrides_local.py            # selftest the boundaries FIRST
+python3 build_gold_local.py /tmp/gold 120  # -> metric_gold.local.json, patients.txt, audit
+python3 temporal_probe_today.py /tmp/probes 30 12
+python3 abbrev_probe.py /tmp/probes 3
+```
+
+Expected probe results for the same two builds: the temporal verdict 4/12 → 11/12 and the
+day-count 0/12 → 10/12; the abbreviation probe 13/17 → 17/17.
+
+The `[timing]` log lines (`querystoreScopedBuild … intent=… slice=…`, `search … llmMs=…`) are at
+INFO and the module package is not covered by the stock `log.level=info`, so turn them on with
+`log.level=org.openmrs.api:info,org.openmrs.module.chartsearchai:info`. For per-query cost prefer
+`chartsearchai_audit_log` (`response_time_ms`, `input_tokens`, `output_tokens`) — it is always
+recorded, needs no log level, and survives restarts.
+
+### The files
+
 - `gold_overrides_local.py` — ports the rc.2 category boundaries onto the 3.7.1 concept
   vocabulary (eyelid/diplopia are eye problems, cerebrovascular accident is a heart problem,
   DSM entities are mental, …) and keeps the SAME stated intent per topic. `--selftest`
@@ -164,7 +210,9 @@ equivalent gold for whatever install you are pointed at, and run the two probes 
 - `build_gold_local.py <outdir> [minRecords]` — profiles every patient with `build_gold_rc2`'s
   `classify()` and emits `metric_gold.local.json`, `offtopic_adj.local.json`, an audit file and
   `patients.txt`. On this install, `minRecords=120` gives **30 patients × 9 topics = 270 cells**
-  (154 present / 116 absent).
+  (154 present / 116 absent). The emitted set is committed as `metric_gold.local.json`,
+  `offtopic_adj.local.json`, `patients.local.txt` and `gold_audit.local.md` — read the audit before
+  trusting a number, it lists every record counted on-topic per cell.
 - `capture_eval_local.sh <outdir> <patients.txt>` — fires those cells at the live REST endpoint.
 - `metric_score.py <capture> offtopic_adj.local.json metric_gold.local.json` — scores one arm.
 - `compare_arms.py <baselineCapture> <armCapture> [gold]` — per-topic and per-cell A/B.

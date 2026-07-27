@@ -550,7 +550,11 @@ class QueryStoreChartBuilder {
 			out.add(new SerializedRecord(doc.getResourceType(), doc.getResourceUuid(),
 					text, recordDate, Collections.<String>emptyList(),
 					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_UUID),
-					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_CONCEPT_NAME)));
+					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_CONCEPT_NAME),
+					// The record's coded identity. querystore keeps it in metadata only; the
+					// citation layer needs it to link a condition row to its identical
+					// encounter-diagnosis row (see LlmInferenceService's twin expansion).
+					metadataString(doc, QueryStoreConstants.FIELD_CONCEPT_UUID)));
 		}
 		return out;
 	}

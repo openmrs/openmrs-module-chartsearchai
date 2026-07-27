@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -516,6 +517,8 @@ public class LlmInferenceService implements ChartSearchService {
 			seen.addAll(inline);
 		}
 
+		seen.addAll(sameAssertionTwins(seen, mappings));
+
 		List<RecordReference> references = new ArrayList<RecordReference>();
 		for (Integer index : seen) {
 			RecordMapping mapping = indexMap.get(index);
@@ -529,6 +532,69 @@ public class LlmInferenceService implements ChartSearchService {
 		Collections.sort(references, Comparator.comparing(RecordReference::getDate,
 				Comparator.nullsLast(Comparator.reverseOrder())));
 		return references;
+	}
+
+	/** The two OpenMRS tables that record the same clinical problem, so a record in each with the
+	 *  same concept is one assertion written twice — not two findings. Deliberately just these
+	 *  two: an obs or a drug order sharing a concept with a condition is a different kind of
+	 *  statement about it (a measurement, a treatment), not a duplicate of it. */
+	private static final Set<String> PROBLEM_ASSERTION_TYPES = Collections.unmodifiableSet(
+			new LinkedHashSet<String>(Arrays.asList(
+					ChartSearchAiConstants.RESOURCE_TYPE_CONDITION,
+					ChartSearchAiConstants.RESOURCE_TYPE_DIAGNOSIS)));
+
+	/**
+	 * The indices of retrieved records that assert the same coded problem as an already-cited
+	 * record, in the OTHER problem table — an OpenMRS {@code condition} and its
+	 * {@code encounter_diagnosis} twin.
+	 *
+	 * <p>Both rows are in the prompt as separate numbered records, the model names the finding
+	 * once and cites whichever of the two it happened to attend to, and the clinician is left
+	 * with a chip for one row and none for its identical twin. Which row it picks is arbitrary,
+	 * so this is fixed mechanically rather than by asking the prompt to be thorough.
+	 *
+	 * <p>Three constraints keep it from becoming "cite anything similar":
+	 * <ul>
+	 *   <li><b>Different resource type.</b> Ten blood-pressure obs share a concept but are ten
+	 *       distinct events with distinct values; only a CROSS-table match is a duplicate.</li>
+	 *   <li><b>Problem tables only.</b> An obs measuring a concept, or a drug order treating it,
+	 *       is a different statement about the problem, not the same one.</li>
+	 *   <li><b>Coded records only.</b> A null concept is not a join key — treating it as one
+	 *       would link every non-coded problem to every other.</li>
+	 * </ul>
+	 *
+	 * <p>Costs no prompt tokens (it runs after generation) and cannot add drift: a twin says
+	 * exactly what the record it duplicates says, so it is on topic whenever that one is.
+	 */
+	static Set<Integer> sameAssertionTwins(Set<Integer> citedIndices, List<RecordMapping> mappings) {
+		Set<Integer> twins = new LinkedHashSet<Integer>();
+		if (citedIndices.isEmpty()) {
+			return twins;
+		}
+		Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();
+		for (RecordMapping mapping : mappings) {
+			byIndex.put(mapping.getIndex(), mapping);
+		}
+		for (Integer citedIndex : citedIndices) {
+			RecordMapping cited = byIndex.get(citedIndex);
+			if (cited == null || cited.getConceptUuid() == null
+					|| !PROBLEM_ASSERTION_TYPES.contains(cited.getResourceType())) {
+				continue;
+			}
+			for (RecordMapping candidate : mappings) {
+				if (candidate.getIndex() == cited.getIndex()
+						|| !cited.getConceptUuid().equals(candidate.getConceptUuid())
+						|| candidate.getResourceType() == null
+						|| candidate.getResourceType().equals(cited.getResourceType())
+						|| !PROBLEM_ASSERTION_TYPES.contains(candidate.getResourceType())) {
+					continue;
+				}
+				if (!citedIndices.contains(candidate.getIndex())) {
+					twins.add(candidate.getIndex());
+				}
+			}
+		}
+		return twins;
 	}
 
 	// =====================================================================

@@ -181,7 +181,7 @@ public class PatientChartSerializer {
 			// per-record view must still contain it. Grounding behaviour is therefore unchanged.
 			String renderedText = dateLabelPrefix(dateLabel) + bodyBase + groupLabel;
 			mappings.add(new RecordMapping(index, record.getResourceType(), record.getResourceUuid(),
-					record.getDate(), renderedText));
+					record.getDate(), renderedText, record.getConceptUuid()));
 
 			// Chart line: show the date only on the first record of a same-date run (an undated record
 			// resets the run, so the next dated record shows its date again); otherwise drop it. With
@@ -378,6 +378,11 @@ public class PatientChartSerializer {
 
 		private final String text;
 
+		/** The coded concept behind this record, or {@code null} — see
+		 *  {@link SerializedRecord#getConceptUuid()}. Carried through to the citation layer so it
+		 *  can recognise the same assertion recorded in two tables. */
+		private final String conceptUuid;
+
 		/**
 		 * Backward-compatible constructor that carries no source text. Mappings
 		 * built this way cannot be grounding-checked; the grounding verifier
@@ -389,11 +394,17 @@ public class PatientChartSerializer {
 		}
 
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text) {
+			this(index, resourceType, resourceUuid, date, text, null);
+		}
+
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String conceptUuid) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
 			this.date = date;
 			this.text = text;
+			this.conceptUuid = conceptUuid;
 		}
 
 		public int getIndex() {
@@ -427,6 +438,16 @@ public class PatientChartSerializer {
 		 */
 		public String getText() {
 			return text;
+		}
+
+		/**
+		 * @return the UUID of the concept this record codes, or {@code null} when non-coded. Two
+		 *         mappings of DIFFERENT resource types sharing this value are the same clinical
+		 *         assertion recorded in two tables (an OpenMRS {@code condition} and its
+		 *         {@code encounter_diagnosis}), which the citation layer links together.
+		 */
+		public String getConceptUuid() {
+			return conceptUuid;
 		}
 	}
 }

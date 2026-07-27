@@ -25,8 +25,18 @@ import java.util.Set;
  * bean automatically — no code change in chartsearchai, and no hard dependency: declare chartsearchai
  * as an {@code aware_of_module} (soft) dependency and compile against {@code chartsearchai-api}.
  * chartsearchai works with zero contributors (the built-in behaviour is unchanged); each contributor's
- * claim is <strong>unioned</strong> on top of the built-in typed scope, so a contributor can only add
- * its own domain's records to the slice — it can never perturb another domain's routing.
+ * claim is <strong>unioned</strong> on top of the built-in typed scope, after the router has decided.
+ *
+ * <p><b>One consequence to know before claiming a built-in resourceType.</b> Because the union runs
+ * last, a claim on {@code condition} or {@code diagnosis} does not merely add records — it overrides
+ * the router's decision to WITHHOLD the complete problem list. That withholding is a safety
+ * property: a domain-qualified conditions question ("any psychiatric conditions?") is deliberately
+ * routed to the similarity slice, because handing a small model an entire problem list makes it
+ * enumerate the list instead of filtering it (measured: a psychiatric question answered
+ * "Cardiogenic shock, Bacterial gastroenteritis, Lumbago with sciatica"). A contributor claiming
+ * those types re-enables exactly that failure for every question it matches. Claim your OWN
+ * domain's types; if you believe a built-in type belongs in your slice, match on cues narrow enough
+ * that a domain-qualified conditions question cannot reach them.
  *
  * <h3>Contract</h3>
  * <ul>

@@ -16,6 +16,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.openmrs.Patient;
 import org.openmrs.api.APIException;
@@ -205,12 +206,18 @@ class QueryStoreChartBuilder {
 		Set<QueryScopeRouter.Intent> intents = QueryScopeRouter.matchedIntents(question);
 		// The built-in typed scope, additionally UNIONed with any module-contributed scopes
 		// (billing, appointments, …). typedSlice(...) is unmodifiable, so wrap it before adding.
-		// The union is additive: with zero contributors this is exactly the built-in behaviour, and
-		// a contributor can only add its own domain's records — never perturb another domain's
-		// routing. See QueryScopeContributor.
+		// With zero contributors this is exactly the built-in behaviour. Note the union runs AFTER
+		// routing, so a contributor claiming condition/diagnosis also overrides the router's
+		// decision to withhold the complete problem list from a domain-qualified conditions
+		// question — see QueryScopeContributor for why that matters and what to claim instead.
 		Set<String> typedScope = new HashSet<String>(QueryScopeRouter.typedSlice(intents));
-		typedScope.addAll(contributedResourceTypes(question));
-		String intentLabel = intentLabel(intents);
+		Set<String> contributed = contributedResourceTypes(question);
+		typedScope.addAll(contributed);
+		// The label carries the contributed types because they change the slice as much as the
+		// intent does: an operator triaging a whole-problem-list answer would otherwise read
+		// "intent=TOPICAL" — the label that says the suppression applied — while a contributor had
+		// put the problem list back.
+		String intentLabel = scopeLabel(intents, contributed);
 
 		QueryStoreService queryStore = resolveQueryStoreOrNull();
 		if (queryStore == null) {
@@ -305,9 +312,28 @@ class QueryStoreChartBuilder {
 		return chart;
 	}
 
-	/** The [timing] log label for the slice's matched intents: {@code TOPICAL} when none matched,
-	 *  else the names joined with {@code +} in declaration order (e.g.
-	 *  {@code MEDICATIONS+ALLERGIES}) — one greppable token per line either way. */
+	/**
+	 * The [timing] log label for what actually shaped the slice: the matched intents, plus any
+	 * module-contributed resourceTypes.
+	 *
+	 * <p>The contributed half is not decoration. The union runs after routing, so a contributor
+	 * claiming {@code condition}/{@code diagnosis} overrides the router's decision to withhold the
+	 * complete problem list from a domain-qualified conditions question. Without the types on the
+	 * line, an operator triaging that answer reads {@code intent=TOPICAL} — the label that says the
+	 * suppression applied — while a contributor had put the problem list back. Sorted so the token
+	 * is stable across runs and greppable.
+	 */
+	static String scopeLabel(Set<QueryScopeRouter.Intent> intents, Set<String> contributedTypes) {
+		String label = intentLabel(intents);
+		if (contributedTypes == null || contributedTypes.isEmpty()) {
+			return label;
+		}
+		return label + "+contrib" + new TreeSet<String>(contributedTypes);
+	}
+
+	/** The intent half of {@link #scopeLabel}: {@code TOPICAL} when none matched, else the names
+	 *  joined with {@code +} in declaration order (e.g. {@code MEDICATIONS+ALLERGIES}) — one
+	 *  greppable token per line either way. */
 	private static String intentLabel(Set<QueryScopeRouter.Intent> intents) {
 		if (intents.isEmpty()) {
 			return QueryScopeRouter.Intent.TOPICAL.name();

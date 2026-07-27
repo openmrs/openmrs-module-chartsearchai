@@ -198,9 +198,18 @@ final class LlmAnswerExtractor {
 	 *
 	 * <p>Trade-off: if the model writes {@code [5/12]} or {@code [5, 12]} inline but omits 5/12
 	 * from its citations array, the group is left as-is rather than risk mangling a value. The
-	 * structured citations array is the authority — chart size is irrelevant, unlike validating
-	 * against record indices (where a 150-record chart would wrongly split a {@code [120/80]}
-	 * value). Downstream, the single-index {@code INLINE_CITATION} pattern sees no marker in an
+	 * structured citations array is the authority.
+	 *
+	 * <p><b>Known residual, and it does scale with chart size.</b> Corroboration is membership-only,
+	 * so on a chart that HAS records 120 and 80, a model that writes {@code BP was [120, 80] today}
+	 * and also lists 120 and 80 in its citations array supplies exactly the corroboration this
+	 * treats as proof: the prose is rewritten to {@code BP was [120], [80] today} and two
+	 * references are fabricated from a blood pressure. Reproduced on a 130-record chart through the
+	 * composed {@code extractResponse} path. A larger chart makes more clinical values collide with
+	 * real record numbers, so the exposure grows with it — do not read this as "chart size is
+	 * irrelevant". No discriminator ships here because the obvious one (require an independent
+	 * single-index marker elsewhere in the answer) regresses the measured multi-index case this
+	 * method exists for, so it needs its own measurement rather than a guess. Downstream, the single-index {@code INLINE_CITATION} pattern sees no marker in an
 	 * untouched group — and when the answer contains NO other single-index marker, the #76
 	 * unanchored-array guard then surfaces no references at all for that answer, including any
 	 * array entries the group only partially matched. That total blast radius is the accepted

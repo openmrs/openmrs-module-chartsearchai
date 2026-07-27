@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Side-by-side per-topic comparison of two capture dirs against the local gold.
 
-Usage: compare_arms.py <baselineDir> <armDir>
+Usage: compare_arms.py <baselineDir> <armDir> [goldFile] [adjFile]
 """
 import collections
 import json
@@ -11,10 +11,18 @@ import os  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import metric_score as M  # noqa: E402
 
-# compare_arms.py <baselineDir> <armDir> [goldFile]
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# compare_arms.py <baselineDir> <armDir> [goldFile] [adjFile]
 gold = json.load(open(sys.argv[3] if len(sys.argv) > 3
-                      else os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                        "metric_gold.local.json")))
+                      else os.path.join(HERE, "metric_gold.local.json")))
+
+# Resolve the adjudication file the same way metric_score.py does. Without this the A/B table and
+# the scorer silently report different meanF1/drift for the SAME capture as soon as anyone
+# adjudicates an unknown citation — which metric_score.py actively asks the operator to do.
+_adj_path = sys.argv[4] if len(sys.argv) > 4 else os.path.join(HERE, "offtopic_adj.local.json")
+ADJ = json.load(open(_adj_path)) if os.path.exists(_adj_path) else {}
+ADJ_ON = ADJ.get("_ontopic", {})
 
 
 def score(cap):
@@ -23,10 +31,12 @@ def score(cap):
     cells = {}
     rows, _ = M.load_captures(cap, lambda c: c in gold)
     for uuid, topic, d in rows:
-        g = gold[uuid + "|" + topic]
+        cell = uuid + "|" + topic
+        g = gold[cell]
         cited = list(dict.fromkeys(r.get("resourceUuid") for r in d.get("references", [])
                                    if r.get("resourceUuid")))
-        s = M.score_cell(cited, g["present"], set(g["ontopic"]), set(g["focus_uuids"]), set(), set())
+        s = M.score_cell(cited, g["present"], set(g["ontopic"]), set(g["focus_uuids"]),
+                         set(ADJ.get(cell, [])), set(ADJ_ON.get(cell, [])))
         p = per[topic]
         if s["present"] and s.get("scoreable"):
             p["f1"].append(s["f1"]); p["prec"].append(s["prec"]); p["rec"].append(s["rec"])

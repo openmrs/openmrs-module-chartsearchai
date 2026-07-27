@@ -44,20 +44,30 @@ public class LlmProviderTodayContextTest {
 		// Wiring test: the answer path must actually pass the date. Building the message correctly
 		// is useless if search()/searchStreaming() call the date-free overload.
 		CapturingEngineProvider provider = new CapturingEngineProvider();
+		String dayBefore = DateFormatUtil.today();
 		provider.searchStreaming(CHART, Collections.<Integer>emptyList(), "Has she been seen recently?",
 				token -> { }, chunk -> { }, null);
 		assertTrue(provider.engine.userMessage.contains(LlmProvider.TODAY_LABEL),
 				"searchStreaming must include the date line: " + provider.engine.userMessage);
-		assertTrue(provider.engine.userMessage.contains(DateFormatUtil.today()),
+		// Read on both sides of the production call so the one run per day that straddles midnight
+		// does not fail: either reading is the correct answer for when the message was built.
+		assertTrue(provider.engine.userMessage.contains(dayBefore)
+				|| provider.engine.userMessage.contains(DateFormatUtil.today()),
 				"…and it must be TODAY: " + provider.engine.userMessage);
 	}
 
 	@Test
 	public void search_shouldSendTodaysDateToTheEngine() {
 		CapturingEngineProvider provider = new CapturingEngineProvider();
+		String dayBefore = DateFormatUtil.today();
 		provider.search(CHART, Collections.<Integer>emptyList(), "Has she been seen recently?");
 		assertTrue(provider.engine.userMessage.contains(LlmProvider.TODAY_LABEL),
 				"search must include the date line: " + provider.engine.userMessage);
+		// The label alone would pass a search() that sent a hardcoded or newest-record date, which
+		// is the mistake this whole change exists to fix — so pin the VALUE here too.
+		assertTrue(provider.engine.userMessage.contains(dayBefore)
+				|| provider.engine.userMessage.contains(DateFormatUtil.today()),
+				"…and it must be TODAY: " + provider.engine.userMessage);
 	}
 
 	@Test

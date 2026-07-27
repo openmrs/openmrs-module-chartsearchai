@@ -93,22 +93,55 @@ final class QueryScopeRouter {
 			ChartSearchAiConstants.RESOURCE_TYPE_DIAGNOSIS);
 
 	/**
-	 * Words that may sit next to a conditions cue without narrowing it to a clinical DOMAIN — the
-	 * cue words themselves, plus generic problem-list qualifiers. "Any active conditions?",
-	 * "chronic medical conditions", "diagnosed with anything" are all still asking for the whole
-	 * problem list; "psychiatric conditions" and "heart conditions" are not.
+	 * Qualifiers that may sit next to a conditions cue without narrowing it to a clinical DOMAIN.
+	 * "Any active conditions?", "chronic medical conditions", "diagnosed with anything" are all
+	 * still asking for the whole problem list; "psychiatric conditions" and "heart conditions" are
+	 * not.
 	 *
-	 * <p>Only words the stopword stripper leaves behind need to appear here; "current", "known",
-	 * "list", "status" and the rest of the function-word vocabulary are already removed by
-	 * {@link QueryPreprocessor#contentWords}.
+	 * <p>{@link #narrowsToADomain} consults three other vocabularies directly rather than
+	 * re-spelling them — the conditions cue itself ({@link #CONDITIONS_CUES}), the temporal cues
+	 * ({@link #TEMPORAL_CUES}) and the other intent cues — because an earlier version copied slices
+	 * of all three into this list and the copies had holes: "any recent conditions?", "list her
+	 * last diagnoses" and "any conditions diagnosed lately?" all lost the problem list because the
+	 * literal list happened not to contain the word the clinician chose.
+	 *
+	 * <p>What is left here is what those patterns cannot supply, and it is not short. The reason is
+	 * mechanical: this check tests ONE token with {@code matches()}, so every multi-word
+	 * alternative in {@link #TEMPORAL_CUES} ("most recent", "past 3 months", "this year") is
+	 * unreachable from it — which is why the bare units ("day", "week", "month", "year") and the
+	 * single-word recency adjectives ("past", "recent", "previous") are members here even though
+	 * the multi-word forms live there. Do not delete an entry on the strength of "the temporal
+	 * pattern covers it": {@code TEMPORAL_CUES.matcher("recent").matches()} is false.
 	 */
 	private static final Set<String> GENERIC_CONDITION_WORDS = Collections.unmodifiableSet(
 			new HashSet<String>(Arrays.asList(
-					"condition", "conditions", "diagnosis", "diagnoses", "diagnosed", "problem",
-					"problems", "active", "inactive", "chronic", "acute", "ongoing", "resolved",
-					"past", "previous", "prior", "underlying", "comorbid", "comorbidity",
-					"comorbidities", "medical", "clinical", "health", "anything", "everything",
-					"main", "major", "minor", "significant", "important", "relevant", "outstanding")));
+					"problem", "problems", "active", "inactive", "chronic", "acute", "ongoing",
+					"resolved", "new", "old", "past", "recent", "previous", "prior", "underlying", "comorbid",
+					"comorbidity", "comorbidities", "medical", "clinical", "health", "anything",
+					"everything", "main", "major", "minor", "significant", "important", "relevant",
+					"outstanding", "full", "complete", "summarise", "summarize", "summary",
+					"overview", "treated", "treatment", "recorded", "documented", "suffer",
+					"suffers", "suffering", "day", "days", "week", "weeks", "month", "months",
+					"year", "years",
+					// The stopword file deliberately PRESERVES negation and some temporal words
+					// because they carry clinical meaning for retrieval. That makes them arrive
+					// here, where they are not domains: "does she have no conditions?" and "what
+					// was her first diagnosis?" are problem-list questions. TEMPORAL_CUES covers
+					// "latest"/"last"/"recently" but not "first"/"earliest", so those are listed.
+					"no", "not", "never", "none", "without", "neither", "first", "earliest",
+					"earlier", "longstanding", "longterm", "lifelong",
+					// The verification/certainty values this module renders in its own chart lines
+					// ("Status: ACTIVE", "Certainty: PROVISIONAL") are the least domain-like words
+					// available, and were reading as domains.
+					"confirmed", "provisional", "presumed", "suspected", "refuted", "entered",
+					"error", "file", "record", "records", "history", "historical")));
+
+	/** A token made only of digits — a year, a range or a count, never a clinical domain. */
+	private static final Pattern NUMERIC_ONLY = Pattern.compile("\\d+");
+
+	/** Everything {@link #narrowsToADomain} compares away before matching a token against the
+	 *  generic list, so one rule covers "co-morbid", "2024-01" and "01/2024" alike. */
+	private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^\\p{L}\\p{N}]+");
 
 	private static final Pattern VISITS_CUES = cues("visits?", "appointments?", "encounters?", "admissions?");
 
@@ -141,11 +174,44 @@ final class QueryScopeRouter {
 	 */
 	private static boolean isDomainQualified(String question) {
 		for (String word : QueryPreprocessor.contentWords(question)) {
-			if (!GENERIC_CONDITION_WORDS.contains(word) && !isOtherIntentCue(word)) {
+			if (narrowsToADomain(word)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * True when one content word is a clinical domain rather than a way of asking about the
+	 * problem list. Everything this class or the stopword file already recognises as
+	 * question-shaping vocabulary is consulted rather than re-listed: any intent cue (including the
+	 * conditions cue itself — "conditions", "diagnoses" and "diagnosed" describe the list, they do
+	 * not narrow it) and any single-word temporal cue.
+	 *
+	 * <p>Note the deliberate asymmetry in how this fails. Reading a problem-list question as
+	 * domain-qualified costs it the completeness guarantee — the answer still comes from the
+	 * similarity slice, so it is merely less exhaustive. Reading a DOMAIN question as a
+	 * problem-list one produces the measured enumeration failure ("psychiatric conditions:
+	 * Cardiogenic shock, Bacterial gastroenteritis …"), which is a clinically wrong answer. When an
+	 * unrecognised word forces a guess, this guesses toward the survivable error.
+	 */
+	private static boolean narrowsToADomain(String word) {
+		// contentWords trims only the EDGES of a token, so anything with interior punctuation
+		// arrives whole: "2-3", "2024-01", "01/2024", "co-morbid". Comparing against a
+		// letters-and-digits-only form as well as the token itself covers all of them with one
+		// rule rather than a spelling-by-spelling branch.
+		String bare = NON_ALPHANUMERIC.matcher(word).replaceAll("");
+		// A number is never a clinical domain — "any conditions diagnosed in 2024?" and "in the
+		// last 2-3 years?" are problem-list questions. TEMPORAL_CUES matches "2 years" but neither
+		// a standalone year nor a range.
+		if (bare.isEmpty() || NUMERIC_ONLY.matcher(bare).matches()) {
+			return false;
+		}
+		return !GENERIC_CONDITION_WORDS.contains(word)
+				&& !GENERIC_CONDITION_WORDS.contains(bare)
+				&& !CONDITIONS_CUES.matcher(word).matches()
+				&& !TEMPORAL_CUES.matcher(word).matches()
+				&& !isOtherIntentCue(word);
 	}
 
 	/** True when {@code word} is a cue of some OTHER typed intent — "any drug allergies or skin

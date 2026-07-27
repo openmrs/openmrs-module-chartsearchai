@@ -550,8 +550,10 @@ public class LlmInferenceService implements ChartSearchService {
 	 *
 	 * <p>Three constraints keep it from becoming "cite anything similar":
 	 * <ul>
-	 *   <li><b>Different resource type.</b> Ten blood-pressure obs share a concept but are ten
-	 *       distinct events with distinct values; only a CROSS-table match is a duplicate.</li>
+	 *   <li><b>Different resource type, one row per table.</b> Ten blood-pressure obs share a
+	 *       concept but are ten distinct events; so are five encounter diagnoses of one problem.
+	 *       Only a concept recorded exactly ONCE in each problem table is one assertion written
+	 *       twice — see {@link #problemFamily}.</li>
 	 *   <li><b>Problem tables only.</b> An obs measuring a concept, or a drug order treating it,
 	 *       is a different statement about the problem, not the same one.</li>
 	 *   <li><b>Coded records only.</b> A null concept is not a join key — treating it as one
@@ -579,20 +581,55 @@ public class LlmInferenceService implements ChartSearchService {
 					|| !QueryScopeRouter.PROBLEM_TABLES.contains(cited.getResourceType())) {
 				continue;
 			}
-			for (RecordMapping candidate : mappings) {
-				if (candidate.getIndex() == cited.getIndex()
-						|| !cited.getConceptUuid().equals(candidate.getConceptUuid())
-						|| candidate.getResourceType() == null
-						|| candidate.getResourceType().equals(cited.getResourceType())
-						|| !QueryScopeRouter.PROBLEM_TABLES.contains(candidate.getResourceType())) {
-					continue;
-				}
-				if (!citedIndices.contains(candidate.getIndex())) {
+			List<RecordMapping> family = problemFamily(cited.getConceptUuid(), mappings);
+			// A TRUE twin: two or more problem tables, each holding this concept exactly once.
+			// Anything else is a series, not a duplicate — see the javadoc — so it is left alone.
+			// (problemFamily already caps each table at one row, so size < 2 is the only test
+			// needed. Deliberately NOT compared against PROBLEM_TABLES.size(): should a third
+			// problem table ever join the set, that comparison would demand a row in all three and
+			// silently stop pairing the ordinary condition+diagnosis pair.)
+			if (family.size() < 2) {
+				continue;
+			}
+			for (RecordMapping candidate : family) {
+				if (candidate.getIndex() != cited.getIndex()
+						&& !citedIndices.contains(candidate.getIndex())) {
 					twins.add(candidate.getIndex());
 				}
 			}
 		}
 		return twins;
+	}
+
+	/**
+	 * The problem-table records sharing {@code conceptUuid}, at most one per table — or an EMPTY
+	 * list when any table holds more than one, which is the caller's signal to leave the family
+	 * alone.
+	 *
+	 * <p>Returning early on the second row of a table is the whole point. {@code encounter_diagnosis}
+	 * is per-encounter, so a problem re-diagnosed at five visits has one condition row and five
+	 * diagnosis rows — five distinct diagnostic events, exactly the reasoning that keeps ten
+	 * blood-pressure obs from being treated as duplicates of each other. Pairing across that shape
+	 * would make the reference count depend on which row the model happened to cite (measured: 6
+	 * chips citing the condition, 2 citing a diagnosis), reintroducing the arbitrariness this
+	 * expansion exists to remove. Requiring exactly one row per table makes the result
+	 * order-independent: either every member pairs with every other, or none do.
+	 *
+	 * @return one mapping per problem table holding this concept, or an empty list if any table
+	 *         holds it more than once
+	 */
+	private static List<RecordMapping> problemFamily(String conceptUuid, List<RecordMapping> mappings) {
+		Map<String, RecordMapping> byTable = new HashMap<String, RecordMapping>();
+		for (RecordMapping mapping : mappings) {
+			if (!conceptUuid.equals(mapping.getConceptUuid())
+					|| !QueryScopeRouter.PROBLEM_TABLES.contains(mapping.getResourceType())) {
+				continue;
+			}
+			if (byTable.put(mapping.getResourceType(), mapping) != null) {
+				return Collections.emptyList();
+			}
+		}
+		return new ArrayList<RecordMapping>(byTable.values());
 	}
 
 	// =====================================================================

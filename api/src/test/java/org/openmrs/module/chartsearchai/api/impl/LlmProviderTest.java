@@ -675,6 +675,7 @@ public class LlmProviderTest {
 		LlmProvider provider = providerWith(engine);
 		String records = "1. [2024-01-01] BP 120/80\n2. [2024-02-02] HbA1c 7.1%";
 		List<Integer> focus = Arrays.asList(1, 2);
+		String dayBefore = org.openmrs.module.chartsearchai.util.DateFormatUtil.today();
 
 		provider.searchStreaming(records, focus, "Is the patient diabetic?",
 				tok -> { }, reason -> { }, "patient-uuid-42");
@@ -685,10 +686,15 @@ public class LlmProviderTest {
 		// Exact-equality against the production builder, answer-path form: full focus hint, the
 		// question, and the trailing "Today's date" line the answer path adds (the KV seed
 		// asserted below is the date-free prefix — that split is the whole point).
-		assertEquals(LlmProvider.buildUserMessage(records, focus, "Is the patient diabetic?",
-				org.openmrs.module.chartsearchai.util.DateFormatUtil.today()),
-				engine.capturedUserMessage,
-				"the engine must still receive the full focus-hinted question prompt");
+		// today() is read on both sides of the production call: a midnight crossing in between
+		// would otherwise fail this on the one run per day that straddles it.
+		assertTrue(engine.capturedUserMessage.equals(LlmProvider.buildUserMessage(records, focus,
+				"Is the patient diabetic?", dayBefore))
+				|| engine.capturedUserMessage.equals(LlmProvider.buildUserMessage(records, focus,
+						"Is the patient diabetic?",
+						org.openmrs.module.chartsearchai.util.DateFormatUtil.today())),
+				"the engine must still receive the full focus-hinted question prompt, got: "
+						+ engine.capturedUserMessage);
 		// The KV filename seed MUST be the question-independent prefix — identical bytes to what
 		// warmup() sends — or a warmup-saved file would hash to a different name and never be found
 		// by the query. This is the core key-match invariant the whole feature relies on.

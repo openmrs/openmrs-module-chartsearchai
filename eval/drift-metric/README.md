@@ -193,6 +193,47 @@ python3 abbrev_probe.py /tmp/probes 3
 Expected probe results for the same two builds: the temporal verdict 4/12 → 11/12 and the
 day-count 0/12 → 10/12; the abbreviation probe 13/17 → 17/17.
 
+### Check the arm is valid before you score it
+
+`chartMode` is a global property, so a probe you ran hours earlier can still be in force. A capture
+taken in `fullChart` scores as a legitimate-looking arm and is not comparable to anything here:
+
+```bash
+curl -s -u admin:Admin123 <base>/ws/rest/v1/systemsetting/chartsearchai.chartMode   # must be queryScoped
+```
+
+After the fact the audit log settles it without re-running anything. On this install a
+`queryScoped`/`topK=12` cell is **1.3k–5k input tokens**; a `fullChart` cell is 7k–11k:
+
+```sql
+select min(input_tokens), round(avg(input_tokens)), max(input_tokens)
+  from chartsearchai_audit_log where date_created between '<start>' and '<end>';
+```
+
+An average near 2k is a scoped arm; near 10k means the arm is `fullChart` and the score is void.
+
+### Re-verifying a reference-side change without a 90-minute capture
+
+A change that only affects which references are attached to an answer (twin co-citation is the
+example) can be attributed exactly, because the set of cells it can possibly touch is derivable
+from the database rather than guessed:
+
+1. Dump every coded problem row with its patient and concept (`conditions` + `encounter_diagnosis`)
+   and count rows per `(patient, concept, table)`.
+2. A cell can only change if one of its captured references belongs to a family the new rule treats
+   differently — for the one-row-per-table gate, any family with >1 row in either table. Match on
+   the family, not on the reference's own UUID: the row that gets dropped is often the *single-row
+   partner* pulled in by a multi-row sibling, so a UUID-level filter misses it.
+3. Copy the arm, delete the affected cells **and three cells the analysis says cannot change**,
+   re-run only those, then diff against the original.
+
+The controls are the load-bearing part: they must come back byte-identical, which is what proves
+the build reproduces the arm rather than merely producing a similar number. Worked example — the
+one-row-per-table gate touched exactly 1 of 270 cells, 268 cells came back byte-identical (the
+remaining one an abstention that reworded with 0 references both ways), and the full rescore was
+unchanged at meanF1 0.760 / 107 of 116 / drift 74. Expect answer *wording* to vary slightly across
+a server restart even where the reference set is identical; compare reference UUID sets, not prose.
+
 The `[timing]` log lines (`querystoreScopedBuild … intent=… slice=…`, `search … llmMs=…`) are at
 INFO and the module package is not covered by the stock `log.level=info`, so turn them on with
 `log.level=org.openmrs.api:info,org.openmrs.module.chartsearchai:info`. For per-query cost prefer

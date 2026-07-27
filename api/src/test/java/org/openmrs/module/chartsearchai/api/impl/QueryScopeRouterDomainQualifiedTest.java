@@ -53,18 +53,106 @@ public class QueryScopeRouterDomainQualifiedTest {
 	@Test
 	public void unqualifiedProblemListQuestionsKeepTheCompleteScope() {
 		// These ARE problem-list enumerations — the completeness guarantee is exactly what they need.
-		assertTrue(intents("What conditions does the patient have?")
+		//
+		// The list is long on purpose. An earlier version of this rule tested every content word
+		// against a single hand-written allow-list, and passed this fixture while silently failing
+		// on any phrasing whose wording happened not to be on it — "any recent conditions?",
+		// "list her last diagnoses", "summarise her diagnoses" and "give me the full problem list"
+		// all lost the problem list. The six phrasings originally asserted here all happened to use
+		// allow-listed words, so the suite stayed green. Every phrasing below was verified broken
+		// before the fix and working after; keep adding real clinician wordings rather than
+		// trusting one list.
+		for (String question : new String[] {
+				"What conditions does the patient have?",
+				"What is on her problem list?",
+				"Any active conditions?",
+				"List all chronic medical conditions",
+				"Has the patient been diagnosed with anything?",
+				"What are the past diagnoses?",
+				"Any recent conditions?",
+				"Any new diagnoses?",
+				"Any conditions diagnosed lately?",
+				"List her last diagnoses",
+				"Any conditions in the past year?",
+				"Summarise her diagnoses",
+				"Give me the full problem list",
+				"What conditions is she being treated for?" }) {
+			assertTrue(intents(question).contains(QueryScopeRouter.Intent.CONDITIONS),
+					"must keep the complete problem list: " + question);
+		}
+	}
+
+	@Test
+	public void theModulesOwnCertaintyVocabularyIsNotAClinicalDomain() {
+		// The words this module prints in its own chart lines — "Status: ACTIVE", "Certainty:
+		// CONFIRMED" — are the ones a clinician most naturally reuses when asking about the problem
+		// list, and every one of them read as a narrowing domain, silently costing these questions
+		// the completeness guarantee.
+		for (String question : new String[] {
+				"Any confirmed diagnoses?",
+				"Any provisional diagnoses?",
+				"Any presumed or suspected conditions?",
+				"Any documented conditions?",
+				"Any conditions on file?",
+				"What conditions are in her medical history?" }) {
+			assertTrue(intents(question).contains(QueryScopeRouter.Intent.CONDITIONS),
+					"a certainty/record qualifier does not narrow to a domain: " + question);
+		}
+	}
+
+	@Test
+	public void aBareYearIsNotAClinicalDomain() {
+		// TEMPORAL_CUES covers "in the past 2 years" but not a standalone year, so "2024" was read
+		// as a domain name. A number cannot name a body system.
+		assertTrue(intents("Any conditions diagnosed in 2024?")
 				.contains(QueryScopeRouter.Intent.CONDITIONS));
-		assertTrue(intents("What is on her problem list?")
+		assertTrue(intents("What diagnoses does she have from 2023?")
 				.contains(QueryScopeRouter.Intent.CONDITIONS));
-		assertTrue(intents("Any active conditions?").contains(QueryScopeRouter.Intent.CONDITIONS),
-				"'active' narrows nothing clinically — still the whole problem list");
-		assertTrue(intents("List all chronic medical conditions")
-				.contains(QueryScopeRouter.Intent.CONDITIONS));
-		assertTrue(intents("Has the patient been diagnosed with anything?")
-				.contains(QueryScopeRouter.Intent.CONDITIONS));
-		assertTrue(intents("What are the past diagnoses?")
-				.contains(QueryScopeRouter.Intent.CONDITIONS));
+	}
+
+	@Test
+	public void aNumberWithInteriorPunctuationIsStillNotAClinicalDomain() {
+		// contentWords trims only the EDGES of a token, so a range or a year-month arrives whole
+		// and a digits-only test on the raw token misses it. These are the ordinary ways a
+		// clinician writes a date window.
+		for (String question : new String[] {
+				"Any conditions in the last 2-3 years?",
+				"Any conditions diagnosed since 2024-01?",
+				"Any conditions diagnosed in 01/2024?" }) {
+			assertTrue(intents(question).contains(QueryScopeRouter.Intent.CONDITIONS),
+					"a date window is not a clinical domain: " + question);
+		}
+	}
+
+	@Test
+	public void hyphenatedSpellingsOfGenericWordsStayGeneric() {
+		// Clinicians write both spellings. Edge-punctuation trimming does not help here — the
+		// hyphen is interior — so the de-hyphenated form has to be checked too.
+		assertTrue(intents("Any co-morbid conditions?").contains(QueryScopeRouter.Intent.CONDITIONS));
+		assertTrue(intents("Any comorbid conditions?").contains(QueryScopeRouter.Intent.CONDITIONS));
+		assertTrue(intents("Any long-standing conditions?").contains(QueryScopeRouter.Intent.CONDITIONS));
+		assertTrue(intents("Any earlier diagnoses?").contains(QueryScopeRouter.Intent.CONDITIONS),
+				"\"earlier\" is in none of the temporal patterns — it has to be a member here");
+	}
+
+	@Test
+	public void edgePunctuationDoesNotReadAsAClinicalDomain() {
+		// The retrieval tokenizer leaves brackets and dashes attached, because the embedder does not
+		// care. A word-level consumer does: "(active)" read as a distinct word looks exactly like a
+		// domain name, and silently cost these questions their completeness guarantee.
+		assertTrue(intents("conditions (active)?").contains(QueryScopeRouter.Intent.CONDITIONS));
+		assertTrue(intents("Any conditions -- active?").contains(QueryScopeRouter.Intent.CONDITIONS));
+		// Java's \p{Punct} is ASCII-only, so these — the spellings macOS, iOS and Word substitute
+		// BY DEFAULT for the two above — were the ones still lost. Pinning the ASCII forms alone
+		// pinned the phrasings least likely to actually arrive.
+		assertTrue(intents("Any conditions \u2014 active?").contains(QueryScopeRouter.Intent.CONDITIONS),
+				"an em dash must not read as a clinical domain");
+		assertTrue(intents("Any conditions \u2013 active?").contains(QueryScopeRouter.Intent.CONDITIONS),
+				"nor an en dash");
+		assertTrue(intents("Any \u201cactive\u201d conditions?").contains(QueryScopeRouter.Intent.CONDITIONS),
+				"nor curly double quotes");
+		assertTrue(intents("Any \u2018active\u2019 conditions?").contains(QueryScopeRouter.Intent.CONDITIONS),
+				"nor curly single quotes");
 	}
 
 	@Test

@@ -43,8 +43,13 @@ public class LlmProvider {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	/** Label that prefixes the focus-hint line in the user message. Shared with the
-	 *  DEFAULT_SYSTEM_PROMPT few-shot so the demonstration always mirrors the real prompt
-	 *  shape — if they drift, the few-shot stops teaching the format the model actually sees. */
+	 *  DEFAULT_SYSTEM_PROMPT few-shot so the demonstration mirrors the real prompt shape — if they
+	 *  drift, the few-shot stops teaching the format the model actually sees.
+	 *
+	 *  <p>The mirror is not total: {@link #TODAY_LABEL} is named in the prompt's prose but NOT
+	 *  demonstrated in the few-shot, so a real message ends with a line the demonstration does not
+	 *  show. Adding it costs ~8 tokens and would put a fake "today" inside a block the prompt tells
+	 *  the model to ignore, so it was left out until measured — the 270-cell eval shows no harm. */
 	static final String FOCUS_HINT_LABEL = "Records ranked by similarity to the query: ";
 
 	/** Label of the trailing line that tells the model what day it is. Shared with the
@@ -675,9 +680,11 @@ public class LlmProvider {
 	 * records and the clinician's query. This date-free form is what {@link #warmup} sends and
 	 * what the streaming path uses as its KV cache seed; the answer paths ({@link #search},
 	 * {@link #searchStreaming}) call the {@code today}-bearing overload below. The warmup form
-	 * with {@code question = ""} remains a byte-prefix of every real query — that shared prefix
-	 * is exactly what llama-server's KV cache reuses, and keeping the date out of it is what
-	 * stops the key changing daily.
+	 * with {@code question = ""} is a byte-prefix of a real query up to the FOCUS-HINT divergence
+	 * point — total on the no-focus path, and on the focus-hinted path covering the records block
+	 * but not past the hint (see the note on the {@code today}-bearing overload). That shared
+	 * prefix is what llama-server's KV cache reuses, and keeping the date out of it is what stops
+	 * the key changing daily.
 	 */
 	static String buildUserMessage(String numberedRecords, String question) {
 		return buildUserMessage(numberedRecords, Collections.<Integer>emptyList(), question);
@@ -707,11 +714,16 @@ public class LlmProvider {
 	 * <p><strong>The trailing placement is a KV-cache constraint, not a style choice.</strong>
 	 * The on-disk KV entry is keyed on the question-independent prefix
 	 * {@code buildUserMessage(numberedRecords, "")} — the exact bytes {@link #warmup} sends. That
-	 * prefix must remain a byte-prefix of every real query, and it must not change from one day
-	 * to the next, or each patient's persisted prefill (pinned prewarm corpus included) would be
-	 * orphaned every midnight. Putting the date after the question satisfies both: warmup and the
-	 * cache seed pass {@code today = null} and are byte-identical to before, while the query adds
-	 * the date in its own per-request tail.
+	 * prefix must not change from one day to the next, or each patient's persisted prefill (pinned
+	 * prewarm corpus included) would be orphaned every midnight. Putting the date after the question
+	 * satisfies that: warmup and the cache seed pass {@code today = null} and are byte-identical to
+	 * before, while the query adds the date in its own per-request tail.
+	 *
+	 * <p>Note the seed is a byte-prefix of a real query only up to the FOCUS-HINT divergence point,
+	 * not unconditionally — with a non-empty focus list the hint is inserted before the query header
+	 * (see {@link #buildUserMessage(String, List, String)}'s note), so llama-server reuses the
+	 * records block and re-prefills from the hint onward. The date sits after that point either way,
+	 * so it costs nothing extra.
 	 *
 	 * @param today today's date, rendered by {@link DateFormatUtil#today()} in the same
 	 *        {@code yyyy-MM-dd} shape as every record date; {@code null}/blank omits the line

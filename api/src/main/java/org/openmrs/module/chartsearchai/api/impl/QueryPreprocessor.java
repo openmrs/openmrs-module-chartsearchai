@@ -389,16 +389,43 @@ final class QueryPreprocessor {
 			return words;
 		}
 		for (String word : cleanTokens(question)) {
-			if (!QUERY_STOPWORDS.contains(word)) {
-				words.add(word);
+			// Trim the punctuation the retrieval tokenizer deliberately leaves in place. Retrieval
+			// hands its text to an embedder that is indifferent to a stray bracket, so widening the
+			// shared tokenizer would change retrieval bytes — and with them the measured
+			// answer-quality baseline — for no retrieval benefit. A CALLER reasoning about which
+			// words the clinician supplied cannot be indifferent: "(active)" read as a distinct word
+			// is read as a clinical domain, which silently costs a problem-list question its
+			// completeness guarantee. Verified before this trim: "conditions (active)?" and
+			// "Any conditions -- active?" both routed away from the problem list.
+			//
+			// Only EDGE runs are trimmed. A token with interior punctuation ("2024-01",
+			// "conditions/diagnoses") still reaches the caller intact, which is why
+			// QueryScopeRouter compares against a letters-and-digits-only form of the token as
+			// well as the token itself.
+			String trimmed = ROUTING_PUNCTUATION.matcher(word).replaceAll("");
+			if (!trimmed.isEmpty() && !QUERY_STOPWORDS.contains(trimmed)) {
+				words.add(trimmed);
 			}
 		}
 		return words;
 	}
 
-	/** Lowercases, drops possessives and punctuation, and splits on whitespace — the one
-	 *  tokenizer {@link #stripQueryStopwords} and {@link #contentWords} share, so they can never
-	 *  disagree about what a word is. */
+	/** Leading/trailing punctuation the shared tokenizer keeps but a word-level consumer must not
+	 *  see — brackets, quotes and dashes. Stripped only in {@link #contentWords}; see the note
+	 *  there for why the retrieval tokenizer is left alone.
+	 *
+	 *  <p>{@code \p{Punct}} is ASCII-only, so the Unicode punctuation category is unioned with it:
+	 *  macOS, iOS and Word substitute em dashes and curly quotes for the ASCII spellings by
+	 *  default, which made the typed-by-hand forms the only ones this trimmed. */
+	private static final Pattern ROUTING_PUNCTUATION = Pattern.compile(
+			"^[\\p{Punct}\\p{IsPunctuation}]+|[\\p{Punct}\\p{IsPunctuation}]+$");
+
+	/** Lowercases, drops possessives and sentence punctuation, and splits on whitespace — the
+	 *  tokenizer {@link #stripQueryStopwords} and {@link #contentWords} share, so the two cannot
+	 *  disagree about word BOUNDARIES or casing. They deliberately differ afterwards: stripping
+	 *  keeps the token as the embedder will see it, while {@link #contentWords} additionally trims
+	 *  edge punctuation and drops empties, because a word-level consumer must not mistake
+	 *  "(active)" for a clinical domain. */
 	private static String[] cleanTokens(String question) {
 		return question.toLowerCase().replaceAll("'s\\b", "")
 				.replaceAll("[?!.,;:']", "").trim().split("\\s+");

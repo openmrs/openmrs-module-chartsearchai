@@ -13,6 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -84,11 +86,20 @@ public class ChartSearchServiceRouterTest {
 		// The prompt now carries "Today's date", so a temporal answer ("seen in the last 30
 		// days?") is only valid for the day it was produced. Folding the date into the key stops
 		// a long TTL from serving yesterday's arithmetic after midnight.
+		//
+		// Pinned as its own "::"-delimited segment, not merely contains(): a question that happens
+		// to mention today's date would satisfy contains() while the router omitted the date
+		// entirely, so contains() cannot tell the two apart.
 		StubRouter router = new StubRouter();
-		assertTrue(router.buildCacheKey(patient("p1"), "q")
-				.contains(org.openmrs.module.chartsearchai.util.DateFormatUtil.today()),
-				"the cache key must be scoped to today: "
-						+ router.buildCacheKey(patient("p1"), "q"));
+		String dayBefore = org.openmrs.module.chartsearchai.util.DateFormatUtil.today();
+		String key = router.buildCacheKey(patient("p1"), "q");
+		List<String> segments = Arrays.asList(key.split("::"));
+		assertTrue(segments.contains(dayBefore) || segments.contains(
+				org.openmrs.module.chartsearchai.util.DateFormatUtil.today()),
+				"the cache key must carry today as its own segment: " + key);
+		assertEquals("p1", key.split("::")[0],
+				"and the patient UUID must stay first, or invalidatePatient's prefix eviction "
+						+ "stops matching this patient's entries");
 	}
 
 	@Test

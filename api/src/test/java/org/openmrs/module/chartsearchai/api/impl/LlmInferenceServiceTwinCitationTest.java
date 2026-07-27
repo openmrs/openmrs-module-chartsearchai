@@ -32,10 +32,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * capture were exactly this).
  *
  * <p>Which of the two rows the model happened to pick is arbitrary, so the fix is mechanical, not
- * a prompt plea: when a cited record is a coded problem, every OTHER retrieved record asserting
- * the SAME concept in the OTHER problem table is the same assertion and is surfaced alongside it.
- * Drift-neutral by construction — a twin cannot be off-topic if the record it duplicates is on
- * topic — and it costs no prompt tokens, because it happens after the answer is generated.
+ * a prompt plea: when a cited record is a coded problem recorded exactly ONCE in each problem
+ * table, the row in the other table is the same assertion and is surfaced alongside it. The
+ * one-row-per-table condition is what makes the result independent of the model's pick — a problem
+ * diagnosed at several encounters is a series of events, not a duplicate, and pairing across it
+ * would put the chip count back at the mercy of which row was cited. Drift-neutral by construction
+ * — a twin cannot be off-topic if the record it duplicates is on topic — and it costs no prompt
+ * tokens, because it happens after the answer is generated.
  */
 public class LlmInferenceServiceTwinCitationTest {
 
@@ -82,6 +85,50 @@ public class LlmInferenceServiceTwinCitationTest {
 
 		assertEquals(Arrays.asList(1, 2), indices(refs),
 				"citing the diagnosis row must surface the condition row too");
+	}
+
+	@Test
+	public void aProblemDiagnosedAtSeveralEncountersIsNotPaired() {
+		// The shape 1:1 tests never reach, and the normal one in real data: encounter_diagnosis is
+		// per-encounter, so a problem re-diagnosed at three visits is 1 condition + 3 diagnosis rows.
+		// Those are three distinct diagnostic events — the same reasoning that keeps ten
+		// blood-pressure obs from being duplicates of one another.
+		List<RecordMapping> mappings = Arrays.asList(
+				mapping(1, "condition", HORDEOLUM, "Condition: Hordeolum. Status: ACTIVE"),
+				mapping(2, "diagnosis", HORDEOLUM, "Diagnosis: Hordeolum. Certainty: CONFIRMED"),
+				mapping(3, "diagnosis", HORDEOLUM, "Diagnosis: Hordeolum. Certainty: CONFIRMED"),
+				mapping(4, "diagnosis", HORDEOLUM, "Diagnosis: Hordeolum. Certainty: PROVISIONAL"));
+
+		assertEquals(Arrays.asList(1), indices(LlmInferenceService.extractCitedReferences(
+				"Hordeolum is recorded [1].", Arrays.asList(1), mappings)),
+				"citing the condition must not fan out to one chip per encounter");
+		assertEquals(Arrays.asList(3), indices(LlmInferenceService.extractCitedReferences(
+				"Hordeolum is recorded [3].", Arrays.asList(3), mappings)),
+				"and citing one of the diagnoses must not pull in the condition either");
+	}
+
+	@Test
+	public void theResultDoesNotDependOnWhichRowTheModelCited() {
+		// The property the whole expansion exists for. Before the one-row-per-table rule this failed:
+		// with 1 condition + 2 diagnoses, citing the diagnosis expanded (the condition table had
+		// exactly one row) while citing the condition did not — so the chip count was a function of
+		// the model's arbitrary pick.
+		List<RecordMapping> ambiguous = Arrays.asList(
+				mapping(1, "condition", HORDEOLUM, "Condition: Hordeolum. Status: ACTIVE"),
+				mapping(2, "diagnosis", HORDEOLUM, "Diagnosis: Hordeolum. Certainty: CONFIRMED"),
+				mapping(3, "diagnosis", HORDEOLUM, "Diagnosis: Hordeolum. Certainty: PROVISIONAL"));
+		assertEquals(1, LlmInferenceService.extractCitedReferences(
+				"Recorded [1].", Arrays.asList(1), ambiguous).size());
+		assertEquals(1, LlmInferenceService.extractCitedReferences(
+				"Recorded [2].", Arrays.asList(2), ambiguous).size());
+
+		List<RecordMapping> unambiguous = Arrays.asList(
+				mapping(1, "condition", HORDEOLUM, "Condition: Hordeolum. Status: ACTIVE"),
+				mapping(2, "diagnosis", HORDEOLUM, "Diagnosis: Hordeolum. Certainty: CONFIRMED"));
+		assertEquals(2, LlmInferenceService.extractCitedReferences(
+				"Recorded [1].", Arrays.asList(1), unambiguous).size());
+		assertEquals(2, LlmInferenceService.extractCitedReferences(
+				"Recorded [2].", Arrays.asList(2), unambiguous).size());
 	}
 
 	@Test

@@ -104,7 +104,15 @@ final class QueryPreprocessor {
 			if (appDataFile.exists()) {
 				is = new FileInputStream(appDataFile);
 				fromFile = true;
-				log.info("Loading stopwords from {}", appDataFile.getAbsolutePath());
+				// WARN, not INFO: this file has TWO consumers now. Besides shaping the retrieval
+				// query it drives QueryScopeRouter's domain-qualification check, so an override
+				// that omits ordinary function words ("patient", "does", "have") silently costs
+				// every problem-list question its completeness guarantee. The module package is not
+				// covered by the stock log.level=info, so at INFO the override is invisible.
+				log.warn("Loading stopwords from {} instead of the bundled list. This file also "
+						+ "drives query-scope routing: an override that drops function words will "
+						+ "stop problem-list questions from being enumerated completely.",
+						appDataFile.getAbsolutePath());
 			}
 		}
 		catch (Exception e) {
@@ -135,7 +143,7 @@ final class QueryPreprocessor {
 		}
 
 		if (fromFile) {
-			log.info("Loaded {} stopwords from application data directory", words.size());
+			log.warn("Loaded {} stopwords from the application data directory", words.size());
 		}
 		return Collections.unmodifiableSet(words);
 	}
@@ -232,29 +240,29 @@ final class QueryPreprocessor {
 		m.put(cue("T1DM"), "type 1 diabetes mellitus");
 		m.put(cue("CKD"), "chronic kidney disease");
 		m.put(cue("ESRD"), "end stage renal disease");
-		m.put(cue("AKI"), "acute kidney injury");
-		m.put(cue("UTI"), "urinary tract infection");
+		m.put(cue("AKIs?"), "acute kidney injury");
+		m.put(cue("UTIs?"), "urinary tract infection");
 		m.put(cue("COPD"), "chronic obstructive pulmonary disease");
 		m.put(cue("CHF"), "congestive heart failure");
-		m.put(cue("CVA"), "cerebrovascular accident stroke");
-		m.put(cue("DVT"), "deep vein thrombosis");
+		m.put(cue("CVAs?"), "cerebrovascular accident stroke");
+		m.put(cue("DVTs?"), "deep vein thrombosis");
 		m.put(cue("GERD"), "gastroesophageal reflux disease");
 		m.put(cue("BMI"), "body mass index");
-		m.put(cue("URTI"), "upper respiratory tract infection");
-		m.put(cue("STI"), "sexually transmitted infection");
-		m.put(cue("STD"), "sexually transmitted disease");
+		m.put(cue("URTIs?"), "upper respiratory tract infection");
+		m.put(cue("STIs?"), "sexually transmitted infection");
+		m.put(cue("STDs?"), "sexually transmitted disease");
 		m.put(cue("ARV"), "antiretroviral");
 		m.put(cue("BP"), "blood pressure");
 		// Capitals only — the lowercase spelling is an ordinary word or unit.
 		m.put(capitalsOnlyCue("DM"), "diabetes mellitus");
-		m.put(capitalsOnlyCue("CAD"), "coronary artery disease");
-		m.put(capitalsOnlyCue("TIA"), "transient ischemic attack");
-		m.put(capitalsOnlyCue("MI"), "myocardial infarction");
-		m.put(capitalsOnlyCue("PE"), "pulmonary embolism");
+		m.put(capitalsOnlyCue("CADs?"), "coronary artery disease");
+		m.put(capitalsOnlyCue("TIAs?"), "transient ischemic attack");
+		m.put(capitalsOnlyCue("MIs?"), "myocardial infarction");
+		m.put(capitalsOnlyCue("PEs?"), "pulmonary embolism");
 		m.put(capitalsOnlyCue("TB"), "tuberculosis");
 		m.put(capitalsOnlyCue("AF"), "atrial fibrillation");
 		m.put(capitalsOnlyCue("SOB"), "shortness of breath");
-		m.put(capitalsOnlyCue("PID"), "pelvic inflammatory disease");
+		m.put(capitalsOnlyCue("PIDs?"), "pelvic inflammatory disease");
 		m.put(capitalsOnlyCue("HR"), "heart rate");
 		m.put(capitalsOnlyCue("RR"), "respiratory rate");
 		CLINICAL_ABBREVIATIONS = Collections.unmodifiableMap(m);

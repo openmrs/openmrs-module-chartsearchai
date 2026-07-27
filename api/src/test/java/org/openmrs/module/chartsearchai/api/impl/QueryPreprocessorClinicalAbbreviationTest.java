@@ -52,6 +52,26 @@ public class QueryPreprocessorClinicalAbbreviationTest {
 	}
 
 	@Test
+	public void expand_shouldCoverThePluralOfCountableInitialisms() {
+		// LAB_PANEL_ABBREVIATIONS has carried "LFTs?"/"RFTs?" from the start because clinicians
+		// pluralise; the condition vocabulary was added without it, so "any UTIs?" expanded to
+		// nothing while "any UTI?" worked. The probe only ever asked "Does the patient have
+		// <ABBREV>?", so it could not see this.
+		assertTrue(QueryPreprocessor.forRetrieval("any UTIs in the last year?").toLowerCase()
+				.contains("urinary tract infection"), "plural UTIs must expand");
+		assertTrue(QueryPreprocessor.forRetrieval("previous MIs?").toLowerCase()
+				.contains("myocardial infarction"), "plural MIs must expand");
+		assertTrue(QueryPreprocessor.forRetrieval("any DVTs?").toLowerCase()
+				.contains("deep vein thrombosis"), "plural DVTs must expand");
+		assertTrue(QueryPreprocessor.forRetrieval("history of TIAs").toLowerCase()
+				.contains("transient ischemic attack"), "plural TIAs must expand");
+		// The mass nouns deliberately do NOT take a plural — "CKDs" is not a thing a clinician
+		// writes, and a spurious alternative is a spurious retrieval token.
+		assertFalse(QueryPreprocessor.forRetrieval("any CKDs?").toLowerCase()
+				.contains("chronic kidney disease"), "mass nouns must not be pluralised");
+	}
+
+	@Test
 	public void expand_shouldAlsoApplyTheLabPanelExpansions() {
 		// One composed entry point: the scoped builder must not have to remember to call two
 		// normalizers, and a future caller cannot get only half the vocabulary.

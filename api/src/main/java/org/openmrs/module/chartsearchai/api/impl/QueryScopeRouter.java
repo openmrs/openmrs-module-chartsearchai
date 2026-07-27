@@ -134,7 +134,14 @@ final class QueryScopeRouter {
 					// ("Status: ACTIVE", "Certainty: PROVISIONAL") are the least domain-like words
 					// available, and were reading as domains.
 					"confirmed", "provisional", "presumed", "suspected", "refuted", "entered",
-					"error", "file", "record", "records", "history", "historical")));
+					"error", "file", "record", "records", "history", "historical",
+					// Quantification. These matter more than the rest: see the asymmetry note on
+					// narrowsToADomain — a count answered from a partial slice is a confidently
+					// wrong NUMBER, not a merely less exhaustive answer.
+					"many", "much", "number", "numbers", "total", "totals", "count", "counts",
+					// Where the records live. "chart"/"notes" were read as domains while the
+					// synonym "record" was not, which is the tell for an allow-list with holes.
+					"chart", "charts", "note", "notes", "list", "listed", "entry", "entries")));
 
 	/** A token made only of digits — a year, a range or a count, never a clinical domain. */
 	private static final Pattern NUMERIC_ONLY = Pattern.compile("\\d+");
@@ -189,11 +196,19 @@ final class QueryScopeRouter {
 	 * not narrow it) and any single-word temporal cue.
 	 *
 	 * <p>Note the deliberate asymmetry in how this fails. Reading a problem-list question as
-	 * domain-qualified costs it the completeness guarantee — the answer still comes from the
-	 * similarity slice, so it is merely less exhaustive. Reading a DOMAIN question as a
+	 * domain-qualified usually costs it only the completeness guarantee — the answer still comes
+	 * from the similarity slice, so it is merely less exhaustive. Reading a DOMAIN question as a
 	 * problem-list one produces the measured enumeration failure ("psychiatric conditions:
 	 * Cardiogenic shock, Bacterial gastroenteritis …"), which is a clinically wrong answer. When an
 	 * unrecognised word forces a guess, this guesses toward the survivable error.
+	 *
+	 * <p><b>The asymmetry inverts for one class of question, which is why the quantification words
+	 * are listed.</b> "How many conditions does the patient have?" answered from a similarity
+	 * top-K is not a less exhaustive answer — it is a specific wrong NUMBER, stated with the same
+	 * confidence as a right one, and nothing in the answer reveals that the input was partial. The
+	 * known-limitations note about LLM counting is about the model's arithmetic over a complete
+	 * list; this would make the list incomplete too. Any word that turns a question into a count
+	 * belongs in this list, not in a guess.
 	 */
 	private static boolean narrowsToADomain(String word) {
 		// contentWords trims only the EDGES of a token, so anything with interior punctuation

@@ -9,9 +9,11 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -180,6 +182,23 @@ public class QueryScopeRouterDomainQualifiedTest {
 				"nor curly double quotes");
 		assertTrue(intents("Any \u2018active\u2019 conditions?").contains(QueryScopeRouter.Intent.CONDITIONS),
 				"nor curly single quotes");
+	}
+
+	@Test
+	public void theBundledStopwordListMustStillStripTheWordsRoutingDependsOn() {
+		// This rule reads the SAME vocabulary retrieval does, so the stopword file is now load-
+		// bearing for routing. Measured on an override that dropped its three "patient*" lines:
+		// contentWords("What conditions does the patient have?") became [conditions, patient],
+		// "patient" read as a clinical domain, and every problem-list question lost its
+		// completeness guarantee — silently. Loading an override now WARNs, but the bundled list
+		// itself is only protected by this assertion.
+		assertEquals(Arrays.asList("conditions"),
+				QueryPreprocessor.contentWords("What conditions does the patient have?"),
+				"the bundled stopword list must strip the question words, or a bare problem-list "
+						+ "question reads as domain-qualified");
+		assertEquals(Arrays.asList("diagnoses"),
+				QueryPreprocessor.contentWords("Does she have any diagnoses?"),
+				"…for every ordinary phrasing of it");
 	}
 
 	@Test

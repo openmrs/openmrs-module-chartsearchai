@@ -560,8 +560,20 @@ public class LlmInferenceService implements ChartSearchService {
 	 *       would link every non-coded problem to every other.</li>
 	 * </ul>
 	 *
-	 * <p>Costs no prompt tokens (it runs after generation) and cannot add drift: a twin says
-	 * exactly what the record it duplicates says, so it is on topic whenever that one is.
+	 * <p>Costs no prompt tokens, because it runs after generation.
+	 *
+	 * <p><b>Drift-neutral only for genuinely cited indices.</b> A twin says exactly what the record
+	 * it duplicates says, so it is on topic whenever that one is — but that reasoning assumes the
+	 * index it pairs from was really cited. Issue #103 breaks that assumption upstream: a clinical
+	 * value pair can be rewritten into citation markers when the chart happens to contain those
+	 * record numbers, and if one of them indexes a coded problem with a 1:1 twin, this method then
+	 * surfaces the TWIN — an index that appears in neither the prose nor the citations array.
+	 * Reproduced on a 130-record chart: {@code {"answer":"BP was [120, 80] today.",
+	 * "citations":[120,80]}} yields references 80, 81 and 120, where 81 is an unrelated diagnosis
+	 * chip on an answer that mentions only a blood pressure. Nothing can be contained here — gating
+	 * on "not shorthand-created" would kill the multi-index case the rewrite exists for — so the
+	 * fix is #103's discriminator, and its cost must be measured knowing this path widens the blast
+	 * radius beyond the numbers inside the bracket.
 	 *
 	 * @param citedIndices the anchored citation set; READ ONLY — the caller passes the very set it
 	 *        then adds the result to, so mutating it here would fail fast on its own iteration

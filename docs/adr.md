@@ -2011,50 +2011,54 @@ Two smaller defects showed up in the code rather than the data: the prompt never
 ### Evidence
 
 **Answer-quality gold — 270 cells, same gold, same install, `chartMode=queryScoped`, `topK=12`,
-three captures per arm.** The baseline turned out to be reproducible (two captures 18 hours apart,
-across a rebuild and a restart, byte-identical on all 270 answers); this change is not (two captures
-of one build differ on 42 of 270 cells). So the baseline is a fixed point and the arm is reported as
-a range:
+repeated captures per arm.** A single capture per arm cannot support these numbers, which the first
+draft of this decision did not know. Two facts came out of repeating them:
 
-| | baseline (`main`), 2 captures | with (1)–(4), 3 captures | mean delta |
-|---|---|---|---|
-| meanF1 (154 present) | 0.743, 0.743 | 0.760 / 0.764 / 0.771 | **+0.022** |
-| abstention (116 absent) | 107/116 both | 107 / 108 / 107 | ±0 |
-| off-topic citations | 92 both | 74 / 95 / 100 | **−2.3** |
+- **`main` is bit-reproducible under a fixed capture method** — two single-pass captures 18 hours
+  apart, across a rebuild and a standalone restart, are byte-identical on all 270 answers. So the
+  baseline is a fixed point, not a draw: **meanF1 0.743, abstention 107/116, drift 92.**
+- **This change is not.** Two single-pass captures of one build differ on **112 of 270 cells** (29 on
+  the reference set, the rest wording). At cell level: the flip-prone `heart` cell answered
+  identically 6/6 times on `main` and flipped between 0 and 9 citations across 9 runs here, on an
+  identical 1519-token prompt.
 
-**The drift improvement reported in the first draft of this decision does not exist.** It was the
-`arm-a` draw. Per topic, averaged over the three captures, with each capture shown so a consistent
-effect can be told from a noisy one:
+Compared against that fixed baseline, per topic, with both arm captures shown so "real" is
+distinguishable from "a draw" (a third capture exists but was assembled from chunks, which
+[perturbs results independently of the build](../eval/drift-metric/README.md#capture-the-arms-the-same-way-or-the-comparison-is-void), so it is excluded):
 
-| topic | base drift | arm drift (3 runs) | Δ | base F1 | arm F1 (3 runs) | Δ |
-|---|---|---|---|---|---|---|
-| **mental** | 54 | 18 / 25 / 25 | **−31.3** | 0.775 | 0.825 / 0.839 / 0.841 | **+0.060** |
-| **heart** | 16 | 28 / 45 / 46 | **+23.7** | 0.663 | 0.674 / 0.674 / 0.674 | +0.011 |
-| **fractures** | 1 | 11 / 10 / 7 | **+8.3** | 0.526 | 0.502 / 0.549 / 0.514 | −0.004 |
-| drug-allergies | 12 | 10 / 8 / 8 | −3.3 | 0.896 | 0.938 / 0.896 / 0.938 | +0.028 |
-| kidney | 5 | 4 / 9 / 5 | +1.0 | 0.629 | 0.656 / 0.670 / 0.659 | +0.033 |
-| eye | 1 | 0 / 0 / 1 | −0.7 | 0.961 | 0.994 / 0.994 / 0.979 | +0.028 |
-| allergies | 0 | 0 / 0 / 0 | ±0 | 0.806 | 0.814 ×3 | +0.008 |
-| programs | 3 | 3 / 3 / 3 | ±0 | 1.000 | 1.000 ×3 | ±0 |
+| topic | drift: base → arm 1 / arm 2 | verdict | F1: base → arm 1 / arm 2 | verdict |
+|---|---|---|---|---|
+| **mental** | 54 → 18 / 25 | **better in both** | 0.775 → 0.825 / 0.839 | **better in both** |
+| **heart** | 16 → 28 / 45 | **WORSE in both** | 0.663 → 0.674 / 0.674 | better in both |
+| **fractures** | 1 → 11 / 10 | **WORSE in both** | 0.526 → 0.502 / 0.549 | straddles |
+| drug-allergies | 12 → 10 / 8 | better in both | 0.896 → 0.938 / 0.896 | straddles |
+| eye | 1 → 0 / 0 | better in both | 0.961 → 0.994 / 0.994 | better in both |
+| kidney | 5 → 4 / 9 | straddles | 0.629 → 0.656 / 0.670 | better in both |
+| allergies | 0 → 0 / 0 | unchanged | 0.806 → 0.814 / 0.814 | better in both |
+| programs | 3 → 3 / 3 | unchanged | 1.000 → 1.000 / 1.000 | unchanged |
+| **TOTAL** | **92 → 74 / 100** | **not resolvable** | **0.743 → 0.760 / 0.771** | **better in both** |
 
-Read the three-run columns: `heart` **+24** and `fractures` **+8** are consistent in every capture, so
-they are real regressions, not draws — and together they cancel the routing fix's real **−31** on
-`mental`. The net drift figure is therefore honest only as "unchanged".
+**meanF1 improves, and that conclusion is safe:** no topic is worse in both captures, five are better
+in both, and both captures beat a baseline that does not move. **The drift improvement claimed in the
+first draft does not exist:** the total straddles the baseline, because two real improvements
+(`mental` −31, plus `drug-allergies` and `eye`) are offset by two real regressions (`heart` +12 to
++29, `fractures` +9 to +10). Abstention is flat at 107–108 of 116.
 
-**What the change does buy, and it is consistent:** meanF1 improves on every topic except `fractures`
-(−0.004), all three captures beat the deterministic baseline, and `mental` — the topic the routing fix
-targets — gains +0.060 while shedding 31 off-topic citations. Abstention is flat.
+**Where the added `heart`/`fractures` drift comes from.** Both are absent-topic cells whose gold
+deliberately counts raw vitals as off-topic, and the added citations are *dated* records appended
+after a negative verdict: *"No heart or cardiac problems diagnosis is recorded. Blood pressure
+readings are: 116 mmHg on 2026-01-03 [2], 96 mmHg on 2025-09-28 [3], …"*. The prompt grew by exactly
+84 tokens on that cell (1435 → 1519) — the date line plus the system-prompt sentence pointing at it —
+and the model now volunteers dated supporting records. That is the mechanism the temporal probe
+rewards (4/12 → 11/12) firing where it is unwanted, and it is the same mechanism behind the
+reproducibility gap: on `main` the run-to-run variation stays inside the reasoning scratchpad (output
+tokens 120–154 while the answer text is identical in 6/6 runs); here it escapes into the answer.
 
-**Where the added `heart`/`fractures` drift comes from.** Those are absent-topic cells whose gold
-deliberately counts raw vitals as off-topic, and the added citations are *dated* records: *"No heart
-or cardiac problems diagnosis is recorded. Blood pressure readings are: 116 mmHg on 2026-01-03 [2],
-96 mmHg on 2025-09-28 [3], …"*. The prompt grew by exactly 84 tokens — the date line plus the
-system-prompt sentence pointing at it (1435 → 1519 on that cell) — and the model now volunteers dated
-supporting records after a negative verdict. That is the same mechanism the temporal probe rewards
-(4/12 → 11/12), acting where it is not wanted. It also explains the reproducibility difference: on
-`main` the run-to-run variation stays inside the reasoning scratchpad (output tokens vary 120–154
-while the answer text is identical in 6/6 runs), whereas here it escapes into the answer, flipping
-that cell between 0 and 9 citations across 9 runs of one identical 1519-token prompt.
+**Consequence for how this decision should be read.** (4) the routing fix is a clear win on the topic
+it targets, and (1) the retrieval vocabulary is measured by its own probe. (2) the date anchor buys a
+large temporal gain and costs `heart`/`fractures` drift plus output reproducibility. Those two effects
+are separable — the sentence that points at the date lives in the configurable system prompt — and
+that separation should be measured before the four are accepted as a block.
 
 **Attributing the two halves.** Twin co-citation can be switched off offline by restricting references to inline-anchored indices, which isolates it from the rest on the *same* capture:
 

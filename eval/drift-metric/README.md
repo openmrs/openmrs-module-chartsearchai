@@ -218,19 +218,38 @@ select min(input_tokens), round(avg(input_tokens)), max(input_tokens)
 
 An average near 2k is a scoped arm; near 10k means the arm is `fullChart` and the score is void.
 
+### Capture the arms the SAME way, or the comparison is void (2026-07-27)
+
+Two 270-cell captures of `main`, taken 18 hours apart across a rebuild and a standalone restart, are
+**byte-identical on all 270 answers** — as long as both are a single sequential pass over
+`patients.txt`. A third capture of the same build, assembled instead from several smaller invocations
+(a few patients per call, because long background runs kept being killed), differs from them on **47
+of 270 cells** (11 on references, 36 wording-only) and moves meanF1 0.743 → 0.736.
+
+Nothing about the build changed. What changed is the order and grouping of requests, and therefore
+the KV-cache state each request starts from: llama-server runs `--parallel 1` with
+`cache_prompt=true`, so how much of a prompt is reused depends on what the *previous* request left in
+the cache, and the resulting prefill split changes floating-point accumulation order.
+
+**So a capture is only comparable to another capture made the same way.** Do not assemble one arm from
+chunks and compare it to a single-pass arm; do not interleave two captures against one server. If a
+long run dies partway, either restart it from scratch or finish it the same way for both arms.
+
 ### Run-to-run noise (measured 2026-07-27)
 
-**The single most important number for reading anything this harness reports.** The same build,
-same gold, same install, captured twice:
+**The single most important number for reading anything this harness reports — and it is not the same
+for every build.** Two single-pass captures of one build, same gold, same install:
 
-| | capture 1 | capture 2 (identical build) |
-|---|---|---|
-| meanF1 (154 present) | 0.760 | **0.771** |
-| abstention (116 absent) | 0.922 (107/116) | **0.931 (108/116)** |
-| off-topic citations | 74 | **100** |
+| | `main` capture 1 | `main` capture 2 | PR #93 capture 1 | PR #93 capture 2 |
+|---|---|---|---|---|
+| meanF1 (154 present) | 0.743 | 0.743 | 0.760 | **0.771** |
+| abstention (116 absent) | 107/116 | 107/116 | 107/116 | 108/116 |
+| off-topic citations | 92 | 92 | 74 | **100** |
+| cells differing from its twin | — | **0 of 270** | — | **112 of 270** |
 
-241 of 270 cells (89%) returned an identical reference set; 16 cells changed their drift
-contribution, netting **+26**. The mechanism is decode nondeterminism, not the pipeline, and the
+`main` is bit-reproducible under a fixed capture method; PR #93's prompt is not. 29 of those 112
+differ on the reference set (the rest are wording), and 16 cells change their drift contribution,
+netting **+26**. The mechanism is decode nondeterminism, not the pipeline, and the
 audit log proves it: patient `1c47b620`'s heart cell recorded `input_tokens = 1519` on nine separate
 runs — byte-identical prompts — while `reference_count` alternated 9, 0, 9, 0, 0, 0, 9, 0, 0. The
 model flips between answering *"No heart or cardiac problems are recorded."* and appending nine

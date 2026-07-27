@@ -321,14 +321,25 @@ class QueryStoreChartBuilder {
 	 * complete problem list from a domain-qualified conditions question. Without the types on the
 	 * line, an operator triaging that answer reads {@code intent=TOPICAL} — the label that says the
 	 * suppression applied — while a contributor had put the problem list back. Sorted so the token
-	 * is stable across runs and greppable.
+	 * is stable across runs, and whitespace-free like every other label on the line: this is a
+	 * {@code key=value} field in a single-line record, so a space would truncate it for
+	 * {@code grep -o 'intent=[^ ]*'} and for any logfmt/ELK extractor.
 	 */
 	static String scopeLabel(Set<QueryScopeRouter.Intent> intents, Set<String> contributedTypes) {
 		String label = intentLabel(intents);
 		if (contributedTypes == null || contributedTypes.isEmpty()) {
 			return label;
 		}
-		return label + "+contrib" + new TreeSet<String>(contributedTypes);
+		StringBuilder contributed = new StringBuilder(label).append("+contrib(");
+		boolean first = true;
+		for (String type : new TreeSet<String>(contributedTypes)) {
+			if (!first) {
+				contributed.append(',');
+			}
+			contributed.append(type);
+			first = false;
+		}
+		return contributed.append(')').toString();
 	}
 
 	/** The intent half of {@link #scopeLabel}: {@code TOPICAL} when none matched, else the names

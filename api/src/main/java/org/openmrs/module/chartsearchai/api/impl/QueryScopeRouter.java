@@ -197,21 +197,43 @@ final class QueryScopeRouter {
 	 */
 	private static boolean narrowsToADomain(String word) {
 		// contentWords trims only the EDGES of a token, so anything with interior punctuation
-		// arrives whole: "2-3", "2024-01", "01/2024", "co-morbid". Comparing against a
-		// letters-and-digits-only form as well as the token itself covers all of them with one
-		// rule rather than a spelling-by-spelling branch.
-		String bare = NON_ALPHANUMERIC.matcher(word).replaceAll("");
-		// A number is never a clinical domain — "any conditions diagnosed in 2024?" and "in the
-		// last 2-3 years?" are problem-list questions. TEMPORAL_CUES matches "2 years" but neither
-		// a standalone year nor a range.
-		if (bare.isEmpty() || NUMERIC_ONLY.matcher(bare).matches()) {
+		// arrives whole — and interior punctuation is TWO different phenomena that need opposite
+		// treatment. As a JOINER it glues one word together ("co-morbid", "long-term", "2024-01"),
+		// so the recognisable form is the concatenation. As a SEPARATOR it packs several words into
+		// one token ("conditions/diagnoses", "acute/chronic conditions"), where the concatenation is
+		// recognisable by nothing — CONDITIONS_CUES needs the \b boundaries that concatenating
+		// destroys — and the parts are what must be checked. Handling only the joiner is what cost
+		// "any conditions/diagnoses?" its completeness guarantee.
+		String joined = NON_ALPHANUMERIC.matcher(word).replaceAll("");
+		if (joined.isEmpty() || isProblemListVocabulary(joined) || isProblemListVocabulary(word)) {
 			return false;
 		}
-		return !GENERIC_CONDITION_WORDS.contains(word)
-				&& !GENERIC_CONDITION_WORDS.contains(bare)
-				&& !CONDITIONS_CUES.matcher(word).matches()
-				&& !TEMPORAL_CUES.matcher(word).matches()
-				&& !isOtherIntentCue(word);
+		String[] parts = NON_ALPHANUMERIC.split(word);
+		if (parts.length < 2) {
+			return true;
+		}
+		for (String part : parts) {
+			if (!part.isEmpty() && !isProblemListVocabulary(part)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * True when a single token is a way of asking about the problem list rather than a clinical
+	 * domain. Everything this class or the stopword file already recognises as question-shaping
+	 * vocabulary is consulted rather than re-listed: the generic qualifiers, any intent cue
+	 * (including the conditions cue itself — "conditions", "diagnoses" and "diagnosed" describe the
+	 * list, they do not narrow it), any single-word temporal cue, and any number (a year, a range or
+	 * a count can never name a body system, and TEMPORAL_CUES matches "2 years" but not "2024").
+	 */
+	private static boolean isProblemListVocabulary(String token) {
+		return NUMERIC_ONLY.matcher(token).matches()
+				|| GENERIC_CONDITION_WORDS.contains(token)
+				|| CONDITIONS_CUES.matcher(token).matches()
+				|| TEMPORAL_CUES.matcher(token).matches()
+				|| isOtherIntentCue(token);
 	}
 
 	/** True when {@code word} is a cue of some OTHER typed intent — "any drug allergies or skin

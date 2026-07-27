@@ -136,6 +136,33 @@ public class QueryScopeRouterDomainQualifiedTest {
 	}
 
 	@Test
+	public void punctuationThatSEPARATESWordsIsNotAClinicalDomain() {
+		// Interior punctuation is two opposite phenomena. As a joiner it glues one word together
+		// ("co-morbid" -> "comorbid"); as a separator it packs several words into one token, where
+		// the concatenation is recognisable by nothing — CONDITIONS_CUES needs the word boundaries
+		// that concatenating destroys. Handling only the joiner left the literal example the
+		// production comment names ("conditions/diagnoses") losing the problem list.
+		for (String question : new String[] {
+				"Any conditions/diagnoses?",
+				"Any conditions/problems?",
+				"Any acute/chronic conditions?",
+				"Any conditions (active/inactive)?",
+				"Any conditions\u2014active?" }) {
+			assertTrue(intents(question).contains(QueryScopeRouter.Intent.CONDITIONS),
+					"every part is problem-list vocabulary: " + question);
+		}
+	}
+
+	@Test
+	public void aSeparatorWhosePartsAreDomainsStillNarrows() {
+		// The negative control for the rule above: splitting on punctuation must not turn a
+		// two-domain question into a problem-list dump. "cardiac/renal" names two body systems.
+		assertFalse(intents("Any cardiac/renal conditions?").contains(QueryScopeRouter.Intent.CONDITIONS),
+				"a slash between two clinical domains still narrows");
+		assertFalse(intents("Any heart/lung conditions?").contains(QueryScopeRouter.Intent.CONDITIONS));
+	}
+
+	@Test
 	public void edgePunctuationDoesNotReadAsAClinicalDomain() {
 		// The retrieval tokenizer leaves brackets and dashes attached, because the embedder does not
 		// care. A word-level consumer does: "(active)" read as a distinct word looks exactly like a

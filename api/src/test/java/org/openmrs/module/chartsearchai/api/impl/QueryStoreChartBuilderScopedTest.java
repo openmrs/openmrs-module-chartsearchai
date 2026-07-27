@@ -385,12 +385,18 @@ public class QueryStoreChartBuilderScopedTest {
 				QueryScopeRouter.matchedIntents("Does the patient have any psychiatric conditions?"),
 				none),
 				"a domain-qualified conditions question is TOPICAL with no contributors");
-		assertEquals("TOPICAL+contrib[condition, diagnosis]", QueryStoreChartBuilder.scopeLabel(
+		String contributed = QueryStoreChartBuilder.scopeLabel(
 				QueryScopeRouter.matchedIntents("Does the patient have any psychiatric conditions?"),
-				new HashSet<String>(Arrays.asList("diagnosis", "condition"))),
+				new HashSet<String>(Arrays.asList("diagnosis", "condition")));
+		assertEquals("TOPICAL+contrib(condition,diagnosis)", contributed,
 				"…and must say so when a contributor put the problem list back, sorted so the "
-						+ "token is stable and greppable");
-		assertEquals("MEDICATIONS+contrib[billing]", QueryStoreChartBuilder.scopeLabel(
+						+ "token is stable across runs");
+		// The label is a key=value field in a single-line [timing] record, so whitespace inside it
+		// truncates the value for `grep -o 'intent=[^ ]*'` and for any logfmt/ELK extractor —
+		// defeating the only purpose the contributed half has.
+		assertFalse(contributed.contains(" "),
+				"the label must stay whitespace-free to survive grep: " + contributed);
+		assertEquals("MEDICATIONS+contrib(billing)", QueryStoreChartBuilder.scopeLabel(
 				QueryScopeRouter.matchedIntents("What medications is the patient taking?"),
 				new HashSet<String>(Arrays.asList("billing"))),
 				"an ordinary contributor claim is labelled the same way");

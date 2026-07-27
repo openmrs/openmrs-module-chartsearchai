@@ -11,17 +11,39 @@ import os  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import metric_score as M  # noqa: E402
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# compare_arms.py <baselineDir> <armDir> [goldFile] [adjFile] — the two file arguments are
+# identified by SHAPE, not by position, because metric_score.py takes them in the opposite order
+# (<capture> [adj] [gold]) and passing this script the order the README teaches for that one
+# silently scored 0 cells and reported "no change" with exit 0.
 
-# compare_arms.py <baselineDir> <armDir> [goldFile] [adjFile]
-gold = json.load(open(sys.argv[3] if len(sys.argv) > 3
-                      else os.path.join(HERE, "metric_gold.local.json")))
 
-# Resolve the adjudication file the same way metric_score.py does. Without this the A/B table and
-# the scorer silently report different meanF1/drift for the SAME capture as soon as anyone
-# adjudicates an unknown citation — which metric_score.py actively asks the operator to do.
-_adj_path = sys.argv[4] if len(sys.argv) > 4 else os.path.join(HERE, "offtopic_adj.local.json")
-ADJ = json.load(open(_adj_path)) if os.path.exists(_adj_path) else {}
+def _load_by_shape(paths):
+    """-> (gold, adj). A gold maps "uuid|topic" -> {present, ontopic, focus_uuids}; an adjudication
+    maps "uuid|topic" -> [uuid, ...] and/or carries "_ontopic"."""
+    gold_doc = adj_doc = None
+    for path in paths:
+        doc = json.load(open(path))
+        looks_adj = "_ontopic" in doc or all(isinstance(v, list) for v in doc.values())
+        if looks_adj and adj_doc is None:
+            adj_doc = doc
+        elif not looks_adj and gold_doc is None:
+            gold_doc = doc
+        else:
+            sys.exit("compare_arms: two files of the same kind passed: %s" % ", ".join(paths))
+    return gold_doc, adj_doc
+
+
+_defaults = [os.path.join(M.HERE, "metric_gold.local.json"),
+             os.path.join(M.HERE, "offtopic_adj.local.json")]
+_given = [p for p in sys.argv[3:5] if os.path.exists(p)]
+gold, _adj = _load_by_shape(_given if _given else [p for p in _defaults if os.path.exists(p)])
+if gold is None:
+    sys.exit("compare_arms: no gold file found (pass one, or put metric_gold.local.json beside "
+             "this script)")
+# Honour the same adjudication metric_score.py resolves, or the A/B table and the scorer report
+# different meanF1/drift for the SAME capture the moment anyone adjudicates an unknown citation —
+# which metric_score.py actively asks the operator to do.
+ADJ = _adj or {}
 ADJ_ON = ADJ.get("_ontopic", {})
 
 
@@ -30,6 +52,10 @@ def score(cap):
                                            "abs_ok": 0, "drift": 0})
     cells = {}
     rows, _ = M.load_captures(cap, lambda c: c in gold)
+    if not rows:
+        print("WARN: %s matched 0 of %d gold cells — wrong capture dir, or the gold and the "
+              "capture are from different installs. The comparison below is empty, not equal."
+              % (cap, len(gold)))
     for uuid, topic, d in rows:
         cell = uuid + "|" + topic
         g = gold[cell]
@@ -41,7 +67,7 @@ def score(cap):
         if s["present"] and s.get("scoreable"):
             p["f1"].append(s["f1"]); p["prec"].append(s["prec"]); p["rec"].append(s["rec"])
             p["drift"] += len(s["off"]) + len(s["unk"])
-            cells[uuid + "|" + topic] = s["f1"]
+            cells[cell] = s["f1"]
         elif not s["present"]:
             p["abs_n"] += 1; p["abs_ok"] += 1 if s["abstain_ok"] else 0
             p["drift"] += len(s["on"]) + len(s["off"]) + len(s["unk"])

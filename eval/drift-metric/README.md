@@ -256,7 +256,13 @@ recorded, needs no log level, and survives restarts.
   trusting a number, it lists every record counted on-topic per cell.
 - `capture_eval_local.sh <outdir> <patients.txt>` — fires those cells at the live REST endpoint.
 - `metric_score.py <capture> offtopic_adj.local.json metric_gold.local.json` — scores one arm.
-- `compare_arms.py <baselineCapture> <armCapture> [gold]` — per-topic and per-cell A/B.
+- `compare_arms.py <baselineCapture> <armCapture> [gold] [adj]` — per-topic and per-cell A/B. The
+  two optional file arguments are identified by shape, so either order works (`metric_score.py`
+  takes them in the opposite one) and each falls back to its committed default independently. Run
+  `compare_arms.py --selftest` after touching that resolution: three consecutive silent failures
+  landed in it — reporting "no change" for a real improvement, dropping the adjudication on the
+  documented gold-only form, and swallowing a typo'd path — while it was module-level code no test
+  could reach.
 - `temporal_probe_today.py <outdir> [windowDays] [patients]` — DB-truth probe for questions whose
   answer depends on *today*: "any visit in the last 30 days?" and "how many days ago was the most
   recent visit?".

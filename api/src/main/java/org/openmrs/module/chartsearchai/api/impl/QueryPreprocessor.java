@@ -143,7 +143,9 @@ final class QueryPreprocessor {
 		}
 
 		if (fromFile) {
-			log.warn("Loaded {} stopwords from the application data directory", words.size());
+			// INFO, not WARN: the override itself is already warned about above, and two WARNs for
+			// one event is how a log trains its reader to skip them.
+			log.info("Loaded {} stopwords from the application data directory", words.size());
 		}
 		return Collections.unmodifiableSet(words);
 	}

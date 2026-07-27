@@ -220,6 +220,12 @@ final class QueryScopeRouter {
 		// destroys — and the parts are what must be checked. Handling only the joiner is what cost
 		// "any conditions/diagnoses?" its completeness guarantee.
 		String joined = NON_ALPHANUMERIC.matcher(word).replaceAll("");
+		// The raw-token check is defensive only, and deliberately kept. For every token
+		// contentWords can currently emit it is unreachable: with no punctuation joined == word, and
+		// with punctuation none of the five checks can match (set membership is over unpunctuated
+		// words, and the cue patterns' only multi-word alternatives contain a space, which
+		// whitespace splitting makes impossible). It costs one set lookup and it is what keeps this
+		// method correct if the tokenizer's contract ever widens.
 		if (joined.isEmpty() || isProblemListVocabulary(joined) || isProblemListVocabulary(word)) {
 			return false;
 		}

@@ -14,17 +14,23 @@ import metric_score as M  # noqa: E402
 def _load_by_shape(paths):
     """-> (gold, adj), either possibly None. A gold maps "uuid|topic" -> {present, ontopic,
     focus_uuids}; an adjudication maps "uuid|topic" -> [uuid, ...] and/or carries "_ontopic"."""
-    gold_doc = adj_doc = None
+    gold = adj = None
     for path in paths:
         doc = json.load(open(path))
+        # An empty document has no shape: all() over no values is vacuously True, so {} would read
+        # as an adjudication and the real gold would fall back to the committed one, reporting the
+        # committed gold's numbers with no warning. build_gold_local.py writes {} when its patient
+        # selection returns nothing, so this is reachable, not theoretical.
+        if not doc:
+            sys.exit("compare_arms: %s is empty — no cells to score" % path)
         looks_adj = "_ontopic" in doc or all(isinstance(v, list) for v in doc.values())
-        if looks_adj and adj_doc is None:
-            adj_doc = doc
-        elif not looks_adj and gold_doc is None:
-            gold_doc = doc
+        if looks_adj and adj is None:
+            adj = (path, doc)
+        elif not looks_adj and gold is None:
+            gold = (path, doc)
         else:
             sys.exit("compare_arms: two files of the same kind passed: %s" % ", ".join(paths))
-    return gold_doc, adj_doc
+    return gold, adj
 
 
 def resolve_inputs(argv, here=None):
@@ -51,17 +57,34 @@ def resolve_inputs(argv, here=None):
     for path in given:
         if not os.path.exists(path):
             sys.exit("compare_arms: no such file: %s" % path)
-    gold_doc, adj_doc = _load_by_shape(given)
-    if gold_doc is None:
+    gold, adj = _load_by_shape(given)
+    if gold is None:
         default_gold = os.path.join(here, "metric_gold.local.json")
         if not os.path.exists(default_gold):
             sys.exit("compare_arms: no gold file found (pass one, or put metric_gold.local.json "
                      "beside this script)")
-        gold_doc = json.load(open(default_gold))
-    if adj_doc is None:
-        default_adj = os.path.join(here, "offtopic_adj.local.json")
-        adj_doc = json.load(open(default_adj)) if os.path.exists(default_adj) else {}
-    return gold_doc, adj_doc
+        gold = (default_gold, json.load(open(default_gold)))
+    if adj is None:
+        adj_doc = {}
+        # Pair the adjudication with the gold's OWN family. A hardcoded ".local" default silently
+        # scored metric_gold.json against the empty offtopic_adj.local.json instead of
+        # offtopic_adj.json, discarding its 13 adjudicated cells.
+        base = os.path.basename(gold[0])
+        candidates = []
+        if "metric_gold" in base:
+            # Only a recognisable gold name maps to a family. Blind substitution on an arbitrary
+            # name ("other_gold.json") leaves it unchanged, so the gold would be loaded a second
+            # time AS the adjudication — caught by selftest case 2 when this was first written.
+            candidates.append(base.replace("metric_gold", "offtopic_adj"))
+        candidates.append("offtopic_adj.local.json")
+        adj_path = None
+        for candidate in candidates:
+            path = os.path.join(os.path.dirname(gold[0]) or here, candidate)
+            if os.path.exists(path):
+                adj_path, adj_doc = path, json.load(open(path))
+                break
+        adj = (adj_path, adj_doc)
+    return gold[1], adj[1]
 
 
 gold = {}
@@ -188,7 +211,25 @@ def selftest():
         except SystemExit:
             pass
 
-        # 7. a missing default gold must exit rather than score nothing
+        # 7. an EMPTY document has no shape — it must exit, not read as an adjudication and let
+        #    the real gold fall back to the committed one
+        empty = os.path.join(tmp, "metric_gold.empty.json")
+        json.dump({}, open(empty, "w"))
+        try:
+            resolve_inputs(["x", "b", "a", empty], tmp)
+            raise AssertionError("an empty gold must exit, not silently substitute the default")
+        except SystemExit:
+            pass
+
+        # 8. the adjudication defaults to the GOLD'S OWN family, not a hardcoded one
+        fam_g = os.path.join(tmp, "metric_gold.fam.json")
+        fam_a = os.path.join(tmp, "offtopic_adj.fam.json")
+        json.dump(g, open(fam_g, "w"))
+        json.dump({"_ontopic": {"p|eye": ["FAMILY"]}}, open(fam_a, "w"))
+        got_g, got_a = resolve_inputs(["x", "b", "a", fam_g], tmp)
+        assert got_a["_ontopic"]["p|eye"] == ["FAMILY"], ("wrong adjudication family", got_a)
+
+        # 9. a missing default gold must exit rather than score nothing
         bare = tempfile.mkdtemp()
         try:
             resolve_inputs(["x", "b", "a"], bare)

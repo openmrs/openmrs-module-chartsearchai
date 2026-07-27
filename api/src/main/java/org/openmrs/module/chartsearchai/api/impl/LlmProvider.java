@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,11 @@ public class LlmProvider {
 	 *  DEFAULT_SYSTEM_PROMPT few-shot so the demonstration always mirrors the real prompt
 	 *  shape — if they drift, the few-shot stops teaching the format the model actually sees. */
 	static final String FOCUS_HINT_LABEL = "Records ranked by similarity to the query: ";
+
+	/** Label of the trailing line that tells the model what day it is. Shared with the
+	 *  DEFAULT_SYSTEM_PROMPT sentence that points the model at it, so the two cannot drift.
+	 *  See {@link #buildUserMessage(String, List, String, String)} for why it is trailing. */
+	static final String TODAY_LABEL = "Today's date: ";
 
 	static final String DEFAULT_SYSTEM_PROMPT = "You are a clinical assistant helping a clinician "
 			+ "review a patient's chart. Answer ONLY the specific query. "
@@ -80,7 +86,11 @@ public class LlmProvider {
 			+ "problems\", \"any eye issues\"), cite nothing after a no-record verdict — do not "
 			+ "list vital signs or unrelated measurements.\n"
 			+ "Your answer must not vary based on the punctuation or phrasing of the query "
-			+ "— focus only on its semantic meaning.\n\n"
+			+ "— focus only on its semantic meaning.\n"
+			+ "Record dates and the \"" + TODAY_LABEL.trim() + "\" line at the end of the message "
+			+ "are both yyyy-MM-dd. When the query depends on when something happened — "
+			+ "\"recent\", \"still\", \"this year\", \"how long ago\" — compare the record dates "
+			+ "against that date instead of assuming what today is.\n\n"
 			+ "The following is a FORMAT DEMONSTRATION ONLY using fake non-medical data. "
 			+ "Do NOT use any of this data in your answer.\n\n"
 			+ "Records:\n"
@@ -133,7 +143,8 @@ public class LlmProvider {
 	 */
 	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
 		String systemPrompt = getSystemPrompt();
-		String userMessage = buildUserMessage(numberedRecords, focusIndices, question);
+		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
+				DateFormatUtil.today());
 		int timeoutSeconds = getTimeoutSeconds();
 
 		LlmEngine.InferenceResult result = getActiveEngine().infer(
@@ -190,8 +201,10 @@ public class LlmProvider {
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, String cacheScope) {
 		String systemPrompt = getSystemPrompt();
-		String userMessage = buildUserMessage(numberedRecords, focusIndices, question);
+		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
+				DateFormatUtil.today());
 		// The KV seed must be the question-independent prefix so it matches the warmup key exactly.
+		// It carries no date — see buildUserMessage's date contract.
 		String cacheSeed = cacheScope == null ? null : buildUserMessage(numberedRecords, "");
 		int timeoutSeconds = getTimeoutSeconds();
 
@@ -679,6 +692,31 @@ public class LlmProvider {
 	 * the 5-10x LLM-time reduction on local Gemma for same-patient/distinct-query traffic.
 	 */
 	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices, String question) {
+		return buildUserMessage(numberedRecords, focusIndices, question, null);
+	}
+
+	/**
+	 * Answer-path variant that appends a {@code "Today's date: yyyy-MM-dd"} line after the
+	 * question. Records carry absolute dates but nothing else in the prompt says what "now" is,
+	 * so without it a question whose answer depends on the current date ("seen recently?",
+	 * "still on treatment?", "anything this year?") can only be answered by guessing today from
+	 * the newest record or from the model's training data.
+	 *
+	 * <p><strong>The trailing placement is a KV-cache constraint, not a style choice.</strong>
+	 * The on-disk KV entry is keyed on the question-independent prefix
+	 * {@code buildUserMessage(numberedRecords, "")} — the exact bytes {@link #warmup} sends. That
+	 * prefix must remain a byte-prefix of every real query, and it must not change from one day
+	 * to the next, or each patient's persisted prefill (pinned prewarm corpus included) would be
+	 * orphaned every midnight. Putting the date after the question satisfies both: warmup and the
+	 * cache seed pass {@code today = null} and are byte-identical to before, while the query adds
+	 * the date in its own per-request tail.
+	 *
+	 * @param today today's date, rendered by {@link DateFormatUtil#today()} in the same
+	 *        {@code yyyy-MM-dd} shape as every record date; {@code null}/blank omits the line
+	 *        entirely (the warmup / cache-seed contract)
+	 */
+	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices, String question,
+			String today) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("Patient records (most recent first):\n").append(normalizeRecords(numberedRecords));
 		if (focusIndices != null && !focusIndices.isEmpty()) {
@@ -735,6 +773,9 @@ public class LlmProvider {
 					+ "the chart.");
 		}
 		sb.append("\n\nClinician's query: ").append(question);
+		if (today != null && !today.trim().isEmpty()) {
+			sb.append("\n\n").append(TODAY_LABEL).append(today.trim());
+		}
 		return sb.toString();
 	}
 

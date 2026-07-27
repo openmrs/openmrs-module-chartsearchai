@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -76,6 +77,18 @@ public class ChartSearchServiceRouterTest {
 		String before = router.buildCacheKey(p, "q");
 		router.gps.put(ChartSearchAiConstants.GP_QUERYSTORE_TOP_K, "30");
 		assertNotEquals(before, router.buildCacheKey(p, "q"));
+	}
+
+	@Test
+	public void buildCacheKey_isScopedToTheDayThePromptWasBuilt() {
+		// The prompt now carries "Today's date", so a temporal answer ("seen in the last 30
+		// days?") is only valid for the day it was produced. Folding the date into the key stops
+		// a long TTL from serving yesterday's arithmetic after midnight.
+		StubRouter router = new StubRouter();
+		assertTrue(router.buildCacheKey(patient("p1"), "q")
+				.contains(org.openmrs.module.chartsearchai.util.DateFormatUtil.today()),
+				"the cache key must be scoped to today: "
+						+ router.buildCacheKey(patient("p1"), "q"));
 	}
 
 	@Test

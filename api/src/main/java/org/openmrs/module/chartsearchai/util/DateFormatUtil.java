@@ -32,6 +32,16 @@ public final class DateFormatUtil {
 		return date.toInstant().atZone(ZoneId.of("UTC")).toLocalDate().format(DATE_FORMAT);
 	}
 
+	/**
+	 * Today, rendered exactly as {@link #formatDate} renders every record date (UTC,
+	 * {@code yyyy-MM-dd}). Single-sourced through {@code formatDate} on purpose: the LLM prompt
+	 * puts this next to record dates and the model is asked to compare them, so a second date
+	 * shape — or a second time zone — would turn "is this recent?" into guesswork.
+	 */
+	public static String today() {
+		return formatDate(new Date());
+	}
+
 	public static Date toLegacyDate(LocalDate date) {
 		if (date == null) {
 			return null;

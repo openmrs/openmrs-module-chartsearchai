@@ -682,7 +682,11 @@ public class LlmProviderTest {
 		assertEquals("patient-uuid-42", engine.capturedScope,
 				"the patient UUID must reach the engine as the KV cache scope so the query path can "
 				+ "restore/persist this patient's prefilled chart");
-		assertEquals(LlmProvider.buildUserMessage(records, focus, "Is the patient diabetic?"),
+		// Exact-equality against the production builder, answer-path form: full focus hint, the
+		// question, and the trailing "Today's date" line the answer path adds (the KV seed
+		// asserted below is the date-free prefix — that split is the whole point).
+		assertEquals(LlmProvider.buildUserMessage(records, focus, "Is the patient diabetic?",
+				org.openmrs.module.chartsearchai.util.DateFormatUtil.today()),
 				engine.capturedUserMessage,
 				"the engine must still receive the full focus-hinted question prompt");
 		// The KV filename seed MUST be the question-independent prefix — identical bytes to what

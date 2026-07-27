@@ -18,8 +18,8 @@ import metric_score as M  # noqa: E402
 
 
 def _load_by_shape(paths):
-    """-> (gold, adj). A gold maps "uuid|topic" -> {present, ontopic, focus_uuids}; an adjudication
-    maps "uuid|topic" -> [uuid, ...] and/or carries "_ontopic"."""
+    """-> (gold, adj), either possibly None. A gold maps "uuid|topic" -> {present, ontopic,
+    focus_uuids}; an adjudication maps "uuid|topic" -> [uuid, ...] and/or carries "_ontopic"."""
     gold_doc = adj_doc = None
     for path in paths:
         doc = json.load(open(path))
@@ -33,17 +33,32 @@ def _load_by_shape(paths):
     return gold_doc, adj_doc
 
 
-_defaults = [os.path.join(M.HERE, "metric_gold.local.json"),
-             os.path.join(M.HERE, "offtopic_adj.local.json")]
-_given = [p for p in sys.argv[3:5] if os.path.exists(p)]
-gold, _adj = _load_by_shape(_given if _given else [p for p in _defaults if os.path.exists(p)])
+# A path the operator actually typed must exist. Existence-filtering the GIVEN arguments (rather
+# than only the defaults) turns a typo into a silent fall back to the committed gold and a
+# complete-looking table — the old code raised FileNotFoundError, which is the better failure.
+_given = sys.argv[3:5]
+for _path in _given:
+    if not os.path.exists(_path):
+        sys.exit("compare_arms: no such file: %s" % _path)
+gold, _adj = _load_by_shape(_given)
+
+# Each kind falls back to its own committed default INDEPENDENTLY. Resolving them together meant
+# that supplying only a gold — the form the README teaches — left the adjudication empty, so the
+# A/B table and metric_score.py disagreed on the same capture the moment anyone adjudicated a
+# citation (measured: meanF1 1.000/drift 0 vs 0.667/drift 1, no warning, exit 0).
 if gold is None:
-    sys.exit("compare_arms: no gold file found (pass one, or put metric_gold.local.json beside "
-             "this script)")
+    _default_gold = os.path.join(M.HERE, "metric_gold.local.json")
+    if not os.path.exists(_default_gold):
+        sys.exit("compare_arms: no gold file found (pass one, or put metric_gold.local.json "
+                 "beside this script)")
+    gold = json.load(open(_default_gold))
+if _adj is None:
+    _default_adj = os.path.join(M.HERE, "offtopic_adj.local.json")
+    _adj = json.load(open(_default_adj)) if os.path.exists(_default_adj) else {}
 # Honour the same adjudication metric_score.py resolves, or the A/B table and the scorer report
 # different meanF1/drift for the SAME capture the moment anyone adjudicates an unknown citation —
 # which metric_score.py actively asks the operator to do.
-ADJ = _adj or {}
+ADJ = _adj
 ADJ_ON = ADJ.get("_ontopic", {})
 
 

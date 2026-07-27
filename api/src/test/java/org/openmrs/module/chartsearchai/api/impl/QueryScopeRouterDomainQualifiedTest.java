@@ -190,8 +190,13 @@ public class QueryScopeRouterDomainQualifiedTest {
 		// bearing for routing. Measured on an override that dropped its three "patient*" lines:
 		// contentWords("What conditions does the patient have?") became [conditions, patient],
 		// "patient" read as a clinical domain, and every problem-list question lost its
-		// completeness guarantee — silently. Loading an override now WARNs, but the bundled list
-		// itself is only protected by this assertion.
+		// completeness guarantee — silently. Loading an override now WARNs, but nothing else
+		// protects the vocabulary.
+		//
+		// This pins the ACTIVE stopword vocabulary, which is the one routing actually uses:
+		// QUERY_STOPWORDS prefers an app-data override over the bundled list, so on a machine that
+		// has one this fails on the override — correctly, because that is what would ship the
+		// broken routing. On CI, where no override exists, it is the bundled list.
 		assertEquals(Arrays.asList("conditions"),
 				QueryPreprocessor.contentWords("What conditions does the patient have?"),
 				"the bundled stopword list must strip the question words, or a bare problem-list "

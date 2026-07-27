@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -74,12 +75,70 @@ final class QueryScopeRouter {
 
 	private static final Pattern CONDITIONS_CUES = cues("conditions?", "diagnos(?:is|es|ed)", "problem list");
 
+	/**
+	 * Words that may sit next to a conditions cue without narrowing it to a clinical DOMAIN — the
+	 * cue words themselves, plus generic problem-list qualifiers. "Any active conditions?",
+	 * "chronic medical conditions", "diagnosed with anything" are all still asking for the whole
+	 * problem list; "psychiatric conditions" and "heart conditions" are not.
+	 *
+	 * <p>Only words the stopword stripper leaves behind need to appear here; "current", "known",
+	 * "list", "status" and the rest of the function-word vocabulary are already removed by
+	 * {@link QueryPreprocessor#contentWords}.
+	 */
+	private static final Set<String> GENERIC_CONDITION_WORDS = Collections.unmodifiableSet(
+			new HashSet<String>(Arrays.asList(
+					"condition", "conditions", "diagnosis", "diagnoses", "diagnosed", "problem",
+					"problems", "active", "inactive", "chronic", "acute", "ongoing", "resolved",
+					"past", "previous", "prior", "underlying", "comorbid", "comorbidity",
+					"comorbidities", "medical", "clinical", "health", "anything", "everything",
+					"main", "major", "minor", "significant", "important", "relevant", "outstanding",
+					"her", "his", "their")));
+
 	private static final Pattern VISITS_CUES = cues("visits?", "appointments?", "encounters?", "admissions?");
 
 	private static final Pattern ORDERS_CUES = cues("orders?", "ordered");
 
 	private static Pattern cues(String... words) {
 		return Pattern.compile("\\b(?:" + String.join("|", words) + ")\\b", Pattern.CASE_INSENSITIVE);
+	}
+
+	/**
+	 * True when a clinical-domain word narrows a conditions question — "any mental health or
+	 * <b>psychiatric</b> conditions?", "any <b>heart</b> conditions?", "diagnosed with
+	 * <b>depression</b>?".
+	 *
+	 * <p>"conditions" is the only enumeration cue that is also a generic noun clinicians attach to
+	 * a domain; "medications" and "allergies" name their own. Routing a domain-qualified question
+	 * to the CONDITIONS scope hands the small model the whole problem list and asks it to filter,
+	 * and on a long list it enumerates instead — measured on the 3.7.1 demo set (30 patients × 9
+	 * topics), the mental-health cell answered "Yes … psychiatric conditions recorded: Lumbago
+	 * with sciatica, Cardiogenic shock, Bacterial gastroenteritis …", and that one topic produced
+	 * 54 of the 92 off-topic citations in the whole eval while genuinely TOPICAL topics (eye,
+	 * fractures) drifted 1 each. A domain-qualified question is therefore answered from the
+	 * similarity slice, like every other topical question — both more accurate and a smaller
+	 * prompt.
+	 *
+	 * <p>Implemented over the same stopword vocabulary retrieval uses
+	 * ({@link QueryPreprocessor#contentWords}) rather than a second word list: anything the
+	 * clinician supplied that is not a cue word or a generic problem-list qualifier is a clinical
+	 * domain.
+	 */
+	private static boolean isDomainQualified(String question) {
+		for (String word : QueryPreprocessor.contentWords(question)) {
+			if (!GENERIC_CONDITION_WORDS.contains(word) && !isOtherIntentCue(word)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** True when {@code word} is a cue of some OTHER typed intent — "any drug allergies or skin
+	 *  conditions?" must not read "drug"/"allergies" as the clinical domain narrowing
+	 *  "conditions"; "skin" is what does that. */
+	private static boolean isOtherIntentCue(String word) {
+		return MEDICATIONS_CUES.matcher(word).matches() || ALLERGIES_CUES.matcher(word).matches()
+				|| PROGRAMS_CUES.matcher(word).matches() || VISITS_CUES.matcher(word).matches()
+				|| ORDERS_CUES.matcher(word).matches();
 	}
 
 	/** Recency cues: questions about the newest value/event or the recent past, which need the
@@ -129,7 +188,7 @@ final class QueryScopeRouter {
 		if (PROGRAMS_CUES.matcher(q).find()) {
 			matched.add(Intent.PROGRAMS);
 		}
-		if (CONDITIONS_CUES.matcher(q).find()) {
+		if (CONDITIONS_CUES.matcher(q).find() && !isDomainQualified(q)) {
 			matched.add(Intent.CONDITIONS);
 		}
 		if (VISITS_CUES.matcher(q).find()) {

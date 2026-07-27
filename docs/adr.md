@@ -2010,34 +2010,51 @@ Two smaller defects showed up in the code rather than the data: the prompt never
 
 ### Evidence
 
-**Answer-quality gold — 270 cells, same gold, same install, `chartMode=queryScoped`, `topK=12`:**
+**Answer-quality gold — 270 cells, same gold, same install, `chartMode=queryScoped`, `topK=12`,
+three captures per arm.** The baseline turned out to be reproducible (two captures 18 hours apart,
+across a rebuild and a restart, byte-identical on all 270 answers); this change is not (two captures
+of one build differ on 42 of 270 cells). So the baseline is a fixed point and the arm is reported as
+a range:
 
-| | baseline (`main`) | with (1)–(4) | with (1)–(4), repeat |
+| | baseline (`main`), 2 captures | with (1)–(4), 3 captures | mean delta |
 |---|---|---|---|
-| meanF1 (154 present cells) | 0.743 | 0.760 | **0.771** |
-| abstention (116 absent cells) | 0.922 (107/116) | 0.922 (107/116) | 0.931 (108/116) |
-| off-topic citations | 92 | 74 | **100** |
+| meanF1 (154 present) | 0.743, 0.743 | 0.760 / 0.764 / 0.771 | **+0.022** |
+| abstention (116 absent) | 107/116 both | 107 / 108 / 107 | ±0 |
+| off-topic citations | 92 both | 74 / 95 / 100 | **−2.3** |
 
-**Read the third column before the second.** It is the SAME build as column two, captured again — and
-the drift it reports is worse than the baseline's. This protocol is not reproducible: 241 of 270
-cells (89%) return an identical reference set across a repeat, but 16 flip, netting **+26 drift**,
-bidirectionally. The cause is decode nondeterminism, established from the audit log rather than
-inferred — one heart cell recorded `input_tokens = 1519` on nine runs, i.e. byte-identical prompts,
-while its reference count alternated 9, 0, 9, 0, 0, 0, 9, 0, 0, the model flipping between a clean
-abstention and the same abstention with nine blood-pressure readings appended.
+**The drift improvement reported in the first draft of this decision does not exist.** It was the
+`arm-a` draw. Per topic, averaged over the three captures, with each capture shown so a consistent
+effect can be told from a noisy one:
 
-So of the three aggregate numbers above, **only abstention is resolvable at this sample size**, and
-it is unchanged. The drift delta (−18) is smaller than the measured noise (±26) and the meanF1 delta
-(+0.017) is only ~1.5× it. See [Run-to-run noise](../eval/drift-metric/README.md#run-to-run-noise-measured-2026-07-27)
-for the method and for `repeat_probe.py`, which sizes it in ten minutes.
+| topic | base drift | arm drift (3 runs) | Δ | base F1 | arm F1 (3 runs) | Δ |
+|---|---|---|---|---|---|---|
+| **mental** | 54 | 18 / 25 / 25 | **−31.3** | 0.775 | 0.825 / 0.839 / 0.841 | **+0.060** |
+| **heart** | 16 | 28 / 45 / 46 | **+23.7** | 0.663 | 0.674 / 0.674 / 0.674 | +0.011 |
+| **fractures** | 1 | 11 / 10 / 7 | **+8.3** | 0.526 | 0.502 / 0.549 / 0.514 | −0.004 |
+| drug-allergies | 12 | 10 / 8 / 8 | −3.3 | 0.896 | 0.938 / 0.896 / 0.938 | +0.028 |
+| kidney | 5 | 4 / 9 / 5 | +1.0 | 0.629 | 0.656 / 0.670 / 0.659 | +0.033 |
+| eye | 1 | 0 / 0 / 1 | −0.7 | 0.961 | 0.994 / 0.994 / 0.979 | +0.028 |
+| allergies | 0 | 0 / 0 / 0 | ±0 | 0.806 | 0.814 ×3 | +0.008 |
+| programs | 3 | 3 / 3 / 3 | ±0 | 1.000 | 1.000 ×3 | ±0 |
 
-What the aggregate does support is that nothing regressed: two captures of the changed arm both beat
-the baseline's meanF1 (0.760 and 0.771 vs 0.743) and both keep abstention at or above it. What
-carries the actual argument for these four changes is the per-cell mechanism — the clinically wrong
-`mental` answer, the unlinked twin diagnosis — and the two DB-truth probes below, which score a
-verdict against a SQL fact instead of a citation set and move far more than the noise.
+Read the three-run columns: `heart` **+24** and `fractures` **+8** are consistent in every capture, so
+they are real regressions, not draws — and together they cancel the routing fix's real **−31** on
+`mental`. The net drift figure is therefore honest only as "unchanged".
 
-Per cell: **22 better / 13 worse / 119 tied**. The topic that moved most is the one the routing fix targets — `mental` F1 0.775 → 0.825 with drift **54 → 18** — and `eye` (0.961 → 0.994), `drug-allergies` (0.896 → 0.938) and `kidney` (0.629 → 0.656) all improve. `fractures` and `heart` gain drift (1 → 11 and 16 → 28); the two largest per-cell regressions are both the model answering *more* conservatively than the gold's deliberately broad trauma boundary rewards (one replaced "No fractures are recorded" + five unrelated injury citations with an uncited "No fractures or broken bones are recorded", which is what the system prompt actually asks for).
+**What the change does buy, and it is consistent:** meanF1 improves on every topic except `fractures`
+(−0.004), all three captures beat the deterministic baseline, and `mental` — the topic the routing fix
+targets — gains +0.060 while shedding 31 off-topic citations. Abstention is flat.
+
+**Where the added `heart`/`fractures` drift comes from.** Those are absent-topic cells whose gold
+deliberately counts raw vitals as off-topic, and the added citations are *dated* records: *"No heart
+or cardiac problems diagnosis is recorded. Blood pressure readings are: 116 mmHg on 2026-01-03 [2],
+96 mmHg on 2025-09-28 [3], …"*. The prompt grew by exactly 84 tokens — the date line plus the
+system-prompt sentence pointing at it (1435 → 1519 on that cell) — and the model now volunteers dated
+supporting records after a negative verdict. That is the same mechanism the temporal probe rewards
+(4/12 → 11/12), acting where it is not wanted. It also explains the reproducibility difference: on
+`main` the run-to-run variation stays inside the reasoning scratchpad (output tokens vary 120–154
+while the answer text is identical in 6/6 runs), whereas here it escapes into the answer, flipping
+that cell between 0 and 9 citations across 9 runs of one identical 1519-token prompt.
 
 **Attributing the two halves.** Twin co-citation can be switched off offline by restricting references to inline-anchored indices, which isolates it from the rest on the *same* capture:
 

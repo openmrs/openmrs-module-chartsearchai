@@ -53,4 +53,13 @@ public class DateFormatUtilTest {
 		LocalDate date = LocalDate.of(2024, 1, 15);
 		assertEquals("2024-01-15", DateFormatUtil.formatDate(DateFormatUtil.toLegacyDate(date)));
 	}
+
+	@Test
+	public void today_rendersInTheSameShapeAsEveryRecordDate() {
+		// The prompt puts this line next to record dates and asks the model to compare them, so a
+		// second date shape — or a second time zone — would turn "is this recent?" into guesswork.
+		// Single-sourcing through formatDate is what prevents that; this pins it.
+		assertEquals(DateFormatUtil.formatDate(new java.util.Date()), DateFormatUtil.today());
+		assertTrue(DateFormatUtil.today().matches("\\d{4}-\\d{2}-\\d{2}"), DateFormatUtil.today());
+	}
 }

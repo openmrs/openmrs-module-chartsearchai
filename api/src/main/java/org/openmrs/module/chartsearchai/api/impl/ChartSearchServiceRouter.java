@@ -19,6 +19,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -216,7 +217,11 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 		String grounding = gp(ChartSearchAiConstants.GP_GROUNDING_ENABLED, "");
 		String groundingMinCosine = gp(ChartSearchAiConstants.GP_GROUNDING_MIN_COSINE, "");
 		String groundingEntailment = gp(ChartSearchAiConstants.GP_GROUNDING_ENTAILMENT_ENABLED, "");
-		return patient.getUuid() + "::" + preFilter.trim().toLowerCase()
+		// The prompt carries today's date, so a temporal answer ("seen in the last 30 days?") is
+		// only valid for the day it was produced. Without the date in the key, a long TTL would
+		// keep serving yesterday's arithmetic.
+		return patient.getUuid() + "::" + DateFormatUtil.today()
+				+ "::" + preFilter.trim().toLowerCase()
 				+ "::" + chartMode.trim().toLowerCase()
 				+ "::" + queryStoreTopK.trim()
 				+ "::" + grounding.trim().toLowerCase()

@@ -80,7 +80,13 @@ instrumentation; not committed).
 
 Baseline (Gemma 4 E2B, full-chart, `metric_gold.standalone.json`): **meanF1 0.464 ·
 abstention 1.00 (11/11) · off-topic citations 41** — reproduced bit-identically across two
-captures (zero run-to-run noise on this protocol; greedy decode + warm prompt cache).
+captures (zero run-to-run noise on that 32-cell protocol; greedy decode + warm prompt cache).
+
+> **Do not carry that determinism claim forward.** It was measured on 32 cells with E2B and does
+> NOT hold on the 270-cell fresh-install protocol below. See
+> [Run-to-run noise](#run-to-run-noise-measured-2026-07-27) — a same-arm repeat there moved drift by
+> +26 and meanF1 by +0.011, which is larger than some of the deltas this harness has been used to
+> judge. Greedy decode does not make llama.cpp bit-reproducible across restarts.
 
 Two reasoning-length experiments were run through this gate with thresholds locked in
 advance (no regression on any axis; ≥15% output-token reduction to be worth shipping).
@@ -147,3 +153,251 @@ arm was re-captured on the final corroborated-normalization build
 the shipped citation design, not an intermediate one. Two rejected
 intermediate wordings are documented in PR #83 — affirmative evidence mandates crashed
 abstention (0.93 → 0.67–0.81, drift 2–3.5×); the shipped wording is restrictive on purpose.
+
+## Fresh-install gold + the Decision 30 gate (2026-07-27, RefApp 3.7.1 demo data)
+
+The rc.2 gold's 22 patients do not exist on a Reference Application 3.7.1 install, and its
+category boundaries were adjudicated against rc.2's concept names. These assets rebuild an
+equivalent gold for whatever install you are pointed at, and run the two probes that gate the
+[ADR Decision 30](../../docs/adr.md) changes.
+
+### Reproducing the Decision 30 numbers exactly
+
+The gold is committed, so scoring needs no database:
+
+```bash
+cd eval/drift-metric
+# 1. capture one arm against a running standalone (~90 min for 270 cells on CPU)
+./capture_eval_local.sh /tmp/cap/main patients.local.txt
+# 2. score it
+python3 metric_score.py /tmp/cap/main offtopic_adj.local.json metric_gold.local.json
+# 3. A/B two arms, per topic and per cell
+python3 compare_arms.py /tmp/cap/main /tmp/cap/arm metric_gold.local.json
+```
+
+Expected on the build this gold was cut against — `main` @ 83cc33e vs PR #93, `chartMode=queryScoped`,
+`querystore.topK=12`, Gemma 4 E4B, `engine=local`:
+
+| | `main` | PR #93 |
+|---|---|---|
+| meanF1 (154 present) | 0.743 | 0.760 |
+| abstention (116 absent) | 0.922 (107/116) | 0.922 (107/116) |
+| off-topic citations | 92 | 74 |
+
+Rebuilding the gold, or pointing it at a different install, needs the database (env as
+`build_gold_rc2.py`: `MARIADB_BIN`, `MYSQL_PWD`, `MARIADB_PORT`) — as do both probes, which derive
+their truth from it:
+
+```bash
+export MARIADB_BIN=<standalone>/database/bin/mariadb MYSQL_PWD=<pw> MARIADB_PORT=3316
+python3 gold_overrides_local.py            # selftest the boundaries FIRST
+python3 build_gold_local.py /tmp/gold 120  # -> metric_gold.local.json, patients.txt, audit
+python3 temporal_probe_today.py /tmp/probes 30 12
+python3 abbrev_probe.py /tmp/probes 3
+```
+
+Expected probe results for the same two builds: the temporal verdict 4/12 → 11/12 and the
+day-count 0/12 → 10/12; the abbreviation probe 13/17 → 17/17.
+
+### Check the arm is valid before you score it
+
+`chartMode` is a global property, so a probe you ran hours earlier can still be in force. A capture
+taken in `fullChart` scores as a legitimate-looking arm and is not comparable to anything here:
+
+```bash
+curl -s -u admin:Admin123 <base>/ws/rest/v1/systemsetting/chartsearchai.chartMode   # must be queryScoped
+```
+
+After the fact the audit log settles it without re-running anything. On this install a
+`queryScoped`/`topK=12` cell is **1.3k–5k input tokens**; a `fullChart` cell is 7k–11k:
+
+```sql
+select min(input_tokens), round(avg(input_tokens)), max(input_tokens)
+  from chartsearchai_audit_log where date_created between '<start>' and '<end>';
+```
+
+An average near 2k is a scoped arm; near 10k means the arm is `fullChart` and the score is void.
+
+### Capture the arms the SAME way, or the comparison is void (2026-07-27)
+
+Two 270-cell captures of `main`, taken 18 hours apart across a rebuild and a standalone restart, are
+**byte-identical on all 270 answers** — as long as both are a single sequential pass over
+`patients.txt`. A third capture of the same build, assembled instead from several smaller invocations
+(a few patients per call, because long background runs kept being killed), differs from them on **47
+of 270 cells** (11 on references, 36 wording-only) and moves meanF1 0.743 → 0.736.
+
+Nothing about the build changed. What changed is the order and grouping of requests, and therefore
+the KV-cache state each request starts from: llama-server runs `--parallel 1` with
+`cache_prompt=true`, so how much of a prompt is reused depends on what the *previous* request left in
+the cache, and the resulting prefill split changes floating-point accumulation order.
+
+**So a capture is only comparable to another capture made the same way.** Do not assemble one arm from
+chunks and compare it to a single-pass arm; do not interleave two captures against one server. If a
+long run dies partway, either restart it from scratch or finish it the same way for both arms.
+
+### Per-cell behaviour is SESSION-persistent — repeats inside one session are not independent (2026-07-28)
+
+The single most expensive lesson here. Trying to attribute a drift regression to one prompt
+component, I measured four configurations at 20–40 runs each and got 1/40, 15/40, 15/40, 6/20 and
+4/20 — apparently decisive differences. They were not. A control configuration whose prompt is
+byte-identical to `main`'s scored 4/20 where `main` had scored 1/20, and one cell
+(`21580018…|heart`) scored 0/5, 0/5, 0/5 and then 5/5 across arms measured minutes apart.
+
+What is actually going on: **within a single server session a given cell tends to be consistently
+violating or consistently clean, and which way it lands changes across restarts.** Two follow-ups
+confirmed it and killed the obvious explanations:
+
+- Interleaving the two arms query-by-query (toggling the system prompt between every request, so
+  drift hits both arms equally) gave **0 of 8 versus 0 of 8** — the difference vanished entirely
+  under pairing.
+- KV-cache reuse is not the cause either: N identical back-to-back requests scored 3 of 16, and the
+  same requests each preceded by a cache-invalidating prompt toggle scored 4 of 16.
+
+So **N runs inside one session is close to N=1** for this kind of question. Repeats must be
+*sessions*, not requests: restart between them, or interleave the arms so the pairing cancels the
+session state. A block design — all of arm A, then all of arm B — confounds the arm with the
+session perfectly, which is exactly how four consecutive "decisive" attributions turned out to be
+noise.
+
+This applies to the 270-cell captures too: each is one session per arm. It is why the per-topic
+verdicts in [ADR Decision 30](../../docs/adr.md) are stated as "better in both captures" / "worse in
+both captures" over two independent sessions rather than as a single delta.
+
+### Run-to-run noise (measured 2026-07-27)
+
+**The single most important number for reading anything this harness reports — and it is not the same
+for every build.** Two single-pass captures of one build, same gold, same install:
+
+| | `main` capture 1 | `main` capture 2 | PR #93 capture 1 | PR #93 capture 2 |
+|---|---|---|---|---|
+| meanF1 (154 present) | 0.743 | 0.743 | 0.760 | **0.771** |
+| abstention (116 absent) | 107/116 | 107/116 | 107/116 | 108/116 |
+| off-topic citations | 92 | 92 | 74 | **100** |
+| cells differing from its twin | — | **0 of 270** | — | **112 of 270** |
+
+`main` is bit-reproducible under a fixed capture method; PR #93's prompt is not. 29 of those 112
+differ on the reference set (the rest are wording), and 16 cells change their drift contribution,
+netting **+26**. The mechanism is decode nondeterminism, not the pipeline, and the
+audit log proves it: patient `1c47b620`'s heart cell recorded `input_tokens = 1519` on nine separate
+runs — byte-identical prompts — while `reference_count` alternated 9, 0, 9, 0, 0, 0, 9, 0, 0. The
+model flips between answering *"No heart or cardiac problems are recorded."* and appending nine
+blood-pressure readings to the same verdict. The flips are bidirectional (+12 on one patient's heart
+cell, −12 on another's) and concentrate on `heart`, where the gold deliberately counts raw vitals as
+off-topic.
+
+Practical consequences:
+
+- **A drift delta smaller than about ±26 on a 270-cell capture is not resolvable from one capture
+  per arm.** Neither is a meanF1 delta below roughly ±0.011.
+- **Abstention accuracy is the stable axis** (±1 cell here), because a flipped cell usually keeps
+  its verdict and only gains or loses citations.
+- **The DB-truth probes are far more robust** than the aggregate: `temporal_probe_today.py` and
+  `abbrev_probe.py` score a verdict against a SQL fact rather than a citation set, and the
+  abbreviation probe's input is deterministic retrieval text.
+- Repeat each arm and report the mean and the range. A single capture per arm is enough to show a
+  *mechanism* (read the answers) but not to settle a small aggregate delta. Settling the drift delta
+  on this protocol needs **at least three full captures per arm** (~2 h each on a CPU-only host).
+- **Do not substitute a partial capture for a repeat.** Scoring the subset of cells two captures
+  happen to share looks like a cheap paired comparison and is not one, because drift is concentrated
+  by topic and a truncated capture is an alphabetical prefix of the patient list, not a sample.
+  Measured here: the first 93 cells hold 24% of the baseline's drift but 34% of the changed arm's, so
+  that subset systematically understates a fix whose effect sits in the cells it omits. Compare full
+  captures, or compare per-cell.
+- Determinism is not restorable by configuration. `cache_prompt` reuse changes batch boundaries
+  across restarts, which changes floating-point accumulation order; greedy decode only removes
+  sampling noise, not that.
+
+A cheap way to size the noise before trusting a delta — 12 cells, 3 runs each, ~10 minutes:
+`repeat_probe.py <goldFile> <cells> <repeats>` reports how many cells return an unstable reference
+set (measured here: **8%** unstable references, 25% unstable wording).
+
+### Re-verifying a reference-side change without a 90-minute capture
+
+A change that only affects which references are attached to an answer (twin co-citation is the
+example) can be attributed exactly, because the set of cells it can possibly touch is derivable
+from the database rather than guessed:
+
+1. Dump every coded problem row with its patient and concept (`conditions` + `encounter_diagnosis`)
+   and count rows per `(patient, concept, table)`.
+2. A cell can only change if one of its captured references belongs to a family the new rule treats
+   differently — for the one-row-per-table gate, any family with >1 row in either table. Match on
+   the family, not on the reference's own UUID: the row that gets dropped is often the *single-row
+   partner* pulled in by a multi-row sibling, so a UUID-level filter misses it.
+3. Copy the arm, delete the affected cells **and three cells the analysis says cannot change**,
+   re-run only those, then diff against the original.
+
+The controls are the load-bearing part: they must come back byte-identical, which is what proves
+the build reproduces the arm rather than merely producing a similar number. Worked example — the
+one-row-per-table gate touched exactly 1 of 270 cells, 268 cells came back byte-identical (the
+remaining one an abstention that reworded with 0 references both ways), and the full rescore was
+unchanged at meanF1 0.760 / 107 of 116 / drift 74. Expect answer *wording* to vary slightly across
+a server restart even where the reference set is identical; compare reference UUID sets, not prose.
+
+The `[timing]` log lines (`querystoreScopedBuild … intent=… slice=…`, `search … llmMs=…`) are at
+INFO and the module package is not covered by the stock `log.level=info`, so turn them on with
+`log.level=org.openmrs.api:info,org.openmrs.module.chartsearchai:info`. For per-query cost prefer
+`chartsearchai_audit_log` (`response_time_ms`, `input_tokens`, `output_tokens`) — it is always
+recorded, needs no log level, and survives restarts.
+
+### The files
+
+- `gold_overrides_local.py` — ports the rc.2 category boundaries onto the 3.7.1 concept
+  vocabulary (eyelid/diplopia are eye problems, cerebrovascular accident is a heart problem,
+  DSM entities are mental, …) and keeps the SAME stated intent per topic. `--selftest`
+  included; run it first. Every addition is one line with a rationale — read it before trusting
+  a number, because an unadjudicated boundary scores a correct answer as drift (measured: an
+  entirely right eye answer scored as an abstention failure with 3 off-topic citations).
+- `build_gold_local.py <outdir> [minRecords]` — profiles every patient with `build_gold_rc2`'s
+  `classify()` and emits `metric_gold.local.json`, `offtopic_adj.local.json`, an audit file and
+  `patients.txt`. On this install, `minRecords=120` gives **30 patients × 9 topics = 270 cells**
+  (154 present / 116 absent). The emitted set is committed as `metric_gold.local.json`,
+  `offtopic_adj.local.json`, `patients.local.txt` and `gold_audit.local.md` — read the audit before
+  trusting a number, it lists every record counted on-topic per cell.
+- `capture_eval_local.sh <outdir> <patients.txt>` — fires those cells at the live REST endpoint.
+- `metric_score.py <capture> offtopic_adj.local.json metric_gold.local.json` — scores one arm.
+- `compare_arms.py <baselineCapture> <armCapture> [gold] [adj]` — per-topic and per-cell A/B.
+  **Positional, in that order** — note `metric_score.py` takes the same two files in the OPPOSITE
+  order, and a swapped pair here is a loud error rather than a guess. Omit the adjudication and it
+  uses the gold's own sibling (`metric_gold.X.json` → `offtopic_adj.X.json`, beside the gold); if
+  there is no sibling it uses none and says so. Every run prints which gold and which adjudication
+  it resolved, with absolute paths.
+
+  **Run `compare_arms.py --selftest` after touching that resolution.** Nine silent failures landed
+  in it, every one a wrong-but-plausible number with no warning and exit 0: ignoring the
+  adjudication; a mirror-imaged argument order that scored 0 cells and printed "no change";
+  dropping the adjudication on the documented gold-only form; swallowing a typo'd path; an empty
+  `{}` classifying as an adjudication so a fresh gold fell back to the committed one; a hardcoded
+  `.local` fallback cross-pairing families; the same file resolving differently as `g.json`,
+  `./g.json` and an absolute path; an adjudication passed alone inverting the sign of the delta; and
+  arguments past slot 4 being ignored without an existence check. They shared one cause — the code
+  inferred what you meant from argument position, document shape, filename family AND directory
+  contents, so every inference was a door. It now validates instead of inferring, and the 11
+  selftest cases each pin one of those failures.
+
+  The 16 cases are mutation-tested, not just written: reintroducing the cross-family fallback, the
+  missing capture-directory check, the emptiness check, the gold-shape check, or deleting the
+  provenance print each makes `--selftest` fail. Two of those five used to survive it — the fixture
+  for "sibling absent" contained nothing for a fallback to find, so the case could not fail, and
+  nothing exercised `__main__` at all. When adding a case here, mutate the guard it protects and
+  confirm the case goes red.
+- `temporal_probe_today.py <outdir> [windowDays] [patients]` — DB-truth probe for questions whose
+  answer depends on *today*: "any visit in the last 30 days?" and "how many days ago was the most
+  recent visit?".
+- `abbrev_probe.py <outdir> [perAbbrev]` — DB-truth probe that asks by initialism only (`CKD`,
+  `MI`, `HTN`, …) on patients whose chart carries the full term.
+- `paired_probe.py <cellsFile> [rounds]` — A/B two system prompts INTERLEAVED per query, so
+  session state cancels instead of being confounded with the arm. Use this, not two blocks, whenever
+  the thing being compared can be switched at runtime.
+- `repeat_probe.py <goldFile> [cells] [repeats]` — fires the SAME cells repeatedly and counts how
+  many return an unstable reference set. Run this before trusting a small delta; see
+  [Run-to-run noise](#run-to-run-noise-measured-2026-07-27).
+- `../latency/latency_ab.sh` — A/B/A wall-clock control on a fixed cell set. Read the timings
+  from `chartsearchai_audit_log.response_time_ms`, not from a stopwatch around the whole run:
+  the module records per-query time, input and output tokens itself.
+
+**Do not read wall-clock differences off two long captures.** On a CPU-only host the machine
+drifts more between runs than any of these changes cost — a topic whose prompt did not change at
+all moved +24% between two captures here. Use the A/B/A control, and cross-check with the
+input/output token counts, which are load-independent.
+
+Measured results are in [ADR Decision 30](../../docs/adr.md#decision-30-latency-neutral-answer-quality-work--retrieval-vocabulary-a-prompt-date-anchor-twin-co-citation-domain-qualified-conditions-routing).

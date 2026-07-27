@@ -675,16 +675,36 @@ public class LlmProviderTest {
 		LlmProvider provider = providerWith(engine);
 		String records = "1. [2024-01-01] BP 120/80\n2. [2024-02-02] HbA1c 7.1%";
 		List<Integer> focus = Arrays.asList(1, 2);
-
 		provider.searchStreaming(records, focus, "Is the patient diabetic?",
 				tok -> { }, reason -> { }, "patient-uuid-42");
 
 		assertEquals("patient-uuid-42", engine.capturedScope,
 				"the patient UUID must reach the engine as the KV cache scope so the query path can "
 				+ "restore/persist this patient's prefilled chart");
-		assertEquals(LlmProvider.buildUserMessage(records, focus, "Is the patient diabetic?"),
+		// Exact-equality against the production builder, answer-path form: full focus hint, the
+		// question, and the trailing "Today's date" line the answer path adds (the KV seed
+		// asserted below is the date-free prefix — that split is the whole point).
+		// "Is the patient diabetic?" is NOT temporal, so it must carry no date anchor. That is a
+		// deliberate change of this assertion's spec, and it is measured rather than argued: an
+		// unconditional anchor made the model append vitals after a negative verdict in 15 of 40
+		// runs across the 8 absent-topic heart cells, against 1 of 40 on main, while every arm's
+		// system prompt already forbade it. See LlmProvider.dateAnchorFor.
+		assertEquals(LlmProvider.buildUserMessage(records, focus, "Is the patient diabetic?", null),
 				engine.capturedUserMessage,
-				"the engine must still receive the full focus-hinted question prompt");
+				"a non-temporal question must get the full focus-hinted prompt with NO date anchor");
+
+		// …and the same path must still carry the anchor when the question does ask about time,
+		// or the gate would have silently removed the feature instead of scoping it.
+		CapturingEngine temporal = new CapturingEngine();
+		LlmProvider temporalProvider = providerWith(temporal);
+		String dayBefore2 = org.openmrs.module.chartsearchai.util.DateFormatUtil.today();
+		temporalProvider.searchStreaming(records, focus, "Has she been seen recently?",
+				tok -> { }, reason -> { }, "patient-uuid-42");
+		assertTrue(temporal.capturedUserMessage.contains(LlmProvider.TODAY_LABEL + dayBefore2)
+				|| temporal.capturedUserMessage.contains(LlmProvider.TODAY_LABEL
+						+ org.openmrs.module.chartsearchai.util.DateFormatUtil.today()),
+				"a temporal question must still carry the date anchor: "
+						+ temporal.capturedUserMessage);
 		// The KV filename seed MUST be the question-independent prefix — identical bytes to what
 		// warmup() sends — or a warmup-saved file would hash to a different name and never be found
 		// by the query. This is the core key-match invariant the whole feature relies on.

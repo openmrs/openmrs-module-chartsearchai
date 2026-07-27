@@ -461,7 +461,12 @@ public class LlmInferenceService implements ChartSearchService {
 	}
 
 	/**
-	 * Builds the clickable reference list for an answer, reconciling the two
+	 * Builds the clickable reference list for an answer from three sources: the two the LLM
+	 * supplies and can disagree on (below), plus the deterministic {@link #sameAssertionTwins}
+	 * expansion applied to the result — a cited coded problem also surfaces the same problem
+	 * recorded in the other problem table, which the model has no reliable way to pair up itself.
+	 *
+	 * <p>Reconciling the LLM's two
 	 * sources of citation indices that can disagree: the LLM's structured
 	 * {@code citations} array and the {@code [N]} markers it writes inline in the
 	 * prose. We take the UNION of both (restricted to indices that map to a real
@@ -516,6 +521,8 @@ public class LlmInferenceService implements ChartSearchService {
 			seen.addAll(inline);
 		}
 
+		seen.addAll(sameAssertionTwins(seen, mappings, indexMap));
+
 		List<RecordReference> references = new ArrayList<RecordReference>();
 		for (Integer index : seen) {
 			RecordMapping mapping = indexMap.get(index);
@@ -529,6 +536,112 @@ public class LlmInferenceService implements ChartSearchService {
 		Collections.sort(references, Comparator.comparing(RecordReference::getDate,
 				Comparator.nullsLast(Comparator.reverseOrder())));
 		return references;
+	}
+
+	/**
+	 * The indices of retrieved records that assert the same coded problem as an already-cited
+	 * record, in the OTHER problem table — an OpenMRS {@code condition} and its
+	 * {@code encounter_diagnosis} twin.
+	 *
+	 * <p>Both rows are in the prompt as separate numbered records, the model names the finding
+	 * once and cites whichever of the two it happened to attend to, and the clinician is left
+	 * with a chip for one row and none for its identical twin. Which row it picks is arbitrary,
+	 * so this is fixed mechanically rather than by asking the prompt to be thorough.
+	 *
+	 * <p>Three constraints keep it from becoming "cite anything similar":
+	 * <ul>
+	 *   <li><b>Different resource type, one row per table.</b> Ten blood-pressure obs share a
+	 *       concept but are ten distinct events; so are five encounter diagnoses of one problem.
+	 *       Only a concept recorded exactly ONCE in each problem table is one assertion written
+	 *       twice — see {@link #problemFamily}.</li>
+	 *   <li><b>Problem tables only.</b> An obs measuring a concept, or a drug order treating it,
+	 *       is a different statement about the problem, not the same one.</li>
+	 *   <li><b>Coded records only.</b> A null concept is not a join key — treating it as one
+	 *       would link every non-coded problem to every other.</li>
+	 * </ul>
+	 *
+	 * <p>Costs no prompt tokens, because it runs after generation.
+	 *
+	 * <p><b>Drift-neutral only for genuinely cited indices.</b> A twin says exactly what the record
+	 * it duplicates says, so it is on topic whenever that one is — but that reasoning assumes the
+	 * index it pairs from was really cited. Issue #103 breaks that assumption upstream: a clinical
+	 * value pair can be rewritten into citation markers when the chart happens to contain those
+	 * record numbers, and if one of them indexes a coded problem with a 1:1 twin, this method then
+	 * surfaces the TWIN — an index that appears in neither the prose nor the citations array.
+	 * Reproduced on a 130-record chart: {@code {"answer":"BP was [120, 80] today.",
+	 * "citations":[120,80]}} yields references 80, 81 and 120, where 81 is an unrelated diagnosis
+	 * chip on an answer that mentions only a blood pressure. Nothing can be contained here — gating
+	 * on "not shorthand-created" would kill the multi-index case the rewrite exists for — so the
+	 * fix is #103's discriminator, and its cost must be measured knowing this path widens the blast
+	 * radius beyond the numbers inside the bracket.
+	 *
+	 * @param citedIndices the anchored citation set; READ ONLY — the caller passes the very set it
+	 *        then adds the result to, so mutating it here would fail fast on its own iteration
+	 * @param byIndex the caller's index&rarr;mapping lookup, passed in rather than rebuilt so the
+	 *        two do not each own a copy of "how a mapping is keyed"
+	 * @return the additional indices to surface, never including one already in {@code citedIndices}
+	 */
+	static Set<Integer> sameAssertionTwins(Set<Integer> citedIndices, List<RecordMapping> mappings,
+			Map<Integer, RecordMapping> byIndex) {
+		Set<Integer> twins = new LinkedHashSet<Integer>();
+		if (citedIndices.isEmpty()) {
+			return twins;
+		}
+		for (Integer citedIndex : citedIndices) {
+			RecordMapping cited = byIndex.get(citedIndex);
+			if (cited == null || cited.getConceptUuid() == null
+					|| !QueryScopeRouter.PROBLEM_TABLES.contains(cited.getResourceType())) {
+				continue;
+			}
+			List<RecordMapping> family = problemFamily(cited.getConceptUuid(), mappings);
+			// A TRUE twin: two or more problem tables, each holding this concept exactly once.
+			// Anything else is a series, not a duplicate — see the javadoc — so it is left alone.
+			// (problemFamily already caps each table at one row, so size < 2 is the only test
+			// needed. Deliberately NOT compared against PROBLEM_TABLES.size(): should a third
+			// problem table ever join the set, that comparison would demand a row in all three and
+			// silently stop pairing the ordinary condition+diagnosis pair.)
+			if (family.size() < 2) {
+				continue;
+			}
+			for (RecordMapping candidate : family) {
+				if (candidate.getIndex() != cited.getIndex()
+						&& !citedIndices.contains(candidate.getIndex())) {
+					twins.add(candidate.getIndex());
+				}
+			}
+		}
+		return twins;
+	}
+
+	/**
+	 * The problem-table records sharing {@code conceptUuid}, at most one per table — or an EMPTY
+	 * list when any table holds more than one, which is the caller's signal to leave the family
+	 * alone.
+	 *
+	 * <p>Returning early on the second row of a table is the whole point. {@code encounter_diagnosis}
+	 * is per-encounter, so a problem re-diagnosed at five visits has one condition row and five
+	 * diagnosis rows — five distinct diagnostic events, exactly the reasoning that keeps ten
+	 * blood-pressure obs from being treated as duplicates of each other. Pairing across that shape
+	 * would make the reference count depend on which row the model happened to cite (measured: 6
+	 * chips citing the condition, 2 citing a diagnosis), reintroducing the arbitrariness this
+	 * expansion exists to remove. Requiring exactly one row per table makes the result
+	 * order-independent: either every member pairs with every other, or none do.
+	 *
+	 * @return one mapping per problem table holding this concept, or an empty list if any table
+	 *         holds it more than once
+	 */
+	private static List<RecordMapping> problemFamily(String conceptUuid, List<RecordMapping> mappings) {
+		Map<String, RecordMapping> byTable = new HashMap<String, RecordMapping>();
+		for (RecordMapping mapping : mappings) {
+			if (!conceptUuid.equals(mapping.getConceptUuid())
+					|| !QueryScopeRouter.PROBLEM_TABLES.contains(mapping.getResourceType())) {
+				continue;
+			}
+			if (byTable.put(mapping.getResourceType(), mapping) != null) {
+				return Collections.emptyList();
+			}
+		}
+		return new ArrayList<RecordMapping>(byTable.values());
 	}
 
 	// =====================================================================

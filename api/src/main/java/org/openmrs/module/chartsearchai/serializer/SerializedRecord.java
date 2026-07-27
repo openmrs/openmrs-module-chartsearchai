@@ -48,6 +48,16 @@ public class SerializedRecord {
 	 */
 	private final String obsGroupConceptName;
 
+	/**
+	 * The UUID of the concept this record codes, or {@code null} for a non-coded record (and for
+	 * types querystore does not attach a concept to). It is the record's clinical IDENTITY,
+	 * independent of which table it was recorded in — which is what lets the citation layer
+	 * recognise that a {@code conditions} row and an {@code encounter_diagnosis} row are the same
+	 * assertion recorded twice. querystore carries it in document metadata
+	 * ({@code QueryStoreConstants.FIELD_CONCEPT_UUID}), never in the stored text.
+	 */
+	private final String conceptUuid;
+
 	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date) {
 		this(resourceType, resourceUuid, text, date, Collections.<String>emptyList());
 	}
@@ -59,6 +69,13 @@ public class SerializedRecord {
 
 	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date,
 			List<String> categoryHints, String obsGroupUuid, String obsGroupConceptName) {
+		this(resourceType, resourceUuid, text, date, categoryHints, obsGroupUuid,
+				obsGroupConceptName, null);
+	}
+
+	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date,
+			List<String> categoryHints, String obsGroupUuid, String obsGroupConceptName,
+			String conceptUuid) {
 		this.resourceType = resourceType;
 		this.resourceUuid = resourceUuid;
 		this.text = text;
@@ -67,6 +84,7 @@ public class SerializedRecord {
 				? categoryHints : Collections.<String>emptyList();
 		this.obsGroupUuid = obsGroupUuid;
 		this.obsGroupConceptName = obsGroupConceptName;
+		this.conceptUuid = conceptUuid;
 	}
 
 	public String getResourceType() {
@@ -108,5 +126,14 @@ public class SerializedRecord {
 	 */
 	public String getObsGroupConceptName() {
 		return obsGroupConceptName;
+	}
+
+	/**
+	 * @return the UUID of the concept this record codes, or {@code null} when the record is
+	 *         non-coded or its type carries no concept. The clinical identity used to recognise
+	 *         the same assertion recorded in two tables.
+	 */
+	public String getConceptUuid() {
+		return conceptUuid;
 	}
 }

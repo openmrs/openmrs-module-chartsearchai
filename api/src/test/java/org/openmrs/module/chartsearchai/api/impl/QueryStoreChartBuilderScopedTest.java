@@ -375,6 +375,37 @@ public class QueryStoreChartBuilderScopedTest {
 	}
 
 	@Test
+	public void scopeLabel_shouldNameTheContributedTypesThatShapedTheSlice() {
+		// The union runs AFTER routing, so a contributor claiming condition/diagnosis overrides the
+		// router's decision to withhold the complete problem list from a domain-qualified conditions
+		// question — the psychiatric-enumeration failure, back on. An operator triaging that answer
+		// must not read the label that says the suppression applied.
+		Set<String> none = Collections.<String> emptySet();
+		assertEquals("TOPICAL", QueryStoreChartBuilder.scopeLabel(
+				QueryScopeRouter.matchedIntents("Does the patient have any psychiatric conditions?"),
+				none),
+				"a domain-qualified conditions question is TOPICAL with no contributors");
+		String contributed = QueryStoreChartBuilder.scopeLabel(
+				QueryScopeRouter.matchedIntents("Does the patient have any psychiatric conditions?"),
+				new HashSet<String>(Arrays.asList("diagnosis", "condition")));
+		assertEquals("TOPICAL+contrib(condition,diagnosis)", contributed,
+				"…and must say so when a contributor put the problem list back, sorted so the "
+						+ "token is stable across runs");
+		// The label is a key=value field in a single-line [timing] record, so whitespace inside it
+		// truncates the value for `grep -o 'intent=[^ ]*'` and for any logfmt/ELK extractor —
+		// defeating the only purpose the contributed half has.
+		assertFalse(contributed.contains(" "),
+				"the label must stay whitespace-free to survive grep: " + contributed);
+		assertEquals("MEDICATIONS+contrib(billing)", QueryStoreChartBuilder.scopeLabel(
+				QueryScopeRouter.matchedIntents("What medications is the patient taking?"),
+				new HashSet<String>(Arrays.asList("billing"))),
+				"an ordinary contributor claim is labelled the same way");
+		assertEquals("MEDICATIONS", QueryStoreChartBuilder.scopeLabel(
+				QueryScopeRouter.matchedIntents("What medications is the patient taking?"), null),
+				"a null claim set must not append an empty suffix");
+	}
+
+	@Test
 	public void buildScoped_shouldIncludeContributorClaimedTypes_complete() {
 		// A module (e.g. billing) registers a contributor claiming its resourceType for questions it
 		// recognizes. Those records must join the slice COMPLETE, exactly like a built-in typed scope.

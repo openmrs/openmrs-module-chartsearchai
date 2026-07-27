@@ -734,6 +734,8 @@ The general-purpose embedding model (all-MiniLM-L6-v2) ranks records by lexical 
 
 **Query stopword normalization.** Common filler words ("does", "the", "patient", "have", "any") are stripped from the query before embedding, so that "any medications?" and "does the patient have any medications?" produce the same embedding vector and identical retrieval results. Without this, different phrasings of the same question return different filtered record sets, leading to inconsistent LLM answers. Stopwords are loaded from `<application-data-directory>/chartsearchai/query-stopwords.txt` if present, otherwise from a bundled default. Admins can customize the stopwords list by placing a modified file at that path without recompiling the module. Only true filler words are stripped — clinical qualifiers like "no", "not", "current", "recent", "last", and "active" are preserved because they change the query's meaning.
 
+Since [Decision 30](#decision-30-latency-neutral-answer-quality-work--retrieval-vocabulary-a-prompt-date-anchor-twin-co-citation-domain-qualified-conditions-routing) this file has a **second consumer**: `QueryScopeRouter` decides whether a conditions question is domain-qualified over the same vocabulary, via `QueryPreprocessor.contentWords`. So an override is no longer only a retrieval knob. Measured: an override that drops the three `patient*` lines leaves `contentWords("What conditions does the patient have?")` as `[conditions, patient]`, "patient" reads as a clinical domain, and every problem-list question silently loses its completeness guarantee. An override must keep the ordinary function words; loading one is logged at WARN so it is visible without turning the module's package up to INFO. The bundled file's header documents both consumers — but a hand-written override replaces that header too, which is why the warning is in the log rather than only in the file.
+
 **Resource-type boosting.** A lightweight keyword-based query classifier (`QueryClassifier`) maps the user query to the clinical resource types most likely to contain the answer. For example, a query mentioning "medications" or "drugs" targets `order` and `medication_dispense` types; "allergies" targets `allergy`; "lab results" targets `obs`; "conditions" targets `condition`; "diagnoses" targets `diagnosis`. Each type is mapped independently so they don't compete for retrieval slots — asking "any conditions" returns only condition records, not a mix of conditions and diagnoses. When the classifier identifies target types, records of those types receive a configurable score boost (`chartsearchai.embedding.typeBoostFactor`, default 1.0, i.e., disabled) applied to their combined semantic + keyword score. The boost is disabled by default because it can create artificial score gaps between boosted and non-boosted records that trigger false gap-detection cutoffs. Values like 1.2–1.5 provide moderate boosting when enabled. Importantly, the classifier receives the **original raw query** (before stopword removal) because category indicator words like "any", "all", "what" overlap with stopwords and would be lost after stripping.
 
 **Two-phase retrieval for category queries.** The query classifier also detects broad "category" queries — queries that combine a category indicator word ("any", "all", "list", "show", "what", "which", "every", "tell") with a resource type keyword. For example, "any medications?" or "list all conditions" are category queries. When detected, the retrieval pipeline uses a two-phase approach: **Phase 1** includes ALL records of the matched resource types regardless of score or topK (auto-expand), because the user explicitly asked for everything of that type and rare medical terms like "Granuloma annulare" can produce low cosine similarity against generic category words like "conditions" despite being a perfect type match. **Phase 2** fills remaining topK slots with the best non-type-matched records from the semantic adaptive cutoff (e.g., assessment notes that provide relevant context). For focused queries (no category indicator detected), topK is applied only when some surviving candidates lack keyword matches — those may be semantic false positives that need capping. When every candidate has a keyword match, topK is bypassed because the combination of gap detection and ratio floor already identified the relevant cluster; applying topK would arbitrarily truncate legitimate results (e.g., 15 vital-sign records for a multi-concept query about "BP, weight, and temperature trend"). This ensures that "any conditions?" returns every condition record, multi-concept queries return all matching vitals, while "does the patient have diabetes?" returns only the most semantically relevant records within topK.
@@ -1957,6 +1959,190 @@ Add a Spring SPI, `QueryScopeContributor` (in `chartsearchai-api`): a module reg
 - **−** The hook is only half the contract. querystore owns retrieval/indexing (project rule), so a claimed resourceType contributes nothing unless querystore actually indexes that domain — first-class support for a new domain needs *both* a querystore indexing extension and a contributor here.
 - **−** A contributor is a slice-composition change, which this project gates on BOTH the scope eval and the temporal probe (they pull in opposite directions — see Decision 28). The SPI cannot enforce that a contributor was gated; the interface javadoc states the expectation, and an unvalidated contributor can silently regress its own domain's answer quality. Union also means a careless, over-broad contributor enlarges the slice for its questions (the same over-cite risk Decision 28 measured) — hence the contract's "match conservatively; prefer to under-claim."
 - **−** The answer cache key (Decision 28) folds in `chartMode` and the question but not the registered contributor set. Contributors are resolved live per query, so a *newly started* contributor module immediately affects fresh answers; but answers already cached for its domain's questions are served until the cache TTL expires. Adding or removing a contributor module at runtime should therefore be followed by a cache flush (or accepted as bounded by the TTL) — keying the cache on the contributor set would add a `getRegisteredComponents` call to every cache-key computation for a rare, lifecycle-only change.
+
+## Decision 30: Latency-neutral answer-quality work — retrieval vocabulary, a prompt date anchor, twin co-citation, domain-qualified conditions routing
+
+**Status: Accepted** (July 2026). Extends [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped). Four changes, all on by default; measured 5.6% FASTER than the code they replace. A fifth was built, measured, refuted and reverted — see below.
+
+### Context
+
+Decision 28 settled the *shape* of the prompt. Re-measuring the shipped shape on a fresh install — Reference Application 3.7.1 demo data, **30 patients × 9 topics = 270 adjudicated cells** (154 present / 116 absent), Gemma 4 E4B on CPU, gold boundaries inherited from the committed rc.2 adjudication — showed the residual quality is not where the earlier tuning looked.
+
+Baseline (`main` @ 83cc33e): **meanF1 0.743 · abstention 0.922 (107/116) · off-topic citations 92**, and per topic:
+
+| topic | meanF1 | precision | recall | abstention | drift |
+|---|---|---|---|---|---|
+| programs | 1.000 | 1.000 | 1.000 | 12/14 | 3 |
+| eye | 0.961 | 0.976 | 0.958 | 16/16 | 1 |
+| drug-allergies | 0.896 | 0.938 | 0.917 | 17/22 | 12 |
+| allergies | 0.806 | 0.833 | 0.787 | 12/12 | 0 |
+| **mental** | 0.775 | 0.896 | 0.765 | 3/3 | **54** |
+| heart | 0.663 | 0.822 | 0.578 | 13/15 | 16 |
+| kidney | 0.629 | 0.843 | 0.549 | 1/1 | 5 |
+| fractures | 0.526 | 0.774 | 0.420 | 3/3 | 1 |
+
+Four things fall out of that table and out of reading the answers behind it:
+
+1. **Precision is near-ceiling; recall is the whole loss.** The model rarely cites something off topic — except on one topic.
+2. **`mental` alone produces 54 of the 92 off-topic citations**, while genuinely topical cells (eye, fractures) drift 1 each. Reading the answers shows why, and it is not a metric artifact: *"Yes, the patient has several mental health or psychiatric conditions recorded: Lumbago with sciatica [2], Cardiogenic shock [3], Bacterial gastroenteritis [5], Pulmonary atelectasis [14], Chronic gingivitis …"*. `mental` is the only gold question containing the word "conditions", so it is the only one routed to the CONDITIONS scope — which hands the small model the patient's entire problem list and asks it to filter. On a long list it enumerates instead. That is a clinically wrong answer, not a scoring quirk.
+3. **8% of all missed on-topic records are a cited record's own twin.** OpenMRS records the same problem in `conditions` and again as an `encounter_diagnosis`; both rows reach the prompt as separate numbered records; the model names the finding once and cites whichever row it attended to. Measured: *"Yes — the patient has eye problems: Hordeolum … [2]"* left the confirmed Hordeolum **diagnosis** unlinked.
+4. **Absence verdicts are asserted from a partial slice.** `TOPICAL` is the one intent with no completeness guarantee. *"No explicit kidney problem diagnosis is recorded"* was measured on a patient whose chart carries *Foreign body in genitourinary tract* — a record the similarity top-K never surfaced.
+
+Two smaller defects showed up in the code rather than the data: the prompt never said what day it is (so "recent", "still", "this year", "how long ago" could only be guessed), and abbreviation expansion existed for lab panels only and on only one of the three build paths — the scoped builder expanded `BMP`, the fullChart focus-hint and progressive-reasoning paths expanded nothing, so the same question retrieved different records depending on the mode.
+
+### Decision
+
+1. **One composed retrieval-text entry point, with a clinical-initialism vocabulary.** `QueryPreprocessor.forRetrieval` = expand-then-strip, called by all three build paths; an `ArchitectureGuardTest` rule forbids chaining the steps at a call site again. The vocabulary adds ~30 condition initialisms (`HTN`, `CKD`, `COPD`, `CVA`, `UTI`, `MI`, `TB`, …) beside the eight lab panels. Expansion is additive — the clinician's own token is always kept — and case-sensitivity is declared per entry, so `MI`/`TB`/`SOB`/`HR` match only in capitals where the lowercase spelling is an ordinary word or unit. Query-side only: zero prompt tokens.
+
+2. **A trailing `Today's date: yyyy-MM-dd` line**, rendered by the same formatter as every record date, plus one system-prompt sentence pointing at it. Placement *after* the question is a KV-cache constraint, not a style choice: the on-disk entry is keyed on `buildUserMessage(records, "")`, so the date rides in the per-request tail and the warmup/seed bytes stay byte-identical — no daily invalidation of every patient's persisted prefill or of the pinned prewarm corpus. Folded into the answer cache key so a long TTL cannot serve yesterday's arithmetic.
+
+3. **Twin co-citation.** When a cited record is a coded problem that the retrieved set holds exactly **once in each** problem table, the row in the other table is surfaced alongside it. Scoped to `condition` ↔ `diagnosis` and to cross-type matches, so ten blood-pressure obs sharing a concept stay ten distinct events, and to coded records, so a null concept is never a join key. Runs after generation: no prompt tokens, and drift-neutral for genuinely cited indices — a twin says exactly what the record it duplicates says. That last clause has a precondition #103 can violate: if a clinical value pair is rewritten into citation markers and one of those numbers indexes a coded problem, this surfaces its twin, an index the model never wrote. See the note on `sameAssertionTwins`; the containment belongs in #103, not here.
+
+   The one-row-per-table condition is what makes the output independent of which row the model picked, which is the entire point of the feature. `encounter_diagnosis` is per-encounter, so a problem re-diagnosed at three visits is 1 condition + 3 diagnosis rows — three distinct diagnostic events, by the same reasoning that keeps ten blood-pressure obs distinct. Pairing across them put the chip count back at the mercy of the model's arbitrary pick (measured against `extractCitedReferences`: 1 condition + 5 diagnoses gave 6 chips when the condition was cited and 2 when a diagnosis was, from one identical retrieved set) and reached across genuinely separate episodes — on patient `a6451ed0` it paired a 2025-07-22 problem with a **2021-07-15** one. Refusing to pair an ambiguous family costs nothing measured: re-running the affected cells on the same 270-cell gold leaves meanF1 0.760, abstention 107/116 and drift 74 unchanged (268 of 270 cells byte-identical, 1 cell affected, its F1 and drift identical).
+
+4. **Domain-qualified conditions questions fall through to TOPICAL.** "conditions" is the only enumeration cue that is also a generic noun clinicians attach to a domain ("heart conditions", "psychiatric conditions"); "medications" and "allergies" name their own domain. The CONDITIONS scope now fires only when nothing narrows the cue — generic qualifiers ("active", "chronic", "medical", "anything") still enumerate the whole problem list, a clinical domain word does not. Implemented over the same stopword vocabulary retrieval uses (`QueryPreprocessor.contentWords`, which unlike `stripQueryStopwords` has no fall-back-to-the-whole-sentence behaviour) rather than a second word list.
+
+   The generic list is deliberately long, and the entries that matter most are the ones this module prints in its own chart lines: `Status: ACTIVE`, `Certainty: CONFIRMED`/`PROVISIONAL`, `ENTERED IN ERROR`. Those are the words a clinician most naturally reuses when asking about the problem list, and each one read as a narrowing domain until it was listed. Bare numerals are excluded structurally rather than enumerated ("diagnosed in 2024" is a problem-list question; `TEMPORAL_CUES` matches "2 years" but not a standalone year), and lookups also try the de-hyphenated spelling so `co-morbid` behaves like `comorbid`.
+
+   On prompt size this can only shrink or tie, never grow: `main` routes **every** conditions cue to the full problem list unconditionally, so a generic-qualified question ("any confirmed diagnoses?") gets exactly the prompt it got on `main`, and only domain-qualified questions get the smaller topical slice. The 270-cell latency figure is measured on the gold questions, none of whose routing this rule changes except `mental`.
+
+**Rejected: giving TOPICAL questions the complete problem list.** The obvious converse of (4) — an opt-in `chartsearchai.scope.problemList` that hands a presence-shaped `TOPICAL` question ("does the patient have any heart problems?") the whole `condition` + `diagnosis` list, so an absence verdict is a statement about the chart rather than about the top-K — was implemented and measured on the same 270 cells. It is worse on every axis and slower; the code was reverted and only this finding kept. See the evidence below.
+
+### Evidence
+
+**Answer-quality gold — 270 cells, same gold, same install, `chartMode=queryScoped`, `topK=12`,
+repeated captures per arm.** A single capture per arm cannot support these numbers, which the first
+draft of this decision did not know. Two facts came out of repeating them:
+
+- **`main` is bit-reproducible under a fixed capture method** — two single-pass captures 18 hours
+  apart, across a rebuild and a standalone restart, are byte-identical on all 270 answers. So the
+  baseline is a fixed point, not a draw: **meanF1 0.743, abstention 107/116, drift 92.**
+- **This change is not.** Two single-pass captures of one build differ on **112 of 270 cells** (29 on
+  the reference set, the rest wording). At cell level: the flip-prone `heart` cell answered
+  identically 6/6 times on `main` and flipped between 0 and 9 citations across 9 runs here, on an
+  identical 1519-token prompt.
+
+Compared against that fixed baseline, per topic, with both arm captures shown so "real" is
+distinguishable from "a draw" (a third capture exists but was assembled from chunks, which
+[perturbs results independently of the build](../eval/drift-metric/README.md#capture-the-arms-the-same-way-or-the-comparison-is-void), so it is excluded):
+
+| topic | drift: base → arm 1 / arm 2 | verdict | F1: base → arm 1 / arm 2 | verdict |
+|---|---|---|---|---|
+| **mental** | 54 → 18 / 25 | **better in both** | 0.775 → 0.825 / 0.839 | **better in both** |
+| **heart** | 16 → 28 / 45 | **WORSE in both** | 0.663 → 0.674 / 0.674 | better in both |
+| **fractures** | 1 → 11 / 10 | **WORSE in both** | 0.526 → 0.502 / 0.549 | straddles |
+| drug-allergies | 12 → 10 / 8 | better in both | 0.896 → 0.938 / 0.896 | straddles |
+| eye | 1 → 0 / 0 | better in both | 0.961 → 0.994 / 0.994 | better in both |
+| kidney | 5 → 4 / 9 | straddles | 0.629 → 0.656 / 0.670 | better in both |
+| allergies | 0 → 0 / 0 | unchanged | 0.806 → 0.814 / 0.814 | better in both |
+| programs | 3 → 3 / 3 | unchanged | 1.000 → 1.000 / 1.000 | unchanged |
+| **TOTAL** | **92 → 74 / 100** | **not resolvable** | **0.743 → 0.760 / 0.771** | **better in both** |
+
+**meanF1 improves, and that conclusion is safe:** no topic is worse in both captures, five are better
+in both, and both captures beat a baseline that does not move. **The drift improvement claimed in the
+first draft does not exist:** the total straddles the baseline, because two real improvements
+(`mental` −31, plus `drug-allergies` and `eye`) are offset by two real regressions (`heart` +12 to
++29, `fractures` +9 to +10). Abstention is flat at 107–108 of 116.
+
+**Where the added `heart`/`fractures` drift comes from.** Both are absent-topic cells whose gold
+deliberately counts raw vitals as off-topic, and the added citations are *dated* records appended
+after a negative verdict: *"No heart or cardiac problems diagnosis is recorded. Blood pressure
+readings are: 116 mmHg on 2026-01-03 [2], 96 mmHg on 2025-09-28 [3], …"*. The prompt grew by exactly
+84 tokens on that cell (1435 → 1519) — the date line plus the system-prompt sentence pointing at it —
+and the model now volunteers dated supporting records. That is the mechanism the temporal probe
+rewards (4/12 → 11/12) firing where it is unwanted, and it is the same mechanism behind the
+reproducibility gap: on `main` the run-to-run variation stays inside the reasoning scratchpad (output
+tokens 120–154 while the answer text is identical in 6/6 runs); here it escapes into the answer.
+
+**Consequence for how this decision should be read.** (4) the routing fix is a clear win on the topic
+it targets, and (1) the retrieval vocabulary is measured by its own probe. (2) the date anchor buys a
+large temporal gain and coincides with the `heart`/`fractures` drift and the reproducibility gap.
+
+**The date anchor is now gated on `QueryScopeRouter.isTemporal`, and the reason is the codebase's own
+prior measurement rather than a new one.** That method's javadoc — on `main`, in a class this change
+edits, untouched by this diff — already records the identical hazard for Decision 28's RECENCY
+anchor: *"NON-temporal questions get no anchor, which is what keeps recent vitals out of an
+absent-topic slice where they bait enumeration (measured: a non-temporal 'any heart problems?' cell
+drifting to 39 vitals citations back when the anchor was unconditional)."* An unconditional DATE
+anchor reproduced that hazard one level up, in the prompt rather than the slice. Both anchors now use
+one gate and one vocabulary, so a question that earns the recency slice is exactly the one told what
+day it is. Verified not to cost the feature: the temporal probe is **11/12 verdict and 9/12 day-count
+with the gate**, against 11/12 and 10/12 without it and 4/12 and 0/12 on `main`.
+
+**What is NOT established, and it cost the most to learn:** which prompt component causes the
+`heart`/`fractures` drift. Four configurations measured at 20–40 runs each produced apparently
+decisive rates (1/40, 15/40, 15/40, 6/20, 4/20) that did not survive scrutiny — a control whose
+prompt is byte-identical to `main`'s scored 4/20 where `main` scored 1/20, and interleaving the arms
+query-by-query collapsed the difference to 0/8 versus 0/8. Per-cell behaviour turns out to be
+*session*-persistent, so repeats inside one session are close to N=1, and a block design confounds
+the arm with the session; KV-cache reuse was ruled out separately (3/16 reused versus 4/16 fresh).
+The gate therefore ships on the design principle and the token saving, with **no claim that it fixes
+the drift**. See [Per-cell behaviour is session-persistent](../eval/drift-metric/README.md#per-cell-behaviour-is-session-persistent--repeats-inside-one-session-are-not-independent-2026-07-28).
+
+**Attributing the two halves.** Twin co-citation can be switched off offline by restricting references to inline-anchored indices, which isolates it from the rest on the *same* capture:
+
+| | meanF1 | drift |
+|---|---|---|
+| baseline, inline-only | 0.742 | 87 |
+| changes, inline-only | 0.745 | **68** |
+| changes, full | **0.760** | 74 |
+
+So the routing/vocabulary/date half is the drift win (−19) and twin co-citation is the recall win: 37 references added across the eval, **31 of them on-topic** (84%), for +0.015 meanF1 at a cost of 6 off-topic citations.
+
+**Temporal probe — 12 patients, DB truth, questions whose answer depends on today's date:**
+
+| | baseline | with the date line |
+|---|---|---|
+| "any visit in the last 30 days?" | 4/12 (0.33) | **11/12 (0.92)** |
+| "how many days ago was the most recent visit?" (±10 d) | 0/12 (0.00) | **10/12 (0.83)** |
+
+The baseline is not merely inaccurate, it is uninformed: it answered **Yes on all twelve**, including a patient last seen 181 days earlier, and when asked for a day count it echoed the year ("2026"). With the date line it answers 11/12 and computes the interval.
+
+**Abbreviation probe — 17 DB-adjudicated carrier cells** (patients whose chart carries the full term, asked using only the initialism; family-history-only rows excluded from the truth, since "No hypertension diagnosis is recorded" is the correct answer there):
+
+| | baseline | with expansion |
+|---|---|---|
+| cites the matching record | 13/17 (0.76) | **17/17 (1.00)** |
+| leads with an affirmative verdict | 13/17 (0.76) | 16/17 (0.94) |
+
+Every previously-missed carrier (an MI, two diabetics, a hypertensive) is now found. The single non-affirmative answer is correct: the record reads "Pleurisy without Effusion or **Active Tuberculosis**", and the model cited it while declining to call it active TB.
+
+**Cost.** On the 162 gold cells present in both timing windows, prompt input falls (mean 1669 → 1653 tokens, −1%: every topic pays ~84 tokens for the date line and the system-prompt sentence, and `mental` gives back 815) and decode rises slightly (mean 183 → 195 output tokens, +6.7%, the more complete enumerations). Wall-clock on a shared CPU-only host drifts more than that between runs — a same-prompt topic like `programs` moved +24% between the two captures — so an A/B/A wall-clock control was run on a fixed 27-cell set with the machine otherwise idle, reading the module's own `chartsearchai_audit_log.response_time_ms`:
+
+| pass | n | mean response time | input tokens | output tokens |
+|---|---|---|---|---|
+| A — with (1)–(4) | 27 | 12 650 ms | 1 540 | 214 |
+| B — clean `main` | 27 | 13 397 ms | 1 683 | 197 |
+| A again (drift control) | 27 | 12 571 ms | 1 540 | 214 |
+
+**The change set is 5.6% faster**, and the two A passes agree to 0.6%, so the run carries no machine drift. The routing fix removes more prefill (−8.5% input tokens) than the date line adds, and that outweighs the slightly longer answers (+8.6% output tokens). Same direction over the full captures (16 395 → 15 652 ms), though those windows are confounded by concurrent builds.
+
+**The rejected problem-list scope, measured on the same 270 cells** (same build, switch on vs off):
+
+| | (1)–(4) | + complete problem list on TOPICAL |
+|---|---|---|
+| meanF1 | 0.760 | **0.732** |
+| abstention | 0.922 (107/116) | **0.871 (101/116)** |
+| off-topic citations | 74 | **154** |
+| mean response time | 15 652 ms | 17 823 ms (+14%) |
+| input tokens | 1 667 | 2 265 |
+
+It reproduces the exact failure the routing fix was written to remove, one topic over: `heart` drift 28 → 77, `kidney` drift 4 → 26 with F1 collapsing 0.656 → 0.479. A small model handed a long undifferentiated problem list enumerates it instead of filtering it, whichever question asked. Sound absence verdicts on topical questions therefore need a mechanism other than "put the whole list in the prompt" — a relevance-gated retrieval tier in querystore, or a larger model — so the switch was reverted rather than shipped off-by-default as a trap.
+
+### Trade-offs
+
+- **+** (1)–(4) do not cost inference time — measured 5.6% faster. (2) adds ~84 input tokens to every prompt (the date line plus the system-prompt sentence that points at it, most of which sits in the cached system prefix), and (4) gives back ~815 on a domain-qualified conditions question; the net is −8.5% input tokens. That figure is measured over the gold's nine topics, whose only conditions-cue question is domain-qualified — it is not a claim about conditions questions generally. A question whose qualifier is generic ("any confirmed diagnoses?", "any conditions on file?") keeps the complete problem list and so pays the ~815 tokens, exactly as it does on `main`; (4) can shrink or tie a prompt against baseline, never grow one.
+- **+** (3) makes citation completeness a mechanical property instead of a prompt plea.
+- **−** (3) doubles the drift tally on an absent cell that already drifted onto a coded problem. Abstention accuracy is unaffected (it is binary), but the off-topic count is not.
+- **−** (3) also makes a reference chip whose number is absent from the prose about 4.6× more common (8 → 37 across 270 cells). That shape already existed — the structured citations array could always contribute an unanchored index — and the frontend renders chips from the `references` list rather than by scanning the prose, so nothing breaks. But a clinician who looks for `[13]` in the answer text will not find it. Distinguishing "the model wrote this" from "we paired it for you" needs a field on `RecordReference` and a frontend change (separate repo), so it is deliberately not attempted here.
+- **−** Tier-2 grounding treats a twin like any other reference with no citing sentence: it falls back to the best-matching sentence anywhere in the answer, which for a twin is the same sentence its sibling matched. Measured side effect on the per-answer entailment cap (16): none — the number of cells exceeding it is 4 in both arms, and the busiest cell's reference count fell 42 → 23, because (4) removes more citations than (3) adds.
+
+  What that fallback does cost, on grounding-enabled deployments only, is the **Lazy Tier-1** shortcut. A twin is by construction absent from both the prose and the citations array, so its candidate set is empty and the fallback widens it to every sentence in the answer — which skips the single-candidate zero-embed path and runs the eager argmax instead: one e5 forward pass for the twin's record text plus one per answer sentence, serialized through querystore's synchronized embedder. On the common list-style answer, where every citation has exactly one citing sentence, that turns zero embeddings into S+1. Unmeasured, because the 270-cell eval and the latency control both run with `chartsearchai.grounding.enabled=false` (the default). The clean fix is to pass the twin→sibling pairing into the verifier so a twin inherits the sentence its sibling already selected — cheaper and the intended semantics, but it can change a verdict where the argmax would have chosen differently, so it needs its own measurement rather than riding along here.
+- **−** (4) trades the completeness guarantee on domain-qualified conditions questions for the similarity slice. A patient with more psychiatric conditions than the top-K can hold loses recall — the same Pareto cost Decision 28 documented, taken deliberately this time because the alternative produced clinically wrong answers.
+- **−** No fix ships for the unsound-absence-verdict problem: a TOPICAL question's "No X is recorded" is still asserted from the similarity slice. The direct remedy was measured and refuted (above); it stays an open weakness of Decision 28, now with a documented dead end.
+- **−** The initialism vocabulary and the generic-qualifier list are English word tables, like the intent router they sit beside; an unmatched phrasing degrades to today's behaviour rather than to a wrong scope. **The tail is open, and that is measured rather than asserted:** hardening this change closed four distinct categories of hole in two review passes (the module's own certainty values, date windows, punctuation acting as a separator, quantification and record-locus words), each an ordinary clinician phrasing found only by going looking, and two more are known and still open ("what is she being managed for?", "anything I should be aware of?"). The count of remaining holes is unknown. [Issue #104](https://github.com/openmrs/openmrs-module-chartsearchai/issues/104) carries the evidence and three candidate structural fixes; each changes routing on the 270-cell gold, so each needs its own measured arm, which is why the targeted fixes shipped here and the redesign did not.
+- **−** **The graceful-degradation argument does not hold uniformly, and one class inverts it.** Losing the complete problem list is normally survivable because the answer is merely less exhaustive prose. A COUNT question ("how many conditions does the patient have?") answered from a similarity top-K is a specific wrong number, stated as confidently as a right one, with nothing in the answer revealing the input was partial — the [counting limitation](#known-limitations) below is about the model's arithmetic over a complete list, not about an incomplete one. Quantification words are therefore listed explicitly rather than left to the guess, but the general point stands for any future category with the same shape.
+- **−** **Upgrade cost, fullChart deployments only.** The on-disk KV key hashes the system prompt, and (2) edits it, so every persisted `.bin` is orphaned once — the same one-time invalidation [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) documents for its admin-date byte change. An orphan is reclaimed only when that patient's next prefill saves, so a pinned prewarm corpus roughly doubles its disk footprint until every patient has been visited again, and each of those first visits pays a full cold prefill. Cheapest mitigation is to clear `chartsearchai.llm.kvCacheDir` at upgrade rather than pay the transient. Nothing to do under the default `queryScoped`, which persists no KV at all.
 
 ## Known limitations
 

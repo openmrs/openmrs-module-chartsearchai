@@ -180,6 +180,27 @@ public class ArchitectureGuardTest {
 		assertNoViolations(violations);
 	}
 
+	/**
+	 * Chart assembly must turn a question into querystore search text through the ONE composed
+	 * entry point {@code QueryPreprocessor.forRetrieval}, never by chaining the steps at the call
+	 * site. The three build paths did chain them, and had already drifted: the scoped path
+	 * expanded lab abbreviations while the fullChart focus-hint and progressive-reasoning paths
+	 * expanded nothing, so the same question retrieved different records depending on the mode.
+	 */
+	@Test
+	public void noHandChainedRetrievalPreprocessing() throws IOException {
+		List<String> violations = scanForPattern(
+				SRC_ROOT,
+				Pattern.compile(
+						"(stripQueryStopwords|expandLabPanelAbbreviations|expandClinicalAbbreviations)\\s*\\("),
+				"QueryPreprocessor.java|QueryPreprocessorLabExpansionTest.java"
+						+ "|QueryPreprocessorClinicalAbbreviationTest.java|QueryPreprocessorRetrievalTextTest.java"
+						+ "|LlmInferenceService.java|LlmInferenceServiceTest.java|ArchitectureGuardTest.java",
+				"Should call QueryPreprocessor.forRetrieval() — the composed expand-then-strip "
+						+ "pipeline — instead of chaining its steps");
+		assertNoViolations(violations);
+	}
+
 	// --- Infrastructure ---
 
 	/** Cache of file name → lines, populated once by {@link #loadAllSources}. */

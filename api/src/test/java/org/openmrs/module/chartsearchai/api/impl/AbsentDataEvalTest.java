@@ -60,7 +60,9 @@ public class AbsentDataEvalTest {
 	@ParameterizedTest(name = "[{index}] {0}")
 	@MethodSource("presentCases")
 	public void presentData_perCase(String caseId, EvalCase evalCase) {
-		String stripped = LlmInferenceService.stripQueryStopwords(evalCase.getQuestion());
+		// The real retrieval text chart assembly sends to querystore — the composed
+		// expand-then-strip pipeline, not the stripping step alone.
+		String stripped = QueryPreprocessor.forRetrieval(evalCase.getQuestion());
 
 		log.info("[{}] question='{}' stripped='{}'",
 				caseId, evalCase.getQuestion(), stripped);

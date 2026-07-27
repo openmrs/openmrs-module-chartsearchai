@@ -1958,6 +1958,119 @@ Add a Spring SPI, `QueryScopeContributor` (in `chartsearchai-api`): a module reg
 - **−** A contributor is a slice-composition change, which this project gates on BOTH the scope eval and the temporal probe (they pull in opposite directions — see Decision 28). The SPI cannot enforce that a contributor was gated; the interface javadoc states the expectation, and an unvalidated contributor can silently regress its own domain's answer quality. Union also means a careless, over-broad contributor enlarges the slice for its questions (the same over-cite risk Decision 28 measured) — hence the contract's "match conservatively; prefer to under-claim."
 - **−** The answer cache key (Decision 28) folds in `chartMode` and the question but not the registered contributor set. Contributors are resolved live per query, so a *newly started* contributor module immediately affects fresh answers; but answers already cached for its domain's questions are served until the cache TTL expires. Adding or removing a contributor module at runtime should therefore be followed by a cache flush (or accepted as bounded by the TTL) — keying the cache on the contributor set would add a `getRegisteredComponents` call to every cache-key computation for a rare, lifecycle-only change.
 
+## Decision 30: Latency-neutral answer-quality work — retrieval vocabulary, a prompt date anchor, twin co-citation, domain-qualified conditions routing
+
+**Status: Accepted** (July 2026). Extends [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped). Four changes, all on by default; measured 5.6% FASTER than the code they replace. A fifth was built, measured, refuted and reverted — see below.
+
+### Context
+
+Decision 28 settled the *shape* of the prompt. Re-measuring the shipped shape on a fresh install — Reference Application 3.7.1 demo data, **30 patients × 9 topics = 270 adjudicated cells** (154 present / 116 absent), Gemma 4 E4B on CPU, gold boundaries inherited from the committed rc.2 adjudication — showed the residual quality is not where the earlier tuning looked.
+
+Baseline (`main` @ 83cc33e): **meanF1 0.743 · abstention 0.922 (107/116) · off-topic citations 92**, and per topic:
+
+| topic | meanF1 | precision | recall | abstention | drift |
+|---|---|---|---|---|---|
+| programs | 1.000 | 1.000 | 1.000 | 12/14 | 3 |
+| eye | 0.961 | 0.976 | 0.958 | 16/16 | 1 |
+| drug-allergies | 0.896 | 0.938 | 0.917 | 17/22 | 12 |
+| allergies | 0.806 | 0.833 | 0.787 | 12/12 | 0 |
+| **mental** | 0.775 | 0.896 | 0.765 | 3/3 | **54** |
+| heart | 0.663 | 0.822 | 0.578 | 13/15 | 16 |
+| kidney | 0.629 | 0.843 | 0.549 | 1/1 | 5 |
+| fractures | 0.526 | 0.774 | 0.420 | 3/3 | 1 |
+
+Four things fall out of that table and out of reading the answers behind it:
+
+1. **Precision is near-ceiling; recall is the whole loss.** The model rarely cites something off topic — except on one topic.
+2. **`mental` alone produces 54 of the 92 off-topic citations**, while genuinely topical cells (eye, fractures) drift 1 each. Reading the answers shows why, and it is not a metric artifact: *"Yes, the patient has several mental health or psychiatric conditions recorded: Lumbago with sciatica [2], Cardiogenic shock [3], Bacterial gastroenteritis [5], Pulmonary atelectasis [14], Chronic gingivitis …"*. `mental` is the only gold question containing the word "conditions", so it is the only one routed to the CONDITIONS scope — which hands the small model the patient's entire problem list and asks it to filter. On a long list it enumerates instead. That is a clinically wrong answer, not a scoring quirk.
+3. **8% of all missed on-topic records are a cited record's own twin.** OpenMRS records the same problem in `conditions` and again as an `encounter_diagnosis`; both rows reach the prompt as separate numbered records; the model names the finding once and cites whichever row it attended to. Measured: *"Yes — the patient has eye problems: Hordeolum … [2]"* left the confirmed Hordeolum **diagnosis** unlinked.
+4. **Absence verdicts are asserted from a partial slice.** `TOPICAL` is the one intent with no completeness guarantee. *"No explicit kidney problem diagnosis is recorded"* was measured on a patient whose chart carries *Foreign body in genitourinary tract* — a record the similarity top-K never surfaced.
+
+Two smaller defects showed up in the code rather than the data: the prompt never said what day it is (so "recent", "still", "this year", "how long ago" could only be guessed), and abbreviation expansion existed for lab panels only and on only one of the three build paths — the scoped builder expanded `BMP`, the fullChart focus-hint and progressive-reasoning paths expanded nothing, so the same question retrieved different records depending on the mode.
+
+### Decision
+
+1. **One composed retrieval-text entry point, with a clinical-initialism vocabulary.** `QueryPreprocessor.forRetrieval` = expand-then-strip, called by all three build paths; an `ArchitectureGuardTest` rule forbids chaining the steps at a call site again. The vocabulary adds ~30 condition initialisms (`HTN`, `CKD`, `COPD`, `CVA`, `UTI`, `MI`, `TB`, …) beside the eight lab panels. Expansion is additive — the clinician's own token is always kept — and case-sensitivity is declared per entry, so `MI`/`TB`/`SOB`/`HR` match only in capitals where the lowercase spelling is an ordinary word or unit. Query-side only: zero prompt tokens.
+
+2. **A trailing `Today's date: yyyy-MM-dd` line**, rendered by the same formatter as every record date, plus one system-prompt sentence pointing at it. Placement *after* the question is a KV-cache constraint, not a style choice: the on-disk entry is keyed on `buildUserMessage(records, "")`, so the date rides in the per-request tail and the warmup/seed bytes stay byte-identical — no daily invalidation of every patient's persisted prefill or of the pinned prewarm corpus. Folded into the answer cache key so a long TTL cannot serve yesterday's arithmetic.
+
+3. **Twin co-citation.** When a cited record is a coded problem, any other *retrieved* record asserting the same `concept_uuid` in the other problem table is surfaced alongside it. Scoped to `condition` ↔ `diagnosis` and to cross-type matches, so ten blood-pressure obs sharing a concept stay ten distinct events, and to coded records, so a null concept is never a join key. Runs after generation: no prompt tokens, and drift-neutral by construction — a twin says exactly what the record it duplicates says.
+
+4. **Domain-qualified conditions questions fall through to TOPICAL.** "conditions" is the only enumeration cue that is also a generic noun clinicians attach to a domain ("heart conditions", "psychiatric conditions"); "medications" and "allergies" name their own domain. The CONDITIONS scope now fires only when nothing narrows the cue — generic qualifiers ("active", "chronic", "medical", "anything") still enumerate the whole problem list, a clinical domain word does not. Implemented over the same stopword vocabulary retrieval uses (`QueryPreprocessor.contentWords`, which unlike `stripQueryStopwords` has no fall-back-to-the-whole-sentence behaviour) rather than a second word list. This is *smaller* prompts, not bigger.
+
+**Rejected: giving TOPICAL questions the complete problem list.** The obvious converse of (4) — an opt-in `chartsearchai.scope.problemList` that hands a presence-shaped `TOPICAL` question ("does the patient have any heart problems?") the whole `condition` + `diagnosis` list, so an absence verdict is a statement about the chart rather than about the top-K — was implemented and measured on the same 270 cells. It is worse on every axis and slower; the code was reverted and only this finding kept. See the evidence below.
+
+### Evidence
+
+**Answer-quality gold — 270 cells, same gold, same install, `chartMode=queryScoped`, `topK=12`:**
+
+| | baseline (`main`) | with (1)–(4) |
+|---|---|---|
+| meanF1 (154 present cells) | 0.743 | **0.760** |
+| abstention (116 absent cells) | 0.922 (107/116) | 0.922 (107/116) |
+| off-topic citations | 92 | **74** |
+
+Per cell: **22 better / 13 worse / 119 tied**. The topic that moved most is the one the routing fix targets — `mental` F1 0.775 → 0.825 with drift **54 → 18** — and `eye` (0.961 → 0.994), `drug-allergies` (0.896 → 0.938) and `kidney` (0.629 → 0.656) all improve. `fractures` and `heart` gain drift (1 → 11 and 16 → 28); the two largest per-cell regressions are both the model answering *more* conservatively than the gold's deliberately broad trauma boundary rewards (one replaced "No fractures are recorded" + five unrelated injury citations with an uncited "No fractures or broken bones are recorded", which is what the system prompt actually asks for).
+
+**Attributing the two halves.** Twin co-citation can be switched off offline by restricting references to inline-anchored indices, which isolates it from the rest on the *same* capture:
+
+| | meanF1 | drift |
+|---|---|---|
+| baseline, inline-only | 0.742 | 87 |
+| changes, inline-only | 0.745 | **68** |
+| changes, full | **0.760** | 74 |
+
+So the routing/vocabulary/date half is the drift win (−19) and twin co-citation is the recall win: 37 references added across the eval, **31 of them on-topic** (84%), for +0.015 meanF1 at a cost of 6 off-topic citations.
+
+**Temporal probe — 12 patients, DB truth, questions whose answer depends on today's date:**
+
+| | baseline | with the date line |
+|---|---|---|
+| "any visit in the last 30 days?" | 4/12 (0.33) | **11/12 (0.92)** |
+| "how many days ago was the most recent visit?" (±10 d) | 0/12 (0.00) | **10/12 (0.83)** |
+
+The baseline is not merely inaccurate, it is uninformed: it answered **Yes on all twelve**, including a patient last seen 181 days earlier, and when asked for a day count it echoed the year ("2026"). With the date line it answers 11/12 and computes the interval.
+
+**Abbreviation probe — 17 DB-adjudicated carrier cells** (patients whose chart carries the full term, asked using only the initialism; family-history-only rows excluded from the truth, since "No hypertension diagnosis is recorded" is the correct answer there):
+
+| | baseline | with expansion |
+|---|---|---|
+| cites the matching record | 13/17 (0.76) | **17/17 (1.00)** |
+| leads with an affirmative verdict | 13/17 (0.76) | 16/17 (0.94) |
+
+Every previously-missed carrier (an MI, two diabetics, a hypertensive) is now found. The single non-affirmative answer is correct: the record reads "Pleurisy without Effusion or **Active Tuberculosis**", and the model cited it while declining to call it active TB.
+
+**Cost.** On the 162 gold cells present in both timing windows, prompt input falls (mean 1669 → 1653 tokens, −1%: every topic pays ~84 tokens for the date line and the system-prompt sentence, and `mental` gives back 815) and decode rises slightly (mean 183 → 195 output tokens, +6.7%, the more complete enumerations). Wall-clock on a shared CPU-only host drifts more than that between runs — a same-prompt topic like `programs` moved +24% between the two captures — so an A/B/A wall-clock control was run on a fixed 27-cell set with the machine otherwise idle, reading the module's own `chartsearchai_audit_log.response_time_ms`:
+
+| pass | n | mean response time | input tokens | output tokens |
+|---|---|---|---|---|
+| A — with (1)–(4) | 27 | 12 650 ms | 1 540 | 214 |
+| B — clean `main` | 27 | 13 397 ms | 1 683 | 197 |
+| A again (drift control) | 27 | 12 571 ms | 1 540 | 214 |
+
+**The change set is 5.6% faster**, and the two A passes agree to 0.6%, so the run carries no machine drift. The routing fix removes more prefill (−8.5% input tokens) than the date line adds, and that outweighs the slightly longer answers (+8.6% output tokens). Same direction over the full captures (16 395 → 15 652 ms), though those windows are confounded by concurrent builds.
+
+**The rejected problem-list scope, measured on the same 270 cells** (same build, switch on vs off):
+
+| | (1)–(4) | + complete problem list on TOPICAL |
+|---|---|---|
+| meanF1 | 0.760 | **0.732** |
+| abstention | 0.922 (107/116) | **0.871 (101/116)** |
+| off-topic citations | 74 | **154** |
+| mean response time | 15 652 ms | 17 823 ms (+14%) |
+| input tokens | 1 667 | 2 265 |
+
+It reproduces the exact failure the routing fix was written to remove, one topic over: `heart` drift 28 → 77, `kidney` drift 4 → 26 with F1 collapsing 0.656 → 0.479. A small model handed a long undifferentiated problem list enumerates it instead of filtering it, whichever question asked. Sound absence verdicts on topical questions therefore need a mechanism other than "put the whole list in the prompt" — a relevance-gated retrieval tier in querystore, or a larger model — so the switch was reverted rather than shipped off-by-default as a trap.
+
+### Trade-offs
+
+- **+** (1)–(4) do not cost inference time — measured 5.6% faster. (2) adds ~84 input tokens to every prompt (the date line plus the system-prompt sentence that points at it, most of which sits in the cached system prefix), and (4) gives back ~815 on a domain-qualified conditions question; the net is −8.5% input tokens.
+- **+** (3) makes citation completeness a mechanical property instead of a prompt plea.
+- **−** (3) doubles the drift tally on an absent cell that already drifted onto a coded problem. Abstention accuracy is unaffected (it is binary), but the off-topic count is not.
+- **−** (4) trades the completeness guarantee on domain-qualified conditions questions for the similarity slice. A patient with more psychiatric conditions than the top-K can hold loses recall — the same Pareto cost Decision 28 documented, taken deliberately this time because the alternative produced clinically wrong answers.
+- **−** No fix ships for the unsound-absence-verdict problem: a TOPICAL question's "No X is recorded" is still asserted from the similarity slice. The direct remedy was measured and refuted (above); it stays an open weakness of Decision 28, now with a documented dead end.
+- **−** The initialism vocabulary and the generic-qualifier list are English word tables, like the intent router they sit beside; an unmatched phrasing degrades to today's behaviour rather than to a wrong scope.
+
 ## Known limitations
 
 - **Counting questions**: LLMs are unreliable at precise counting tasks (e.g., "how many weight records in the last 10 years?"). The model may undercount or overcount even when all relevant records are provided. Larger, more capable models perform better at counting but are still not perfectly reliable. This is a fundamental limitation of LLM inference, not a retrieval issue. Questions that require exact counts are better suited to structured queries.

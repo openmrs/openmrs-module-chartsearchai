@@ -147,3 +147,39 @@ arm was re-captured on the final corroborated-normalization build
 the shipped citation design, not an intermediate one. Two rejected
 intermediate wordings are documented in PR #83 — affirmative evidence mandates crashed
 abstention (0.93 → 0.67–0.81, drift 2–3.5×); the shipped wording is restrictive on purpose.
+
+## Fresh-install gold + the Decision 30 gate (2026-07-27, RefApp 3.7.1 demo data)
+
+The rc.2 gold's 22 patients do not exist on a Reference Application 3.7.1 install, and its
+category boundaries were adjudicated against rc.2's concept names. These assets rebuild an
+equivalent gold for whatever install you are pointed at, and run the two probes that gate the
+[ADR Decision 30](../../docs/adr.md) changes.
+
+- `gold_overrides_local.py` — ports the rc.2 category boundaries onto the 3.7.1 concept
+  vocabulary (eyelid/diplopia are eye problems, cerebrovascular accident is a heart problem,
+  DSM entities are mental, …) and keeps the SAME stated intent per topic. `--selftest`
+  included; run it first. Every addition is one line with a rationale — read it before trusting
+  a number, because an unadjudicated boundary scores a correct answer as drift (measured: an
+  entirely right eye answer scored as an abstention failure with 3 off-topic citations).
+- `build_gold_local.py <outdir> [minRecords]` — profiles every patient with `build_gold_rc2`'s
+  `classify()` and emits `metric_gold.local.json`, `offtopic_adj.local.json`, an audit file and
+  `patients.txt`. On this install, `minRecords=120` gives **30 patients × 9 topics = 270 cells**
+  (154 present / 116 absent).
+- `capture_eval_local.sh <outdir> <patients.txt>` — fires those cells at the live REST endpoint.
+- `metric_score.py <capture> offtopic_adj.local.json metric_gold.local.json` — scores one arm.
+- `compare_arms.py <baselineCapture> <armCapture> [gold]` — per-topic and per-cell A/B.
+- `temporal_probe_today.py <outdir> [windowDays] [patients]` — DB-truth probe for questions whose
+  answer depends on *today*: "any visit in the last 30 days?" and "how many days ago was the most
+  recent visit?".
+- `abbrev_probe.py <outdir> [perAbbrev]` — DB-truth probe that asks by initialism only (`CKD`,
+  `MI`, `HTN`, …) on patients whose chart carries the full term.
+- `../latency/latency_ab.sh` — A/B/A wall-clock control on a fixed cell set. Read the timings
+  from `chartsearchai_audit_log.response_time_ms`, not from a stopwatch around the whole run:
+  the module records per-query time, input and output tokens itself.
+
+**Do not read wall-clock differences off two long captures.** On a CPU-only host the machine
+drifts more between runs than any of these changes cost — a topic whose prompt did not change at
+all moved +24% between two captures here. Use the A/B/A control, and cross-check with the
+input/output token counts, which are load-independent.
+
+Measured results are in [ADR Decision 30](../../docs/adr.md#decision-30-latency-neutral-answer-quality-work--retrieval-vocabulary-a-prompt-date-anchor-twin-co-citation-domain-qualified-conditions-routing).

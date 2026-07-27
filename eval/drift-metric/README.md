@@ -274,6 +274,13 @@ recorded, needs no log level, and survives restarts.
   inferred what you meant from argument position, document shape, filename family AND directory
   contents, so every inference was a door. It now validates instead of inferring, and the 11
   selftest cases each pin one of those failures.
+
+  The 16 cases are mutation-tested, not just written: reintroducing the cross-family fallback, the
+  missing capture-directory check, the emptiness check, the gold-shape check, or deleting the
+  provenance print each makes `--selftest` fail. Two of those five used to survive it — the fixture
+  for "sibling absent" contained nothing for a fallback to find, so the case could not fail, and
+  nothing exercised `__main__` at all. When adding a case here, mutate the guard it protects and
+  confirm the case goes red.
 - `temporal_probe_today.py <outdir> [windowDays] [patients]` — DB-truth probe for questions whose
   answer depends on *today*: "any visit in the last 30 days?" and "how many days ago was the most
   recent visit?".

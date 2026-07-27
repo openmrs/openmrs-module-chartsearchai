@@ -101,17 +101,24 @@ def resolve_inputs(argv, here=None):
         # to this script. build_gold_local.py writes the pair into one directory, so this is the
         # pairing that is always correct when it exists.
         base = os.path.basename(gold_path)
-        sibling = (os.path.join(os.path.dirname(gold_path), base.replace("metric_gold", "offtopic_adj"))
-                   if "metric_gold" in base else None)
-        if sibling and os.path.exists(sibling) and os.path.abspath(sibling) != gold_path:
+        # replace(..., 1) so "metric_gold_metric_gold.json" looks for
+        # "offtopic_adj_metric_gold.json" rather than rewriting both halves.
+        sibling_name = base.replace("metric_gold", "offtopic_adj", 1) if "metric_gold" in base else None
+        sibling = os.path.join(os.path.dirname(gold_path), sibling_name) if sibling_name else None
+        if sibling and os.path.exists(sibling):
             adj = _load(sibling, "adj")
             provenance.append("adj:  %s [sibling of the gold]" % sibling)
         else:
             adj = {}
-            provenance.append("adj:  NONE — no %s beside the gold. Unknown citations stay unknown; "
-                              "metric_score.py may report different numbers if you pass it one."
-                              % (base.replace("metric_gold", "offtopic_adj")
-                                 if "metric_gold" in base else DEFAULT_ADJ))
+            # Name the candidate actually looked for. Reporting DEFAULT_ADJ when a sibling name WAS
+            # derivable said "no offtopic_adj.local.json beside the gold" while
+            # offtopic_adj.rc2.json sat right there.
+            provenance.append("adj:  NONE — %s. Unknown citations stay unknown; metric_score.py "
+                              "may report different numbers if you pass it one."
+                              % ("no %s beside the gold" % sibling_name if sibling_name
+                                 else "the gold's name has no \"metric_gold\" in it, so no "
+                                      "sibling adjudication name can be derived; pass one "
+                                      "explicitly as the 4th argument"))
     return gold, adj, provenance
 
 
@@ -237,10 +244,20 @@ def selftest():
 
         # 3. gold only, sibling ABSENT -> NO adjudication, and the output says so
         #    (stops: silently substituting the .local adjudication of another family)
+        #
+        # The FOREIGN adjudication below is what makes this case able to fail. Without it the
+        # fixture directory holds nothing for a cross-family fallback to find, so "sibling absent"
+        # was only ever tested where the bug could not fire — and a mutation reintroducing the
+        # fallback kept this green while silently scoring 0.250 instead of 0.333.
+        write(other, DEFAULT_ADJ, {"_ontopic": {"p|eye": ["FOREIGN"]}})
         lone = write(other, "metric_gold.lonely.json", GOLD)
         g, a, prov = resolved(["x", "b", "arm", lone])
         assert a == {}, ("a missing sibling must not fall back to another family", a)
         assert "NONE" in prov, prov
+        assert "metric_gold.lonely" not in prov.split("adj:")[1], \
+            ("the NONE line must name the sibling it looked for, not the gold", prov)
+        # …and the derived candidate must be named, not a hardcoded default
+        assert "offtopic_adj.lonely.json" in prov, prov
 
         # 4. a bare filename must resolve exactly like ./x and like an absolute path
         #    (stops: dirname("") sending the family lookup to the script's directory)
@@ -290,16 +307,65 @@ def selftest():
 
         # 11. no default gold at all -> exit, not an empty comparison
         must_exit(["x", "b", "arm"], "a missing default gold must exit", bare)
+
+        # 12. an EMPTY adjudication is not a shape either — in the slot AND as a sibling
+        must_exit(["x", "b", "arm", home_gold, write(other, "offtopic_adj.empty.json", {})],
+                  "an empty adjudication argument must exit")
+        empty_sib = tempfile.mkdtemp()
+        write(empty_sib, "metric_gold.es.json", GOLD)
+        write(empty_sib, "offtopic_adj.es.json", {})
+        must_exit(["x", "b", "arm", os.path.join(empty_sib, "metric_gold.es.json")],
+                  "an empty sibling adjudication must exit")
+        shutil.rmtree(empty_sib, ignore_errors=True)
+
+        # 13. a gold whose cells lack "present" is not a gold (it used to load and then die
+        #     mid-scoring with a KeyError)
+        must_exit(["x", "b", "arm", write(other, "metric_gold.nopresent.json",
+                                          {"p|eye": {"ontopic": {}, "focus_uuids": []}})],
+                  "a cell without \"present\" must be rejected at load time")
+
+        # 14. the resolved provenance must always name both roles — it is the redesign's only
+        #     guarantee that an unanticipated resolution is visible
+        for argv in (["x", "b", "arm"], ["x", "b", "arm", fam_gold],
+                     ["x", "b", "arm", home_gold, home_adj]):
+            _, _, prov_lines = resolve_inputs(argv, home)
+            joined = "\n".join(prov_lines)
+            assert joined.startswith("gold: ") and "adj:" in joined, (argv, prov_lines)
+            assert os.path.isabs(prov_lines[0].split("gold: ")[1].split(" (")[0]), prov_lines
+
+        # 15. and the CLI must actually PRINT it — deleting the print loop left every case above
+        #     green, because they call resolve_inputs directly and never exercise __main__
+        cap = os.path.join(other, "cap")
+        os.makedirs(cap, exist_ok=True)
+        out = __import__("subprocess").run(
+            [__import__("sys").executable, os.path.abspath(__file__), cap, cap, home_gold],
+            capture_output=True, text=True).stdout
+        assert "gold: " in out and "adj:" in out, ("the CLI must print the provenance", out[:400])
+
+        # 16. both capture arguments must be directories — forgetting the arm dir printed a full
+        #     table comparing the real baseline against an empty arm, exit 0
+        for bad in ([__import__("sys").executable, os.path.abspath(__file__), cap, home_gold],
+                    [__import__("sys").executable, os.path.abspath(__file__), cap]):
+            rc = __import__("subprocess").run(bad, capture_output=True, text=True).returncode
+            assert rc != 0, ("a non-directory capture argument must exit: %s" % bad[2:])
     finally:
         for d in (home, other, bare):
             shutil.rmtree(d, ignore_errors=True)
-    print("compare_arms selftest OK (11 cases)")
+    print("compare_arms selftest OK (16 cases)")
 
 
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         selftest()
     else:
+        # Both capture arguments must be directories. Forgetting the arm dir
+        # ("compare_arms.py <cap> <goldfile>") otherwise printed a full table comparing the real
+        # baseline against an empty arm, with one warning and exit 0.
+        for _i in (1, 2):
+            if len(sys.argv) <= _i or not os.path.isdir(sys.argv[_i]):
+                sys.exit("compare_arms: argument %d must be a capture DIRECTORY, got %r\n"
+                         "Usage: compare_arms.py <baselineDir> <armDir> [goldFile] [adjFile]"
+                         % (_i, sys.argv[_i] if len(sys.argv) > _i else None))
         gold, ADJ, PROVENANCE = resolve_inputs(sys.argv)
         ADJ_ON = ADJ.get("_ontopic", {})
         # Printed on EVERY run. Nine silent failures here shared one signature — a plausible number

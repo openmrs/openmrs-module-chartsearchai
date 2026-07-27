@@ -209,7 +209,11 @@ final class LlmAnswerExtractor {
 	 * real record numbers, so the exposure grows with it — do not read this as "chart size is
 	 * irrelevant". No discriminator ships here because the obvious one (require an independent
 	 * single-index marker elsewhere in the answer) regresses the measured multi-index case this
-	 * method exists for, so it needs its own measurement rather than a guess. Downstream, the single-index {@code INLINE_CITATION} pattern sees no marker in an
+	 * method exists for, so it needs its own measurement rather than a guess. See #103, and the note
+	 * on {@code LlmInferenceService.sameAssertionTwins} for how twin co-citation widens the blast
+	 * radius past the numbers inside the bracket.
+	 *
+	 * <p>Downstream, the single-index {@code INLINE_CITATION} pattern sees no marker in an
 	 * untouched group — and when the answer contains NO other single-index marker, the #76
 	 * unanchored-array guard then surfaces no references at all for that answer, including any
 	 * array entries the group only partially matched. That total blast radius is the accepted

@@ -2012,11 +2012,30 @@ Two smaller defects showed up in the code rather than the data: the prompt never
 
 **Answer-quality gold — 270 cells, same gold, same install, `chartMode=queryScoped`, `topK=12`:**
 
-| | baseline (`main`) | with (1)–(4) |
-|---|---|---|
-| meanF1 (154 present cells) | 0.743 | **0.760** |
-| abstention (116 absent cells) | 0.922 (107/116) | 0.922 (107/116) |
-| off-topic citations | 92 | **74** |
+| | baseline (`main`) | with (1)–(4) | with (1)–(4), repeat |
+|---|---|---|---|
+| meanF1 (154 present cells) | 0.743 | 0.760 | **0.771** |
+| abstention (116 absent cells) | 0.922 (107/116) | 0.922 (107/116) | 0.931 (108/116) |
+| off-topic citations | 92 | 74 | **100** |
+
+**Read the third column before the second.** It is the SAME build as column two, captured again — and
+the drift it reports is worse than the baseline's. This protocol is not reproducible: 241 of 270
+cells (89%) return an identical reference set across a repeat, but 16 flip, netting **+26 drift**,
+bidirectionally. The cause is decode nondeterminism, established from the audit log rather than
+inferred — one heart cell recorded `input_tokens = 1519` on nine runs, i.e. byte-identical prompts,
+while its reference count alternated 9, 0, 9, 0, 0, 0, 9, 0, 0, the model flipping between a clean
+abstention and the same abstention with nine blood-pressure readings appended.
+
+So of the three aggregate numbers above, **only abstention is resolvable at this sample size**, and
+it is unchanged. The drift delta (−18) is smaller than the measured noise (±26) and the meanF1 delta
+(+0.017) is only ~1.5× it. See [Run-to-run noise](../eval/drift-metric/README.md#run-to-run-noise-measured-2026-07-27)
+for the method and for `repeat_probe.py`, which sizes it in ten minutes.
+
+What the aggregate does support is that nothing regressed: two captures of the changed arm both beat
+the baseline's meanF1 (0.760 and 0.771 vs 0.743) and both keep abstention at or above it. What
+carries the actual argument for these four changes is the per-cell mechanism — the clinically wrong
+`mental` answer, the unlinked twin diagnosis — and the two DB-truth probes below, which score a
+verdict against a SQL fact instead of a citation set and move far more than the noise.
 
 Per cell: **22 better / 13 worse / 119 tied**. The topic that moved most is the one the routing fix targets — `mental` F1 0.775 → 0.825 with drift **54 → 18** — and `eye` (0.961 → 0.994), `drug-allergies` (0.896 → 0.938) and `kidney` (0.629 → 0.656) all improve. `fractures` and `heart` gain drift (1 → 11 and 16 → 28); the two largest per-cell regressions are both the model answering *more* conservatively than the gold's deliberately broad trauma boundary rewards (one replaced "No fractures are recorded" + five unrelated injury citations with an uncited "No fractures or broken bones are recorded", which is what the system prompt actually asks for).
 

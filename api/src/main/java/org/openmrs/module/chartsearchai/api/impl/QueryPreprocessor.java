@@ -31,10 +31,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Normalizes a raw user question into the inputs querystore retrieval consumes — the focus-hint
- * pass and the query-scoped slice pass: a stopword-stripped form ({@link #stripQueryStopwords}),
- * a lab-abbreviation-expanded form for the scoped slice ({@link #expandLabPanelAbbreviations}),
- * content terms for keyword matching, and a recency cap.
+ * Normalizes a raw user question into the inputs the rest of the module derives from it.
+ *
+ * <p>{@link #forRetrieval} is the entry point chart assembly should use: it composes abbreviation
+ * expansion — lab panels and condition initialisms alike — with stopword stripping, in that order,
+ * and ALL THREE build paths call it (the fullChart focus-hint pass, the query-scoped slice pass,
+ * and the progressive-reasoning preview). The individual steps
+ * ({@link #stripQueryStopwords}, {@link #expandLabPanelAbbreviations},
+ * {@link #expandClinicalAbbreviations}) remain visible for their own tests, but a call site that
+ * chains them by hand has historically drifted — one path expanded and the others did not — which
+ * is why {@code ArchitectureGuardTest.noHandChainedRetrievalPreprocessing} forbids it.
+ *
+ * <p>Also derives {@link #contentWords} (the stopword vocabulary without stripping's
+ * fall-back-to-the-whole-sentence behaviour, used by {@code QueryScopeRouter} to tell a
+ * problem-list question from a domain-qualified one), content terms for keyword matching, and a
+ * recency cap.
  */
 final class QueryPreprocessor {
 
@@ -174,14 +185,14 @@ final class QueryPreprocessor {
 	private static final Map<Pattern, String> LAB_PANEL_ABBREVIATIONS;
 	static {
 		Map<Pattern, String> m = new LinkedHashMap<Pattern, String>();
-		m.put(Pattern.compile("\\bBMP\\b", Pattern.CASE_INSENSITIVE), "basic metabolic panel");
-		m.put(Pattern.compile("\\bCMP\\b", Pattern.CASE_INSENSITIVE), "comprehensive metabolic panel");
-		m.put(Pattern.compile("\\bCBC\\b", Pattern.CASE_INSENSITIVE), "complete blood count");
-		m.put(Pattern.compile("\\bLFTs?\\b", Pattern.CASE_INSENSITIVE), "liver function tests");
-		m.put(Pattern.compile("\\bRFTs?\\b", Pattern.CASE_INSENSITIVE), "renal function tests");
-		m.put(Pattern.compile("\\bABG\\b", Pattern.CASE_INSENSITIVE), "arterial blood gas");
-		m.put(Pattern.compile("\\bESR\\b", Pattern.CASE_INSENSITIVE), "erythrocyte sedimentation rate");
-		m.put(Pattern.compile("\\bCRP\\b", Pattern.CASE_INSENSITIVE), "C-reactive protein");
+		m.put(cue("BMP"), "basic metabolic panel");
+		m.put(cue("CMP"), "comprehensive metabolic panel");
+		m.put(cue("CBC"), "complete blood count");
+		m.put(cue("LFTs?"), "liver function tests");
+		m.put(cue("RFTs?"), "renal function tests");
+		m.put(cue("ABG"), "arterial blood gas");
+		m.put(cue("ESR"), "erythrocyte sedimentation rate");
+		m.put(cue("CRP"), "C-reactive protein");
 		LAB_PANEL_ABBREVIATIONS = Collections.unmodifiableMap(m);
 	}
 

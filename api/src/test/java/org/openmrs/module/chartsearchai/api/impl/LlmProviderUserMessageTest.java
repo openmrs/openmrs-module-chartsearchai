@@ -52,6 +52,36 @@ public class LlmProviderUserMessageTest {
 	}
 
 	@Test
+	public void todaysDateGoesAfterTheQuestionSoTheWarmupPrefixSurvives() {
+		// The date changes daily and the KV entry is keyed on buildUserMessage(records, "") — the
+		// warmup bytes. Anywhere earlier than the per-request tail and every patient's persisted
+		// prefill, pinned prewarm corpus included, is orphaned each midnight.
+		String warmup = LlmProvider.buildUserMessage(CHART, "");
+		String query = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+				"Has she been seen recently?", "2026-07-27");
+
+		assertTrue(query.contains(LlmProvider.TODAY_LABEL + "2026-07-27"),
+				"the prompt must carry today's date: " + query);
+		assertTrue(query.indexOf("Clinician's query:") < query.indexOf(LlmProvider.TODAY_LABEL),
+				"the date line must come AFTER the query: " + query);
+		assertTrue(query.startsWith(warmup),
+				"and the warmup bytes must remain a byte-prefix of it.\n  warmup: " + warmup
+						+ "\n  query:  " + query);
+	}
+
+	@Test
+	public void withoutTodayTheMessageIsByteIdenticalToTheDateFreeForm() {
+		// What makes every pre-existing on-disk KV filename still valid: the seed path passes no
+		// date and its bytes are provably unchanged by the feature.
+		String threeArg = LlmProvider.buildUserMessage(CHART, Arrays.asList(1),
+				"Has she been seen recently?");
+		assertEquals(threeArg, LlmProvider.buildUserMessage(CHART, Arrays.asList(1),
+				"Has she been seen recently?", null));
+		assertEquals(threeArg, LlmProvider.buildUserMessage(CHART, Arrays.asList(1),
+				"Has she been seen recently?", "   "), "a blank date must also be a no-op");
+	}
+
+	@Test
 	public void buildUserMessageShouldVaryByQuestion() {
 		String a = LlmProvider.buildUserMessage(CHART, "What is the BP?");
 		String b = LlmProvider.buildUserMessage(CHART, "Any allergies?");

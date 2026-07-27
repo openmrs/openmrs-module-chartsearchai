@@ -17,6 +17,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+
 /**
  * Maps a clinician's question to the record types whose records belong <em>complete</em> in a
  * query-scoped slice chart ({@code chartsearchai.chartMode=queryScoped}). For an enumeration
@@ -37,7 +39,10 @@ import java.util.regex.Pattern;
  * similarity top-K was invisible to an allergy enumeration). Everything cue-free — topical
  * questions like "any eye problems?" — matches nothing ({@link Intent#TOPICAL}), where the
  * slice is the similarity top-K alone and the prompt's abstention language (same contract as
- * the focus-hint path) handles the no-match case. A misroute to TOPICAL only costs typed
+ * the focus-hint path) handles the no-match case. Cue-free is no longer the ONLY route to
+ * TOPICAL: a conditions cue narrowed by a clinical domain ("any psychiatric conditions?") is
+ * also sent there, because the complete problem list is the wrong context for it — see
+ * {@link #isDomainQualified}. A misroute to TOPICAL only costs typed
  * completeness; a wrong or partial typed scope would bias the slice — hence conservative
  * cues, unioned when they co-occur.
  *
@@ -76,6 +81,18 @@ final class QueryScopeRouter {
 	private static final Pattern CONDITIONS_CUES = cues("conditions?", "diagnos(?:is|es|ed)", "problem list");
 
 	/**
+	 * The two querystore resource types that record the same clinical problem — an OpenMRS
+	 * {@code conditions} row and its {@code encounter_diagnosis}. Shared with
+	 * {@code LlmInferenceService}'s twin co-citation, which pairs one against the other, so the
+	 * CONDITIONS scope and the pairing rule cannot drift: were a third problem table to appear (or
+	 * one be renamed) and only one of the two lists updated, routing would keep enumerating a table
+	 * whose rows had silently stopped pairing.
+	 */
+	static final Set<String> PROBLEM_TABLES = setOf(
+			ChartSearchAiConstants.RESOURCE_TYPE_CONDITION,
+			ChartSearchAiConstants.RESOURCE_TYPE_DIAGNOSIS);
+
+	/**
 	 * Words that may sit next to a conditions cue without narrowing it to a clinical DOMAIN — the
 	 * cue words themselves, plus generic problem-list qualifiers. "Any active conditions?",
 	 * "chronic medical conditions", "diagnosed with anything" are all still asking for the whole
@@ -91,8 +108,7 @@ final class QueryScopeRouter {
 					"problems", "active", "inactive", "chronic", "acute", "ongoing", "resolved",
 					"past", "previous", "prior", "underlying", "comorbid", "comorbidity",
 					"comorbidities", "medical", "clinical", "health", "anything", "everything",
-					"main", "major", "minor", "significant", "important", "relevant", "outstanding",
-					"her", "his", "their")));
+					"main", "major", "minor", "significant", "important", "relevant", "outstanding")));
 
 	private static final Pattern VISITS_CUES = cues("visits?", "appointments?", "encounters?", "admissions?");
 
@@ -223,7 +239,7 @@ final class QueryScopeRouter {
 			case PROGRAMS:
 				return setOf("program");
 			case CONDITIONS:
-				return setOf("condition", "diagnosis");
+				return PROBLEM_TABLES;
 			case VISITS:
 				return setOf("visit", "encounter");
 			case ORDERS:

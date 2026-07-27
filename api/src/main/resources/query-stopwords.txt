@@ -2,6 +2,17 @@
 # semantically equivalent phrasings (e.g. "any medications?" and
 # "does the patient have any medications?" both become "medications").
 #
+# TWO consumers read this list, so an edit here reaches further than retrieval:
+#   1. the retrieval text sent to querystore (QueryPreprocessor.forRetrieval);
+#   2. scope ROUTING (QueryScopeRouter.isDomainQualified via
+#      QueryPreprocessor.contentWords) — whatever survives stripping is treated as the
+#      clinical domain the clinician named.
+# Consequence of (2): adding a word that names a clinical domain does not merely blur the
+# embedding, it flips routing. Strip "psychiatric" and "any psychiatric conditions?" stops
+# looking domain-qualified, so it is handed the patient's ENTIRE problem list again — the
+# enumeration failure that routing change exists to prevent. The rule below already forbids
+# such words; this is what it costs when broken.
+#
 # IMPORTANT: Do NOT add words that carry clinical meaning:
 #   - Negation: no, not, never, none, without, neither
 #   - Temporal: recent, last, new, first, previous, earliest

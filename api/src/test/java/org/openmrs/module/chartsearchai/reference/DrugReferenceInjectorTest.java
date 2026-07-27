@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -87,6 +88,33 @@ public class DrugReferenceInjectorTest {
 				"precondition: a reference record must actually be injected, else the rebuild path is not exercised");
 		assertTrue(result.isQueryScoped(),
 				"the injected chart must carry forward the query-scoped stamp");
+	}
+
+	@Test
+	public void injectionPreservesConceptUuidOnTheChartsOwnRecords() {
+		// Second field this reconstructor has to carry across, and the same failure shape as the
+		// query-scoped stamp above: RecordMapping.getConceptUuid() is what pairs an OpenMRS
+		// condition with its identical encounter_diagnosis in LlmInferenceService's twin
+		// co-citation. If injection rebuilt the mappings instead of copying them, every citation
+		// would quietly lose its twin on any deployment with drugReference enabled — no error, no
+		// log line, just half the reference chips. Cheap guard on an expensive silent failure.
+		PatientChart chart = new PatientChart("Patient\n\n[1] Condition: Hordeolum. Status: ACTIVE\n",
+				Collections.unmodifiableList(Collections.singletonList(
+						new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_CONDITION,
+								"cond-uuid-1", null, "Condition: Hordeolum. Status: ACTIVE",
+								"concept-hordeolum"))),
+				Collections.<Integer> emptyList());
+
+		PatientChart result = injector().injectRecords(chart,
+				context(5, null), "what is the safe dose of ibuprofen?");
+
+		assertTrue(result.getMappings().size() > chart.getMappings().size(),
+				"precondition: a reference record must actually be injected, else the rebuild path is not exercised");
+		assertEquals("concept-hordeolum", result.getMappings().get(0).getConceptUuid(),
+				"the chart's own record must keep its concept identity through injection");
+		assertNull(result.getMappings().get(1).getConceptUuid(),
+				"and the injected drug-reference record must have none — reference data is not a "
+						+ "patient problem, so it must never pair with one");
 	}
 
 	@Test

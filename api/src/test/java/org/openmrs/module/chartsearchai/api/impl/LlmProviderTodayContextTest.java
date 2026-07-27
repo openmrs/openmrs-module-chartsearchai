@@ -9,19 +9,14 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.Date;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
-
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * The prompt must tell the model what day it is.
@@ -29,57 +24,20 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * <p>Every record carries an absolute {@code (yyyy-MM-dd)} date, but nothing in the prompt said
  * what "now" is — so a question whose answer depends on the current date ("seen recently?",
  * "still on treatment?", "anything this year?", "how long ago?") could only be answered by
- * guessing today from the newest record or from the model's training cutoff. This fixture pins
- * both the content and the PLACEMENT of the date line.
+ * guessing today from the newest record or from the model's training cutoff.
  *
- * <p>Placement is a hard constraint, not a style choice: the date changes daily, and llama-server's
- * KV cache is keyed on the question-independent prefix {@code buildUserMessage(records, "")}. The
- * date therefore has to live AFTER the question, in the per-request tail — anywhere earlier and
- * every patient's persisted KV entry (and the pinned prewarm corpus) would be invalidated once a
- * day.
+ * <p>This fixture pins the WIRING only — that each answer path reaches the engine with a date and
+ * that warmup does not. The message layout and the byte-prefix constraint behind the date's
+ * placement belong to {@link LlmProviderUserMessageTest}, which owns the chart fixture and the
+ * warmup contract; keeping both here meant two files asserting one invariant, either of which
+ * could go stale alone.
  */
 public class LlmProviderTodayContextTest {
 
-	private static final String CHART = "[1] (2025-01-15) Clinical observation: BP 120/80\n"
-			+ "[2] (2025-01-10) Diagnosis: Hypertension";
-
-	@Test
-	public void buildUserMessage_shouldAppendTodaysDateAfterTheQuestion() {
-		String message = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
-				"Has she been seen recently?", "2026-07-27");
-
-		assertTrue(message.contains(LlmProvider.TODAY_LABEL + "2026-07-27"),
-				"the prompt must carry today's date: " + message);
-		assertTrue(message.indexOf("Clinician's query:") < message.indexOf(LlmProvider.TODAY_LABEL),
-				"the date line must come AFTER the query so the warmup/KV byte-prefix survives: "
-						+ message);
-	}
-
-	@Test
-	public void buildUserMessage_withTodayShouldStillStartWithTheWarmupPrefix() {
-		// The whole point of the trailing placement: warmup (and the KV cache seed) send
-		// buildUserMessage(records, "") and must remain a byte-prefix of the real query, or
-		// llama-server re-prefills the entire chart on every query.
-		String warmup = LlmProvider.buildUserMessage(CHART, "");
-		String query = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
-				"Has she been seen recently?", "2026-07-27");
-		assertTrue(query.startsWith(warmup),
-				"adding the date must not break the warmup byte-prefix contract.\n"
-						+ "  warmup: " + warmup + "\n  query:  " + query);
-	}
-
-	@Test
-	public void buildUserMessage_withoutTodayShouldBeByteIdenticalToTheThreeArgForm() {
-		// The warmup / KV-seed path passes no date, so its bytes — and therefore every existing
-		// on-disk KV filename — are provably unchanged by this feature.
-		String withoutDate = LlmProvider.buildUserMessage(CHART, Arrays.asList(1),
-				"Has she been seen recently?", null);
-		String threeArg = LlmProvider.buildUserMessage(CHART, Arrays.asList(1),
-				"Has she been seen recently?");
-		assertEquals(threeArg, withoutDate);
-		assertEquals(threeArg, LlmProvider.buildUserMessage(CHART, Arrays.asList(1),
-				"Has she been seen recently?", "   "), "a blank date must also be a no-op");
-	}
+	/** Deliberately minimal and local: these tests assert only that the answer paths REACH the
+	 *  engine with a date, never the message layout — that contract, and the shared chart fixture
+	 *  it needs, belong to {@link LlmProviderUserMessageTest}. */
+	private static final String CHART = "[1] (2025-01-15) Clinical observation: BP 120/80";
 
 	@Test
 	public void searchStreaming_shouldSendTodaysDateToTheEngine() {
@@ -110,14 +68,6 @@ public class LlmProviderTodayContextTest {
 		provider.warmup(CHART);
 		assertFalse(provider.engine.userMessage.contains(LlmProvider.TODAY_LABEL),
 				"warmup must stay date-free: " + provider.engine.userMessage);
-	}
-
-	@Test
-	public void today_shouldRenderInTheSameFormatAsEveryRecordDate() {
-		// The model compares the date line against record dates, so both must be rendered by the
-		// one formatter — a different shape ("27 Jul 2026") would make the comparison guesswork.
-		assertEquals(DateFormatUtil.formatDate(new Date()), DateFormatUtil.today());
-		assertTrue(DateFormatUtil.today().matches("\\d{4}-\\d{2}-\\d{2}"), DateFormatUtil.today());
 	}
 
 	@Test
@@ -162,33 +112,24 @@ public class LlmProviderTodayContextTest {
 		}
 
 		@Override
-		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
-				ObjectNode responseFormat) {
-			return infer(systemPrompt, userMessage, timeoutSeconds);
-		}
-
-		@Override
 		public InferenceResult inferStreaming(String systemPrompt, String userMessage,
 				int timeoutSeconds, Consumer<String> tokenConsumer) {
-			this.userMessage = userMessage;
-			return new InferenceResult("{\"reasoning\":\"\",\"answer\":\"ok\",\"citations\":[]}", 0, 0);
+			// Matches LlmProviderTest's stub: the provider must always take the scope-aware
+			// overload, so reaching this one is a regression rather than a fallback.
+			throw new UnsupportedOperationException(
+					"searchStreaming must call the scope-aware inferStreaming");
 		}
 
 		@Override
 		public InferenceResult inferStreaming(String systemPrompt, String userMessage,
 				int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed) {
-			return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer);
+			this.userMessage = userMessage;
+			return new InferenceResult("{\"reasoning\":\"\",\"answer\":\"ok\",\"citations\":[]}", 0, 0);
 		}
 
 		@Override
 		public void warmup(String systemPrompt, String userMessage, int timeoutSeconds) {
 			this.userMessage = userMessage;
-		}
-
-		@Override
-		public void warmup(String systemPrompt, String userMessage, int timeoutSeconds,
-				String cacheScope, boolean pin) {
-			warmup(systemPrompt, userMessage, timeoutSeconds);
 		}
 
 		@Override

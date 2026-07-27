@@ -672,10 +672,12 @@ public class LlmProvider {
 
 	/**
 	 * Builds the user-message body sent to the LLM, given the numbered patient
-	 * records and the clinician's query. This is shared between {@link #search},
-	 * {@link #searchStreaming}, and {@link #warmup} so that a warmup with
-	 * {@code question = ""} produces a byte-prefix of every real query — that
-	 * shared prefix is exactly what llama-server's KV cache reuses.
+	 * records and the clinician's query. This date-free form is what {@link #warmup} sends and
+	 * what the streaming path uses as its KV cache seed; the answer paths ({@link #search},
+	 * {@link #searchStreaming}) call the {@code today}-bearing overload below. The warmup form
+	 * with {@code question = ""} remains a byte-prefix of every real query — that shared prefix
+	 * is exactly what llama-server's KV cache reuses, and keeping the date out of it is what
+	 * stops the key changing daily.
 	 */
 	static String buildUserMessage(String numberedRecords, String question) {
 		return buildUserMessage(numberedRecords, Collections.<Integer>emptyList(), question);

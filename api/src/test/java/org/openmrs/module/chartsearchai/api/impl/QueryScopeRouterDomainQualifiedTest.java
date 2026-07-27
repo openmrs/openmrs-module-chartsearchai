@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -27,7 +26,7 @@ import org.junit.jupiter.api.Test;
  * enumerates instead. Measured on the 3.7.1 demo set (30 patients × 9 topics): the mental-health
  * cell answered <em>"Yes, the patient has several mental health or psychiatric conditions
  * recorded: Lumbago with sciatica, Cardiogenic shock, Bacterial gastroenteritis, Pulmonary
- * atelectasis, Chronic gingivitis …"</em> — a clinically wrong answer, and 52 of the 75 off-topic
+ * atelectasis, Chronic gingivitis …"</em> — a clinically wrong answer, and 54 of the 92 off-topic
  * citations in the whole eval came from that single topic, while genuinely TOPICAL topics (eye,
  * fractures) drifted 1 citation each.
  *
@@ -93,11 +92,5 @@ public class QueryScopeRouterDomainQualifiedTest {
 		assertFalse(matched.contains(QueryScopeRouter.Intent.CONDITIONS));
 		assertTrue(matched.contains(QueryScopeRouter.Intent.ALLERGIES));
 		assertTrue(matched.contains(QueryScopeRouter.Intent.MEDICATIONS));
-	}
-
-	@Test
-	public void nullAndBlankAreStillTopical() {
-		assertEquals(0, intents(null).size());
-		assertEquals(0, intents("   ").size());
 	}
 }

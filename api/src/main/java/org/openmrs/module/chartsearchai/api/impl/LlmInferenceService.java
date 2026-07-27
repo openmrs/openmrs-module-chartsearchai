@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -462,7 +461,12 @@ public class LlmInferenceService implements ChartSearchService {
 	}
 
 	/**
-	 * Builds the clickable reference list for an answer, reconciling the two
+	 * Builds the clickable reference list for an answer from three sources: the two the LLM
+	 * supplies and can disagree on (below), plus the deterministic {@link #sameAssertionTwins}
+	 * expansion applied to the result — a cited coded problem also surfaces the same problem
+	 * recorded in the other problem table, which the model has no reliable way to pair up itself.
+	 *
+	 * <p>Reconciling the LLM's two
 	 * sources of citation indices that can disagree: the LLM's structured
 	 * {@code citations} array and the {@code [N]} markers it writes inline in the
 	 * prose. We take the UNION of both (restricted to indices that map to a real
@@ -517,7 +521,7 @@ public class LlmInferenceService implements ChartSearchService {
 			seen.addAll(inline);
 		}
 
-		seen.addAll(sameAssertionTwins(seen, mappings));
+		seen.addAll(sameAssertionTwins(seen, mappings, indexMap));
 
 		List<RecordReference> references = new ArrayList<RecordReference>();
 		for (Integer index : seen) {
@@ -533,15 +537,6 @@ public class LlmInferenceService implements ChartSearchService {
 				Comparator.nullsLast(Comparator.reverseOrder())));
 		return references;
 	}
-
-	/** The two OpenMRS tables that record the same clinical problem, so a record in each with the
-	 *  same concept is one assertion written twice — not two findings. Deliberately just these
-	 *  two: an obs or a drug order sharing a concept with a condition is a different kind of
-	 *  statement about it (a measurement, a treatment), not a duplicate of it. */
-	private static final Set<String> PROBLEM_ASSERTION_TYPES = Collections.unmodifiableSet(
-			new LinkedHashSet<String>(Arrays.asList(
-					ChartSearchAiConstants.RESOURCE_TYPE_CONDITION,
-					ChartSearchAiConstants.RESOURCE_TYPE_DIAGNOSIS)));
 
 	/**
 	 * The indices of retrieved records that assert the same coded problem as an already-cited
@@ -565,20 +560,23 @@ public class LlmInferenceService implements ChartSearchService {
 	 *
 	 * <p>Costs no prompt tokens (it runs after generation) and cannot add drift: a twin says
 	 * exactly what the record it duplicates says, so it is on topic whenever that one is.
+	 *
+	 * @param citedIndices the anchored citation set; READ ONLY — the caller passes the very set it
+	 *        then adds the result to, so mutating it here would fail fast on its own iteration
+	 * @param byIndex the caller's index&rarr;mapping lookup, passed in rather than rebuilt so the
+	 *        two do not each own a copy of "how a mapping is keyed"
+	 * @return the additional indices to surface, never including one already in {@code citedIndices}
 	 */
-	static Set<Integer> sameAssertionTwins(Set<Integer> citedIndices, List<RecordMapping> mappings) {
+	static Set<Integer> sameAssertionTwins(Set<Integer> citedIndices, List<RecordMapping> mappings,
+			Map<Integer, RecordMapping> byIndex) {
 		Set<Integer> twins = new LinkedHashSet<Integer>();
 		if (citedIndices.isEmpty()) {
 			return twins;
 		}
-		Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();
-		for (RecordMapping mapping : mappings) {
-			byIndex.put(mapping.getIndex(), mapping);
-		}
 		for (Integer citedIndex : citedIndices) {
 			RecordMapping cited = byIndex.get(citedIndex);
 			if (cited == null || cited.getConceptUuid() == null
-					|| !PROBLEM_ASSERTION_TYPES.contains(cited.getResourceType())) {
+					|| !QueryScopeRouter.PROBLEM_TABLES.contains(cited.getResourceType())) {
 				continue;
 			}
 			for (RecordMapping candidate : mappings) {
@@ -586,7 +584,7 @@ public class LlmInferenceService implements ChartSearchService {
 						|| !cited.getConceptUuid().equals(candidate.getConceptUuid())
 						|| candidate.getResourceType() == null
 						|| candidate.getResourceType().equals(cited.getResourceType())
-						|| !PROBLEM_ASSERTION_TYPES.contains(candidate.getResourceType())) {
+						|| !QueryScopeRouter.PROBLEM_TABLES.contains(candidate.getResourceType())) {
 					continue;
 				}
 				if (!citedIndices.contains(candidate.getIndex())) {

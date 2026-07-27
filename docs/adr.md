@@ -2056,9 +2056,28 @@ tokens 120–154 while the answer text is identical in 6/6 runs); here it escape
 
 **Consequence for how this decision should be read.** (4) the routing fix is a clear win on the topic
 it targets, and (1) the retrieval vocabulary is measured by its own probe. (2) the date anchor buys a
-large temporal gain and costs `heart`/`fractures` drift plus output reproducibility. Those two effects
-are separable — the sentence that points at the date lives in the configurable system prompt — and
-that separation should be measured before the four are accepted as a block.
+large temporal gain and coincides with the `heart`/`fractures` drift and the reproducibility gap.
+
+**The date anchor is now gated on `QueryScopeRouter.isTemporal`, and the reason is the codebase's own
+prior measurement rather than a new one.** That method's javadoc — on `main`, in a class this change
+edits, untouched by this diff — already records the identical hazard for Decision 28's RECENCY
+anchor: *"NON-temporal questions get no anchor, which is what keeps recent vitals out of an
+absent-topic slice where they bait enumeration (measured: a non-temporal 'any heart problems?' cell
+drifting to 39 vitals citations back when the anchor was unconditional)."* An unconditional DATE
+anchor reproduced that hazard one level up, in the prompt rather than the slice. Both anchors now use
+one gate and one vocabulary, so a question that earns the recency slice is exactly the one told what
+day it is. Verified not to cost the feature: the temporal probe is **11/12 verdict and 9/12 day-count
+with the gate**, against 11/12 and 10/12 without it and 4/12 and 0/12 on `main`.
+
+**What is NOT established, and it cost the most to learn:** which prompt component causes the
+`heart`/`fractures` drift. Four configurations measured at 20–40 runs each produced apparently
+decisive rates (1/40, 15/40, 15/40, 6/20, 4/20) that did not survive scrutiny — a control whose
+prompt is byte-identical to `main`'s scored 4/20 where `main` scored 1/20, and interleaving the arms
+query-by-query collapsed the difference to 0/8 versus 0/8. Per-cell behaviour turns out to be
+*session*-persistent, so repeats inside one session are close to N=1, and a block design confounds
+the arm with the session; KV-cache reuse was ruled out separately (3/16 reused versus 4/16 fresh).
+The gate therefore ships on the design principle and the token saving, with **no claim that it fixes
+the drift**. See [Per-cell behaviour is session-persistent](../eval/drift-metric/README.md#per-cell-behaviour-is-session-persistent--repeats-inside-one-session-are-not-independent-2026-07-28).
 
 **Attributing the two halves.** Twin co-citation can be switched off offline by restricting references to inline-anchored indices, which isolates it from the rest on the *same* capture:
 

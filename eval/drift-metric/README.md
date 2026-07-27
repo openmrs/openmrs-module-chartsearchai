@@ -235,6 +235,34 @@ the cache, and the resulting prefill split changes floating-point accumulation o
 chunks and compare it to a single-pass arm; do not interleave two captures against one server. If a
 long run dies partway, either restart it from scratch or finish it the same way for both arms.
 
+### Per-cell behaviour is SESSION-persistent — repeats inside one session are not independent (2026-07-28)
+
+The single most expensive lesson here. Trying to attribute a drift regression to one prompt
+component, I measured four configurations at 20–40 runs each and got 1/40, 15/40, 15/40, 6/20 and
+4/20 — apparently decisive differences. They were not. A control configuration whose prompt is
+byte-identical to `main`'s scored 4/20 where `main` had scored 1/20, and one cell
+(`21580018…|heart`) scored 0/5, 0/5, 0/5 and then 5/5 across arms measured minutes apart.
+
+What is actually going on: **within a single server session a given cell tends to be consistently
+violating or consistently clean, and which way it lands changes across restarts.** Two follow-ups
+confirmed it and killed the obvious explanations:
+
+- Interleaving the two arms query-by-query (toggling the system prompt between every request, so
+  drift hits both arms equally) gave **0 of 8 versus 0 of 8** — the difference vanished entirely
+  under pairing.
+- KV-cache reuse is not the cause either: N identical back-to-back requests scored 3 of 16, and the
+  same requests each preceded by a cache-invalidating prompt toggle scored 4 of 16.
+
+So **N runs inside one session is close to N=1** for this kind of question. Repeats must be
+*sessions*, not requests: restart between them, or interleave the arms so the pairing cancels the
+session state. A block design — all of arm A, then all of arm B — confounds the arm with the
+session perfectly, which is exactly how four consecutive "decisive" attributions turned out to be
+noise.
+
+This applies to the 270-cell captures too: each is one session per arm. It is why the per-topic
+verdicts in [ADR Decision 30](../../docs/adr.md) are stated as "better in both captures" / "worse in
+both captures" over two independent sessions rather than as a single delta.
+
 ### Run-to-run noise (measured 2026-07-27)
 
 **The single most important number for reading anything this harness reports — and it is not the same
@@ -357,6 +385,9 @@ recorded, needs no log level, and survives restarts.
   recent visit?".
 - `abbrev_probe.py <outdir> [perAbbrev]` — DB-truth probe that asks by initialism only (`CKD`,
   `MI`, `HTN`, …) on patients whose chart carries the full term.
+- `paired_probe.py <cellsFile> [rounds]` — A/B two system prompts INTERLEAVED per query, so
+  session state cancels instead of being confounded with the arm. Use this, not two blocks, whenever
+  the thing being compared can be switched at runtime.
 - `repeat_probe.py <goldFile> [cells] [repeats]` — fires the SAME cells repeatedly and counts how
   many return an unstable reference set. Run this before trusting a small delta; see
   [Run-to-run noise](#run-to-run-noise-measured-2026-07-27).

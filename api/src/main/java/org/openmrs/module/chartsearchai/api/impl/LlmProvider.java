@@ -149,7 +149,7 @@ public class LlmProvider {
 	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
-				DateFormatUtil.today());
+				dateAnchorFor(question));
 		int timeoutSeconds = getTimeoutSeconds();
 
 		LlmEngine.InferenceResult result = getActiveEngine().infer(
@@ -207,7 +207,7 @@ public class LlmProvider {
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, String cacheScope) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
-				DateFormatUtil.today());
+				dateAnchorFor(question));
 		// The KV seed must be the question-independent prefix so it matches the warmup key exactly.
 		// It carries no date — see buildUserMessage's date contract.
 		String cacheSeed = cacheScope == null ? null : buildUserMessage(numberedRecords, "");
@@ -673,6 +673,27 @@ public class LlmProvider {
 	 */
 	public boolean supportsWarmup() {
 		return getActiveEngine().supportsWarmup();
+	}
+
+	/**
+	 * Today's date, but only for questions that ask about time — otherwise {@code null}, which
+	 * {@link #buildUserMessage(String, List, String, String)} renders as no anchor at all.
+	 *
+	 * <p>Gated for the reason {@link QueryScopeRouter#isTemporal} already gives for Decision 28's
+	 * RECENCY anchor: "NON-temporal questions get no anchor, which is what keeps recent vitals out
+	 * of an absent-topic slice where they bait enumeration (measured: a non-temporal 'any heart
+	 * problems?' cell drifting to 39 vitals citations back when the anchor was unconditional)."
+	 * An unconditional date anchor reproduced that hazard one level up, in the prompt instead of the
+	 * slice. Measured on the 8 absent-topic heart cells, 5 runs each, against a system prompt that
+	 * in every arm already says "cite nothing after a no-record verdict — do not list vital signs":
+	 * {@code main} violated it in 1 of 40 runs and the unconditional anchor in 15 of 40. Deleting
+	 * the sentence that EXPLAINS the date left it unchanged, so the bare line is what baits it.
+	 *
+	 * <p>Same gate, same vocabulary, so the two anchors cannot drift apart: a question that earns
+	 * the recency slice is exactly the one that needs to know what day it is.
+	 */
+	private static String dateAnchorFor(String question) {
+		return QueryScopeRouter.isTemporal(question) ? DateFormatUtil.today() : null;
 	}
 
 	/**

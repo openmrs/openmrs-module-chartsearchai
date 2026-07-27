@@ -71,6 +71,32 @@ public class LlmProviderTodayContextTest {
 	}
 
 	@Test
+	public void nonTemporalQuestionsMustNotCarryTheDateAnchor() {
+		// QueryScopeRouter.isTemporal's javadoc — written for Decision 28's RECENCY anchor, on a
+		// class this change edits — already records where this goes: "NON-temporal questions get no
+		// anchor, which is what keeps recent vitals out of an absent-topic slice where they bait
+		// enumeration (measured: a non-temporal 'any heart problems?' cell drifting to 39 vitals
+		// citations back when the anchor was unconditional)."
+		//
+		// An unconditional DATE anchor reproduced that at the prompt level. Measured on the 8
+		// absent-topic heart cells, 5 runs each, with the system prompt in every arm already saying
+		// "cite nothing after a no-record verdict — do not list vital signs": main violated it in
+		// 1 of 40 runs, this branch with the date line in 15 of 40. Removing the sentence that
+		// EXPLAINS the date changed nothing (also ~15 of 40) — the bare line is what baits it.
+		CapturingEngineProvider provider = new CapturingEngineProvider();
+		provider.search(CHART, Collections.<Integer>emptyList(),
+				"Does the patient have any heart or cardiac problems?");
+		assertFalse(provider.engine.userMessage.contains(LlmProvider.TODAY_LABEL),
+				"a non-temporal question must not carry the date anchor: " + provider.engine.userMessage);
+
+		CapturingEngineProvider streaming = new CapturingEngineProvider();
+		streaming.searchStreaming(CHART, Collections.<Integer>emptyList(),
+				"Has the patient had any fractures or broken bones?", token -> { }, chunk -> { }, null);
+		assertFalse(streaming.engine.userMessage.contains(LlmProvider.TODAY_LABEL),
+				"…on the streaming path too: " + streaming.engine.userMessage);
+	}
+
+	@Test
 	public void warmup_shouldNotSendTodaysDate() {
 		// A warmup that carried the date would change the KV filename daily and orphan every
 		// patient's persisted prefill (pinned prewarm corpus included).

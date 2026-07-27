@@ -157,7 +157,7 @@ class QueryStoreChartBuilder {
 		Set<String> focusUuids = Collections.<String>emptySet();
 		if (usePreFilter && question != null && !question.trim().isEmpty()) {
 			focusUuids = searchSimilarityUuids(queryStore, patient,
-					QueryPreprocessor.stripQueryStopwords(question),
+					QueryPreprocessor.forRetrieval(question),
 					"QueryStore.searchByPatient failed for patient [uuid={}] — proceeding without focus hint");
 		}
 		int focusHits = focusUuids.size();
@@ -243,15 +243,15 @@ class QueryStoreChartBuilder {
 					chartDocs.size(), patient.getUuid());
 		}
 
-		// Similarity top-K uuids — the semantic catch-all beyond the typed scope. Lab-panel
-		// abbreviations are expanded first ("BMP" → "+ basic metabolic panel") so the retrieval
-		// text carries the full concept name querystore indexed. Failure degrades to the typed
-		// slice alone (never blocks the answer), mirroring build()'s focus-hint contract.
+		// Similarity top-K uuids — the semantic catch-all beyond the typed scope. Clinical
+		// abbreviations are expanded first ("BMP" → "+ basic metabolic panel", "CKD" → "+ chronic
+		// kidney disease") so the retrieval text carries the full concept name querystore indexed.
+		// Failure degrades to the typed slice alone (never blocks the answer), mirroring build()'s
+		// focus-hint contract.
 		Set<String> similarityUuids = Collections.<String>emptySet();
 		if (question != null && !question.trim().isEmpty()) {
 			similarityUuids = searchSimilarityUuids(queryStore, patient,
-					QueryPreprocessor.stripQueryStopwords(
-							QueryPreprocessor.expandLabPanelAbbreviations(question)),
+					QueryPreprocessor.forRetrieval(question),
 					"QueryStore.searchByPatient failed for scoped build [uuid={}] — proceeding with the typed slice only");
 		}
 		long rpcMs = System.currentTimeMillis() - rpcStart;
@@ -401,7 +401,7 @@ class QueryStoreChartBuilder {
 		long rpcStart = System.currentTimeMillis();
 		List<QueryDocument> hits;
 		try {
-			String preprocessedQuestion = QueryPreprocessor.stripQueryStopwords(question);
+			String preprocessedQuestion = QueryPreprocessor.forRetrieval(question);
 			hits = queryStore.searchByPatient(patient.getUuid(), preprocessedQuestion,
 					resolveProgressiveReasoningTopK());
 		}

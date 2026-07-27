@@ -188,16 +188,122 @@ final class QueryPreprocessor {
 	/**
 	 * Appends the full panel name after each recognized lab abbreviation ("last BMP" →
 	 * "last BMP basic metabolic panel"), keeping the original token so both surface forms reach
-	 * the retrieval embedding. Pass-through for null/blank/cue-free questions. Used by the
-	 * query-scoped slice builder before {@link #stripQueryStopwords}.
+	 * the retrieval embedding. Pass-through for null/blank/cue-free questions. Callers should
+	 * prefer {@link #expandClinicalAbbreviations}, which also covers the condition vocabulary.
 	 */
 	static String expandLabPanelAbbreviations(String question) {
+		return expand(question, LAB_PANEL_ABBREVIATIONS);
+	}
+
+	/**
+	 * Condition/finding initialisms mapped to the full clinical terms querystore indexes.
+	 * Same failure mode as {@link #LAB_PANEL_ABBREVIATIONS}, one level up from the lab bench:
+	 * a clinician asks "any HTN?" or "does she have CKD" while the record reads "Hypertension" /
+	 * "Chronic kidney disease, stage IIIA (moderate)", and the bare initialism embeds far from
+	 * the record — so the similarity slice can miss a condition the patient demonstrably has.
+	 *
+	 * <p>Curated and deliberately conservative: only unambiguous, in-common-use clinical
+	 * initialisms. Expansion is <em>additive</em> — the clinician's own token is always kept —
+	 * so the worst case for a wrong entry is a couple of extra words in the retrieval text,
+	 * never a lost query term.
+	 *
+	 * <p>Case sensitivity is declared PER ENTRY, not by a length rule: an initialism whose
+	 * lowercase spelling is also an ordinary English word or unit — {@code mi} (mile),
+	 * {@code hr} (hour), {@code sob}, {@code tb} (terabyte), {@code cad}, {@code tia} (a name) —
+	 * is matched only in capitals, where it is unambiguously the diagnosis. The rest are matched
+	 * case-insensitively because clinicians type them either way ("any htn?").
+	 */
+	private static final Map<Pattern, String> CLINICAL_ABBREVIATIONS;
+	static {
+		Map<Pattern, String> m = new LinkedHashMap<Pattern, String>();
+		m.put(cue("HTN"), "hypertension");
+		m.put(cue("T2DM"), "type 2 diabetes mellitus");
+		m.put(cue("T1DM"), "type 1 diabetes mellitus");
+		m.put(cue("CKD"), "chronic kidney disease");
+		m.put(cue("ESRD"), "end stage renal disease");
+		m.put(cue("AKI"), "acute kidney injury");
+		m.put(cue("UTI"), "urinary tract infection");
+		m.put(cue("COPD"), "chronic obstructive pulmonary disease");
+		m.put(cue("CHF"), "congestive heart failure");
+		m.put(cue("CVA"), "cerebrovascular accident stroke");
+		m.put(cue("DVT"), "deep vein thrombosis");
+		m.put(cue("GERD"), "gastroesophageal reflux disease");
+		m.put(cue("BMI"), "body mass index");
+		m.put(cue("URTI"), "upper respiratory tract infection");
+		m.put(cue("STI"), "sexually transmitted infection");
+		m.put(cue("STD"), "sexually transmitted disease");
+		m.put(cue("ARV"), "antiretroviral");
+		m.put(cue("BP"), "blood pressure");
+		// Capitals only — the lowercase spelling is an ordinary word or unit.
+		m.put(capitalsOnlyCue("DM"), "diabetes mellitus");
+		m.put(capitalsOnlyCue("CAD"), "coronary artery disease");
+		m.put(capitalsOnlyCue("TIA"), "transient ischemic attack");
+		m.put(capitalsOnlyCue("MI"), "myocardial infarction");
+		m.put(capitalsOnlyCue("PE"), "pulmonary embolism");
+		m.put(capitalsOnlyCue("TB"), "tuberculosis");
+		m.put(capitalsOnlyCue("AF"), "atrial fibrillation");
+		m.put(capitalsOnlyCue("SOB"), "shortness of breath");
+		m.put(capitalsOnlyCue("PID"), "pelvic inflammatory disease");
+		m.put(capitalsOnlyCue("HR"), "heart rate");
+		m.put(capitalsOnlyCue("RR"), "respiratory rate");
+		CLINICAL_ABBREVIATIONS = Collections.unmodifiableMap(m);
+	}
+
+	/** Word-boundary, case-insensitive pattern for an initialism that cannot be confused with an
+	 *  ordinary word. */
+	private static Pattern cue(String abbreviation) {
+		return Pattern.compile("\\b" + abbreviation + "\\b", Pattern.CASE_INSENSITIVE);
+	}
+
+	/** Word-boundary pattern that matches only the capitalised spelling — for initialisms whose
+	 *  lowercase form is an ordinary word or unit (see {@link #CLINICAL_ABBREVIATIONS}). */
+	private static Pattern capitalsOnlyCue(String abbreviation) {
+		return Pattern.compile("\\b" + abbreviation + "\\b");
+	}
+
+	/**
+	 * The retrieval-text normalizer both chart-build paths call: appends the full clinical term
+	 * after every recognized abbreviation — lab panels ({@link #LAB_PANEL_ABBREVIATIONS}) and
+	 * condition initialisms ({@link #CLINICAL_ABBREVIATIONS}) alike — keeping the clinician's own
+	 * wording so both surface forms reach the embedding. Pass-through for null/blank/cue-free
+	 * questions.
+	 *
+	 * <p>One composed entry point on purpose: a caller that remembered only the lab expansion
+	 * would silently get half the vocabulary, which is exactly how the fullChart focus-hint path
+	 * came to expand nothing while the scoped path expanded panels.
+	 */
+	static String expandClinicalAbbreviations(String question) {
+		return expand(expandLabPanelAbbreviations(question), CLINICAL_ABBREVIATIONS);
+	}
+
+	/**
+	 * The composed retrieval-text pipeline: abbreviation expansion followed by stopword
+	 * stripping, in that order (expansion must see the clinician's raw casing and punctuation,
+	 * which stripping removes). This is the ONLY entry point chart assembly should use to turn a
+	 * question into querystore search text — the three build paths previously chained the steps
+	 * themselves and had already drifted apart (the fullChart focus-hint path expanded nothing
+	 * while the scoped path expanded lab panels).
+	 *
+	 * <p>Null/blank-safe (returned unchanged), unlike the raw {@link #stripQueryStopwords} step it
+	 * wraps: every call site guards for a blank question today, but a composed entry point that
+	 * NPEs on one is a trap for the next caller.
+	 */
+	static String forRetrieval(String question) {
+		if (question == null || question.trim().isEmpty()) {
+			return question;
+		}
+		return stripQueryStopwords(expandClinicalAbbreviations(question));
+	}
+
+	/** Appends each map value after every word-boundary match of its key, leaving the match in
+	 *  place. Shared by the two vocabularies so their expansion semantics cannot drift. */
+	private static String expand(String question, Map<Pattern, String> vocabulary) {
 		if (question == null || question.trim().isEmpty()) {
 			return question;
 		}
 		String expanded = question;
-		for (Map.Entry<Pattern, String> entry : LAB_PANEL_ABBREVIATIONS.entrySet()) {
-			// "$0" keeps the matched abbreviation; the panel name is quoted so a value ever
+		for (Map.Entry<Pattern, String> entry : vocabulary.entrySet()) {
+			// "$0" keeps the matched abbreviation; the expansion is quoted so a value ever
 			// containing '$' or '\' is inserted literally instead of being parsed as a group
 			// reference / escape (which would throw or mangle the retrieval text).
 			expanded = entry.getKey().matcher(expanded)
@@ -214,7 +320,7 @@ final class QueryPreprocessor {
 	 * @param question the raw user question
 	 */
 	static String stripQueryStopwords(String question) {
-		String[] words = question.toLowerCase().replaceAll("'s\\b", "").replaceAll("[?!.,;:']", "").trim().split("\\s+");
+		String[] words = cleanTokens(question);
 		List<String> contentWords = new ArrayList<String>();
 		List<String> allClean = new ArrayList<String>();
 		for (String word : words) {
@@ -251,6 +357,40 @@ final class QueryPreprocessor {
 			return sb.toString();
 		}
 		return question.toLowerCase().trim();
+	}
+
+	/**
+	 * The question's content words — lowercased, punctuation-stripped, stopwords removed — with
+	 * NO fallback. {@link #stripQueryStopwords} deliberately returns the whole cleaned sentence
+	 * when fewer than two content words survive (a one-word embedding is too vague to retrieve
+	 * on); a caller reasoning about which words the clinician actually supplied must not see
+	 * those function words reappear. Used by {@code QueryScopeRouter} to tell a problem-list
+	 * question ("what conditions does the patient have?") from a domain-qualified one ("any
+	 * psychiatric conditions?"), so routing and retrieval share one stopword vocabulary instead
+	 * of growing a second.
+	 *
+	 * @return the content words in order; empty for a null/blank question or one that is all
+	 *         stopwords
+	 */
+	static List<String> contentWords(String question) {
+		List<String> words = new ArrayList<String>();
+		if (question == null || question.trim().isEmpty()) {
+			return words;
+		}
+		for (String word : cleanTokens(question)) {
+			if (!QUERY_STOPWORDS.contains(word)) {
+				words.add(word);
+			}
+		}
+		return words;
+	}
+
+	/** Lowercases, drops possessives and punctuation, and splits on whitespace — the one
+	 *  tokenizer {@link #stripQueryStopwords} and {@link #contentWords} share, so they can never
+	 *  disagree about what a word is. */
+	private static String[] cleanTokens(String question) {
+		return question.toLowerCase().replaceAll("'s\\b", "")
+				.replaceAll("[?!.,;:']", "").trim().split("\\s+");
 	}
 
 	/**

@@ -80,7 +80,13 @@ instrumentation; not committed).
 
 Baseline (Gemma 4 E2B, full-chart, `metric_gold.standalone.json`): **meanF1 0.464 ·
 abstention 1.00 (11/11) · off-topic citations 41** — reproduced bit-identically across two
-captures (zero run-to-run noise on this protocol; greedy decode + warm prompt cache).
+captures (zero run-to-run noise on that 32-cell protocol; greedy decode + warm prompt cache).
+
+> **Do not carry that determinism claim forward.** It was measured on 32 cells with E2B and does
+> NOT hold on the 270-cell fresh-install protocol below. See
+> [Run-to-run noise](#run-to-run-noise-measured-2026-07-27) — a same-arm repeat there moved drift by
+> +26 and meanF1 by +0.011, which is larger than some of the deltas this harness has been used to
+> judge. Greedy decode does not make llama.cpp bit-reproducible across restarts.
 
 Two reasoning-length experiments were run through this gate with thresholds locked in
 advance (no regression on any axis; ≥15% output-token reduction to be worth shipping).
@@ -212,6 +218,45 @@ select min(input_tokens), round(avg(input_tokens)), max(input_tokens)
 
 An average near 2k is a scoped arm; near 10k means the arm is `fullChart` and the score is void.
 
+### Run-to-run noise (measured 2026-07-27)
+
+**The single most important number for reading anything this harness reports.** The same build,
+same gold, same install, captured twice:
+
+| | capture 1 | capture 2 (identical build) |
+|---|---|---|
+| meanF1 (154 present) | 0.760 | **0.771** |
+| abstention (116 absent) | 0.922 (107/116) | **0.931 (108/116)** |
+| off-topic citations | 74 | **100** |
+
+241 of 270 cells (89%) returned an identical reference set; 16 cells changed their drift
+contribution, netting **+26**. The mechanism is decode nondeterminism, not the pipeline, and the
+audit log proves it: patient `1c47b620`'s heart cell recorded `input_tokens = 1519` on nine separate
+runs — byte-identical prompts — while `reference_count` alternated 9, 0, 9, 0, 0, 0, 9, 0, 0. The
+model flips between answering *"No heart or cardiac problems are recorded."* and appending nine
+blood-pressure readings to the same verdict. The flips are bidirectional (+12 on one patient's heart
+cell, −12 on another's) and concentrate on `heart`, where the gold deliberately counts raw vitals as
+off-topic.
+
+Practical consequences:
+
+- **A drift delta smaller than about ±26 on a 270-cell capture is not resolvable from one capture
+  per arm.** Neither is a meanF1 delta below roughly ±0.011.
+- **Abstention accuracy is the stable axis** (±1 cell here), because a flipped cell usually keeps
+  its verdict and only gains or loses citations.
+- **The DB-truth probes are far more robust** than the aggregate: `temporal_probe_today.py` and
+  `abbrev_probe.py` score a verdict against a SQL fact rather than a citation set, and the
+  abbreviation probe's input is deterministic retrieval text.
+- Repeat each arm and report the mean and the range. A single capture per arm is enough to show a
+  *mechanism* (read the answers) but not to settle a small aggregate delta.
+- Determinism is not restorable by configuration. `cache_prompt` reuse changes batch boundaries
+  across restarts, which changes floating-point accumulation order; greedy decode only removes
+  sampling noise, not that.
+
+A cheap way to size the noise before trusting a delta — 12 cells, 3 runs each, ~10 minutes:
+`repeat_probe.py <goldFile> <cells> <repeats>` reports how many cells return an unstable reference
+set (measured here: **8%** unstable references, 25% unstable wording).
+
 ### Re-verifying a reference-side change without a 90-minute capture
 
 A change that only affects which references are attached to an answer (twin co-citation is the
@@ -286,6 +331,9 @@ recorded, needs no log level, and survives restarts.
   recent visit?".
 - `abbrev_probe.py <outdir> [perAbbrev]` — DB-truth probe that asks by initialism only (`CKD`,
   `MI`, `HTN`, …) on patients whose chart carries the full term.
+- `repeat_probe.py <goldFile> [cells] [repeats]` — fires the SAME cells repeatedly and counts how
+  many return an unstable reference set. Run this before trusting a small delta; see
+  [Run-to-run noise](#run-to-run-noise-measured-2026-07-27).
 - `../latency/latency_ab.sh` — A/B/A wall-clock control on a fixed cell set. Read the timings
   from `chartsearchai_audit_log.response_time_ms`, not from a stopwatch around the whole run:
   the module records per-query time, input and output tokens itself.

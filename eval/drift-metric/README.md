@@ -248,7 +248,14 @@ Practical consequences:
   `abbrev_probe.py` score a verdict against a SQL fact rather than a citation set, and the
   abbreviation probe's input is deterministic retrieval text.
 - Repeat each arm and report the mean and the range. A single capture per arm is enough to show a
-  *mechanism* (read the answers) but not to settle a small aggregate delta.
+  *mechanism* (read the answers) but not to settle a small aggregate delta. Settling the drift delta
+  on this protocol needs **at least three full captures per arm** (~2 h each on a CPU-only host).
+- **Do not substitute a partial capture for a repeat.** Scoring the subset of cells two captures
+  happen to share looks like a cheap paired comparison and is not one, because drift is concentrated
+  by topic and a truncated capture is an alphabetical prefix of the patient list, not a sample.
+  Measured here: the first 93 cells hold 24% of the baseline's drift but 34% of the changed arm's, so
+  that subset systematically understates a fix whose effect sits in the cells it omits. Compare full
+  captures, or compare per-cell.
 - Determinism is not restorable by configuration. `cache_prompt` reuse changes batch boundaries
   across restarts, which changes floating-point accumulation order; greedy decode only removes
   sampling noise, not that.

@@ -256,13 +256,24 @@ recorded, needs no log level, and survives restarts.
   trusting a number, it lists every record counted on-topic per cell.
 - `capture_eval_local.sh <outdir> <patients.txt>` — fires those cells at the live REST endpoint.
 - `metric_score.py <capture> offtopic_adj.local.json metric_gold.local.json` — scores one arm.
-- `compare_arms.py <baselineCapture> <armCapture> [gold] [adj]` — per-topic and per-cell A/B. The
-  two optional file arguments are identified by shape, so either order works (`metric_score.py`
-  takes them in the opposite one) and each falls back to its committed default independently. Run
-  `compare_arms.py --selftest` after touching that resolution: three consecutive silent failures
-  landed in it — reporting "no change" for a real improvement, dropping the adjudication on the
-  documented gold-only form, and swallowing a typo'd path — while it was module-level code no test
-  could reach.
+- `compare_arms.py <baselineCapture> <armCapture> [gold] [adj]` — per-topic and per-cell A/B.
+  **Positional, in that order** — note `metric_score.py` takes the same two files in the OPPOSITE
+  order, and a swapped pair here is a loud error rather than a guess. Omit the adjudication and it
+  uses the gold's own sibling (`metric_gold.X.json` → `offtopic_adj.X.json`, beside the gold); if
+  there is no sibling it uses none and says so. Every run prints which gold and which adjudication
+  it resolved, with absolute paths.
+
+  **Run `compare_arms.py --selftest` after touching that resolution.** Nine silent failures landed
+  in it, every one a wrong-but-plausible number with no warning and exit 0: ignoring the
+  adjudication; a mirror-imaged argument order that scored 0 cells and printed "no change";
+  dropping the adjudication on the documented gold-only form; swallowing a typo'd path; an empty
+  `{}` classifying as an adjudication so a fresh gold fell back to the committed one; a hardcoded
+  `.local` fallback cross-pairing families; the same file resolving differently as `g.json`,
+  `./g.json` and an absolute path; an adjudication passed alone inverting the sign of the delta; and
+  arguments past slot 4 being ignored without an existence check. They shared one cause — the code
+  inferred what you meant from argument position, document shape, filename family AND directory
+  contents, so every inference was a door. It now validates instead of inferring, and the 11
+  selftest cases each pin one of those failures.
 - `temporal_probe_today.py <outdir> [windowDays] [patients]` — DB-truth probe for questions whose
   answer depends on *today*: "any visit in the last 30 days?" and "how many days ago was the most
   recent visit?".

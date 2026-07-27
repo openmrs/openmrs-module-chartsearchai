@@ -11,80 +11,108 @@ import os  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import metric_score as M  # noqa: E402
 
-def _load_by_shape(paths):
-    """-> (gold, adj), either possibly None. A gold maps "uuid|topic" -> {present, ontopic,
-    focus_uuids}; an adjudication maps "uuid|topic" -> [uuid, ...] and/or carries "_ontopic"."""
-    gold = adj = None
-    for path in paths:
+DEFAULT_GOLD = "metric_gold.local.json"
+
+DEFAULT_ADJ = "offtopic_adj.local.json"
+
+
+def _kind(doc):
+    """'adj', 'gold', or None when the document cannot be either."""
+    if not isinstance(doc, dict) or not doc:
+        return None
+    if "_ontopic" in doc or all(isinstance(v, list) for v in doc.values()):
+        return "adj"
+    if all(isinstance(v, dict) and "present" in v for v in doc.values()):
+        return "gold"
+    return None
+
+
+def _load(path, expected):
+    """Load `path` and require it to BE `expected`. Never guesses — a mismatch exits."""
+    try:
         doc = json.load(open(path))
-        # An empty document has no shape: all() over no values is vacuously True, so {} would read
-        # as an adjudication and the real gold would fall back to the committed one, reporting the
-        # committed gold's numbers with no warning. build_gold_local.py writes {} when its patient
-        # selection returns nothing, so this is reachable, not theoretical.
-        if not doc:
-            sys.exit("compare_arms: %s is empty — no cells to score" % path)
-        looks_adj = "_ontopic" in doc or all(isinstance(v, list) for v in doc.values())
-        if looks_adj and adj is None:
-            adj = (path, doc)
-        elif not looks_adj and gold is None:
-            gold = (path, doc)
-        else:
-            sys.exit("compare_arms: two files of the same kind passed: %s" % ", ".join(paths))
-    return gold, adj
+    except ValueError as exc:
+        sys.exit("compare_arms: %s is not valid JSON (%s)" % (path, exc))
+    except (IsADirectoryError, OSError) as exc:
+        sys.exit("compare_arms: cannot read %s (%s)" % (path, exc))
+    kind = _kind(doc)
+    if kind is None:
+        sys.exit("compare_arms: %s is neither a gold nor an adjudication (empty, or the wrong "
+                 "shape). A gold maps \"uuid|topic\" -> {present, ontopic, focus_uuids}; an "
+                 "adjudication maps \"uuid|topic\" -> [uuid, ...] and/or carries \"_ontopic\"."
+                 % path)
+    if kind != expected:
+        sys.exit("compare_arms: %s looks like the %s, but it was given in the %s position.\n"
+                 "Usage: compare_arms.py <baselineDir> <armDir> [goldFile] [adjFile]  (note "
+                 "metric_score.py takes these two in the OPPOSITE order)" % (path, kind, expected))
+    return doc
 
 
 def resolve_inputs(argv, here=None):
-    """-> (gold, adj) for `compare_arms.py <baselineDir> <armDir> [goldFile] [adjFile]`.
+    """-> (gold, adj, provenance) for `compare_arms.py <baselineDir> <armDir> [goldFile] [adjFile]`.
 
-    The two file arguments are identified by SHAPE, not by position, because metric_score.py takes
-    them in the opposite order (`<capture> [adj] [gold]`) and passing this script the order the
-    README teaches for that one silently scored 0 cells and reported "no change" with exit 0.
+    This resolution produced NINE silent failures before it was rewritten — every one of them a
+    wrong-but-plausible number with no warning and exit 0 — because it tried to infer what the
+    operator meant from four independent signals: argument position, document shape, filename
+    family, and which files happened to sit in a directory. Each inference was a door. The fix is
+    not another special case; it is to stop inferring:
 
-    Three rules, each of which was a defect first — this function exists so `--selftest` can pin
-    them instead of a reviewer re-deriving them:
-
-    1. A path the operator TYPED must exist. Existence-filtering the given arguments turned a typo
-       into a silent fall back to the committed gold and a complete-looking table.
-    2. Each kind falls back to its own default INDEPENDENTLY. Resolving them together meant that
-       supplying only a gold — the form the README teaches — left the adjudication empty, so this
-       table and metric_score.py disagreed on the same capture (measured: meanF1 1.000/drift 0 vs
-       0.667/drift 1, no warning, exit 0).
-    3. The adjudication is honoured at all, because metric_score.py honours it and actively asks
-       the operator to extend it.
+    - **Positional, in the documented order.** Each supplied file must BE what its position says.
+      A swapped pair (metric_score.py's order) is now a loud error naming both kinds, where shape
+      sniffing silently accepted it and then, in other combinations, silently mispaired it.
+    - **One validation path.** Given files, defaults and family siblings are all loaded by
+      {@code _load}, so "the default was empty" cannot behave differently from "the argument was
+      empty" — it used to: rc=0 with a misattributed warning versus rc=1 with the right message.
+    - **No cross-family fallback.** An adjudication is only ever the gold's own sibling, resolved
+      beside the gold's absolute path. The hardcoded ".local" second chance silently paired a fresh
+      gold with a foreign adjudication, and `dirname` of a bare filename is "", which made the same
+      file resolve differently depending on whether it was typed as `g.json`, `./g.json` or an
+      absolute path.
+    - **Nothing is silent.** The returned provenance is printed on every run, so a resolution this
+      function did not anticipate is visible in the output instead of being a plausible number.
     """
     here = here or M.HERE
-    given = argv[3:5]
-    for path in given:
-        if not os.path.exists(path):
+    if len(argv) > 5:
+        sys.exit("compare_arms: too many arguments (%d). Usage: compare_arms.py <baselineDir> "
+                 "<armDir> [goldFile] [adjFile]" % (len(argv) - 1))
+    given_gold = argv[3] if len(argv) > 3 else None
+    given_adj = argv[4] if len(argv) > 4 else None
+    for path in (given_gold, given_adj):
+        if path is not None and not os.path.exists(path):
             sys.exit("compare_arms: no such file: %s" % path)
-    gold, adj = _load_by_shape(given)
-    if gold is None:
-        default_gold = os.path.join(here, "metric_gold.local.json")
-        if not os.path.exists(default_gold):
-            sys.exit("compare_arms: no gold file found (pass one, or put metric_gold.local.json "
-                     "beside this script)")
-        gold = (default_gold, json.load(open(default_gold)))
-    if adj is None:
-        adj_doc = {}
-        # Pair the adjudication with the gold's OWN family. A hardcoded ".local" default silently
-        # scored metric_gold.json against the empty offtopic_adj.local.json instead of
-        # offtopic_adj.json, discarding its 13 adjudicated cells.
-        base = os.path.basename(gold[0])
-        candidates = []
-        if "metric_gold" in base:
-            # Only a recognisable gold name maps to a family. Blind substitution on an arbitrary
-            # name ("other_gold.json") leaves it unchanged, so the gold would be loaded a second
-            # time AS the adjudication — caught by selftest case 2 when this was first written.
-            candidates.append(base.replace("metric_gold", "offtopic_adj"))
-        candidates.append("offtopic_adj.local.json")
-        adj_path = None
-        for candidate in candidates:
-            path = os.path.join(os.path.dirname(gold[0]) or here, candidate)
-            if os.path.exists(path):
-                adj_path, adj_doc = path, json.load(open(path))
-                break
-        adj = (adj_path, adj_doc)
-    return gold[1], adj[1]
+
+    provenance = []
+    if given_gold:
+        gold_path = os.path.abspath(given_gold)
+    else:
+        gold_path = os.path.join(here, DEFAULT_GOLD)
+        if not os.path.exists(gold_path):
+            sys.exit("compare_arms: no gold given and no %s beside this script" % DEFAULT_GOLD)
+    gold = _load(gold_path, "gold")
+    provenance.append("gold: %s (%d cells)%s"
+                      % (gold_path, len(gold), "" if given_gold else " [default]"))
+
+    if given_adj:
+        adj_path = os.path.abspath(given_adj)
+        adj = _load(adj_path, "adj")
+        provenance.append("adj:  %s" % adj_path)
+    else:
+        # The gold's OWN sibling, beside the gold itself — never a different family, never relative
+        # to this script. build_gold_local.py writes the pair into one directory, so this is the
+        # pairing that is always correct when it exists.
+        base = os.path.basename(gold_path)
+        sibling = (os.path.join(os.path.dirname(gold_path), base.replace("metric_gold", "offtopic_adj"))
+                   if "metric_gold" in base else None)
+        if sibling and os.path.exists(sibling) and os.path.abspath(sibling) != gold_path:
+            adj = _load(sibling, "adj")
+            provenance.append("adj:  %s [sibling of the gold]" % sibling)
+        else:
+            adj = {}
+            provenance.append("adj:  NONE — no %s beside the gold. Unknown citations stay unknown; "
+                              "metric_score.py may report different numbers if you pass it one."
+                              % (base.replace("metric_gold", "offtopic_adj")
+                                 if "metric_gold" in base else DEFAULT_ADJ))
+    return gold, adj, provenance
 
 
 gold = {}
@@ -164,87 +192,118 @@ def main():
 
 
 def selftest():
-    """Pin every invocation form. Three consecutive defects landed in resolve_inputs' logic while
-    it was module-level code executed at import, i.e. unreachable from any test."""
+    """Pin every historical defect. Nine silent failures landed in this resolution; each case below
+    names the one it stops, and each was verified to FAIL against the code that had that defect."""
     import shutil
     import tempfile
-    tmp = tempfile.mkdtemp()
+    home = tempfile.mkdtemp()          # stands in for the script's own directory
+    other = tempfile.mkdtemp()         # a separate directory, so cross-directory pairing is testable
+    bare = tempfile.mkdtemp()          # no defaults at all
     try:
-        g = {"p|eye": {"present": True, "ontopic": {"u1": "x"}, "focus_uuids": ["u1"]}}
-        a = {"_ontopic": {"p|eye": ["u2"]}}
-        gp, ap = os.path.join(tmp, "metric_gold.local.json"), os.path.join(tmp, "offtopic_adj.local.json")
-        json.dump(g, open(gp, "w")); json.dump(a, open(ap, "w"))
-        alt_g, alt_a = os.path.join(tmp, "other_gold.json"), os.path.join(tmp, "other_adj.json")
-        shutil.copy(gp, alt_g); shutil.copy(ap, alt_a)
+        GOLD = {"p|eye": {"present": True, "ontopic": {"u1": "x"}, "focus_uuids": ["u1"]}}
+        HOME_ADJ = {"_ontopic": {"p|eye": ["HOME"]}}
+        FAM_ADJ = {"_ontopic": {"p|eye": ["FAMILY"]}}
 
-        # 1. both orders resolve identically, and neither kind is dropped
-        for argv in (["x", "b", "a", alt_g, alt_a], ["x", "b", "a", alt_a, alt_g]):
-            got_g, got_a = resolve_inputs(argv, tmp)
-            assert got_g == g, argv
-            assert got_a == a, ("adjudication dropped", argv)
+        def write(d, name, doc):
+            p = os.path.join(d, name)
+            json.dump(doc, open(p, "w"))
+            return p
 
-        # 2. the README's form — gold only — must still pick up the default adjudication
-        got_g, got_a = resolve_inputs(["x", "b", "a", alt_g], tmp)
-        assert got_g == g and got_a == a, ("gold-only form dropped the adjudication", got_a)
+        home_gold = write(home, DEFAULT_GOLD, GOLD)
+        home_adj = write(home, DEFAULT_ADJ, HOME_ADJ)
 
-        # 3. adjudication only — the gold must come from the default
-        got_g, got_a = resolve_inputs(["x", "b", "a", alt_a], tmp)
-        assert got_g == g and got_a == a, ("adj-only form", got_g, got_a)
+        def resolved(argv, here=home):
+            g, a, prov = resolve_inputs(argv, here)
+            return g, a, "\n".join(prov)
 
-        # 4. no file arguments — both defaults
-        got_g, got_a = resolve_inputs(["x", "b", "a"], tmp)
-        assert got_g == g and got_a == a
-
-        # 5. a typo must exit, not silently substitute the default
-        for bad in (["x", "b", "a", os.path.join(tmp, "nope.json")],
-                    ["x", "b", "a", alt_g, os.path.join(tmp, "nope.json")]):
+        def must_exit(argv, why, here=home):
             try:
-                resolve_inputs(bad, tmp)
-                raise AssertionError("a missing path must exit: %s" % bad)
+                resolve_inputs(argv, here)
             except SystemExit:
-                pass
+                return
+            raise AssertionError(why)
 
-        # 6. two files of the same kind must exit rather than silently keep one
+        # 1. no arguments -> the committed pair, both flagged in the provenance
+        g, a, prov = resolved(["x", "b", "arm"])
+        assert g == GOLD and a == HOME_ADJ, ("defaults", a)
+        assert "[default]" in prov and DEFAULT_ADJ in prov, prov
+
+        # 2. gold only, sibling PRESENT -> the sibling, not the script's default
+        #    (stops: a hardcoded .local fallback pairing a fresh gold with a foreign adjudication)
+        fam_gold = write(other, "metric_gold.pr93.json", GOLD)
+        write(other, "offtopic_adj.pr93.json", FAM_ADJ)
+        g, a, prov = resolved(["x", "b", "arm", fam_gold])
+        assert a == FAM_ADJ, ("must use the gold's own family", a, prov)
+
+        # 3. gold only, sibling ABSENT -> NO adjudication, and the output says so
+        #    (stops: silently substituting the .local adjudication of another family)
+        lone = write(other, "metric_gold.lonely.json", GOLD)
+        g, a, prov = resolved(["x", "b", "arm", lone])
+        assert a == {}, ("a missing sibling must not fall back to another family", a)
+        assert "NONE" in prov, prov
+
+        # 4. a bare filename must resolve exactly like ./x and like an absolute path
+        #    (stops: dirname("") sending the family lookup to the script's directory)
+        cwd = os.getcwd()
         try:
-            resolve_inputs(["x", "b", "a", alt_g, gp], tmp)
-            raise AssertionError("two golds must exit")
-        except SystemExit:
-            pass
+            os.chdir(other)
+            spellings = [resolved(["x", "b", "arm", s])[1]
+                         for s in ("metric_gold.pr93.json", "./metric_gold.pr93.json", fam_gold)]
+        finally:
+            os.chdir(cwd)
+        assert spellings[0] == spellings[1] == spellings[2] == FAM_ADJ, spellings
 
-        # 7. an EMPTY document has no shape — it must exit, not read as an adjudication and let
-        #    the real gold fall back to the committed one
-        empty = os.path.join(tmp, "metric_gold.empty.json")
-        json.dump({}, open(empty, "w"))
-        try:
-            resolve_inputs(["x", "b", "a", empty], tmp)
-            raise AssertionError("an empty gold must exit, not silently substitute the default")
-        except SystemExit:
-            pass
+        # 5. an adjudication in the GOLD slot must exit loudly, not be silently swapped
+        #    (stops: shape sniffing accepting metric_score.py's order and mispairing the other file)
+        must_exit(["x", "b", "arm", home_adj], "an adj in the gold slot must exit")
+        must_exit(["x", "b", "arm", home_gold, home_gold], "a gold in the adj slot must exit")
 
-        # 8. the adjudication defaults to the GOLD'S OWN family, not a hardcoded one
-        fam_g = os.path.join(tmp, "metric_gold.fam.json")
-        fam_a = os.path.join(tmp, "offtopic_adj.fam.json")
-        json.dump(g, open(fam_g, "w"))
-        json.dump({"_ontopic": {"p|eye": ["FAMILY"]}}, open(fam_a, "w"))
-        got_g, got_a = resolve_inputs(["x", "b", "a", fam_g], tmp)
-        assert got_a["_ontopic"]["p|eye"] == ["FAMILY"], ("wrong adjudication family", got_a)
+        # 6. a typo'd path must exit in EITHER slot (stops: silent substitution of the default)
+        must_exit(["x", "b", "arm", os.path.join(home, "nope.json")], "typo in slot 3")
+        must_exit(["x", "b", "arm", home_gold, os.path.join(home, "nope.json")], "typo in slot 4")
 
-        # 9. a missing default gold must exit rather than score nothing
-        bare = tempfile.mkdtemp()
-        try:
-            resolve_inputs(["x", "b", "a"], bare)
-            raise AssertionError("a missing default gold must exit")
-        except SystemExit:
-            pass
+        # 7. an empty or wrong-shaped document must exit — as an ARGUMENT and as a DEFAULT
+        #    (stops: {} classifying as an adjudication; and the default escaping validation)
+        must_exit(["x", "b", "arm", write(other, "metric_gold.empty.json", {})], "empty gold arg")
+        for junk in ({}, [], "s", 0, None, {"p|eye": 3}):
+            junk_home = tempfile.mkdtemp()
+            write(junk_home, DEFAULT_GOLD, junk)
+            must_exit(["x", "b", "arm"], "a junk DEFAULT gold must exit: %r" % (junk,), junk_home)
+            shutil.rmtree(junk_home, ignore_errors=True)
+
+        # 8. a junk family sibling must exit rather than be silently discarded
+        sib_home = tempfile.mkdtemp()
+        write(sib_home, "metric_gold.x.json", GOLD)
+        write(sib_home, "offtopic_adj.x.json", {"p|eye": {"present": True}})
+        must_exit(["x", "b", "arm", os.path.join(sib_home, "metric_gold.x.json")],
+                  "a junk sibling must exit")
+        shutil.rmtree(sib_home, ignore_errors=True)
+
+        # 9. arguments beyond slot 4 must be rejected, not ignored
+        must_exit(["x", "b", "arm", home_gold, home_adj, "extra.json"], "arg 5 must be rejected")
+
+        # 10. a gold carrying an "_ontopic" cell key must not flip roles
+        odd = dict(GOLD)
+        odd["_ontopic"] = {"p|eye": ["X"]}
+        must_exit(["x", "b", "arm", write(other, "metric_gold.odd.json", odd)],
+                  "a gold with an _ontopic key must exit, not be read as the adjudication")
+
+        # 11. no default gold at all -> exit, not an empty comparison
+        must_exit(["x", "b", "arm"], "a missing default gold must exit", bare)
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-    print("compare_arms selftest OK")
+        for d in (home, other, bare):
+            shutil.rmtree(d, ignore_errors=True)
+    print("compare_arms selftest OK (11 cases)")
 
 
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         selftest()
     else:
-        gold, ADJ = resolve_inputs(sys.argv)
+        gold, ADJ, PROVENANCE = resolve_inputs(sys.argv)
         ADJ_ON = ADJ.get("_ontopic", {})
+        # Printed on EVERY run. Nine silent failures here shared one signature — a plausible number
+        # with no indication of which files produced it — so the resolution is now always visible.
+        for line in PROVENANCE:
+            print("  " + line)
         main()

@@ -43,7 +43,9 @@ import org.springframework.stereotype.Service;
  *       maximum, and the tighter one for small patients). One warning per drug — the
  *       published daily ceiling wins when both arms trip.</li>
  *   <li><b>Interactions</b> — the drug interacts with one of the patient's active orders:
- *       by a hand-authored rule, by sharing an ATC chemical subgroup with an active order
+ *       by a hand-authored rule (a rule whose source rates it below
+ *       {@code chartsearchai.drugSafety.minInteractionSeverity} is not raised — unrated rules
+ *       are never floor-filtered), by sharing an ATC chemical subgroup with an active order
  *       (duplicate-therapy reasoning), or — failing that — by sharing a curated
  *       {@link CrossReactivityGroup} (cross-branch family overlap).</li>
  *   <li><b>Contraindications</b> — the drug is contraindicated by an active allergy or
@@ -456,7 +458,7 @@ public class DrugSafetyValidator {
 					.contains(orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH))) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(),
 						"same ATC class (" + orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH)
-								+ ") as active order " + displayNameForAtcCode(orderCode)
+								+ ") as active order " + displayLabelForAtcCode(orderCode)
 								+ " — possible duplicate therapy"));
 				continue;
 			}
@@ -464,7 +466,7 @@ public class DrugSafetyValidator {
 			if (group != null) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(),
 						"same cross-reactivity group (" + group.getName() + ") as active order "
-								+ displayNameForAtcCode(orderCode) + " — possible additive or duplicate-class therapy"));
+								+ displayLabelForAtcCode(orderCode) + " — possible additive or duplicate-class therapy"));
 			}
 		}
 	}
@@ -482,7 +484,7 @@ public class DrugSafetyValidator {
 	/** @return the synonym-augmented display label ({@link DrugReference#displayLabel()}) of the
 	 *          reference drug carrying {@code upperCode}, or the bare code when the active
 	 *          order's substance is not present in the loaded dataset. */
-	private String displayNameForAtcCode(String upperCode) {
+	private String displayLabelForAtcCode(String upperCode) {
 		for (DrugReference ref : drugReferenceService.getAll()) {
 			if (ref.normalizedAtcCodes().contains(upperCode)) {
 				return ref.displayLabel();

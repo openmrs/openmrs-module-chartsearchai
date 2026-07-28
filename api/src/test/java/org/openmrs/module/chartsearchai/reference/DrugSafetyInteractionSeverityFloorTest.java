@@ -11,7 +11,6 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -77,6 +76,47 @@ public class DrugSafetyInteractionSeverityFloorTest {
 	}
 
 	@Test
+	public void minorSeverityRuleChipStillFiresAtTheFloor() {
+		// The floor's LOWER boundary: "minimum severity a rule must carry" means Minor itself
+		// passes under the default floor. Mutation-proven necessary: with the comparison
+		// off-by-one (<=), every other test in the suite still passes while Minor rules are
+		// silently filtered. Spironolactone x aspirin is a Minor row in the bundled sample,
+		// and spironolactone shares no subgroup or group with aspirin here, so the Minor rule
+		// chip is the only warning this arrangement can produce.
+		List<SafetyWarning> warnings = ddinterValidator().validate(
+				"Aspirin could be considered for cardioprotection.", "Can she take aspirin?",
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Spironolactone"),
+						DrugReferenceTestSupport.set("C03DA01"), null, null));
+
+		assertTrue(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION, "acetylsalicylic"),
+				"a Minor rule sits AT the default floor and must still chip, was: " + warnings);
+	}
+
+	@Test
+	public void sameSubgroupPairKeepsTheClassChipWhenItsRuleIsFloorFiltered() throws Exception {
+		// The floor x class-arm seam, pinned on a real-shaped fixture (the bundled sample has
+		// no same-subgroup pair): two ACE inhibitors joined by an Unknown-severity row. The
+		// rated rule chip is floor-filtered; the duplicate-therapy class chip survives — the
+		// pair yields exactly ONE warning, and it is the informative one (this is also what
+		// trims #88's rule+class double chip for Unknown-severity same-class pairs).
+		try (java.io.InputStream in = DrugSafetyInteractionSeverityFloorTest.class.getClassLoader()
+				.getResourceAsStream("chartsearchai-test/ddi-severity-floor-pair.json")) {
+			DrugSafetyValidator validator = DrugReferenceTestSupport
+					.validator(DrugReferenceTestSupport.serviceWith(DdiDrugReferenceSource.parse(in)));
+			List<SafetyWarning> warnings = validator.validate(
+					"Lisinopril could be added.", "Can we add lisinopril?",
+					DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Ramipril"),
+							DrugReferenceTestSupport.set("C09AA05"), null, null));
+
+			assertEquals(1, warnings.size(),
+					"the pair must yield exactly one warning (rule filtered, class kept), was: " + warnings);
+			assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+					"Lisinopril", "same ATC class"),
+					"the surviving warning must be the duplicate-therapy class chip, was: " + warnings);
+		}
+	}
+
+	@Test
 	public void curatedRuleWithoutSeverityIsNeverFiltered() {
 		// The curated seed's hand-authored rules carry no severity field; absent severity is
 		// exempt from the floor — every curated rule is deliberate.
@@ -94,15 +134,14 @@ public class DrugSafetyInteractionSeverityFloorTest {
 	@Test
 	public void classBasedChipsAreUnaffectedByTheFloor() {
 		// The floor governs rule-based chips only: the class arm (duplicate therapy) carries no
-		// severity and keeps firing — with the Unknown-severity ramipril x lisinopril rule chip
-		// filtered, the duplicate-therapy chip is what remains of that pair (also trims #88's
-		// double-chip for Unknown-severity same-class pairs down to one).
+		// severity and keeps firing. Enalapril is not a bundled-sample drug, so no rated rule
+		// is involved here at all — this pins the pure class arm; the rule-filtered-same-pair
+		// seam is pinned by sameSubgroupPairKeepsTheClassChipWhenItsRuleIsFloorFiltered.
 		List<SafetyWarning> warnings = ddinterValidator().validate(
 				"Lisinopril could be added.", "Can we add lisinopril?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Enalapril"),
 						DrugReferenceTestSupport.set("C09AA02"), null, null));
 
-		assertNotNull(warnings);
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
 				"Lisinopril", "same ATC class"),
 				"the class-based duplicate-therapy chip must be unaffected by the severity floor, was: "

@@ -95,9 +95,14 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			}
 		}
 
-		// mechanisms table (text stored once); note strings interned per severity+group
+		// mechanisms table (text stored once); note strings interned per severity+group.
+		// Severity strings are interned too: the vocabulary is four values across ~300k
+		// full-KB rows, and Jackson allocates a fresh String per row — without this cache the
+		// structured severity field alone would retain ~13.5 MB for the module lifetime,
+		// reintroducing exactly the per-pair cost the note interning exists to avoid.
 		JsonNode mech = root.path("mechanisms");
 		Map<String, String> noteCache = new HashMap<String, String>();
+		Map<String, String> severityCache = new HashMap<String, String>();
 
 		// group interaction rows by drug id -> partner links
 		Map<String, List<Link>> partners = new HashMap<String, List<Link>>();
@@ -107,7 +112,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			}
 			String a = row.get(0).asText();
 			String b = row.get(1).asText();
-			String severity = row.get(2).asText();
+			String severity = severityCache.computeIfAbsent(row.get(2).asText(), s -> s);
 			String gid = row.get(3).asText();
 			if (!byId.containsKey(a) || !byId.containsKey(b)) {
 				continue;
@@ -227,7 +232,10 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 				return null;
 			}
 			String rxcui = d.path("rxcui").isTextual() ? d.get("rxcui").asText() : null;
-			String rxnormName = d.path("rxnorm_name").isTextual() ? d.get("rxnorm_name").asText() : null;
+			// Trimmed once here so the match token, the divergence guard, and the chip-label
+			// synonym all see the same clean value — a padded name would defeat the guard and
+			// leak padding into the label.
+			String rxnormName = d.path("rxnorm_name").isTextual() ? d.get("rxnorm_name").asText().trim() : null;
 			List<String> atc = new ArrayList<String>();
 			for (JsonNode a : d.path("atc")) {
 				atc.add(a.asText());

@@ -85,13 +85,24 @@ public class DrugReference {
 	/**
 	 * The clinician-facing label for safety chips: the display name, with the diverging generic
 	 * appended as a synonym — {@code "Acetylsalicylic acid (aspirin)"} — so a warning is
-	 * recognizable against both the dataset's vocabulary and the question/chart's. Entries whose
-	 * name already contains their generic (including route variants like
-	 * {@code Lidocaine (topical)}) render unchanged. Never used in prompt text — record
-	 * rendering keeps {@link #getName()} — so this is a chip-display concern only.
+	 * recognizable against both the dataset's vocabulary and the question/chart's. The synonym
+	 * renders only when the two genuinely diverge (neither contains the other, case-insensitive):
+	 * route variants like {@code Lidocaine (topical)} and redundancy like
+	 * {@code Kava (kava preparation)} render unchanged — the check lives here, not only in the
+	 * ddinter parser, because a curated json file can bind {@code genericName} directly. Never
+	 * used in prompt text — record rendering keeps {@link #getName()} — so this is a
+	 * chip-display concern only.
 	 */
 	public String displayLabel() {
-		return genericName == null || genericName.isEmpty() ? name : name + " (" + genericName + ")";
+		if (genericName == null || genericName.isEmpty() || name == null) {
+			return name;
+		}
+		String n = name.toLowerCase(Locale.ROOT);
+		String g = genericName.toLowerCase(Locale.ROOT);
+		if (n.contains(g) || g.contains(n)) {
+			return name;
+		}
+		return name + " (" + genericName + ")";
 	}
 
 	public void setName(String name) {

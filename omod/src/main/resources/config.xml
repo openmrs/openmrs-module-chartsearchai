@@ -304,7 +304,7 @@
 	<globalProperty>
 		<property>chartsearchai.drugSafety.minInteractionSeverity</property>
 		<defaultValue>minor</defaultValue>
-		<description>Minimum source-assigned severity a rule-based interaction must carry to raise a warning chip: unknown &lt; minor &lt; moderate &lt; major. Applies only to rules whose dataset rates them (the ddinter source's per-row DDInter severity); rules without a severity (the curated json seed's hand-authored rules), class-based duplicate-therapy/cross-reactivity warnings, and contraindication warnings are always shown. "unknown" shows every rated rule. The default "minor" filters exactly DDInter's Unknown-severity rows, which carry no mechanism description (14% of the full knowledge base) and would otherwise share equal billing with critical warnings. An unrecognized value falls back to "minor". Default: minor.</description>
+		<description>Minimum source-assigned severity a rule-based interaction must carry to raise a warning chip: unknown &lt; minor &lt; moderate &lt; major. Applies only to rules whose dataset rates them (the ddinter source's per-row DDInter severity); rules without a severity (e.g. the curated json seed's hand-authored rules — the exemption is per-rule, not per-format), class-based duplicate-therapy/cross-reactivity warnings, and contraindication warnings are always shown. "unknown" shows every rated rule. The default "minor" filters exactly DDInter's Unknown-severity rows, which carry no mechanism description (14% of the full knowledge base) and would otherwise share equal billing with critical warnings. An unrecognized value falls back to the default. Default: minor.</description>
 	</globalProperty>
 
 	<globalProperty>

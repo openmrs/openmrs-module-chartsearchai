@@ -46,7 +46,9 @@ public class SafetyWarning {
 		return type;
 	}
 
-	/** The reference drug the warning is about (display name). */
+	/** The reference drug the warning is about — its display label, which may carry a
+	 *  parenthesized generic synonym when the dataset's display name diverges from it,
+	 *  e.g. {@code "Acetylsalicylic acid (aspirin)"} (see {@link DrugReference#displayLabel()}). */
 	public String getDrug() {
 		return drug;
 	}

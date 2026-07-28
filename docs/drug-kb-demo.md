@@ -315,6 +315,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | `interactions` | object[] | interaction warning | Drug–drug interaction rules (below). |
 | `contraindications` | object[] | contraindication warning | Allergy/condition rules (below). |
 | `source` | string | injection | Provenance string rendered in the reference text. |
+| `genericName` | string, optional | Everyday generic synonym appended to safety-chip labels when it genuinely diverges from `name` (neither containing the other) — `"Acetylsalicylic acid (aspirin)"`. Display only: never rendered into the reference text the LLM sees, never used for matching. A redundant value (equal to, containing, or contained in `name`) is ignored. |
 
 **`ageBands[]` object**
 
@@ -331,6 +332,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | `token` | string | Substring matched (case-insensitive) against the patient's active-order drug names. |
 | `atc` | string | ATC code matched against the active order's ATC mapping (an alternative to `token`). |
 | `note` | string | Free text appended to the interaction warning (e.g. "increased risk of GI bleeding"). |
+| `severity` | string, optional | Source-assigned rating (`Unknown`/`Minor`/`Moderate`/`Major`). **Rating a rule opts it into the severity floor** (`chartsearchai.drugSafety.minInteractionSeverity`, default `minor`): a rule rated below the floor raises no warning. Omit it (the usual case for hand-authored rules) and the rule always fires. |
 
 **`contraindications[]` object**
 

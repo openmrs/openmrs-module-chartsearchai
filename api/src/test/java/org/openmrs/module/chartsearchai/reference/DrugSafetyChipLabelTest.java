@@ -65,6 +65,39 @@ public class DrugSafetyChipLabelTest {
 	}
 
 	@Test
+	public void redundantSynonymsAreNeverRendered() {
+		// displayLabel defends itself for ANY source (a curated json file can bind genericName
+		// too, bypassing the ddinter parser's guard): a synonym that merely repeats or extends
+		// the name ("Kava (kava preparation)", "Aspirin (Aspirin)") adds qualifier noise, not
+		// recognition, and is suppressed. 61 of the full KB's 276 divergences are this shape.
+		DrugReference kava = new DrugReference();
+		kava.setName("Kava");
+		kava.setGenericName("kava preparation");
+		assertEquals("Kava", kava.displayLabel(),
+				"a generic that contains the name is redundancy, not a synonym");
+
+		DrugReference plain = new DrugReference();
+		plain.setName("Aspirin");
+		plain.setGenericName("aspirin");
+		assertEquals("Aspirin", plain.displayLabel(),
+				"a generic equal to the name must render plainly");
+	}
+
+	@Test
+	public void severityStringsAreInternedAcrossTheParsedModel() {
+		// The parser's documented memory policy: per-pair strings are interned to the unique
+		// vocabulary. Severity has exactly four values across ~300k full-KB rows — without
+		// interning, the structured field alone retains ~13.5 MB for the module lifetime.
+		DrugReference warfarin = new DdiDrugReferenceSource().load().stream()
+				.filter(r -> "Warfarin".equalsIgnoreCase(r.getName())).findFirst().orElseThrow();
+		List<DrugReference.Interaction> majors = warfarin.getInteractions().stream()
+				.filter(i -> "Major".equals(i.getSeverity())).toList();
+		assertTrue(majors.size() >= 2, "precondition: warfarin has several Major rows");
+		assertTrue(majors.get(0).getSeverity() == majors.get(1).getSeverity(),
+				"equal severities must share one interned String instance");
+	}
+
+	@Test
 	public void contraindicationChipLabelsCarryBothVocabularies() {
 		// The measured scenario end-to-end: aspirin allergy on the chart, aspirin proposed by
 		// the question — the chip must be recognizable against both the question ("aspirin")
@@ -80,6 +113,20 @@ public class DrugSafetyChipLabelTest {
 				&& w.getDrug().equals("Acetylsalicylic acid (aspirin)")
 				&& w.getDetail().contains("Acetylsalicylic acid (aspirin)")),
 				"the allergy chip must carry the synonym-augmented label, was: " + warnings);
+	}
+
+	@Test
+	public void displayLabelNeverLeaksIntoTheRenderedRecordText() {
+		// Prompt stability is this slice's own settled priority: the injected record the LLM
+		// sees renders getName(), never the synonym-augmented label. Every "Drug reference — X"
+		// containment assertion elsewhere would still pass if render() switched to the label
+		// (the label starts with the name), so the absence needs its own pin.
+		String rendered = DrugReferenceTestSupport
+				.injectedDdinterReferenceText("Is it safe to give her aspirin?");
+		assertTrue(rendered.contains("Acetylsalicylic acid"),
+				"precondition: the aspirin reference record renders its display name");
+		assertTrue(!rendered.contains("Acetylsalicylic acid (aspirin)"),
+				"the synonym-augmented label is chip-display only and must never enter prompt text");
 	}
 
 	@Test

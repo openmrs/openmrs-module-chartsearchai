@@ -411,7 +411,7 @@ public class ChartSearchAiConstants {
 
 	/** Minimum source-assigned severity ({@code unknown} &lt; {@code minor} &lt; {@code moderate} &lt;
 	 *  {@code major}) a rule-based interaction must carry to raise a warning chip. Rules without a
-	 *  severity (the curated seed's hand-authored rules) are always shown, as are class-based and
+	 *  severity (e.g. the curated seed's hand-authored rules) are always shown, as are class-based and
 	 *  contraindication chips. {@code unknown} shows every rated rule; the default {@code minor}
 	 *  filters exactly DDInter's Unknown-severity rows, which carry no mechanism text (14% of the
 	 *  full knowledge base) and dilute the chips that matter. See issue #84. */

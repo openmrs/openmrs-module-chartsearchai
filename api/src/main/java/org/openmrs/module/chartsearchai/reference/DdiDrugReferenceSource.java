@@ -136,6 +136,17 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 					&& rxcuiCounts.get(row.rxcui) == 1;
 			ref.setId(uniqueRxcui ? row.rxcui : row.id);
 			ref.setName(row.name);
+			// Chip-label synonym (never renaming): when the DDInter display name diverges from
+			// the RxNorm generic the question and chart use ("Acetylsalicylic acid" vs
+			// "aspirin"), carry the generic so safety chips can show both vocabularies. A name
+			// that already contains its generic — including the route variants sharing one
+			// RxNorm name ("Lidocaine (topical)") — carries none. Renaming outright was
+			// measured and rejected: 276 of the full KB's names diverge, mostly INN-vs-USAN
+			// pairs a swap would mistranslate.
+			if (row.rxnormName != null && !row.rxnormName.isEmpty()
+					&& !row.name.toLowerCase(Locale.ROOT).contains(row.rxnormName.toLowerCase(Locale.ROOT))) {
+				ref.setGenericName(row.rxnormName.toLowerCase(Locale.ROOT));
+			}
 			ref.setAliases(row.aliases);
 			ref.setAtcCodes(row.atc);
 			ref.setInteractions(interactionsFor(links, byId));

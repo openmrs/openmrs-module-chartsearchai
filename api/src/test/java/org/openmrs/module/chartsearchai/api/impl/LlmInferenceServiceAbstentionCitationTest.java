@@ -65,8 +65,10 @@ public class LlmInferenceServiceAbstentionCitationTest {
 		});
 		service.setDrugSafetyValidator(new DrugSafetyValidator() {
 
+			// overrides the mappings-carrying overload production actually calls (issue #105)
 			@Override
-			public List<SafetyWarning> validate(String answer, String question, Patient patient) {
+			public List<SafetyWarning> validate(String answer, String question, Patient patient,
+					List<RecordMapping> mappings) {
 				return Collections.emptyList();
 			}
 		});

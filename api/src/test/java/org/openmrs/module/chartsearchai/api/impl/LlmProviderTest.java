@@ -80,6 +80,39 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void defaultSystemPrompt_shouldForbidYesNoVerdictsOnUnaddressedSafetyQuestions() {
+		// Measured on the 3.7.1 standalone (2026-07-28, issue #107): "Is it safe to give her
+		// panadol?" where no record addresses panadol produced a SAMPLED verdict across five
+		// generations (Yes/Yes/Yes/No/abstain), each justified by the patient's unrelated
+		// aspirin allergy — a groundless safety verdict in front of a legitimately grounded
+		// citation. The presence-shaped verdict rules ("is the patient hypertensive") did not
+		// transfer to the safety/suitability shape, so the prompt must name it explicitly and
+		// demonstrate it in the few-shot.
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("safety and suitability questions"),
+				"System prompt must address safety/suitability yes/no questions explicitly");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("the records do not address"),
+				"System prompt must teach the records-do-not-address verdict for unaddressed subjects");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("never evidence for or against"),
+				"System prompt must forbid justifying a safety verdict with a record about something else");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("Is it safe to deliver mangoes?"),
+				"The few-shot must demonstrate the unanswerable safety question");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("The records do not address mango deliveries"),
+				"The few-shot's safety demonstration must lead with the abstention verdict, not Yes/No");
+		// Review follow-up on the first guard shape (issue #107): appending the unrelated record
+		// as "context" after the abstention verdict implies a relevance the system cannot
+		// establish — its own deterministic layers assert none — and invites exactly the false
+		// inference the model drew pre-guard ("No — the patient has an aspirin allergy"). The
+		// verdict stands alone, mirroring the cite-nothing rule for category questions.
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("cite nothing with it"),
+				"System prompt must forbid attaching records to an unaddressed-safety verdict");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains(
+				"\"answer\": \"The records do not address mango deliveries.\", \"citations\": []"),
+				"The few-shot's safety abstention must stand alone with no cited context");
+		assertFalse(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("For context, 8 oranges"),
+				"The few-shot must not teach attaching unrelated records as context");
+	}
+
+	@Test
 	public void defaultSystemPrompt_shouldInstructAbstentionWhenNoRecordsRelevant() {
 		// The few-shot demonstrates abstention in FOCUS mode (a "Records ranked by
 		// similarity..." line followed by an empty-citations answer). On the non-focus path

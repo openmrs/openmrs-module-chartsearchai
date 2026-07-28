@@ -305,9 +305,11 @@ public class LlmInferenceServiceTest {
 		});
 		service.setDrugSafetyValidator(new org.openmrs.module.chartsearchai.reference.DrugSafetyValidator() {
 
+			// overrides the mappings-carrying overload production actually calls (issue #105)
 			@Override
 			public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
-					String answer, String question, org.openmrs.Patient patient) {
+					String answer, String question, org.openmrs.Patient patient,
+					java.util.List<RecordMapping> mappings) {
 				return java.util.Collections.emptyList();
 			}
 		});

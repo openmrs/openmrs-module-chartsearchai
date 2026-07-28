@@ -51,6 +51,27 @@ public class ChartSearchAiUtils {
 	public static final Pattern INLINE_CITATION = Pattern.compile("\\[(\\d{1,9})\\]");
 
 	/**
+	 * Decodes every inline {@code [N]} citation marker in {@code text} to its record index,
+	 * in first-appearance order. The shared decode step over {@link #INLINE_CITATION} for
+	 * citation extraction ({@code LlmInferenceService}), grounding
+	 * ({@code CitationGroundingVerifier}) and safety echo-scoping ({@code DrugSafetyValidator})
+	 * so those consumers cannot drift. (The clause-scoped splitter keeps its own matcher — it
+	 * needs each marker's text offset, which a set of indexes cannot carry.) Returns an empty
+	 * set for null/blank text.
+	 */
+	public static Set<Integer> citedIndexes(String text) {
+		Set<Integer> indexes = new java.util.LinkedHashSet<Integer>();
+		if (text == null || text.isEmpty()) {
+			return indexes;
+		}
+		java.util.regex.Matcher marker = INLINE_CITATION.matcher(text);
+		while (marker.find()) {
+			indexes.add(Integer.valueOf(marker.group(1)));
+		}
+		return indexes;
+	}
+
+	/**
 	 * Builds a composite key from a resource type and resource UUID.
 	 * This is the single canonical format for resource keys used across
 	 * retrieval pipelines, filter methods, and result sets.

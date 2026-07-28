@@ -775,6 +775,162 @@ public class CitationGroundingVerifierTest {
 				"lazy Tier-1 fallback must reproduce the eager cosine fail");
 	}
 
+	// ---- drug-reference citations (issue #106): verdicts may demote, never verify ----
+
+	/** A mapping typed as an injected drug-reference record. Pass
+	 *  {@link #realReferenceRecordText} where the text content matters (the demote logic keys on
+	 *  the resource type, so mechanics-only tests may pass synthetic text). */
+	private static RecordMapping drugReferenceMapping(int index, String text) {
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
+				"ref-" + index, null, text);
+	}
+
+	/** Real injected drug-reference record text off the real production chain (bundled DDInter
+	 *  sample, load → parse → injectRecords → render) — no hand-assembled imitation of the
+	 *  renderer's format. */
+	private static String realReferenceRecordText(String drugName) {
+		return org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
+				.injectedDdinterReferenceText("Can the patient take " + drugName + "?");
+	}
+
+	@Test
+	public void drugReference_highCosinePassRendersUnverifiedNotVerified() {
+		// The false-assurance case from issue #106: an answer reciting a drug-reference record
+		// embeds near-identically to it whether or not the recitation swaps subject roles, so a
+		// Tier-1 cosine pass carries no faithfulness signal. It must render null (unverified),
+		// never true (verified).
+		String record = realReferenceRecordText("Warfarin");
+		String sentence = "Warfarin interacts with several drugs [7].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record, AXIS_A); // recitation overlap -> cosine 1.0 -> Tier-1 would pass
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(7))),
+				Arrays.asList(drugReferenceMapping(7, record)), FLOOR, TIER1_ONLY);
+
+		assertNull(result.get(0).getGrounded(),
+				"a cosine pass on a drug-reference citation must render unverified, not verified");
+	}
+
+	@Test
+	public void drugReference_offTopicCitationIsStillFlagged() {
+		// The demote direction keeps its signal: a drug-reference record cited for a claim it has
+		// no overlap with (an off-topic citation) must still come back grounded=false.
+		String record = realReferenceRecordText("Warfarin");
+		String sentence = "The patient's blood pressure is well controlled [7].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record, AXIS_B); // orthogonal -> cosine 0.0 -> off-topic
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(7))),
+				Arrays.asList(drugReferenceMapping(7, record)), FLOOR, TIER1_ONLY);
+
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"an off-topic drug-reference citation must still be flagged");
+	}
+
+	@Test
+	public void drugReference_offTopicCitationStillFlaggedUnderEntailmentMode() {
+		// The mode-uniform half of the demote-only contract (the class javadoc's accepted embed
+		// cost): under entailment the flag comes from the LAZY Tier-1 pass, since Tier-2 is
+		// skipped. An implementation that "optimized" the lazy pass away for demote-only
+		// citations would render this null and still pass every other drug-reference test.
+		String record = realReferenceRecordText("Warfarin");
+		String sentence = "The patient's blood pressure is well controlled [7].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record, AXIS_B); // orthogonal -> off-topic
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(7))),
+				Arrays.asList(drugReferenceMapping(7, record)), FLOOR, TIER2_ON);
+
+		assertEquals(0, llm.calls, "drug-reference citations must not reach Tier-2 even when off-topic");
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"the off-topic flag must survive entailment mode via the lazy Tier-1 pass");
+	}
+
+	@Test
+	public void drugReference_neverEntersTier2Entailment() {
+		// Tier-2's yes on this content type is false assurance (issue #106: 4/4 subject-swapped
+		// recitations passed) and its no misfired on the one faithful answer — so drug-reference
+		// citations must not be judged by the entailment LLM at all, even when it would say yes.
+		String record = realReferenceRecordText("Warfarin");
+		String sentence = "Warfarin decreases the plasma concentrations of CYP3A4 substrates [7].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record, AXIS_A);
+		llm.verdict = Boolean.TRUE; // would falsely verify the swapped claim
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(7))),
+				Arrays.asList(drugReferenceMapping(7, record)), FLOOR, TIER2_ON);
+
+		assertEquals(0, llm.calls, "drug-reference citations must never reach the entailment LLM");
+		assertNull(result.get(0).getGrounded(),
+				"with Tier-2 skipped, the Tier-1 pass renders unverified");
+	}
+
+	@Test
+	public void drugReference_doesNotConsumeTheEntailmentCapOfChartCitations() {
+		// Cap-boundary pin: the drug-reference citation comes FIRST, followed by exactly
+		// cap-many chart citations. If exclusion happened after the budget decrement (e.g. a
+		// refactor nesting the demote check inside the budget branch), the LAST chart citation
+		// would overflow the cap and keep its lazy Tier-1 FALSE instead of the Tier-2 TRUE.
+		int cap = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
+		StringBuilder answer = new StringBuilder("Reference note [100]. ");
+		List<RecordReference> refs = new ArrayList<RecordReference>();
+		List<RecordMapping> maps = new ArrayList<RecordMapping>();
+		refs.add(reference(100));
+		maps.add(drugReferenceMapping(100, "warfarin reference record"));
+		for (int i = 1; i <= cap; i++) {
+			answer.append("claim ").append(i).append(" [").append(i).append("]. ");
+			refs.add(reference(i));
+			maps.add(mapping(i, "record " + i));
+		}
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer.toString(), refs, maps, FLOOR, TIER2_ON);
+
+		assertEquals(cap, llm.calls,
+				"chart citations alone fill the cap; the excluded drug-reference pair must not count");
+		assertEquals(Boolean.TRUE, result.get(cap).getGrounded(),
+				"the last chart citation must still get its Tier-2 verdict — a consumed slot would leave it FALSE");
+	}
+
+	@Test
+	public void drugReference_isExcludedFromTier2BatchAlongsideChartCitations() {
+		// Mixed answer: the chart citation keeps its full Tier-2 treatment (one batched pair) and
+		// the drug-reference citation neither joins the batch nor gets verified by it.
+		String chartSentence = "Patient has diabetes [1].";
+		String refSentence = "Warfarin interacts with several drugs [7].";
+		String answer = chartSentence + " " + refSentence;
+		String record = realReferenceRecordText("Warfarin");
+		embeddings.register(chartSentence, AXIS_A);
+		embeddings.register("type 2 diabetes mellitus", AXIS_A);
+		embeddings.register(refSentence, AXIS_A);
+		embeddings.register(record, AXIS_A);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(7))),
+				Arrays.asList(mapping(1, "type 2 diabetes mellitus"), drugReferenceMapping(7, record)),
+				FLOOR, TIER2_ON);
+
+		assertEquals(1, llm.calls, "only the chart citation may reach Tier-2");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "chart citation keeps its Tier-2 verdict");
+		assertNull(result.get(1).getGrounded(), "drug-reference citation renders unverified");
+	}
+
+	@Test
+	public void drugReference_noTextStaysUnverified() {
+		// The existing no-text contract is unchanged by the demote-only rule.
+		List<RecordReference> result = verifier.verify("Warfarin interacts with several drugs [7].",
+				new ArrayList<RecordReference>(Arrays.asList(reference(7))),
+				Arrays.asList(drugReferenceMapping(7, null)), FLOOR, TIER1_ONLY);
+
+		assertNull(result.get(0).getGrounded());
+	}
+
 	/** Index of the first {@code entailsBatch} call whose statement list contains {@code statement}
 	 *  exactly, or -1 — lets a test assert how citations were grouped into calls. */
 	private int callIndexContaining(String statement) {

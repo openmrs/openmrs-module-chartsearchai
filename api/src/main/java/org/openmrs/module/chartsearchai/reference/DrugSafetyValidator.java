@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,8 +31,10 @@ import org.springframework.stereotype.Service;
  * after the answer is generated and <em>annotates</em> it with {@link SafetyWarning}s.
  * It never rewrites or blocks the answer — the clinician decides.
  *
- * <p>For every reference drug the question asks about or the answer names, it checks three
- * things against the patient's clinical context and the reference table:
+ * <p>For every reference drug in play — those the question asks about, plus those the answer
+ * names on its own authority (a drug the answer mentions only by echoing a cited record's own
+ * text is a mention, not a proposal, and is excluded — see {@code isEchoOfCitedRecord}, issue
+ * #105) — it checks three things against the patient's clinical context and the reference table:
  * <ul>
  *   <li><b>Overdose</b> — a daily dose parsed from the answer exceeds the
  *       reference {@code maxDailyDoseMg} for the patient's age band; or, when the patient's
@@ -122,6 +125,19 @@ public class DrugSafetyValidator {
 	 * already exists.
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient) {
+		return validate(answer, question, patient, null);
+	}
+
+	/**
+	 * Production entry point with the chart's record mappings, which enable echo scoping: an
+	 * answer-named drug that a record cited by the answer already names in its own text (a
+	 * recited reference partner, an allergy reported off the chart) is a mention, not a
+	 * proposal, and is not validated (issue #105). Passing {@code null}/empty mappings disables
+	 * the scoping and keeps every answer-named drug in play (the conservative pre-scoping
+	 * behavior).
+	 */
+	public List<SafetyWarning> validate(String answer, String question, Patient patient,
+			List<RecordMapping> mappings) {
 		try {
 			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
 					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -130,7 +146,7 @@ public class DrugSafetyValidator {
 				return new ArrayList<SafetyWarning>();
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-			return validate(answer, question, context);
+			return validate(answer, question, context, mappings);
 		}
 		catch (RuntimeException e) {
 			log.warn("Drug-safety validation failed; returning no warnings — the answer path is never broken", e);
@@ -158,6 +174,15 @@ public class DrugSafetyValidator {
 	 * reads the dose from the answer, so a question-only drug with no stated dose yields no overdose.
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext context) {
+		return validate(answer, question, context, null);
+	}
+
+	/**
+	 * Mappings-aware overload — the seam the public entry point delegates to. See
+	 * {@link #validate(String, String, Patient, List)} for the echo-scoping contract.
+	 */
+	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext context,
+			List<RecordMapping> mappings) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
 
 		boolean warnDose = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS,
@@ -173,8 +198,27 @@ public class DrugSafetyValidator {
 		// Drugs in play = those the QUESTION resolves to UNION those the ANSWER names — both via the same
 		// DrugReferenceService.findByQuery the injector uses, so question/answer/injector matching can
 		// never drift, and identity-dedup holds (findByQuery resolves against the shared getAll() cache).
-		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(drugReferenceService.findByQuery(question));
-		inPlay.addAll(drugReferenceService.findByQuery(answer));
+		// Answer-side drugs are echo-scoped (issue #105): a drug the answer names while a record the
+		// answer cites already names it in its own text is an echo of that record (a recited reference
+		// partner, an allergy reported off the chart), not a proposal — validating it produced chips
+		// about drugs nobody suggested giving. Question-named drugs are always validated.
+		Set<DrugReference> questionDrugs = new LinkedHashSet<DrugReference>(
+				drugReferenceService.findByQuery(question));
+		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(questionDrugs);
+		// The echo corpus is built lazily so the common case — the answer names no drug beyond
+		// the question's — does no citation parsing and no mapping sweep at all.
+		List<String> citedTextsLower = null;
+		for (DrugReference ref : drugReferenceService.findByQuery(answer)) {
+			if (questionDrugs.contains(ref)) {
+				continue; // already in play; question-named drugs are always validated
+			}
+			if (citedTextsLower == null) {
+				citedTextsLower = citedRecordTextsLower(answer, mappings);
+			}
+			if (!isEchoOfCitedRecord(ref, citedTextsLower)) {
+				inPlay.add(ref);
+			}
+		}
 
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
@@ -193,6 +237,55 @@ public class DrugSafetyValidator {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
 		}
 		return warnings;
+	}
+
+	/**
+	 * The lowercased texts of the records the answer cites inline — the attribution corpus for
+	 * echo scoping. Built once per validate() call (one citation decode, one mapping sweep, at
+	 * most one lowercase copy per cited record) no matter how many answer-named drugs are
+	 * checked. Null/empty mappings (the mappings-less overloads) and uncited answers yield an
+	 * empty corpus, so no drug is ever exempted — the conservative direction.
+	 */
+	private static List<String> citedRecordTextsLower(String answer, List<RecordMapping> mappings) {
+		List<String> texts = new ArrayList<String>();
+		if (mappings == null || mappings.isEmpty()) {
+			return texts;
+		}
+		Set<Integer> citedIndexes = ChartSearchAiUtils.citedIndexes(answer);
+		if (citedIndexes.isEmpty()) {
+			return texts;
+		}
+		for (RecordMapping mapping : mappings) {
+			if (citedIndexes.contains(Integer.valueOf(mapping.getIndex())) && mapping.getText() != null) {
+				texts.add(mapping.getText().toLowerCase(Locale.ROOT));
+			}
+		}
+		return texts;
+	}
+
+	/**
+	 * @return true when a record the answer cites inline names {@code ref} in its own text —
+	 *         i.e. the answer's mention of the drug is attributable to cited record content (a
+	 *         recited drug-reference partner, an allergy reported off the chart) rather than a
+	 *         proposal on the answer's own authority (issue #105). Attribution is deliberately
+	 *         answer-global, not sentence-scoped: recited record text carries its own sentence
+	 *         punctuation ("… (Moderate. NSAIDs may …) [14]"), so sentence splitting routinely
+	 *         separates a recited drug name from the {@code [N]} marker that vouches for it.
+	 *         An empty corpus (no mappings, an uncited answer, or no cited record carrying text)
+	 *         returns false, keeping the drug validated. The accepted trade-off: an answer that
+	 *         BOTH cites a record naming drug X AND independently proposes X is exempted — but a
+	 *         proposal-worthy X is usually question-named (always validated) or actively ordered
+	 *         (checked directly by the order-driven arms), so the residual shape is rare and the
+	 *         measured alternative was worse (7 of 8 chips about unproposed drugs on one
+	 *         enumeration answer).
+	 */
+	private static boolean isEchoOfCitedRecord(DrugReference ref, List<String> citedTextsLower) {
+		for (String text : citedTextsLower) {
+			if (ref.matchesText(text)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void addContraindications(List<SafetyWarning> warnings, DrugReference ref,

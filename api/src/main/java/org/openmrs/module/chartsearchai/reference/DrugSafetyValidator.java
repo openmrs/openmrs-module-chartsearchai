@@ -220,13 +220,19 @@ public class DrugSafetyValidator {
 			}
 		}
 
+		// The severity floor governs rule-based interaction chips only (see addInteractions);
+		// resolved once per validate, fail-safe to the default with no OpenMRS context.
+		int severityFloor = floorRank(ChartSearchAiUtils.getStringGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY));
+
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
 				addContraindications(warnings, ref, context);
 				addClassContraindications(warnings, ref, context);
 			}
 			if (warnInteractions) {
-				addInteractions(warnings, ref, context);
+				addInteractions(warnings, ref, context, severityFloor);
 				addClassInteractions(warnings, ref, context);
 			}
 			if (warnDose) {
@@ -237,6 +243,38 @@ public class DrugSafetyValidator {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
 		}
 		return warnings;
+	}
+
+	/**
+	 * @return the rank of a source-assigned interaction severity in the floor's ordering
+	 *         ({@code unknown}=0 &lt; {@code minor}=1 &lt; {@code moderate}=2 &lt; {@code major}=3),
+	 *         or {@code -1} for null/unrecognized — which the rule filter treats as exempt
+	 *         (unrated is not low-rated).
+	 */
+	private static int severityRank(String severity) {
+		if (severity == null) {
+			return -1;
+		}
+		switch (severity.trim().toLowerCase(Locale.ROOT)) {
+			case "unknown":
+				return 0;
+			case "minor":
+				return 1;
+			case "moderate":
+				return 2;
+			case "major":
+				return 3;
+			default:
+				return -1;
+		}
+	}
+
+	/** @return the floor rank for the GP value, falling back to the default floor when the
+	 *          value is unrecognized (a typo'd GP must not silently disable all rated rules). */
+	private static int floorRank(String gpValue) {
+		int rank = severityRank(gpValue);
+		return rank >= 0 ? rank
+				: severityRank(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY);
 	}
 
 	/**
@@ -312,11 +350,20 @@ public class DrugSafetyValidator {
 	}
 
 	private void addInteractions(List<SafetyWarning> warnings, DrugReference ref,
-			PatientClinicalContext context) {
+			PatientClinicalContext context, int severityFloor) {
 		if (context == null) {
 			return;
 		}
 		for (DrugReference.Interaction i : ref.getInteractions()) {
+			// The severity floor (issue #84): a rule the SOURCE rated below the floor is not
+			// raised — DDInter's Unknown-severity rows carry no mechanism text and would bury
+			// the chips that matter (measured: an uncharacterized aspirin x simvastatin row
+			// sharing equal billing with a severe-allergy contraindication). A rule with no
+			// severity (every curated hand-authored rule) is exempt: unrated is not low-rated.
+			int rank = severityRank(i.getSeverity());
+			if (rank >= 0 && rank < severityFloor) {
+				continue;
+			}
 			if (context.hasActiveDrug(i.getToken(), i.getAtc())) {
 				// A matched rule has a non-blank token or ATC, so the coalesce never yields null.
 				String detail = "interacts with active order "

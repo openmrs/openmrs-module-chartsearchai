@@ -329,6 +329,11 @@ public class DrugReference {
 
 		private String note;
 
+		/** Source-assigned severity ({@code Major}/{@code Moderate}/{@code Minor}/{@code Unknown}
+		 *  for DDInter rows), or {@code null} for sources that don't rate rules (the curated
+		 *  seed) — a null severity is exempt from the validator's severity floor. */
+		private String severity;
+
 		public String getToken() {
 			return token;
 		}
@@ -351,6 +356,14 @@ public class DrugReference {
 
 		public void setNote(String note) {
 			this.note = note;
+		}
+
+		public String getSeverity() {
+			return severity;
+		}
+
+		public void setSeverity(String severity) {
+			this.severity = severity;
 		}
 	}
 

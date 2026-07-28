@@ -409,6 +409,17 @@ public class ChartSearchAiConstants {
 
 	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS = true;
 
+	/** Minimum source-assigned severity ({@code unknown} &lt; {@code minor} &lt; {@code moderate} &lt;
+	 *  {@code major}) a rule-based interaction must carry to raise a warning chip. Rules without a
+	 *  severity (the curated seed's hand-authored rules) are always shown, as are class-based and
+	 *  contraindication chips. {@code unknown} shows every rated rule; the default {@code minor}
+	 *  filters exactly DDInter's Unknown-severity rows, which carry no mechanism text (14% of the
+	 *  full knowledge base) and dilute the chips that matter. See issue #84. */
+	public static final String GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY =
+			"chartsearchai.drugSafety.minInteractionSeverity";
+
+	public static final String DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY = "minor";
+
 	/** Concept UUID (a kg-valued numeric concept) used to read the patient's most recent weight for
 	 *  the weight-aware per-dose overdose check. The value {@link #DRUG_SAFETY_WEIGHT_CONCEPT_DISABLED}
 	 *  disables the weight-aware arm; blank/absent falls back to the default like every other GP

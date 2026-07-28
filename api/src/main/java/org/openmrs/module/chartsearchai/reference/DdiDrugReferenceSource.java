@@ -113,8 +113,8 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 				continue;
 			}
 			String note = noteFor(severity, gid, mech, noteCache);
-			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, note));
-			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, note));
+			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, severity, note));
+			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, severity, note));
 		}
 
 		// RxCUI frequency: some route variants share a RxCUI (e.g. the Lidocaine variants all
@@ -163,6 +163,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			String token = p.rxnormName != null && !p.rxnormName.isEmpty() ? p.rxnormName : p.name;
 			i.setToken(token.toLowerCase(Locale.ROOT));
 			i.setAtc(p.atc.isEmpty() ? null : p.atc.get(0));
+			i.setSeverity(link.severity);
 			i.setNote(link.note);
 			out.add(i);
 		}
@@ -245,15 +246,18 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 		}
 	}
 
-	/** A partner link: the other drug's id and the shared interaction note. */
+	/** A partner link: the other drug's id, the row's severity, and the shared interaction note. */
 	private static final class Link {
 
 		final String partnerId;
 
+		final String severity;
+
 		final String note;
 
-		Link(String partnerId, String note) {
+		Link(String partnerId, String severity, String note) {
 			this.partnerId = partnerId;
+			this.severity = severity;
 			this.note = note;
 		}
 	}

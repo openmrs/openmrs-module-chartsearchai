@@ -302,6 +302,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.drugSafety.minInteractionSeverity</property>
+		<defaultValue>minor</defaultValue>
+		<description>Minimum source-assigned severity a rule-based interaction must carry to raise a warning chip: unknown &lt; minor &lt; moderate &lt; major. Applies only to rules whose dataset rates them (the ddinter source's per-row DDInter severity); rules without a severity (the curated json seed's hand-authored rules), class-based duplicate-therapy/cross-reactivity warnings, and contraindication warnings are always shown. "unknown" shows every rated rule. The default "minor" filters exactly DDInter's Unknown-severity rows, which carry no mechanism description (14% of the full knowledge base) and would otherwise share equal billing with critical warnings. An unrecognized value falls back to "minor". Default: minor.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.drugSafety.weightConceptUuid</property>
 		<defaultValue>5089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</defaultValue>
 		<description>UUID of the kg-valued numeric concept holding the patient's weight observations, read (most recent, non-voided) to drive the weight-aware per-dose overdose check: a per-administration dose in the answer above the age band's mgPerKgMax × weight is flagged. The default is the reference (CIEL) "Weight (kg)" concept, 5089; point it at your dictionary's weight-in-kg concept if different. Set to "none" to disable the weight-aware arm (the absolute maxDailyDoseMg check still runs); a blank value falls back to the default, like every global property. The concept's values must be recorded in kilograms. Requires chartsearchai.drugSafety.warnOnDoseExcess.</description>

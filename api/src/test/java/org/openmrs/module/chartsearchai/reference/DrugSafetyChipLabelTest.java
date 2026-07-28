@@ -91,7 +91,8 @@ public class DrugSafetyChipLabelTest {
 		DrugReference warfarin = new DdiDrugReferenceSource().load().stream()
 				.filter(r -> "Warfarin".equalsIgnoreCase(r.getName())).findFirst().orElseThrow();
 		List<DrugReference.Interaction> majors = warfarin.getInteractions().stream()
-				.filter(i -> "Major".equals(i.getSeverity())).toList();
+				.filter(i -> "Major".equals(i.getSeverity()))
+				.collect(java.util.stream.Collectors.toList()); // Stream.toList() is Java 16+; target is 11
 		assertTrue(majors.size() >= 2, "precondition: warfarin has several Major rows");
 		assertTrue(majors.get(0).getSeverity() == majors.get(1).getSeverity(),
 				"equal severities must share one interned String instance");

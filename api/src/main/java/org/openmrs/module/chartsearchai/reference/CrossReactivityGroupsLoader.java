@@ -55,8 +55,8 @@ public class CrossReactivityGroupsLoader {
 	/**
 	 * Parse a groups stream. Groups with a blank {@code name} or no usable {@code atcPrefixes}
 	 * are dropped (with a warning): a name-less group would render
-	 * {@code "same cross-reactivity group (null)"} into a safety warning, and a prefix-less one
-	 * can never match. Package-private and static so tests can exercise the real parser against
+	 * {@code "… is in the same cross-reactivity group (null) …"} into a safety warning, and a
+	 * prefix-less one can never match. Package-private and static so tests can exercise the real parser against
 	 * the real dataset.
 	 */
 	static List<CrossReactivityGroup> parse(InputStream in) throws IOException {

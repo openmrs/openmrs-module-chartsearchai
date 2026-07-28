@@ -111,8 +111,10 @@ public class DrugSafetyChipLabelTest {
 
 		assertTrue(warnings.stream().anyMatch(w -> w.getType().equals(SafetyWarning.TYPE_CONTRAINDICATION)
 				&& w.getDrug().equals("Acetylsalicylic acid (aspirin)")
-				&& w.getDetail().contains("Acetylsalicylic acid (aspirin)")),
-				"the allergy chip must carry the synonym-augmented label, was: " + warnings);
+				&& w.getDetail().equals("The patient has a recorded allergy to Acetylsalicylic acid (aspirin).")),
+				"the allergy detail must be one complete standalone sentence naming the drug exactly once"
+						+ " (renderers show the detail alone; the drug field is grouping metadata), was: "
+						+ warnings);
 	}
 
 	@Test
@@ -143,7 +145,9 @@ public class DrugSafetyChipLabelTest {
 						DrugReferenceTestSupport.set("N02BA01"), null, null));
 
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
-				"Ibuprofen", "Acetylsalicylic acid (aspirin)"),
-				"the class chip must name the order with the synonym-augmented label, was: " + warnings);
+				"Ibuprofen", "Ibuprofen is in the same cross-reactivity group",
+				"active order Acetylsalicylic acid (aspirin)"),
+				"the class detail must be a standalone sentence leading with the subject drug and naming"
+						+ " the order with the synonym-augmented label, was: " + warnings);
 	}
 }

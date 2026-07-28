@@ -378,7 +378,7 @@ Response:
 
 Each reference carries a `grounded` field — `true` / `false` once [citation grounding](#citation-grounding) has verified it, or `null` when grounding is disabled (the default, shown above) or did not check that citation.
 
-`safetyWarnings` is an array of non-blocking drug-safety advisories (each `{ type, drug, detail }`, where `type` is `overdose` / `interaction` / `contraindication`). The key is always present and empty unless the optional drug-reference feature is enabled and something was flagged (see [Drug-reference injection & safety validation](#drug-reference-injection--safety-validation)).
+`safetyWarnings` is an array of non-blocking drug-safety advisories (each `{ type, drug, detail }`, where `type` is `overdose` / `interaction` / `contraindication`). `detail` is one complete standalone sentence that already leads with the drug — **clients should render `detail` alone**; prefixing `drug` duplicates the subject ("Aspirin: Aspirin interacts with…"). `drug` carries the drug's display label (possibly with a parenthesized generic synonym) for grouping, sorting, and deduping. The key is always present and empty unless the optional drug-reference feature is enabled and something was flagged (see [Drug-reference injection & safety validation](#drug-reference-injection--safety-validation)).
 
 ### Streaming search (SSE)
 

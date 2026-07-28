@@ -345,7 +345,7 @@ public class DrugSafetyValidator {
 			}
 			if (hit) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-						"contraindicated by " + against + ": "
+						ref.displayLabel() + " is contraindicated by an " + against + ": "
 								+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
 			}
 		}
@@ -368,7 +368,7 @@ public class DrugSafetyValidator {
 			}
 			if (context.hasActiveDrug(i.getToken(), i.getAtc())) {
 				// A matched rule has a non-blank token or ATC, so the coalesce never yields null.
-				String detail = "interacts with active order "
+				String detail = ref.displayLabel() + " interacts with active order "
 						+ ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
 				if (i.getNote() != null && !i.getNote().isEmpty()) {
 					detail += " — " + i.getNote();
@@ -408,21 +408,23 @@ public class DrugSafetyValidator {
 			}
 			if (allergen == ref) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-						"the patient has a recorded allergy to " + ref.displayLabel()));
+						"The patient has a recorded allergy to " + ref.displayLabel() + "."));
 				continue;
 			}
 			String shared = sharedClass(refClasses, allergen);
 			if (shared != null) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-						"same ATC class (" + shared + ") as the patient's allergy to " + allergen.displayLabel()
+						ref.displayLabel() + " is in the same ATC class (" + shared
+								+ ") as the patient's allergy to " + allergen.displayLabel()
 								+ " — possible cross-reactivity"));
 				continue;
 			}
 			CrossReactivityGroup group = CrossReactivityGroup.sharedGroup(refGroups, allergen);
 			if (group != null) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-						"same cross-reactivity group (" + group.getName() + ") as the patient's allergy to "
-								+ allergen.displayLabel() + " — possible cross-reactivity"));
+						ref.displayLabel() + " is in the same cross-reactivity group (" + group.getName()
+								+ ") as the patient's allergy to " + allergen.displayLabel()
+								+ " — possible cross-reactivity"));
 			}
 		}
 	}
@@ -457,7 +459,8 @@ public class DrugSafetyValidator {
 			if (orderCode.length() >= DrugReference.ATC_SUBGROUP_PREFIX_LENGTH && refClasses
 					.contains(orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH))) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(),
-						"same ATC class (" + orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH)
+						ref.displayLabel() + " is in the same ATC class ("
+								+ orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH)
 								+ ") as active order " + displayLabelForAtcCode(orderCode)
 								+ " — possible duplicate therapy"));
 				continue;
@@ -465,8 +468,9 @@ public class DrugSafetyValidator {
 			CrossReactivityGroup group = CrossReactivityGroup.sharedGroupForCode(refGroups, orderCode);
 			if (group != null) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(),
-						"same cross-reactivity group (" + group.getName() + ") as active order "
-								+ displayLabelForAtcCode(orderCode) + " — possible additive or duplicate-class therapy"));
+						ref.displayLabel() + " is in the same cross-reactivity group (" + group.getName()
+								+ ") as active order " + displayLabelForAtcCode(orderCode)
+								+ " — possible additive or duplicate-class therapy"));
 			}
 		}
 	}
@@ -512,7 +516,8 @@ public class DrugSafetyValidator {
 			Double dailyMg = parseDailyDoseMg(doses);
 			if (dailyMg != null && dailyMg > band.getMaxDailyDoseMg()) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, ref.displayLabel(),
-						"stated dose ~" + DrugReference.formatNumber(dailyMg) + " mg/day exceeds the "
+						"The stated " + ref.displayLabel() + " dose ~" + DrugReference.formatNumber(dailyMg)
+								+ " mg/day exceeds the "
 								+ DrugReference.formatNumber(band.getMaxDailyDoseMg()) + " mg/day maximum for ages "
 								+ band.getMinYears() + "-" + band.getMaxYears()));
 				// One warning per drug: the published daily ceiling is the stronger statement,
@@ -527,7 +532,8 @@ public class DrugSafetyValidator {
 		double perDoseLimitMg = band.getMgPerKgMax() * weightKg;
 		if (perDoseMg != null && perDoseMg > perDoseLimitMg) {
 			warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, ref.displayLabel(),
-					"stated dose ~" + DrugReference.formatNumber(perDoseMg) + " mg exceeds the "
+					"The stated " + ref.displayLabel() + " dose ~" + DrugReference.formatNumber(perDoseMg)
+							+ " mg exceeds the "
 							+ DrugReference.formatNumber(band.getMgPerKgMax()) + " mg/kg per-dose maximum (~"
 							+ DrugReference.formatNumber(perDoseLimitMg) + " mg) for the patient's weight "
 							+ DrugReference.formatNumber(weightKg) + " kg (ages " + band.getMinYears() + "-"

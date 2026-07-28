@@ -396,11 +396,11 @@ query surfaces only the warnings for the drug named.
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|
-| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication (ibuprofen allergy, GI bleed, peptic ulcer), "recorded allergy to Ibuprofen", interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), a "same cross-reactivity group (NSAID)" interaction |
+| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication (ibuprofen allergy, GI bleed, peptic ulcer), "The patient has a recorded allergy to Ibuprofen.", interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), an "Ibuprofen is in the same cross-reactivity group (NSAID)…" interaction |
 | *Is amoxicillin safe for this patient?* | injected `amoxicillin`; contraindication (penicillin-class), interaction (methotrexate), **duplicate therapy J01CA** (Ampicillin) |
-| *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "recorded allergy to Paracetamol", interaction (warfarin) |
+| *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "The patient has a recorded allergy to Paracetamol.", interaction (warfarin) |
 | *Is gentamicin appropriate for this patient?* | injected `gentamicin`; contraindication (aminoglycoside allergy, renal impairment), interaction (furosemide), **duplicate therapy J01GB** (Amikacin) |
-| *Is naproxen safe for this patient?* | injected `naproxen`; **cross-reactivity** "same ATC class (M01AE) as the patient's allergy to Ibuprofen" *(needs Step 4)* |
+| *Is naproxen safe for this patient?* | injected `naproxen`; **cross-reactivity** "Naproxen is in the same ATC class (M01AE) as the patient's allergy to Ibuprofen…" *(needs Step 4)* |
 | any KB alias (brufen, advil, panadol, tylenol, amoxil…) on **any** patient | a `drug_reference` citation (question-driven injection needs no patient data) |
 
 **Order-driven injection (path 7)** — set `injectFromQuery=false`, then ask

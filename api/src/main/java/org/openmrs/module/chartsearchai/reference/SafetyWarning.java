@@ -53,7 +53,12 @@ public class SafetyWarning {
 		return drug;
 	}
 
-	/** Human-readable detail, e.g. "exceeds 1200 mg/day max for ages 2-11" or "interacts with warfarin". */
+	/** The warning as one complete, standalone sentence naming the drug — e.g. "The stated
+	 *  Ibuprofen dose ~2400 mg/day exceeds the 1200 mg/day maximum for ages 2-11" or
+	 *  "Warfarin interacts with active order aspirin — Major. …". <b>Renderers should display
+	 *  this alone</b>; prefixing {@link #getDrug()} duplicates the subject, because every
+	 *  detail already leads with it. The drug field exists for grouping/sorting/deduping, not
+	 *  as a display prefix. */
 	public String getDetail() {
 		return detail;
 	}

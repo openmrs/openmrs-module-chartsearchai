@@ -381,9 +381,10 @@ entry dataset).
 > clean patient), and map the Aspirin concept to ATC `N02BA01` for the cross-branch group chip.
 > The committed `atc_drugkb.sql` maps only the J01CA/J01GB antibiotics, but the long-lived
 > :8081 instance **already carries** an `N02BA01` mapping on Aspirin — live-verified 2026-07-10:
-> the ibuprofen query there shows an extra *"same cross-reactivity group (NSAID) as active order
-> N02BA01 — possible additive or duplicate-class therapy"* chip (the bare code appears because
-> no KB entry carries `N02BA01`). Both Decision-27 paths were live-verified end-to-end that day
+> the ibuprofen query there shows an extra *"Ibuprofen is in the same cross-reactivity group
+> (NSAID) as active order N02BA01 — possible additive or duplicate-class therapy"* chip (the
+> bare code appears because no KB entry carries `N02BA01`; wording as of the sentence-detail
+> refactor — the 2026-07-10 capture predates the leading subject). Both Decision-27 paths were live-verified end-to-end that day
 > (weight arm: `~1000 mg exceeds the 15 mg/kg per-dose maximum (~750 mg) … weight 50 kg`,
 > driven by the bundled CIEL default with no GP row).
 
@@ -419,8 +420,8 @@ e.g. a stock demo patient) with a phrasing that keeps drug + dose together:
 
 > *"Repeat back the proposed order and state if it is safe: paracetamol 6000 mg daily."*
 
-→ answer "The proposed order is paracetamol 6000 mg daily…" → `overdose: stated dose ~6000 mg/day
-exceeds the 4000 mg/day maximum`. (Phrasings where the model writes the drug and the dose in
+→ answer "The proposed order is paracetamol 6000 mg daily…" → `overdose: The stated Paracetamol
+dose ~6000 mg/day exceeds the 4000 mg/day maximum for ages 12-120`. (Phrasings where the model writes the drug and the dose in
 *separate* sentences will not fire, even when the arithmetic is right.)
 
 ---

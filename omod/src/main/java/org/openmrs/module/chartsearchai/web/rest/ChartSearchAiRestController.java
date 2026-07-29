@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -223,19 +224,9 @@ public class ChartSearchAiRestController {
 		response.put("answer", chartAnswer.getAnswer());
 		response.put("disclaimer", DISCLAIMER);
 
-		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
-		for (RecordReference ref : chartAnswer.getReferences()) {
-			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
-			refMap.put("index", ref.getIndex());
-			refMap.put("resourceType", ref.getResourceType());
-			refMap.put("resourceUuid", ref.getResourceUuid());
-			refMap.put("date", formatDate(ref.getDate()));
-			// null when grounding is disabled or could not run — clients must
-			// render null as "unverified", never as "verified".
-			refMap.put("grounded", ref.getGrounded());
-			refs.add(refMap);
-		}
-		response.put("references", refs);
+		// Shared with the SSE emission sites so all four stay in step — carries the
+		// tri-state `grounded` verdict and the `group` discriminator; see serializeReferences.
+		response.put("references", serializeReferences(chartAnswer.getReferences()));
 		response.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
 		if (auditLog.getAuditLogId() != null) {
 			response.put("questionId", String.valueOf(auditLog.getAuditLogId()));
@@ -898,23 +889,51 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Serializes references to the SSE wire shape shared by the early {@code references} event
-	 * (grounding verdicts not yet attached) and the final {@code done} event (grounded).
-	 * {@code grounded} is null when grounding is disabled or could not run — clients must render
+	 * Serializes references to the wire shape shared by every emission site: the {@code /search}
+	 * response, the early {@code references} SSE event (grounding verdicts not yet attached), the
+	 * final {@code done} event (grounded) and the trailing {@code grounded} event of the async
+	 * path. One implementation so a field added here cannot reach some clients and not others.
+	 *
+	 * <p>{@code grounded} is null when grounding is disabled or could not run — clients must render
 	 * null as "unverified", never as "verified".
+	 *
+	 * <p>{@code group} classifies each reference as chart evidence or module-supplied reference
+	 * prose (see {@link ChartSearchAiUtils#referenceGroup}), and the list is ordered so the groups
+	 * are contiguous with chart evidence first — a client that simply renders the array in order
+	 * gets the grouping for free, and one that buckets by {@code group} gets stable buckets. The
+	 * sort is stable, so within a group the date ordering established upstream is preserved. It
+	 * reorders only the serialized view; {@code index} remains each record's citation number, so
+	 * inline {@code [N]} markers in the answer prose keep resolving.
 	 */
 	private List<Map<String, Object>> serializeReferences(List<RecordReference> references) {
+		List<RecordReference> ordered = new ArrayList<RecordReference>(references);
+		// Stable sort on the group rank alone: chart evidence before reference material, with the
+		// upstream order untouched inside each group.
+		Collections.sort(ordered, Comparator.comparingInt(
+			(RecordReference ref) -> groupRank(ref.getResourceType())));
+
 		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
-		for (RecordReference ref : references) {
+		for (RecordReference ref : ordered) {
 			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
 			refMap.put("index", ref.getIndex());
 			refMap.put("resourceType", ref.getResourceType());
 			refMap.put("resourceUuid", ref.getResourceUuid());
 			refMap.put("date", formatDate(ref.getDate()));
 			refMap.put("grounded", ref.getGrounded());
+			refMap.put("group", ChartSearchAiUtils.referenceGroup(ref.getResourceType()));
 			refs.add(refMap);
 		}
 		return refs;
+	}
+
+	/**
+	 * Sort rank of a resource type's reference group: chart evidence first, module-supplied
+	 * reference material last. Derived via {@link ChartSearchAiUtils#referenceGroup} rather than
+	 * from {@code resourceType} directly, so ordering and labelling can never disagree.
+	 */
+	private static int groupRank(String resourceType) {
+		return ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE
+				.equals(ChartSearchAiUtils.referenceGroup(resourceType)) ? 1 : 0;
 	}
 
 	/**

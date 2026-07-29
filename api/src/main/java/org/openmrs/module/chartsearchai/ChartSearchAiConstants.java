@@ -483,6 +483,21 @@ public class ChartSearchAiConstants {
 	/** Reference data, not patient data — injected by {@link org.openmrs.module.chartsearchai.reference.DrugReferenceInjector}. */
 	public static final String RESOURCE_TYPE_DRUG_REFERENCE = "drug_reference";
 
+	/**
+	 * Wire value of a serialized reference's {@code group}: a record retrieved from THIS
+	 * patient's chart. Evidence about the patient, citable as such.
+	 */
+	public static final String REFERENCE_GROUP_CHART = "chart";
+
+	/**
+	 * Wire value of a serialized reference's {@code group}: module-supplied reference prose
+	 * (a drug knowledge-base entry), not a record about this patient. Kept visible precisely
+	 * so a client can disclose that provenance rather than let it read as chart evidence —
+	 * and never grounding-verified as {@code true}, since these citations are demote-only
+	 * (see {@code CitationGroundingVerifier}).
+	 */
+	public static final String REFERENCE_GROUP_REFERENCE = "reference";
+
 	private ChartSearchAiConstants() {
 	}
 }

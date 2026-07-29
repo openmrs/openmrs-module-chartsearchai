@@ -367,8 +367,8 @@ Response:
   "disclaimer": "This response is AI-generated and may not be accurate...",
   "questionId": "42",
   "references": [
-    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15", "grounded": null },
-    { "index": 1, "resourceType": "order", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10", "grounded": null }
+    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15", "grounded": null, "group": "chart" },
+    { "index": 1, "resourceType": "order", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10", "grounded": null, "group": "chart" }
   ],
   "safetyWarnings": []
 }
@@ -377,6 +377,17 @@ Response:
 `questionId` is a string identifier for this query, used to submit feedback (see below). It is omitted if audit logging fails.
 
 Each reference carries a `grounded` field — `true` / `false` once [citation grounding](#citation-grounding) has verified it, or `null` when grounding is disabled (the default, shown above) or did not check that citation.
+
+Each reference also carries a `group`, derived from its `resourceType`, telling a client what kind of source it is:
+
+| `group` | Meaning |
+| --- | --- |
+| `chart` | A record retrieved from **this patient's chart** — evidence about the patient. |
+| `reference` | **Module-supplied reference prose** (a drug knowledge-base entry injected by [drug-reference injection](#drug-reference-injection--safety-validation)), not a record about this patient. |
+
+Render the two groups distinctly: a `reference` entry is a pointer into a drug knowledge base, so presenting it alongside chart records without distinction lets module-supplied text read as chart evidence. Do not use `group` to hide references — a `reference` entry is the disclosure of where a drug-interaction statement came from, and the answer prose still cites it by number. Note that `reference` entries are never `grounded: true`, because drug-reference citations are [demote-only](#citation-grounding); their faithfulness is checked by the `safetyWarnings` chips instead.
+
+The array is ordered so the groups are contiguous, `chart` first, preserving most-recent-first order within each group — so a client that just renders the array in order gets the grouping without doing any work. `index` is unaffected by that ordering; it remains each record's citation number, matching the inline `[N]` markers in the answer.
 
 `safetyWarnings` is an array of non-blocking drug-safety advisories (each `{ type, drug, detail }`, where `type` is `overdose` / `interaction` / `contraindication`). `detail` is one complete standalone sentence that already leads with the drug — **clients should render `detail` alone**; prefixing `drug` duplicates the subject ("Aspirin: Aspirin interacts with…"). `drug` carries the drug's display label (possibly with a parenthesized generic synonym) for grouping, sorting, and deduping. The key is always present and empty unless the optional drug-reference feature is enabled and something was flagged (see [Drug-reference injection & safety validation](#drug-reference-injection--safety-validation)).
 
@@ -402,7 +413,7 @@ SSE events:
 | `thinking` | A chunk of the model's reasoning, emitted before the answer; render distinctly (e.g. a collapsible panel), never as the answer |
 | `token` | A chunk of the answer text as it is generated |
 | `references` | The answer's citations the moment the answer is complete — before grounding verdicts exist; render as unverified until verdicts arrive |
-| `done` | Final JSON with the complete answer, references (sorted most recent first, with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`), `safetyWarnings`, `questionId`, and disclaimer. With `chartsearchai.grounding.async=true`, `done` is emitted as soon as the answer is complete — its references carry no verdicts yet and `safetyWarnings` is empty (validation runs with grounding) |
+| `done` | Final JSON with the complete answer, references (`chart` group first, most recent first within each group, with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`, `group`), `safetyWarnings`, `questionId`, and disclaimer. With `chartsearchai.grounding.async=true`, `done` is emitted as soon as the answer is complete — its references carry no verdicts yet and `safetyWarnings` is empty (validation runs with grounding) |
 | `grounded` | Only with `chartsearchai.grounding.async=true`: the references re-sent with their grounding verdicts (`grounded` true/false/null) once Tier-2 verification completes, plus the final `safetyWarnings`, with the same `questionId`. Keep consuming the stream after `done` to receive it |
 | `error` | Error message if something goes wrong |
 

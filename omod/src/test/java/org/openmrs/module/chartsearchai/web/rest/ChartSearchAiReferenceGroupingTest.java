@@ -14,7 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -24,9 +25,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.User;
-import org.openmrs.module.chartsearchai.api.AuditLogService;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
-import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,8 +46,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * FIRST in the service's reference list, so a passing test proves the serializer really
  * reorders rather than accidentally agreeing with input order. The two chart records are
  * given in non-index order (230 before 8) so the test also pins that regrouping is
- * STABLE — it must not disturb the date ordering {@code extractCitedReferences} already
- * established within a group.
+ * STABLE — whatever order {@code extractCitedReferences} established within a group has to
+ * survive.
+ *
+ * <p>The allergy and the drug reference are null-dated because that is genuinely their shape:
+ * an allergy's querystore date is administrative and deliberately unrendered, and an injected
+ * drug-reference record never carries one. That pairing is the only situation in which the
+ * group sort changes anything at all, since upstream already sorts undated records last. The
+ * condition is null-dated purely to give the chart group a second member, so the stability
+ * assertion has something to be tight about — a real condition would carry a date. What is
+ * pinned here is therefore insertion-order stability, not date ordering.
  */
 public class ChartSearchAiReferenceGroupingTest {
 
@@ -85,26 +93,16 @@ public class ChartSearchAiReferenceGroupingTest {
 						new ChartSearchService.RecordReference(8, "condition", "u8", null, Boolean.TRUE)));
 	}
 
-	/** The {@code references} array of the named SSE event, in emitted order. */
+	/**
+	 * The {@code references} array of the named SSE event, in emitted order. Decoding is delegated
+	 * to {@link SseEvents} so this class and the sibling streaming tests cannot disagree about the
+	 * wire format — they previously each had their own decoder, differing over whether the space
+	 * after {@code data:} was payload.
+	 */
 	private List<JsonNode> referencesOf(String eventType) throws Exception {
-		String body = new String(out.toByteArray(), StandardCharsets.UTF_8);
-		StringBuilder data = new StringBuilder();
-		String current = null;
-		boolean capturing = false;
-		for (String line : body.split("\n")) {
-			if (line.startsWith("event:")) {
-				if (capturing) {
-					break;
-				}
-				current = line.substring("event:".length()).trim();
-				capturing = eventType.equals(current);
-				data.setLength(0);
-			} else if (capturing && line.startsWith("data:")) {
-				data.append(line.substring("data:".length()));
-			}
-		}
-		assertTrue(capturing || data.length() > 0, "no '" + eventType + "' event was emitted");
-		JsonNode refs = MAPPER.readTree(data.toString()).get("references");
+		SseEvent event = SseEvents.ofType(out, eventType);
+		assertNotNull(event, "no '" + eventType + "' event was emitted");
+		JsonNode refs = MAPPER.readTree(event.data).get("references");
 		assertNotNull(refs, "'" + eventType + "' event carried no references array");
 		List<JsonNode> list = new ArrayList<JsonNode>();
 		for (JsonNode r : refs) {
@@ -164,13 +162,33 @@ public class ChartSearchAiReferenceGroupingTest {
 		controller.streamAnswer(out, patient(), "is it safe to give her aspirin?", new User(3),
 				"full-chart", false);
 
-		List<JsonNode> refs = referencesOf("references");
-		List<String> groups = new ArrayList<String>();
-		for (JsonNode ref : refs) {
-			groups.add(ref.get("group").asText());
+		// Compared against the done event itself rather than a repeated literal: a client renders the
+		// early event and then replaces it wholesale from done, so what matters is that the two agree.
+		assertEquals(groupsAndIndexesOf("done"), groupsAndIndexesOf("references"),
+				"the early references event must group and order identically to done — a client "
+						+ "renders it first and would otherwise see citations jump on replacement");
+	}
+
+	/** The {@code group}/{@code index} pairs of an event's references, in emitted order. */
+	private List<String> groupsAndIndexesOf(String eventType) throws Exception {
+		List<String> pairs = new ArrayList<String>();
+		for (JsonNode ref : referencesOf(eventType)) {
+			pairs.add(ref.get("group").asText() + ":" + ref.get("index").asInt());
 		}
-		assertEquals(Arrays.asList("chart", "chart", "reference"), groups,
-				"the early references event must group identically to done — a client renders it first");
+		return pairs;
+	}
+
+	@Test
+	public void groundedEvent_carriesGroupsToo_whenAsyncGroundingIsOn() throws Exception {
+		// Async mode emits done early (no verdicts) and the verdicts afterwards on a trailing
+		// grounded event. That trailing event is its own serializeReferences call site, so it needs
+		// its own assertion — a client that only consumes grounded must still get the grouping.
+		controller.streamAnswer(out, patient(), "is it safe to give her aspirin?", new User(3),
+				"full-chart", true);
+
+		assertEquals(Arrays.asList("chart:230", "chart:8", "reference:231"),
+				groupsAndIndexesOf("grounded"),
+				"the trailing grounded event must carry the same groups and order as every other site");
 	}
 
 	@Test
@@ -182,12 +200,87 @@ public class ChartSearchAiReferenceGroupingTest {
 		assertEquals(231, drugRef.get("index").asInt());
 		assertEquals("drug_reference", drugRef.get("resourceType").asText());
 		assertEquals("1191", drugRef.get("resourceUuid").asText());
+		// The key must still be emitted even when the record is undated — a client reads it
+		// unconditionally. Presence rather than value, because every fixture record is null-dated
+		// (see the class javadoc for why that is the realistic shape here).
+		assertTrue(drugRef.has("date"), "the date key must survive grouping, null value included");
+		// Passthrough only: the fixture supplies a null verdict, so this pins that grouping did not
+		// disturb the tri-state `grounded` field. The demote-only RULE that produces the null for a
+		// drug_reference lives in CitationGroundingVerifier and is tested there.
 		assertTrue(drugRef.get("grounded").isNull(),
-				"a drug_reference citation stays demote-only: a pass renders null, never true");
+				"grouping must not disturb the tri-state grounded verdict it serializes alongside");
+	}
+
+	/**
+	 * The render order must cover every declared group. {@code groupRank} ranks by position in
+	 * {@link ChartSearchAiRestController#REFERENCE_GROUP_ORDER}, so a group constant added without
+	 * being placed in that list would rank as unknown and its entries would clump at the end
+	 * regardless of intent — the contiguity contract would hold but the declared order would not.
+	 * Adding a {@code REFERENCE_GROUP_*} constant fails here until it is given a position.
+	 */
+	@Test
+	public void referenceGroupOrder_shouldRankEveryDeclaredGroupConstant() throws Exception {
+		List<String> declared = new ArrayList<String>();
+		for (Field field : ChartSearchAiConstants.class.getDeclaredFields()) {
+			// isPublic matters: this test is in a different package from the constants, so reading a
+			// non-public field would throw IllegalAccessException and bury the actionable assertion
+			// below under a reflection stack trace.
+			if (field.getName().startsWith("REFERENCE_GROUP_") && field.getType() == String.class
+					&& Modifier.isStatic(field.getModifiers())
+					&& Modifier.isPublic(field.getModifiers())) {
+				declared.add((String) field.get(null));
+			}
+		}
+		assertTrue(declared.size() >= 2, "expected the REFERENCE_GROUP_* constants to be discovered");
+		for (String group : declared) {
+			assertTrue(ChartSearchAiRestController.REFERENCE_GROUP_ORDER.contains(group),
+					"group \"" + group + "\" has no position in REFERENCE_GROUP_ORDER, so its "
+							+ "references would sort as an unknown group rather than where intended");
+		}
+	}
+
+	/**
+	 * Regrouping must not reorder the CALLER's list. The early {@code references} event is handed
+	 * the very list object {@code LlmInferenceService} still owns and reuses for its grounding
+	 * pass, so sorting in place mutates live service state across a module boundary. Today that
+	 * mutation is benign in effect — a stable group-only partition leaves chart citations in
+	 * relative order, and reference-group citations never consume Tier-2's budget — which is
+	 * exactly why it needs a test rather than trust: the damage would only appear once the
+	 * comparator gained a second key, long after the copy had been dropped as redundant.
+	 */
+	@Test
+	public void serializingReferences_mustNotReorderTheCallersList() throws Exception {
+		MixedReferenceStubService service = new MixedReferenceStubService();
+		controller.setChartSearchService(service);
+
+		controller.streamAnswer(out, patient(), "is it safe to give her aspirin?", new User(3),
+				"full-chart", false);
+
+		// Assert the event actually fired first: without this the guard below would pass vacuously
+		// if the references event ever stopped being emitted, since an untouched list is also an
+		// unread one.
+		assertEquals(3, referencesOf("references").size(),
+				"the references event must have been emitted for this guard to mean anything");
+
+		List<Integer> indexesAfter = new ArrayList<Integer>();
+		for (ChartSearchService.RecordReference ref : service.listHandedToCitationsConsumer) {
+			indexesAfter.add(ref.getIndex());
+		}
+		assertEquals(Arrays.asList(231, 230, 8), indexesAfter,
+				"the list handed to the citations consumer was reordered — grounding downstream "
+						+ "would see a different citation order than the service built");
 	}
 
 	/** Streams a token, fires citations, then returns the mixed-reference answer. */
 	private static class MixedReferenceStubService implements ChartSearchService {
+
+		/**
+		 * The exact list instance passed to the citations consumer, mirroring how
+		 * {@code LlmInferenceService} hands its {@code cited} list to the consumer and then reuses
+		 * that same instance for grounding. Held so a test can assert it came back untouched.
+		 */
+		final List<RecordReference> listHandedToCitationsConsumer =
+				new ArrayList<RecordReference>(mixedAnswer().getReferences());
 
 		@Override
 		public ChartAnswer search(Patient patient, String question) {
@@ -206,7 +299,7 @@ public class ChartSearchAiReferenceGroupingTest {
 				Consumer<List<RecordReference>> citationsConsumer,
 				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 			tokenConsumer.accept("Severe allergy to Aspirin [230].");
-			citationsConsumer.accept(mixedAnswer().getReferences());
+			citationsConsumer.accept(listHandedToCitationsConsumer);
 			ungroundedAnswerConsumer.accept(mixedAnswer());
 			return mixedAnswer();
 		}
@@ -216,39 +309,4 @@ public class ChartSearchAiReferenceGroupingTest {
 		}
 	}
 
-	private static class StubAuditLogService implements AuditLogService {
-
-		@Override
-		public ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog) {
-			auditLog.setAuditLogId(42);
-			return auditLog;
-		}
-
-		@Override
-		public ChartSearchAuditLog getAuditLog(Integer auditLogId) {
-			return null;
-		}
-
-		@Override
-		public List<ChartSearchAuditLog> getAuditLogs(Patient patient, User user,
-				java.util.Date fromDate, java.util.Date toDate, Integer startIndex, Integer limit) {
-			return java.util.Collections.emptyList();
-		}
-
-		@Override
-		public Long getAuditLogCount(Patient patient, User user, java.util.Date fromDate,
-				java.util.Date toDate) {
-			return 0L;
-		}
-
-		@Override
-		public long getQueryCountByUserSince(User user, java.util.Date since) {
-			return 0L;
-		}
-
-		@Override
-		public int deleteAuditLogsBefore(java.util.Date before) {
-			return 0;
-		}
-	}
 }

@@ -775,11 +775,13 @@ Response:
   "answer": "The patient is currently on...[1]...[3]",
   "disclaimer": "This response is AI-generated and may not be accurate...",
   "references": [
-    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15" },
-    { "index": 1, "resourceType": "obs", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10" }
+    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15", "grounded": null, "group": "chart" },
+    { "index": 1, "resourceType": "obs", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10", "grounded": null, "group": "chart" }
   ]
 }
 ```
+
+`grounded` is the citation-grounding verdict — `true`/`false` once verified, `null` when grounding is disabled (the default) or did not check that citation; clients must render `null` as unverified, never as verified. `group` is derived from `resourceType` and separates `chart` (a record retrieved from this patient's chart) from `reference` (module-supplied drug knowledge-base prose, not a record about this patient); the array is ordered `chart` group first, preserving the upstream order (most recent first, undated last) within each group.
 
 #### Streaming endpoint (SSE)
 
@@ -793,7 +795,7 @@ POST /ws/rest/v1/chartsearchai/search/stream
 
 Returns a `text/event-stream` with three event types:
 - `token` — a chunk of the answer text, streamed as generated
-- `done` — final JSON with the complete answer, references (with `index`, `resourceType`, `resourceUuid`, `date`), and disclaimer
+- `done` — final JSON with the complete answer, references (with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`, `group`), and disclaimer
 - `error` — an error message if something goes wrong
 
 Both search endpoints return a `questionId` (the audit log row ID as a string) that the frontend uses to submit user feedback.
@@ -1637,7 +1639,7 @@ The overdose check parses `(drug, mg, frequency)` from the free-text answer. To 
 
 ### Wire & frontend
 
-`ChartAnswer` carries `safetyWarnings`; the REST controller emits a `safetyWarnings` array (`{ type, drug, detail }`) on both the blocking `/search` response and the streaming `done` event (always present, possibly empty). The [frontend ESM](https://github.com/openmrs/openmrs-esm-chartsearchai) renders them as colour-coded chips below the answer and renders `drug_reference` citations as non-navigating reference chips. With the feature off (the default), the wire carries an empty array and the frontend is a no-op.
+`ChartAnswer` carries `safetyWarnings`; the REST controller emits a `safetyWarnings` array (`{ type, drug, detail }`) on both the blocking `/search` response and the streaming `done` event (always present, possibly empty). The [frontend ESM](https://github.com/openmrs/openmrs-esm-chartsearchai) renders them as colour-coded chips below the answer and renders `drug_reference` citations as non-navigating reference chips — it currently identifies those by testing `resourceType` itself, which the per-reference `group` discriminator now supersedes (see the `references` shape above); adopting `group` there is outstanding follow-up. With the feature off (the default), the wire carries an empty array and the frontend is a no-op.
 
 ### Trade-offs
 

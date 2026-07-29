@@ -251,6 +251,12 @@ public class CitationGroundingVerifier {
 		if (mappings != null) {
 			for (RecordMapping mapping : mappings) {
 				textByIndex.put(mapping.getIndex(), mapping.getText());
+				// Keyed on the resource type, deliberately narrower than
+				// ChartSearchAiUtils.referenceGroup: the measured justification for demote-only
+				// (#106) is about drug-reference recitations specifically. If a second kind of
+				// injected record is added, decide whether it belongs here too — the client
+				// suppresses a true verdict for ALL reference-group citations, so leaving a new
+				// type out of this set would let it be verified here and hidden there.
 				if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())) {
 					demoteOnlyIndexes.add(Integer.valueOf(mapping.getIndex()));
 				}

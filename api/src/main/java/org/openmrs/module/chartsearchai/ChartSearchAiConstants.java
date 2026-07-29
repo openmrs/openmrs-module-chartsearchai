@@ -493,8 +493,10 @@ public class ChartSearchAiConstants {
 	 * Wire value of a serialized reference's {@code group}: module-supplied reference prose
 	 * (a drug knowledge-base entry), not a record about this patient. Kept visible precisely
 	 * so a client can disclose that provenance rather than let it read as chart evidence —
-	 * and never grounding-verified as {@code true}, since these citations are demote-only
-	 * (see {@code CitationGroundingVerifier}).
+	 * A drug-reference citation is additionally never grounding-verified as {@code true}, being
+	 * demote-only (see {@code CitationGroundingVerifier}) — but note that gate keys on the
+	 * {@code drug_reference} resource type, not on this group, so the property does not extend for
+	 * free to a second kind of injected record.
 	 */
 	public static final String REFERENCE_GROUP_REFERENCE = "reference";
 

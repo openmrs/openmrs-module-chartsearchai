@@ -96,6 +96,42 @@ Conclusion: E2B needs its full reasoning scratchpad to enumerate completely. Sho
 — by force or by instruction — trades one safety property for another. Do not revisit
 without a different model or a mechanism that preserves completeness.
 
+## The 3.7.1 cohort: standalone gold is unremappable (2026-07-29)
+
+The 3.7.1 standalone's demo DB is a **different synthetic cohort** from the install the
+standalone gold was adjudicated on: the four personas' clinical identities do not exist
+(signature conditions — Richard's cervical-vertebra fracture, Mark's jaw dislocation —
+are absent or scattered across unrelated patients), so `remap_gold_standalone.py`'s
+clinical-identity matching cannot reconstruct the gold there. **Trap: the deterministic
+`patient_id`s (7/22/25/11) still exist but belong to clinically different patients — an
+id-based remap would silently score against the wrong charts.** Restoring F1/drift
+comparability on that cohort requires fresh human adjudication; until then the 2026-06-12
+numbers have no comparable successor.
+
+## Pure-prompt A/B for the #107 verdict guard (2026-07-29, 3.7.1 standalone)
+
+With the gold unremappable, the #107 answer-shaping gate ran as a same-environment
+**pure-prompt A/B** (`compare_arms.py`): the branch head vs the identical build with only
+the #107 prompt hunks (guard sentence + few-shot) reverted — single variable = the guard.
+8 patients (rich → sparse charts) × the 8 Tier-A presence topics per arm, captured via
+`capture_probe_yesno.sh` (`CAPTURE_PATIENTS=… CAPTURE_TIER_B=0`), fullChart mode,
+grounding+entailment on, both arms warm (cold fullChart captures wedge on the 300s LLM
+timeout — warm the llama before batch runs).
+
+| arm | verdict-led | YES/NO/NONE | "records do not address" leads |
+|---|---|---|---|
+| baseline (no guard) | 62/64 | 33/29/2 | 0 |
+| candidate (guard) | **63/64** | 31/32/1 | **0** |
+
+Six class flips, read individually (full detail on
+[#107](https://github.com/openmrs/openmrs-module-chartsearchai/issues/107)): three are
+obs-only kidney cells moving **toward** the approved record-grounded form ("No kidney
+issues diagnosis is recorded. Relevant labs are: …") where the baseline had violated the
+verdict rules; two are opposite-direction noise on borderline mental cells; one is a
+single candidate-side directness miss offset by the baseline's own two. Verdict:
+**beat-or-match holds** — the guard adds abstention-lead behavior for unaddressed
+safety questions without bleeding into presence topics.
+
 ## Widened rc.2 gold: fullChart vs queryScoped (2026-07-19, 22 patients)
 
 `chartsearchai.chartMode=queryScoped` (query-scoped slice prompts, #74) vs `fullChart`

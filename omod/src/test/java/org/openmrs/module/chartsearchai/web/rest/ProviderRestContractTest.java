@@ -318,6 +318,21 @@ public class ProviderRestContractTest {
 	}
 
 	@Test
+	public void newConversationUsesTheProvidersLiveModeWhenTheRequestOmitsMode() {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		ScriptedProvider hub = new ScriptedProvider("hub", true);
+		hub.mode = ProviderMode.FULL_CHART_STABLE;
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(hub));
+
+		ClinicalConversation created = controller.startNewConversation(patient(), "hub", null);
+
+		assertEquals("hub", created.getProviderId());
+		assertEquals(ProviderMode.FULL_CHART_STABLE.getWireName(), created.getProviderMode());
+	}
+
+	@Test
 	public void chatStreamWithNoExplicitModeUsesTheProvidersLiveConfiguredMode() throws Exception {
 		// Regression: chartsearchai.chartMode=fullChart previously failed EVERY turn with
 		// unsupported_mode, because resolveMode's hardcoded query_scoped default never matched

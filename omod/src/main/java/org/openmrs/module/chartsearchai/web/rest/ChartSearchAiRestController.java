@@ -787,8 +787,9 @@ public class ChartSearchAiRestController {
 		}
 		String providerId = resolveProviderId(body);
 		ProviderMode mode = resolveMode(body);
+		ClinicalConversation conversation;
 		try {
-			providerRegistry.require(providerId);
+			conversation = startNewConversation(resolved.patient, providerId, mode);
 		}
 		catch (ProviderUnavailableException e) {
 			Map<String, Object> error = new LinkedHashMap<String, Object>();
@@ -796,8 +797,6 @@ public class ChartSearchAiRestController {
 			error.put("problemCode", e.getProblemCode());
 			return new ResponseEntity<Object>(error, HttpStatus.BAD_REQUEST);
 		}
-		ClinicalConversation conversation = conversationService.startNew(resolved.patient, providerId,
-				mode);
 		Map<String, Object> response = new LinkedHashMap<String, Object>();
 		response.put("session", conversation.getUuid());
 		response.put("provider", conversation.getProviderId());
@@ -1009,8 +1008,7 @@ public class ChartSearchAiRestController {
 				return;
 			}
 
-			ProviderMode resolvedMode = mode != null ? mode
-					: (provider.modes().isEmpty() ? ProviderMode.QUERY_SCOPED : provider.modes().get(0));
+			ProviderMode resolvedMode = resolveProviderMode(provider, mode);
 			conversation = resolveConversation(patient, providerId, resolvedMode, conversationUuid);
 			final ClinicalConversation activeConversation = conversation;
 			String requestId = UUID.randomUUID().toString();
@@ -1081,6 +1079,22 @@ public class ChartSearchAiRestController {
 			}
 		}
 		return conversationService.openOrCreate(patient, providerId, mode);
+	}
+
+	/** Resolve and persist a new provider-bound conversation with the same mode semantics as chat. */
+	ClinicalConversation startNewConversation(Patient patient, String providerId,
+			ProviderMode requestedMode) {
+		ClinicalAnswerProvider provider = providerRegistry.require(providerId);
+		return conversationService.startNew(patient, providerId,
+				resolveProviderMode(provider, requestedMode));
+	}
+
+	private ProviderMode resolveProviderMode(ClinicalAnswerProvider provider,
+			ProviderMode requestedMode) {
+		if (requestedMode != null) {
+			return requestedMode;
+		}
+		return provider.modes().isEmpty() ? ProviderMode.QUERY_SCOPED : provider.modes().get(0);
 	}
 
 	private void writeTurnEventOrThrow(OutputStream out, TurnEvent event,

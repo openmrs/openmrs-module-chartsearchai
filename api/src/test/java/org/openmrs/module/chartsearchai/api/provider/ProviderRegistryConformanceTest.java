@@ -202,5 +202,12 @@ public class ProviderRegistryConformanceTest {
 		// fresh-install default — rather than exposing a dead default.
 		registry.gps.put(ClinicalAnswerProviderRegistry.GP_DEFAULT_PROVIDER, "nonsense");
 		assertEquals("bundled", registry.getDefaultProviderId());
+
+		// A hub-only deployment cannot fall back to the disabled fresh-install default.
+		StubRegistry hubOnly = registry("hub", new FakeProvider("bundled", true),
+				new FakeProvider("hub", true));
+		hubOnly.gps.put(ClinicalAnswerProviderRegistry.GP_DEFAULT_PROVIDER, "nonsense");
+		assertEquals("hub", hubOnly.getDefaultProviderId());
+		assertTrue(hubOnly.descriptors().get(0).isDefault());
 	}
 }

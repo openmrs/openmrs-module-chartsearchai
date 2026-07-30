@@ -98,13 +98,20 @@ public class ClinicalAnswerProviderRegistry {
 	}
 
 	/**
-	 * The provider preselected for new conversations. A configured default that is not an
-	 * enabled provider is ignored in favor of the fresh-install default rather than exposing a
-	 * dead default.
+	 * The provider preselected for new conversations. A configured default that is not enabled
+	 * falls back to the fresh-install default when it is enabled, otherwise to the first enabled
+	 * provider. Discovery never advertises a disabled provider as the default.
 	 */
 	public String getDefaultProviderId() {
+		List<String> enabled = enabledProviderIds();
 		String configured = gp(GP_DEFAULT_PROVIDER, FRESH_INSTALL_DEFAULT);
-		return enabledProviderIds().contains(configured) ? configured : FRESH_INSTALL_DEFAULT;
+		if (enabled.contains(configured)) {
+			return configured;
+		}
+		if (enabled.contains(FRESH_INSTALL_DEFAULT)) {
+			return FRESH_INSTALL_DEFAULT;
+		}
+		return enabled.isEmpty() ? FRESH_INSTALL_DEFAULT : enabled.get(0);
 	}
 
 	/** The picker only exists when there is an actual choice. */

@@ -185,16 +185,31 @@ It is not for want of being told: the system prompt has said *"Records beginning
 reference' are clinical reference data … cite them the same way"* since the feature landed, and
 `Injected 1 drug-reference record(s)` confirms the interaction was in the prompt, numbered.
 
+A **phrasing twin** settles the obvious objection. Same build, same cells, only the sentence
+changed (`CAPTURE_PHRASING="Is it safe to give this patient %s?"` vs the default
+`"Can this patient take %s?"`):
+
+| capture | ANSWER verdict-led | stated | abstained | ABSTAIN held |
+|---|---|---|---|---|
+| A: `Can … take X?` | 0/10 | 3 | 7 | 10/10 |
+| twin: `Is it safe to give … X?` | 0/10 | 2 | 8 | 10/10 |
+
+The two-hop block is **uniform**: all 7 cells abstain in all three captures (arm A, twin, arm
+B) — **21 arm-cells, zero joins.** The only phrasing-sensitive cell is a direct match
+(`agnes__safety-aspirin`, which the twin abstains on and arm A did not), so phrasing moves the
+direct cells and leaves the join untouched. The twin is also marginally *worse* than the
+original, so the first phrasing was not unluckily chosen.
+
 **The practical consequence is the inverse of how it first reads:** the `safetyWarnings` chips
 are not a redundant re-derivation of something the LLM already had — they compute a join the
-model did not make in 14 attempts (7 cells × 2 arms). That is the argument for keeping them
-visible even when the prose abstains.
+model did not make once in 21 attempts. That is the argument for keeping them visible even when
+the prose abstains.
 
-**Caveats on the conclusion, honestly.** One phrasing only (`"Can she take X?"`, and "she" is
-wrong for joshua), where this repo's own prompt carries *"Your answer must not vary based on
-the punctuation or phrasing of the query"* because phrasing sensitivity was a measured bug
-here, and the sibling probe deliberately captures a `?`-twin for that reason. So this measures
-one sentence, not the model. And prompt-shaping is not exhausted: a few-shot demonstrating the
+**Caveats on the conclusion, honestly.** Two phrasings, both gender-neutral (the first version
+said "she" at every patient, including a male one — fixed, and `CAPTURE_PHRASING` makes a twin
+one env var). Two is enough to rule out a single unlucky sentence; it is not a phrasing sweep.
+Four patients and one KB, so this is the shape of the failure, not its prevalence. And
+prompt-shaping is not exhausted: a few-shot demonstrating the
 join is untried (it would mean restructuring the mango abstention example, which *is* #107's
 mechanism — and both arms hold ABSTAIN at 10/10, so that attempt risks the guard this probe
 watches), as are injecting a pre-computed join as its own record, focus-hint reordering, and a

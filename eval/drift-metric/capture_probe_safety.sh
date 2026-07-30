@@ -49,6 +49,13 @@ PATIENTS=(
 # quiet control expected to connect to nobody.
 DRUGS=(erythromycin clarithromycin aspirin warfarin paracetamol)
 
+# PHRASING: one printf template taking the drug name. A conclusion about the MODEL needs at
+# least two phrasings — this repo's own prompt carries "Your answer must not vary based on the
+# punctuation or phrasing of the query" precisely because phrasing sensitivity was a measured
+# bug here, and the sibling probe captures a "?"-twin for the same reason. The default is
+# gender-neutral: the first version said "she" at every patient, including a male one.
+PHRASING="${CAPTURE_PHRASING:-Can this patient take %s?}"
+
 fire() { # uuid, question, outfile — promote only on a clean 200, so a resume against a
          # sick server cannot overwrite a good cell with an error body.
   local code rc=0
@@ -80,7 +87,7 @@ for entry in "${PATIENTS[@]}"; do
   ok=true
 
   dcode=$(curl -s -u "$AUTH" --max-time 60 -o "$OUT/.d.json" -w "%{http_code}" \
-    "$BASE/order?patient=$uuid&t=drugorder&v=custom:(display)&limit=50") || dcode=000
+    "$BASE/order?patient=$uuid&t=drugorder&v=custom:(display,voided,dateStopped,autoExpireDate)&limit=50") || dcode=000
   acode=$(curl -s -u "$AUTH" --max-time 60 -o "$OUT/.a.json" -w "%{http_code}" \
     "$BASE/patient/$uuid/allergy?v=custom:(allergen:(codedAllergen:(display),nonCodedAllergen))") || acode=000
   # 204 is a success for the allergy call: OpenMRS answers No Content for a patient with no
@@ -92,10 +99,27 @@ for entry in "${PATIENTS[@]}"; do
   esac
 
   # An allergy-free patient gets an empty body, which a bare json.load rejects.
-  drugs=$(python3 -c 'import json,sys
+  # Filtered to ACTIVE orders, because the label has to mean the same thing the chip means:
+  # DrugSafetyValidator reads Context.getOrderService().getActiveOrders(...), whereas this REST
+  # query has no status filter and happily returns stopped and auto-expired orders. Without
+  # this the two signals drift apart the moment a probe patient's order lapses — one of them
+  # auto-expires within days of writing — and the probe would label a cell ANSWER while no chip
+  # can fire, reporting a defect that is really a stale fixture.
+  drugs=$(python3 -c 'import datetime, json, sys
 try: d=json.load(open(sys.argv[1]))
 except Exception: d={}
-print(json.dumps([o.get("display","") for o in d.get("results",[])]))' "$OUT/.d.json") || drugs='[]'
+now = datetime.datetime.now(datetime.timezone.utc)
+def active(o):
+    if o.get("voided") or o.get("dateStopped"):
+        return False
+    exp = o.get("autoExpireDate")
+    if not exp:
+        return True
+    try:
+        return datetime.datetime.fromisoformat(exp.replace("Z", "+00:00")) > now
+    except Exception:
+        return True   # unparseable date: keep it, and let the chip comparison expose the drift
+print(json.dumps([o.get("display","") for o in d.get("results",[]) if active(o)]))' "$OUT/.d.json") || drugs='[]'
   allergens=$(python3 -c 'import json,sys
 try: d=json.load(open(sys.argv[1]))
 except Exception: d={}
@@ -123,7 +147,7 @@ for entry in "${PATIENTS[@]}"; do
   slug="${entry%%:*}"
   uuid="${entry##*:}"
   for d in "${DRUGS[@]}"; do
-    fire "$uuid" "Can she take $d?" "$OUT/${slug}__safety-${d}.json"
+    fire "$uuid" "$(printf "$PHRASING" "$d")" "$OUT/${slug}__safety-${d}.json"
   done
 done
 

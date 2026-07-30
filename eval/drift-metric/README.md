@@ -134,63 +134,72 @@ safety questions without bleeding into presence topics.
 
 ## Safety/suitability probe, and a measured prompt dead end (2026-07-30)
 
-`capture_probe_safety.sh` + `score_probe_safety.py` instrument the cells the #107 verdict
-guard governs, which the Tier-A presence topics never reach: "Can she take X?" against a
-patient whose own record either does or does not bear on X. 4 patients (two on simvastatin,
-one on aspirin, one on lisinopril; two with an aspirin allergy) × 5 drugs = 20 cells.
+`capture_probe_safety.sh` + `score_probe_safety.py` instrument the cells the #107 verdict guard
+governs, which the Tier-A presence topics never reach: "Can she take X?" against a patient
+whose own record either does or does not bear on X. 4 patients (two on simvastatin, one on
+aspirin, one on lisinopril; two with an aspirin allergy) × 5 drugs = 20 cells.
 
-Cells are labelled from data, on the **union** of two signals: a `safetyWarnings` chip
-(`DrugSafetyValidator` is deterministic, reading active orders, allergies and the drug KB
-directly) **or** the asked-about drug appearing among the patient's own active orders and
-allergens, which the capture writes to `_context.json`. Chip-or-own → a verdict is expected;
-neither → the abstention must hold.
+Cells are labelled from data, on the **union** of two signals: a `safetyWarnings` chip naming
+that drug (`DrugSafetyValidator` reads active orders, allergies and the drug KB directly)
+**or** the drug appearing among the patient's own orders/allergens, which the capture writes to
+`_context.json`. Chip-or-own → a verdict is expected; neither → the abstention must hold.
 
-> The chip alone is **not** a sufficient label, and the first version of this probe got that
-> wrong in a way that inverted a column. A patient ALREADY TAKING the asked-about drug raises
-> no chip — there is no interaction and no allergy, they are simply on it — while their chart
-> addresses the question directly through the active order. Scoring that as
-> "abstention expected" credited an answer that says *"the records do not address whether she
-> can take aspirin"* about a patient holding an active aspirin order. The numbers below are
-> the re-derived ones; the first pass reported a spurious `10/11 → 11/11` gain on the
-> abstention column and missed that the candidate arm made the core defect worse.
+> **This instrument was wrong twice before it was trustworthy, and both faults changed the
+> reported numbers.** (1) It labelled on chips alone, so a patient ALREADY TAKING the drug —
+> who raises no chip, because the validator skips restating existing therapy — was scored as
+> "abstention expected". That credited an answer saying *"the records do not address whether
+> she can take aspirin"* about a patient holding an active aspirin order, and inverted the
+> deciding column. (2) Read on its own published columns, the first version's table said
+> **keep the candidate** (verdict-led 0/9→1/9, abstained 7/9→7/9, abstention 10/11→11/11); the
+> revert was made on prose about one cell, i.e. *against* the instrument. The numbers below are
+> re-derived, and now support the revert directly. `score_probe_safety.py` additionally
+> hard-fails on a cross-arm label disagreement, refuses an arm with zero chips (GPs off ⇒ a
+> clean-looking pass with the defect invisible), anchors the abstention regex to the lead, and
+> excludes `CANNOT` from verdict-led.
 
-**The defect it measured.** On branch head, `Injected 1 drug-reference record(s)` for "Can
-she take erythromycin?" on a simvastatin patient — the erythromycin×simvastatin Major
-interaction was *in the prompt, numbered and citable* — and the answer was still "The records
-do not address whether the patient can take erythromycin", citing nothing. Across the probe:
+| arm | ANSWER: verdict-led | stated, no lead | abstained (the defect) | ABSTAIN held |
+|---|---|---|---|---|
+| A: branch head | 0/10 | 3 | **7** | 10/10 |
+| B: + "a drug-reference record DOES address the drug it names" hunk | 1/10 | 1 | **8** | 10/10 |
 
-| arm | ANSWER verdict-led | ANSWER abstained (the defect) | ABSTAIN held |
-|---|---|---|---|
-| A: branch head | 0/10 | **7** | 10/10 |
-| B: + "a drug-reference record DOES address the drug it names" hunk | 1/10 | **8** | 10/10 |
+**Verdict: does not beat-or-match; the hunk was reverted.** The candidate abstains on one cell
+*more* than the baseline, and destroys two of the three informative-but-not-verdict-led answers.
+Two flips, opposite directions: `joshua__safety-aspirin` gained a verdict lead ("No, the patient
+has a recorded allergy to Aspirin [38]"), while `agnes__safety-aspirin` lost an answer citing
+her active aspirin order *and* the reference, replacing it with an abstention that is false
+about her chart. Genuine abstention cells were 10/10 in both arms.
 
-**Verdict: does not beat-or-match; the hunk was reverted.** Every erythromycin /
-clarithromycin / warfarin cell — exactly the target — is unchanged, and the candidate arm
-abstains on one cell *more* than the baseline. Two flips, and they run in opposite
-directions: `joshua__safety-aspirin` gained a verdict lead ("No, the patient has a recorded
-allergy to Aspirin [38]"), while `agnes__safety-aspirin` lost an informative answer that
-cited her active aspirin order *and* the reference, replacing it with an abstention that is
-simply false about her chart. Genuine abstention cells were never at risk: 10/10 both arms.
+Decoding is greedy (`temperature: 0.0`, samplers pinned), so a single-cell flip is signal
+rather than sampling noise — that is what makes a 20-cell A/B worth reading at all.
 
-**Why prompt-shaping is the wrong lever here.** The split is not random. The one cell that
-improved is a *direct* match — the patient record itself names the asked-about drug (an
-aspirin allergy). All nine failures need a **two-hop join**: the reference record says X
-interacts with Y, a patient record shows Y is active, therefore a verdict on X. The model
-does not make that hop, and it is not for lack of being told the records are citable — the
-system prompt has said *"Records beginning with 'Drug reference' are clinical reference data …
-cite them the same way"* since the feature landed. 9 opportunities across 3 drugs × 3
-patients, two prompt variants, zero joins.
+**Why prompt-shaping looks like the wrong lever.** The 10 ANSWER cells split cleanly:
 
-So this belongs with the other measured dead ends above rather than with the fixable
-findings. **The practical consequence is the opposite of what it looks like:** the
-`safetyWarnings` chips are not a redundant re-derivation of something the LLM already had —
-they compute a join the model demonstrably cannot, which is the argument for keeping them
+* **3 direct-match** — the patient's own order or allergy names the asked-about drug
+  (`{agnes,betty,joshua}__safety-aspirin`). The model can act here: joshua's cell is the one
+  that produced a verdict.
+* **7 two-hop** — the reference record says X interacts with Y, a patient record shows Y is
+  active, therefore a verdict on X (`erythromycin`/`clarithromycin`/`warfarin` against
+  simvastatin or aspirin). **All 7 abstained, in both arms.**
+
+It is not for want of being told: the system prompt has said *"Records beginning with 'Drug
+reference' are clinical reference data … cite them the same way"* since the feature landed, and
+`Injected 1 drug-reference record(s)` confirms the interaction was in the prompt, numbered.
+
+**The practical consequence is the inverse of how it first reads:** the `safetyWarnings` chips
+are not a redundant re-derivation of something the LLM already had — they compute a join the
+model did not make in 14 attempts (7 cells × 2 arms). That is the argument for keeping them
 visible even when the prose abstains.
 
-Not tried, and the only prompt lever left: a few-shot demonstrating the join. It would mean
-restructuring the mango abstention example, which *is* #107's mechanism, and arm B holds
-UNRELATED at 11/11 — so that attempt risks the guard the probe is watching. Fund it
-deliberately, with this probe as the gate.
+**Caveats on the conclusion, honestly.** One phrasing only (`"Can she take X?"`, and "she" is
+wrong for joshua), where this repo's own prompt carries *"Your answer must not vary based on
+the punctuation or phrasing of the query"* because phrasing sensitivity was a measured bug
+here, and the sibling probe deliberately captures a `?`-twin for that reason. So this measures
+one sentence, not the model. And prompt-shaping is not exhausted: a few-shot demonstrating the
+join is untried (it would mean restructuring the mango abstention example, which *is* #107's
+mechanism — and both arms hold ABSTAIN at 10/10, so that attempt risks the guard this probe
+watches), as are injecting a pre-computed join as its own record, focus-hint reordering, and a
+decomposed two-step query. Fund any of those with this probe as the gate, and add a phrasing
+twin first.
 
 ## Widened rc.2 gold: fullChart vs queryScoped (2026-07-19, 22 patients)
 

@@ -69,32 +69,54 @@ fire() { # uuid, question, outfile — promote only on a clean 200, so a resume 
   fi
 }
 
-# Per-patient context, so the scorer can tell "no chip because nothing connects" from "no
-# chip because they are simply already on it". Written before the cells so a run interrupted
-# midway still scores what it captured.
+# Per-patient context, so the scorer can tell "no chip because nothing connects" from "no chip
+# because they are simply already on it". Each file records ok=true only when BOTH requests
+# returned 200: curl -s exits 0 on a 401/404, so without the status check an auth failure would
+# write empty lists that are indistinguishable from a patient genuinely on nothing — and the
+# scorer would silently fall back to the chip-only label this context exists to replace.
 for entry in "${PATIENTS[@]}"; do
   slug="${entry%%:*}"
   uuid="${entry##*:}"
-  # Both parsers tolerate an empty or non-JSON body: the allergy endpoint returns nothing at
-  # all for a patient with no allergies, which crashed a bare json.load and — under
-  # `set -e` — would abort the whole run before a single cell was captured.
-  drugs=$(curl -s -u "$AUTH" "$BASE/order?patient=$uuid&t=drugorder&v=custom:(display)&limit=50" \
-    | python3 -c 'import json,sys
-try: d=json.load(sys.stdin)
+  ok=true
+
+  dcode=$(curl -s -u "$AUTH" --max-time 60 -o "$OUT/.d.json" -w "%{http_code}" \
+    "$BASE/order?patient=$uuid&t=drugorder&v=custom:(display)&limit=50") || dcode=000
+  acode=$(curl -s -u "$AUTH" --max-time 60 -o "$OUT/.a.json" -w "%{http_code}" \
+    "$BASE/patient/$uuid/allergy?v=custom:(allergen:(codedAllergen:(display),nonCodedAllergen))") || acode=000
+  # 204 is a success for the allergy call: OpenMRS answers No Content for a patient with no
+  # allergies, and treating that as a failure would degrade exactly the patients whose label
+  # depends on the order list (someone already on the drug being asked about).
+  case "$dcode/$acode" in
+    200/200 | 200/204) ;;
+    *) ok=false; echo "WARN: $slug context HTTP drugs=$dcode allergies=$acode" >&2 ;;
+  esac
+
+  # An allergy-free patient gets an empty body, which a bare json.load rejects.
+  drugs=$(python3 -c 'import json,sys
+try: d=json.load(open(sys.argv[1]))
 except Exception: d={}
-print(json.dumps([o.get("display","") for o in d.get("results",[])]))') || drugs='[]'
-  allergens=$(curl -s -u "$AUTH" "$BASE/patient/$uuid/allergy?v=custom:(allergen:(codedAllergen:(display),nonCodedAllergen))" \
-    | python3 -c 'import json,sys
-try: d=json.load(sys.stdin)
+print(json.dumps([o.get("display","") for o in d.get("results",[])]))' "$OUT/.d.json") || drugs='[]'
+  allergens=$(python3 -c 'import json,sys
+try: d=json.load(open(sys.argv[1]))
 except Exception: d={}
 out=[]
 for a in d.get("results",[]):
     al=a.get("allergen") or {}
     out.append(((al.get("codedAllergen") or {}).get("display")) or al.get("nonCodedAllergen") or "")
-print(json.dumps(out))') || allergens='[]'
-  printf '{"patient":"%s","drugs":%s,"allergens":%s}\n' "$uuid" "$drugs" "$allergens" \
-    > "$OUT/${slug}___context.json"
-  echo "${slug}___context: captured"
+print(json.dumps(out))' "$OUT/.a.json") || allergens='[]'
+  rm -f "$OUT/.d.json" "$OUT/.a.json"
+
+  # Same promote-on-success discipline the answers get: the labels decide what every cell
+  # MEANS, so a failed fetch must not quietly clobber a good context from a previous run.
+  printf '{"patient":"%s","ok":%s,"drugs":%s,"allergens":%s}\n' "$uuid" "$ok" "$drugs" "$allergens" \
+    > "$OUT/${slug}___context.json.tmp"
+  if [ "$ok" = true ] || [ ! -f "$OUT/${slug}___context.json" ]; then
+    mv "$OUT/${slug}___context.json.tmp" "$OUT/${slug}___context.json"
+  else
+    rm -f "$OUT/${slug}___context.json.tmp"
+    echo "  ${slug}___context: kept previous good context"
+  fi
+  echo "${slug}___context: ok=$ok"
 done
 
 for entry in "${PATIENTS[@]}"; do
@@ -104,3 +126,10 @@ for entry in "${PATIENTS[@]}"; do
     fire "$uuid" "Can she take $d?" "$OUT/${slug}__safety-${d}.json"
   done
 done
+
+# Completeness marker, for the same reason score_directness guards it: a run killed midway
+# otherwise yields gate-shaped numbers over a biased prefix of the patient order. The scorer
+# flags its absence.
+echo "cells=$(( ${#PATIENTS[@]} * ${#DRUGS[@]} )) patients=${#PATIENTS[@]} drugs=${#DRUGS[@]}" \
+  > "$OUT/CAPTURE_DONE"
+echo "CAPTURE_DONE written"

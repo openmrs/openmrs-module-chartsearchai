@@ -136,28 +136,41 @@ safety questions without bleeding into presence topics.
 
 `capture_probe_safety.sh` + `score_probe_safety.py` instrument the cells the #107 verdict
 guard governs, which the Tier-A presence topics never reach: "Can she take X?" against a
-patient whose own record either does or does not bear on X. **Cells are self-labelling** —
-`DrugSafetyValidator` is deterministic and reads the patient's active orders, allergies and
-the drug-reference KB directly, so a `safetyWarnings` chip is the ground truth for "X
-connects to this patient". Chip present → a verdict is expected; no chip → the abstention
-must hold. 4 patients (two on simvastatin, one on aspirin, one on lisinopril; two with an
-aspirin allergy) × 5 drugs = 20 cells.
+patient whose own record either does or does not bear on X. 4 patients (two on simvastatin,
+one on aspirin, one on lisinopril; two with an aspirin allergy) × 5 drugs = 20 cells.
+
+Cells are labelled from data, on the **union** of two signals: a `safetyWarnings` chip
+(`DrugSafetyValidator` is deterministic, reading active orders, allergies and the drug KB
+directly) **or** the asked-about drug appearing among the patient's own active orders and
+allergens, which the capture writes to `_context.json`. Chip-or-own → a verdict is expected;
+neither → the abstention must hold.
+
+> The chip alone is **not** a sufficient label, and the first version of this probe got that
+> wrong in a way that inverted a column. A patient ALREADY TAKING the asked-about drug raises
+> no chip — there is no interaction and no allergy, they are simply on it — while their chart
+> addresses the question directly through the active order. Scoring that as
+> "abstention expected" credited an answer that says *"the records do not address whether she
+> can take aspirin"* about a patient holding an active aspirin order. The numbers below are
+> the re-derived ones; the first pass reported a spurious `10/11 → 11/11` gain on the
+> abstention column and missed that the candidate arm made the core defect worse.
 
 **The defect it measured.** On branch head, `Injected 1 drug-reference record(s)` for "Can
 she take erythromycin?" on a simvastatin patient — the erythromycin×simvastatin Major
 interaction was *in the prompt, numbered and citable* — and the answer was still "The records
 do not address whether the patient can take erythromycin", citing nothing. Across the probe:
 
-| arm | CONNECTED verdict-led | CONNECTED abstained | UNRELATED abstention held |
+| arm | ANSWER verdict-led | ANSWER abstained (the defect) | ABSTAIN held |
 |---|---|---|---|
-| A: branch head | 0/9 | **7/9** | 10/11 |
-| B: + "a drug-reference record DOES address the drug it names" hunk | 1/9 | **7/9** | 11/11 |
+| A: branch head | 0/10 | **7** | 10/10 |
+| B: + "a drug-reference record DOES address the drug it names" hunk | 1/10 | **8** | 10/10 |
 
-**Verdict: does not beat-or-match; the hunk was reverted.** The 7 abstentions are unchanged —
-every erythromycin / clarithromycin / warfarin cell, i.e. exactly the target. Two flips, one
-each way: `joshua__safety-aspirin` gained a verdict lead ("No, the patient has a recorded
-allergy to Aspirin [38]"), and `agnes__safety-aspirin` regressed from an informative answer
-citing her active order *and* the reference to a bare abstention.
+**Verdict: does not beat-or-match; the hunk was reverted.** Every erythromycin /
+clarithromycin / warfarin cell — exactly the target — is unchanged, and the candidate arm
+abstains on one cell *more* than the baseline. Two flips, and they run in opposite
+directions: `joshua__safety-aspirin` gained a verdict lead ("No, the patient has a recorded
+allergy to Aspirin [38]"), while `agnes__safety-aspirin` lost an informative answer that
+cited her active aspirin order *and* the reference, replacing it with an abstention that is
+simply false about her chart. Genuine abstention cells were never at risk: 10/10 both arms.
 
 **Why prompt-shaping is the wrong lever here.** The split is not random. The one cell that
 improved is a *direct* match — the patient record itself names the asked-about drug (an

@@ -4,17 +4,23 @@
 # presence topics in capture_probe_yesno.sh do not reach.
 #
 # Each cell is a "can she take X?" question against a patient whose own record either does
-# or does not bear on X. The expected shape is NOT hand-labelled: DrugSafetyValidator is
-# deterministic and reads the patient's active orders, allergies and the drug-reference KB
-# directly, so the presence of a safetyWarnings chip is the ground truth for "X connects to
-# this patient".
+# or does not bear on X. Cells are labelled from data rather than by hand, but a chip alone
+# is NOT a sufficient label — that was the first version's mistake and it inverted one
+# column of the result:
 #
-#   chip present  -> a record DOES address the drug: the answer should lead with a verdict
-#                    and cite it. An abstention here is the #107 guard over-firing.
-#   chip absent   -> nothing connects X to this patient: the answer must still abstain, and
-#                    must not produce a bare Yes/No. This is the regression direction.
+#   A patient ALREADY TAKING the asked-about drug produces no chip (there is no interaction
+#   and no allergy — they are simply on it), yet their chart addresses the question directly
+#   via the active order. Scoring that cell as "abstention expected" rewarded an answer that
+#   says "the records do not address whether she can take aspirin" about a patient holding an
+#   active aspirin order, which is false.
 #
-# So each capture is self-labelling, and score_probe_safety.py reads the pair.
+# So each patient's own active drugs and allergens are captured alongside the cells, into
+# _context.json, and score_probe_safety.py labels on the union:
+#
+#   SHOULD ANSWER  chip present, OR the drug matches an active order / recorded allergy.
+#                  The answer must lead with a verdict. An abstention is the defect.
+#   SHOULD ABSTAIN neither. The answer must abstain and must not produce a bare Yes/No —
+#                  this is the #107 regression direction.
 #
 # Usage: capture_probe_safety.sh <outdir>
 #   OPENMRS_AUTH / OPENMRS_REST override credentials and base URL.
@@ -45,11 +51,14 @@ DRUGS=(erythromycin clarithromycin aspirin warfarin paracetamol)
 
 fire() { # uuid, question, outfile — promote only on a clean 200, so a resume against a
          # sick server cannot overwrite a good cell with an error body.
-  local code rc
+  local code rc=0
+  # `|| rc=$?` is required, not stylistic: this script runs under `set -e`, which the sibling
+  # capture_probe_yesno.sh does not use. Without it a single refused/timed-out cell aborts the
+  # whole arm and the WARN branch below is unreachable — verified, exit 7 on connection
+  # refused, before any cell was captured.
   code=$(curl -s -u "$AUTH" --max-time 600 -H "Content-Type: application/json" \
     -X POST "$BASE/chartsearchai/search" \
-    -d "$(printf '{"patient":"%s","question":"%s"}' "$1" "$2")" -o "$3.tmp" -w "%{http_code}")
-  rc=$?
+    -d "$(printf '{"patient":"%s","question":"%s"}' "$1" "$2")" -o "$3.tmp" -w "%{http_code}") || rc=$?
   if [ "$rc" -eq 0 ] && [ "$code" = 200 ]; then
     mv "$3.tmp" "$3"
     echo "$(basename "$3" .json): $code"
@@ -59,6 +68,34 @@ fire() { # uuid, question, outfile — promote only on a clean 200, so a resume 
     echo "$(basename "$3" .json): $code NOT-PROMOTED"
   fi
 }
+
+# Per-patient context, so the scorer can tell "no chip because nothing connects" from "no
+# chip because they are simply already on it". Written before the cells so a run interrupted
+# midway still scores what it captured.
+for entry in "${PATIENTS[@]}"; do
+  slug="${entry%%:*}"
+  uuid="${entry##*:}"
+  # Both parsers tolerate an empty or non-JSON body: the allergy endpoint returns nothing at
+  # all for a patient with no allergies, which crashed a bare json.load and — under
+  # `set -e` — would abort the whole run before a single cell was captured.
+  drugs=$(curl -s -u "$AUTH" "$BASE/order?patient=$uuid&t=drugorder&v=custom:(display)&limit=50" \
+    | python3 -c 'import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d={}
+print(json.dumps([o.get("display","") for o in d.get("results",[])]))') || drugs='[]'
+  allergens=$(curl -s -u "$AUTH" "$BASE/patient/$uuid/allergy?v=custom:(allergen:(codedAllergen:(display),nonCodedAllergen))" \
+    | python3 -c 'import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d={}
+out=[]
+for a in d.get("results",[]):
+    al=a.get("allergen") or {}
+    out.append(((al.get("codedAllergen") or {}).get("display")) or al.get("nonCodedAllergen") or "")
+print(json.dumps(out))') || allergens='[]'
+  printf '{"patient":"%s","drugs":%s,"allergens":%s}\n' "$uuid" "$drugs" "$allergens" \
+    > "$OUT/${slug}___context.json"
+  echo "${slug}___context: captured"
+done
 
 for entry in "${PATIENTS[@]}"; do
   slug="${entry%%:*}"

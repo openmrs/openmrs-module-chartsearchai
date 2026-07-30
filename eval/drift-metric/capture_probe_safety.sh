@@ -49,12 +49,26 @@ PATIENTS=(
 # quiet control expected to connect to nobody.
 DRUGS=(erythromycin clarithromycin aspirin warfarin paracetamol)
 
-# PHRASING: one printf template taking the drug name. A conclusion about the MODEL needs at
-# least two phrasings — this repo's own prompt carries "Your answer must not vary based on the
-# punctuation or phrasing of the query" precisely because phrasing sensitivity was a measured
-# bug here, and the sibling probe captures a "?"-twin for the same reason. The default is
-# gender-neutral: the first version said "she" at every patient, including a male one.
-PHRASING="${CAPTURE_PHRASING:-Can this patient take %s?}"
+# PHRASING: the question template, with {drug} marking where the drug name goes. A conclusion
+# about the MODEL needs at least two phrasings — this repo's own prompt carries "Your answer
+# must not vary based on the punctuation or phrasing of the query" precisely because phrasing
+# sensitivity was a measured bug here, and the sibling probe captures a "?"-twin for the same
+# reason. The default is gender-neutral: the first version said "she" at every patient,
+# including a male one.
+#
+# A {drug} placeholder rather than a printf %s: a phrasing containing a literal percent sign
+# ("Is a 50% dose of X safe?") silently mangled the question through printf and dropped the drug
+# name entirely, so the probe would have scored answers to a nonsense question without error.
+# Assigned in two steps deliberately: an inline ${VAR:-...{drug}?} default does NOT work, because
+# the closing brace of {drug} terminates the parameter expansion and the default becomes
+# "Can this patient take {drug?}" — a corrupted placeholder the substitution below cannot match.
+DEFAULT_PHRASING='Can this patient take {drug}?'
+PHRASING="${CAPTURE_PHRASING:-$DEFAULT_PHRASING}"
+case "$PHRASING" in
+  *"{drug}"*) ;;
+  *) echo "ERROR: CAPTURE_PHRASING must contain the {drug} placeholder; got: $PHRASING" >&2
+     exit 1 ;;
+esac
 
 fire() { # uuid, question, outfile — promote only on a clean 200, so a resume against a
          # sick server cannot overwrite a good cell with an error body.
@@ -105,21 +119,44 @@ for entry in "${PATIENTS[@]}"; do
   # this the two signals drift apart the moment a probe patient's order lapses — one of them
   # auto-expires within days of writing — and the probe would label a cell ANSWER while no chip
   # can fire, reporting a defect that is really a stale fixture.
-  drugs=$(python3 -c 'import datetime, json, sys
-try: d=json.load(open(sys.argv[1]))
-except Exception: d={}
-now = datetime.datetime.now(datetime.timezone.utc)
-def active(o):
+  drugs=$(python3 -c '
+import datetime, json, sys
+
+# Two ways this comparison used to resolve itself silently, both of which defeat the filter:
+#   * a date-only value (no offset) parses NAIVE, and naive > aware raises TypeError
+#   * "+0300" without a colon is only accepted by fromisoformat on Python 3.11+
+# Either landed in a bare `except: keep`, so an EXPIRED order was kept and the probe would
+# label a cell ANSWER that no chip can ever match — a defect reported where none exists.
+# Now: normalise the offset, assume UTC when none is given, and record anything still
+# unparseable so the scorer can say so out loud instead of guessing.
+def parse(v):
+    t = v.strip().replace("Z", "+00:00")
+    # +0300 -> +03:00, for interpreters older than 3.11
+    if len(t) > 5 and t[-5] in "+-" and t[-3] != ":":
+        t = t[:-2] + ":" + t[-2:]
+    d = datetime.datetime.fromisoformat(t)
+    return d if d.tzinfo else d.replace(tzinfo=datetime.timezone.utc)
+
+try:
+    doc = json.load(open(sys.argv[1]))
+except Exception:
+    doc = {}
+
+now, keep, unparsed = datetime.datetime.now(datetime.timezone.utc), [], []
+for o in doc.get("results", []):
     if o.get("voided") or o.get("dateStopped"):
-        return False
+        continue
     exp = o.get("autoExpireDate")
-    if not exp:
-        return True
-    try:
-        return datetime.datetime.fromisoformat(exp.replace("Z", "+00:00")) > now
-    except Exception:
-        return True   # unparseable date: keep it, and let the chip comparison expose the drift
-print(json.dumps([o.get("display","") for o in d.get("results",[]) if active(o)]))' "$OUT/.d.json") || drugs='[]'
+    if exp:
+        try:
+            if parse(exp) <= now:
+                continue          # genuinely expired: the validator would not see it either
+        except Exception:
+            unparsed.append(exp)  # keep it, but surface it rather than pretending it is active
+    keep.append(o.get("display", ""))
+
+json.dump({"drugs": keep, "date_parse_failures": unparsed}, sys.stdout)
+' "$OUT/.d.json") || drugs='{"drugs":[],"date_parse_failures":[]}'
   allergens=$(python3 -c 'import json,sys
 try: d=json.load(open(sys.argv[1]))
 except Exception: d={}
@@ -132,7 +169,10 @@ print(json.dumps(out))' "$OUT/.a.json") || allergens='[]'
 
   # Same promote-on-success discipline the answers get: the labels decide what every cell
   # MEANS, so a failed fetch must not quietly clobber a good context from a previous run.
-  printf '{"patient":"%s","ok":%s,"drugs":%s,"allergens":%s}\n' "$uuid" "$ok" "$drugs" "$allergens" \
+  order_list=$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["drugs"]))' "$drugs")
+  order_bad=$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["date_parse_failures"]))' "$drugs")
+  printf '{"patient":"%s","ok":%s,"drugs":%s,"allergens":%s,"date_parse_failures":%s}\n' \
+    "$uuid" "$ok" "$order_list" "$allergens" "$order_bad" \
     > "$OUT/${slug}___context.json.tmp"
   if [ "$ok" = true ] || [ ! -f "$OUT/${slug}___context.json" ]; then
     mv "$OUT/${slug}___context.json.tmp" "$OUT/${slug}___context.json"
@@ -147,7 +187,7 @@ for entry in "${PATIENTS[@]}"; do
   slug="${entry%%:*}"
   uuid="${entry##*:}"
   for d in "${DRUGS[@]}"; do
-    fire "$uuid" "$(printf "$PHRASING" "$d")" "$OUT/${slug}__safety-${d}.json"
+    fire "$uuid" "${PHRASING//\{drug\}/$d}" "$OUT/${slug}__safety-${d}.json"
   done
 done
 

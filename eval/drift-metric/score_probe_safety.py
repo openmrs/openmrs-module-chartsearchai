@@ -90,7 +90,8 @@ def load(directory):
             d = json.load(open(os.path.join(directory, f)))
         except Exception as e:
             cells[key] = {"answer": "", "unreadable": str(e), "chips": [], "all_chips": [],
-                          "own_drug": False, "ctx_ok": False, "refs": []}
+                          "own_drug": False, "ctx_ok": False, "refs": [],
+                          "date_parse_failures": []}
             continue
 
         ctx = context.get(slug)
@@ -109,6 +110,7 @@ def load(directory):
             # auth failure is indistinguishable from a patient genuinely on nothing.
             "ctx_ok": bool(ctx) and ctx.get("ok") is not False,
             "refs": [r.get("group") for r in (d.get("references") or [])],
+            "date_parse_failures": (ctx or {}).get("date_parse_failures", []),
         }
     return cells, done
 
@@ -137,6 +139,10 @@ def summarise(name, cells, done, expected=None):
         problems.append("%d cell(s) with missing/failed patient context, so labelled on chips "
                         "alone — which mislabels an already-prescribed drug: %s"
                         % (len(bad_ctx), bad_ctx[:4]))
+    bad_dates = sorted({d for c in cells.values() for d in c["date_parse_failures"]})
+    if bad_dates:
+        problems.append("unparseable order expiry date(s) %s — those orders were kept, so a cell "
+                        "may be labelled ANSWER that no chip can match" % bad_dates[:3])
     if cells and not any(c["all_chips"] for c in cells.values()):
         problems.append("ZERO chips anywhere in this arm — DrugSafetyValidator is off or threw, "
                         "so no cell can demonstrate the defect and every label collapses to the "

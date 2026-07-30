@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -25,9 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.User;
-import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
-import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -73,53 +70,18 @@ public class ChartSearchAiStreamEventOrderTest {
 		return new User(3);
 	}
 
-	/** One parsed SSE event: {@code event:} type plus the concatenated {@code data:} payload. */
-	private static final class SseEvent {
-
-		final String type;
-
-		final String data;
-
-		SseEvent(String type, String data) {
-			this.type = type;
-			this.data = data;
-		}
-	}
-
+	// SSE decoding lives in SseEvents so this class and the reference-grouping tests cannot
+	// drift apart on the wire format again; the decoder there is this class's original one.
 	private List<SseEvent> emittedEvents() {
-		List<SseEvent> events = new ArrayList<SseEvent>();
-		for (String block : new String(out.toByteArray(), StandardCharsets.UTF_8).split("\n\n")) {
-			String type = null;
-			StringBuilder data = new StringBuilder();
-			for (String line : block.split("\n")) {
-				if (line.startsWith("event: ")) {
-					type = line.substring(7).trim();
-				} else if (line.startsWith("data: ")) {
-					data.append(line.substring(6));
-				}
-			}
-			if (type != null) {
-				events.add(new SseEvent(type, data.toString()));
-			}
-		}
-		return events;
+		return SseEvents.parse(out);
 	}
 
 	private List<String> eventTypes() {
-		List<String> types = new ArrayList<String>();
-		for (SseEvent e : emittedEvents()) {
-			types.add(e.type);
-		}
-		return types;
+		return SseEvents.types(out);
 	}
 
 	private SseEvent eventOfType(String type) {
-		for (SseEvent e : emittedEvents()) {
-			if (e.type.equals(type)) {
-				return e;
-			}
-		}
-		return null;
+		return SseEvents.ofType(out, type);
 	}
 
 	@Test
@@ -315,39 +277,4 @@ public class ChartSearchAiStreamEventOrderTest {
 		}
 	}
 
-	private static class StubAuditLogService implements AuditLogService {
-
-		@Override
-		public ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog) {
-			auditLog.setAuditLogId(42);
-			return auditLog;
-		}
-
-		@Override
-		public ChartSearchAuditLog getAuditLog(Integer auditLogId) {
-			return null;
-		}
-
-		@Override
-		public List<ChartSearchAuditLog> getAuditLogs(Patient patient, User user,
-				java.util.Date fromDate, java.util.Date toDate, Integer startIndex, Integer limit) {
-			return java.util.Collections.emptyList();
-		}
-
-		@Override
-		public Long getAuditLogCount(Patient patient, User user, java.util.Date fromDate,
-				java.util.Date toDate) {
-			return 0L;
-		}
-
-		@Override
-		public long getQueryCountByUserSince(User user, java.util.Date since) {
-			return 0L;
-		}
-
-		@Override
-		public int deleteAuditLogsBefore(java.util.Date before) {
-			return 0;
-		}
-	}
 }

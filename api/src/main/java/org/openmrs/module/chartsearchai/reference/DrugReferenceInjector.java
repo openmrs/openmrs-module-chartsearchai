@@ -37,6 +37,15 @@ import org.springframework.stereotype.Service;
  * resource type so the frontend can render its citation chip distinctly (a side
  * panel, not a chart-tab navigation).
  *
+ * <p><strong>Adding a second kind of injected record?</strong> Its resource type must also be
+ * classified by {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#referenceGroup}, which
+ * decides whether a client presents a citation as evidence about the patient or as module-supplied
+ * reference material. That method fails safe to <em>chart evidence</em> for types it does not
+ * recognise — the wrong default for anything injected here — so an unclassified injected type is
+ * published to clinicians as if it came from the patient's own record, with no error raised. The
+ * reflective guard in {@code ChartSearchAiReferenceGroupTest} catches a new
+ * {@code RESOURCE_TYPE_*} constant, but it cannot see a bare string literal written here.
+ *
  * <p>Matching is deterministic and age-gated:
  * <ul>
  *   <li><b>Question-driven</b> — an alias hit against the query text.</li>

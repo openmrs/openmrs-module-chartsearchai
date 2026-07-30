@@ -155,7 +155,11 @@ that drug (`DrugSafetyValidator` reads active orders, allergies and the drug KB 
 > re-derived, and now support the revert directly. `score_probe_safety.py` additionally
 > hard-fails on a cross-arm label disagreement, refuses an arm with zero chips (GPs off ⇒ a
 > clean-looking pass with the defect invisible), anchors the abstention regex to the lead, and
-> excludes `CANNOT` from verdict-led.
+> excludes `CANNOT` from verdict-led. It also **exits non-zero** on any of those: `2`
+> incomparable, `3` integrity problems, `0` only for a clean read. That mattered — with both
+> arms captured at zero chips (GPs off for the whole experiment), the 7 two-hop cells collapse
+> into the ABSTAIN bucket and the report reads `abstained A=0 B=1, abstention held 17/17` and
+> used to exit `0`: indistinguishable from a pass to anything reading the exit code.
 
 | arm | ANSWER: verdict-led | stated, no lead | abstained (the defect) | ABSTAIN held |
 |---|---|---|---|---|

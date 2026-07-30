@@ -39,6 +39,9 @@ public class DrugReference {
 
 	private String name;
 
+	/** Diverging everyday generic name, or null — see {@link #getGenericName()}. */
+	private String genericName;
+
 	private String drugClass;
 
 	private List<String> aliases = Collections.emptyList();
@@ -65,6 +68,41 @@ public class DrugReference {
 
 	public String getName() {
 		return name;
+	}
+
+	/** The everyday generic name (e.g. RxNorm's {@code aspirin}) when it genuinely diverges
+	 *  from {@link #getName()} (e.g. {@code Acetylsalicylic acid}), else {@code null}. Set by
+	 *  sources whose display vocabulary can differ from the chart's; consumed by
+	 *  {@link #displayLabel()}. */
+	public String getGenericName() {
+		return genericName;
+	}
+
+	public void setGenericName(String genericName) {
+		this.genericName = genericName;
+	}
+
+	/**
+	 * The clinician-facing label for safety chips: the display name, with the diverging generic
+	 * appended as a synonym — {@code "Acetylsalicylic acid (aspirin)"} — so a warning is
+	 * recognizable against both the dataset's vocabulary and the question/chart's. The synonym
+	 * renders only when the two genuinely diverge (neither contains the other, case-insensitive):
+	 * route variants like {@code Lidocaine (topical)} and redundancy like
+	 * {@code Kava (kava preparation)} render unchanged — the check lives here, not only in the
+	 * ddinter parser, because a curated json file can bind {@code genericName} directly. Never
+	 * used in prompt text — record rendering keeps {@link #getName()} — so this is a
+	 * chip-display concern only.
+	 */
+	public String displayLabel() {
+		if (genericName == null || genericName.isEmpty() || name == null) {
+			return name;
+		}
+		String n = name.toLowerCase(Locale.ROOT);
+		String g = genericName.toLowerCase(Locale.ROOT);
+		if (n.contains(g) || g.contains(n)) {
+			return name;
+		}
+		return name + " (" + genericName + ")";
 	}
 
 	public void setName(String name) {
@@ -329,6 +367,11 @@ public class DrugReference {
 
 		private String note;
 
+		/** Source-assigned severity ({@code Major}/{@code Moderate}/{@code Minor}/{@code Unknown}
+		 *  for DDInter rows), or {@code null} for sources that don't rate rules (the curated
+		 *  seed) — a null severity is exempt from the validator's severity floor. */
+		private String severity;
+
 		public String getToken() {
 			return token;
 		}
@@ -351,6 +394,14 @@ public class DrugReference {
 
 		public void setNote(String note) {
 			this.note = note;
+		}
+
+		public String getSeverity() {
+			return severity;
+		}
+
+		public void setSeverity(String severity) {
+			this.severity = severity;
 		}
 	}
 

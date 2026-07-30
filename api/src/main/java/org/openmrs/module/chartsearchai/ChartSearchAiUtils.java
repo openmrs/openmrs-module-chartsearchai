@@ -51,6 +51,58 @@ public class ChartSearchAiUtils {
 	public static final Pattern INLINE_CITATION = Pattern.compile("\\[(\\d{1,9})\\]");
 
 	/**
+	 * Decodes every inline {@code [N]} citation marker in {@code text} to its record index,
+	 * in first-appearance order. The shared decode step over {@link #INLINE_CITATION} for
+	 * citation extraction ({@code LlmInferenceService}), grounding
+	 * ({@code CitationGroundingVerifier}) and safety echo-scoping ({@code DrugSafetyValidator})
+	 * so those consumers cannot drift. (The clause-scoped splitter keeps its own matcher — it
+	 * needs each marker's text offset, which a set of indexes cannot carry.) Returns an empty
+	 * set for null/blank text.
+	 */
+	public static Set<Integer> citedIndexes(String text) {
+		Set<Integer> indexes = new java.util.LinkedHashSet<Integer>();
+		if (text == null || text.isEmpty()) {
+			return indexes;
+		}
+		java.util.regex.Matcher marker = INLINE_CITATION.matcher(text);
+		while (marker.find()) {
+			indexes.add(Integer.valueOf(marker.group(1)));
+		}
+		return indexes;
+	}
+
+	/**
+	 * Classifies a cited record's resource type into the group a client renders it under:
+	 * {@link ChartSearchAiConstants#REFERENCE_GROUP_CHART} for evidence retrieved from this
+	 * patient's chart, {@link ChartSearchAiConstants#REFERENCE_GROUP_REFERENCE} for
+	 * module-supplied reference prose. This is the single entry point for the DISPLAY-GROUPING
+	 * decision: code that labels or orders references for a client must ask here rather than
+	 * compare {@code resourceType} itself, so the split stays in one place if a second kind of
+	 * injected record is ever added. (Unrelated per-type behaviour keyed off
+	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE} is untouched by this — the
+	 * demote-only grounding gate in {@code CitationGroundingVerifier} is its own concern and
+	 * legitimately tests the type directly.)
+	 *
+	 * <p>The two groups are exhaustive because exactly two code paths mint a
+	 * {@code RecordMapping}: {@code PatientChartSerializer}, which passes through whatever
+	 * type querystore retrieved, and {@code DrugReferenceInjector}, which always writes
+	 * {@code drug_reference}.
+	 *
+	 * <p>Anything unrecognised — including {@code null} — fails safe to chart evidence.
+	 * Labelling an unknown type as reference material would assert a module provenance we
+	 * cannot demonstrate; grouping it as chart evidence keeps it in the main list where it is
+	 * judged against the record it points at.
+	 *
+	 * @param resourceType the cited record's resource type, may be null
+	 * @return the group wire value, never null
+	 */
+	public static String referenceGroup(String resourceType) {
+		return ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(resourceType)
+				? ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE
+				: ChartSearchAiConstants.REFERENCE_GROUP_CHART;
+	}
+
+	/**
 	 * Builds a composite key from a resource type and resource UUID.
 	 * This is the single canonical format for resource keys used across
 	 * retrieval pipelines, filter methods, and result sets.

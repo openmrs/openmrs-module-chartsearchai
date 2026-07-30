@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,8 +31,10 @@ import org.springframework.stereotype.Service;
  * after the answer is generated and <em>annotates</em> it with {@link SafetyWarning}s.
  * It never rewrites or blocks the answer — the clinician decides.
  *
- * <p>For every reference drug the question asks about or the answer names, it checks three
- * things against the patient's clinical context and the reference table:
+ * <p>For every reference drug in play — those the question asks about, plus those the answer
+ * names on its own authority (a drug the answer mentions only by echoing a cited record's own
+ * text is a mention, not a proposal, and is excluded — see {@code isEchoOfCitedRecord}, issue
+ * #105) — it checks three things against the patient's clinical context and the reference table:
  * <ul>
  *   <li><b>Overdose</b> — a daily dose parsed from the answer exceeds the
  *       reference {@code maxDailyDoseMg} for the patient's age band; or, when the patient's
@@ -40,7 +43,9 @@ import org.springframework.stereotype.Service;
  *       maximum, and the tighter one for small patients). One warning per drug — the
  *       published daily ceiling wins when both arms trip.</li>
  *   <li><b>Interactions</b> — the drug interacts with one of the patient's active orders:
- *       by a hand-authored rule, by sharing an ATC chemical subgroup with an active order
+ *       by a hand-authored rule (a rule whose source rates it below
+ *       {@code chartsearchai.drugSafety.minInteractionSeverity} is not raised — unrated rules
+ *       are never floor-filtered), by sharing an ATC chemical subgroup with an active order
  *       (duplicate-therapy reasoning), or — failing that — by sharing a curated
  *       {@link CrossReactivityGroup} (cross-branch family overlap).</li>
  *   <li><b>Contraindications</b> — the drug is contraindicated by an active allergy or
@@ -122,6 +127,19 @@ public class DrugSafetyValidator {
 	 * already exists.
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient) {
+		return validate(answer, question, patient, null);
+	}
+
+	/**
+	 * Production entry point with the chart's record mappings, which enable echo scoping: an
+	 * answer-named drug that a record cited by the answer already names in its own text (a
+	 * recited reference partner, an allergy reported off the chart) is a mention, not a
+	 * proposal, and is not validated (issue #105). Passing {@code null}/empty mappings disables
+	 * the scoping and keeps every answer-named drug in play (the conservative pre-scoping
+	 * behavior).
+	 */
+	public List<SafetyWarning> validate(String answer, String question, Patient patient,
+			List<RecordMapping> mappings) {
 		try {
 			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
 					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -130,7 +148,7 @@ public class DrugSafetyValidator {
 				return new ArrayList<SafetyWarning>();
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-			return validate(answer, question, context);
+			return validate(answer, question, context, mappings);
 		}
 		catch (RuntimeException e) {
 			log.warn("Drug-safety validation failed; returning no warnings — the answer path is never broken", e);
@@ -158,6 +176,15 @@ public class DrugSafetyValidator {
 	 * reads the dose from the answer, so a question-only drug with no stated dose yields no overdose.
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext context) {
+		return validate(answer, question, context, null);
+	}
+
+	/**
+	 * Mappings-aware overload — the seam the public entry point delegates to. See
+	 * {@link #validate(String, String, Patient, List)} for the echo-scoping contract.
+	 */
+	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext context,
+			List<RecordMapping> mappings) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
 
 		boolean warnDose = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS,
@@ -173,8 +200,33 @@ public class DrugSafetyValidator {
 		// Drugs in play = those the QUESTION resolves to UNION those the ANSWER names — both via the same
 		// DrugReferenceService.findByQuery the injector uses, so question/answer/injector matching can
 		// never drift, and identity-dedup holds (findByQuery resolves against the shared getAll() cache).
-		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(drugReferenceService.findByQuery(question));
-		inPlay.addAll(drugReferenceService.findByQuery(answer));
+		// Answer-side drugs are echo-scoped (issue #105): a drug the answer names while a record the
+		// answer cites already names it in its own text is an echo of that record (a recited reference
+		// partner, an allergy reported off the chart), not a proposal — validating it produced chips
+		// about drugs nobody suggested giving. Question-named drugs are always validated.
+		Set<DrugReference> questionDrugs = new LinkedHashSet<DrugReference>(
+				drugReferenceService.findByQuery(question));
+		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(questionDrugs);
+		// The echo corpus is built lazily so the common case — the answer names no drug beyond
+		// the question's — does no citation parsing and no mapping sweep at all.
+		List<String> citedTextsLower = null;
+		for (DrugReference ref : drugReferenceService.findByQuery(answer)) {
+			if (questionDrugs.contains(ref)) {
+				continue; // already in play; question-named drugs are always validated
+			}
+			if (citedTextsLower == null) {
+				citedTextsLower = citedRecordTextsLower(answer, mappings);
+			}
+			if (!isEchoOfCitedRecord(ref, citedTextsLower)) {
+				inPlay.add(ref);
+			}
+		}
+
+		// The severity floor governs rule-based interaction chips only (see addInteractions);
+		// resolved once per validate, fail-safe to the default with no OpenMRS context.
+		int severityFloor = floorRank(ChartSearchAiUtils.getStringGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY));
 
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
@@ -182,7 +234,7 @@ public class DrugSafetyValidator {
 				addClassContraindications(warnings, ref, context);
 			}
 			if (warnInteractions) {
-				addInteractions(warnings, ref, context);
+				addInteractions(warnings, ref, context, severityFloor);
 				addClassInteractions(warnings, ref, context);
 			}
 			if (warnDose) {
@@ -193,6 +245,87 @@ public class DrugSafetyValidator {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
 		}
 		return warnings;
+	}
+
+	/**
+	 * @return the rank of a source-assigned interaction severity in the floor's ordering
+	 *         ({@code unknown}=0 &lt; {@code minor}=1 &lt; {@code moderate}=2 &lt; {@code major}=3),
+	 *         or {@code -1} for null/unrecognized — which the rule filter treats as exempt
+	 *         (unrated is not low-rated).
+	 */
+	private static int severityRank(String severity) {
+		if (severity == null) {
+			return -1;
+		}
+		switch (severity.trim().toLowerCase(Locale.ROOT)) {
+			case "unknown":
+				return 0;
+			case "minor":
+				return 1;
+			case "moderate":
+				return 2;
+			case "major":
+				return 3;
+			default:
+				return -1;
+		}
+	}
+
+	/** @return the floor rank for the GP value, falling back to the default floor when the
+	 *          value is unrecognized (a typo'd GP must not silently disable all rated rules). */
+	private static int floorRank(String gpValue) {
+		int rank = severityRank(gpValue);
+		return rank >= 0 ? rank
+				: severityRank(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY);
+	}
+
+	/**
+	 * The lowercased texts of the records the answer cites inline — the attribution corpus for
+	 * echo scoping. Built once per validate() call (one citation decode, one mapping sweep, at
+	 * most one lowercase copy per cited record) no matter how many answer-named drugs are
+	 * checked. Null/empty mappings (the mappings-less overloads) and uncited answers yield an
+	 * empty corpus, so no drug is ever exempted — the conservative direction.
+	 */
+	private static List<String> citedRecordTextsLower(String answer, List<RecordMapping> mappings) {
+		List<String> texts = new ArrayList<String>();
+		if (mappings == null || mappings.isEmpty()) {
+			return texts;
+		}
+		Set<Integer> citedIndexes = ChartSearchAiUtils.citedIndexes(answer);
+		if (citedIndexes.isEmpty()) {
+			return texts;
+		}
+		for (RecordMapping mapping : mappings) {
+			if (citedIndexes.contains(Integer.valueOf(mapping.getIndex())) && mapping.getText() != null) {
+				texts.add(mapping.getText().toLowerCase(Locale.ROOT));
+			}
+		}
+		return texts;
+	}
+
+	/**
+	 * @return true when a record the answer cites inline names {@code ref} in its own text —
+	 *         i.e. the answer's mention of the drug is attributable to cited record content (a
+	 *         recited drug-reference partner, an allergy reported off the chart) rather than a
+	 *         proposal on the answer's own authority (issue #105). Attribution is deliberately
+	 *         answer-global, not sentence-scoped: recited record text carries its own sentence
+	 *         punctuation ("… (Moderate. NSAIDs may …) [14]"), so sentence splitting routinely
+	 *         separates a recited drug name from the {@code [N]} marker that vouches for it.
+	 *         An empty corpus (no mappings, an uncited answer, or no cited record carrying text)
+	 *         returns false, keeping the drug validated. The accepted trade-off: an answer that
+	 *         BOTH cites a record naming drug X AND independently proposes X is exempted — but a
+	 *         proposal-worthy X is usually question-named (always validated) or actively ordered
+	 *         (checked directly by the order-driven arms), so the residual shape is rare and the
+	 *         measured alternative was worse (7 of 8 chips about unproposed drugs on one
+	 *         enumeration answer).
+	 */
+	private static boolean isEchoOfCitedRecord(DrugReference ref, List<String> citedTextsLower) {
+		for (String text : citedTextsLower) {
+			if (ref.matchesText(text)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void addContraindications(List<SafetyWarning> warnings, DrugReference ref,
@@ -211,27 +344,36 @@ public class DrugSafetyValidator {
 				against = "active condition";
 			}
 			if (hit) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.getName(),
-						"contraindicated by " + against + ": "
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
+						ref.displayLabel() + " is contraindicated by an " + against + ": "
 								+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
 			}
 		}
 	}
 
 	private void addInteractions(List<SafetyWarning> warnings, DrugReference ref,
-			PatientClinicalContext context) {
+			PatientClinicalContext context, int severityFloor) {
 		if (context == null) {
 			return;
 		}
 		for (DrugReference.Interaction i : ref.getInteractions()) {
+			// The severity floor (issue #84): a rule the SOURCE rated below the floor is not
+			// raised — DDInter's Unknown-severity rows carry no mechanism text and would bury
+			// the chips that matter (measured: an uncharacterized aspirin x simvastatin row
+			// sharing equal billing with a severe-allergy contraindication). A rule with no
+			// severity (every curated hand-authored rule) is exempt: unrated is not low-rated.
+			int rank = severityRank(i.getSeverity());
+			if (rank >= 0 && rank < severityFloor) {
+				continue;
+			}
 			if (context.hasActiveDrug(i.getToken(), i.getAtc())) {
 				// A matched rule has a non-blank token or ATC, so the coalesce never yields null.
-				String detail = "interacts with active order "
+				String detail = ref.displayLabel() + " interacts with active order "
 						+ ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
 				if (i.getNote() != null && !i.getNote().isEmpty()) {
 					detail += " — " + i.getNote();
 				}
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(), detail));
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
 			}
 		}
 	}
@@ -265,22 +407,24 @@ public class DrugSafetyValidator {
 				continue;
 			}
 			if (allergen == ref) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.getName(),
-						"the patient has a recorded allergy to " + ref.getName()));
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
+						"The patient has a recorded allergy to " + ref.displayLabel() + "."));
 				continue;
 			}
 			String shared = sharedClass(refClasses, allergen);
 			if (shared != null) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.getName(),
-						"same ATC class (" + shared + ") as the patient's allergy to " + allergen.getName()
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
+						ref.displayLabel() + " is in the same ATC class (" + shared
+								+ ") as the patient's allergy to " + allergen.displayLabel()
 								+ " — possible cross-reactivity"));
 				continue;
 			}
 			CrossReactivityGroup group = CrossReactivityGroup.sharedGroup(refGroups, allergen);
 			if (group != null) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.getName(),
-						"same cross-reactivity group (" + group.getName() + ") as the patient's allergy to "
-								+ allergen.getName() + " — possible cross-reactivity"));
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
+						ref.displayLabel() + " is in the same cross-reactivity group (" + group.getName()
+								+ ") as the patient's allergy to " + allergen.displayLabel()
+								+ " — possible cross-reactivity"));
 			}
 		}
 	}
@@ -314,17 +458,19 @@ public class DrugSafetyValidator {
 			}
 			if (orderCode.length() >= DrugReference.ATC_SUBGROUP_PREFIX_LENGTH && refClasses
 					.contains(orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH))) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(),
-						"same ATC class (" + orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH)
-								+ ") as active order " + displayNameForAtcCode(orderCode)
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(),
+						ref.displayLabel() + " is in the same ATC class ("
+								+ orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH)
+								+ ") as active order " + displayLabelForAtcCode(orderCode)
 								+ " — possible duplicate therapy"));
 				continue;
 			}
 			CrossReactivityGroup group = CrossReactivityGroup.sharedGroupForCode(refGroups, orderCode);
 			if (group != null) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.getName(),
-						"same cross-reactivity group (" + group.getName() + ") as active order "
-								+ displayNameForAtcCode(orderCode) + " — possible additive or duplicate-class therapy"));
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(),
+						ref.displayLabel() + " is in the same cross-reactivity group (" + group.getName()
+								+ ") as active order " + displayLabelForAtcCode(orderCode)
+								+ " — possible additive or duplicate-class therapy"));
 			}
 		}
 	}
@@ -339,12 +485,13 @@ public class DrugSafetyValidator {
 		return null;
 	}
 
-	/** @return the display name of the reference drug carrying {@code upperCode}, or the bare code
-	 *          when the active order's substance is not present in the loaded dataset. */
-	private String displayNameForAtcCode(String upperCode) {
+	/** @return the synonym-augmented display label ({@link DrugReference#displayLabel()}) of the
+	 *          reference drug carrying {@code upperCode}, or the bare code when the active
+	 *          order's substance is not present in the loaded dataset. */
+	private String displayLabelForAtcCode(String upperCode) {
 		for (DrugReference ref : drugReferenceService.getAll()) {
 			if (ref.normalizedAtcCodes().contains(upperCode)) {
-				return ref.getName();
+				return ref.displayLabel();
 			}
 		}
 		return upperCode;
@@ -368,8 +515,9 @@ public class DrugSafetyValidator {
 		if (dailyArm) {
 			Double dailyMg = parseDailyDoseMg(doses);
 			if (dailyMg != null && dailyMg > band.getMaxDailyDoseMg()) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, ref.getName(),
-						"stated dose ~" + DrugReference.formatNumber(dailyMg) + " mg/day exceeds the "
+				warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, ref.displayLabel(),
+						"The stated " + ref.displayLabel() + " dose ~" + DrugReference.formatNumber(dailyMg)
+								+ " mg/day exceeds the "
 								+ DrugReference.formatNumber(band.getMaxDailyDoseMg()) + " mg/day maximum for ages "
 								+ band.getMinYears() + "-" + band.getMaxYears()));
 				// One warning per drug: the published daily ceiling is the stronger statement,
@@ -383,8 +531,9 @@ public class DrugSafetyValidator {
 		Double perDoseMg = parseMaxPerDoseMg(doses);
 		double perDoseLimitMg = band.getMgPerKgMax() * weightKg;
 		if (perDoseMg != null && perDoseMg > perDoseLimitMg) {
-			warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, ref.getName(),
-					"stated dose ~" + DrugReference.formatNumber(perDoseMg) + " mg exceeds the "
+			warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, ref.displayLabel(),
+					"The stated " + ref.displayLabel() + " dose ~" + DrugReference.formatNumber(perDoseMg)
+							+ " mg exceeds the "
 							+ DrugReference.formatNumber(band.getMgPerKgMax()) + " mg/kg per-dose maximum (~"
 							+ DrugReference.formatNumber(perDoseLimitMg) + " mg) for the patient's weight "
 							+ DrugReference.formatNumber(weightKg) + " kg (ages " + band.getMinYears() + "-"

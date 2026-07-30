@@ -315,6 +315,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | `interactions` | object[] | interaction warning | Drug–drug interaction rules (below). |
 | `contraindications` | object[] | contraindication warning | Allergy/condition rules (below). |
 | `source` | string | injection | Provenance string rendered in the reference text. |
+| `genericName` | string, optional | Everyday generic synonym appended to safety-chip labels when it genuinely diverges from `name` (neither containing the other) — `"Acetylsalicylic acid (aspirin)"`. Display only: never rendered into the reference text the LLM sees, never used for matching. A redundant value (equal to, containing, or contained in `name`) is ignored. |
 
 **`ageBands[]` object**
 
@@ -331,6 +332,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | `token` | string | Substring matched (case-insensitive) against the patient's active-order drug names. |
 | `atc` | string | ATC code matched against the active order's ATC mapping (an alternative to `token`). |
 | `note` | string | Free text appended to the interaction warning (e.g. "increased risk of GI bleeding"). |
+| `severity` | string, optional | Source-assigned rating (`Unknown`/`Minor`/`Moderate`/`Major`). **Rating a rule opts it into the severity floor** (`chartsearchai.drugSafety.minInteractionSeverity`, default `minor`): a rule rated below the floor raises no warning. Omit it (the usual case for hand-authored rules) and the rule always fires. |
 
 **`contraindications[]` object**
 
@@ -379,9 +381,10 @@ entry dataset).
 > clean patient), and map the Aspirin concept to ATC `N02BA01` for the cross-branch group chip.
 > The committed `atc_drugkb.sql` maps only the J01CA/J01GB antibiotics, but the long-lived
 > :8081 instance **already carries** an `N02BA01` mapping on Aspirin — live-verified 2026-07-10:
-> the ibuprofen query there shows an extra *"same cross-reactivity group (NSAID) as active order
-> N02BA01 — possible additive or duplicate-class therapy"* chip (the bare code appears because
-> no KB entry carries `N02BA01`). Both Decision-27 paths were live-verified end-to-end that day
+> the ibuprofen query there shows an extra *"Ibuprofen is in the same cross-reactivity group
+> (NSAID) as active order N02BA01 — possible additive or duplicate-class therapy"* chip (the
+> bare code appears because no KB entry carries `N02BA01`; wording as of the sentence-detail
+> refactor — the 2026-07-10 capture predates the leading subject). Both Decision-27 paths were live-verified end-to-end that day
 > (weight arm: `~1000 mg exceeds the 15 mg/kg per-dose maximum (~750 mg) … weight 50 kg`,
 > driven by the bundled CIEL default with no GP row).
 
@@ -394,11 +397,11 @@ query surfaces only the warnings for the drug named.
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|
-| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication (ibuprofen allergy, GI bleed, peptic ulcer), "recorded allergy to Ibuprofen", interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), a "same cross-reactivity group (NSAID)" interaction |
+| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication (ibuprofen allergy, GI bleed, peptic ulcer), "The patient has a recorded allergy to Ibuprofen.", interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), an "Ibuprofen is in the same cross-reactivity group (NSAID)…" interaction |
 | *Is amoxicillin safe for this patient?* | injected `amoxicillin`; contraindication (penicillin-class), interaction (methotrexate), **duplicate therapy J01CA** (Ampicillin) |
-| *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "recorded allergy to Paracetamol", interaction (warfarin) |
+| *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "The patient has a recorded allergy to Paracetamol.", interaction (warfarin) |
 | *Is gentamicin appropriate for this patient?* | injected `gentamicin`; contraindication (aminoglycoside allergy, renal impairment), interaction (furosemide), **duplicate therapy J01GB** (Amikacin) |
-| *Is naproxen safe for this patient?* | injected `naproxen`; **cross-reactivity** "same ATC class (M01AE) as the patient's allergy to Ibuprofen" *(needs Step 4)* |
+| *Is naproxen safe for this patient?* | injected `naproxen`; **cross-reactivity** "Naproxen is in the same ATC class (M01AE) as the patient's allergy to Ibuprofen…" *(needs Step 4)* |
 | any KB alias (brufen, advil, panadol, tylenol, amoxil…) on **any** patient | a `drug_reference` citation (question-driven injection needs no patient data) |
 
 **Order-driven injection (path 7)** — set `injectFromQuery=false`, then ask
@@ -417,8 +420,8 @@ e.g. a stock demo patient) with a phrasing that keeps drug + dose together:
 
 > *"Repeat back the proposed order and state if it is safe: paracetamol 6000 mg daily."*
 
-→ answer "The proposed order is paracetamol 6000 mg daily…" → `overdose: stated dose ~6000 mg/day
-exceeds the 4000 mg/day maximum`. (Phrasings where the model writes the drug and the dose in
+→ answer "The proposed order is paracetamol 6000 mg daily…" → `overdose: The stated Paracetamol
+dose ~6000 mg/day exceeds the 4000 mg/day maximum for ages 12-120`. (Phrasings where the model writes the drug and the dose in
 *separate* sentences will not fire, even when the arithmetic is right.)
 
 ---

@@ -96,6 +96,130 @@ Conclusion: E2B needs its full reasoning scratchpad to enumerate completely. Sho
 — by force or by instruction — trades one safety property for another. Do not revisit
 without a different model or a mechanism that preserves completeness.
 
+## The 3.7.1 cohort: standalone gold is unremappable (2026-07-29)
+
+The 3.7.1 standalone's demo DB is a **different synthetic cohort** from the install the
+standalone gold was adjudicated on: the four personas' clinical identities do not exist
+(signature conditions — Richard's cervical-vertebra fracture, Mark's jaw dislocation —
+are absent or scattered across unrelated patients), so `remap_gold_standalone.py`'s
+clinical-identity matching cannot reconstruct the gold there. **Trap: the deterministic
+`patient_id`s (7/22/25/11) still exist but belong to clinically different patients — an
+id-based remap would silently score against the wrong charts.** Restoring F1/drift
+comparability on that cohort requires fresh human adjudication; until then the 2026-06-12
+numbers have no comparable successor.
+
+## Pure-prompt A/B for the #107 verdict guard (2026-07-29, 3.7.1 standalone)
+
+With the gold unremappable, the #107 answer-shaping gate ran as a same-environment
+**pure-prompt A/B** (`compare_arms.py`): the branch head vs the identical build with only
+the #107 prompt hunks (guard sentence + few-shot) reverted — single variable = the guard.
+8 patients (rich → sparse charts) × the 8 Tier-A presence topics per arm, captured via
+`capture_probe_yesno.sh` (`CAPTURE_PATIENTS=… CAPTURE_TIER_B=0`), fullChart mode,
+grounding+entailment on, both arms warm (cold fullChart captures wedge on the 300s LLM
+timeout — warm the llama before batch runs).
+
+| arm | verdict-led | YES/NO/NONE | "records do not address" leads |
+|---|---|---|---|
+| baseline (no guard) | 62/64 | 33/29/2 | 0 |
+| candidate (guard) | **63/64** | 31/32/1 | **0** |
+
+Six class flips, read individually (full detail on
+[#107](https://github.com/openmrs/openmrs-module-chartsearchai/issues/107)): three are
+obs-only kidney cells moving **toward** the approved record-grounded form ("No kidney
+issues diagnosis is recorded. Relevant labs are: …") where the baseline had violated the
+verdict rules; two are opposite-direction noise on borderline mental cells; one is a
+single candidate-side directness miss offset by the baseline's own two. Verdict:
+**beat-or-match holds** — the guard adds abstention-lead behavior for unaddressed
+safety questions without bleeding into presence topics.
+
+## Safety/suitability probe, and a measured prompt dead end (2026-07-30)
+
+`capture_probe_safety.sh` + `score_probe_safety.py` instrument the cells the #107 verdict guard
+governs, which the Tier-A presence topics never reach: "Can she take X?" against a patient
+whose own record either does or does not bear on X. 4 patients (two on simvastatin, one on
+aspirin, one on lisinopril; two with an aspirin allergy) × 5 drugs = 20 cells.
+
+Cells are labelled from data, on the **union** of two signals: a `safetyWarnings` chip naming
+that drug (`DrugSafetyValidator` reads active orders, allergies and the drug KB directly)
+**or** the drug appearing among the patient's own orders/allergens, which the capture writes to
+`_context.json`. Chip-or-own → a verdict is expected; neither → the abstention must hold.
+
+> **This instrument was wrong twice before it was trustworthy, and both faults changed the
+> reported numbers.** (1) It labelled on chips alone, so a patient ALREADY TAKING the drug —
+> who raises no chip, because the validator skips restating existing therapy — was scored as
+> "abstention expected". That credited an answer saying *"the records do not address whether
+> she can take aspirin"* about a patient holding an active aspirin order, and inverted the
+> deciding column. (2) Read on its own published columns, the first version's table said
+> **keep the candidate** (verdict-led 0/9→1/9, abstained 7/9→7/9, abstention 10/11→11/11); the
+> revert was made on prose about one cell, i.e. *against* the instrument. The numbers below are
+> re-derived, and now support the revert directly. `score_probe_safety.py` additionally
+> hard-fails on a cross-arm label disagreement, refuses an arm with zero chips (GPs off ⇒ a
+> clean-looking pass with the defect invisible), anchors the abstention regex to the lead, and
+> excludes `CANNOT` from verdict-led. It also **exits non-zero** on any of those: `2`
+> incomparable, `3` integrity problems, `0` only for a clean read. That mattered — with both
+> arms captured at zero chips (GPs off for the whole experiment), the 7 two-hop cells collapse
+> into the ABSTAIN bucket and the report reads `abstained A=0 B=1, abstention held 17/17` and
+> used to exit `0`: indistinguishable from a pass to anything reading the exit code.
+
+| arm | ANSWER: verdict-led | stated, no lead | abstained (the defect) | ABSTAIN held |
+|---|---|---|---|---|
+| A: branch head | 0/10 | 3 | **7** | 10/10 |
+| B: + "a drug-reference record DOES address the drug it names" hunk | 1/10 | 1 | **8** | 10/10 |
+
+**Verdict: does not beat-or-match; the hunk was reverted.** The candidate abstains on one cell
+*more* than the baseline, and destroys two of the three informative-but-not-verdict-led answers.
+Two flips, opposite directions: `joshua__safety-aspirin` gained a verdict lead ("No, the patient
+has a recorded allergy to Aspirin [38]"), while `agnes__safety-aspirin` lost an answer citing
+her active aspirin order *and* the reference, replacing it with an abstention that is false
+about her chart. Genuine abstention cells were 10/10 in both arms.
+
+Decoding is greedy (`temperature: 0.0`, samplers pinned), so a single-cell flip is signal
+rather than sampling noise — that is what makes a 20-cell A/B worth reading at all.
+
+**Why prompt-shaping looks like the wrong lever.** The 10 ANSWER cells split cleanly:
+
+* **3 direct-match** — the patient's own order or allergy names the asked-about drug
+  (`{agnes,betty,joshua}__safety-aspirin`). The model can act here: joshua's cell is the one
+  that produced a verdict.
+* **7 two-hop** — the reference record says X interacts with Y, a patient record shows Y is
+  active, therefore a verdict on X (`erythromycin`/`clarithromycin`/`warfarin` against
+  simvastatin or aspirin). **All 7 abstained, in both arms.**
+
+It is not for want of being told: the system prompt has said *"Records beginning with 'Drug
+reference' are clinical reference data … cite them the same way"* since the feature landed, and
+`Injected 1 drug-reference record(s)` confirms the interaction was in the prompt, numbered.
+
+A **phrasing twin** settles the obvious objection. Same build, same cells, only the sentence
+changed (`CAPTURE_PHRASING="Is it safe to give this patient %s?"` vs the default
+`"Can this patient take %s?"`):
+
+| capture | ANSWER verdict-led | stated | abstained | ABSTAIN held |
+|---|---|---|---|---|
+| A: `Can … take X?` | 0/10 | 3 | 7 | 10/10 |
+| twin: `Is it safe to give … X?` | 0/10 | 2 | 8 | 10/10 |
+
+The two-hop block is **uniform**: all 7 cells abstain in all three captures (arm A, twin, arm
+B) — **21 arm-cells, zero joins.** The only phrasing-sensitive cell is a direct match
+(`agnes__safety-aspirin`, which the twin abstains on and arm A did not), so phrasing moves the
+direct cells and leaves the join untouched. The twin is also marginally *worse* than the
+original, so the first phrasing was not unluckily chosen.
+
+**The practical consequence is the inverse of how it first reads:** the `safetyWarnings` chips
+are not a redundant re-derivation of something the LLM already had — they compute a join the
+model did not make once in 21 attempts. That is the argument for keeping them visible even when
+the prose abstains.
+
+**Caveats on the conclusion, honestly.** Two phrasings, both gender-neutral (the first version
+said "she" at every patient, including a male one — fixed, and `CAPTURE_PHRASING` makes a twin
+one env var). Two is enough to rule out a single unlucky sentence; it is not a phrasing sweep.
+Four patients and one KB, so this is the shape of the failure, not its prevalence. And
+prompt-shaping is not exhausted: a few-shot demonstrating the
+join is untried (it would mean restructuring the mango abstention example, which *is* #107's
+mechanism — and both arms hold ABSTAIN at 10/10, so that attempt risks the guard this probe
+watches), as are injecting a pre-computed join as its own record, focus-hint reordering, and a
+decomposed two-step query. Fund any of those with this probe as the gate, and add a phrasing
+twin first.
+
 ## Widened rc.2 gold: fullChart vs queryScoped (2026-07-19, 22 patients)
 
 `chartsearchai.chartMode=queryScoped` (query-scoped slice prompts, #74) vs `fullChart`

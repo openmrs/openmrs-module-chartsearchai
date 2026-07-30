@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -131,7 +130,8 @@ public class LlmInferenceService implements ChartSearchService {
 					extractCitedReferences(response.getAnswer(), response.getCitations(),
 							chart.getMappings()),
 					chart.getMappings());
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question, patient);
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
+					patient, chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings);
@@ -410,7 +410,8 @@ public class LlmInferenceService implements ChartSearchService {
 					chart.getMappings());
 			groundMs = System.currentTimeMillis() - groundStart;
 
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question, patient);
+			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
+					patient, chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings);
@@ -501,11 +502,7 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 		}
 		if (answer != null) {
-			Set<Integer> inline = new LinkedHashSet<Integer>();
-			Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(answer);
-			while (marker.find()) {
-				inline.add(Integer.valueOf(marker.group(1)));
-			}
+			Set<Integer> inline = ChartSearchAiUtils.citedIndexes(answer);
 			// Real answer prose that anchors NO citation inline: the structured
 			// array is unanchored (the abstention-dump failure mode), so surface
 			// nothing rather than the records the model merely reviewed. The

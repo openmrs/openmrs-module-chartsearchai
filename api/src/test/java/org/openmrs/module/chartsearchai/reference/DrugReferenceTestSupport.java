@@ -25,13 +25,30 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
- * The one set of drug-reference test helpers, shared by the reference test classes so the
+ * The one set of drug-reference test helpers, shared by the reference test classes (and, via
+ * the one public accessor, the grounding tests in {@code api.impl}) so the
  * arrangement/matcher bodies cannot drift between files (the same rule CLAUDE.md states for
  * {@code TestDatasetHelper}). Everything here constructs REAL production objects and calls
  * real production paths — no mocks, no pipeline reimplementation; the individual test files
  * keep thin, file-shaped delegates so their call sites read naturally.
  */
-final class DrugReferenceTestSupport {
+public final class DrugReferenceTestSupport {
+
+	/**
+	 * The real rendered text of the drug-reference record the REAL injector injects for
+	 * {@code question} (bundled DDInter sample, real load → parse → injectRecords → render
+	 * chain). The one cross-package accessor for tests that need genuine injected record text
+	 * without reimplementing the renderer.
+	 */
+	public static String injectedDdinterReferenceText(String question) {
+		PatientChart chart = injector(ddinterService()).injectRecords(oneRecordChart(),
+				ctx(60, null, null, null, null, null), question);
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType()))
+				.map(RecordMapping::getText).findFirst()
+				.orElseThrow(() -> new IllegalStateException(
+						"no drug-reference record was injected for question: " + question));
+	}
 
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */
 	static final String ATC_SAMPLE = "atc/atc-sample.tsv";

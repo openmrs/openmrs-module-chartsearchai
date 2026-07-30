@@ -95,9 +95,14 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			}
 		}
 
-		// mechanisms table (text stored once); note strings interned per severity+group
+		// mechanisms table (text stored once); note strings interned per severity+group.
+		// Severity strings are interned too: the vocabulary is four values across ~300k
+		// full-KB rows, and Jackson allocates a fresh String per row — without this cache the
+		// structured severity field alone would retain ~13.5 MB for the module lifetime,
+		// reintroducing exactly the per-pair cost the note interning exists to avoid.
 		JsonNode mech = root.path("mechanisms");
 		Map<String, String> noteCache = new HashMap<String, String>();
+		Map<String, String> severityCache = new HashMap<String, String>();
 
 		// group interaction rows by drug id -> partner links
 		Map<String, List<Link>> partners = new HashMap<String, List<Link>>();
@@ -107,14 +112,14 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			}
 			String a = row.get(0).asText();
 			String b = row.get(1).asText();
-			String severity = row.get(2).asText();
+			String severity = severityCache.computeIfAbsent(row.get(2).asText(), s -> s);
 			String gid = row.get(3).asText();
 			if (!byId.containsKey(a) || !byId.containsKey(b)) {
 				continue;
 			}
 			String note = noteFor(severity, gid, mech, noteCache);
-			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, note));
-			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, note));
+			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, severity, note));
+			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, severity, note));
 		}
 
 		// RxCUI frequency: some route variants share a RxCUI (e.g. the Lidocaine variants all
@@ -136,6 +141,17 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 					&& rxcuiCounts.get(row.rxcui) == 1;
 			ref.setId(uniqueRxcui ? row.rxcui : row.id);
 			ref.setName(row.name);
+			// Chip-label synonym (never renaming): when the DDInter display name diverges from
+			// the RxNorm generic the question and chart use ("Acetylsalicylic acid" vs
+			// "aspirin"), carry the generic so safety chips can show both vocabularies. A name
+			// that already contains its generic — including the route variants sharing one
+			// RxNorm name ("Lidocaine (topical)") — carries none. Renaming outright was
+			// measured and rejected: 276 of the full KB's names diverge, mostly INN-vs-USAN
+			// pairs a swap would mistranslate.
+			if (row.rxnormName != null && !row.rxnormName.isEmpty()
+					&& !row.name.toLowerCase(Locale.ROOT).contains(row.rxnormName.toLowerCase(Locale.ROOT))) {
+				ref.setGenericName(row.rxnormName.toLowerCase(Locale.ROOT));
+			}
 			ref.setAliases(row.aliases);
 			ref.setAtcCodes(row.atc);
 			ref.setInteractions(interactionsFor(links, byId));
@@ -163,6 +179,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			String token = p.rxnormName != null && !p.rxnormName.isEmpty() ? p.rxnormName : p.name;
 			i.setToken(token.toLowerCase(Locale.ROOT));
 			i.setAtc(p.atc.isEmpty() ? null : p.atc.get(0));
+			i.setSeverity(link.severity);
 			i.setNote(link.note);
 			out.add(i);
 		}
@@ -215,7 +232,10 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 				return null;
 			}
 			String rxcui = d.path("rxcui").isTextual() ? d.get("rxcui").asText() : null;
-			String rxnormName = d.path("rxnorm_name").isTextual() ? d.get("rxnorm_name").asText() : null;
+			// Trimmed once here so the match token, the divergence guard, and the chip-label
+			// synonym all see the same clean value — a padded name would defeat the guard and
+			// leak padding into the label.
+			String rxnormName = d.path("rxnorm_name").isTextual() ? d.get("rxnorm_name").asText().trim() : null;
 			List<String> atc = new ArrayList<String>();
 			for (JsonNode a : d.path("atc")) {
 				atc.add(a.asText());
@@ -245,15 +265,18 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 		}
 	}
 
-	/** A partner link: the other drug's id and the shared interaction note. */
+	/** A partner link: the other drug's id, the row's severity, and the shared interaction note. */
 	private static final class Link {
 
 		final String partnerId;
 
+		final String severity;
+
 		final String note;
 
-		Link(String partnerId, String note) {
+		Link(String partnerId, String severity, String note) {
 			this.partnerId = partnerId;
+			this.severity = severity;
 			this.note = note;
 		}
 	}

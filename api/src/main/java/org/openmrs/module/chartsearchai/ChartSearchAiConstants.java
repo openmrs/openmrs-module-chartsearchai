@@ -409,6 +409,17 @@ public class ChartSearchAiConstants {
 
 	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS = true;
 
+	/** Minimum source-assigned severity ({@code unknown} &lt; {@code minor} &lt; {@code moderate} &lt;
+	 *  {@code major}) a rule-based interaction must carry to raise a warning chip. Rules without a
+	 *  severity (e.g. the curated seed's hand-authored rules) are always shown, as are class-based and
+	 *  contraindication chips. {@code unknown} shows every rated rule; the default {@code minor}
+	 *  filters exactly DDInter's Unknown-severity rows, which carry no mechanism text (14% of the
+	 *  full knowledge base) and dilute the chips that matter. See issue #84. */
+	public static final String GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY =
+			"chartsearchai.drugSafety.minInteractionSeverity";
+
+	public static final String DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY = "minor";
+
 	/** Concept UUID (a kg-valued numeric concept) used to read the patient's most recent weight for
 	 *  the weight-aware per-dose overdose check. The value {@link #DRUG_SAFETY_WEIGHT_CONCEPT_DISABLED}
 	 *  disables the weight-aware arm; blank/absent falls back to the default like every other GP
@@ -471,6 +482,23 @@ public class ChartSearchAiConstants {
 
 	/** Reference data, not patient data — injected by {@link org.openmrs.module.chartsearchai.reference.DrugReferenceInjector}. */
 	public static final String RESOURCE_TYPE_DRUG_REFERENCE = "drug_reference";
+
+	/**
+	 * Wire value of a serialized reference's {@code group}: a record retrieved from THIS
+	 * patient's chart. Evidence about the patient, citable as such.
+	 */
+	public static final String REFERENCE_GROUP_CHART = "chart";
+
+	/**
+	 * Wire value of a serialized reference's {@code group}: module-supplied reference prose
+	 * (a drug knowledge-base entry), not a record about this patient. Kept visible precisely
+	 * so a client can disclose that provenance rather than let it read as chart evidence —
+	 * A drug-reference citation is additionally never grounding-verified as {@code true}, being
+	 * demote-only (see {@code CitationGroundingVerifier}) — but note that gate keys on the
+	 * {@code drug_reference} resource type, not on this group, so the property does not extend for
+	 * free to a second kind of injected record.
+	 */
+	public static final String REFERENCE_GROUP_REFERENCE = "reference";
 
 	private ChartSearchAiConstants() {
 	}

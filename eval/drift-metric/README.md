@@ -132,6 +132,53 @@ single candidate-side directness miss offset by the baseline's own two. Verdict:
 **beat-or-match holds** — the guard adds abstention-lead behavior for unaddressed
 safety questions without bleeding into presence topics.
 
+## Safety/suitability probe, and a measured prompt dead end (2026-07-30)
+
+`capture_probe_safety.sh` + `score_probe_safety.py` instrument the cells the #107 verdict
+guard governs, which the Tier-A presence topics never reach: "Can she take X?" against a
+patient whose own record either does or does not bear on X. **Cells are self-labelling** —
+`DrugSafetyValidator` is deterministic and reads the patient's active orders, allergies and
+the drug-reference KB directly, so a `safetyWarnings` chip is the ground truth for "X
+connects to this patient". Chip present → a verdict is expected; no chip → the abstention
+must hold. 4 patients (two on simvastatin, one on aspirin, one on lisinopril; two with an
+aspirin allergy) × 5 drugs = 20 cells.
+
+**The defect it measured.** On branch head, `Injected 1 drug-reference record(s)` for "Can
+she take erythromycin?" on a simvastatin patient — the erythromycin×simvastatin Major
+interaction was *in the prompt, numbered and citable* — and the answer was still "The records
+do not address whether the patient can take erythromycin", citing nothing. Across the probe:
+
+| arm | CONNECTED verdict-led | CONNECTED abstained | UNRELATED abstention held |
+|---|---|---|---|
+| A: branch head | 0/9 | **7/9** | 10/11 |
+| B: + "a drug-reference record DOES address the drug it names" hunk | 1/9 | **7/9** | 11/11 |
+
+**Verdict: does not beat-or-match; the hunk was reverted.** The 7 abstentions are unchanged —
+every erythromycin / clarithromycin / warfarin cell, i.e. exactly the target. Two flips, one
+each way: `joshua__safety-aspirin` gained a verdict lead ("No, the patient has a recorded
+allergy to Aspirin [38]"), and `agnes__safety-aspirin` regressed from an informative answer
+citing her active order *and* the reference to a bare abstention.
+
+**Why prompt-shaping is the wrong lever here.** The split is not random. The one cell that
+improved is a *direct* match — the patient record itself names the asked-about drug (an
+aspirin allergy). All nine failures need a **two-hop join**: the reference record says X
+interacts with Y, a patient record shows Y is active, therefore a verdict on X. The model
+does not make that hop, and it is not for lack of being told the records are citable — the
+system prompt has said *"Records beginning with 'Drug reference' are clinical reference data …
+cite them the same way"* since the feature landed. 9 opportunities across 3 drugs × 3
+patients, two prompt variants, zero joins.
+
+So this belongs with the other measured dead ends above rather than with the fixable
+findings. **The practical consequence is the opposite of what it looks like:** the
+`safetyWarnings` chips are not a redundant re-derivation of something the LLM already had —
+they compute a join the model demonstrably cannot, which is the argument for keeping them
+visible even when the prose abstains.
+
+Not tried, and the only prompt lever left: a few-shot demonstrating the join. It would mean
+restructuring the mango abstention example, which *is* #107's mechanism, and arm B holds
+UNRELATED at 11/11 — so that attempt risks the guard the probe is watching. Fund it
+deliberately, with this probe as the gate.
+
 ## Widened rc.2 gold: fullChart vs queryScoped (2026-07-19, 22 patients)
 
 `chartsearchai.chartMode=queryScoped` (query-scoped slice prompts, #74) vs `fullChart`

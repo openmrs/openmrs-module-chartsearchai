@@ -115,7 +115,15 @@ public class DrugReferenceInjector {
 	 * wording — the direction issue #107 guards.
 	 */
 	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question) {
-		if (drugSafetyValidator == null) {
+		// Gated on the SAME toggle that gates the chips, because the two must never disagree. The
+		// validator's public entry point checks this GP; the package-private overload used here does
+		// not, so without this an operator setting validateAnswers=false would switch the chips off
+		// while findings kept flowing into the prompt — the answer asserting "not safe due to a Major
+		// interaction [232]" with no chip beside it. That is precisely the chip-versus-prose divergence
+		// this whole change exists to remove, reappearing silently and only under a non-default config.
+		if (drugSafetyValidator == null || !ChartSearchAiUtils.getBooleanGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
 			return Collections.emptyList();
 		}
 		return drugSafetyValidator.validate("", question, context);

@@ -160,6 +160,29 @@ public class DrugReferenceInjectorTest {
 	}
 
 	@Test
+	public void findingInjectionIsGatedOnTheSameToggleAsTheChips() {
+		// The chips and the injected findings must switch on and off together. DrugSafetyValidator
+		// gates on drugSafety.validateAnswers in its public Patient-taking entry only; the
+		// package-private overload preAnswerFindings uses does not, so an operator setting that GP
+		// false would silence the chips while findings kept reaching the prompt — the answer asserting
+		// a Major interaction with no chip beside it, which is the divergence this change removes.
+		//
+		// With no OpenMRS context the GP read fails safe to the default (true), so this asserts the
+		// enabled direction: the toggle is consulted and findings flow. The disabled direction needs a
+		// live GP layer — contract: with validateAnswers=false, injectRecords must emit no
+		// safety_finding record even when the validator would have found one.
+		PatientChart result = ddinterInjectorWithSafety().injectRecords(oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, set("simvastatin"), set("C10AA01"), null, null),
+				"is it safe to give clarithromycin?");
+		boolean found = false;
+		for (RecordMapping m : result.getMappings()) {
+			found = found || ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType());
+		}
+		assertTrue(found, "with the toggle at its default the finding must still be injected: "
+				+ result.getText());
+	}
+
+	@Test
 	public void noSafetyFindingRecordIsInjectedWhenTheDeterministicLayerFindsNothing() {
 		// The property that makes this safe: the record exists only when the validator has a finding,
 		// so a question nothing bears on gains nothing and its abstention is preserved by

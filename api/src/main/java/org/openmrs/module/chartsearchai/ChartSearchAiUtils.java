@@ -98,8 +98,9 @@ public class ChartSearchAiUtils {
 	 */
 	public static String referenceGroup(String resourceType) {
 		return ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(resourceType)
-				? ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE
-				: ChartSearchAiConstants.REFERENCE_GROUP_CHART;
+				|| ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(resourceType)
+						? ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE
+						: ChartSearchAiConstants.REFERENCE_GROUP_CHART;
 	}
 
 	/**

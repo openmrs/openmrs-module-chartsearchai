@@ -222,11 +222,13 @@ public class DrugSafetyValidator {
 			}
 		}
 
-		// The severity floor governs rule-based interaction chips only (see addInteractions);
-		// resolved once per validate, fail-safe to the default with no OpenMRS context.
-		int severityFloor = floorRank(ChartSearchAiUtils.getStringGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY,
-				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY));
+		// Resolved once per validate, fail-safe to the default with no OpenMRS context. Through the
+		// shared accessor, not a second copy of the same expression: DrugReferenceInjector decides
+		// which interactions to promote into the prompt off the same floor, and two identical inline
+		// reads would let a future change to one of them (a different GP, an added fallback, a
+		// per-patient override) silently diverge the chips from the prose — a chip with no matching
+		// prose, or prose with no chip, which is the exact defect the shared floor exists to prevent.
+		int severityFloor = configuredSeverityFloor();
 
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
@@ -253,7 +255,7 @@ public class DrugSafetyValidator {
 	 *         or {@code -1} for null/unrecognized — which the rule filter treats as exempt
 	 *         (unrated is not low-rated).
 	 */
-	private static int severityRank(String severity) {
+	static int severityRank(String severity) {
 		if (severity == null) {
 			return -1;
 		}
@@ -277,6 +279,27 @@ public class DrugSafetyValidator {
 		int rank = severityRank(gpValue);
 		return rank >= 0 ? rank
 				: severityRank(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY);
+	}
+
+	/**
+	 * The configured interaction-severity floor. Extracted so
+	 * {@link DrugReferenceInjector#orderedInteractionNotes} applies the same floor when it decides
+	 * which interactions are worth promoting into the rendered record — one definition, so the
+	 * prompt text and the chips cannot disagree about which rules count.
+	 */
+	static int configuredSeverityFloor() {
+		return floorRank(ChartSearchAiUtils.getStringGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY));
+	}
+
+	/**
+	 * Whether a rule's source-assigned severity clears {@code floor}. A rule with no severity at
+	 * all is exempt — every curated hand-authored rule is unrated, and unrated is not low-rated.
+	 */
+	static boolean clearsSeverityFloor(DrugReference.Interaction interaction, int floor) {
+		int rank = severityRank(interaction.getSeverity());
+		return rank < 0 || rank >= floor;
 	}
 
 	/**
@@ -362,8 +385,7 @@ public class DrugSafetyValidator {
 			// the chips that matter (measured: an uncharacterized aspirin x simvastatin row
 			// sharing equal billing with a severe-allergy contraindication). A rule with no
 			// severity (every curated hand-authored rule) is exempt: unrated is not low-rated.
-			int rank = severityRank(i.getSeverity());
-			if (rank >= 0 && rank < severityFloor) {
+			if (!clearsSeverityFloor(i, severityFloor)) {
 				continue;
 			}
 			if (context.hasActiveDrug(i.getToken(), i.getAtc())) {

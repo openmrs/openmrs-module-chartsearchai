@@ -124,6 +124,23 @@ final class PatientClinicalContextBuilder {
 		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens);
 	}
 
+	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by
+	 *  the weight and renal lookups so both apply one freshness rule and one validity rule. */
+	private static Obs latestNumericObs(Patient patient, Concept concept) {
+		Date cutoff = new Date(System.currentTimeMillis() - maxWeightAgeDays() * MILLIS_PER_DAY);
+		Obs latest = null;
+		for (Obs obs : Context.getObsService().getObservationsByPersonAndConcept(patient, concept)) {
+			if (obs.getValueNumeric() == null || obs.getValueNumeric() <= 0 || obs.getObsDatetime() == null
+					|| obs.getObsDatetime().before(cutoff)) {
+				continue;
+			}
+			if (latest == null || obs.getObsDatetime().after(latest.getObsDatetime())) {
+				latest = obs;
+			}
+		}
+		return latest;
+	}
+
 	/**
 	 * @return the patient's most recent weight in kg, or {@code null} when none is recorded, the
 	 *         newest one is older than {@code chartsearchai.drugSafety.weightMaxAgeDays} (a stale —
@@ -150,17 +167,7 @@ final class PatientClinicalContextBuilder {
 			log.debug("Weight concept {} not found; skipping weight for drug-reference context", conceptUuid);
 			return null;
 		}
-		Date cutoff = new Date(System.currentTimeMillis() - maxWeightAgeDays() * MILLIS_PER_DAY);
-		Obs latest = null;
-		for (Obs obs : Context.getObsService().getObservationsByPersonAndConcept(patient, weightConcept)) {
-			if (obs.getValueNumeric() == null || obs.getValueNumeric() <= 0 || obs.getObsDatetime() == null
-					|| obs.getObsDatetime().before(cutoff)) {
-				continue;
-			}
-			if (latest == null || obs.getObsDatetime().after(latest.getObsDatetime())) {
-				latest = obs;
-			}
-		}
+		Obs latest = latestNumericObs(patient, weightConcept);
 		return latest == null ? null : latest.getValueNumeric();
 	}
 

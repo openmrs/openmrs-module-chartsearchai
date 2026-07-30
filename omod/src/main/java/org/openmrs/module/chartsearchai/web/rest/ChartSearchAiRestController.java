@@ -1097,6 +1097,11 @@ public class ChartSearchAiRestController {
 	private void writeTurnEvent(OutputStream out, TurnEvent event, ClinicalConversation conversation,
 			ClinicalConversationTurn turn) throws IOException {
 		TurnEventType type = event.getType();
+		if (type == TurnEventType.ANSWER_VALIDATION && event.getAnswer() != null) {
+			// The composer becomes available after review while In-Depth may still run. Persist only
+			// the already checked/edited envelope so a follow-up sees safe prior context immediately.
+			conversationService.recordCheckedAnswer(turn, event.getAnswer());
+		}
 		String wire = type.getWireName();
 		if (type == TurnEventType.ANSWER_DELTA || type == TurnEventType.REASONING_DELTA) {
 			writeSseEvent(out, wire, event.getTextDelta() == null ? "" : event.getTextDelta());

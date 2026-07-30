@@ -225,6 +225,12 @@ public class ResolveConversationTest {
 		}
 
 		@Override
+		public boolean recordCheckedAnswer(ClinicalConversationTurn turn,
+				org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope answer) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
 		public List<PriorClinicalTurn> priorClinicalTurns(ClinicalConversation conversation) {
 			throw new UnsupportedOperationException();
 		}

@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.openmrs.Patient;
@@ -185,11 +186,30 @@ public class ConversationServiceImpl implements ConversationService {
 	}
 
 	@Override
+	public boolean recordCheckedAnswer(ClinicalConversationTurn turn, AnswerEnvelope answer) {
+		require(turn != null && turn.getConversation() != null, "turn and conversation are required");
+		require(answer != null, "answer is required");
+		if (turn.getTerminalState() != null || !isChecked(answer)) {
+			return false;
+		}
+
+		turn.setAnswerText(answer.getText());
+		turn.setProviderPayload(serialize(answer.getPayload()));
+		turn.setPayloadMediaType(ClinicalConversationTurn.MEDIA_TYPE_JSON);
+		Date now = new Date();
+		turn.getConversation().setLastActivityAt(now);
+		conversationDAO.saveConversation(turn.getConversation());
+		conversationDAO.saveTurn(turn);
+		return true;
+	}
+
+	@Override
 	public List<PriorClinicalTurn> priorClinicalTurns(ClinicalConversation conversation) {
 		List<PriorClinicalTurn> prior = new ArrayList<>();
 		for (ClinicalConversationTurn turn : conversationDAO.getTurns(conversation)) {
-			if (TurnEventType.TURN_DONE.getWireName().equals(turn.getTerminalState())
-					&& turn.getAnswerText() != null) {
+			boolean completedAnswer = TurnEventType.TURN_DONE.getWireName().equals(turn.getTerminalState());
+			boolean checkedAnswerStillRunning = turn.getTerminalState() == null && isStoredChecked(turn);
+			if ((completedAnswer || checkedAnswerStillRunning) && turn.getAnswerText() != null) {
 				prior.add(new PriorClinicalTurn(turn.getQuestion(), turn.getAnswerText()));
 			}
 		}
@@ -232,6 +252,29 @@ public class ConversationServiceImpl implements ConversationService {
 		}
 		Object value = answer.getPayload().get(field);
 		return value instanceof Number ? ((Number) value).intValue() : null;
+	}
+
+	private static boolean isChecked(AnswerEnvelope answer) {
+		Object validation = answer.getPayload().get("answerValidation");
+		if (!(validation instanceof Map)) {
+			return false;
+		}
+		Object status = ((Map<?, ?>) validation).get("status");
+		return "checked".equals(status) || "edited".equals(status);
+	}
+
+	private static boolean isStoredChecked(ClinicalConversationTurn turn) {
+		if (turn.getProviderPayload() == null) {
+			return false;
+		}
+		try {
+			JsonNode status = MAPPER.readTree(turn.getProviderPayload()).path("answerValidation")
+					.path("status");
+			return "checked".equals(status.asText()) || "edited".equals(status.asText());
+		}
+		catch (IOException ignored) {
+			return false;
+		}
 	}
 
 	private static String serialize(Map<String, Object> payload) {

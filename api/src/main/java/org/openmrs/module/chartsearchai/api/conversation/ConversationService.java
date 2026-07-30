@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.api.conversation;
 import java.util.List;
 
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope;
 import org.openmrs.module.chartsearchai.api.provider.ProviderMode;
 import org.openmrs.module.chartsearchai.api.provider.TurnResult;
 import org.openmrs.module.chartsearchai.model.ClinicalConversation;
@@ -51,6 +52,15 @@ public interface ConversationService {
 
 	ClinicalConversationTurn finishTurn(ClinicalConversationTurn turn, TurnResult result, long responseTimeMs);
 
-	/** Completed successful turns projected to canonical prose for the provider's next request. */
+	/**
+	 * Persists an already reviewed safe answer while an optional later stage (such as In-Depth) is
+	 * still running. Returns {@code false} when the envelope is not a checked final answer.
+	 */
+	boolean recordCheckedAnswer(ClinicalConversationTurn turn, AnswerEnvelope answer);
+
+	/**
+	 * Completed successful turns, plus checked answers whose optional In-Depth tail is still
+	 * running, projected to canonical prose for the provider's next request.
+	 */
 	List<PriorClinicalTurn> priorClinicalTurns(ClinicalConversation conversation);
 }

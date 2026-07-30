@@ -10,10 +10,12 @@
 package org.openmrs.module.chartsearchai.api.conversation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
 import java.util.Date;
@@ -173,6 +175,45 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertEquals("", turn.getAuditLog().getAnswer());
 		assertEquals(0, conversationService.priorClinicalTurns(conversation).size(),
 				"failed output cannot become context for a later clinical answer");
+	}
+
+	@Test
+	public void checkedAnswerIsAvailableForFollowUpBeforeTheInDepthTailCompletes() throws Exception {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "request-checked",
+				"What was the most recent visit date?");
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "2026-01-26");
+		payload.put("answerValidation", Collections.singletonMap("status", "checked"));
+		payload.put("inDepth", Collections.singletonMap("status", "pending"));
+		assertTrue(conversationService.recordCheckedAnswer(turn, AnswerEnvelope.fromPayload(payload)));
+		assertNull(turn.getTerminalState(), "the In-Depth tail has not completed yet");
+		assertNull(turn.getAuditLog(), "only the terminal turn creates the immutable audit row");
+		Context.flushSession();
+		Context.clearSession();
+
+		List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(
+				conversationDAO.getTurnByUuid(turn.getUuid()).getConversation());
+		assertEquals(1, prior.size(),
+				"a checked answer must be usable as history while its optional In-Depth tail runs");
+		assertEquals("What was the most recent visit date?", prior.get(0).getQuestion());
+		assertEquals("2026-01-26", prior.get(0).getAnswer());
+	}
+
+	@Test
+	public void needsReviewAnswerNeverBecomesFollowUpContext() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "request-needs-review",
+				"What was the most recent visit date?");
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "Unreviewed answer");
+		payload.put("answerValidation", Collections.singletonMap("status", "needs_review"));
+
+		assertFalse(conversationService.recordCheckedAnswer(turn, AnswerEnvelope.fromPayload(payload)));
+		assertNull(turn.getAnswerText());
+		assertEquals(0, conversationService.priorClinicalTurns(conversation).size());
 	}
 
 	@Test

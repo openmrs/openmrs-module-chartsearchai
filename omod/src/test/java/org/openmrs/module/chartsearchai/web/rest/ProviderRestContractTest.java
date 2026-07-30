@@ -128,6 +128,33 @@ public class ProviderRestContractTest {
 	}
 
 	@Test
+	public void checkedAnswerIsRecordedBeforeItsInDepthTailCompletes() throws Exception {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		ScriptedProvider provider = new ScriptedProvider("hub", true);
+		Map<String, Object> checked = answerPayload("2026-01-26");
+		checked.put("answerValidation", Collections.singletonMap("status", "checked"));
+		checked.put("inDepth", Collections.singletonMap("status", "pending"));
+		provider.events = Arrays.asList(
+				TurnEvent.of(TurnEventType.TURN_STARTED, 0, "hub"),
+				TurnEvent.withAnswer(TurnEventType.ANSWER_VALIDATION, 1, "hub",
+						AnswerEnvelope.fromPayload(checked)),
+				TurnEvent.of(TurnEventType.INDEPTH_PENDING, 2, "hub"),
+				TurnEvent.of(TurnEventType.TURN_DONE, 3, "hub"));
+		provider.result = TurnResult.done("hub", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(checked));
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(provider));
+
+		controller.streamProviderTurn(new ByteArrayOutputStream(), patient(), "What was the visit date?",
+				"hub", ProviderMode.QUERY_SCOPED, "single-e4b-checked", null);
+
+		assertEquals(1, conversations.recordedCheckedAnswers,
+				"checked answer must persist before an optional In-Depth tail completes");
+		assertEquals("2026-01-26", conversations.lastRecordedCheckedAnswer);
+	}
+
+	@Test
 	public void aNewTurnOnTheSameConversationCancelsThePriorInFlightTurn() throws Exception {
 		// G18: starting a new turn while a prior one on the same conversation is still running
 		// (e.g. its In-Depth is still generating) must cancel that prior turn instead of letting
@@ -459,7 +486,11 @@ public class ProviderRestContractTest {
 
 		int finished;
 
+		int recordedCheckedAnswers;
+
 		String lastFinishedAnswer;
+
+		String lastRecordedCheckedAnswer;
 
 		RecordingConversationService() {
 			openConversation = new ClinicalConversation();
@@ -518,6 +549,13 @@ public class ProviderRestContractTest {
 			finished++;
 			lastFinishedAnswer = result.getAnswer() == null ? null : result.getAnswer().getText();
 			return turn;
+		}
+
+		@Override
+		public boolean recordCheckedAnswer(ClinicalConversationTurn turn, AnswerEnvelope answer) {
+			recordedCheckedAnswers++;
+			lastRecordedCheckedAnswer = answer.getText();
+			return true;
 		}
 
 		@Override

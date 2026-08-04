@@ -361,7 +361,10 @@ public class PatientChartSerializer {
 			return focusIndices;
 		}
 
-		/** Marks this chart as a query-scoped slice; called only by the scoped chart builder. */
+		/** Marks this chart as a query-scoped slice. Called by the scoped chart builder, and again by
+		 *  {@code DrugReferenceInjector} when it rebuilds the chart to append injected records —
+		 *  a rebuild that dropped the stamp would silently turn a slice into something downstream
+		 *  reads as a full chart. */
 		public void markQueryScoped() {
 			this.queryScoped = true;
 		}
@@ -372,8 +375,10 @@ public class PatientChartSerializer {
 			return queryScoped;
 		}
 
-		/** Declares the resource types this chart carries completely; called by the scoped chart
-		 *  builder with the typed scope it filtered on. A null/empty set declares nothing. */
+		/** Declares the resource types this chart carries completely. Called by the scoped chart
+		 *  builder with the typed scope it filtered on, and again by {@code DrugReferenceInjector}
+		 *  on its rebuilt chart (via {@link #getCompleteResourceTypes}) for the same reason
+		 *  {@link #markQueryScoped} is. A null/empty set declares nothing. */
 		public void markCompleteFor(Set<String> resourceTypes) {
 			this.completeResourceTypes = resourceTypes == null || resourceTypes.isEmpty()
 					? Collections.<String>emptySet()

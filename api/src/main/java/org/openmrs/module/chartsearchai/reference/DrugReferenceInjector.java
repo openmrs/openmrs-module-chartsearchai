@@ -36,9 +36,12 @@ import org.springframework.stereotype.Service;
  * contraindications, interactions) the same way it grounds chart records.
  *
  * <p>Injection is appended <em>after</em> the retrieved chart records, continuing
- * the citation numbering, and carries the {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE}
- * resource type so the frontend can render its citation chip distinctly (a side
- * panel, not a chart-tab navigation).
+ * the citation numbering. A {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE} record
+ * carries that resource type so the frontend can render its citation chip distinctly (a side
+ * panel, not a chart-tab navigation). That is NOT true of every injected type — an
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is deliberately the
+ * opposite, carrying the patient's real {@code Order} uuid precisely so a client CAN navigate to
+ * it like any other chart citation (see below).
  *
  * <p><strong>Adding another kind of injected record?</strong> Its resource type must also be
  * classified by {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#referenceGroup}, which
@@ -283,6 +286,16 @@ public class DrugReferenceInjector {
 	 * issue #118 verbatim, and it opens only under drift, which is the only condition this method
 	 * exists for. Narrowing the corpus to records with no stop/discontinue marker would close it
 	 * without giving up the insurance above.
+	 *
+	 * <p>Same follow-up, second half: the match itself is a plain substring test
+	 * ({@code ActiveDrugOrder.namedIn}), so a short order name can be found inside an unrelated word
+	 * — an active {@code ASA} order reads as substantiated by a record saying
+	 * {@code "Drug order: Nasal spray"} — and a sibling record can mask an order whose name is a
+	 * substring of it ({@code Aspirin} inside {@code Aspirin/Dipyridamole}). Both silently suppress
+	 * the injection AND the WARN. This module already has the right rule and its rationale:
+	 * {@code DrugReference.matchesText} matches on word boundaries precisely so a token cannot hit
+	 * inside unrelated prose. Extract that boundary scan and call it from both rather than adding a
+	 * third matching rule.
 	 *
 	 * <p>Only reconciled when the chart claims to carry every drug-order record
 	 * ({@link PatientChart#isCompleteFor}). A query-scoped slice — the DEFAULT chart mode — omits

@@ -522,8 +522,13 @@ public class ChartSearchAiConstants {
 	 * so a client can disclose that provenance rather than let it read as chart evidence —
 	 * A drug-reference citation is additionally never grounding-verified as {@code true}, being
 	 * demote-only (see {@code CitationGroundingVerifier}) — but note that gate keys on the
-	 * {@code drug_reference} resource type, not on this group, so the property does not extend for
-	 * free to a second kind of injected record.
+	 * {@code drug_reference} resource type, not on this group, so the property does NOT extend for
+	 * free to the other injected types. It already does not hold for all of this group:
+	 * {@link #RESOURCE_TYPE_SAFETY_FINDING} is reference-group yet graded normally. And
+	 * {@link #RESOURCE_TYPE_ACTIVE_DRUG_ORDER} is injected but groups as
+	 * {@link #REFERENCE_GROUP_CHART}, so it is graded too (decided in #118: one drug asserted of
+	 * this patient has no subject roles to swap, so a passing verdict is real assurance). A client
+	 * must therefore read {@code grounded} per reference, not infer it from {@code group}.
 	 */
 	public static final String REFERENCE_GROUP_REFERENCE = "reference";
 

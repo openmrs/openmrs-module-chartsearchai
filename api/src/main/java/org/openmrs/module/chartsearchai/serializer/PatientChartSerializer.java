@@ -381,9 +381,18 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * True when every record querystore holds of {@code resourceType} for this patient is in
-		 * this chart — so a record's ABSENCE means the index does not hold it, rather than the
-		 * chart having legitimately left it out.
+		 * True when this chart carries every record of {@code resourceType} that was RETRIEVED for
+		 * this patient — so a record's ABSENCE from it is informative (nothing here dropped it on
+		 * purpose) rather than merely out of scope.
+		 *
+		 * <p>A statement about this chart, deliberately, not about the index. A scoped slice built at
+		 * querystore's ES chart cap declares completeness even though the fetch itself dropped the
+		 * older tail, so absence can mean "the retrieved chart lacks it" as well as "the index lacks
+		 * it". That is the contract the consumers this exists for need — they repair the chart the
+		 * ANSWER is grounded in, and at the cap it genuinely lacks the record — but it means a caller
+		 * must not report absence as an indexing defect without hedging. See
+		 * {@code QueryStoreChartBuilder.buildScoped}, which explains why suppressing the stamp there
+		 * would be the wrong fix.
 		 *
 		 * <p>A full chart is complete for every type by construction, which is why only the scoped
 		 * builder stamps anything: a mode that fetches the whole chart cannot forget to. A

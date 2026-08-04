@@ -10,9 +10,12 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,7 +50,10 @@ import org.springframework.stereotype.Service;
  *       {@code chartsearchai.drugSafety.minInteractionSeverity} is not raised — unrated rules
  *       are never floor-filtered), by sharing an ATC chemical subgroup with an active order
  *       (duplicate-therapy reasoning), or — failing that — by sharing a curated
- *       {@link CrossReactivityGroup} (cross-branch family overlap).</li>
+ *       {@link CrossReactivityGroup} (cross-branch family overlap). The rule arm raises one
+ *       warning per (drug, matched partner): several rules can name one partner — DDInter's
+ *       route variants of a drug all publish the same match token — and they collapse to the
+ *       most severe row, see {@link #bestRulePerPartner}.</li>
  *   <li><b>Contraindications</b> — the drug is contraindicated by an active allergy or
  *       condition: by a hand-authored rule, by being the same drug as — or sharing an ATC
  *       chemical subgroup with — a recorded allergy (cross-reactivity reasoning), or —
@@ -255,7 +261,7 @@ public class DrugSafetyValidator {
 	 *         or {@code -1} for null/unrecognized — which the rule filter treats as exempt
 	 *         (unrated is not low-rated).
 	 */
-	static int severityRank(String severity) {
+	private static int severityRank(String severity) {
 		if (severity == null) {
 			return -1;
 		}
@@ -271,6 +277,22 @@ public class DrugSafetyValidator {
 			default:
 				return -1;
 		}
+	}
+
+	/**
+	 * {@link #severityRank} raised so that an <em>unrated</em> rule sorts above {@code major}: every
+	 * curated hand-authored rule is unrated and {@link #clearsSeverityFloor} already treats unrated
+	 * as exempt rather than low — unrated is not low-rated, so wherever a most-severe-wins choice is
+	 * made it must not lose to a rated row. The one definition of that ordering, shared by the chip
+	 * grouping here ({@link #bestRulePerPartner}) and the promoted-note ordering in
+	 * {@link DrugReferenceInjector.InteractionNote}; two copies could drift into ranking the same
+	 * pair of rules oppositely, which is how the chip and the prompt text come to disagree.
+	 *
+	 * @return the rank, with null/unrecognized mapped to {@link Integer#MAX_VALUE}
+	 */
+	static int severityPriority(String severity) {
+		int rank = severityRank(severity);
+		return rank < 0 ? Integer.MAX_VALUE : rank;
 	}
 
 	/** @return the floor rank for the GP value, falling back to the default floor when the
@@ -374,30 +396,168 @@ public class DrugSafetyValidator {
 		}
 	}
 
+	/**
+	 * Rule-based interaction chips for {@code ref}: <b>one chip per (this drug, matched partner)</b>
+	 * — see {@link #bestRulePerPartner} for why several rules can match one order.
+	 */
 	private void addInteractions(List<SafetyWarning> warnings, DrugReference ref,
 			PatientClinicalContext context, int severityFloor) {
 		if (context == null) {
 			return;
 		}
+		for (DrugReference.Interaction i : bestRulePerPartner(ref, context, severityFloor)) {
+			String detail = ref.displayLabel() + " interacts with active order " + partnerLabel(i);
+			if (i.getNote() != null && !i.getNote().isEmpty()) {
+				detail += " — " + i.getNote();
+			}
+			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
+		}
+	}
+
+	/**
+	 * The partner label a chip names for {@code interaction} — its match token, else its ATC code.
+	 *
+	 * <p>One definition, because the chip detail renders it and {@link #bestRulePerPartner} groups on
+	 * it: that grouping is only correct while the key IS the label the chip says, and two copies of
+	 * the same coalesce could drift into grouping rules by something a clinician never sees.
+	 *
+	 * <p>Trimmed to fold the way the MATCH folds. {@link PatientClinicalContext#hasActiveDrug} trims
+	 * the rule's token and matches it case-insensitively against the order name, so two rows whose
+	 * tokens differ only in case or in surrounding whitespace are one partner to the only predicate
+	 * that decides an interaction concerns this patient — and must be one partner here too, or issue
+	 * #115's duplicate chip returns for a hand-authored dataset, silently and with two labels a
+	 * clinician cannot tell apart. That shape reaches this method: {@code ddinter} lower-cases every
+	 * token it derives and takes it from the trimmed RxNorm generic whenever the partner row has one,
+	 * and {@code atc} carries no rules at all, but the curated {@code json} source is plain Jackson
+	 * over an operator-editable file and sanitizes neither case nor padding — nor does the ATC arm,
+	 * which is why the fold is applied to the coalesced value rather than to the token alone.
+	 *
+	 * <p>Not yet the only label site: {@link DrugReferenceInjector#orderedInteractionNotes} still
+	 * coalesces its own, untrimmed (it trims the assembled {@code label (note)} piece, not the label),
+	 * so a padded curated token reaches the citable record as {@code "warfarin   (Major. …)"} beside a
+	 * chip reading {@code "active order warfarin"}. Same partner, different spelling; giving the
+	 * injector this method is the follow-up.
+	 *
+	 * @return the label, or null when the rule carries neither — which a rule that matched an active
+	 *         order cannot ({@code hasActiveDrug} needs a non-blank token or a non-blank ATC), so
+	 *         callers inside the matched loop never see it
+	 */
+	private static String partnerLabel(DrugReference.Interaction interaction) {
+		String label = ChartSearchAiUtils.firstNonBlank(interaction.getToken(), interaction.getAtc());
+		return label == null ? null : label.trim();
+	}
+
+	/**
+	 * The matched interaction rules of {@code ref} worth chipping, at most one per partner, in
+	 * dataset order of first appearance.
+	 *
+	 * <p><b>Why grouping is needed (issue #115).</b> DDInter carries one entry per <em>route
+	 * variant</em> and every variant of a drug publishes the same {@code rxnorm_name}, so the
+	 * variants' rows all reach this arm carrying the same match token: one active order matches
+	 * every one of them, and ungrouped that is N chips for a single pair, at N different
+	 * severities. Measured on the 3.7.1 standalone: a patient on one Dexamethasone 4mg order,
+	 * asked about voxelotor, raised three chips — Major + Moderate + Moderate — of which the two
+	 * Moderate details were byte-identical strings, because the nasal and ophthalmic variants
+	 * share a mechanism group. Across the full KB 142 {@code rxnorm_name} values are shared by
+	 * more than one entry (332 entries), and 1004 question-drugs would raise 3 or more chips for
+	 * some single active drug. {@link SafetyWarning} carries no {@code equals}, so nothing
+	 * downstream can collapse them — and because the chips are also injected as citable
+	 * safety-finding records ({@code DrugReferenceInjector.preAnswerFindings}), each duplicate
+	 * became a near-identical record in the prompt as well.
+	 *
+	 * <p><b>What is grouped.</b> The key is the label the chip actually renders
+	 * ({@link #partnerLabel}, case-folded), so rules that would produce the same
+	 * "interacts with active order X" subject collapse while rules naming different partners each
+	 * keep their chip — even when their notes are identical strings. Grouping is per {@code ref}
+	 * and per arm: two different drugs in play still chip separately about the same order, and the
+	 * class arm ({@link #addClassInteractions}) is untouched, so the rule-plus-class double chip
+	 * of issue #88 is a different defect and stays open.
+	 *
+	 * <p><b>Which row wins.</b> The most severe rating, then the longer note — longer in prose, not in
+	 * whitespace, see {@link #noteLength}. Route variants genuinely differ — topical dexamethasone does
+	 * not have systemic dexamethasone's interaction profile, which is why DDInter rates voxelotor Major
+	 * against systemic dexamethasone, Moderate against two others and carries no row at all against the
+	 * topical variant — but nothing on a {@code DrugOrder} tells this layer which variant the order is
+	 * (the context carries names and ATC codes; all four variants publish an identical ATC list),
+	 * so the variant cannot be resolved here. Reporting the strongest rating over-warns rather than
+	 * under-warns on a non-blocking advisory the clinician adjudicates, which is the fail-safe
+	 * direction; the accepted cost is that a patient on a topical form may see the systemic
+	 * severity. Making the severity route-aware needs a dose-form/route vocabulary that does not
+	 * exist yet — the data-side half of #115. The note length is the only informativeness signal a
+	 * row carries: DDInter's "no mechanism description on file" fallback is shorter than any real
+	 * mechanism paragraph, and where two equally-rated rows both carry prose the longer one has been
+	 * a strict superset in the shapes measured — in the two dolutegravir x iron rows (171 and 236
+	 * characters of note) the surplus is the sentence "The mechanism of interaction has not been
+	 * established.", so the fuller row says everything the shorter one does and states its own limit
+	 * — so a tie on severity keeps the fuller note. Equal on both keeps the incumbent, so a group's
+	 * chip is the dataset's first such row.
+	 *
+	 * <p><b>Two corners this rule accepts.</b> A row with no note at all still wins its group on
+	 * severity alone, so an operator's token-only unrated rule beats a rated row carrying a mechanism
+	 * paragraph and the chip then gives no reason — reachable only in hand-authored data, since every
+	 * DDInter row has a note, and left as it is because the alternative (a note outranking a rating)
+	 * would drop the operator's own rule, which is the thing {@link #severityPriority} exists to
+	 * protect. And grouping is by label, so two tokens that both match one order but are not the same
+	 * string stay two chips: across the full KB exactly one such pair exists — {@code enalapril} and
+	 * {@code enalaprilat}, which 376 entries carry as separate partners, and which a single order
+	 * named "Enalaprilat 1.25 mg" matches through the order-name matcher's inflection tolerance.
+	 * Prodrug and active metabolite are genuinely different DDInter entries, so that pair is reported
+	 * rather than merged.
+	 */
+	private static Collection<DrugReference.Interaction> bestRulePerPartner(DrugReference ref,
+			PatientClinicalContext context, int severityFloor) {
+		Map<String, DrugReference.Interaction> best = new LinkedHashMap<String, DrugReference.Interaction>();
 		for (DrugReference.Interaction i : ref.getInteractions()) {
 			// The severity floor (issue #84): a rule the SOURCE rated below the floor is not
 			// raised — DDInter's Unknown-severity rows carry no mechanism text and would bury
 			// the chips that matter (measured: an uncharacterized aspirin x simvastatin row
 			// sharing equal billing with a severe-allergy contraindication). A rule with no
 			// severity (every curated hand-authored rule) is exempt: unrated is not low-rated.
+			// Filtered BEFORE grouping, so a sub-floor row can never become a group's winner and
+			// the floor keeps deciding exactly which rules exist for this arm.
 			if (!clearsSeverityFloor(i, severityFloor)) {
 				continue;
 			}
-			if (context.hasActiveDrug(i.getToken(), i.getAtc())) {
-				// A matched rule has a non-blank token or ATC, so the coalesce never yields null.
-				String detail = ref.displayLabel() + " interacts with active order "
-						+ ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
-				if (i.getNote() != null && !i.getNote().isEmpty()) {
-					detail += " — " + i.getNote();
-				}
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
+			if (!context.hasActiveDrug(i.getToken(), i.getAtc())) {
+				continue;
+			}
+			String key = partnerLabel(i).toLowerCase(Locale.ROOT);
+			DrugReference.Interaction incumbent = best.get(key);
+			if (incumbent == null || outranks(i, incumbent)) {
+				// LinkedHashMap keeps a re-put key in its original position, so replacing a group's
+				// winner does not reorder the chips.
+				best.put(key, i);
 			}
 		}
+		return best.values();
+	}
+
+	/**
+	 * @return true when {@code candidate} is the row worth chipping for a partner {@code incumbent}
+	 *         already covers — a more severe rating, or an equal rating with a longer note. See
+	 *         {@link #bestRulePerPartner} for the rationale.
+	 */
+	private static boolean outranks(DrugReference.Interaction candidate, DrugReference.Interaction incumbent) {
+		int candidateSeverity = severityPriority(candidate.getSeverity());
+		int incumbentSeverity = severityPriority(incumbent.getSeverity());
+		if (candidateSeverity != incumbentSeverity) {
+			return candidateSeverity > incumbentSeverity;
+		}
+		return noteLength(candidate) > noteLength(incumbent);
+	}
+
+	/**
+	 * @return how much mechanism prose {@code interaction}'s note carries — its <em>trimmed</em>
+	 *         length. Whitespace is not the informativeness signal the tie-break is reading: measured
+	 *         raw, a short referral note with a block of blank lines pasted onto it outranks a longer
+	 *         real mechanism paragraph, and the surviving chip then says nothing about the mechanism
+	 *         while the row explaining it is discarded. Trimmed for the comparison only — the note
+	 *         still renders as authored, exactly as it does for a row with no competitor;
+	 *         {@link DrugReferenceInjector#orderedInteractionNotes} makes the same "trim before you
+	 *         compare lengths" call for the same reason.
+	 */
+	private static int noteLength(DrugReference.Interaction interaction) {
+		return interaction.getNote() == null ? 0 : interaction.getNote().trim().length();
 	}
 
 	/**

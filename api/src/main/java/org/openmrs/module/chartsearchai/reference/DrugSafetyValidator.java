@@ -514,7 +514,10 @@ public class DrugSafetyValidator {
 	 * all 42,415 rows whose mechanism carries no text are rated Unknown, which #108's severity floor
 	 * filters out before this arm sees them (3 above-floor rows do carry an empty mechanism —
 	 * vilanterol, mometasone and bitolterol against regular human insulin, all Moderate — and none of
-	 * the three is a class-related pair). The shape that DOES survive is the UNRATED rule:
+	 * the three is a class-related pair). Put the other way round: of the 2,195 above-floor rows whose
+	 * pair ALSO trips the class arm — 2,181 by a shared ATC-4 subgroup, 14 by the curated NSAID group —
+	 * not one carries a contentless note, so on this dataset the case #88 argued from never arises where
+	 * a fold could act on it. The shape that DOES survive is the UNRATED rule:
 	 * {@link #clearsSeverityFloor} deliberately exempts a rule with no severity rather than treating
 	 * it as low, so every hand-authored curated rule reaches a chip whatever it carries, and one
 	 * authored with no note produces a chip reading only "X interacts with active order Y". No bundled

@@ -18,7 +18,9 @@ import java.io.InputStream;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * Exercises the real {@link DdiDrugReferenceSource} and its behaviour through the real injector
@@ -33,6 +35,15 @@ public class DdiDrugReferenceSourceTest {
 	private DrugReference entry(String name) {
 		return new DdiDrugReferenceSource().load().stream()
 				.filter(r -> name.equalsIgnoreCase(r.getName())).findFirst().orElse(null);
+	}
+
+	/** The injected drug-reference record's mapping — the carrier of the citation metadata that is
+	 *  deliberately absent from the record text (issue #117). */
+	private RecordMapping injectedReference(PatientChart chart) {
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType()))
+				.findFirst().orElseThrow(() -> new AssertionError(
+						"no drug-reference record was injected into the chart"));
 	}
 
 	@Test
@@ -105,8 +116,11 @@ public class DdiDrugReferenceSourceTest {
 				DrugReferenceTestSupport.ctx(60, null, null, null, null, null), "is warfarin safe to add?");
 		String text = result.getText();
 		assertTrue(text.contains("Drug reference — Warfarin"), "the Warfarin reference should be injected");
-		assertTrue(text.contains("more interactions on file"),
-				"a broad interaction set must be capped, with the remainder summarised");
+		// The remainder is reported on the record's mapping, not appended to the record text: as a
+		// text tail the model recited it into clinician-facing answers (issue #117). Same fact, new
+		// carrier — and it is still a precondition for the length assertion below meaning anything.
+		assertTrue(injectedReference(result).getWithheldInteractions() > 0,
+				"a broad interaction set must be capped, with the remainder reported as withheld");
 		int start = text.indexOf("Drug reference — Warfarin");
 		int end = text.indexOf('\n', start);
 		String line = end > start ? text.substring(start, end) : text.substring(start);

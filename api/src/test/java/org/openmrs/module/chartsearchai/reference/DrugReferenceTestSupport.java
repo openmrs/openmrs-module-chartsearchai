@@ -50,6 +50,17 @@ public final class DrugReferenceTestSupport {
 						"no drug-reference record was injected for question: " + question));
 	}
 
+	/**
+	 * The real record mappings the REAL injector produces for {@code question} (bundled DDInter
+	 * sample, real load → parse → injectRecords chain), for tests outside this package that need
+	 * genuine injected mappings — including their citation metadata (source, withheld count) —
+	 * rather than hand-built stand-ins.
+	 */
+	public static List<RecordMapping> injectedDdinterMappings(String question) {
+		return injector(ddinterService()).injectRecords(oneRecordChart(),
+				ctx(60, null, null, null, null, null), question).getMappings();
+	}
+
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */
 	static final String ATC_SAMPLE = "atc/atc-sample.tsv";
 

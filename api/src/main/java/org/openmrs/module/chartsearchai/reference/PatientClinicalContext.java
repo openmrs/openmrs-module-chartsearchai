@@ -111,14 +111,21 @@ public class PatientClinicalContext {
 		return conditionTokens;
 	}
 
-	/** @return true when any active-order name or ATC code matches the given interaction rule. */
+	/**
+	 * @return true when any active-order name or ATC code matches the given interaction rule. The
+	 *         name arm goes through {@link DrugReference#matchesOrderName} — not bare containment,
+	 *         which reported drugs the patient had never taken because drug names nest ("tiotropium"
+	 *         contains "opium"; issue #86), and not the prose rule either, because an order's display
+	 *         name is localized and inflected rather than prose (see there). Both callers — the chip
+	 *         decision in {@link DrugSafetyValidator} and the prompt-promotion predicate in
+	 *         {@link DrugReferenceInjector} — reach that rule only through here, which is what keeps
+	 *         the chips and the promoted prose agreeing about which orders a rule matches.
+	 */
 	boolean hasActiveDrug(String nameToken, String atcCode) {
 		if (nameToken != null && !nameToken.trim().isEmpty()) {
 			String n = nameToken.trim();
 			for (String drug : activeDrugNames) {
-				// Whole-word, not substring: an interaction token that is a sub-token of a longer
-				// order name (e.g. "chlorothiazide" inside "hydrochlorothiazide") must not match.
-				if (DrugReference.containsWord(drug, n)) {
+				if (DrugReference.matchesOrderName(drug, n)) {
 					return true;
 				}
 			}

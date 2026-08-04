@@ -279,23 +279,104 @@ public class DrugReference {
 	 *         substring, so a drug name nested inside a longer one does not spuriously match
 	 *         ("chlorothiazide" is not a whole word in "hydrochlorothiazide"), while a real token
 	 *         still matches ("aspirin" in "Aspirin 81 mg"). Case-insensitive; a null/blank word
-	 *         never matches. This is the one matcher shared by {@link #matchesText}
-	 *         (alias-in-question) and {@link PatientClinicalContext#hasActiveDrug}
-	 *         (token-in-order-name), so the two cannot drift.
+	 *         never matches. Backs {@link #matchesText} (alias-in-prose); the active-order
+	 *         counterpart is {@link #matchesOrderName}, which shares this rule's left boundary but
+	 *         not its right one — see there for why one matcher cannot serve both.
 	 */
 	static boolean containsWord(String text, String word) {
-		if (text == null || word == null || word.isEmpty()) {
+		return containsBoundedToken(text, word, 0);
+	}
+
+	/**
+	 * How many trailing letters an active-order display name may carry past a matched drug token
+	 * before the token stops naming that drug. Two: a localized drug name suffixes the INN stem with
+	 * one inflectional ending — Romance singulars ({@code Aspirine}, {@code Aspirina},
+	 * {@code Ondansetrona}) and their plurals ({@code Multivitamines}) — while a longer tail is a
+	 * different substance ({@code Heparinoids}, {@code Multi-Vitamin Adult}). See
+	 * {@link #matchesOrderName} for the measurement behind the number.
+	 */
+	private static final int MAX_ORDER_NAME_INFLECTION_LETTERS = 2;
+
+	/**
+	 * Order-name matching: whether {@code token} — an interaction rule's drug token — names the drug
+	 * in a patient's active drug ORDER, whose {@code orderName} is one display name rather than
+	 * prose.
+	 *
+	 * <p>A bare containment test here reports drugs the patient has never taken, because drug names
+	 * nest: {@code "tiotropium".contains("opium")} and {@code "spironolactone".contains("iron")} are
+	 * both true, and both were raised as Major interaction chips on the 3.7.1 standalone (issue #86).
+	 * The discriminating half of the fix is the LEFT boundary shared with {@link #containsWord}: an
+	 * alphanumeric character immediately before the token means the token sits inside a longer word,
+	 * i.e. a different molecule — {@code tiotr|opium}, {@code sp|iron|olactone},
+	 * {@code nitro|glycerin}, {@code bud|esonide}, {@code hydro|chlorothiazide},
+	 * {@code cipr|ofloxacin}.
+	 *
+	 * <p>The right-hand side is where this deliberately differs from {@link #containsWord}, because
+	 * the two kinds of string differ: prose is words, an order name is one localized, inflected
+	 * display name with a dose appended. Measured over the 3.7.1 demo dictionary (2531 drug and
+	 * drug-concept names x the full KB's 2093 rule tokens), by tolerated trailing letters:
+	 *
+	 * <pre>
+	 *   rule                    matches   nested-name collisions leaking   what enters at this step
+	 *   contains (the defect)     896     9 of 9                           —
+	 *   symmetric boundary        761     0 of 9                           —
+	 *   left + &lt;=1 letter         828     0 of 9   67 localized spellings (Aspirine Co 81mg, Aspirina,
+	 *                                              Amoxicilline, Clarithromycine Co 500mg, Ondansetrona)
+	 *   left + &lt;=2 letters        829     0 of 9   1 localized plural (Multivitamines et fer)
+	 *   left + &lt;=3 letters        829     0 of 9   nothing
+	 *   left + &lt;=4 letters        834     0 of 9   5 FALSE positives (Heparinoids ~ heparin,
+	 *                                              Multi-Vitamin Adult ~ vitamin a)
+	 * </pre>
+	 *
+	 * A symmetric boundary would therefore stop checking a patient on {@code Aspirine Co 81mg} for
+	 * aspirin interactions at all — trading a false positive for a false NEGATIVE, the wrong
+	 * direction for a safety net, and one that looks exactly like the noise being removed. Two is the
+	 * far edge of the plateau where every legitimate name is matched and no false positive has yet
+	 * appeared; the first ones appear at four. Stopping at one (this issue's originally measured
+	 * recommendation) leaves exactly one legitimate name unmatched, {@code Multivitamines et fer},
+	 * whose reference entry carries 2 Major and 8 Moderate rules that would silently stop being
+	 * checked.
+	 *
+	 * <p>A bound on the tail, rather than a list of known inflections: stripping
+	 * {@code -e}/{@code -a}/{@code -o} from both sides was measured on the same corpus at 826
+	 * matches, a strict subset of this rule, and trades one bound for a per-language whitelist that a
+	 * differently-localized deployment falls off silently. Residual imprecision this rule keeps, for
+	 * the record: 2 of the 829 are a nitroglycerin order matching the token {@code glycerin} through
+	 * its own parenthetical synonym ("glycerine trinitrate") — a mislabel, not a fabricated drug, and
+	 * one every rule that tolerates an inflectional tail shares.
+	 */
+	static boolean matchesOrderName(String orderName, String token) {
+		return containsBoundedToken(orderName, token, MAX_ORDER_NAME_INFLECTION_LETTERS);
+	}
+
+	/**
+	 * The one boundary-aware containment scan, shared by prose matching ({@link #containsWord}) and
+	 * order-name matching ({@link #matchesOrderName}) so the boundary rule cannot drift between
+	 * them. A match needs {@code token} to start at a word boundary in {@code text} and to end at
+	 * one, give or take up to {@code maxTrailingLetters} letters — never digits, which in a drug
+	 * name are a strength rather than part of the name. Case-insensitive; a null/blank token never
+	 * matches.
+	 */
+	private static boolean containsBoundedToken(String text, String token, int maxTrailingLetters) {
+		if (text == null || token == null || token.isEmpty()) {
 			return false;
 		}
 		String t = text.toLowerCase(Locale.ROOT);
-		String w = word.toLowerCase(Locale.ROOT);
+		String w = token.toLowerCase(Locale.ROOT);
 		int idx = t.indexOf(w);
 		while (idx >= 0) {
-			boolean leftOk = idx == 0 || !Character.isLetterOrDigit(t.charAt(idx - 1));
-			int end = idx + w.length();
-			boolean rightOk = end >= t.length() || !Character.isLetterOrDigit(t.charAt(end));
-			if (leftOk && rightOk) {
-				return true;
+			if (idx == 0 || !Character.isLetterOrDigit(t.charAt(idx - 1))) {
+				int end = idx + w.length();
+				for (int tail = 0; tail <= maxTrailingLetters; tail++) {
+					int at = end + tail;
+					// A tail character must itself be a letter to be stepped over.
+					if (tail > 0 && !Character.isLetter(t.charAt(at - 1))) {
+						break;
+					}
+					if (at >= t.length() || !Character.isLetterOrDigit(t.charAt(at))) {
+						return true;
+					}
+				}
 			}
 			idx = t.indexOf(w, idx + 1);
 		}

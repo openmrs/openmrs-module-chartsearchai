@@ -67,4 +67,22 @@ public class HasActiveDrugWholeWordTest {
 		assertEquals(1, interactionCount(warnings, "Ibuprofen"),
 				"the whole-word token should match within a dose/form-qualified order name");
 	}
+
+	@Test
+	public void theNestedShorterDrugStillFiresOnItsOwnOrder() throws Exception {
+		// The other side of the same nested pair, so the fix is de-duplication and not suppression of
+		// the shorter name: a chlorothiazide order must still raise chlorothiazide's own rule. Without
+		// this, a matcher that simply never matched the shorter token would pass the two tests above.
+		List<SafetyWarning> warnings = validatorOverFixture().validate(
+				"Ibuprofen is a reasonable analgesic choice.",
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("chlorothiazide 500 mg"),
+						null, null, null));
+
+		assertEquals(1, interactionCount(warnings, "Ibuprofen"),
+				"exactly one interaction should fire (chlorothiazide), and the longer hydrochlorothiazide "
+						+ "token must not match a chlorothiazide order either");
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Ibuprofen", "chlorothiazide"),
+				"the fired interaction should name the drug actually on the chart");
+	}
 }

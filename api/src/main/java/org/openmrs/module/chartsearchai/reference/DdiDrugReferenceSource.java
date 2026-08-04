@@ -175,7 +175,8 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			DrugReference.Interaction i = new DrugReference.Interaction();
 			// Match on the RxNorm generic name (e.g. "aspirin", "acetaminophen") rather than the
 			// DDInter display name ("Acetylsalicylic acid"), since the validator matches this token
-			// as a substring of the order's display name; fall back to the display name.
+			// against the order's display name (by DrugReference.matchesOrderName, which needs the
+			// token to start a word of that name); fall back to the display name.
 			String token = p.rxnormName != null && !p.rxnormName.isEmpty() ? p.rxnormName : p.name;
 			i.setToken(token.toLowerCase(Locale.ROOT));
 			i.setAtc(p.atc.isEmpty() ? null : p.atc.get(0));

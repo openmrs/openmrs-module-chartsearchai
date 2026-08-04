@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "source": "test fixture — same-class explicit-interaction pairs",
+  "entries": [
+    {
+      "id": "lisinopril",
+      "name": "Lisinopril",
+      "aliases": ["lisinopril"],
+      "atcCodes": ["C09AA03"],
+      "interactions": [
+        { "token": "ramipril", "atc": "C09AA05", "note": "additive hyperkalemia and renal impairment risk" }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "enalapril",
+      "name": "Enalapril",
+      "aliases": ["enalapril"],
+      "atcCodes": ["C09AA02"],
+      "interactions": [
+        { "token": "ramipril", "atc": "C09AA05" }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "ramipril",
+      "name": "Ramipril",
+      "aliases": ["ramipril"],
+      "atcCodes": ["C09AA05"],
+      "source": "test fixture"
+    }
+  ]
+}

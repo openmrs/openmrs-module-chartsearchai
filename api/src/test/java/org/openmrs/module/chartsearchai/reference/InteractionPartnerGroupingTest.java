@@ -68,8 +68,9 @@ public class InteractionPartnerGroupingTest {
 	@Test
 	public void aHandAuthoredUnratedRowOutranksASourceRatedMajorRowForTheSamePartner() throws IOException {
 		// DrugSafetyValidator.severityPriority ranks an UNRATED rule above Major, deliberately:
-		// clearsSeverityFloor already exempts unrated rules from the floor because every curated
-		// hand-authored rule is unrated, and unrated is not low-rated. Since #115 that ordering also
+		// clearsSeverityFloor already exempts unrated rules from the floor because every rule in the
+		// bundled curated seed is unrated, and unrated is not low-rated. (A hand-authored file CAN
+		// rate a row — this fixture does, which is what makes the two comparable at all.) Since #115 that ordering also
 		// decides which chip a clinician sees, so an operator's own rule must not be dropped in
 		// favour of a source rating for the same partner. The fixture's rated row comes FIRST, so
 		// "keep the incumbent" fails here too.
@@ -90,11 +91,13 @@ public class InteractionPartnerGroupingTest {
 	public void theFullerNoteTieBreakMeasuresProseNotPadding() throws IOException {
 		// Severity cannot separate the fixture's two Linezolid rows, so the tie-break falls to the
 		// note — "the only informativeness signal a row carries". Whitespace is not that signal: the
-		// first row's note is a 79-character referral to a policy document with eleven newlines
-		// pasted onto the end (90 raw), the second is the 89-character mechanism. Measured raw, the
+		// SECOND row's note is a 79-character referral to a policy document with eleven newlines
+		// pasted onto the end (90 raw), the first is the 89-character mechanism. Measured raw, the
 		// referral wins and the clinician gets a chip that says nothing about serotonin syndrome
 		// while the row explaining it is discarded — decided by padding, which is exactly what the
-		// tie-break exists NOT to do.
+		// tie-break exists NOT to do. The winner being the FIRST row is deliberate: it also rules
+		// out "keep the last matching row", which passes every other case in this file because their
+		// intended winners all happen to sit last.
 		List<SafetyWarning> warnings = validator().validate("Linezolid could be started.",
 				"Is it safe to give linezolid?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Citalopram 20mg"),
@@ -106,5 +109,49 @@ public class InteractionPartnerGroupingTest {
 				+ " reversible MAO inhibitor and risks serotonin syndrome with an SSRI.",
 				warnings.get(0).getDetail(),
 				"the fuller note is the one carrying more PROSE, not the one carrying more whitespace");
+	}
+
+	@Test
+	public void rowsEqualOnSeverityAndOnNoteLengthKeepTheIncumbent() throws IOException {
+		// "Equal on both keeps the incumbent, so a group's chip is the dataset's first such row" is
+		// the last clause of the winner rule, and length cannot pin it while the two lengths differ.
+		// The fixture's two Amiodarone rows are both Moderate with 99-character notes saying
+		// different things, so only the incumbent rule decides — and a tie-break that replaced the
+		// incumbent on equality (a >= where the code has a >) would silently swap which of two
+		// equally-informative mechanisms the clinician reads.
+		List<SafetyWarning> warnings = validator().validate("Amiodarone could be started.",
+				"Is it safe to give amiodarone?",
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Digoxin 125mcg"),
+						null, null, null));
+
+		assertEquals(1, warnings.size(),
+				"two rows naming one partner must raise one chip, was: " + warnings);
+		assertEquals("Amiodarone interacts with active order digoxin — Moderate. Amiodarone reduces"
+				+ " digoxin clearance; halve the digoxin dose and check a level in a week.",
+				warnings.get(0).getDetail(),
+				"a full tie must keep the dataset's first row, not the last one seen");
+	}
+
+	@Test
+	public void rowsCarryingOnlyAnAtcCodeAreGroupedAndLabelledByThatCode() throws IOException {
+		// The partner label is the token ELSE the ATC code, and no shipped dataset exercises the
+		// second half: DDInter always derives a token, the WHO ATC source carries no rules at all,
+		// and all five bundled curated rules carry both fields. An operator's file need not — and
+		// hasActiveDrug matches on the ATC arm alone, after which the label is what the chip says AND
+		// what the group key is folded from. So `return getToken().trim()` would pass every other
+		// test in the repo and NPE here. The two Rivaroxaban rows carry the same code written
+		// " b01aa03 " and "B01AA03", which also pins that the fold applies to the ATC half; the two
+		// rows above them carry neither field and must simply match nothing rather than throw.
+		List<SafetyWarning> warnings = validator().validate("Rivaroxaban could be started.",
+				"Is it safe to start rivaroxaban?",
+				DrugReferenceTestSupport.ctx(60, null, null, DrugReferenceTestSupport.set("B01AA03"),
+						null, null));
+
+		assertEquals(1, warnings.size(),
+				"two rows naming one ATC-coded partner must raise one chip, was: " + warnings);
+		assertEquals("Rivaroxaban interacts with active order B01AA03 — Major. Do not co-prescribe two"
+				+ " oral anticoagulants outside a documented switching protocol.",
+				warnings.get(0).getDetail(),
+				"the chip must name the partner by its ATC code and carry the most severe row's note");
 	}
 }

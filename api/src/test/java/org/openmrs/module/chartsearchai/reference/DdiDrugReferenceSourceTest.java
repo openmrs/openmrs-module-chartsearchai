@@ -369,8 +369,9 @@ public class DdiDrugReferenceSourceTest {
 		// Real slice (#115): DDInter carries one entry per ROUTE VARIANT, and all four Dexamethasone
 		// variants publish rxnorm_name "dexamethasone" plus an identical ATC list. The route
 		// distinction is clinically real — topical dexamethasone does not have systemic
-		// dexamethasone's interaction profile, which is why Voxelotor is rated Major against one
-		// variant and Moderate against the others — so the DATASET must stay unflattened and the
+		// dexamethasone's interaction profile, which is why Voxelotor is rated Major against the
+		// systemic variant, Moderate against two others, and carries no row at all against the
+		// topical one (three rows over four variants) — so the DATASET must stay unflattened and the
 		// one-chip-per-pair decision belongs to the validator (pinned below).
 		List<DrugReference> entries = routeVariantEntries();
 		List<DrugReference> variants = entries.stream()
@@ -434,8 +435,9 @@ public class DdiDrugReferenceSourceTest {
 	@Test
 	public void strongestSeverityWinsEvenWhenItIsNeitherTheFirstRowNorTheLongestNote() throws Exception {
 		// Real slice: Lapatinib carries two rows against the shared token "sirolimus" — Sirolimus
-		// (Moderate, 285-char note) at dataset position 2 and Sirolimus (protein-bound) (Major,
-		// 280-char note) at position 4. The Major row is neither the first match nor the longest
+		// (Moderate, a 285-char mechanism inside a 295-char note) at dataset position 2 and Sirolimus
+		// (protein-bound) (Major, 280 inside 287) at position 4; the note is what the tie-break
+		// compares, and it carries the severity prefix. The Major row is neither the first match nor the longest
 		// note, so this is the arrangement that separates "most severe wins" from "keep the first
 		// row" and from "keep the longest note", both of which would pass the dexamethasone case.
 		List<SafetyWarning> warnings = routeVariantValidator().validate(

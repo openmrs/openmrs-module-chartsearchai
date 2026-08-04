@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Test fixture (issue #115): curated entries whose interaction rows name ONE partner twice. The curated source is the operator-editable one — plain Jackson over a hand-authored file, with no trimming of rule tokens or notes and no required severity — so it is the only source that can produce (a) two rows for one partner whose tokens differ only in case or in surrounding whitespace, which PatientClinicalContext.hasActiveDrug already folds to the same partner, (b) a hand-authored UNRATED row competing with a source-rated one, which is the mixed configuration in which DrugSafetyValidator.severityPriority's 'unrated outranks Major' ordering is observable at all, and (c) two equally-rated rows whose note LENGTHS order one way raw and the other way trimmed, which is what makes the fuller-note tie-break's measurement observable. The padding in (c) is written as \\n escapes rather than trailing spaces on purpose: invisible trailing whitespace in a fixture is one editor away from being stripped, which would leave the test passing while testing nothing. Parsed by the real JsonDrugReferenceSource parser.",
+  "description": "Test fixture (issue #115): curated entries whose interaction rows name ONE partner twice. The curated source is the operator-editable one — plain Jackson over a hand-authored file, with no trimming of rule tokens or notes, no required severity, and no required token — so it is the only source that can pose the questions the one-chip-per-partner collapse turns on: (a) two rows for one partner whose tokens differ only in case or in surrounding whitespace, which PatientClinicalContext.hasActiveDrug already folds to the same partner; (b) a hand-authored UNRATED row competing with a rated one, the mixed configuration in which DrugSafetyValidator.severityPriority's 'unrated outranks Major' ordering is observable at all; (c) two equally-rated rows whose note lengths order one way raw and the other way trimmed, which is what makes the fuller-note tie-break's measurement observable; (d) two equally-rated rows whose notes are the same LENGTH but different text, which is the only way to see that a full tie keeps the incumbent rather than the last row; and (e) rows carrying an ATC code but no token at all, which is the half of the partner label no shipped dataset exercises. The padding in (c) is written as \\n escapes rather than trailing spaces on purpose: invisible trailing whitespace in a fixture is one editor away from being stripped, which would leave the test passing while testing nothing. In (c) and (d) the intended winner is the FIRST row, so 'keep the last matching row' fails as well as 'measure the note raw'. Parsed by the real JsonDrugReferenceSource parser.",
   "entries": [
     {
       "id": "fluconazole-curated",
@@ -64,12 +64,64 @@
         {
           "token": "citalopram",
           "severity": "Major",
-          "note": "Major. Withhold per the local antimicrobial policy; see the pharmacy monograph.\n\n\n\n\n\n\n\n\n\n\n"
+          "note": "Major. Linezolid is a reversible MAO inhibitor and risks serotonin syndrome with an SSRI."
         },
         {
           "token": "citalopram",
           "severity": "Major",
-          "note": "Major. Linezolid is a reversible MAO inhibitor and risks serotonin syndrome with an SSRI."
+          "note": "Major. Withhold per the local antimicrobial policy; see the pharmacy monograph.\n\n\n\n\n\n\n\n\n\n\n"
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "amiodarone-curated",
+      "name": "Amiodarone",
+      "drugClass": "Class III antiarrhythmic",
+      "aliases": [
+        "amiodarone"
+      ],
+      "atcCodes": [
+        "C01BD01"
+      ],
+      "interactions": [
+        {
+          "token": "digoxin",
+          "severity": "Moderate",
+          "note": "Moderate. Amiodarone reduces digoxin clearance; halve the digoxin dose and check a level in a week."
+        },
+        {
+          "token": "digoxin",
+          "severity": "Moderate",
+          "note": "Moderate. Monitor for digoxin toxicity: nausea, visual halos and bradycardia in the first few days."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "rivaroxaban-curated",
+      "name": "Rivaroxaban",
+      "drugClass": "Direct factor Xa inhibitor",
+      "aliases": [
+        "rivaroxaban"
+      ],
+      "atcCodes": [
+        "B01AF01"
+      ],
+      "interactions": [
+        {},
+        {
+          "note": "An unmatchable stub: no token and no ATC, so it names no partner."
+        },
+        {
+          "atc": " b01aa03 ",
+          "severity": "Moderate",
+          "note": "Moderate. Overlapping anticoagulants raise bleeding risk; bridge deliberately, not by accident."
+        },
+        {
+          "atc": "B01AA03",
+          "severity": "Major",
+          "note": "Major. Do not co-prescribe two oral anticoagulants outside a documented switching protocol."
         }
       ],
       "source": "Test fixture"

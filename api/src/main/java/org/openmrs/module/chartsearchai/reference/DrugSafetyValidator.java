@@ -261,7 +261,7 @@ public class DrugSafetyValidator {
 	 *         or {@code -1} for null/unrecognized — which the rule filter treats as exempt
 	 *         (unrated is not low-rated).
 	 */
-	static int severityRank(String severity) {
+	private static int severityRank(String severity) {
 		if (severity == null) {
 			return -1;
 		}
@@ -422,16 +422,21 @@ public class DrugSafetyValidator {
 	 * the same coalesce could drift into grouping rules by something a clinician never sees.
 	 *
 	 * <p>Trimmed to fold the way the MATCH folds. {@link PatientClinicalContext#hasActiveDrug} trims
-	 * and case-folds the rule's token before testing it against an order name, so two rows whose
+	 * the rule's token and matches it case-insensitively against the order name, so two rows whose
 	 * tokens differ only in case or in surrounding whitespace are one partner to the only predicate
 	 * that decides an interaction concerns this patient — and must be one partner here too, or issue
 	 * #115's duplicate chip returns for a hand-authored dataset, silently and with two labels a
 	 * clinician cannot tell apart. That shape reaches this method: {@code ddinter} lower-cases every
 	 * token it derives and takes it from the trimmed RxNorm generic whenever the partner row has one,
 	 * and {@code atc} carries no rules at all, but the curated {@code json} source is plain Jackson
-	 * over an operator-editable file and sanitizes neither case nor padding. Trimming also keeps that
-	 * padding out of the chip text, as {@link DrugReferenceInjector#orderedInteractionNotes} already
-	 * does for its own rendered label.
+	 * over an operator-editable file and sanitizes neither case nor padding — nor does the ATC arm,
+	 * which is why the fold is applied to the coalesced value rather than to the token alone.
+	 *
+	 * <p>Not yet the only label site: {@link DrugReferenceInjector#orderedInteractionNotes} still
+	 * coalesces its own, untrimmed (it trims the assembled {@code label (note)} piece, not the label),
+	 * so a padded curated token reaches the citable record as {@code "warfarin   (Major. …)"} beside a
+	 * chip reading {@code "active order warfarin"}. Same partner, different spelling; giving the
+	 * injector this method is the follow-up.
 	 *
 	 * @return the label, or null when the rule carries neither — which a rule that matched an active
 	 *         order cannot ({@code hasActiveDrug} needs a non-blank token or a non-blank ATC), so
@@ -471,8 +476,9 @@ public class DrugSafetyValidator {
 	 * <p><b>Which row wins.</b> The most severe rating, then the longer note — longer in prose, not
 	 * in whitespace, see {@link #noteLength}. Route variants
 	 * genuinely differ — topical dexamethasone does not have systemic dexamethasone's interaction
-	 * profile, which is why DDInter rates voxelotor Major against one variant and Moderate against
-	 * the others — but nothing on a {@code DrugOrder} tells this layer which variant the order is
+	 * profile, which is why DDInter rates voxelotor Major against systemic dexamethasone, Moderate
+	 * against two others and carries no row at all against the topical variant — but nothing on a
+	 * {@code DrugOrder} tells this layer which variant the order is
 	 * (the context carries names and ATC codes; all four variants publish an identical ATC list),
 	 * so the variant cannot be resolved here. Reporting the strongest rating over-warns rather than
 	 * under-warns on a non-blocking advisory the clinician adjudicates, which is the fail-safe
@@ -481,9 +487,23 @@ public class DrugSafetyValidator {
 	 * exist yet — the data-side half of #115. The note length is the only informativeness signal a
 	 * row carries: DDInter's "no mechanism description on file" fallback is shorter than any real
 	 * mechanism paragraph, and where two equally-rated rows both carry prose the longer one has been
-	 * the superset in the shapes measured (the two dolutegravir x iron rows, where it adds the
-	 * dose-separation INTERVAL guidance), so a tie on severity keeps the fuller note. Equal on both
-	 * keeps the incumbent, so a group's chip is the dataset's first such row.
+	 * a strict superset in the shapes measured — in the two dolutegravir x iron rows (171 and 236
+	 * characters of note) the surplus is the sentence "The mechanism of interaction has not been
+	 * established.", so the fuller row says everything the shorter one does and states its own limit
+	 * — so a tie on severity keeps the fuller note. Equal on both keeps the incumbent, so a group's
+	 * chip is the dataset's first such row.
+	 *
+	 * <p><b>Two corners this rule accepts.</b> A row with no note at all still wins its group on
+	 * severity alone, so an operator's token-only unrated rule beats a rated row carrying a mechanism
+	 * paragraph and the chip then gives no reason — reachable only in hand-authored data, since every
+	 * DDInter row has a note, and left as it is because the alternative (a note outranking a rating)
+	 * would drop the operator's own rule, which is the thing {@link #severityPriority} exists to
+	 * protect. And grouping is by label, so two tokens that both match one order but are not the same
+	 * string stay two chips: across the full KB exactly one such pair exists — {@code enalapril} and
+	 * {@code enalaprilat}, which 376 entries carry as separate partners, and which a single order
+	 * named "Enalaprilat 1.25 mg" matches through the order-name matcher's inflection tolerance.
+	 * Prodrug and active metabolite are genuinely different DDInter entries, so that pair is reported
+	 * rather than merged.
 	 */
 	private static Collection<DrugReference.Interaction> bestRulePerPartner(DrugReference ref,
 			PatientClinicalContext context, int severityFloor) {

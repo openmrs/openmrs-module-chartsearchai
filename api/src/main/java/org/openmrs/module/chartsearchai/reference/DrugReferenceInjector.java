@@ -310,11 +310,15 @@ public class DrugReferenceInjector {
 	 * most-severe chip, while this method still promotes one entry per row. A patient on one
 	 * dexamethasone order therefore gets one Major chip beside a record reading "dexamethasone
 	 * (Major …); dexamethasone (Moderate …); dexamethasone (Moderate …)", so a model answering from
-	 * the record can still name a severity the chip deliberately discarded. Collapsing here needs
-	 * the same thing the chip cannot decide either — which variant the order is — and so waits on
-	 * the route vocabulary that is the data-side half of #115. Until then the two paths agree on
-	 * WHICH partners concern the patient, which is what the ordering above exists to guarantee, but
-	 * not on how many rows or which severity.
+	 * the record can still name a severity the chip deliberately discarded — and does so from the
+	 * more quotable half, because in that measured case the discarded Moderate note is 659 characters
+	 * against the surviving Major row's 326. Nothing goes missing: {@code render} emits every promoted
+	 * note, so a duplicated partner can only push another partner into its compact
+	 * {@code name (Severity)} form, never out. Collapsing here needs the same thing the chip cannot
+	 * decide either — which variant the order is — and so waits on the route vocabulary that is the
+	 * data-side half of #115. Until then the two paths agree on WHICH partners concern the patient,
+	 * which is what the ordering above exists to guarantee, but not on how many rows or which
+	 * severity.
 	 *
 	 * <p>Ordering alone is not sufficient, which is why {@code render} also overrides the budget for
 	 * this segment: two above-floor partners can exceed {@link #MAX_INTERACTION_RENDER_CHARS}

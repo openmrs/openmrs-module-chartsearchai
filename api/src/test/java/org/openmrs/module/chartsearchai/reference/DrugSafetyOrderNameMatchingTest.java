@@ -62,10 +62,10 @@ public class DrugSafetyOrderNameMatchingTest {
 
 	/**
 	 * A verbatim slice of the full DDInter KB (2283 drugs / 295,184 rows) carrying the rows behind
-	 * the live-reproduced collisions — linezolid x opium, dolutegravir x iron — and the
-	 * multivitamin x warfarin row the localized plural must still match. The bundled 16-drug sample
-	 * contains none of those drugs, so it cannot express any of this (same reason
-	 * {@code ddi-severity-floor-pair.json} exists).
+	 * the live-reproduced collisions — linezolid x opium, dolutegravir x iron — the
+	 * multivitamin x warfarin row the localized plural must still match, and the warfarin x heparin
+	 * row the far-edge case needs. The bundled 16-drug sample contains none of those drugs, so it
+	 * cannot express any of this (same reason {@code ddi-severity-floor-pair.json} exists).
 	 */
 	private static final String COLLISION_SLICE = "chartsearchai-test/ddi-order-name-collisions.json";
 
@@ -205,16 +205,22 @@ public class DrugSafetyOrderNameMatchingTest {
 	public void aLongerTailThanAnInflectionIsADifferentSubstance() throws IOException {
 		// The far edge of the same bound, so the constant is pinned from ABOVE as well as below.
 		// "Heparinoids / salicylic acid" is a real concept name in this deployment's dictionary
-		// (CIEL 104813, mapped to the salicylic-acid rows of the KB this fixture is sliced from) and
-		// it is NOT heparin — heparinoids are a separate DDInter drug. Its tail past the token is
+		// (CIEL 104813; in the full KB it hangs off the three Salicylic acid rows and off nothing
+		// else, never off Heparin — the KB carries no heparinoid row at all, its class members are
+		// there under their own names, DDInter471 Danaparoid and DDInter1424 Pentosan
+		// polysulfate). A heparinoid
+		// is not heparin, so reading that order as an active heparin order fabricates a drug the
+		// patient is not on, which is this issue's defect. Its tail past the token is
 		// four letters, which is exactly where the measured curve turns: widening the allowance to 4
 		// re-admits this name (and "Multi-Vitamin Adult" ~ "vitamin a") and starts fabricating Major
 		// chips again, which is the defect issue #86 is about. Together with the localized-plural
 		// test above, this holds MAX_ORDER_NAME_INFLECTION_LETTERS in [2, 3] — no name in the
 		// measured corpus has a three-letter tail, so 2 versus 3 is not observable from real data
-		// and 2 is the value shipped. The slice carries no salicylic-acid row, so "no warning at
-		// all" below is exactly "no heparin warning" — add one and the fix is a narrower assertion
-		// here, never a wider tail allowance.
+		// and 2 is the value shipped. The assertion below can be "no warning at all" because the
+		// slice carries no salicylic-acid row, which makes it exactly "no heparin warning" — read it
+		// as fixture-scoped: against the full KB that same order legitimately matches the token
+		// "salicylic acid" (Moderate x warfarin, past the "/" word boundary). Add that row and the
+		// fix is a narrower assertion here, never a wider tail allowance.
 		DrugSafetyValidator validator = collisionValidator();
 		String question = "Is it safe to start warfarin?";
 		String answer = "Warfarin could be started with monitoring.";
@@ -237,12 +243,12 @@ public class DrugSafetyOrderNameMatchingTest {
 	public void anEnglishWordStartingWithADrugNameIsNotAProposalOfThatDrug() {
 		// The other way the two matchers can be collapsed into one: giving PROSE the order-name
 		// tail allowance. Prose is words, and an ordinary word that merely starts with a drug name
-		// is not that drug — measured over the full KB's 5169 aliases against the system word list,
-		// 22 of the single-word ones are one or two letters short of an English word (aspirin ~
-		// aspiring, warfarin ~ warfaring, urea ~ urease, iron ~ irony, clove ~ clover). The drugs
-		// a question or answer names are what the validator checks at all
-		// (DrugSafetyValidator.validate -> findByQuery -> matchesText), so a lenient prose rule does
-		// not mislabel an order — it invents the proposal the whole chip rests on. Widening
+		// is not that drug — measured over the full KB's 5169 aliases against the system word list
+		// (/usr/share/dict/words, 235,976 entries), 22 of the single-word ones are one or two letters
+		// short of an English word (aspirin ~ aspiring, warfarin ~ warfaring, urea ~ urease, iron ~
+		// irony, clove ~ clover). The drugs a question or answer names are what the validator checks
+		// at all (DrugSafetyValidator.validate -> findByQuery -> matchesText), so a lenient prose
+		// rule does not mislabel an order — it invents the proposal the whole chip rests on. Widening
 		// containsWord to the order-name allowance passes every other test in this module, which is
 		// why this case exists.
 		DrugSafetyValidator validator = bundledValidator();

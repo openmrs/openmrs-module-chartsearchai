@@ -278,7 +278,7 @@ public class DrugReference {
 	 *         each side by a non-alphanumeric character or the string edge. Whole-word, not
 	 *         substring, so a drug name nested inside a longer one does not spuriously match
 	 *         ("chlorothiazide" is not a whole word in "hydrochlorothiazide"), while a real token
-	 *         still matches ("aspirin" in "Aspirin 81 mg"). Case-insensitive; a null/blank word
+	 *         still matches ("aspirin" in "Aspirin 81 mg"). Case-insensitive; a null or empty word
 	 *         never matches. Backs {@link #matchesText} (alias-in-prose); the active-order
 	 *         counterpart is {@link #matchesOrderName}, which shares this rule's left boundary but
 	 *         not its right one — see there for why one matcher cannot serve both.
@@ -353,9 +353,19 @@ public class DrugReference {
 	 * The one boundary-aware containment scan, shared by prose matching ({@link #containsWord}) and
 	 * order-name matching ({@link #matchesOrderName}) so the boundary rule cannot drift between
 	 * them. A match needs {@code token} to start at a word boundary in {@code text} and to end at
-	 * one, give or take up to {@code maxTrailingLetters} letters — never digits, which in a drug
-	 * name are a strength rather than part of the name. Case-insensitive; a null/blank token never
-	 * matches.
+	 * one, give or take up to {@code maxTrailingLetters} letters. Letters only: a digit is never an
+	 * inflection, so a digit sitting against the token is neither stepped over nor treated as the
+	 * end of the name, and a display name that glues its strength straight onto the drug name
+	 * ({@code Aspirin81mg}) therefore does not match. That shape does not occur in the measured
+	 * dictionary — of the 67 matches this rule drops relative to bare containment, 61 are a token
+	 * inside a longer word and 6 are tails longer than two letters, none is a glued digit — and
+	 * treating a digit as the end of the name instead scores identically over that corpus (829
+	 * either way), so the two are indistinguishable on real data and this is the conservative one.
+	 * Case-insensitive; a null or empty token never matches. Whitespace-only is the caller's
+	 * business, deliberately not this method's: {@link PatientClinicalContext#hasActiveDrug} trims
+	 * its token, and the {@code ddinter} and {@code atc} sources drop blank aliases at parse. A
+	 * hand-authored {@code json} KB is NOT sanitized, so a blank alias there still matches any text
+	 * carrying two adjacent spaces — pre-existing, and an authoring guard belongs in that parser.
 	 */
 	private static boolean containsBoundedToken(String text, String token, int maxTrailingLetters) {
 		if (text == null || token == null || token.isEmpty()) {

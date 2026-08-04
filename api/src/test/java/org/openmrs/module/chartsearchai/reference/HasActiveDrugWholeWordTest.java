@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -91,5 +92,9 @@ public class HasActiveDrugWholeWordTest {
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
 				"Ibuprofen", "chlorothiazide"),
 				"the fired interaction should name the drug actually on the chart");
+		assertFalse(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Ibuprofen", "hydrochlorothiazide"),
+				"\"chlorothiazide\" is itself a substring of \"hydrochlorothiazide\", so the needle above "
+						+ "cannot tell the two rules apart on its own — the longer one must be absent");
 	}
 }

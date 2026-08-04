@@ -690,18 +690,6 @@ public class DrugSafetyValidator {
 	 */
 	static final int MAX_QUESTION_PAIR_CHIPS = 10;
 
-	/**
-	 * @return {@link #severityRank} with an UNRATED rule raised above {@code major}: every curated
-	 *         hand-authored rule is unrated and {@link #clearsSeverityFloor} already treats unrated as
-	 *         exempt rather than low — unrated is not low-rated, so wherever a most-severe-first choice
-	 *         is made it must not be the one dropped. Matches the ordering
-	 *         {@code DrugReferenceInjector}'s promoted notes apply to the same rows.
-	 */
-	static int severityPriority(String severity) {
-		int rank = severityRank(severity);
-		return rank < 0 ? Integer.MAX_VALUE : rank;
-	}
-
 	/** Orders candidate pair chips most-severe first; see {@link #severityPriority}. */
 	private static final Comparator<PairFinding> PAIR_SEVERITY_DESCENDING = new Comparator<PairFinding>() {
 
@@ -913,6 +901,16 @@ public class DrugSafetyValidator {
 	 * {@code rxnorm_name}s, and all 6 are one substance family (the trastuzumab conjugates, isosorbide
 	 * and its mononitrate, the COVID-19 vaccines), so a pair genuinely worth reporting is not among them.
 	 *
+	 * <p>The name comes from {@link #partnerLabel}, the same coalesce the chart arm's own grouping keys
+	 * on, so the two arms that now group chips in this class agree by construction about what naming a
+	 * partner means. They cannot fight over a pair: both consult {@code hasActiveDrug}, and they take
+	 * opposite branches of it. Whenever any rule joining a pair names an active order, this arm records
+	 * the pair as the chart's and raises nothing, while {@link #bestRulePerPartner} raises exactly one
+	 * chip for that partner label — grouping only merges chips sharing a label, so a chip for the
+	 * deferred pair always survives it, at that partner's most severe row. Whenever no joining rule
+	 * names an active order, the chart arm raises nothing for the pair and this arm reports it. So one
+	 * clinical pair yields one chip from one arm, never two chips and never none.
+	 *
 	 * @return each drug mapped to the reference data's own name for it: the match token (or, for a rule
 	 *         carrying only a code, the ATC code) of the first above-floor rule any OTHER drug in
 	 *         {@code drugs} uses to name it. Falls back to its generic name, else its display name, when
@@ -929,7 +927,7 @@ public class DrugSafetyValidator {
 				}
 				List<DrugReference.Interaction> naming = aboveFloorRulesAgainst(other, drug, floor);
 				if (!naming.isEmpty()) {
-					name = ChartSearchAiUtils.firstNonBlank(naming.get(0).getToken(), naming.get(0).getAtc());
+					name = partnerLabel(naming.get(0));
 					break;
 				}
 			}

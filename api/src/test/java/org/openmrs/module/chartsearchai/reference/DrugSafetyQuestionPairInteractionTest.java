@@ -398,7 +398,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		String tail = warning.getDetail().substring(at + "also named in the question — ".length());
 		for (String severity : Arrays.asList("Major", "Moderate", "Minor", "Unknown")) {
 			if (tail.startsWith(severity)) {
-				return DrugSafetyValidator.severityRank(severity);
+				return DrugSafetyValidator.severityPriority(severity);
 			}
 		}
 		return -1;
@@ -485,8 +485,9 @@ public class DrugSafetyQuestionPairInteractionTest {
 					"pair chips must be ordered most-severe first, was: " + warnings);
 			previous = rank;
 		}
-		assertEquals(3, DrugSafetyValidator.severityRank("Major"),
-				"precondition: this test's ordering check reads the shared severity ranking");
+		assertEquals(3, DrugSafetyValidator.severityPriority("Major"),
+				"precondition: this test's ordering check reads the very ranking the arm sorts on —"
+						+ " severityPriority, which #121 made the one definition of it");
 	}
 
 	@Test

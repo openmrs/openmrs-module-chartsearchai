@@ -79,15 +79,22 @@ public class ChartSearchAiReferenceGroupTest {
 	/**
 	 * Forcing function for the exhaustiveness assumption {@link ChartSearchAiUtils#referenceGroup}
 	 * documents. The unknown-type fallback is {@code chart}, which is right for a chart type but
-	 * WRONG for a future module-injected one: a second kind of injected record (a guideline, a
-	 * formulary note) would be published as chart evidence about the patient, with no error
-	 * anywhere — the provenance disclosure silently inverts.
+	 * WRONG for a module-injected one that carries module-supplied prose (a guideline, a formulary
+	 * note): it would be published as chart evidence about the patient, with no error anywhere —
+	 * the provenance disclosure silently inverts.
 	 *
 	 * <p>The compiler cannot check this, so this test pins it: every declared
 	 * {@code RESOURCE_TYPE_*} constant must have an explicitly recorded expected group. Adding a
-	 * constant without deciding its group fails here. If that is you: add your type below —
-	 * {@code chart} if querystore retrieves it from the patient's chart, {@code reference} if the
-	 * module injects it, in which case {@code referenceGroup} needs updating too.
+	 * constant without deciding its group fails here.
+	 *
+	 * <p>If that is you, decide on PROVENANCE, not on whether the module injects it — "injected"
+	 * is not the test, and using it as one is how this classification gets inverted. Ask whose
+	 * record it is. {@code chart} when it is evidence about this patient, whether querystore
+	 * retrieved it or the module read it from a patient-data service and injected it — that is why
+	 * {@code RESOURCE_TYPE_ACTIVE_DRUG_ORDER} is {@code chart} below despite being injected.
+	 * {@code reference} only when the content is module-supplied material rather than the
+	 * patient's record, in which case {@code referenceGroup} needs updating too, since its fallback
+	 * will not get you there.
 	 */
 	@Test
 	public void referenceGroup_everyDeclaredResourceTypeConstant_shouldHaveADecidedGroup() {
@@ -105,6 +112,15 @@ public class ChartSearchAiReferenceGroupTest {
 		// (which is why it is not a drug_reference record — the system prompt tells the model those are
 		// NOT the patient's data), but it is still module-supplied material, so it presents as reference.
 		expected.put("RESOURCE_TYPE_SAFETY_FINDING", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
+		// Module-INJECTED but NOT module-supplied, the one combination this classification has to get
+		// right in both directions: an active_drug_order record is the patient's own active order,
+		// read from OrderService when the retrieved chart carries no drug-order record for it
+		// (issue #118). Grouping it as reference material would tell a clinician a live prescription
+		// is not their patient's data — the dangerous inversion, since it invites discounting the very
+		// order a safety chip is raised about. It also carries the real Order uuid, so it stays
+		// navigable like any other chart citation. Chart evidence is what referenceGroup's fallback
+		// yields; the row is here because the decision must be recorded, not inherited by omission.
+		expected.put("RESOURCE_TYPE_ACTIVE_DRUG_ORDER", ChartSearchAiConstants.REFERENCE_GROUP_CHART);
 
 		List<String> undecided = new ArrayList<String>();
 		List<String> seen = new ArrayList<String>();

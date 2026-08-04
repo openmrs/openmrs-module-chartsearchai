@@ -244,6 +244,93 @@ public class QueryStoreChartBuilderScopedTest {
 	}
 
 	@Test
+	public void buildScoped_shouldDeclareTheTypedScopeComplete_soAbsenceIsReadableAsDrift() {
+		// The completeness stamp is what lets a consumer tell a record absent because the INDEX
+		// lacks it from one absent because the slice never asked for its type. It is also what
+		// keeps the active-order reconciliation (issue #118) alive in the DEFAULT chart mode: a
+		// medications question's slice carries every drug_order document, so a drug order the
+		// safety layer holds but the slice has not got means the index is behind.
+		//
+		// Pinned through the composed production build on purpose. The router's resource-type
+		// strings (QueryScopeRouter.typedSlice) and the reconciliation's lookup are separate
+		// literals in separate classes, so nothing else asserts that they still name the same
+		// type — a rename on either side would silently switch the whole feature off in the
+		// default mode with every other test still green. Similarity returns nothing here, so
+		// the drug orders can only have arrived via the typed scope.
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "What medications is the patient taking?");
+
+		assertTrue(mappedUuids(chart).containsAll(Arrays.asList("d-1", "d-2")),
+				"precondition: the typed scope must have pulled every drug_order in; got "
+						+ mappedUuids(chart));
+		assertTrue(chart.isCompleteFor("drug_order"),
+				"a medications slice carries every drug_order document, so it must declare that "
+						+ "type complete — otherwise a missing drug order reads as 'out of scope'");
+		assertFalse(chart.isCompleteFor("obs"),
+				"obs is outside the typed scope: whichever obs the slice has came from similarity, "
+						+ "so a missing obs says nothing and must not be declared complete");
+	}
+
+	@Test
+	public void buildScoped_shouldDeclareNothingComplete_forATopicalQuestion() {
+		// A cue-free question routes TOPICAL (similarity only), so no type is enumerated and NO
+		// absence is meaningful. This is the production counterpart of the reconciliation's
+		// "a slice that never scoped drug orders is not reconciled" case: reading absence as drift
+		// here would WARN and inject a medication list on essentially every non-medication query.
+		PatientChart chart = builder.buildScoped(patient(1), "what is her blood pressure?");
+
+		assertFalse(chart.isCompleteFor("drug_order"),
+				"a topical slice enumerates nothing, so it must declare no type complete");
+	}
+
+	@Test
+	public void buildScoped_shouldDeclareNothingComplete_whenTheBuildDegraded() {
+		// A degraded return carries no records at all, so declaring completeness for it would
+		// assert a guarantee no filter enforced — the reason only the filtering path stamps.
+		assertFalse(builder.buildScoped(null, "What medications is the patient taking?")
+				.isCompleteFor("drug_order"),
+				"the degraded empty slice applied no filter, so it must declare nothing complete");
+	}
+
+	@Test
+	public void buildScoped_shouldStillDeclareCompleteness_atTheQuerystoreChartCap() {
+		// The cap is the one case where a scoped slice can be missing a doc of a type it scoped:
+		// getPatientChart returns only querystore's most recent N, so a pre-cutoff drug order never
+		// reaches the filter. The class javadoc says so, which makes "then don't declare it
+		// complete" the obvious-looking fix — and it is the WRONG one, so it is pinned here rather
+		// than left to a comment.
+		//
+		// What a consumer reads from absence is whether the chart THE ANSWER IS GROUNDED IN lacks
+		// the record, and at the cap it genuinely does. Suppressing the stamp would silence the
+		// active-order reconciliation (#118) exactly there, handing back the chip-versus-answer
+		// contradiction on the biggest charts — the patients least likely to be checked by hand.
+		// Only the WARN's attribution is affected (a retrieval cap, not an indexing gap), which the
+		// reconciliation already hedges and the cap's own WARN already reports.
+		List<QueryDocument> atCap = new ArrayList<QueryDocument>();
+		atCap.add(doc("drug_order", "d-1", "Drug order: Lisinopril 10 mg daily", LocalDate.of(2026, 6, 29)));
+		// Reads the production constant, not a literal: a test hardcoding 10 000 would silently stop
+		// exercising the cap if the threshold changed, and would still pass.
+		while (atCap.size() < QueryStoreChartBuilder.QUERYSTORE_ES_CHART_CAP) {
+			int i = atCap.size();
+			atCap.add(doc("obs", "o-" + i, "Systolic blood pressure: 142 mmHg", LocalDate.of(2026, 6, 30)));
+		}
+		queryStore.stubChart = atCap;
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "What medications is the patient taking?");
+
+		assertEquals(QueryStoreChartBuilder.QUERYSTORE_ES_CHART_CAP, atCap.size(),
+				"precondition: the fetch must land exactly ON the cap, or this asserts the ordinary path");
+		assertTrue(mappedUuids(chart).contains("d-1"),
+				"precondition: the scoped drug order must be in the slice");
+		assertTrue(chart.isCompleteFor("drug_order"),
+				"a slice built at the chart cap must STILL declare its typed scope complete — "
+						+ "absence from the retrieved chart is what the reconciliation repairs, and the "
+						+ "cap is precisely when the retrieved chart is missing something");
+	}
+
+	@Test
 	public void buildScoped_shouldNeverRenderFocusIndices() {
 		queryStore.stubHits = new ArrayList<QueryDocument>(Arrays.asList(
 				doc("obs", "o-1", "Systolic blood pressure: 142 mmHg", LocalDate.of(2026, 6, 30))));

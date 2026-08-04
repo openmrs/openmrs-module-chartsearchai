@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.serializer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -329,6 +330,15 @@ public class PatientChartSerializer {
 		 *  a slice prompt under a patient's KV scope would purge their real full-chart entry. */
 		private boolean queryScoped;
 
+		/** The resource types this chart carries COMPLETELY — every record querystore holds of
+		 *  that type for this patient. Only a query-scoped slice needs to state this: the full
+		 *  chart carries everything by construction, so {@link #isCompleteFor} answers from
+		 *  {@link #queryScoped} unless a slice has declared its scope. Stamped by the scoped
+		 *  builder, for the same reason the queryScoped flag is: a consumer deciding whether a
+		 *  record's ABSENCE is meaningful must read the chart that was built, not re-derive the
+		 *  routing from the question. */
+		private Set<String> completeResourceTypes = Collections.emptySet();
+
 		public PatientChart(String text, List<RecordMapping> mappings) {
 			this(text, mappings, Collections.<Integer>emptyList());
 		}
@@ -351,7 +361,10 @@ public class PatientChartSerializer {
 			return focusIndices;
 		}
 
-		/** Marks this chart as a query-scoped slice; called only by the scoped chart builder. */
+		/** Marks this chart as a query-scoped slice. Called by the scoped chart builder, and again by
+		 *  {@code DrugReferenceInjector} when it rebuilds the chart to append injected records —
+		 *  a rebuild that dropped the stamp would silently turn a slice into something downstream
+		 *  reads as a full chart. */
 		public void markQueryScoped() {
 			this.queryScoped = true;
 		}
@@ -360,6 +373,52 @@ public class PatientChartSerializer {
 		 *  race-free signal for KV decisions (see the field note). */
 		public boolean isQueryScoped() {
 			return queryScoped;
+		}
+
+		/** Declares the resource types this chart carries completely. Called by the scoped chart
+		 *  builder with the typed scope it filtered on, and again by {@code DrugReferenceInjector}
+		 *  on its rebuilt chart (via {@link #getCompleteResourceTypes}) for the same reason
+		 *  {@link #markQueryScoped} is. A null/empty set declares nothing. */
+		public void markCompleteFor(Set<String> resourceTypes) {
+			this.completeResourceTypes = resourceTypes == null || resourceTypes.isEmpty()
+					? Collections.<String>emptySet()
+					: Collections.unmodifiableSet(new HashSet<String>(resourceTypes));
+		}
+
+		/**
+		 * True when this chart carries every record of {@code resourceType} that was RETRIEVED for
+		 * this patient — so a record's ABSENCE from it is informative (nothing here dropped it on
+		 * purpose) rather than merely out of scope.
+		 *
+		 * <p>A statement about this chart, deliberately, not about the index. A scoped slice built at
+		 * querystore's ES chart cap declares completeness even though the fetch itself dropped the
+		 * older tail, so absence can mean "the retrieved chart lacks it" as well as "the index lacks
+		 * it". That is the contract the consumers this exists for need — they repair the chart the
+		 * ANSWER is grounded in, and at the cap it genuinely lacks the record — but it means a caller
+		 * must not report absence as an indexing defect without hedging. See
+		 * {@code QueryStoreChartBuilder.buildScoped}, which explains why suppressing the stamp there
+		 * would be the wrong fix.
+		 *
+		 * <p>A full chart is complete for every type by construction, which is why only the scoped
+		 * builder stamps anything: a mode that fetches the whole chart cannot forget to. A
+		 * query-scoped slice is complete only for the types it declared via
+		 * {@link #markCompleteFor} — a slice omits everything outside its typed scope by design, so
+		 * absence there carries no information, and a consumer reading it as drift would fire on
+		 * almost every query.
+		 *
+		 * <p>Ask this only of a chart from the chart-assembly entry point
+		 * ({@code ChartBuildingStrategy.buildChart}). The progressive-reasoning preview's focused
+		 * top-K chart is neither of those shapes and declares nothing, so it would answer as a full
+		 * chart; nothing consults it, and nothing should.
+		 */
+		public boolean isCompleteFor(String resourceType) {
+			return !queryScoped || completeResourceTypes.contains(resourceType);
+		}
+
+		/** The types declared via {@link #markCompleteFor}, so a caller rebuilding this chart can
+		 *  carry the declaration across; empty on a full chart, which needs none. */
+		public Set<String> getCompleteResourceTypes() {
+			return completeResourceTypes;
 		}
 	}
 

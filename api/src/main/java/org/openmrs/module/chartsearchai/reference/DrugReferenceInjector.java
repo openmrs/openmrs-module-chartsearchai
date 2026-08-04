@@ -12,8 +12,10 @@ package org.openmrs.module.chartsearchai.reference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -34,18 +36,29 @@ import org.springframework.stereotype.Service;
  * contraindications, interactions) the same way it grounds chart records.
  *
  * <p>Injection is appended <em>after</em> the retrieved chart records, continuing
- * the citation numbering, and carries the {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE}
- * resource type so the frontend can render its citation chip distinctly (a side
- * panel, not a chart-tab navigation).
+ * the citation numbering. A {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE} record
+ * carries that resource type so the frontend can render its citation chip distinctly (a side
+ * panel, not a chart-tab navigation). That is NOT true of every injected type — an
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is deliberately the
+ * opposite, carrying the patient's real {@code Order} uuid precisely so a client CAN navigate to
+ * it like any other chart citation (see below).
  *
- * <p><strong>Adding a second kind of injected record?</strong> Its resource type must also be
+ * <p><strong>Adding another kind of injected record?</strong> Its resource type must also be
  * classified by {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#referenceGroup}, which
  * decides whether a client presents a citation as evidence about the patient or as module-supplied
  * reference material. That method fails safe to <em>chart evidence</em> for types it does not
- * recognise — the wrong default for anything injected here — so an unclassified injected type is
+ * recognise — the wrong default for module-supplied material — so an unclassified injected type is
  * published to clinicians as if it came from the patient's own record, with no error raised. The
  * reflective guard in {@code ChartSearchAiReferenceGroupTest} catches a new
  * {@code RESOURCE_TYPE_*} constant, but it cannot see a bare string literal written here.
+ *
+ * <p>Three kinds are injected today, and they are not all module-supplied: a
+ * {@code drug_reference} entry and a {@code safety_finding} present as reference material, while an
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is the patient's own active
+ * order (read from {@code OrderService} when the chart cannot substantiate it — see
+ * {@link #unrepresentedActiveOrders}) and so deliberately presents as chart evidence. For that one
+ * the fail-safe default happens to be the correct classification; the decision is recorded
+ * explicitly in the guard test rather than left to the default.
  *
  * <p>Matching is deterministic and age-gated:
  * <ul>
@@ -79,6 +92,11 @@ public class DrugReferenceInjector {
 	 * patient has a relevant partner (breadth is all it is there for), in full when they do not.
 	 */
 	static final int MAX_INTERACTION_RENDER_CHARS = 1500;
+
+	/** querystore's resource type for a drug-order document (its {@code DrugOrderRecordSerializer}
+	 *  contract), which the chart carries through unchanged. The type the active-order
+	 *  reconciliation looks for, and the type it asks the chart's completeness declaration about. */
+	private static final String QUERYSTORE_DRUG_ORDER_TYPE = "drug_order";
 
 	@Autowired
 	private DrugReferenceService drugReferenceService;
@@ -165,7 +183,8 @@ public class DrugReferenceInjector {
 	PatientChart injectRecords(PatientChart chart, PatientClinicalContext context, String question) {
 		List<DrugReference> matched = matchingEntries(context, question);
 		List<SafetyWarning> findings = preAnswerFindings(context, question);
-		if (matched.isEmpty() && findings.isEmpty()) {
+		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
+		if (matched.isEmpty() && findings.isEmpty() && unrepresented.isEmpty()) {
 			return chart;
 		}
 
@@ -173,6 +192,17 @@ public class DrugReferenceInjector {
 		StringBuilder text = new StringBuilder(chart.getText());
 		List<RecordMapping> mappings = new ArrayList<RecordMapping>(chart.getMappings());
 		int index = mappings.size() + 1;
+
+		// The patient's own records first, before the module's reference material and the findings
+		// derived from it — the order the REST layer also renders references in (chart evidence
+		// before reference material), so the clinician reads evidence then conclusion.
+		for (PatientClinicalContext.ActiveDrugOrder order : unrepresented) {
+			String rendered = renderActiveOrder(order);
+			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
+					order.getUuid(), null, rendered));
+			text.append("[").append(index).append("] ").append(rendered).append("\n");
+			index++;
+		}
 
 		for (DrugReference ref : matched) {
 			RenderedReference rendered = render(ref, age, context);
@@ -195,8 +225,8 @@ public class DrugReferenceInjector {
 			index++;
 		}
 
-		log.debug("Injected {} drug-reference and {} safety-finding record(s) into chart for question '{}'",
-				matched.size(), findings.size(), question);
+		log.debug("Injected {} active-order, {} drug-reference and {} safety-finding record(s) into chart "
+				+ "for question '{}'", unrepresented.size(), matched.size(), findings.size(), question);
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
@@ -207,7 +237,183 @@ public class DrugReferenceInjector {
 		if (chart.isQueryScoped()) {
 			injected.markQueryScoped();
 		}
+		// Same reasoning for the completeness stamp: it is what tells a consumer whether a record's
+		// ABSENCE from this chart is meaningful, and a fresh PatientChart declares nothing. Dropping
+		// it would silently turn the rebuilt slice into one whose absences look uninformative.
+		injected.markCompleteFor(chart.getCompleteResourceTypes());
 		return injected;
+	}
+
+	/**
+	 * The patient's active drug orders that {@code chart} carries no drug-order record for — the
+	 * reconciliation of the drug-safety layer's {@code OrderService} read against the serialized
+	 * chart the answer is grounded in (issue #118). WARNs when it finds any: the two reads
+	 * disagreeing is an anomaly an operator needs to see, and it was previously silent.
+	 *
+	 * <p>Why this exists. The safety layer reads active orders straight from {@code OrderService}
+	 * ({@link PatientClinicalContextBuilder}); the answer is grounded only in the querystore chart.
+	 * That independence is a strength — it is what kept the chips correct when the index was behind
+	 * — but nothing compared the two, so a divergence surfaced to the clinician as the module
+	 * contradicting itself: a chip naming "active order simvastatin" beside an answer stating "No
+	 * active medications are recorded." (3.7.1 standalone, HEAD {@code 13690b1}; three phrasings,
+	 * so not phrasing sensitivity). Injecting the orders the chart cannot substantiate degrades the
+	 * divergence into a missing-record repair instead: the model has the medication list in front of
+	 * it, which is the mechanism #110 established for the safety findings.
+	 *
+	 * <p>Index drift was only the trigger, and fixing it belongs to querystore, which owns
+	 * indexing. The same divergence is reachable from a query racing an in-flight index write, a
+	 * failed indexing advice, or a partial reindex, so the reconciliation is not conditioned on any
+	 * cause.
+	 *
+	 * <p>An order is substantiated by a chart record carrying its {@code Order} uuid (querystore
+	 * indexes its {@code drug_order} document under exactly that — its
+	 * {@code DrugOrderRecordSerializer} contract, so the match is exact), or failing that by a
+	 * drug-order record whose text names the drug. The name fallback is deliberate insurance in the
+	 * conservative direction: were the uuid contract to change, uuid-only matching would report
+	 * every order as missing on every query, and a WARN that fires always reports nothing. A
+	 * <em>live</em> drug-order record naming the drug already tells the model the patient has an
+	 * order for it, so there is nothing for the answer to deny and nothing to repair.
+	 *
+	 * <p><strong>Two ways that fallback used to over-match, both fixed, both of which suppressed the
+	 * WARN as well as the repair</strong> — so the discrepancy became invisible rather than merely
+	 * unrepaired, which is worse than not having the check.
+	 *
+	 * <p>First, the corpus was every {@code drug_order} record's text regardless of whether the
+	 * record described a LIVE order. querystore indexes stopped and discontinued orders too (they
+	 * are not voided). So in the renewal shape — stop Simvastatin 20mg, start Simvastatin 40mg, the
+	 * replacement's document missing under drift — the stopped record's text named the drug, the new
+	 * order counted as substantiated, and the answer reading "Stopped: …" correctly reported no
+	 * active medication beside a chip naming one. Issue #118 verbatim, through the ordinary revise
+	 * flow. Only records describing a live order now substantiate one
+	 * ({@link #describesEndedOrder}).
+	 *
+	 * <p>Second, the match itself was a plain substring test, so a short order name was found inside
+	 * an unrelated word — an active {@code ASA} order read as substantiated by
+	 * {@code "Drug order: Nasal spray"} — and a sibling record could mask an order whose name is a
+	 * substring of it ({@code Aspirin} inside {@code Aspirin/Dipyridamole}).
+	 * {@code ActiveDrugOrder.namedIn} now shares {@link DrugReference#containsWord} — the existing
+	 * symmetric-boundary rule that already backs alias-in-prose matching — rather than introducing a
+	 * third matcher beside it and {@code matchesOrderName}. Which of those two it borrows is a real
+	 * decision, not a coin toss; {@code namedIn}'s javadoc records why the symmetric one is the
+	 * correct and the safe choice for this direction.
+	 *
+	 * <p>Only reconciled when the chart claims to carry every drug-order record
+	 * ({@link PatientChart#isCompleteFor}). A query-scoped slice — the DEFAULT chart mode — omits
+	 * everything outside the question's typed scope by design, so absence there says nothing about
+	 * the index; treating it as drift would WARN and inject a medication list on nearly every
+	 * query. A medications question does scope the slice to drug orders, which is precisely the
+	 * question that produced the observed contradiction, so the default mode is still covered.
+	 */
+	static List<PatientClinicalContext.ActiveDrugOrder> unrepresentedActiveOrders(PatientChart chart,
+			PatientClinicalContext context) {
+		if (chart == null || context == null || context.getActiveDrugOrders().isEmpty()
+				|| !chart.isCompleteFor(QUERYSTORE_DRUG_ORDER_TYPE)) {
+			return Collections.emptyList();
+		}
+
+		Set<String> chartResourceUuids = new HashSet<String>();
+		StringBuilder drugOrderText = new StringBuilder();
+		List<RecordMapping> mappings = chart.getMappings();
+		for (RecordMapping mapping : mappings == null ? Collections.<RecordMapping>emptyList() : mappings) {
+			// Uuid matching is type-agnostic: a resource uuid is globally unique, so a record
+			// carrying this order's uuid IS this order however it is typed.
+			if (mapping.getResourceUuid() != null) {
+				chartResourceUuids.add(mapping.getResourceUuid());
+			}
+			if (QUERYSTORE_DRUG_ORDER_TYPE.equals(mapping.getResourceType()) && mapping.getText() != null) {
+				// Only records describing a LIVE order may substantiate one. A stopped or
+				// discontinued order's record names the drug while saying the patient is no longer
+				// on it, so counting it would answer "the chart already covers this order" with a
+				// record that in fact tells the model the opposite.
+				String lower = mapping.getText().toLowerCase(Locale.ROOT);
+				if (!describesEndedOrder(lower)) {
+					drugOrderText.append(lower).append('\n');
+				}
+			}
+		}
+		String drugOrderTextLower = drugOrderText.toString();
+
+		List<PatientClinicalContext.ActiveDrugOrder> unrepresented =
+				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			boolean substantiated = (order.getUuid() != null && chartResourceUuids.contains(order.getUuid()))
+					|| order.namedIn(drugOrderTextLower);
+			if (!substantiated) {
+				unrepresented.add(order);
+			}
+		}
+		if (!unrepresented.isEmpty()) {
+			// WARN, not INFO: the two reads disagreeing means the chart the answer is grounded in is
+			// behind the authoritative order list, which an operator must be able to see. The chart
+			// comes from the querystore index, so the usual cause is that index being behind — a
+			// querystore concern, named here so the log points at the right module.
+			log.warn("Active-order reconciliation: {} of {} active drug order(s) have no drug-order record "
+					+ "in the retrieved chart, so the answer could deny a medication the drug-safety "
+					+ "chips name; injecting them as records. The chart is built from the querystore "
+					+ "index, so this normally means that index is behind the OrderService read "
+					+ "(querystore owns indexing). Unrepresented: {}",
+					unrepresented.size(), context.getActiveDrugOrders().size(), unrepresented);
+		}
+		return unrepresented;
+	}
+
+	/** Lowercased marker querystore renders a drug order's END date under — it emits
+	 *  {@code ". Stopped: <date>"} for both {@code getDateStopped()} and {@code getAutoExpireDate()}
+	 *  (its {@code DrugOrderRecordSerializer} contract). */
+	private static final String QUERYSTORE_STOPPED_MARKER = ". stopped:";
+
+	/** Lowercased marker for a DISCONTINUE order — the record of a drug ENDING. Keyed on the
+	 *  {@code Action} VALUE, never on the {@code ". Action: "} label alone: querystore renders that
+	 *  label on every drug-order record and {@code Order.action} defaults to {@code NEW}, so keying
+	 *  on the label would treat every agreeing chart as drifted and fire the WARN on every query. */
+	private static final String QUERYSTORE_DISCONTINUE_MARKER = ". action: discontinue";
+
+	/**
+	 * Whether {@code lowerRecordText} describes an order that has ENDED, so it must not substantiate
+	 * a currently-active order of the same drug.
+	 *
+	 * <p>Why this reads the rendered text rather than a status field. querystore DOES carry the
+	 * structural signal — its {@code putOrderBaseFields} puts {@code action}, {@code date_stopped}
+	 * and {@code auto_expire_date} into the {@code QueryDocument} metadata — but that metadata is
+	 * dropped three layers upstream of here: {@code QueryStoreChartBuilder.toSerializedRecords}
+	 * carries only the obs-group fields into {@code SerializedRecord}, and the reconciliation sees
+	 * only the resulting {@link RecordMapping} (index, type, uuid, date, text). Threading a status
+	 * flag through would mean widening two shared internal types, and — the reason it is not simply
+	 * the better fix — it would rest on metadata surviving querystore's index round-trip, which is
+	 * unverified here and unverifiable in this module's tests (querystore does not index under
+	 * {@code BaseModuleContextSensitiveTest}). The rendered text, by contrast, is demonstrably what
+	 * the chart carries: it is the same {@code getText()} this method already matches names against.
+	 * Plumbing the structural field is the better long-term fix once that round-trip is confirmed.
+	 *
+	 * <p>Because it keys on rendered prose, the markers are pinned against the REAL querystore
+	 * serializer's output in {@code QuerystoreOrderTextMarkerTest} — a wording change there fails
+	 * loudly instead of silently reopening issue #118.
+	 *
+	 * <p><strong>Known limitation, and the strongest argument for the structural fix above.</strong>
+	 * Running that serializer (rather than reading it) showed querystore does NOT render an
+	 * auto-expire date into the text: an order that lapsed by {@code autoExpireDate} passing carries
+	 * no end marker at all, so it can still substantiate a live order. querystore does carry
+	 * {@code auto_expire_date} in the document METADATA, so the structural route would cover this
+	 * case and rendered prose cannot. The narrower renewal shape this method exists for — an order
+	 * explicitly stopped or discontinued — IS covered, and {@code QuerystoreOrderTextMarkerTest}
+	 * pins the auto-expire gap so it fails loudly if querystore ever starts rendering it.
+	 */
+	static boolean describesEndedOrder(String lowerRecordText) {
+		return lowerRecordText != null
+				&& (lowerRecordText.contains(QUERYSTORE_STOPPED_MARKER)
+						|| lowerRecordText.contains(QUERYSTORE_DISCONTINUE_MARKER));
+	}
+
+	/**
+	 * One unrepresented active order as a chart line. Shaped like querystore's own drug-order text
+	 * ({@code "Drug order: <drug>. Dose: …"}) so the model reads it as the chart record it stands in
+	 * for, and stated as plain fact: a hedge inside the record ("no matching record was retrieved")
+	 * is the shape that made the model put an abstention clause in front of its own evidence in
+	 * #110. The provenance is carried by the record's resource type and the WARN above, where an
+	 * operator looks for it, rather than by prose in front of a clinician.
+	 */
+	static String renderActiveOrder(PatientClinicalContext.ActiveDrugOrder order) {
+		return "Active drug order: " + order.getDisplay() + ".";
 	}
 
 	/**
@@ -218,9 +424,9 @@ public class DrugReferenceInjector {
 	 * chemical subgroup or a curated cross-reactivity group — a real duplicate-therapy /
 	 * cross-reactivity concern). An active medication unrelated to the asked-about drug — or a
 	 * question that names no drug at all — is not injected: it would be noise that helps the
-	 * clinician in no way. The model still sees the active-order records in the chart, and the
-	 * safety validator reads active orders directly, so neither the answer's medication awareness
-	 * nor the safety chips depend on this injection.
+	 * clinician in no way. The safety validator reads active orders directly, so the chips never
+	 * depend on this injection; the answer's medication awareness comes from the chart's own
+	 * drug-order records, and from {@link #unrepresentedActiveOrders} for any the chart is missing.
 	 */
 	List<DrugReference> matchingEntries(PatientClinicalContext context, String question) {
 		Map<String, DrugReference> byId = new LinkedHashMap<String, DrugReference>();

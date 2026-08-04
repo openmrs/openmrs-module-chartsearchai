@@ -931,6 +931,69 @@ public class CitationGroundingVerifierTest {
 		assertNull(result.get(0).getGrounded());
 	}
 
+	// ---- injected active-order citations (issue #118): graded normally, NOT demote-only ----
+
+	/** A mapping typed as an injected active-order record, carrying the real {@code Order} uuid the
+	 *  production injector puts there. */
+	private static RecordMapping activeDrugOrderMapping(int index, String uuid, String text) {
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
+				uuid, null, text);
+	}
+
+	/** Real injected active-order record text off the real production chain (reconciliation →
+	 *  render), the counterpart of {@link #realReferenceRecordText}. */
+	private static String realActiveOrderRecordText(String uuid, String display) {
+		return org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
+				.injectedActiveOrderText(uuid, display);
+	}
+
+	@Test
+	public void activeDrugOrder_highCosinePassRendersVerifiedNotDemoted() {
+		// The deliberate NON-extension of the #106 demote-only carve-out, which until now lived only
+		// in a comment beside the carve-out. active_drug_order is a THIRD injected type, so the
+		// obvious generalisation — "records this module injects cannot be verified" — is wrong for it
+		// and nothing failed if someone made it: the #106 hazard is reference PROSE whose subject
+		// roles swap while still embedding near-identically ("A interacts with B"), whereas this
+		// record is one drug name asserted of this patient, so a cosine pass is real assurance.
+		// Demoting it would strip the faithfulness check from the very record injected to stop the
+		// answer contradicting the safety chips (#118) — silently, since a demoted verdict is null,
+		// not an error. Exactly inverts drugReference_highCosinePassRendersUnverifiedNotVerified.
+		String record = realActiveOrderRecordText("order-uuid-7", "Simvastatin Co 20mg");
+		String sentence = "The patient has an active order for Simvastatin Co 20mg [7].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record, AXIS_A);
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(7))),
+				Arrays.asList(activeDrugOrderMapping(7, "order-uuid-7", record)), FLOOR, TIER1_ONLY);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"an active-order citation is chart evidence, so a cosine pass must VERIFY it — "
+						+ "demote-only is scoped to drug-reference prose (#106), not to everything injected");
+	}
+
+	@Test
+	public void activeDrugOrder_isVerifiedByTier2Entailment() {
+		// The other half: it must also reach the entailment LLM. A type excluded from Tier-2 keeps a
+		// Tier-1 verdict only, so an off-claim citation that cosine happens to like would never be
+		// caught — and no client suppresses this type's verdict (it groups as chart evidence), so the
+		// verdict rendered here is the one the clinician sees. Inverts
+		// drugReference_neverEntersTier2Entailment.
+		String record = realActiveOrderRecordText("order-uuid-7", "Simvastatin Co 20mg");
+		String sentence = "The patient has an active order for Simvastatin Co 20mg [7].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record, AXIS_A);
+		llm.verdict = Boolean.FALSE;
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(7))),
+				Arrays.asList(activeDrugOrderMapping(7, "order-uuid-7", record)), FLOOR, TIER2_ON);
+
+		assertEquals(1, llm.calls, "an active-order citation must be judged by the entailment LLM");
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"and Tier-2's verdict must be authoritative for it, overriding the Tier-1 cosine pass");
+	}
+
 	/** Index of the first {@code entailsBatch} call whose statement list contains {@code statement}
 	 *  exactly, or -1 — lets a test assert how citations were grouped into calls. */
 	private int callIndexContaining(String statement) {

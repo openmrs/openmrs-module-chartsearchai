@@ -77,16 +77,21 @@ public class ChartSearchAiUtils {
 	 * patient's chart, {@link ChartSearchAiConstants#REFERENCE_GROUP_REFERENCE} for
 	 * module-supplied reference prose. This is the single entry point for the DISPLAY-GROUPING
 	 * decision: code that labels or orders references for a client must ask here rather than
-	 * compare {@code resourceType} itself, so the split stays in one place if a second kind of
-	 * injected record is ever added. (Unrelated per-type behaviour keyed off
+	 * compare {@code resourceType} itself, so the split stays in one place as further kinds of
+	 * injected record are added — three exist already, and they do not all fall on the same side
+	 * (see below). (Unrelated per-type behaviour keyed off
 	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE} is untouched by this — the
 	 * demote-only grounding gate in {@code CitationGroundingVerifier} is its own concern and
 	 * legitimately tests the type directly.)
 	 *
 	 * <p>The two groups are exhaustive because exactly two code paths mint a
 	 * {@code RecordMapping}: {@code PatientChartSerializer}, which passes through whatever
-	 * type querystore retrieved, and {@code DrugReferenceInjector}, which always writes
-	 * {@code drug_reference}.
+	 * type querystore retrieved, and {@code DrugReferenceInjector}, which writes
+	 * {@code drug_reference}, {@code safety_finding} and {@code active_drug_order}. Not everything
+	 * injected is reference material: an {@code active_drug_order} record is the patient's own
+	 * active order, read from {@code OrderService} when the retrieved chart cannot substantiate it,
+	 * so it groups as chart evidence — which is also what the fallback below yields, deliberately
+	 * rather than by omission (the decision is recorded in {@code ChartSearchAiReferenceGroupTest}).
 	 *
 	 * <p>Anything unrecognised — including {@code null} — fails safe to chart evidence.
 	 * Labelling an unknown type as reference material would assert a module provenance we

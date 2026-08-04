@@ -294,6 +294,24 @@ class QueryStoreChartBuilder {
 		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} simHits={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
 				patient.getPatientId(), intentLabel, chartDocs.size(), similarityUuids.size(), records.size(),
 				rpcMs, serializeMs, System.currentTimeMillis() - buildStart);
+		// The typed scope IS the set of types this slice carries completely (every doc of those
+		// types the chart fetch returned survived the filter above). Stamped so a consumer can tell
+		// a record that is absent because the retrieved chart lacks it from one absent because the
+		// slice never asked for its type — only the former is a discrepancy worth reporting.
+		// Stamped only here, on the path that actually applied the filter: the degraded returns
+		// above carry no records at all, so declaring completeness for them would assert a
+		// guarantee no filter enforced.
+		//
+		// Deliberately stamped at the ES chart cap too, where the fetch itself dropped the older
+		// tail (WARNed above) so the slice can be missing pre-cutoff docs of a scoped type. Do NOT
+		// "fix" that by suppressing the stamp: what a consumer reads from absence is whether the
+		// chart THE ANSWER IS GROUNDED IN lacks the record, and at the cap it genuinely does — so
+		// the active-order reconciliation (issue #118) still needs to repair it, or the largest
+		// charts get back exactly the contradiction that issue is about, on the patients least
+		// likely to be checked by hand. Only the cause differs (a retrieval cap, not an indexing
+		// gap), which is why the reconciliation's WARN says the index is *normally* behind rather
+		// than asserting it, and why the cap gets its own WARN on the same request.
+		chart.markCompleteFor(typedScope);
 		return markScoped(chart);
 	}
 
@@ -458,8 +476,10 @@ class QueryStoreChartBuilder {
 	 *  (older tail silently dropped) — mirrors {@code ElasticsearchBackendStore.FULL_CHART_MAX_HITS}
 	 *  in the querystore module. Kept in sync manually: querystore-api exposes no constant for it.
 	 *  A returned size at this value means a scoped typed slice may be missing pre-cutoff records
-	 *  (see {@link #buildScoped}). */
-	private static final int QUERYSTORE_ES_CHART_CAP = 10_000;
+	 *  (see {@link #buildScoped}). Package-private so the test asserting what {@link #buildScoped}
+	 *  does AT the cap reads the real threshold — a test hardcoding 10 000 would silently stop
+	 *  exercising the cap the moment this value changed, and still pass. */
+	static final int QUERYSTORE_ES_CHART_CAP = 10_000;
 
 	/**
 	 * Runs the similarity search and collects hit uuids, degrading to an empty set on failure with

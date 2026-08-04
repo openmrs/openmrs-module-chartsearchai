@@ -247,6 +247,78 @@ public class DrugSafetyQuestionPairInteractionTest {
 	}
 
 	@Test
+	public void aMultiWordRuleTokenDoesNotNameEveryDrugCalledAfterOneOfItsWords() throws IOException {
+		// A rule's token and an entry's alias are both canonical reference names, so "does this rule
+		// name that entry?" is a question about NAME IDENTITY. Asking it with the prose matcher — the
+		// token as haystack, the entry's aliases as needles — makes "ethinyl estradiol" name the
+		// separate Estradiol entry, because word boundaries stop a name nested inside a WORD
+		// (chlorothiazide in hydrochlorothiazide) but not one nested inside a PHRASE. The chip then
+		// states an interaction the knowledge base does not contain, against a drug whose row it read
+		// from a different drug — and preAnswerFindings injects that same string as a citable record,
+		// so the model is handed a fabricated interaction as evidence it is designed to report.
+		DrugReferenceService fixture = pairFixtureService();
+		DrugReference levofloxacin = fixture.findByQuery("levofloxacin").get(0);
+		assertEquals("ethinyl estradiol", levofloxacin.getInteractions().get(0).getToken(),
+				"precondition: the only rule must be against ethinyl estradiol, a different drug");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixture).validate(
+				"The records do not address this combination.",
+				"Does levofloxacin interact with estradiol?", patientOnNeitherDrug());
+
+		assertTrue(warnings.isEmpty(),
+				"no rule joins levofloxacin and estradiol, so nothing may be raised — a chip here names"
+						+ " an interaction the knowledge base does not carry, was: " + warnings);
+	}
+
+	@Test
+	public void theRealMultiWordPairIsStillReportedWhenTheQuestionNamesIt() throws IOException {
+		// The other edge of the previous test: tightening name identity must not stop a genuine
+		// multi-word token from naming its own partner. The same fixture, the same rule, the question
+		// naming ethinyl estradiol itself — which also resolves the Estradiol entry, since "estradiol"
+		// is a whole word of the question too, so this pins that exactly one of the two is reported.
+		DrugReferenceService fixture = pairFixtureService();
+		String question = "Does levofloxacin interact with ethinyl estradiol?";
+		assertTrue(fixture.findByQuery(question).stream().map(DrugReference::getName)
+				.collect(Collectors.toList()).containsAll(Arrays.asList("Ethinyl estradiol", "Estradiol")),
+				"precondition: the question must resolve BOTH the real partner and the similarly named"
+						+ " drug, else this proves nothing");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixture).validate(
+				"The records do not address this combination.", question, patientOnNeitherDrug());
+
+		assertEquals(1, interactionChips(warnings),
+				"the pair the rule really carries must still be reported, exactly once, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Levofloxacin", "Ethinyl estradiol", "Moderate"),
+				"and must name the partner the rule actually points at, was: " + warnings);
+	}
+
+	@Test
+	public void aQuestionNamingOneDrugRaisesNoPairChipForItsOwnRouteVariant() throws IOException {
+		// One drug is not a pair, however many entries it resolves to. The size(inPlay) < 2 guard
+		// counts ENTRIES, so a single question word that the KB carries route variants of clears it,
+		// and the token-keyed grouping cannot collapse the result either — a self-pair's key has the
+		// same name on both sides, which is unique. The full KB has 33 above-floor rows joining two
+		// entries that share one match token, so a question naming one of those 29 drugs gets a chip
+		// about a combination the clinician never proposed (issue #105's over-reach), and for a drug
+		// whose variants are named after DIFFERENT substances the chip names two drugs the question
+		// never mentioned at all — the #86 failure mode this arm's own wording exists to avoid.
+		DrugReferenceService fixture = pairFixtureService();
+		List<String> resolved = fixture.findByQuery("Is minoxidil safe for this patient?").stream()
+				.map(DrugReference::getName).collect(Collectors.toList());
+		assertEquals(Arrays.asList("Minoxidil", "Minoxidil (topical)"), resolved,
+				"precondition: one drug word must resolve two entries, and each must carry the row that"
+						+ " joins them — that is what clears the two-drugs guard");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixture).validate(
+				"Minoxidil is used for hypertension and for androgenetic alopecia.",
+				"Is minoxidil safe for this patient?", patientOnNeitherDrug());
+
+		assertTrue(warnings.isEmpty(),
+				"a question naming ONE drug must raise no pair chip, was: " + warnings);
+	}
+
+	@Test
 	public void everyDistinctPairAmongThreeNamedDrugsIsReported() {
 		// The other edge of the one-chip-per-pair grouping: it must collapse only what IS one pair.
 		// Keying pairs on the drugs' match tokens is a de-duplication inside a safety net, so its

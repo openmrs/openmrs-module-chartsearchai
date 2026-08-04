@@ -634,8 +634,10 @@ public class DrugSafetyValidator {
 		if (coveredByActiveOrderArm(forward, context) || coveredByActiveOrderArm(reverse, context)) {
 			return;
 		}
-		// One chip per clinical PAIR, not per pair of ENTRIES — see pairKeyFor.
-		if (!reportedPairs.add(pairKeyFor(first, forward, second, reverse))) {
+		// One chip per clinical PAIR, not per pair of ENTRIES, and nothing at all when the two entries
+		// are one drug — see pairKeyFor.
+		List<String> pairKey = pairKeyFor(first, forward, second, reverse);
+		if (pairKey == null || !reportedPairs.add(pairKey)) {
 			return;
 		}
 		// Whichever side carries the rule owns the sentence; with symmetric data both do, and the tie
@@ -687,29 +689,54 @@ public class DrugSafetyValidator {
 	/**
 	 * The reference-side counterpart of {@link PatientClinicalContext#hasActiveDrug}: the same two
 	 * arms, a rule's name token and its ATC code, resolved against a loaded entry's aliases and
-	 * normalized codes instead of against the chart's active orders. Alias matching goes through the
-	 * shared {@link DrugReference#matchesText} — the same matcher {@code findByQuery}/
-	 * {@code lookupByToken} use to bind free text to an entry — so "this rule points at that drug" is
-	 * decided one way throughout.
+	 * normalized codes instead of against the chart's active orders.
 	 *
-	 * <p>Deliberately that matcher and not the order-name one {@code hasActiveDrug} reaches for (issue
-	 * #128 splits the two): both operands here are canonical reference strings — a rule's match token
-	 * against an entry's aliases — with no localized, inflected display name to tolerate a trailing
-	 * letter for, and the orientation is inverted, the rule's TOKEN being the haystack and the entry's
-	 * aliases the needles. The nesting hazard therefore runs the other way here, and it is the
-	 * symmetric word boundary that stops an alias nested in a longer token from matching
-	 * ({@code chlorothiazide} against a {@code hydrochlorothiazide} rule).
+	 * <p>Both operands here are canonical reference strings — a rule's match token against an entry's
+	 * own alias list — so the question is NAME IDENTITY, and neither of the two matchers issue #128
+	 * splits {@link DrugReference#matchesText} into answers it. Both scan for a name inside a longer
+	 * string, which is right when the longer string is prose ({@code findByQuery}) or a localized order
+	 * name ({@code matchesOrderName}) and wrong here, because a token is neither. Measured on the full
+	 * KB, scanning made a multi-word token name every drug called after one of its words: 408 of 2093
+	 * distinct tokens are multi-word and 53 of those carry a word that is some other entry's whole name
+	 * — {@code ethinyl estradiol} (in 449 entries' rule lists) named the separate Estradiol entry,
+	 * {@code magnesium salicylate} named Salicylic acid, {@code iron-dextran complex} named Iron. A
+	 * word boundary does not help: it stops a name nested inside a WORD ({@code chlorothiazide} in
+	 * {@code hydrochlorothiazide}) but not one nested inside a PHRASE. The chip then stated an
+	 * interaction the KB does not carry, against a drug whose row it had read from a different drug,
+	 * and {@link DrugReferenceInjector#preAnswerFindings} injected that same sentence as a citable
+	 * record — a fabricated interaction handed to the model as evidence.
+	 *
+	 * <p>So this arm compares names rather than scanning: exactly one of {@code other}'s aliases,
+	 * case-folded. No third matcher is introduced — this reads the same {@link DrugReference#getAliases}
+	 * list {@code matchesText} reads, so #128's change to how that list is scanned cannot drift from it.
+	 * Nothing genuine is lost: {@code ddinter} writes each rule's token from its partner row's
+	 * {@code rxnorm_name} (falling back to its name), and the parser puts both in that partner's
+	 * aliases, so every real rule still names its partner exactly — and an entry whose aliases omit its
+	 * own name could never be resolved from a question in the first place, {@code findByQuery} reading
+	 * the same list.
 	 *
 	 * @return true when {@code rule} names reference entry {@code other}
 	 */
 	private static boolean identifies(DrugReference.Interaction rule, DrugReference other) {
-		String token = rule.getToken();
-		if (!ChartSearchAiUtils.isBlank(token)
-				&& other.matchesText(token.trim().toLowerCase(Locale.ROOT))) {
+		if (namesEntry(rule.getToken(), other)) {
 			return true;
 		}
 		String atc = DrugReference.normalizeAtcToken(rule.getAtc());
 		return atc != null && other.normalizedAtcCodes().contains(atc);
+	}
+
+	/** @return true when {@code token} is, case-folded, one of {@code other}'s own aliases. */
+	private static boolean namesEntry(String token, DrugReference other) {
+		if (ChartSearchAiUtils.isBlank(token)) {
+			return false;
+		}
+		String name = token.trim().toLowerCase(Locale.ROOT);
+		for (String alias : other.getAliases()) {
+			if (alias != null && name.equals(alias.trim().toLowerCase(Locale.ROOT))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -760,13 +787,26 @@ public class DrugSafetyValidator {
 	 * the reference data itself: the chart arm reads that same token to decide which of the patient's
 	 * orders a rule names, so it cannot resolve the ambiguity either.
 	 *
-	 * @return the key for this pair. Each drug is named by the rules on the OTHER side of it, so
-	 *         {@code first} is named by {@code reverse} and {@code second} by {@code forward} — the
-	 *         crossing is deliberate, not a transposition.
+	 * <p>The degenerate case of that same rule is a pair of entries the data names IDENTICALLY, which
+	 * is one drug and not a pair at all — so it gets no key and no chip. It is reachable from a
+	 * question naming a single drug: the two-drugs guard counts ENTRIES, and one word resolves several
+	 * when the KB carries route variants of it, 33 above-floor rows in the full KB joining two entries
+	 * that share one match token (29 drug words: minoxidil, timolol, lidocaine, atropine, neomycin,
+	 * paclitaxel …). Grouping alone cannot suppress those, a self-pair's key being unique by
+	 * construction. Reporting one would assert a combination the clinician never proposed — issue
+	 * #105's over-reach — and where the variants are named after different substances it would name two
+	 * drugs the question never mentioned, the #86 failure mode this arm's wording exists to avoid. The
+	 * verdict is taken before any key is claimed, so a genuine pair keyed differently still reports.
+	 *
+	 * @return the key for this pair, or null when the two entries are one drug. Each drug is named by
+	 *         the rules on the OTHER side of it, so {@code first} is named by {@code reverse} and
+	 *         {@code second} by {@code forward} — the crossing is deliberate, not a transposition.
 	 */
 	private static List<String> pairKeyFor(DrugReference first, List<DrugReference.Interaction> forward,
 			DrugReference second, List<DrugReference.Interaction> reverse) {
-		return unorderedPairKey(pairKeyNameFor(first, reverse), pairKeyNameFor(second, forward));
+		String firstName = pairKeyNameFor(first, reverse);
+		String secondName = pairKeyNameFor(second, forward);
+		return firstName.equals(secondName) ? null : unorderedPairKey(firstName, secondName);
 	}
 
 	/**

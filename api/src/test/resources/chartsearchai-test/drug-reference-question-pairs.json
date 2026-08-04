@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Test fixture for the question-named PAIR arm (issue #114), parsed by the real JsonDrugReferenceSource. Three shapes the bundled DDInter sample cannot express, each a miniature of a shape the FULL KB carries: (1) route variants of one drug sharing a match token — DDInter publishes the same rxnorm_name for every variant, so one question word resolves several entries that all pair off the same rule (142 rxnorm_name values are shared by more than one entry across 332 entries of the full KB; see issue #115); (2) one pair joined by TWO rules whose tokens differ, only the second of which names the patient's active order, so 'is this pair already the chart arm's?' cannot be answered from the first rule alone; (3) a rule that identifies its partner only by ATC code, carrying no name token — the arm the ddinter source never exercises because it always writes a token.",
+  "description": "Test fixture for the question-named PAIR arm (issue #114), parsed by the real JsonDrugReferenceSource. Five shapes the bundled DDInter sample cannot express, each a miniature of a shape the FULL KB carries: (1) route variants of one drug sharing a match token — DDInter publishes the same rxnorm_name for every variant, so one question word resolves several entries that all pair off the same rule (142 rxnorm_name values are shared by more than one entry across 332 entries of the full KB; see issue #115); (2) one pair joined by TWO rules whose tokens differ, only the second of which names the patient's active order, so 'is this pair already the chart arm's?' cannot be answered from the first rule alone; (3) a rule that identifies its partner only by ATC code, carrying no name token — the arm the ddinter source never exercises because it always writes a token; (4) a MULTI-WORD rule token one of whose words is another drug's whole name ('ethinyl estradiol' vs the separate Estradiol entry) — 408 of the full KB's 2093 distinct tokens are multi-word and 53 of those name a word that is some other entry's whole name, 'ethinyl estradiol' appearing in 449 entries' rule lists; (5) two route variants joined by a KB row of their own, which is one drug and not a pair — 33 such rows exist in the full KB, all above the default floor, spanning 29 drug words (minoxidil, timolol, lidocaine, atropine, neomycin, paclitaxel ...).",
   "entries": [
     {
       "id": "dexamethasone",
@@ -66,6 +66,57 @@
           "token": "warfarin",
           "severity": "Major",
           "note": "Major. NSAIDs may increase the risk of bleeding in patients treated with warfarin."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "levofloxacin",
+      "name": "Levofloxacin",
+      "aliases": ["levofloxacin"],
+      "interactions": [
+        {
+          "token": "ethinyl estradiol",
+          "severity": "Moderate",
+          "note": "Moderate. RECOMMENDED: The effectiveness of estrogen-containing oral contraceptives may be impaired during coadministration with antibiotics."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "ethinyl-estradiol",
+      "name": "Ethinyl estradiol",
+      "aliases": ["ethinyl estradiol"],
+      "source": "Test fixture"
+    },
+    {
+      "id": "estradiol",
+      "name": "Estradiol",
+      "aliases": ["estradiol"],
+      "source": "Test fixture"
+    },
+    {
+      "id": "minoxidil",
+      "name": "Minoxidil",
+      "aliases": ["minoxidil"],
+      "interactions": [
+        {
+          "token": "minoxidil",
+          "severity": "Moderate",
+          "note": "Moderate. Coadministration of two minoxidil formulations may produce additive hypotensive effects."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "minoxidil-topical",
+      "name": "Minoxidil (topical)",
+      "aliases": ["minoxidil (topical)", "minoxidil"],
+      "interactions": [
+        {
+          "token": "minoxidil",
+          "severity": "Moderate",
+          "note": "Moderate. Coadministration of two minoxidil formulations may produce additive hypotensive effects."
         }
       ],
       "source": "Test fixture"

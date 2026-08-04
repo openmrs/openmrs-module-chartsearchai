@@ -175,9 +175,10 @@ public class LlmProviderTest {
 		// change must resist all left `mvn test` green: deleting any of its five load-bearing clauses
 		// from DEFAULT_SYSTEM_PROMPT — including the never-"Yes" token — plus appending a fallback in
 		// wording other than arm D's, plus splitting the addressed branch into a paragraph of its own.
-		// An eighth, rewording DrugReferenceInjector.renderFinding's prefix out from under the
-		// few-shot, is why that prefix is now one shared constant. All eight were re-run against these
-		// assertions and every one fails.
+		// Two more are why the few-shot's record prefix is now one shared constant rather than a copy:
+		// rewording DrugReferenceInjector.renderFinding's prefix out from under the demonstration, and
+		// re-inlining a literal into the prompt and then rewording that prefix. All nine were run
+		// against these assertions and every one fails.
 		//   * The verdict's DIRECTION must come from the finding, never by deferring to the general
 		//     yes/no rule: that rule's "start with Yes ONLY when a record explicitly names what is
 		//     asked" is a PRESENCE criterion, and on a safety question a record naming the drug is
@@ -221,16 +222,20 @@ public class LlmProviderTest {
 		assertTrue(safetyRuleAt > 0, "the safety/suitability paragraph must still be present");
 		// To the next newline, which is where the paragraph ends — so moving the addressed branch out
 		// of it fails the next assertion rather than slipping through a wider window.
-		String safetyRule = prompt.substring(safetyRuleAt, prompt.indexOf('\n', safetyRuleAt));
+		int safetyRuleEnd = prompt.indexOf('\n', safetyRuleAt);
+		assertTrue(safetyRuleEnd > safetyRuleAt,
+				"the safety/suitability paragraph must still be newline-terminated, or the extraction "
+				+ "below silently widens to the rest of the prompt");
+		String safetyRule = prompt.substring(safetyRuleAt, safetyRuleEnd);
 		assertTrue(safetyRule.contains("When a safety finding DOES name the drug"),
 				"the addressed branch must live in the same paragraph as the unaddressed one it is "
 				+ "the converse of, not in a paragraph of its own: " + safetyRule);
 		assertFalse(safetyRule.toLowerCase().contains("otherwise"),
 				"the safety/suitability paragraph must carry NO otherwise-branch in any wording. Arm "
-				+ "D's fallback is the one hunk of the 2026-07-30 A/B/C/D that broke ABSTAIN (7/10 "
-				+ "vs 10/10), because a fallback makes every other record fair game on a cell nothing "
-				+ "bears on. Both branches here are gated on a positive antecedent instead: "
-				+ safetyRule);
+				+ "D's fallback cost the most ABSTAIN of the 2026-07-30 A/B/C/D — 7/10 against a "
+				+ "10/10 baseline, where arm B's quoted template cost 1 and arm C none — because a "
+				+ "fallback makes every other record fair game on a cell nothing bears on. Both "
+				+ "branches here are gated on a positive antecedent instead: " + safetyRule);
 		assertTrue(prompt.contains("every record it rests on, cited"),
 				"Leading with the verdict must not cost the complete-enumeration property: the "
 				+ "records the finding rests on still have to reach the answer, cited");
@@ -251,10 +256,12 @@ public class LlmProviderTest {
 				+ "'Safety finding — <drug>: <detail>' shape DrugReferenceInjector.renderFinding "
 				+ "appends, or it teaches a shape the model never sees");
 		assertTrue(prompt.contains("[4] " + DrugReferenceInjector.FINDING_PREFIX + "Durian:"),
-				"and that shape must be the PRODUCTION prefix rather than a copy of it: two "
-				+ "independent literals let renderFinding be reworded while the few-shot keeps "
-				+ "demonstrating the old shape, with every test green. This assertion and the "
-				+ "literal one above fail together only while the two agree");
+				"and that shape must be the PRODUCTION prefix rather than a copy of it. The two "
+				+ "assertions cover opposite drift directions and BOTH pass only while the prompt "
+				+ "and renderFinding agree: reword the constant and the literal one above fails; "
+				+ "re-inline a literal into the prompt and then reword the constant, and this one "
+				+ "fails. Two independent literals would let renderFinding be reworded while the "
+				+ "few-shot kept demonstrating a shape the model never sees, with every test green");
 		assertTrue(prompt.contains("\"answer\": \"No — durian should not be delivered:"),
 				"The demonstrated answer must LEAD with the verdict; a lead that opens on the "
 				+ "mechanism is the behaviour being fixed");

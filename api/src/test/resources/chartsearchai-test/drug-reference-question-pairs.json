@@ -122,6 +122,46 @@
       "source": "Test fixture"
     },
     {
+      "id": "acetylsalicylic-acid",
+      "name": "Acetylsalicylic acid",
+      "genericName": "aspirin",
+      "aliases": ["acetylsalicylic acid", "aspirin"],
+      "interactions": [
+        {
+          "token": "diclofenac",
+          "severity": "Major",
+          "note": "Major. Concomitant use of two nonsteroidal anti-inflammatory drugs increases the risk of gastrointestinal bleeding and ulceration."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "diclofenac",
+      "name": "Diclofenac",
+      "aliases": ["diclofenac"],
+      "interactions": [
+        {
+          "token": "aspirin",
+          "severity": "Major",
+          "note": "Major. Concomitant use of two nonsteroidal anti-inflammatory drugs increases the risk of gastrointestinal bleeding and ulceration."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "diclofenac-topical",
+      "name": "Diclofenac (topical)",
+      "aliases": ["diclofenac (topical)", "diclofenac"],
+      "interactions": [
+        {
+          "token": "aspirin",
+          "severity": "Unknown",
+          "note": "Unknown severity interaction (DDInter 2.0; no mechanism description on file)."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
       "id": "miconazole",
       "name": "Miconazole",
       "aliases": ["miconazole"],

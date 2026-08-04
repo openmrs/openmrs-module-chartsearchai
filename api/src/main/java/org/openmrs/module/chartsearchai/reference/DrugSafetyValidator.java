@@ -609,35 +609,58 @@ public class DrugSafetyValidator {
 		if (questionDrugs.size() < 2) {
 			return;
 		}
+		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);
+		Map<DrugReference, String> names = pairKeyNames(drugs, severityFloor);
+		// Group first, decide second. Both the grouping and the chart-precedence verdict belong to the
+		// CLINICAL pair, and route variants make one clinical pair arrive as several entry pairs
+		// carrying different rule sets — the sub-floor sibling of an above-floor row loses that row, so
+		// its entry pair sees different tokens and can reach a different verdict. Deciding per entry
+		// pair, as an early return, therefore let a chart-owned pair leave no trace: its sibling
+		// concluded the chart did not own it and chipped, so the patient's own medication became the
+		// subject of a sentence reading as a reference lookup, carrying one variant's mechanism
+		// attributed to another whose own row was sub-floor. Candidates are collected per pair key and
+		// emitted only once every entry pair has been seen.
+		Map<List<String>, SafetyWarning> candidates = new LinkedHashMap<List<String>, SafetyWarning>();
+		Set<List<String>> chartOwned = new LinkedHashSet<List<String>>();
 		// Indexed so each UNORDERED pair of entries is visited once: DDInter rows are symmetric and
 		// the parser writes every pair into both drugs' entries, so walking ordered pairs would report
 		// each interaction twice, once from each side.
-		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);
-		Set<List<String>> reportedPairs = new LinkedHashSet<List<String>>();
 		for (int i = 0; i < drugs.size() - 1; i++) {
 			for (int j = i + 1; j < drugs.size(); j++) {
-				addQuestionPairInteraction(warnings, drugs.get(i), drugs.get(j), context, severityFloor,
-						reportedPairs);
+				collectQuestionPairInteraction(candidates, chartOwned, drugs.get(i), drugs.get(j), names,
+						context, severityFloor);
+			}
+		}
+		for (Map.Entry<List<String>, SafetyWarning> candidate : candidates.entrySet()) {
+			if (!chartOwned.contains(candidate.getKey())) {
+				warnings.add(candidate.getValue());
 			}
 		}
 	}
 
-	/** One question-named pair: at most one chip, from whichever side carries the rule. */
-	private void addQuestionPairInteraction(List<SafetyWarning> warnings, DrugReference first,
-			DrugReference second, PatientClinicalContext context, int severityFloor,
-			Set<List<String>> reportedPairs) {
+	/** One question-named pair: at most one candidate chip, from whichever side carries the rule. */
+	private void collectQuestionPairInteraction(Map<List<String>, SafetyWarning> candidates,
+			Set<List<String>> chartOwned, DrugReference first, DrugReference second,
+			Map<DrugReference, String> names, PatientClinicalContext context, int severityFloor) {
 		List<DrugReference.Interaction> forward = aboveFloorRulesAgainst(first, second, severityFloor);
 		List<DrugReference.Interaction> reverse = aboveFloorRulesAgainst(second, first, severityFloor);
 		if (forward.isEmpty() && reverse.isEmpty()) {
 			return;
 		}
-		if (coveredByActiveOrderArm(forward, context) || coveredByActiveOrderArm(reverse, context)) {
+		// One chip per clinical PAIR, not per pair of ENTRIES, and nothing at all when the two entries
+		// are one drug — see pairKeyNames.
+		String firstName = names.get(first);
+		String secondName = names.get(second);
+		if (firstName.equals(secondName)) {
 			return;
 		}
-		// One chip per clinical PAIR, not per pair of ENTRIES, and nothing at all when the two entries
-		// are one drug — see pairKeyFor.
-		List<String> pairKey = pairKeyFor(first, forward, second, reverse);
-		if (pairKey == null || !reportedPairs.add(pairKey)) {
+		List<String> pairKey = unorderedPairKey(firstName, secondName);
+		if (coveredByActiveOrderArm(forward, context) || coveredByActiveOrderArm(reverse, context)) {
+			// Recorded, not returned: the sibling entry pairs of this clinical pair must see it.
+			chartOwned.add(pairKey);
+			return;
+		}
+		if (candidates.containsKey(pairKey)) {
 			return;
 		}
 		// Whichever side carries the rule owns the sentence; with symmetric data both do, and the tie
@@ -664,7 +687,8 @@ public class DrugSafetyValidator {
 		if (rule.getNote() != null && !rule.getNote().isEmpty()) {
 			detail += " — " + rule.getNote();
 		}
-		warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, subject.displayLabel(), detail));
+		candidates.put(pairKey, new SafetyWarning(SafetyWarning.TYPE_INTERACTION, subject.displayLabel(),
+				detail));
 	}
 
 	/**
@@ -772,57 +796,63 @@ public class DrugSafetyValidator {
 	 * against voxelotor is four near-identical chips, and four near-identical injected findings, for a
 	 * single clinical fact. That is issue #115's shape arriving on the question side (142
 	 * {@code rxnorm_name} values are shared by more than one entry across 332 entries of the full KB),
-	 * so the pair is keyed by the two drugs' MATCH TOKENS rather than by their entries — the token
-	 * being the reference data's own canonical name for a drug, and precisely what the variants share.
-	 * Which variant's row then supplies the severity is #115's open half; the dataset's first is kept,
-	 * as the chart arm keeps its first.
+	 * so pairs are keyed by the two drugs' MATCH TOKENS rather than by their entries — the token being
+	 * the reference data's own canonical name for a drug, and precisely what the variants share
+	 * (measured: in all 142 of those families the token is an exact alias of every member).
+	 *
+	 * <p>The name is resolved PER DRUG, once, rather than per pair, because a drug that keys two ways
+	 * gets two keys and its pair escapes the grouping. It did: the name came from the other side's rule
+	 * token where there was one and from {@link DrugReference#displayLabel} where there was not — two
+	 * vocabularies, so one entry keyed as {@code aspirin} in the pair whose partner row names it and as
+	 * {@code Acetylsalicylic acid (aspirin)} in the pair whose partner row is sub-floor, leaving nothing
+	 * to name it with. Resolving from ANY of the question's drugs' rules removes the second vocabulary
+	 * from the common case entirely, and route variants agree by construction, being named by the one
+	 * token that identifies them all.
 	 *
 	 * <p>De-duplicating inside a safety net can only be done where nothing actionable is lost, and two
-	 * entries collapse here only when the reference data gives them the SAME name. In the shape this
-	 * exists for, one rule then identifies both, so the surviving chip carries that very rule's
-	 * severity and mechanism and all that is dropped is a second spelling of the partner. Entries the
-	 * data can tell apart are named by different tokens and keep their own chips — asserted over three
-	 * drugs named in one question. The residual is a KB that gives two genuinely different drugs one
-	 * token and separates them only by ATC code: the first is reported. Such a token is ambiguous in
-	 * the reference data itself: the chart arm reads that same token to decide which of the patient's
-	 * orders a rule names, so it cannot resolve the ambiguity either.
+	 * entries share a name only when the reference data itself gives them one. The surviving chip then
+	 * carries that same rule's severity and mechanism, and all that is dropped is a second spelling of
+	 * the partner; entries the data can tell apart keep their own chips, asserted over three drugs named
+	 * in one question. Which variant's row supplies the severity is #115's open half; the dataset's
+	 * first is kept, as the chart arm keeps its first.
 	 *
-	 * <p>The degenerate case of that same rule is a pair of entries the data names IDENTICALLY, which
-	 * is one drug and not a pair at all — so it gets no key and no chip. It is reachable from a
-	 * question naming a single drug: the two-drugs guard counts ENTRIES, and one word resolves several
-	 * when the KB carries route variants of it, 33 above-floor rows in the full KB joining two entries
-	 * that share one match token (29 drug words: minoxidil, timolol, lidocaine, atropine, neomycin,
-	 * paclitaxel …). Grouping alone cannot suppress those, a self-pair's key being unique by
-	 * construction. Reporting one would assert a combination the clinician never proposed — issue
-	 * #105's over-reach — and where the variants are named after different substances it would name two
-	 * drugs the question never mentioned, the #86 failure mode this arm's wording exists to avoid. The
-	 * verdict is taken before any key is claimed, so a genuine pair keyed differently still reports.
+	 * <p>Two entries that end up with the SAME name are one drug, not a pair, and raise nothing. That is
+	 * reachable from a question naming a single drug: the two-drugs guard counts ENTRIES, and one word
+	 * resolves several when the KB carries variants of it — 33 above-floor rows in the full KB join two
+	 * entries sharing one token (29 drug words: minoxidil, timolol, lidocaine, atropine, neomycin,
+	 * paclitaxel …). Reporting one would assert a combination the clinician never proposed (issue #105's
+	 * over-reach), and where the variants are named after different substances it would name two drugs
+	 * the question never mentioned, which is #86. The measured cost of that suppression is bounded: only
+	 * 6 of the full KB's 2093 distinct tokens are an exact alias of entries with different
+	 * {@code rxnorm_name}s, and all 6 are one substance family (the trastuzumab conjugates, isosorbide
+	 * and its mononitrate, the COVID-19 vaccines), so a pair genuinely worth reporting is not among them.
 	 *
-	 * @return the key for this pair, or null when the two entries are one drug. Each drug is named by
-	 *         the rules on the OTHER side of it, so {@code first} is named by {@code reverse} and
-	 *         {@code second} by {@code forward} — the crossing is deliberate, not a transposition.
+	 * @return each drug mapped to the reference data's own name for it: the match token (or, for a rule
+	 *         carrying only a code, the ATC code) of the first above-floor rule any OTHER drug in
+	 *         {@code drugs} uses to name it. Falls back to its generic name, else its display name, when
+	 *         no rule names it at all — reachable only for the unnamed side of a one-directional pair,
+	 *         since {@code ddinter} writes every row into both entries.
 	 */
-	private static List<String> pairKeyFor(DrugReference first, List<DrugReference.Interaction> forward,
-			DrugReference second, List<DrugReference.Interaction> reverse) {
-		String firstName = pairKeyNameFor(first, reverse);
-		String secondName = pairKeyNameFor(second, forward);
-		return firstName.equals(secondName) ? null : unorderedPairKey(firstName, secondName);
-	}
-
-	/**
-	 * @return the reference data's own name for {@code drug}, lower-cased: the match token (or, for a
-	 *         rule carrying only a code, the ATC code) of {@code namingRules} — the rules on the other
-	 *         side of the pair, which are the ones that name this drug. Falls back to the entry's own
-	 *         label when no rule names it at all, so a pair with data on one side only still keys on
-	 *         something specific to that drug rather than on a shared blank. That fallback is where
-	 *         variants of one drug can key differently (each on its own label), and the direction is
-	 *         the safe one for a net — an extra chip, never a dropped one. Not a matcher: this name is
-	 *         only ever a key, which is why it may be a label.
-	 */
-	private static String pairKeyNameFor(DrugReference drug, List<DrugReference.Interaction> namingRules) {
-		String name = namingRules.isEmpty() ? drug.displayLabel()
-				: ChartSearchAiUtils.firstNonBlank(namingRules.get(0).getToken(), namingRules.get(0).getAtc());
-		return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
+	private static Map<DrugReference, String> pairKeyNames(List<DrugReference> drugs, int floor) {
+		Map<DrugReference, String> names = new LinkedHashMap<DrugReference, String>();
+		for (DrugReference drug : drugs) {
+			String name = null;
+			for (DrugReference other : drugs) {
+				if (other == drug) {
+					continue;
+				}
+				List<DrugReference.Interaction> naming = aboveFloorRulesAgainst(other, drug, floor);
+				if (!naming.isEmpty()) {
+					name = ChartSearchAiUtils.firstNonBlank(naming.get(0).getToken(), naming.get(0).getAtc());
+					break;
+				}
+			}
+			if (name == null) {
+				name = ChartSearchAiUtils.firstNonBlank(drug.getGenericName(), drug.displayLabel());
+			}
+			names.put(drug, name == null ? "" : name.trim().toLowerCase(Locale.ROOT));
+		}
+		return names;
 	}
 
 	/**

@@ -318,6 +318,63 @@ public class DrugSafetyQuestionPairInteractionTest {
 				"a question naming ONE drug must raise no pair chip, was: " + warnings);
 	}
 
+	/** The variant family whose sibling row is sub-floor, so the two entry pairs of ONE clinical pair
+	 *  reach the arm carrying different rule sets — the shape both findings below turn on. */
+	private static final String VARIANT_PAIR_QUESTION = "Does diclofenac interact with aspirin?";
+
+	@Test
+	public void aPairIsKeyedInTheReferenceDataVocabularyOnBothSides() throws IOException {
+		// A drug must key the same way in every pair it appears in, or one clinical pair gets two keys
+		// and escapes the grouping. It did: the key name came from the OTHER side's rule token when
+		// there was one and from displayLabel() when there was not — two vocabularies, so the same
+		// entry keyed as "aspirin" against Diclofenac (whose row names it) and as "Acetylsalicylic acid
+		// (aspirin)" against Diclofenac (topical) (whose row is sub-floor, leaving nothing to name it
+		// with). Two chips, no patient data needed. And an extra chip is an extra injected pre-answer
+		// finding, which is the outcome the keying exists to prevent.
+		DrugReferenceService fixture = pairFixtureService();
+		DrugReference asa = fixture.findByQuery("acetylsalicylic acid").get(0);
+		assertEquals("Acetylsalicylic acid (aspirin)", asa.displayLabel(),
+				"precondition: this entry's display label must diverge from the token the rules use for"
+						+ " it, else the two vocabularies cannot be told apart");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixture).validate(
+				"The records do not address this combination.", VARIANT_PAIR_QUESTION,
+				patientOnNeitherDrug());
+
+		assertEquals(1, interactionChips(warnings),
+				"one clinical pair, one chip, however the reference data names each side, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Acetylsalicylic acid (aspirin)", "Diclofenac", "named in the question"),
+				"and it must still name the pair asked about, was: " + warnings);
+	}
+
+	@Test
+	public void aChartOwnedPairSuppressesItsRouteSiblingToo() throws IOException {
+		// Chart precedence is a verdict about the PAIR, so it has to be reached over every entry pair
+		// that is that pair. It was reached per entry pair and taken as an early return, so the
+		// chart-owned pair (Acetylsalicylic acid, Diclofenac) left no trace and its sibling
+		// (Acetylsalicylic acid, Diclofenac (topical)) — whose own row is sub-floor, so nothing on that
+		// side matched the active order — concluded the chart did not own it and chipped. One clinical
+		// pair in two voices, which #435 forbids: the patient's own medication became the subject of a
+		// sentence that reads as a reference lookup, carrying the systemic row's Major mechanism
+		// attributed to the topical variant whose own row is Unknown.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(pairFixtureService()).validate(
+				"Aspirin and diclofenac together raise bleeding risk.", VARIANT_PAIR_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Aspirin 81mg"),
+						null, null, null));
+
+		assertEquals(1, interactionChips(warnings),
+				"the pair the chart already owns must be reported exactly once, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Diclofenac", "active order aspirin"),
+				"and the surviving chip must be the patient-specific one, was: " + warnings);
+		for (SafetyWarning warning : warnings) {
+			assertFalse(warning.getDetail().contains("named in the question"),
+					"no route sibling of a chart-owned pair may be reported as a reference lookup: "
+							+ warning);
+		}
+	}
+
 	@Test
 	public void everyDistinctPairAmongThreeNamedDrugsIsReported() {
 		// The other edge of the one-chip-per-pair grouping: it must collapse only what IS one pair.

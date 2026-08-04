@@ -77,6 +77,26 @@ public final class DrugReferenceTestSupport {
 		return injectedDdinterChart(question).getMappings();
 	}
 
+	/**
+	 * The real rendered text of the active-order record the REAL injector injects for an active
+	 * order the chart cannot substantiate (issue #118) — the real reconciliation → render chain,
+	 * not a hand-assembled imitation of the format. The second cross-package accessor, for the
+	 * grounding tests: how this record text embeds against an answer sentence is exactly what
+	 * decides whether treating it as ordinary chart evidence is right, so a test asserting that
+	 * must read the text production actually produces.
+	 */
+	public static String injectedActiveOrderText(String orderUuid, String display) {
+		PatientChart chart = injector(ddinterService()).injectRecords(oneRecordChart(),
+				ctx(60, null, null, null, null, null,
+						Collections.singletonList(activeOrder(orderUuid, display))),
+				"what are the patient's active medications?");
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER.equals(m.getResourceType()))
+				.map(RecordMapping::getText).findFirst()
+				.orElseThrow(() -> new IllegalStateException(
+						"no active-order record was injected for order: " + display));
+	}
+
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */
 	static final String ATC_SAMPLE = "atc/atc-sample.tsv";
 

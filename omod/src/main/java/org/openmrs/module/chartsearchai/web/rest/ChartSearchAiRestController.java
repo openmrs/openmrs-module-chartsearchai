@@ -951,7 +951,8 @@ public class ChartSearchAiRestController {
 			refMap.put("grounded", ref.getGrounded());
 			refMap.put("group", ChartSearchAiUtils.referenceGroup(ref.getResourceType()));
 			// Citation metadata, for rendering beside the chip: where the cited record came from,
-			// and how many of its interaction partners the render budget left out. Both used to be
+			// and how many of its interaction partners the cited record does not name (usually because
+			// they are not relevant to this patient, not because they did not fit). Both used to be
 			// appended to the record text itself, where the model recited them into the answer
 			// (issue #117) — they are fields so the model has nothing to quote. `source` is null and
 			// `withheldInteractions` 0 for a chart record, which is that record's real shape.

@@ -26,7 +26,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 
 /**
  * The one set of drug-reference test helpers, shared by the reference test classes (and, via
- * the one public accessor, the grounding tests in {@code api.impl}) so the
+ * the public accessors, the grounding and inference tests in {@code api.impl}) so the
  * arrangement/matcher bodies cannot drift between files (the same rule CLAUDE.md states for
  * {@code TestDatasetHelper}). Everything here constructs REAL production objects and calls
  * real production paths — no mocks, no pipeline reimplementation; the individual test files
@@ -41,8 +41,13 @@ public final class DrugReferenceTestSupport {
 	 * without reimplementing the renderer.
 	 */
 	public static String injectedDdinterReferenceText(String question) {
-		return injectedReference(injector(ddinterService()).injectRecords(oneRecordChart(),
-				ctx(60, null, null, null, null, null), question)).getText();
+		return injectedReference(injectedDdinterChart(question)).getText();
+	}
+
+	/** The one arrangement behind both public DDInter accessors, so they cannot drift apart. */
+	private static PatientChart injectedDdinterChart(String question) {
+		return injector(ddinterService()).injectRecords(oneRecordChart(),
+				ctx(60, null, null, null, null, null), question);
 	}
 
 	/**
@@ -69,8 +74,7 @@ public final class DrugReferenceTestSupport {
 	 * rather than hand-built stand-ins.
 	 */
 	public static List<RecordMapping> injectedDdinterMappings(String question) {
-		return injector(ddinterService()).injectRecords(oneRecordChart(),
-				ctx(60, null, null, null, null, null), question).getMappings();
+		return injectedDdinterChart(question).getMappings();
 	}
 
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */

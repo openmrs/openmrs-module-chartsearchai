@@ -418,6 +418,13 @@ public class DrugReferenceInjectorTest {
 				"nor anywhere in the prompt chart text: " + result.getText());
 		assertFalse(result.getText().contains("Source:"),
 				"nor anywhere in the prompt chart text: " + result.getText());
+		// The two pairs above only differ if the mapping text and the chart line can differ, so pin
+		// that they cannot: the chart line is "[N] " + the mapping text, byte for byte. This is the
+		// invariant the grounding verifier rests on — it compares an answer sentence against
+		// mapping.getText() to judge a claim the model formed from the chart text — so a divergence
+		// would ground claims against words the model never read. Nothing else asserts it.
+		assertTrue(result.getText().contains("[" + ref.getIndex() + "] " + ref.getText() + "\n"),
+				"the chart line must be the mapping text verbatim: " + result.getText());
 
 		// And still exposed — removing them from the text must not lose them. The bundled Lisinopril
 		// entry carries 15 interaction partners and this record renders two (the promoted ibuprofen
@@ -479,6 +486,9 @@ public class DrugReferenceInjectorTest {
 		for (RecordMapping m : result.getMappings()) {
 			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType())) {
 				finding = m;
+				// First, not last — so this test and its sibling above describe the SAME record if a
+				// question ever yields more than one finding.
+				break;
 			}
 		}
 		assertNotNull(finding, "precondition: a deterministic finding must be injected: " + result.getText());

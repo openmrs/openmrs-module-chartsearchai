@@ -241,6 +241,9 @@ public class LlmInferenceServiceTest {
 						+ chartRecord.getIndex() + "].",
 				Arrays.asList(reference.getIndex(), chartRecord.getIndex()), mappings);
 
+		// Both citations resolved, or the loop below leaves one side null and the assertions fail as a
+		// NullPointerException instead of naming which citation went missing.
+		assertEquals(2, result.size(), "both cited records must resolve to references: " + result);
 		RecordReference cited = null;
 		RecordReference citedChart = null;
 		for (RecordReference ref : result) {

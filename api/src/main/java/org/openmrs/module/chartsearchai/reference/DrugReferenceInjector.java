@@ -440,7 +440,7 @@ public class DrugReferenceInjector {
 	 * <p>{@code text} is the citable record: everything in it is quotable, because the model is
 	 * instructed to cite records and it quotes what it cites. {@code source} and
 	 * {@code withheldInteractions} are facts <em>about</em> that text — a dataset attribution and
-	 * how many partners the budget dropped — which used to be appended to it and were duly recited
+	 * how many partners the text does not name — which used to be appended to it and were duly recited
 	 * into clinician-facing answers ("…and 824 more interactions on file. Source: DDInter 2.0…",
 	 * issue #117). They travel here instead, onto the {@link RecordMapping} and out to the client,
 	 * where a citation chip can show provenance and honest truncation without the model ever

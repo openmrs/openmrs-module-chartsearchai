@@ -102,7 +102,7 @@ public class ChartSearchAiReferenceProvenanceTest {
 				"the citation must carry the dataset it came from, so a client can show provenance "
 						+ "without the record text having to name it");
 		assertEquals(824, drugRef.get("withheldInteractions").asInt(),
-				"and how many interaction partners the render budget left out, so truncation stays "
+				"and how many interaction partners the record does not name, so the subset stays "
 						+ "honest without a text tail the model recites");
 	}
 

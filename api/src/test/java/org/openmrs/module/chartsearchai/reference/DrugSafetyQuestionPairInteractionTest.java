@@ -375,6 +375,85 @@ public class DrugSafetyQuestionPairInteractionTest {
 		}
 	}
 
+	/** Every drug in the bundled DDInter sample, named in one question — the polypharmacy-review shape
+	 *  a clinician can type in one line, and the arm's worst case, since pairs grow as N²/2. */
+	private static final String POLYPHARMACY_QUESTION = "Reviewing polypharmacy: lisinopril, metformin,"
+			+ " methotrexate, omeprazole, sertraline, simvastatin, spironolactone, tramadol, warfarin,"
+			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"
+			+ " — any interactions?";
+
+	/** The severity word the chip's own note leads with, as a rank; -1 when the chip carries none.
+	 *  Read from the segment the pair chip appends after its provenance clause, so a severity word
+	 *  occurring later inside a mechanism paragraph cannot be mistaken for the rule's rating. */
+	private static int chipSeverityRank(SafetyWarning warning) {
+		int at = warning.getDetail().indexOf("also named in the question — ");
+		if (at < 0) {
+			return -1;
+		}
+		String tail = warning.getDetail().substring(at + "also named in the question — ".length());
+		for (String severity : Arrays.asList("Major", "Moderate", "Minor", "Unknown")) {
+			if (tail.startsWith(severity)) {
+				return DrugSafetyValidator.severityRank(severity);
+			}
+		}
+		return -1;
+	}
+
+	@Test
+	public void thePairChipsAreOrderedBySeverityAndBounded() {
+		// The arm's output is question-controlled and grows as N²/2, while every chip is also an
+		// injected pre-answer finding. Before this bound, the question below raised 72 chips carrying
+		// 42,708 characters of finding text into the prompt — for a path whose per-entry reference
+		// record is capped at 1500 characters for exactly this reason. Unbounded is one half; unordered
+		// is the other, since appending in dataset order let a Minor lead several Majors, the inverse
+		// of the severity-first rule the promoted notes follow over the very same rows.
+		List<SafetyWarning> warnings = ddinterValidator().validate("", POLYPHARMACY_QUESTION,
+				patientOnNeitherDrug());
+
+		assertTrue(interactionChips(warnings) <= 10,
+				"the pair arm must bound what one question can raise, was " + interactionChips(warnings)
+						+ " chips: " + warnings);
+		int previous = Integer.MAX_VALUE;
+		for (SafetyWarning warning : warnings) {
+			int rank = chipSeverityRank(warning);
+			if (rank < 0) {
+				continue;
+			}
+			assertTrue(rank <= previous,
+					"pair chips must be ordered most-severe first, was: " + warnings);
+			previous = rank;
+		}
+		assertEquals(3, DrugSafetyValidator.severityRank("Major"),
+				"precondition: this test's ordering check reads the shared severity ranking");
+	}
+
+	@Test
+	public void theInjectedPairFindingsAreBoundedToo() {
+		// The measured harm is on the prompt side, so it is asserted there too, through the real
+		// injector: every chip becomes its own citable record, so an unbounded chip list is an
+		// unbounded question-controlled prompt expansion.
+		DrugReferenceService service = DrugReferenceTestSupport.ddinterService();
+		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
+		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
+
+		PatientChart result = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+				patientOnNeitherDrug(), POLYPHARMACY_QUESTION);
+
+		int findings = 0;
+		int findingChars = 0;
+		for (RecordMapping mapping : result.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(mapping.getResourceType())) {
+				findings++;
+				findingChars += mapping.getText().length();
+			}
+		}
+		assertTrue(findings <= 10,
+				"a question naming N drugs must not inject N²/2 findings, was " + findings);
+		assertTrue(findingChars <= 12000,
+				"nor an unbounded number of characters, was " + findingChars + " over " + findings
+						+ " finding record(s)");
+	}
+
 	@Test
 	public void everyDistinctPairAmongThreeNamedDrugsIsReported() {
 		// The other edge of the one-chip-per-pair grouping: it must collapse only what IS one pair.

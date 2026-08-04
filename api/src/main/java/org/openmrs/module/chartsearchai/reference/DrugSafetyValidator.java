@@ -11,6 +11,8 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -620,7 +622,7 @@ public class DrugSafetyValidator {
 		// subject of a sentence reading as a reference lookup, carrying one variant's mechanism
 		// attributed to another whose own row was sub-floor. Candidates are collected per pair key and
 		// emitted only once every entry pair has been seen.
-		Map<List<String>, SafetyWarning> candidates = new LinkedHashMap<List<String>, SafetyWarning>();
+		Map<List<String>, PairFinding> candidates = new LinkedHashMap<List<String>, PairFinding>();
 		Set<List<String>> chartOwned = new LinkedHashSet<List<String>>();
 		// Indexed so each UNORDERED pair of entries is visited once: DDInter rows are symmetric and
 		// the parser writes every pair into both drugs' entries, so walking ordered pairs would report
@@ -631,15 +633,89 @@ public class DrugSafetyValidator {
 						context, severityFloor);
 			}
 		}
-		for (Map.Entry<List<String>, SafetyWarning> candidate : candidates.entrySet()) {
+		List<PairFinding> found = new ArrayList<PairFinding>();
+		for (Map.Entry<List<String>, PairFinding> candidate : candidates.entrySet()) {
 			if (!chartOwned.contains(candidate.getKey())) {
-				warnings.add(candidate.getValue());
+				found.add(candidate.getValue());
 			}
+		}
+		// Most severe first, and bounded — see MAX_QUESTION_PAIR_CHIPS. Collections.sort is stable, so
+		// equally-rated pairs keep the dataset order the entry loop produced them in.
+		Collections.sort(found, PAIR_SEVERITY_DESCENDING);
+		int shown = Math.min(found.size(), MAX_QUESTION_PAIR_CHIPS);
+		if (shown < found.size()) {
+			// WARN, not INFO: a clinician reading the chips cannot tell a bounded list from a complete
+			// one, so an operator has to be able to see that this question outran the bound and which
+			// ratings went unshown. Silent truncation in a safety net reads as "nothing else was found".
+			List<String> withheld = new ArrayList<String>();
+			for (PairFinding finding : found.subList(shown, found.size())) {
+				withheld.add(finding.severity);
+			}
+			log.warn("Question-pair safety: {} of {} question-named drug pairs shown (cap {}); the "
+					+ "question resolved {} reference drugs, and pairs grow as N^2/2. Withheld, least "
+					+ "severe last: {}", shown, found.size(), MAX_QUESTION_PAIR_CHIPS, drugs.size(),
+					withheld);
+		}
+		for (PairFinding finding : found.subList(0, shown)) {
+			warnings.add(finding.warning);
+		}
+	}
+
+	/**
+	 * How many question-pair chips one question may raise.
+	 *
+	 * <p>Pairs grow as N²/2 in the number of reference drugs the question resolves, and every chip is
+	 * also injected as a citable pre-answer finding, so this arm is the one safety input a QUESTION
+	 * controls the size of — the others are bounded by the patient's own chart, which held findings to
+	 * 0–3. Measured on the bundled sample with the patient on nothing: one line naming its 16 drugs
+	 * raised 72 chips carrying 42,708 characters of finding text into the prompt, against a path that
+	 * caps a single reference record at {@link DrugReferenceInjector#MAX_INTERACTION_RENDER_CHARS} =
+	 * 1500 for precisely this reason.
+	 *
+	 * <p>Ten covers every pair among five named drugs, which is well past any "does A interact with B?"
+	 * question this arm exists for, and holds that worst case to roughly 6k characters of finding text.
+	 * A count rather than a character budget because a chip is a whole sentence a clinician reads: half
+	 * a chip is not a smaller chip. What is dropped is the least severe — the list is sorted
+	 * most-severe-first — and it is logged, never dropped silently.
+	 */
+	static final int MAX_QUESTION_PAIR_CHIPS = 10;
+
+	/**
+	 * @return {@link #severityRank} with an UNRATED rule raised above {@code major}: every curated
+	 *         hand-authored rule is unrated and {@link #clearsSeverityFloor} already treats unrated as
+	 *         exempt rather than low — unrated is not low-rated, so wherever a most-severe-first choice
+	 *         is made it must not be the one dropped. Matches the ordering
+	 *         {@code DrugReferenceInjector}'s promoted notes apply to the same rows.
+	 */
+	static int severityPriority(String severity) {
+		int rank = severityRank(severity);
+		return rank < 0 ? Integer.MAX_VALUE : rank;
+	}
+
+	/** Orders candidate pair chips most-severe first; see {@link #severityPriority}. */
+	private static final Comparator<PairFinding> PAIR_SEVERITY_DESCENDING = new Comparator<PairFinding>() {
+
+		@Override
+		public int compare(PairFinding a, PairFinding b) {
+			return Integer.compare(severityPriority(b.severity), severityPriority(a.severity));
+		}
+	};
+
+	/** One candidate pair chip, with the source-assigned rating that orders it. */
+	private static final class PairFinding {
+
+		final SafetyWarning warning;
+
+		final String severity;
+
+		PairFinding(SafetyWarning warning, String severity) {
+			this.warning = warning;
+			this.severity = severity;
 		}
 	}
 
 	/** One question-named pair: at most one candidate chip, from whichever side carries the rule. */
-	private void collectQuestionPairInteraction(Map<List<String>, SafetyWarning> candidates,
+	private void collectQuestionPairInteraction(Map<List<String>, PairFinding> candidates,
 			Set<List<String>> chartOwned, DrugReference first, DrugReference second,
 			Map<DrugReference, String> names, PatientClinicalContext context, int severityFloor) {
 		List<DrugReference.Interaction> forward = aboveFloorRulesAgainst(first, second, severityFloor);
@@ -687,8 +763,8 @@ public class DrugSafetyValidator {
 		if (rule.getNote() != null && !rule.getNote().isEmpty()) {
 			detail += " — " + rule.getNote();
 		}
-		candidates.put(pairKey, new SafetyWarning(SafetyWarning.TYPE_INTERACTION, subject.displayLabel(),
-				detail));
+		candidates.put(pairKey, new PairFinding(new SafetyWarning(SafetyWarning.TYPE_INTERACTION,
+				subject.displayLabel(), detail), rule.getSeverity()));
 	}
 
 	/**

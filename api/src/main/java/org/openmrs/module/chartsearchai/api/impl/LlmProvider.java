@@ -64,8 +64,10 @@ public class LlmProvider {
 			// which DrugReferenceInjector emits only when DrugSafetyValidator found something.
 			// Change either and read the other: #112 diagnosed a missing verdict rule from this
 			// paragraph alone and proposed adding one beside it, which would have left two
-			// contradictory lead instructions — the shape eval/drift-metric/README.md records
-			// regressing. Its lead clause was re-pointed instead.
+			// contradictory lead instructions in one prompt. That was ruled out on the issue itself,
+			// on the measured history that added instructions in this area regress — all three
+			// candidate arms in eval/drift-metric/README.md did, and were reverted. Its lead clause
+			// was re-pointed instead.
 			+ "Records beginning with \"Safety finding\" ARE about this patient — this module derived "
 			+ "them from the patient's own records — so a safety finding naming the drug asked about "
 			+ "means the records DO address that drug: answer the question from that finding and cite "

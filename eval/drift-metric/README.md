@@ -387,11 +387,93 @@ exit 0. It now reports the split, flags a YES lead raised against that drug's ow
 problem, and exits 3. Re-scoring the arm C capture reproduces the catch on
 `mary__safety-clarithromycin`; the shipped arm reports 0 and exits 0.
 
+> **Half of it, as it turned out.** That fix checked polarity, not support: it inspected only the
+> `YES` direction and exempted any cell with no chip, so the mirrored case — a negative lead with
+> nothing behind it — still scored as a two-column improvement. See the #126 section below, which
+> closes both directions and adds the fixtures none of these four faults had.
+
 **Genuinely still open.** Two ANSWER cells abstain (`agnes__safety-aspirin`, whose own drug it is, so
 there is no adverse finding to report, and `mary__safety-warfarin`). A renal-function pairing was
 built and reverted: the one probe case (gentamicin against a creatinine from 2023-09-14) is correctly
 silent because the result is years stale, and the model's occasional 1-in-4 answer there was surfacing
 that stale lab as current — reliably reproducing it would have been reliably wrong.
+
+## The instrument's fourth blind spot, and the first fixtures it has ever had (2026-08-05, #126)
+
+The gap the section above says is "closed" was closed in one direction only. `affirms_safety()` was
+
+```python
+return classify(cell["answer"]) == "YES" and not abstained(cell) and bool(cell["chips"])
+```
+
+which never inspects a `NO` lead, and — through `bool(cell["chips"])` — declines to inspect the
+cells where a verdict is **least** supported. So an answer opening *"No — aspirin should not be
+given"* on a cell the patient's own order labels ANSWER, with no chip and no finding behind it,
+scored **+1 verdict-led, −1 abstained, no integrity flag, exit 0**. Read on its own columns the gate
+said ship it, and the change in flight when this was found (#112 / PR #125) teaches exactly that
+lead. Polarity was being checked; support was not.
+
+Reproduced with the shipped scorer against the real captures now committed as
+`fixtures/probe-safety/`, then re-run against the fix — the A/B a candidate would actually be judged
+by (baseline arm vs the same arm with one fabricated verdict):
+
+| `shipped-clean` vs `unsupported-no` | before | after |
+|---|---|---|
+| verdict-led | A=3 **B=4** | A=3 B=4 (unchanged, on purpose) |
+| abstained (the defect) | A=1 **B=0** | A=1 B=0 (unchanged) |
+| verdicts the records do not license | — | **A=0 B=1** |
+| exit code | **0** | **3** |
+
+The predicate is now `unlicensed_verdict` = `inverted_yes` **or** `unsupported_no`, over the same
+ANSWER cells as before: a `YES` contradicting that drug's own chip *or* injected finding, and a
+negative lead where the deterministic layer raised neither. Support is chip-**or**-finding because
+those are one computation (`DrugSafetyValidator.validate`) read at two points in one request. An
+empty chip list now makes a verdict more suspicious, not exempt. Both directions are still counted
+inside `verdict-led` rather than deducted from it, so every column keeps the meaning it had when
+earlier results were quoted against it.
+
+**Reported-number changes to know about, since #107's and #110's numbers came out of these scripts.**
+The columns above are unchanged. What changed: the `affirming "Yes" against a chip` line is renamed
+(`inverted "Yes" against this drug's own finding`) and joined by two new lines; the YES check now
+also fires on a finding with no chip (no recorded capture is known to differ — findings post-date
+#110's injection and arrive with a chip — but the union is a real broadening); a capture with a
+fabricated negative verdict on an ANSWER cell now exits 3 instead of 0, which is the point; and a
+`.json` in a capture dir that is not a cell (`.d.json`/`.a.json` from a killed context loop) no
+longer pads the ANSWER denominator. With no `__safety-<drug>` in the filename the alias needle is
+empty and an empty needle matches every chip and every order, so such a file used to read
+`ANSWER +own` — measured on `fixtures/probe-safety/stray-file`: ANSWER 2, stated-no-lead 1 before,
+ANSWER 1 and an `unreadable capture` flag after. It already exited 3, but through the unrelated
+patient-context check. That flag's line now prints the reason as well as the keys, because
+`1 unreadable capture(s): ['.d']` reads like a truncated capture and needs a different response from
+an operator. Re-scoring the arm C capture still reports one inverted `YES` and still exits 3; that is
+asserted, not assumed.
+
+**Fixtures, because four blind spots on record had none.** Each of the five closed faults now has a
+capture directory under `fixtures/probe-safety/`, built from real live captures (see its
+`PROVENANCE.md` for per-file origin, and for the two answer strings that are necessarily
+counterfactual — a blind spot's fixture has to contain the failure the scorer must catch, and the
+shipped build does not emit it). `score_probe_safety.py --selftest` runs the scorer over each as a
+subprocess and asserts **both** the exit code and the reported counts, which also makes these
+numbers reproducible across future edits. Wired into CI (`.github/workflows/build.yml`,
+`harness-selftests`) alongside the three pre-existing `--selftest` entry points, which nothing ran
+either.
+
+**What is still not checked: content.** Both directions are *shape* checks. A "No" naming an
+interaction the patient does not have — e.g. one resting on #86's unanchored substring match, where
+*"active order opium"* is really tiotropium — is licensed by shape and indistinguishable from a
+correct "No" here. `fixtures/probe-safety/wrong-partner` pins that as **exit 0** so the boundary is
+visible rather than assumed; it is the expectation a chip-versus-answer concordance check would have
+to change.
+
+**The same fault in the Java side of the harness.** `LlmAnswerQualityTest.buildPromptVariations()`
+anchored an arm on `"Answer ONLY the specific question asked."` while the prompt says *"Answer ONLY
+the specific query."*, so `String.replace` returned the original and that arm's trend instruction
+never entered the prompt — the harness compared four prompts, one of which was not the variant it
+reported. (Not byte-identical to the baseline, which is how it survived: its *second* substitution
+did apply. Measured on the compiled prompt: baseline 6034 chars, that arm 6013, `oldest to newest`
+absent.) Every substitution now goes through `replaceOrFail`, which throws when its needle is
+absent, and a new always-run test builds the arms and asserts each differs from the baseline and
+from its siblings — so the check runs in CI, unlike the opt-in test around it.
 
 ## Widened rc.2 gold: fullChart vs queryScoped (2026-07-19, 22 patients)
 

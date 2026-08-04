@@ -18,6 +18,25 @@ jobs:
       MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
       MAVEN_REPO_API_KEY: ${{ secrets.MAVEN_REPO_API_KEY }}
 
+  # The offline eval harness scores its own fixtures. Nothing here talks to a server or a model, so
+  # it runs in seconds — and until #126 nothing ran it at all: five scoring faults in
+  # eval/drift-metric were each found by reading the code during unrelated work, after each had
+  # already produced a number someone quoted. score_probe_safety.py --selftest is what makes the
+  # sixth a test failure instead of a discovery.
+  harness-selftests:
+    name: eval harness selftests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: score_probe_safety.py (blind-spot regression fixtures)
+        run: python3 eval/drift-metric/score_probe_safety.py --selftest
+      - name: score_directness.py (the versioned verdict-class definition)
+        run: python3 eval/drift-metric/score_directness.py --selftest
+      - name: metric_score.py
+        run: python3 eval/drift-metric/metric_score.py --selftest
+      - name: build_gold_rc2.py
+        run: python3 eval/drift-metric/build_gold_rc2.py --selftest
+
   owasp-dependency-check:
     if: ${{ github.event_name != 'pull_request' }}
     uses: openmrs/openmrs-contrib-gha-workflows/.github/workflows/owasp-dependency-check.yml@main

@@ -1,0 +1,30 @@
+{
+ "questionId": "4662",
+ "answer": "No \u2014 Linezolid should not be given: Linezolid interacts with active order opium",
+ "references": [
+  {
+   "index": 38,
+   "resourceType": "drug_reference",
+   "resourceUuid": "190376",
+   "date": null,
+   "grounded": null,
+   "group": "reference"
+  },
+  {
+   "index": 39,
+   "resourceType": "safety_finding",
+   "resourceUuid": "interaction:Linezolid",
+   "date": null,
+   "grounded": true,
+   "group": "reference"
+  }
+ ],
+ "safetyWarnings": [
+  {
+   "type": "interaction",
+   "drug": "Linezolid",
+   "detail": "Linezolid interacts with active order opium \u2014 Major. Coadministration of narcotic analgesics with monoamine oxidase inhibitors (MAOIs) has been associated with rare reports of anxiety, confusion, hypotension, respiratory depression, cyanosis, and coma. The mechanism of interaction is unknown, but may involve potentiation of central nervous system (CNS) and respiratory depressant effects by MAOIs."
+  }
+ ],
+ "disclaimer": "This response is AI-generated and may not be accurate. It is not a substitute for clinical judgment. Always verify against the patient's medical records."
+}

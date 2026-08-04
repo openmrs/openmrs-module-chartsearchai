@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -251,17 +253,82 @@ public class LlmAnswerQualityTest {
 				+ ". Missing: " + missing + ". Answer: " + bestAnswer);
 	}
 
+	/**
+	 * The instrument has to assert it did something. This is the only test in this class that runs
+	 * unconditionally — it needs no LLM — because the arms it checks were silently not what they
+	 * claimed to be, and the opt-in test above is where that hid.
+	 *
+	 * <p>{@code String.replace} returns the ORIGINAL string when the needle is absent, so a
+	 * substitution anchored on a sentence that has drifted out of
+	 * {@link LlmProvider#DEFAULT_SYSTEM_PROMPT} simply does not happen, and nothing says so: the run
+	 * compares four prompts believing it has four variants, and every number it prints is
+	 * well-formed. An arm whose ONLY edit drifts is byte-identical to the baseline arm, which is what
+	 * the assertions here catch. The fourth arm was subtler and is why {@link #replaceOrFail} exists:
+	 * it anchored on {@code "Answer ONLY the specific question asked."} while the prompt says
+	 * {@code "Answer ONLY the specific query."}, and its SECOND substitution did apply — so it
+	 * differed from the baseline and from its siblings while missing the trend instruction that is
+	 * its whole reason to exist as a separate arm (issue #126).</p>
+	 *
+	 * <p>One assertion per arm, against the baseline and against each other: an arm that duplicates a
+	 * sibling is the same vacuous comparison one step removed. Building the arms at all is the other
+	 * half of the check — {@code replaceOrFail} throws on a needle the prompt no longer contains.</p>
+	 */
+	@Test
+	public void promptVariations_shouldEachDifferFromTheBaselineAndFromEachOther() {
+		List<String> variations = buildPromptVariations();
+
+		assertEquals(4, variations.size(), "expected the baseline arm plus three variants");
+		assertEquals(LlmProvider.DEFAULT_SYSTEM_PROMPT, variations.get(0),
+				"arm 1 is the baseline and must be the compiled prompt verbatim");
+		for (int i = 1; i < variations.size(); i++) {
+			assertNotEquals(LlmProvider.DEFAULT_SYSTEM_PROMPT, variations.get(i),
+					"prompt variation " + (i + 1) + " is byte-identical to the baseline arm, so "
+							+ "comparing them measures nothing");
+		}
+		for (int i = 0; i < variations.size(); i++) {
+			for (int j = i + 1; j < variations.size(); j++) {
+				assertNotEquals(variations.get(i), variations.get(j),
+						"prompt variations " + (i + 1) + " and " + (j + 1) + " are identical");
+			}
+		}
+	}
+
+	/**
+	 * One substitution on a prompt, which must actually happen.
+	 *
+	 * <p>{@code String.replace} fails open: handed a needle that is not there it returns the original
+	 * and reports nothing, so an arm anchored on a sentence the prompt no longer contains keeps
+	 * producing numbers that look like a measurement of an edit it never applied. That is the defect
+	 * this class carried (issue #126), and the reason every substitution below goes through this
+	 * method instead of calling {@code replace} directly: a future arm cannot regain the fault without
+	 * tripping {@link #promptVariations_shouldEachDifferFromTheBaselineAndFromEachOther}, which builds
+	 * the arms unconditionally and therefore runs this check in CI.
+	 */
+	private static String replaceOrFail(String prompt, String needle, String replacement) {
+		if (!prompt.contains(needle)) {
+			throw new IllegalStateException("prompt-variation anchor is no longer in "
+					+ "LlmProvider.DEFAULT_SYSTEM_PROMPT, so this arm would silently measure an edit "
+					+ "it never made (issue #126). Re-point it at the current sentence: " + needle);
+		}
+		String edited = prompt.replace(needle, replacement);
+		if (edited.equals(prompt)) {
+			throw new IllegalStateException("prompt-variation substitution changed nothing — the "
+					+ "replacement is identical to the anchor: " + needle);
+		}
+		return edited;
+	}
+
 	private static List<String> buildPromptVariations() {
 		List<String> prompts = new ArrayList<>();
 
 		prompts.add(LlmProvider.DEFAULT_SYSTEM_PROMPT);
 
-		prompts.add(LlmProvider.DEFAULT_SYSTEM_PROMPT.replace(
+		prompts.add(replaceOrFail(LlmProvider.DEFAULT_SYSTEM_PROMPT,
 				"Include ALL relevant records in your answer — never omit any for brevity.",
 				"NEVER summarize multiple values into a range. List each measurement individually "
 				+ "with its date, value, and citation. Every record MUST appear in the answer."));
 
-		prompts.add(LlmProvider.DEFAULT_SYSTEM_PROMPT.replace(
+		prompts.add(replaceOrFail(LlmProvider.DEFAULT_SYSTEM_PROMPT,
 				"Include ALL relevant records in your answer — never omit any for brevity. "
 				+ "Cite EVERY record you reference by its number in brackets (e.g. [1], [3]).",
 				"CRITICAL REQUIREMENT: You must cite EVERY record provided. "
@@ -269,14 +336,23 @@ public class LlmAnswerQualityTest {
 				+ "Do NOT summarize ranges. Do NOT skip records. "
 				+ "Use the arrow format: val (date) [N] \u2192 val (date) [N] \u2192 ..."));
 
-		prompts.add(LlmProvider.DEFAULT_SYSTEM_PROMPT
-				.replace("Answer ONLY the specific question asked.",
-						"Answer ONLY the specific question asked. When the question asks about trends, "
-						+ "you MUST list every single value from oldest to newest.")
-				.replace("Include ALL relevant records in your answer — never omit any for brevity. "
-						+ "Cite EVERY record you reference by its number in brackets (e.g. [1], [3]).",
-						"Cite EVERY record by its [N] number. Your answer must contain ALL record numbers. "
-						+ "Format: val (date) [N] \u2192 val (date) [N] \u2192 ..."));
+		// The prompt's scope sentence is "Answer ONLY the specific query." This arm anchored on
+		// "Answer ONLY the specific question asked." — a sentence the prompt has never contained — so
+		// its trend instruction never entered the prompt while its second substitution did, and the
+		// harness reported a trend variant with no trend instruction in it. Measured on the compiled
+		// prompt before the fix: baseline 6034 chars, this arm 6013, "oldest to newest" absent — so it
+		// was not identical to the baseline arm, which is how it survived a diff of the four prompts.
+		// The anchor text belongs to LlmProvider; if that sentence is reworded again, replaceOrFail
+		// fails loudly instead of dropping this edit.
+		prompts.add(replaceOrFail(
+				replaceOrFail(LlmProvider.DEFAULT_SYSTEM_PROMPT,
+						"Answer ONLY the specific query.",
+						"Answer ONLY the specific query. When the question asks about trends, "
+						+ "you MUST list every single value from oldest to newest."),
+				"Include ALL relevant records in your answer — never omit any for brevity. "
+				+ "Cite EVERY record you reference by its number in brackets (e.g. [1], [3]).",
+				"Cite EVERY record by its [N] number. Your answer must contain ALL record numbers. "
+				+ "Format: val (date) [N] \u2192 val (date) [N] \u2192 ..."));
 
 		return prompts;
 	}

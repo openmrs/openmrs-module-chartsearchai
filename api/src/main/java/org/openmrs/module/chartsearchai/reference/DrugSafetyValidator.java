@@ -58,9 +58,10 @@ import org.springframework.stereotype.Service;
  *       {@link CrossReactivityGroup} (cross-branch family overlap). The rule arm raises one
  *       warning per (drug, matched partner): several rules can name one partner — DDInter's
  *       route variants of a drug all publish the same match token — and they collapse to the
- *       most severe row, see {@link #bestRulePerPartner}. It also interacts with
- *       ANOTHER DRUG THE QUESTION NAMED — see {@link #addQuestionPairInteractions}, the arm that
- *       answers "does A interact with B?" for a patient on neither.</li>
+ *       most severe row, see {@link #bestRulePerPartner}. Separately, and needing no patient data at
+ *       all, one question-named drug interacts with ANOTHER DRUG THE SAME QUESTION NAMED — see
+ *       {@link #addQuestionPairInteractions}, the arm that answers "does A interact with B?" for a
+ *       patient on neither.</li>
  *   <li><b>Contraindications</b> — the drug is contraindicated by an active allergy or
  *       condition: by a hand-authored rule, by being the same drug as — or sharing an ATC
  *       chemical subgroup with — a recorded allergy (cross-reactivity reasoning), or —
@@ -593,18 +594,27 @@ public class DrugSafetyValidator {
 	 * {@link DrugReferenceInjector#preAnswerFindings} runs this same validate with an EMPTY answer,
 	 * so an answer-side pair could produce a chip with no record behind it.
 	 *
-	 * <p>The floor is the shared {@code severityFloor} the chart arm is given, so this cannot become
-	 * a route around a decision the chip path enforces; and a pair either of whose drugs is an
-	 * active order is left to {@link #addInteractions}, whose chip states a fact about THIS patient
-	 * — the stronger statement, and reporting both would say one finding in two voices.
+	 * <p>The floor is the shared {@code severityFloor} the chart arm is given, so this cannot become a
+	 * route around a decision the chip path enforces; and a pair the chart arm already reports is left
+	 * to {@link #addInteractions}, whose chip states a fact about THIS patient — the stronger statement,
+	 * and reporting both would say one finding in two voices. Stated precisely, because the looser
+	 * version ("either drug is an active order") is not what the code can ask and not what it does: the
+	 * test is whether any RULE joining the pair names an active order, {@link #coveredByActiveOrderArm}
+	 * putting the same question to {@code hasActiveDrug} that {@code addInteractions} answers when it
+	 * decides to chip. The two differ, and the difference is deliberate — a patient can be ON one of the
+	 * pair while no rule joining it names their order (the one-directional case below), and that pair is
+	 * this arm's to report, because the chart arm raises nothing for it.
 	 *
-	 * <p>{@link DrugReferenceInjector#orderedInteractionNotes} is deliberately NOT extended to match:
-	 * its documented "a partner that raises a chip is exactly a partner promoted here" is scoped to
-	 * the active-order arm, and stays exact, because a pair chip's partner is by construction not an
-	 * active order. The pair finding's prose grounding comes from elsewhere — since issue #110 the
-	 * deterministic finding is itself injected as a numbered, citable record by
-	 * {@code preAnswerFindings}, carrying this chip's string verbatim — so the promoted-note budget
-	 * and the chip/prose invariant both stay untouched.
+	 * <p>{@link DrugReferenceInjector#orderedInteractionNotes} is deliberately NOT extended to match,
+	 * and its "a partner that raises a chip is exactly a partner promoted here" should be read as scoped
+	 * to the arm it describes: across the whole chip set it no longer holds, since a pair chip's partner
+	 * is promoted nowhere. That sentence lives in a file this change does not touch — rewording it is
+	 * left to whichever PR owns that method next, so two PRs do not collide on it. What is NOT affected
+	 * is the invariant the sentence exists to protect, that a chip and the prose cannot describe the
+	 * same finding differently: since issue #110 the deterministic finding is itself injected as a
+	 * numbered, citable record by {@code preAnswerFindings}, carrying this chip's string verbatim, so a
+	 * pair finding's grounding comes from that record rather than from the promoted notes, and the
+	 * promoted-note budget is untouched.
 	 */
 	private void addQuestionPairInteractions(List<SafetyWarning> warnings, Set<DrugReference> questionDrugs,
 			PatientClinicalContext context, int severityFloor) {

@@ -122,6 +122,19 @@
       "source": "Test fixture"
     },
     {
+      "id": "paracetamol",
+      "name": "Paracetamol",
+      "aliases": ["paracetamol"],
+      "interactions": [
+        {
+          "token": "warfarin",
+          "severity": "Moderate",
+          "note": "Moderate. Regular or prolonged use of paracetamol may potentiate the anticoagulant effect of warfarin."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
       "id": "acetylsalicylic-acid",
       "name": "Acetylsalicylic acid",
       "genericName": "aspirin",

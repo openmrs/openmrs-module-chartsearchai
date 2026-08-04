@@ -237,6 +237,11 @@ public class DrugSafetyQuestionPairInteractionTest {
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixture).validate(
 				"The records do not address this combination.", question, patientOnNeitherDrug());
 
+		// The chip's severity word comes from the NOTE, which the ddinter parser prefixes with the
+		// rating; the rating FIELD is what the floor and the most-severe-first ordering read. Both are
+		// asserted, so deleting either from the fixture fails here rather than passing quietly.
+		assertEquals("Major", fixture.findByQuery("voxelotor").get(0).getInteractions().get(0)
+				.getSeverity(), "precondition: the surviving row's rating field must be Major");
 		assertEquals(1, interactionChips(warnings),
 				"route variants of one drug are one drug for this arm, so the pair must be reported"
 						+ " once, not once per variant entry, was: " + warnings);
@@ -397,6 +402,63 @@ public class DrugSafetyQuestionPairInteractionTest {
 			}
 		}
 		return -1;
+	}
+
+	@Test
+	public void twoDrugsThatNoRuleNamesStayTwoDrugs() throws IOException {
+		// The key-name fallback, which is what a drug keys on when no rule on any other named drug's
+		// entry names it. Reachable only in one-directional data — the bundled curated seed's exact
+		// shape, where Ibuprofen and Paracetamol each carry a rule against warfarin and warfarin is not
+		// an entry at all — and only for the unnamed side of a pair, since a pair needs a joining rule
+		// and that rule names the OTHER side. Two such drugs therefore never pair with each other, but
+		// they do both pair with the drug they name, and if the fallback did not distinguish them those
+		// two pairs would collapse into one and a real interaction would be dropped silently. Nothing
+		// pinned it: replacing the fallback with a constant left the whole package green.
+		DrugReferenceService fixture = pairFixtureService();
+		String question = "Can ibuprofen or paracetamol be given with warfarin?";
+		DrugReference warfarin = fixture.findByQuery("warfarin").get(0);
+		assertTrue(warfarin.getInteractions().isEmpty(),
+				"precondition: the named drug must carry no rules of its own, so both others fall back");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixture).validate(
+				"Both raise bleeding risk with anticoagulants.", question, patientOnNeitherDrug());
+
+		assertEquals(2, interactionChips(warnings),
+				"two different drugs interacting with the same third drug are two pairs, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Ibuprofen", "Warfarin"), "ibuprofen x warfarin must be reported: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Paracetamol", "Warfarin"), "paracetamol x warfarin must be reported: " + warnings);
+		// Two chips from one question also exercise the ordering, and here the RATING FIELD is what
+		// orders them — the fixture's Major row is second in dataset order, so dataset order alone would
+		// put the Moderate first.
+		assertEquals("Ibuprofen", warnings.get(0).getDrug(),
+				"the more severe pair must lead, was: " + warnings);
+	}
+
+	@Test
+	public void aDrugTheANSWERNamesIsNotPairedWithTheQuestionsDrug() {
+		// The arm's scoping decision, and its most safety-relevant one: it covers the drugs the
+		// QUESTION resolved to, never the wider inPlay set the other arms use. Answer-named additions
+		// are the model's word choice, and two drugs it names are as often alternatives ("ibuprofen, or
+		// warfarin if …") as a proposed combination, so pairing them asserts a co-administration risk
+		// nobody proposed. It would also make the chip's own words false: ", also named in the
+		// question" would be printed about a drug the question never mentioned. Nothing pinned this —
+		// widening the arm to inPlay left the whole package green — so it is pinned here.
+		String answer = "Ibuprofen is usually avoided in this situation; warfarin is often preferred.";
+		List<DrugReference> named = DrugReferenceTestSupport.ddinterService().findByQuery(answer);
+		assertTrue(named.stream().map(DrugReference::getName).collect(Collectors.toList())
+				.containsAll(Arrays.asList("Warfarin", "Ibuprofen")),
+				"precondition: the ANSWER must name both drugs of a pair the source rates above the"
+						+ " floor (warfarin x ibuprofen is Major in the bundled sample), else this proves"
+						+ " nothing: " + named);
+
+		List<SafetyWarning> warnings = ddinterValidator().validate(answer, "Is ibuprofen safe here?",
+				patientOnNeitherDrug());
+
+		assertTrue(warnings.isEmpty(),
+				"only the QUESTION's drugs may be paired: the answer naming a second drug must not"
+						+ " produce a pair chip about a combination nobody proposed, was: " + warnings);
 	}
 
 	@Test

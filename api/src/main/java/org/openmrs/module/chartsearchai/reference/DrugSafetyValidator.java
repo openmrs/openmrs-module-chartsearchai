@@ -494,13 +494,17 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>The defect.</b> A co-medication that is BOTH an explicit interaction partner AND
 	 * class-related raised TWO {@code TYPE_INTERACTION} chips for one clinical fact, because neither
-	 * arm could see the other. Reproduced through this validator on {@code main} at {@code 89d14ab}:
-	 * a patient on one Heparin sodium order (mapped {@code B01AB01}) asked about enoxaparin
-	 * ({@code B01AB05}) got "Enoxaparin interacts with active order heparin — Major. …" from the rule
-	 * arm AND "Enoxaparin is in the same ATC class (B01AB) as active order Heparin — possible
-	 * duplicate therapy" from the class arm. Since issue #110 every chip is also injected as a citable
-	 * safety-finding record ({@code DrugReferenceInjector.preAnswerFindings}), so the duplicate reached
-	 * the prompt as a second near-identical record as well.
+	 * arm could see the other. Measured live on the 3.7.1 standalone against {@code main} at
+	 * {@code 89d14ab}, twice: a patient on one Ondansetron order (the concept is one of the few in that
+	 * dictionary carrying a {@code WHOATC} map, {@code A04AA01}) asked "Is it safe to give dolasetron?"
+	 * ({@code A04AA04}) got both
+	 * <pre>
+	 * Dolasetron interacts with active order ondansetron — Major. Dolasetron can cause dose-related
+	 *     prolongation of the QT interval via its pharmacologically active metabolite, hydrodolasetron. …
+	 * Dolasetron is in the same ATC class (A04AA) as active order Ondansetron — possible duplicate therapy
+	 * </pre>
+	 * Since issue #110 every chip is also injected as a citable safety-finding record
+	 * ({@code DrugReferenceInjector.preAnswerFindings}), so the duplicate reached the prompt as well.
 	 *
 	 * <p><b>Fold, rather than "the class arm yields to the rule arm".</b> Preferring the rule chip and
 	 * dropping the class chip is the wrong dedup, because a rule can reach a chip carrying nothing
@@ -1255,6 +1259,8 @@ public class DrugSafetyValidator {
 		// safetyWarnings TWICE. Suppression is on the chip's own identity, not on the gate, and the
 		// pair is marked seen either way, so the reverse direction cannot re-report it. It also makes
 		// two of this arm's own candidates that would word one statement identically collapse.
+		// "Identically" has to allow for issue #88's fold, which appends a sentence to the very chip
+		// this arm would raise for such a pair — see alreadySaid.
 		Set<String> seenChips = new LinkedHashSet<String>();
 		for (SafetyWarning existing : warnings) {
 			seenChips.add(chipIdentity(existing));
@@ -1286,9 +1292,10 @@ public class DrugSafetyValidator {
 					continue;
 				}
 				SafetyWarning chip = interactionWarning(ref, i);
-				if (!seenChips.add(chipIdentity(chip))) {
+				if (alreadySaid(chip, seenChips)) {
 					continue;
 				}
+				seenChips.add(chipIdentity(chip));
 				pairs.add(new ScreenedPair(chip, severityPriority(i.getSeverity()),
 						ref.displayLabel() + " x "
 								+ (partner != null ? partner.displayLabel() : partnerLabel(i)) + " ("
@@ -1473,6 +1480,40 @@ public class DrugSafetyValidator {
 	 */
 	private static String chipIdentity(SafetyWarning warning) {
 		return warning.getType() + '\u0000' + warning.getDrug() + '\u0000' + warning.getDetail();
+	}
+
+	/**
+	 * @return true when one of the already-raised chips in {@code said} (as {@link #chipIdentity}
+	 *         strings) states everything {@code candidate} states: its exact identity, or that identity
+	 *         carrying issue #88's folded class sentence after it.
+	 *
+	 *         <p>The second case is why equality alone is no longer enough. The screen stands down from
+	 *         a pair the drug-in-play arm already reported by recognising a chip worded identically —
+	 *         and for a CLASS-RELATED pair that arm's chip is precisely this candidate's chip plus one
+	 *         sentence, so on equality alone the screen re-reports the pair and #88's duplicate comes
+	 *         back in two wordings, one folded and one not. Reproduced through the real validator: an
+	 *         uncited answer naming one of the patient's own class-related orders, under a screening
+	 *         question, put both wordings in {@code safetyWarnings}.
+	 *
+	 *         <p>Matched against how {@link #addInteractionWarnings} composes the fold rather than by
+	 *         hunting for a sentence boundary — a mechanism note is prose full of full stops — and
+	 *         anchored on the folded sentence's own opening ({@code "<drug> is in "}), which is what
+	 *         keeps this from firing on a longer chip that merely BEGINS with the candidate's text:
+	 *         {@code iron} and {@code iron dextran} are both real KB partner labels, and
+	 *         "… active order iron" is a prefix of "… active order iron dextran".
+	 */
+	private static boolean alreadySaid(SafetyWarning candidate, Set<String> said) {
+		String identity = chipIdentity(candidate);
+		if (said.contains(identity)) {
+			return true;
+		}
+		String foldedPrefix = endSentence(identity) + " " + candidate.getDrug() + " is in ";
+		for (String existing : said) {
+			if (existing.startsWith(foldedPrefix)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

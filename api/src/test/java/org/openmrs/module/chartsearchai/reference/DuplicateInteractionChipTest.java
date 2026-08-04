@@ -187,4 +187,26 @@ public class DuplicateInteractionChipTest {
 				+ "irreversible platelet inhibition of low-dose aspirin.", onlyDetail(warnings),
 				"an unfolded rule chip must be unchanged");
 	}
+
+	@Test
+	public void aFoldedChipStillSuppressesTheScreeningArmsPlainChipForTheSamePair() throws Exception {
+		// The seam the fold opens in issue #113's screen. That arm stands down from a pair the
+		// drug-in-play arm already reported by recognising a chip that words the finding identically —
+		// and a folded chip is that arm's chip PLUS a sentence, so an exact-string test stops
+		// recognising it and the screen re-reports the pair. #88's duplicate would come straight back,
+		// now in two wordings, one folded and one not. A screening question names no drug, so the
+		// subject reaches "in play" through the ANSWER (uncited, so echo scoping does not exempt it) —
+		// the shape #127 measured this suppression against.
+		List<SafetyWarning> warnings = foldValidator().validate("Ibuprofen is on the list.",
+				"Are there any drug interactions with her current medications?",
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("ibuprofen 400mg", "aspirin 81mg"),
+						DrugReferenceTestSupport.set("M01AE01", "N02BA01"), null, null));
+
+		assertEquals("Ibuprofen interacts with active order aspirin — Major. Ibuprofen blunts the "
+				+ "irreversible platelet inhibition of low-dose aspirin. Ibuprofen is in the same "
+				+ "cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin) — "
+				+ "possible additive or duplicate-class therapy", onlyDetail(warnings),
+				"one chip for the one pair, and it is the FOLDED one — not the screen's plainer chip");
+	}
 }

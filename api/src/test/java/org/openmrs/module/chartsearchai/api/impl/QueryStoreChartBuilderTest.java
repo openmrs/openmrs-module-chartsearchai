@@ -167,6 +167,24 @@ public class QueryStoreChartBuilderTest {
 	}
 
 	@Test
+	public void build_shouldReportEveryTypeComplete_includingItsDegradedEmptyReturns() {
+		// The other half of PatientChart#isCompleteFor's contract (the scoped test covers the
+		// slice): a full chart carries every record querystore holds, so a record's ABSENCE from it
+		// means the index does not hold it. That is what the active-order reconciliation (#118)
+		// reads, and fullChart mode stamps nothing — completeness is the default for an unstamped
+		// chart, which is why this needs pinning rather than trusting.
+		assertTrue(builder.build(patient(1), "any allergies?").isCompleteFor("drug_order"),
+				"a full chart is complete for every type, so absence in it is readable as drift");
+		// The degraded empty return reads as complete too, and deliberately so: it substantiates no
+		// active order, so every one the safety layer holds is reported and injected instead of the
+		// answer being left free to deny a medication a chip names. Note the asymmetry with
+		// buildScoped, whose degraded returns declare nothing and are therefore NOT reconciled.
+		assertTrue(builder.build(null, "any allergies?").isCompleteFor("drug_order"),
+				"the degraded empty full chart reads as complete — an empty chart substantiates no "
+						+ "order, so the reconciliation reports them all rather than staying silent");
+	}
+
+	@Test
 	public void build_shouldNotRenderAdministrativeDates_onPatientAndAllergyRecords() {
 		// Shared toSerializedRecords contract, locked from the fullChart entry point too (the
 		// scoped test covers buildScoped): querystore stamps dateCreated on patient and allergy

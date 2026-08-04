@@ -46,8 +46,8 @@ public class InteractionPartnerGroupingTest {
 	@Test
 	public void rowsWhoseTokensDifferOnlyInCaseOrWhitespaceNameOnePartnerAndRaiseOneChip() throws IOException {
 		// The fixture's two Fluconazole rows carry the tokens "Warfarin" and "  warfarin  ".
-		// PatientClinicalContext.hasActiveDrug folds a rule token with trim().toLowerCase() before
-		// matching it, so BOTH rows match the one Warfarin order — they are the same partner by the
+		// PatientClinicalContext.hasActiveDrug trims a rule token and matches it case-insensitively
+		// against the order name, so BOTH rows match the one Warfarin order — same partner by the
 		// only predicate that decides an interaction concerns this patient. The grouping key must
 		// fold the same way, or #115's duplicate chip comes straight back for a hand-authored
 		// dataset, silently and with two labels a clinician cannot tell apart. Asserted verbatim,

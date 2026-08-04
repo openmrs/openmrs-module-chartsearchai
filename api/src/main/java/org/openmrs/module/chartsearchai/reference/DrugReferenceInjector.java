@@ -271,6 +271,19 @@ public class DrugReferenceInjector {
 	 * drug-order record naming the drug already tells the model the patient has an order for it, so
 	 * there is nothing for the answer to deny and nothing to repair.
 	 *
+	 * <p><strong>Known gap in that last claim</strong> (issue to follow, deliberately not changed
+	 * here — the fallback's shape is a reviewed decision and narrowing it alters chip-adjacent
+	 * behaviour that needs the standalone gate). The corpus is every {@code drug_order} record's
+	 * text regardless of whether that record describes a LIVE order: querystore indexes stopped and
+	 * discontinued orders too (they are not voided) and renders them {@code ". Stopped: <date>"} /
+	 * {@code ". Action: DISCONTINUE"}. So in the renewal shape — old order stopped and indexed, its
+	 * replacement active but NOT indexed — the stopped record's text names the drug, the order is
+	 * treated as substantiated, and nothing is injected or WARNed, while the answer reading
+	 * "Stopped: …" correctly reports no active medication beside a chip that names one. That is
+	 * issue #118 verbatim, and it opens only under drift, which is the only condition this method
+	 * exists for. Narrowing the corpus to records with no stop/discontinue marker would close it
+	 * without giving up the insurance above.
+	 *
 	 * <p>Only reconciled when the chart claims to carry every drug-order record
 	 * ({@link PatientChart#isCompleteFor}). A query-scoped slice — the DEFAULT chart mode — omits
 	 * everything outside the question's typed scope by design, so absence there says nothing about

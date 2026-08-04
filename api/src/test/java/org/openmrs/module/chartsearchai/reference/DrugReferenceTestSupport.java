@@ -97,6 +97,35 @@ public final class DrugReferenceTestSupport {
 						"no active-order record was injected for order: " + display));
 	}
 
+	/**
+	 * The real safety-finding record the REAL pipeline injects for {@code question} asked about a
+	 * patient on {@code activeDrug} (with ATC code {@code atcCode}) — the whole production chain,
+	 * bundled DDInter sample through {@code DrugSafetyValidator.validate} and
+	 * {@code injectRecords}/{@code renderFinding}, with the real validator behind the real injector
+	 * (through the same {@code set*} seams the other helpers here use, in place of production's
+	 * autowiring). The third cross-package accessor, for the grounding tests.
+	 *
+	 * <p>Returns the {@link RecordMapping} rather than only its text because a grounding test needs
+	 * the resource type and the citation index too, and because the argument for treating this record
+	 * as module-supplied material is an argument about what THIS prose does under a cosine pass
+	 * (issue #122) — a hand-assembled imitation of the finding line would not be testing it.
+	 *
+	 * @throws IllegalStateException when the question raises no deterministic finding, so a test
+	 *         cannot silently assert nothing
+	 */
+	public static RecordMapping injectedSafetyFinding(String question, String activeDrug, String atcCode) {
+		DrugReferenceService service = ddinterService();
+		service.setCrossReactivityGroups(bundledGroups());
+		DrugReferenceInjector injector = injector(service);
+		injector.setDrugSafetyValidator(validator(service));
+		PatientChart chart = injector.injectRecords(oneRecordChart(),
+				ctx(60, null, set(activeDrug), set(atcCode), null, null), question);
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
+				.findFirst().orElseThrow(() -> new IllegalStateException(
+						"no safety-finding record was injected for question: " + question));
+	}
+
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */
 	static final String ATC_SAMPLE = "atc/atc-sample.tsv";
 

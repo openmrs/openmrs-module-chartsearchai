@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -24,6 +26,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.CitationGroundingVerifier.TextEmbedder;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -931,6 +934,129 @@ public class CitationGroundingVerifierTest {
 		assertNull(result.get(0).getGrounded());
 	}
 
+	// ---- injected safety-finding citations (issue #122): reference material, so demote-only ----
+
+	/**
+	 * The real injected safety-finding record the REAL production chain renders for the canonical
+	 * case — a patient on simvastatin asked about clarithromycin — off the bundled DDInter sample
+	 * (load → parse → validate → injectRecords → renderFinding). The whole mapping rather than only
+	 * its text, unlike {@link #realReferenceRecordText}: the record's own citation index is what an
+	 * answer sentence has to cite, and its real resource type is what the carve-out keys on.
+	 */
+	private static RecordMapping realSafetyFinding() {
+		return org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
+				.injectedSafetyFinding("is it safe to give clarithromycin?", "simvastatin", "C10AA01");
+	}
+
+	/** The answer sentence a finding gets cited by — the model reporting the finding line it was
+	 *  handed, which is the behaviour #110 injected the record to produce. */
+	private static String findingCitingSentence(RecordMapping finding) {
+		return "Not safe — clarithromycin interacts with the patient's active simvastatin order ["
+				+ finding.getIndex() + "].";
+	}
+
+	@Test
+	public void safetyFinding_highCosinePassRendersUnverifiedNotVerified() {
+		// Issue #122. #110 injects the deterministic drug-safety join as a citable record so the answer
+		// reports a conclusion it will not re-derive; #106 had already established that module-supplied
+		// injected records are demote-only. safety_finding was never registered with that carve-out, so
+		// the module's own arithmetic was graded as if it were retrieved chart evidence — and the grade
+		// tracked embedding noise, not the finding: on the 3.7.1 standalone at 13690b1, Margaret King +
+		// voxelotor returned the MAJOR finding grounded=false beside two byte-identical Moderate
+		// siblings at true, and one finding flipped true->false across two runs of one probe.
+		//
+		// The record's prose is exactly the shape #106 measured the hazard on — "<Drug> interacts with
+		// active order <Partner> — Major. <mechanism>", reference prose whose subject roles can swap
+		// while still embedding near-identically — and the citing sentence is a recitation of it. So a
+		// cosine pass carries no faithfulness signal, and publishing it as `true` is false assurance.
+		RecordMapping finding = realSafetyFinding();
+		String sentence = findingCitingSentence(finding);
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(finding.getText(), AXIS_A); // recitation overlap -> cosine 1.0 -> would pass
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(finding.getIndex()))),
+				Arrays.asList(finding), FLOOR, TIER1_ONLY);
+
+		assertNull(result.get(0).getGrounded(),
+				"a cosine pass on the module's own deterministic finding must render unverified, "
+						+ "never verified");
+	}
+
+	@Test
+	public void safetyFinding_offTopicCitationIsStillFlagged() {
+		// Demote-only, NOT exempt-from-grounding — the alternative issue #122 asked to decide rather
+		// than default. A FALSE verdict here is not the module doubting its own arithmetic, which
+		// would indeed be a meaningless claim; it is a statement about the CITATION — the model
+		// attached the finding's number to a sentence the finding is not about. That is real,
+		// observable and worth flagging, and it is the residual signal #106 deliberately kept when it
+		// removed the passing verdict. Exempting entirely would discard it, and (since drug_reference
+		// keeps its flag) could only be done for safety_finding alone — a per-type branch in the very
+		// registry this issue exists to stop keying off type names.
+		RecordMapping finding = realSafetyFinding();
+		String sentence = "The patient's blood pressure is well controlled [" + finding.getIndex() + "].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(finding.getText(), AXIS_B); // orthogonal -> cosine 0.0 -> off-topic
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(finding.getIndex()))),
+				Arrays.asList(finding), FLOOR, TIER1_ONLY);
+
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"an off-topic safety-finding citation must still be flagged");
+	}
+
+	@Test
+	public void safetyFinding_neverEntersTier2Entailment() {
+		// The judge cannot help here either: its "yes" on a recitation of module-rendered prose is the
+		// false assurance #106 measured (4/4 role-swapped recitations judged entailed, the one faithful
+		// recitation judged not). So the pair is skipped rather than discounted afterwards.
+		RecordMapping finding = realSafetyFinding();
+		String sentence = findingCitingSentence(finding);
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(finding.getText(), AXIS_A);
+		llm.verdict = Boolean.TRUE; // would falsely verify the recitation
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(finding.getIndex()))),
+				Arrays.asList(finding), FLOOR, TIER2_ON);
+
+		assertEquals(0, llm.calls, "safety-finding citations must never reach the entailment LLM");
+		assertNull(result.get(0).getGrounded(), "with Tier-2 skipped, the Tier-1 pass renders unverified");
+	}
+
+	@Test
+	public void safetyFinding_doesNotConsumeTheEntailmentCapOfChartCitations() {
+		// The second half of the defect, and the one a client cannot see: these records were also
+		// spending the per-answer entailment budget that #106's rationale reserves for chart claims,
+		// and a polypharmacy answer can carry several findings. Cap-boundary pin, mirroring the
+		// drug-reference test above — the finding comes FIRST, followed by exactly cap-many chart
+		// citations, so a consumed slot pushes the LAST chart citation past the cap and leaves it on
+		// its Tier-1 verdict. Chart indexes are offset past the finding's real index so the two
+		// citation numberings cannot collide.
+		int cap = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
+		RecordMapping finding = realSafetyFinding();
+		int base = finding.getIndex();
+		StringBuilder answer = new StringBuilder(findingCitingSentence(finding)).append(" ");
+		List<RecordReference> refs = new ArrayList<RecordReference>();
+		List<RecordMapping> maps = new ArrayList<RecordMapping>();
+		refs.add(reference(base));
+		maps.add(finding);
+		for (int i = 1; i <= cap; i++) {
+			answer.append("claim ").append(i).append(" [").append(base + i).append("]. ");
+			refs.add(reference(base + i));
+			maps.add(mapping(base + i, "record " + i));
+		}
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer.toString(), refs, maps, FLOOR, TIER2_ON);
+
+		assertEquals(cap, llm.calls,
+				"chart citations alone fill the cap; the excluded safety-finding pair must not count");
+		assertEquals(Boolean.TRUE, result.get(cap).getGrounded(),
+				"the last chart citation must still get its Tier-2 verdict — a consumed slot would leave it FALSE");
+	}
+
 	// ---- injected active-order citations (issue #118): graded normally, NOT demote-only ----
 
 	/** A mapping typed as an injected active-order record, carrying the real {@code Order} uuid the
@@ -992,6 +1118,85 @@ public class CitationGroundingVerifierTest {
 		assertEquals(1, llm.calls, "an active-order citation must be judged by the entailment LLM");
 		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
 				"and Tier-2's verdict must be authoritative for it, overriding the Tier-1 cosine pass");
+	}
+
+	// ---- the grounding registry every resource type must be decided in (issue #122) ----
+
+	/**
+	 * Runs the REAL verifier over ONE cited record of {@code resourceType} whose text is aligned with
+	 * its citing sentence — a Tier-1 PASS, which is the only verdict the carve-out changes (a cosine
+	 * FAIL flags every type alike) — and returns the verdict published for it. Re-arms the stubs
+	 * first, so {@code llm.calls} afterwards counts this type's Tier-2 entry alone.
+	 *
+	 * <p>Synthetic record text, deliberately: the carve-out keys on the resource type, and most of
+	 * these types have no injector in this module to render real prose from. What the real prose does
+	 * under a cosine pass is asserted by the {@code realSafetyFinding} / {@code realReferenceRecordText}
+	 * tests above; this helper's subject is the type registry.
+	 */
+	private Boolean verdictForAlignedCitation(String resourceType, boolean entailmentEnabled) {
+		setUp();
+		llm.verdict = Boolean.TRUE;
+		String sentence = "The record supports this claim [4].";
+		String record = "record text for " + resourceType;
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record, AXIS_A);
+		return verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(4))),
+				Arrays.asList(new RecordMapping(4, resourceType, "uuid-4", null, record)),
+				FLOOR, entailmentEnabled).get(0).getGrounded();
+	}
+
+	/**
+	 * The forcing function issue #122 asked for, and the reason that issue existed at all. An injected
+	 * resource type has to be registered in TWO places: {@link ChartSearchAiUtils#referenceGroup},
+	 * which a reflective sweep in {@code ChartSearchAiReferenceGroupTest} has always guarded, and the
+	 * demote-only grounding carve-out, which nothing guarded. #110 duly did the first and missed the
+	 * second, so the module's own deterministic findings were graded as retrieved chart evidence with
+	 * no error raised anywhere.
+	 *
+	 * <p>The carve-out is now DERIVED from the group
+	 * ({@link ChartSearchAiUtils#isGroundingDemoteOnly}), and this sweep is what keeps it derived:
+	 * re-hardcoding it as a list of type names still passes today — today's list and today's groups
+	 * agree — and fails the moment a fourth injected type is added, which is exactly when the omission
+	 * would otherwise ship again. Its counterpart in {@code ChartSearchAiReferenceGroupTest} asserts
+	 * the same rule against the group each constant is RECORDED as, so the two registries cannot drift
+	 * together either.
+	 *
+	 * <p>Asserts carve-out MEMBERSHIP — through the verdict the real verifier publishes and its Tier-2
+	 * entry — not the live instability that motivated the issue: those flips are embedding-driven, so
+	 * no unit test reproduces them. The chart-group half of each assertion is the positive control that
+	 * the machinery under it is working.
+	 */
+	@Test
+	public void everyDeclaredResourceTypeConstant_isGradedAccordingToItsReferenceGroup() throws Exception {
+		int swept = 0;
+		for (Field field : ChartSearchAiConstants.class.getDeclaredFields()) {
+			if (!field.getName().startsWith("RESOURCE_TYPE_") || field.getType() != String.class
+					|| !Modifier.isStatic(field.getModifiers())) {
+				continue;
+			}
+			swept++;
+			String type = (String) field.get(null);
+			String group = ChartSearchAiUtils.referenceGroup(type);
+			boolean referenceMaterial = ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(group);
+			String label = field.getName() + " (\"" + type + "\", group " + group + ")";
+
+			assertEquals(referenceMaterial ? null : Boolean.TRUE,
+					verdictForAlignedCitation(type, TIER1_ONLY),
+					label + ": a cosine PASS must render " + (referenceMaterial
+							? "unverified — module-supplied material is demote-only (#106, #122)"
+							: "verified — chart evidence is graded normally, however it reached the chart"));
+
+			Boolean underEntailment = verdictForAlignedCitation(type, TIER2_ON);
+			assertEquals(referenceMaterial ? 0 : 1, llm.calls, label + ": " + (referenceMaterial
+					? "module-supplied material must not reach Tier-2, nor consume the per-answer cap "
+							+ "that chart claims rely on"
+					: "chart evidence must be judged by the entailment LLM"));
+			assertEquals(referenceMaterial ? null : Boolean.TRUE, underEntailment,
+					label + ": the entailment-mode verdict must agree with the Tier-1-only one for "
+							+ "this group — the carve-out is mode-uniform");
+		}
+		assertTrue(swept > 0, "the RESOURCE_TYPE_* sweep matched no constants, so it asserts nothing");
 	}
 
 	/** Index of the first {@code entailsBatch} call whose statement list contains {@code statement}

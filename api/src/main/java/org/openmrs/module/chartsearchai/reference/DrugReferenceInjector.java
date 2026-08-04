@@ -363,8 +363,7 @@ public class DrugReferenceInjector {
 			}
 			boolean promote = context != null && context.hasActiveDrug(i.getToken(), i.getAtc())
 					&& DrugSafetyValidator.clearsSeverityFloor(i, floor);
-			(promote ? promoted : rest).add(new InteractionNote(rendered, compact,
-					DrugSafetyValidator.severityRank(i.getSeverity())));
+			(promote ? promoted : rest).add(new InteractionNote(rendered, compact, i.getSeverity()));
 		}
 		// Within the promoted segment, severity — not dataset position — decides who keeps their
 		// mechanism prose when the budget can only afford one full note (see render). Measured on the
@@ -409,14 +408,14 @@ public class DrugReferenceInjector {
 
 		final String compact;
 
-		/** {@link DrugSafetyValidator#severityRank} with unrated raised above Major — see
-		 *  {@link #SEVERITY_DESCENDING}. */
+		/** {@link DrugSafetyValidator#severityPriority} — the shared ordering in which unrated sits
+		 *  above Major; see {@link #SEVERITY_DESCENDING}. */
 		final int severityPriority;
 
-		InteractionNote(String full, String compact, int severityRank) {
+		InteractionNote(String full, String compact, String severity) {
 			this.full = full;
 			this.compact = compact;
-			this.severityPriority = severityRank < 0 ? Integer.MAX_VALUE : severityRank;
+			this.severityPriority = DrugSafetyValidator.severityPriority(severity);
 		}
 	}
 

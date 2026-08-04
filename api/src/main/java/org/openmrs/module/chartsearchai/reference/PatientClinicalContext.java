@@ -237,13 +237,25 @@ public class PatientClinicalContext {
 			return names;
 		}
 
-		/** @return true when {@code lowercasedText} names this order — the fallback for matching an
-		 *          order against chart record text when the uuids do not line up. Matched on word
-		 *          boundaries via the module's one such rule ({@link DrugReference#containsWord}),
-		 *          not by plain containment: a short order name ({@code ASA}) otherwise reads as
-		 *          named by an unrelated word ({@code Nasal}), which silently suppresses both the
-		 *          injection and the WARN and so hides the discrepancy instead of leaving it
-		 *          unrepaired. */
+		/**
+		 * @return true when {@code lowercasedText} names this order — the fallback for matching an
+		 *         order against chart record text when the uuids do not line up. Matched on word
+		 *         boundaries, not by plain containment: a short order name ({@code ASA}) otherwise
+		 *         reads as named by an unrelated word ({@code Nasal}), which silently suppresses both
+		 *         the injection and the WARN and so hides the discrepancy instead of leaving it
+		 *         unrepaired.
+		 *
+		 *         <p>Uses {@link DrugReference#containsWord} (symmetric boundaries) rather than its
+		 *         sibling {@code matchesOrderName} (left boundary plus up to two trailing inflection
+		 *         letters), because the roles here are the other way round from that one's: it asks
+		 *         whether a rule token names the drug in a single order DISPLAY name, whereas this
+		 *         asks whether an order name appears in querystore's rendered record PROSE — and
+		 *         prose is what the symmetric rule is for. The tail tolerance also runs the wrong way
+		 *         for this check: leniency here means deciding an order IS substantiated, which
+		 *         suppresses the repair and the WARN together, so the stricter rule is the safe
+		 *         direction. See {@code matchesOrderName}'s javadoc for why one matcher cannot serve
+		 *         both.
+		 */
 		boolean namedIn(String lowercasedText) {
 			if (lowercasedText == null || lowercasedText.isEmpty()) {
 				return false;

@@ -271,31 +271,31 @@ public class DrugReferenceInjector {
 	 * drug-order record whose text names the drug. The name fallback is deliberate insurance in the
 	 * conservative direction: were the uuid contract to change, uuid-only matching would report
 	 * every order as missing on every query, and a WARN that fires always reports nothing. A
-	 * drug-order record naming the drug already tells the model the patient has an order for it, so
-	 * there is nothing for the answer to deny and nothing to repair.
+	 * <em>live</em> drug-order record naming the drug already tells the model the patient has an
+	 * order for it, so there is nothing for the answer to deny and nothing to repair.
 	 *
-	 * <p><strong>Known gap in that last claim</strong> (issue to follow, deliberately not changed
-	 * here — the fallback's shape is a reviewed decision and narrowing it alters chip-adjacent
-	 * behaviour that needs the standalone gate). The corpus is every {@code drug_order} record's
-	 * text regardless of whether that record describes a LIVE order: querystore indexes stopped and
-	 * discontinued orders too (they are not voided) and renders them {@code ". Stopped: <date>"} /
-	 * {@code ". Action: DISCONTINUE"}. So in the renewal shape — old order stopped and indexed, its
-	 * replacement active but NOT indexed — the stopped record's text names the drug, the order is
-	 * treated as substantiated, and nothing is injected or WARNed, while the answer reading
-	 * "Stopped: …" correctly reports no active medication beside a chip that names one. That is
-	 * issue #118 verbatim, and it opens only under drift, which is the only condition this method
-	 * exists for. Narrowing the corpus to records with no stop/discontinue marker would close it
-	 * without giving up the insurance above.
+	 * <p><strong>Two ways that fallback used to over-match, both fixed, both of which suppressed the
+	 * WARN as well as the repair</strong> — so the discrepancy became invisible rather than merely
+	 * unrepaired, which is worse than not having the check.
 	 *
-	 * <p>Same follow-up, second half: the match itself is a plain substring test
-	 * ({@code ActiveDrugOrder.namedIn}), so a short order name can be found inside an unrelated word
-	 * — an active {@code ASA} order reads as substantiated by a record saying
-	 * {@code "Drug order: Nasal spray"} — and a sibling record can mask an order whose name is a
-	 * substring of it ({@code Aspirin} inside {@code Aspirin/Dipyridamole}). Both silently suppress
-	 * the injection AND the WARN. This module already has the right rule and its rationale:
-	 * {@code DrugReference.matchesText} matches on word boundaries precisely so a token cannot hit
-	 * inside unrelated prose. Extract that boundary scan and call it from both rather than adding a
-	 * third matching rule.
+	 * <p>First, the corpus was every {@code drug_order} record's text regardless of whether the
+	 * record described a LIVE order. querystore indexes stopped and discontinued orders too (they
+	 * are not voided). So in the renewal shape — stop Simvastatin 20mg, start Simvastatin 40mg, the
+	 * replacement's document missing under drift — the stopped record's text named the drug, the new
+	 * order counted as substantiated, and the answer reading "Stopped: …" correctly reported no
+	 * active medication beside a chip naming one. Issue #118 verbatim, through the ordinary revise
+	 * flow. Only records describing a live order now substantiate one
+	 * ({@link #describesEndedOrder}).
+	 *
+	 * <p>Second, the match itself was a plain substring test, so a short order name was found inside
+	 * an unrelated word — an active {@code ASA} order read as substantiated by
+	 * {@code "Drug order: Nasal spray"} — and a sibling record could mask an order whose name is a
+	 * substring of it ({@code Aspirin} inside {@code Aspirin/Dipyridamole}).
+	 * {@code ActiveDrugOrder.namedIn} now shares {@link DrugReference#containsWord} — the existing
+	 * symmetric-boundary rule that already backs alias-in-prose matching — rather than introducing a
+	 * third matcher beside it and {@code matchesOrderName}. Which of those two it borrows is a real
+	 * decision, not a coin toss; {@code namedIn}'s javadoc records why the symmetric one is the
+	 * correct and the safe choice for this direction.
 	 *
 	 * <p>Only reconciled when the chart claims to carry every drug-order record
 	 * ({@link PatientChart#isCompleteFor}). A query-scoped slice — the DEFAULT chart mode — omits

@@ -101,8 +101,9 @@ public final class DrugReferenceTestSupport {
 	 * The real safety-finding record the REAL pipeline injects for {@code question} asked about a
 	 * patient on {@code activeDrug} (with ATC code {@code atcCode}) — the whole production chain,
 	 * bundled DDInter sample through {@code DrugSafetyValidator.validate} and
-	 * {@code injectRecords}/{@code renderFinding}, with the validator wired exactly as production
-	 * wires it. The third cross-package accessor, for the grounding tests.
+	 * {@code injectRecords}/{@code renderFinding}, with the real validator behind the real injector
+	 * (through the same {@code set*} seams the other helpers here use, in place of production's
+	 * autowiring). The third cross-package accessor, for the grounding tests.
 	 *
 	 * <p>Returns the {@link RecordMapping} rather than only its text because a grounding test needs
 	 * the resource type and the citation index too, and because the argument for treating this record

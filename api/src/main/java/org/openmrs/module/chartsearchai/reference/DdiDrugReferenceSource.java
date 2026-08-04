@@ -56,8 +56,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <p><b>Scope.</b> V1 carries drug-drug interactions only: entries expose {@code interactions},
  * never {@code ageBands} or {@code contraindications} (dosing and drug-allergy/condition are
- * out of scope). {@code management} is not a discrete DDInter field, so it is folded into the
- * interaction note rather than invented.
+ * out of scope). {@code management} is not a discrete DDInter field, so whatever management prose
+ * the mechanism text carries is folded into the interaction note rather than invented — save for
+ * the residual field markers below, which are dropped because they carry no management content
+ * to fold.
  *
  * <p><b>Residual field markers.</b> Some mechanism texts are prefixed with an all-caps field
  * marker followed by a colon — apparently the surviving tail of a management tag from the
@@ -67,10 +69,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * occurs, and both markers appear only in that leading position. They are machine artifacts, not
  * prose, and the note reaches three surfaces verbatim — the clinician's chip detail, the rendered
  * reference record, and the pre-answer safety finding that reuses that chip detail
- * ({@link DrugReferenceInjector#renderFinding}) — so {@link #noteFor} strips a leading marker
- * instead of passing it through (issue #116). Marker <em>shape</em>, not a fixed list of the two
- * seen today: a KB refresh emitting a sibling tag would otherwise leak it verbatim exactly as
- * these two did.
+ * ({@link DrugReferenceInjector#renderFinding}) — so {@link #mechanismText} strips a leading
+ * marker instead of passing it through (issue #116). Marker <em>shape</em>, not a fixed list of
+ * the two seen today: a KB refresh emitting a sibling tag would otherwise leak it verbatim
+ * exactly as these two did.
  *
  * <p>The marker is dropped rather than reinterpreted. {@code INTERVAL:} broadly flags
  * administration timing (dose separation is the management for the chelation/absorption rows —

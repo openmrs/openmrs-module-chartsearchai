@@ -28,6 +28,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * and validator (via {@link DrugReferenceTestSupport}). With no OpenMRS context available the
  * source falls back to the bundled {@code /chartsearchai/ddi-knowledge-base.json} sample — the
  * production default — so these run the real load/parse/inject/validate paths against real data.
+ *
+ * <p>The tests that need a KB slice the 60-mechanism bundled sample does not contain feed the real
+ * {@link DdiDrugReferenceSource#parse} a fixture instead (see {@link #ddiFixtureEntries}); the
+ * pipeline exercised is the same, only the dataset is narrowed.
  */
 public class DdiDrugReferenceSourceTest {
 
@@ -58,6 +62,14 @@ public class DdiDrugReferenceSourceTest {
 			+ "when clinically necessary and appropriate. Patients should be advised to report any signs "
 			+ "of theophylline toxicity including nausea, vomiting, diarrhea, headache, restlessness, "
 			+ "insomnia, or irregular heartbeat to their physician.";
+
+	/**
+	 * Synthetic fixture group 9997: a seven-word ALL-CAPS run before its colon, one word past the
+	 * pattern's bound. No real KB row supplies this shape (the longest real all-caps run is a single
+	 * word), so it is the only way to observe the bound.
+	 */
+	private static final String BOUND_PROBE_MECHANISM = "PATIENTS SHOULD BE ADVISED TO REPORT SIGNS: "
+			+ "coadministration may increase the risk of theophylline toxicity.";
 
 	private DrugReference entry(String name) {
 		return new DdiDrugReferenceSource().load().stream()
@@ -168,12 +180,21 @@ public class DdiDrugReferenceSourceTest {
 				"warfarin's aspirin interaction should fire against an active order named Aspirin");
 	}
 
-	private static List<DrugReference> markerFixtureEntries() throws Exception {
+	/**
+	 * Entries parsed from a DDInter test fixture by the real {@link DdiDrugReferenceSource#parse}.
+	 * Deliberately not named {@code fixtureEntries}: {@link DrugReferenceTestSupport} already owns
+	 * that name bound to {@link JsonDrugReferenceSource#parse}, a different parser.
+	 */
+	private static List<DrugReference> ddiFixtureEntries(String classpathResource) throws Exception {
 		try (InputStream in = DdiDrugReferenceSourceTest.class.getClassLoader()
-				.getResourceAsStream(MARKER_FIXTURE)) {
-			assertNotNull(in, "field-marker fixture should be on the test classpath");
+				.getResourceAsStream(classpathResource)) {
+			assertNotNull(in, classpathResource + " should be on the test classpath");
 			return DdiDrugReferenceSource.parse(in);
 		}
+	}
+
+	private static List<DrugReference> markerFixtureEntries() throws Exception {
+		return ddiFixtureEntries(MARKER_FIXTURE);
 	}
 
 	private static DrugReference.Interaction interaction(List<DrugReference> entries, String drug, String token) {
@@ -203,13 +224,29 @@ public class DdiDrugReferenceSourceTest {
 		// The other half of a conditional deletion: what the pattern must NOT eat. Stripping is the
 		// only place this source deletes clinician-facing text, and over-matching fails silently —
 		// no exception, just a note that opens mid-sentence. KB group 4945 is the real negative
-		// control: the one row in all 8234 mechanisms whose own opening clause is a mixed-case
-		// sentence ending in a colon. It is what the pattern's six-word bound buys — loosen the run
-		// and this note is beheaded down to a lowercase "either ...", with the "Limited and
-		// controversial data suggest" hedge that qualifies the whole finding silently gone.
+		// control: the one row in all 8234 mechanisms whose own opening clause is a sentence ending
+		// in a colon. Beheaded, it would read "Minor. either there is no significant interaction ...",
+		// losing the "Limited and controversial data suggest" hedge that qualifies the whole finding.
+		// It guards the CONJUNCTION of the pattern's constraints, not any one of them: its clause is
+		// both mixed-case and seven words long, so measured against the real KB no single loosening
+		// reaches it. The six-word bound on its own is pinned by the next test instead.
 		assertEquals("Minor. " + THEOPHYLLINE_MECHANISM,
 				interaction(markerFixtureEntries(), "Nifedipine", "theophylline").getNote(),
 				"a mechanism outside the marker shape must reach the note byte-for-byte");
+	}
+
+	@Test
+	public void allCapsRunLongerThanTheMarkerBoundIsNotTreatedAsAMarker() throws Exception {
+		// Isolates the six-word bound the class javadoc names as a guard ("a shouted sentence ending
+		// in a colon is not mistaken for a marker"). Without this the bound is unobservable: the real
+		// KB's longest all-caps run is a single word, so deleting {0,5} leaves the whole suite green
+		// and the guard silently gone. Synthetic for that reason, and reachable for the same reason
+		// group 9998 is — the KB file is operator-editable. Seven ALL-CAPS words then a colon: the
+		// shipped pattern must spare it, and it strips the moment the bound alone is loosened.
+		String note = interaction(markerFixtureEntries(), "Theophylline", "bound probe").getNote();
+
+		assertEquals("Minor. " + BOUND_PROBE_MECHANISM, note,
+				"an all-caps run past the marker bound is a shouted sentence, not a marker, and must survive");
 	}
 
 	@Test
@@ -299,13 +336,9 @@ public class DdiDrugReferenceSourceTest {
 		// Real slice: three Lidocaine route variants all map to RxCUI 6387. The injector dedups
 		// citations by id, so the rxcui is used only when unique — else the DDInter id — keeping
 		// the three entries distinct rather than collapsing to one.
-		try (InputStream in = DdiDrugReferenceSourceTest.class.getClassLoader()
-				.getResourceAsStream("chartsearchai-test/ddi-rxcui-collision.json")) {
-			assertNotNull(in, "collision fixture should be on the test classpath");
-			List<DrugReference> entries = DdiDrugReferenceSource.parse(in);
-			assertEquals(3, entries.size(), "fixture has three Lidocaine variants");
-			long distinctIds = entries.stream().map(DrugReference::getId).distinct().count();
-			assertEquals(3, distinctIds, "variants sharing a RxCUI must not collapse to one id");
-		}
+		List<DrugReference> entries = ddiFixtureEntries("chartsearchai-test/ddi-rxcui-collision.json");
+		assertEquals(3, entries.size(), "fixture has three Lidocaine variants");
+		long distinctIds = entries.stream().map(DrugReference::getId).distinct().count();
+		assertEquals(3, distinctIds, "variants sharing a RxCUI must not collapse to one id");
 	}
 }

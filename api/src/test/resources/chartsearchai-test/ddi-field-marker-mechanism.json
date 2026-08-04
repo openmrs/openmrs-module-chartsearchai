@@ -2,7 +2,7 @@
  "metadata": {
   "schema_version": "1.0",
   "title": "Test fixture: real DDInter rows whose mechanism text carries a residual field marker, plus the real negative control that must NOT be stripped",
-  "note": "Verbatim slice of the full KB (issue #116). Mechanism 2248 is the dolutegravir x iron row observed leaking 'INTERVAL:' onto a live safety chip; mechanism 222 is the other marker in the family, 'RECOMMENDED:'. Mechanism 4945 (nifedipine x theophylline) is the negative control: a real row whose own opening clause is a mixed-case sentence ending in a colon, so it sits inside the marker pattern's negative space and must survive byte-for-byte. It is the single row in the whole 8234-mechanism KB with that shape, and it is what the pattern's documented word bound buys: loosen the run past six words and the note is silently beheaded, opening mid-sentence on a lowercase 'either' with the 'Limited and controversial data suggest' hedge gone. Drug rows are the real ones (ids, rxcuis, rxnorm names, ATC), with the ciel arrays trimmed to the exact-name concept. Group 9998 and drug DDInterT03 are the one synthetic addition: a degenerate marker-only mechanism, absent from the real KB (all 274 marker rows carry text after the marker) but reachable because the KB file is operator-editable — it pins that stripping the marker degrades to the no-mechanism note rather than leaving a dangling severity. Shaped like the real KB (see ddi-rxcui-collision.json precedent)."
+  "note": "Verbatim slice of the full KB (issue #116). Mechanism 2248 is the dolutegravir x iron row observed leaking 'INTERVAL:' onto a live safety chip; mechanism 222 is the other marker in the family, 'RECOMMENDED:'. Mechanism 4945 (nifedipine x theophylline) is the real negative control: the single row in the whole 8234-mechanism KB whose own opening clause is a sentence ending in a colon, so it must survive byte-for-byte. Note what it does and does not pin — it sits outside the pattern on TWO axes at once (its clause is mixed-case AND seven words long, past the six-word run bound), so measured against the real KB no single loosening reaches it: dropping the case constraint alone, the word bound alone, or the two-letter minimum alone all still match exactly the same 274 rows and spare 4945. It pins the conjunction, and it is beheaded only when case and bound are loosened together (the note then opens mid-sentence on a lowercase 'either', with the 'Limited and controversial data suggest' hedge that qualifies the whole finding gone). Drug rows are the real ones (ids, rxcuis, rxnorm names, ATC), with the ciel arrays trimmed to the exact-name concept. Groups 9998/9997 and drugs DDInterT03/DDInterT04 are the two synthetic additions — absent from the real KB but reachable because the KB file is operator-editable. 9998 is a degenerate marker-only mechanism (all 274 real marker rows carry text after the marker): it pins that stripping degrades to the no-mechanism note rather than leaving a dangling severity. 9997 is a seven-word ALL-CAPS run before its colon, which no real row supplies (the longest real all-caps run is one word): it is the only case that isolates the six-word bound, stripping the moment that bound alone is loosened while the shipped pattern spares it. Shaped like the real KB (see ddi-rxcui-collision.json precedent)."
  },
  "mechanisms": {
   "2248": {
@@ -19,6 +19,12 @@
   },
   "4945": {
    "text": "Limited and controversial data suggest the following: either there is no significant interaction between theophylline and dihydropyridine calcium channel blockers, or theophylline serum levels increase after the addition of dihydropyridine calcium channel blockers. Data are available for nifedipine. Theophylline dosage should be reduced if necessary, and plasma levels should be checked when clinically necessary and appropriate. Patients should be advised to report any signs of theophylline toxicity including nausea, vomiting, diarrhea, headache, restlessness, insomnia, or irregular heartbeat to their physician.",
+   "categories": [
+    "others"
+   ]
+  },
+  "9997": {
+   "text": "PATIENTS SHOULD BE ADVISED TO REPORT SIGNS: coadministration may increase the risk of theophylline toxicity.",
    "categories": [
     "others"
    ]
@@ -139,6 +145,14 @@
    "rxnorm_name": "marker only",
    "atc": [],
    "ciel": []
+  },
+  {
+   "id": "DDInterT04",
+   "name": "Bound Probe",
+   "rxcui": "999998",
+   "rxnorm_name": "bound probe",
+   "atc": [],
+   "ciel": []
   }
  ],
  "interactions": [
@@ -165,6 +179,12 @@
    "DDInterT03",
    "Major",
    "9998"
+  ],
+  [
+   "DDInter1791",
+   "DDInterT04",
+   "Minor",
+   "9997"
   ]
  ]
 }

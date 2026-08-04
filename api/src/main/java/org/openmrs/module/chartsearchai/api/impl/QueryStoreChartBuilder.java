@@ -294,6 +294,13 @@ class QueryStoreChartBuilder {
 		log.info("[timing] querystoreScopedBuild patient={} intent={} chartDocs={} simHits={} slice={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
 				patient.getPatientId(), intentLabel, chartDocs.size(), similarityUuids.size(), records.size(),
 				rpcMs, serializeMs, System.currentTimeMillis() - buildStart);
+		// The typed scope IS the set of types this slice carries completely (every doc of those
+		// types survived the filter above). Stamped so a consumer can tell a record that is absent
+		// because the index lacks it from one absent because the slice never asked for its type —
+		// only the former is a discrepancy worth reporting. Stamped only here, on the path that
+		// actually applied the filter: the degraded returns above carry no records at all, so
+		// declaring completeness for them would assert a guarantee no filter enforced.
+		chart.markCompleteFor(typedScope);
 		return markScoped(chart);
 	}
 

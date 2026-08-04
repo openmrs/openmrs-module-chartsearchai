@@ -9,8 +9,10 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -19,8 +21,10 @@ import java.util.Set;
  * age (for dose-band selection and age-gated injection), weight in kg (for the
  * weight-aware per-dose overdose check; {@code null} = unknown, check skipped),
  * the names/ATC codes of active drug orders (for interaction checks and
- * order-driven injection), and lowercased text tokens from active allergies and
- * conditions (for contraindication checks).
+ * order-driven injection), the active drug orders themselves (for reconciling the
+ * safety layer's read against the serialized chart — see
+ * {@link DrugReferenceInjector#unrepresentedActiveOrders}), and lowercased text tokens
+ * from active allergies and conditions (for contraindication checks).
  *
  * <p>This is a pure value object so the injector and validator can be unit-tested
  * with hand-built contexts, while production builds one from a {@code Patient} via
@@ -42,14 +46,30 @@ public class PatientClinicalContext {
 
 	private final Set<String> conditionTokens;
 
+	private final List<ActiveDrugOrder> activeDrugOrders;
+
 	public PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens) {
+		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens, null);
+	}
+
+	/**
+	 * Full form, carrying the active drug orders as individually-identified orders in addition to
+	 * the flattened name/ATC sets the matching uses. The flattened sets stay independent of this
+	 * list: they are what every interaction and contraindication check reads, and a caller that
+	 * supplies only them keeps exactly the pre-reconciliation behaviour (nothing to reconcile).
+	 */
+	public PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
+			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
+			List<ActiveDrugOrder> activeDrugOrders) {
 		this.ageYears = ageYears;
 		this.weightKg = weightKg;
 		this.activeDrugNames = lower(activeDrugNames);
 		this.activeDrugAtcCodes = upper(activeDrugAtcCodes);
 		this.allergyTokens = lower(allergyTokens);
 		this.conditionTokens = lower(conditionTokens);
+		this.activeDrugOrders = activeDrugOrders == null ? Collections.<ActiveDrugOrder> emptyList()
+				: Collections.unmodifiableList(new ArrayList<ActiveDrugOrder>(activeDrugOrders));
 	}
 
 	/** Pre-weight constructor, retained for test convenience (production uses the weight-carrying
@@ -99,6 +119,13 @@ public class PatientClinicalContext {
 	/** @return uppercased ATC codes mapped from the patient's active drug orders. */
 	public Set<String> getActiveDrugAtcCodes() {
 		return activeDrugAtcCodes;
+	}
+
+	/** @return the patient's active drug orders as individually-identified orders, in the order
+	 *          {@code OrderService} returned them; empty when none or when the caller supplied
+	 *          only the flattened name/ATC sets. */
+	public List<ActiveDrugOrder> getActiveDrugOrders() {
+		return activeDrugOrders;
 	}
 
 	/** @return lowercased text of the patient's active allergies (allergen names/comments). */
@@ -167,5 +194,66 @@ public class PatientClinicalContext {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * One of the patient's active drug orders, identified well enough to be reconciled against the
+	 * serialized chart and, when the chart cannot substantiate it, rendered as a citable record:
+	 * the {@code Order} uuid (the identity querystore indexes its {@code drug_order} document
+	 * under, so the two reads can be matched exactly), the display name, and every name that
+	 * identifies the order in record text.
+	 *
+	 * <p>Deliberately carries no dosing. The whole point of the reconciliation is that this module
+	 * must not hold one fact and present it two ways, and a second dose-rendering path beside
+	 * querystore's is exactly that. The display name already carries the strength in real data
+	 * ("Simvastatin Co 20mg"), and the citation resolves to the order itself for the rest.
+	 */
+	public static final class ActiveDrugOrder {
+
+		private final String uuid;
+
+		private final String display;
+
+		private final Set<String> names;
+
+		public ActiveDrugOrder(String uuid, String display, Set<String> names) {
+			this.uuid = uuid;
+			this.display = display;
+			this.names = lower(names);
+		}
+
+		/** @return the {@code Order} uuid, or {@code null} when unknown. */
+		public String getUuid() {
+			return uuid;
+		}
+
+		/** @return the order's display name, as a record renders it. */
+		public String getDisplay() {
+			return display;
+		}
+
+		/** @return lowercased names identifying this order (drug name and/or concept name). */
+		public Set<String> getNames() {
+			return names;
+		}
+
+		/** @return true when {@code lowercasedText} names this order — the fallback for matching an
+		 *          order against chart record text when the uuids do not line up. */
+		boolean namedIn(String lowercasedText) {
+			if (lowercasedText == null || lowercasedText.isEmpty()) {
+				return false;
+			}
+			for (String name : names) {
+				if (lowercasedText.contains(name)) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		@Override
+		public String toString() {
+			return display + " [" + uuid + "]";
+		}
 	}
 }

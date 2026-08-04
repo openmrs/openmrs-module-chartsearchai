@@ -257,6 +257,11 @@ public class CitationGroundingVerifier {
 				// injected record is added, decide whether it belongs here too — the client
 				// suppresses a true verdict for ALL reference-group citations, so leaving a new
 				// type out of this set would let it be verified here and hidden there.
+				// Decided for active_drug_order (#118): NOT demote-only. It is chart-group
+				// evidence, so no client hides its verdict, and the #106 hazard does not apply —
+				// that is about reference prose whose subject roles can swap while still embedding
+				// near-identically ("A interacts with B"), whereas this record is one drug name
+				// asserted of this patient, so a passing verdict is real assurance.
 				if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())) {
 					demoteOnlyIndexes.add(Integer.valueOf(mapping.getIndex()));
 				}

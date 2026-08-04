@@ -90,11 +90,29 @@ public final class DrugReferenceTestSupport {
 	/** Canonical context builder: any null set means empty; weight null means unknown. */
 	static PatientClinicalContext ctx(Integer age, Double weightKg, Set<String> drugs, Set<String> atc,
 			Set<String> allergies, Set<String> conditions) {
+		return ctx(age, weightKg, drugs, atc, allergies, conditions, null);
+	}
+
+	/** As {@link #ctx}, additionally carrying the identified active drug orders the
+	 *  chart/service reconciliation reads (null means none). */
+	static PatientClinicalContext ctx(Integer age, Double weightKg, Set<String> drugs, Set<String> atc,
+			Set<String> allergies, Set<String> conditions,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		return new PatientClinicalContext(age, weightKg,
 				drugs == null ? Collections.<String> emptySet() : drugs,
 				atc == null ? Collections.<String> emptySet() : atc,
 				allergies == null ? Collections.<String> emptySet() : allergies,
-				conditions == null ? Collections.<String> emptySet() : conditions);
+				conditions == null ? Collections.<String> emptySet() : conditions,
+				orders);
+	}
+
+	/** One active drug order as {@link PatientClinicalContextBuilder} builds it: the Order uuid,
+	 *  the display name, and the names that identify it in record text (drug and/or concept name). */
+	static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display, String... names) {
+		Set<String> all = new LinkedHashSet<String>();
+		all.add(display);
+		Collections.addAll(all, names);
+		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, all);
 	}
 
 	/** A service over the real bundled datasets (classpath fallback — the production default path). */
@@ -159,11 +177,33 @@ public final class DrugReferenceTestSupport {
 
 	/** A one-record chart to inject into; the injected reference must append as record [2]. */
 	static PatientChart oneRecordChart() {
-		List<RecordMapping> mappings = new ArrayList<RecordMapping>();
-		mappings.add(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,
+		return chartOf(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,
 				"obs-uuid-1", null, "BP 120/80"));
-		return new PatientChart("Patient\n\n[1] BP 120/80\n",
-				Collections.unmodifiableList(mappings), Collections.<Integer> emptyList());
+	}
+
+	/** A chart of {@code records}, rendered as the numbered "[N] text" lines
+	 *  {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer} produces — so a
+	 *  test can place a real drug-order record in the chart, or leave it out. */
+	static PatientChart chartOf(RecordMapping... records) {
+		StringBuilder text = new StringBuilder("Patient\n\n");
+		for (RecordMapping record : records) {
+			text.append("[").append(record.getIndex()).append("] ").append(record.getText()).append("\n");
+		}
+		return new PatientChart(text.toString(),
+				Collections.unmodifiableList(new ArrayList<RecordMapping>(Arrays.asList(records))),
+				Collections.<Integer> emptyList());
+	}
+
+	/** A querystore drug-order chart record: its resource type is querystore's {@code drug_order}
+	 *  and its resourceUuid is the Order uuid (its {@code DrugOrderRecordSerializer} contract). */
+	static RecordMapping drugOrderRecord(int index, String orderUuid, String drugText) {
+		return new RecordMapping(index, "drug_order", orderUuid, null, "Drug order: " + drugText);
+	}
+
+	/** An obs chart record, for filling a chart with records that are not drug orders. */
+	static RecordMapping obsRecord(int index, String text) {
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_OBS, "obs-uuid-" + index,
+				null, text);
 	}
 
 	static boolean has(List<SafetyWarning> warnings, String type, String drugContains) {

@@ -85,8 +85,12 @@ public class ChartSearchAiUtils {
 	 *
 	 * <p>The two groups are exhaustive because exactly two code paths mint a
 	 * {@code RecordMapping}: {@code PatientChartSerializer}, which passes through whatever
-	 * type querystore retrieved, and {@code DrugReferenceInjector}, which always writes
-	 * {@code drug_reference}.
+	 * type querystore retrieved, and {@code DrugReferenceInjector}, which writes
+	 * {@code drug_reference}, {@code safety_finding} and {@code active_drug_order}. Not everything
+	 * injected is reference material: an {@code active_drug_order} record is the patient's own
+	 * active order, read from {@code OrderService} when the retrieved chart cannot substantiate it,
+	 * so it groups as chart evidence — which is also what the fallback below yields, deliberately
+	 * rather than by omission (the decision is recorded in {@code ChartSearchAiReferenceGroupTest}).
 	 *
 	 * <p>Anything unrecognised — including {@code null} — fails safe to chart evidence.
 	 * Labelling an unknown type as reference material would assert a module provenance we

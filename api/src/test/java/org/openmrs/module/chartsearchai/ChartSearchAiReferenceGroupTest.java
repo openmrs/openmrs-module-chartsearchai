@@ -105,6 +105,15 @@ public class ChartSearchAiReferenceGroupTest {
 		// (which is why it is not a drug_reference record — the system prompt tells the model those are
 		// NOT the patient's data), but it is still module-supplied material, so it presents as reference.
 		expected.put("RESOURCE_TYPE_SAFETY_FINDING", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
+		// Module-INJECTED but NOT module-supplied, the one combination this classification has to get
+		// right in both directions: an active_drug_order record is the patient's own active order,
+		// read from OrderService when the retrieved chart carries no drug-order record for it
+		// (issue #118). Grouping it as reference material would tell a clinician a live prescription
+		// is not their patient's data — the dangerous inversion, since it invites discounting the very
+		// order a safety chip is raised about. It also carries the real Order uuid, so it stays
+		// navigable like any other chart citation. Chart evidence is what referenceGroup's fallback
+		// yields; the row is here because the decision must be recorded, not inherited by omission.
+		expected.put("RESOURCE_TYPE_ACTIVE_DRUG_ORDER", ChartSearchAiConstants.REFERENCE_GROUP_CHART);
 
 		List<String> undecided = new ArrayList<String>();
 		List<String> seen = new ArrayList<String>();

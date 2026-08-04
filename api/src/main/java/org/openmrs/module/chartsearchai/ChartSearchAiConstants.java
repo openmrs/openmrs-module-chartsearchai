@@ -496,6 +496,21 @@ public class ChartSearchAiConstants {
 	public static final String RESOURCE_TYPE_SAFETY_FINDING = "safety_finding";
 
 	/**
+	 * One of the patient's ACTIVE drug orders, read from {@code OrderService}, that the serialized
+	 * chart carries no drug-order record for — injected by
+	 * {@link org.openmrs.module.chartsearchai.reference.DrugReferenceInjector} so the answer cannot
+	 * deny a medication the drug-safety chips simultaneously name (issue #118).
+	 *
+	 * <p>Unlike {@link #RESOURCE_TYPE_DRUG_REFERENCE} and {@link #RESOURCE_TYPE_SAFETY_FINDING},
+	 * which are module-supplied material, this is the patient's own record — the authoritative read
+	 * of it — and it carries the real {@code Order} uuid, so it groups as
+	 * {@link #REFERENCE_GROUP_CHART} evidence and stays navigable. Kept as its own type rather than
+	 * borrowing querystore's {@code drug_order} so the reconciliation is visible on the wire: a
+	 * reference of this type is the module reporting that the retrieved chart was incomplete.
+	 */
+	public static final String RESOURCE_TYPE_ACTIVE_DRUG_ORDER = "active_drug_order";
+
+	/**
 	 * Wire value of a serialized reference's {@code group}: a record retrieved from THIS
 	 * patient's chart. Evidence about the patient, citable as such.
 	 */

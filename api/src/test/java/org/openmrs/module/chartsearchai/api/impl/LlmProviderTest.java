@@ -171,10 +171,13 @@ public class LlmProviderTest {
 		// So the finding's lead is re-pointed at the verdict and the addressed branch is written and
 		// demonstrated. THREE constraints come from the arms measured and reverted on 2026-07-30
 		// (eval/drift-metric/README.md, "the two-hop join is impossible"), and each one below carries
-		// its own assertion because a mutation probe showed none of them was pinned: deleting any of
-		// the five load-bearing clauses of this change from DEFAULT_SYSTEM_PROMPT — including the
-		// never-"Yes" token — left the whole suite green, 5/5. Each assertion here was re-run against
-		// its own deletion and fails without it.
+		// its own assertion because a mutation probe showed none of them was pinned. Seven shapes this
+		// change must resist all left `mvn test` green: deleting any of its five load-bearing clauses
+		// from DEFAULT_SYSTEM_PROMPT — including the never-"Yes" token — plus appending a fallback in
+		// wording other than arm D's, plus splitting the addressed branch into a paragraph of its own.
+		// An eighth, rewording DrugReferenceInjector.renderFinding's prefix out from under the
+		// few-shot, is why that prefix is now one shared constant. All eight were re-run against these
+		// assertions and every one fails.
 		//   * The verdict's DIRECTION must come from the finding, never by deferring to the general
 		//     yes/no rule: that rule's "start with Yes ONLY when a record explicitly names what is
 		//     asked" is a PRESENCE criterion, and on a safety question a record naming the drug is
@@ -208,6 +211,26 @@ public class LlmProviderTest {
 		assertFalse(prompt.contains("otherwise state what the record shows"),
 				"Arm D's otherwise-branch made drug-reference material fair game on cells nothing "
 				+ "bears on and broke the #107 abstention 3x; the rule keeps a single precondition");
+		// Pinning arm D's exact wording is not enough — an otherwise-branch phrased any other way
+		// evades it while reinstating the measured failure, and the eval gate provably cannot see the
+		// fabricated verdict that produces (#126). So assert the property structurally, over the whole
+		// safety/suitability paragraph: no fallback clause anywhere in it. Extracting the paragraph
+		// also pins that the addressed branch stays INSIDE it — split into a paragraph of its own it
+		// becomes a second, competing lead instruction, the shape that regressed before.
+		int safetyRuleAt = prompt.indexOf("The same rules apply to safety and suitability questions");
+		assertTrue(safetyRuleAt > 0, "the safety/suitability paragraph must still be present");
+		// To the next newline, which is where the paragraph ends — so moving the addressed branch out
+		// of it fails the next assertion rather than slipping through a wider window.
+		String safetyRule = prompt.substring(safetyRuleAt, prompt.indexOf('\n', safetyRuleAt));
+		assertTrue(safetyRule.contains("When a safety finding DOES name the drug"),
+				"the addressed branch must live in the same paragraph as the unaddressed one it is "
+				+ "the converse of, not in a paragraph of its own: " + safetyRule);
+		assertFalse(safetyRule.toLowerCase().contains("otherwise"),
+				"the safety/suitability paragraph must carry NO otherwise-branch in any wording. Arm "
+				+ "D's fallback is the one hunk of the 2026-07-30 A/B/C/D that broke ABSTAIN (7/10 "
+				+ "vs 10/10), because a fallback makes every other record fair game on a cell nothing "
+				+ "bears on. Both branches here are gated on a positive antecedent instead: "
+				+ safetyRule);
 		assertTrue(prompt.contains("every record it rests on, cited"),
 				"Leading with the verdict must not cost the complete-enumeration property: the "
 				+ "records the finding rests on still have to reach the answer, cited");

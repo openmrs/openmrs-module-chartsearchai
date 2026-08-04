@@ -1,0 +1,42 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: a partner token whose text CONTAINS a shorter drug's whole-word alias",
+  "note": "Interaction screening resolves a rule's partner side among the patient's own order entries so the pair can be keyed order-independently. The rule token here is the multi-word RxNorm generic 'insulin glargine', and the shorter entry 'Insulin' carries the alias 'insulin', which IS a whole word of that token — so a first-match scan resolves the partner to the wrong entry, the reverse direction keys differently, and one interaction is chipped twice in opposite directions. 'Insulin' is deliberately listed FIRST so the mis-resolution is deterministic. One order name ('Insulin glargine 20U') resolves to both insulin entries, which is why no second order is needed to reach this. Real KB-shaped ids/rxcuis/ATC codes; metoprolol x insulin is a genuine interaction (beta-blockade masks hypoglycaemia)."
+ },
+ "mechanisms": {
+  "4501": {
+   "text": "Beta-blockers may mask the adrenergic warning signs of hypoglycaemia, such as tremor and tachycardia, and may prolong or potentiate insulin-induced hypoglycaemia by blunting the counter-regulatory response.",
+   "categories": []
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter0975",
+   "name": "Insulin",
+   "rxcui": "5856",
+   "rxnorm_name": "insulin",
+   "atc": ["A10AB01"],
+   "ciel": []
+  },
+  {
+   "id": "DDInter0976",
+   "name": "Insulin glargine",
+   "rxcui": "274783",
+   "rxnorm_name": "insulin glargine",
+   "atc": ["A10AE04"],
+   "ciel": []
+  },
+  {
+   "id": "DDInter1198",
+   "name": "Metoprolol",
+   "rxcui": "6918",
+   "rxnorm_name": "metoprolol",
+   "atc": ["C07AB02"],
+   "ciel": []
+  }
+ ],
+ "interactions": [
+  ["DDInter1198", "DDInter0976", "Major", "4501"]
+ ]
+}

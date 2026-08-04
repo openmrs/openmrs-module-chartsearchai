@@ -46,8 +46,12 @@ import java.util.regex.Pattern;
  * {@code program}, {@code condition}, {@code diagnosis}, {@code visit}, {@code encounter} —
  * plus {@code patient} and {@code obs}, which this router never scopes ({@code patient} is
  * always included by the builder; {@code obs} is the similarity path's domain).
+ *
+ * <p>Public only so the drug-safety layer can reuse {@link #isInteractionScreening} — question
+ * intent is classified here and must not be classified a second time elsewhere. Every other member
+ * stays package-private.
  */
-final class QueryScopeRouter {
+public final class QueryScopeRouter {
 
 	private QueryScopeRouter() {
 	}
@@ -105,6 +109,37 @@ final class QueryScopeRouter {
 	 */
 	static boolean isTemporal(String question) {
 		return question != null && TEMPORAL_CUES.matcher(question).find();
+	}
+
+	/** Drug-interaction cues. Word-boundary anchored via {@link #cues}, so "interactive" — whose
+	 *  suffix matches none of the alternatives — never triggers. Deliberately only the {@code
+	 *  interact*} family: looser near-synonyms ("conflict", "interfere") carry everyday non-drug
+	 *  senses, and this predicate gates a clinician-facing safety output where firing on an
+	 *  unrelated question is worse than missing a phrasing. */
+	private static final Pattern INTERACTION_CUES = cues("interact(?:s|ed|ing|ion|ions)?");
+
+	/**
+	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
+	 * interactions with her current medications?", "do any of her meds interact?" — as opposed to
+	 * merely mentioning medications. Consumed by {@code DrugSafetyValidator}, which has no way to
+	 * anchor such a question on a named drug and instead screens the patient's own active orders
+	 * against each other (issue #113).
+	 *
+	 * <p>Two cues must BOTH hold: an {@code interact*} word, and the router's own
+	 * {@link Intent#MEDICATIONS} classification. Reusing that classification rather than writing a
+	 * second drug vocabulary is the point — "medication-domain question" keeps one definition — and
+	 * it is what makes the trigger conservative: a question about how a patient interacts with their
+	 * care team carries no medication cue and screens nothing. The accepted cost is that a bare
+	 * "any interactions?" does not trigger; in practice a clinician names what might interact
+	 * ("drug", "meds", "medications", "prescriptions"), all of which the MEDICATIONS cues cover.
+	 *
+	 * <p>Note this is a cue predicate, NOT an {@link Intent}: interaction screening changes what the
+	 * safety layer checks, not which record types a slice must contain, so — like
+	 * {@link #isTemporal} — it deliberately stays out of the enumeration-scope mapping.
+	 */
+	public static boolean isInteractionScreening(String question) {
+		return question != null && INTERACTION_CUES.matcher(question).find()
+				&& matchedIntents(question).contains(Intent.MEDICATIONS);
 	}
 
 	/**

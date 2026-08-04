@@ -212,7 +212,9 @@ public class DrugSafetyOrderNameMatchingTest {
 		// chips again, which is the defect issue #86 is about. Together with the localized-plural
 		// test above, this holds MAX_ORDER_NAME_INFLECTION_LETTERS in [2, 3] — no name in the
 		// measured corpus has a three-letter tail, so 2 versus 3 is not observable from real data
-		// and 2 is the value shipped.
+		// and 2 is the value shipped. The slice carries no salicylic-acid row, so "no warning at
+		// all" below is exactly "no heparin warning" — add one and the fix is a narrower assertion
+		// here, never a wider tail allowance.
 		DrugSafetyValidator validator = collisionValidator();
 		String question = "Is it safe to start warfarin?";
 		String answer = "Warfarin could be started with monitoring.";

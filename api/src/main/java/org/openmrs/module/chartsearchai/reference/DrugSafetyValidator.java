@@ -473,12 +473,11 @@ public class DrugSafetyValidator {
 	 * class arm ({@link #addClassInteractions}) is untouched, so the rule-plus-class double chip
 	 * of issue #88 is a different defect and stays open.
 	 *
-	 * <p><b>Which row wins.</b> The most severe rating, then the longer note — longer in prose, not
-	 * in whitespace, see {@link #noteLength}. Route variants
-	 * genuinely differ — topical dexamethasone does not have systemic dexamethasone's interaction
-	 * profile, which is why DDInter rates voxelotor Major against systemic dexamethasone, Moderate
-	 * against two others and carries no row at all against the topical variant — but nothing on a
-	 * {@code DrugOrder} tells this layer which variant the order is
+	 * <p><b>Which row wins.</b> The most severe rating, then the longer note — longer in prose, not in
+	 * whitespace, see {@link #noteLength}. Route variants genuinely differ — topical dexamethasone does
+	 * not have systemic dexamethasone's interaction profile, which is why DDInter rates voxelotor Major
+	 * against systemic dexamethasone, Moderate against two others and carries no row at all against the
+	 * topical variant — but nothing on a {@code DrugOrder} tells this layer which variant the order is
 	 * (the context carries names and ATC codes; all four variants publish an identical ATC list),
 	 * so the variant cannot be resolved here. Reporting the strongest rating over-warns rather than
 	 * under-warns on a non-blocking advisory the clinician adjudicates, which is the fail-safe

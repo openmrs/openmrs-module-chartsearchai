@@ -1,0 +1,311 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: real KB slice for order-name matching (issue #86)",
+  "note": "Verbatim slice of the full DDInter knowledge base (2283 drugs / 295,184 rows): the drug rows and interaction rows behind the live-verified order-name collisions — opium inside \"Tiotropium\", iron inside \"Spironolactone\" — plus the multivitamin x warfarin row a localized plural order name (\"Multivitamines et fer\") must still match, and the heparin x warfarin row that pins the far edge of the tail allowance (\"Heparinoids / salicylic acid\" is a different substance and must NOT be read as heparin). The bundled 16-drug sample contains none of these drugs. Rows and mechanism texts are unmodified; only unrelated drugs and rows were dropped.",
+  "source": {
+   "name": "DDInter 2.0",
+   "url": "https://ddinter2.scbdd.com/",
+   "normalization": "RxNorm (NLM)",
+   "bridge": "CIEL v2026-07-20"
+  }
+ },
+ "mechanisms": {
+  "1854": {
+   "text": "Coadministration of narcotic analgesics with monoamine oxidase inhibitors (MAOIs) has been associated with rare reports of anxiety, confusion, hypotension, respiratory depression, cyanosis, and coma. The mechanism of interaction is unknown, but may involve potentiation of central nervous system (CNS) and respiratory depressant effects by MAOIs.",
+   "categories": [
+    "others"
+   ]
+  },
+  "8224": {
+   "text": "Multivitamin preparations containing vitamin K may antagonize the hypoprothrombinemic effect of oral anticoagulants in some patients.  Vitamin K1 in its active, reduced form serves as a cofactor in the generation of functional clotting factors, during which it becomes oxidized.  It is reactivated in a process that is inhibited by oral anticoagulants, thus intake of additional vitamin K through supplements or diet can reverse the action of oral anticoagulants.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
+  "7199": {
+   "text": "Coadministration with medications containing polyvalent cations such as aluminum, calcium, iron, or magnesium may decrease the oral bioavailability of dolutegravir.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "2248": {
+   "text": "INTERVAL: Coadministration with medications containing polyvalent cations such as aluminum, calcium, iron, or magnesium may decrease the oral bioavailability of dolutegravir. The mechanism of interaction has not been established.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "851": {
+   "text": "Although therapy with heparin and oral anticoagulants often overlap in clinical practice, the potential for additive anticoagulant effects and increased risk of severe bleeding should be considered. Oral anticoagulants may prolong the activated partial thromboplastin time (aPTT) in patients receiving heparin, while heparin may prolong the International Normalized Ratio (INR) in patients receiving warfarin.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1073",
+   "name": "Linezolid",
+   "rxcui": "190376",
+   "rxnorm_name": "linezolid",
+   "drugbank_id": "DB00601",
+   "atc": [
+    "J01XX08"
+   ],
+   "ciel": [
+    {
+     "code": "78879",
+     "uuid": "78879AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Linezolid"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1344",
+   "name": "Opium",
+   "rxcui": "7676",
+   "rxnorm_name": "opium",
+   "drugbank_id": "DB11130",
+   "atc": [
+    "A07DA02",
+    "N02AA02"
+   ],
+   "ciel": [
+    {
+     "code": "103692",
+     "uuid": "103692AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / ipecac / opium"
+    },
+    {
+     "code": "103788",
+     "uuid": "103788AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Belladonna alkaloids / opium"
+    },
+    {
+     "code": "103798",
+     "uuid": "103798AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Belladonna extract / opium"
+    },
+    {
+     "code": "104822",
+     "uuid": "104822AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Homatropine / opium / pectin"
+    },
+    {
+     "code": "170673",
+     "uuid": "fbbb8749-c143-4e62-92ea-76e77db47f32",
+     "name": "Acetaminophen / caffeine / opium"
+    },
+    {
+     "code": "81092",
+     "uuid": "81092AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Opium"
+    },
+    {
+     "code": "81094",
+     "uuid": "81094AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Opium tincture"
+    },
+    {
+     "code": "81095",
+     "uuid": "81095AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Opium, powdered"
+    }
+   ]
+  },
+  {
+   "id": "DDInter582",
+   "name": "Dolutegravir",
+   "rxcui": "1433868",
+   "rxnorm_name": "dolutegravir",
+   "drugbank_id": "DB08930",
+   "atc": [
+    "J05AJ03"
+   ],
+   "ciel": [
+    {
+     "code": "165085",
+     "uuid": "165085AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dolutegravir"
+    },
+    {
+     "code": "165606",
+     "uuid": "165606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / dolutegravir / lamivudine"
+    },
+    {
+     "code": "169361",
+     "uuid": "0af318f4-94a2-4dbe-9727-fb1d682e75fb",
+     "name": "Dolutegravir / lamivudine / tenofovir alafenamide"
+    },
+    {
+     "code": "170472",
+     "uuid": "72f7a185-3673-4499-a314-9487a715eabc",
+     "name": "Dolutegravir / lamivudine"
+    },
+    {
+     "code": "170548",
+     "uuid": "66e5599c-7424-4252-b357-6949b0a50459",
+     "name": "Dolutegravir / rilpivirine"
+    },
+    {
+     "code": "170670",
+     "uuid": "7e00083b-c345-4c2d-9b87-81be50eff8b1",
+     "name": "Dolutegravir / emtricitabine / tenofovir alafenamide"
+    },
+    {
+     "code": "170671",
+     "uuid": "b944c518-10b4-4a93-a928-d0e4d10a66e4",
+     "name": "Dolutegravir / lamivudine / tenofovir disoproxil"
+    }
+   ]
+  },
+  {
+   "id": "DDInter975",
+   "name": "Iron",
+   "rxcui": "90176",
+   "rxnorm_name": "iron",
+   "drugbank_id": "DB01592",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "78218",
+     "uuid": "78218AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Iron"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2187",
+   "name": "Iron (bisglycinate)",
+   "rxcui": "90176",
+   "rxnorm_name": "iron",
+   "drugbank_id": "DB01592",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "78218",
+     "uuid": "78218AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Iron"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1951",
+   "name": "Warfarin",
+   "rxcui": "11289",
+   "rxnorm_name": "warfarin",
+   "drugbank_id": "DB00682",
+   "atc": [
+    "B01AA03"
+   ],
+   "ciel": [
+    {
+     "code": "86415",
+     "uuid": "86415AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin"
+    },
+    {
+     "code": "86416",
+     "uuid": "86416AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin potassium"
+    },
+    {
+     "code": "86417",
+     "uuid": "86417AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin sodium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2246",
+   "name": "Multivitamin",
+   "rxcui": null,
+   "rxnorm_name": null,
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": []
+  },
+  {
+   "id": "DDInter856",
+   "name": "Heparin",
+   "rxcui": "5224",
+   "rxnorm_name": "heparin",
+   "drugbank_id": "DB01109",
+   "atc": [
+    "B01AB01",
+    "C05BA03",
+    "S01XA14"
+   ],
+   "ciel": [
+    {
+     "code": "72681",
+     "uuid": "72681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium heparin"
+    },
+    {
+     "code": "77413",
+     "uuid": "77413AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin"
+    },
+    {
+     "code": "77414",
+     "uuid": "77414AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin sodium"
+    },
+    {
+     "code": "77415",
+     "uuid": "77415AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin sodium (beef)"
+    },
+    {
+     "code": "77416",
+     "uuid": "77416AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin sodium (pork)"
+    },
+    {
+     "code": "77417",
+     "uuid": "77417AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin, beef"
+    },
+    {
+     "code": "77418",
+     "uuid": "77418AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin, pork"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1073",
+   "DDInter1344",
+   "Major",
+   "1854"
+  ],
+  [
+   "DDInter1951",
+   "DDInter2246",
+   "Moderate",
+   "8224"
+  ],
+  [
+   "DDInter2187",
+   "DDInter582",
+   "Major",
+   "7199"
+  ],
+  [
+   "DDInter582",
+   "DDInter975",
+   "Major",
+   "2248"
+  ],
+  [
+   "DDInter1951",
+   "DDInter856",
+   "Major",
+   "851"
+  ]
+ ]
+}

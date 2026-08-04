@@ -111,12 +111,21 @@ public class PatientClinicalContext {
 		return conditionTokens;
 	}
 
-	/** @return true when any active-order name or ATC code matches the given interaction rule. */
+	/**
+	 * @return true when any active-order name or ATC code matches the given interaction rule. The
+	 *         name arm goes through {@link DrugReference#matchesOrderName} — not bare containment,
+	 *         which reported drugs the patient had never taken because drug names nest ("tiotropium"
+	 *         contains "opium"; issue #86), and not the prose rule either, because an order's display
+	 *         name is localized and inflected rather than prose (see there). Both callers — the chip
+	 *         decision in {@link DrugSafetyValidator} and the prompt-promotion predicate in
+	 *         {@link DrugReferenceInjector} — reach that rule only through here, which is what keeps
+	 *         the chips and the promoted prose agreeing about which orders a rule matches.
+	 */
 	boolean hasActiveDrug(String nameToken, String atcCode) {
 		if (nameToken != null && !nameToken.trim().isEmpty()) {
-			String n = nameToken.trim().toLowerCase(Locale.ROOT);
+			String n = nameToken.trim();
 			for (String drug : activeDrugNames) {
-				if (drug.contains(n)) {
+				if (DrugReference.matchesOrderName(drug, n)) {
 					return true;
 				}
 			}
@@ -135,6 +144,18 @@ public class PatientClinicalContext {
 		return containsToken(conditionTokens, token);
 	}
 
+	/**
+	 * Deliberately still bare containment, unlike the order-name arm above (issue #86): these
+	 * haystacks are free text — an allergen name plus its comments, a condition in the clinician's
+	 * own wording — where a curated rule is meant to match a fragment ({@code nsaid} inside "NSAID
+	 * class reaction", {@code peptic ulcer} inside "history of peptic ulcer disease"), so the
+	 * word-start rule would silently stop matching the rules that exist. The nesting risk is the
+	 * same in principle ({@code opium} against an allergen recorded as "Tiotropium") and wants its
+	 * own measurement over real allergy and condition text, not the order-name corpus that settled
+	 * #86. Exposure today is confined to hand-authored contraindication rules: neither the
+	 * {@code ddinter} nor the {@code atc} source emits any, and the class-based allergy arm resolves
+	 * allergens through {@link DrugReferenceService#lookupByToken}, which is already boundary-aware.
+	 */
 	private static boolean containsToken(Set<String> haystack, String token) {
 		if (token == null || token.trim().isEmpty()) {
 			return false;

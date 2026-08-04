@@ -143,6 +143,71 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void defaultSystemPrompt_shouldTeachTheVerdictLeadWhenASafetyFindingAddressesTheQuestion() {
+		// Measured on the 3.7.1 standalone (2026-08-04, issue #112): six of six safety probes whose
+		// finding, chip and citation were all correct still answered the wrong question. "Is it safe
+		// to give her clarithromycin?" (mary, active simvastatin) -> "Clarithromycin interacts with
+		// active order simvastatin — Major. Coadministration with potent inhibitors of CYP450 3A4
+		// may significantly increase the plasma concentrations of simvastatin..." The words "not
+		// safe", "avoid" and "No" never appeared: the clinical call existed only on the chip.
+		//
+		// Cause: that is literal compliance with the record-type sentence #110 added, which told the
+		// model to "open with what the finding says". The mechanism was therefore occupying the
+		// verdict slot. The safety/suitability rule below it covers only the UNADDRESSED branch
+		// ("when no record addresses the drug ... never Yes or No") and the only safety few-shot is
+		// the mango abstention, so nothing described or demonstrated the addressed branch.
+		//
+		// So the finding's lead is re-pointed at the verdict and the addressed branch is written and
+		// demonstrated. Two constraints come from measured dead ends, and both are pinned below:
+		//   * The verdict's DIRECTION must come from the finding, never by deferring to the general
+		//     yes/no rule: that rule's "start with Yes ONLY when a record explicitly names what is
+		//     asked" is a PRESENCE criterion, and on a safety question a record naming the drug is
+		//     evidence AGAINST it. Arm C of the 2026-07-30 A/B/C/D deferred and produced an inverted
+		//     "Yes ... ivosidenib (Major...)" 5/6 for a patient on simvastatin. Hence never-"Yes"
+		//     here (a token, not a sentence template — arm B showed that quoting a forbidden
+		//     template primes it, 6/6 on a cell that never had it).
+		//   * The rule's precondition must stay "a safety finding names the drug asked about" with no
+		//     otherwise-branch. Arm D's "otherwise state what the record shows" made drug-reference
+		//     material fair game and broke the #107 abstention on 3 unconnected cells. Gated on a
+		//     finding record existing, this rule is unreachable on those cells by construction.
+		String prompt = LlmProvider.DEFAULT_SYSTEM_PROMPT;
+		assertTrue(prompt.contains("evidence against giving it"),
+				"System prompt must state that a safety finding naming the asked-about drug is "
+				+ "evidence AGAINST it, so the verdict's direction comes from the finding rather "
+				+ "than from the presence-shaped yes/no rule");
+		assertTrue(prompt.contains("belongs after the call, not in place of it"),
+				"System prompt must say the finding's mechanism follows the verdict rather than "
+				+ "replacing it — reciting the mechanism in the verdict slot IS the defect");
+		assertFalse(prompt.contains("open with what the finding says"),
+				"The record-type sentence must no longer point the lead at the finding's own words: "
+				+ "that instruction and a verdict-lead rule contradict each other, and it is the one "
+				+ "the model obeyed 6/6");
+		assertTrue(prompt.contains("Is it safe to deliver durian?"),
+				"The few-shot must DEMONSTRATE the addressed safety branch, not only describe it — "
+				+ "in the same fake-fruit vocabulary as its neighbours");
+		assertTrue(prompt.contains("[4] Safety finding — Durian:"),
+				"The demonstration needs a record in the real, undated "
+				+ "'Safety finding — <drug>: <detail>' shape DrugReferenceInjector.renderFinding "
+				+ "appends, or it teaches a shape the model never sees");
+		assertTrue(prompt.contains("\"answer\": \"No — durian should not be delivered:"),
+				"The demonstrated answer must LEAD with the verdict; a lead that opens on the "
+				+ "mechanism is the behaviour being fixed");
+		// Both branches must stay reachable. #107's abstention is the direction that trades a
+		// missing verdict for a fabricated one, which is the worse defect, so the addressed-case
+		// demonstration must sit AFTER the mango abstention and BEFORE the focus-hint banana
+		// abstention — it must not displace either.
+		int mango = prompt.indexOf("Is it safe to deliver mangoes?");
+		int durian = prompt.indexOf("Is it safe to deliver durian?");
+		int focusHint = prompt.indexOf(LlmProvider.FOCUS_HINT_LABEL);
+		assertTrue(mango > 0 && durian > mango && focusHint > durian,
+				"Few-shot order must be mango abstention -> durian verdict -> focus-hint banana "
+				+ "abstention, so neither abstention demonstration is displaced by the new one. "
+				+ "mango=" + mango + " durian=" + durian + " focusHint=" + focusHint);
+		assertTrue(prompt.contains("never \"Yes\" or \"No\""),
+				"The unaddressed branch's #107 guard must survive verbatim");
+	}
+
+	@Test
 	public void defaultSystemPrompt_shouldInstructAbstentionWhenNoRecordsRelevant() {
 		// The few-shot demonstrates abstention in FOCUS mode (a "Records ranked by
 		// similarity..." line followed by an empty-citations answer). On the non-focus path

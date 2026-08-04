@@ -19,9 +19,16 @@ import org.junit.jupiter.api.Test;
 /**
  * Exercises {@link PatientClinicalContext#hasActiveDrug} through the real
  * {@link DrugSafetyValidator} over a fixture whose drug names are substring-nested
- * ("chlorothiazide" ⊂ "hydrochlorothiazide"). The matcher must fire on whole-word
- * matches only: an interaction token that is merely a sub-token of a longer active-order
- * name must not raise a warning naming a drug the patient is not on.
+ * ("chlorothiazide" ⊂ "hydrochlorothiazide"). An interaction token that is merely a sub-token of a
+ * longer active-order name must not raise a warning naming a drug the patient is not on.
+ *
+ * <p>The discriminating rule is the LEFT word boundary, which is all these three cases need — the
+ * class name records the whole-word fix this file was written for (issue #86), not the rule that
+ * shipped. {@link DrugReference#matchesOrderName} additionally tolerates a bounded inflectional
+ * tail, because requiring a boundary on the RIGHT too stops a patient on {@code Aspirine Co 81mg}
+ * being checked for aspirin interactions at all. That half of the contract — and the bound on it —
+ * lives in {@link DrugSafetyOrderNameMatchingTest}; do not "restore" whole-word symmetry here
+ * without reading it first.
  */
 public class HasActiveDrugWholeWordTest {
 

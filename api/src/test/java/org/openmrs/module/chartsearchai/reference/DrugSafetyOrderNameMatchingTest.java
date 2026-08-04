@@ -38,6 +38,18 @@ import org.junit.jupiter.api.Test;
  *       the dropped are localized spellings of the very token being matched, so those patients
  *       would silently stop being checked for interactions — a false negative dressed as noise
  *       removal.</li>
+ *   <li><b>Must not fire, at the far edge.</b> The trailing allowance those localized names need is
+ *       bounded, and the bound is pinned from both sides here: one letter short and
+ *       {@code Multivitamines et fer} stops being checked, two letters long and
+ *       {@code Heparinoids / salicylic acid} starts being read as heparin. Without the upper-edge
+ *       case a later widening of the constant reinstates exactly the fabricated Major chips this
+ *       class exists to prevent, and nothing fails.</li>
+ *   <li><b>Must not fire in prose.</b> The allowance belongs to order names alone;
+ *       {@link DrugReference#containsWord} keeps the symmetric boundary for prose. Collapsing the
+ *       two matchers into one is what made #87 unsafe, and it can be done in either direction —
+ *       the localized cases above catch a prose rule applied to order names, and this one catches
+ *       the order-name rule applied to prose, where "aspiring" would be read as a proposal of
+ *       aspirin.</li>
  * </ul>
  *
  * <p>Every scenario runs the real pipeline: real datasets parsed by the real sources, the real
@@ -187,6 +199,67 @@ public class DrugSafetyOrderNameMatchingTest {
 				"Warfarin", "active order multivitamin", "Moderate"),
 				"the same rule must fire for the localized plural of the same product, was: "
 						+ onFrenchPlural);
+	}
+
+	@Test
+	public void aLongerTailThanAnInflectionIsADifferentSubstance() throws IOException {
+		// The far edge of the same bound, so the constant is pinned from ABOVE as well as below.
+		// "Heparinoids / salicylic acid" is a real concept name in this deployment's dictionary
+		// (CIEL 104813, mapped to the salicylic-acid rows of the KB this fixture is sliced from) and
+		// it is NOT heparin — heparinoids are a separate DDInter drug. Its tail past the token is
+		// four letters, which is exactly where the measured curve turns: widening the allowance to 4
+		// re-admits this name (and "Multi-Vitamin Adult" ~ "vitamin a") and starts fabricating Major
+		// chips again, which is the defect issue #86 is about. Together with the localized-plural
+		// test above, this holds MAX_ORDER_NAME_INFLECTION_LETTERS in [2, 3] — no name in the
+		// measured corpus has a three-letter tail, so 2 versus 3 is not observable from real data
+		// and 2 is the value shipped.
+		DrugSafetyValidator validator = collisionValidator();
+		String question = "Is it safe to start warfarin?";
+		String answer = "Warfarin could be started with monitoring.";
+
+		List<SafetyWarning> onHeparin = validator.validate(answer, question,
+				onOrders("Heparin sodium 5000 units/mL"));
+		assertTrue(DrugReferenceTestSupport.detailContains(onHeparin, SafetyWarning.TYPE_INTERACTION,
+				"Warfarin", "active order heparin", "Major"),
+				"precondition: a patient actually on heparin must get the real warfarin x heparin Major "
+						+ "chip, else this proves nothing, was: " + onHeparin);
+
+		List<SafetyWarning> onHeparinoids = validator.validate(answer, question,
+				onOrders("Heparinoids / salicylic acid"));
+		assertTrue(onHeparinoids.isEmpty(),
+				"a heparinoid order must not be reported as an active heparin order — four trailing "
+						+ "letters is a different substance, not an inflection, was: " + onHeparinoids);
+	}
+
+	@Test
+	public void anEnglishWordStartingWithADrugNameIsNotAProposalOfThatDrug() {
+		// The other way the two matchers can be collapsed into one: giving PROSE the order-name
+		// tail allowance. Prose is words, and an ordinary word that merely starts with a drug name
+		// is not that drug — measured over the full KB's 5169 aliases against the system word list,
+		// 22 of the single-word ones are one or two letters short of an English word (aspirin ~
+		// aspiring, warfarin ~ warfaring, urea ~ urease, iron ~ irony, clove ~ clover). The drugs
+		// a question or answer names are what the validator checks at all
+		// (DrugSafetyValidator.validate -> findByQuery -> matchesText), so a lenient prose rule does
+		// not mislabel an order — it invents the proposal the whole chip rests on. Widening
+		// containsWord to the order-name allowance passes every other test in this module, which is
+		// why this case exists.
+		DrugSafetyValidator validator = bundledValidator();
+		PatientClinicalContext onWarfarin = onOrders("Warfarin 5mg");
+
+		List<SafetyWarning> namingAspirin = validator.validate(
+				"Aspirin could be added for her cardiac risk.", "Is it safe to add aspirin?", onWarfarin);
+		assertTrue(DrugReferenceTestSupport.detailContains(namingAspirin, SafetyWarning.TYPE_INTERACTION,
+				"Acetylsalicylic acid (aspirin)", "active order warfarin", "Major"),
+				"precondition: naming aspirin must raise the real aspirin x warfarin Major chip for a "
+						+ "patient on warfarin, else this proves nothing, was: " + namingAspirin);
+
+		List<SafetyWarning> merelyAspiring = validator.validate(
+				"Encourage the training plan and keep her INR checks on schedule.",
+				"She is an aspiring marathon runner — any concerns with her current medicines?",
+				onWarfarin);
+		assertTrue(merelyAspiring.isEmpty(),
+				"\"aspiring\" must not put aspirin in play and fabricate a Major bleeding interaction "
+						+ "for a patient on warfarin, was: " + merelyAspiring);
 	}
 
 	@Test

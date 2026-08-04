@@ -2,7 +2,7 @@
  "metadata": {
   "schema_version": "1.0",
   "title": "Test fixture: real KB slice for order-name matching (issue #86)",
-  "note": "Verbatim slice of the full DDInter knowledge base (2283 drugs / 295,184 rows): the drug rows and interaction rows behind the live-verified order-name collisions — opium inside \"Tiotropium\", iron inside \"Spironolactone\" — plus the multivitamin x warfarin row a localized plural order name (\"Multivitamines et fer\") must still match. The bundled 16-drug sample contains none of these drugs. Rows and mechanism texts are unmodified; only unrelated drugs and rows were dropped.",
+  "note": "Verbatim slice of the full DDInter knowledge base (2283 drugs / 295,184 rows): the drug rows and interaction rows behind the live-verified order-name collisions — opium inside \"Tiotropium\", iron inside \"Spironolactone\" — plus the multivitamin x warfarin row a localized plural order name (\"Multivitamines et fer\") must still match, and the heparin x warfarin row that pins the far edge of the tail allowance (\"Heparinoids / salicylic acid\" is a different substance and must NOT be read as heparin). The bundled 16-drug sample contains none of these drugs. Rows and mechanism texts are unmodified; only unrelated drugs and rows were dropped.",
   "source": {
    "name": "DDInter 2.0",
    "url": "https://ddinter2.scbdd.com/",
@@ -33,6 +33,12 @@
    "text": "INTERVAL: Coadministration with medications containing polyvalent cations such as aluminum, calcium, iron, or magnesium may decrease the oral bioavailability of dolutegravir. The mechanism of interaction has not been established.",
    "categories": [
     "absorption"
+   ]
+  },
+  "851": {
+   "text": "Although therapy with heparin and oral anticoagulants often overlap in clinical practice, the potential for additive anticoagulant effects and increased risk of severe bleeding should be considered. Oral anticoagulants may prolong the activated partial thromboplastin time (aPTT) in patients receiving heparin, while heparin may prolong the International Normalized Ratio (INR) in patients receiving warfarin.",
+   "categories": [
+    "synergistic_effect"
    ]
   }
  },
@@ -219,6 +225,55 @@
    "drugbank_id": null,
    "atc": [],
    "ciel": []
+  },
+  {
+   "id": "DDInter856",
+   "name": "Heparin",
+   "rxcui": "5224",
+   "rxnorm_name": "heparin",
+   "drugbank_id": "DB01109",
+   "atc": [
+    "B01AB01",
+    "C05BA03",
+    "S01XA14"
+   ],
+   "ciel": [
+    {
+     "code": "72681",
+     "uuid": "72681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium heparin"
+    },
+    {
+     "code": "77413",
+     "uuid": "77413AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin"
+    },
+    {
+     "code": "77414",
+     "uuid": "77414AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin sodium"
+    },
+    {
+     "code": "77415",
+     "uuid": "77415AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin sodium (beef)"
+    },
+    {
+     "code": "77416",
+     "uuid": "77416AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin sodium (pork)"
+    },
+    {
+     "code": "77417",
+     "uuid": "77417AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin, beef"
+    },
+    {
+     "code": "77418",
+     "uuid": "77418AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin, pork"
+    }
+   ]
   }
  ],
  "interactions": [
@@ -245,6 +300,12 @@
    "DDInter975",
    "Major",
    "2248"
+  ],
+  [
+   "DDInter1951",
+   "DDInter856",
+   "Major",
+   "851"
   ]
  ]
 }

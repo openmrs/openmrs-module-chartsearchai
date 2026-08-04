@@ -130,7 +130,8 @@ public class DdiDrugReferenceSourceTest {
 	@Test
 	public void interactionFiresAgainstOrderNamedByGenericName() {
 		// Warfarin's DDInter partner "Acetylsalicylic acid" must fire against an order named
-		// "Aspirin" — the token is the generic "aspirin", matched as a substring of the order name.
+		// "Aspirin" — the token is the generic "aspirin", matched against the order name by word
+		// start (DrugReference.matchesOrderName, issue #86), not as a bare substring.
 		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterService());
 		List<SafetyWarning> warnings = validator.validate(
 				"Warfarin is a reasonable anticoagulant choice.",

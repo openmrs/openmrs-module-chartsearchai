@@ -115,7 +115,7 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The deterministic safety findings for the drugs this question names, as citable records.
+	 * The deterministic safety findings this question raises, as citable records.
 	 *
 	 * <p>Rationale, measured. {@link DrugSafetyValidator} computes the safety join correctly every
 	 * time, but it runs <em>after</em> the answer, so the model is asked to re-derive a conclusion the
@@ -132,6 +132,13 @@ public class DrugReferenceInjector {
 	 * runs the contraindication and interaction passes while contributing no dose-excess warning,
 	 * which is correct: a dose warning is about a dose the answer proposes, and there is no answer yet.
 	 * No second definition of any safety rule is introduced.
+	 *
+	 * <p>A question that names no drug is therefore not automatically finding-free: {@code validate}
+	 * screens the patient's own active orders against each other when the question asks to be
+	 * screened for interactions (issue #113), and those findings arrive here as records like any
+	 * other. That gate reads the QUESTION only, so it holds identically for this pre-answer pass and
+	 * for the post-answer chips pass — the property that keeps a finding in the prompt from ever
+	 * being asserted without a chip beside the answer.
 	 *
 	 * <p>The list is empty whenever the deterministic layer finds nothing, so a question that nothing
 	 * bears on gains no record and its abstention survives by construction rather than by prompt

@@ -23,7 +23,20 @@ public class SafetyWarning {
 	 *  {@code mgPerKgMax} × weight. One warning per drug; the daily ceiling wins when both trip. */
 	public static final String TYPE_OVERDOSE = "overdose";
 
-	/** Interaction: a drug named in the answer interacts with one of the patient's active orders. */
+	/**
+	 * Interaction: two drugs the reference data relates — by a dataset rule (one the source RATED has
+	 * to clear {@code chartsearchai.drugSafety.minInteractionSeverity}; an unrated one is exempt, so
+	 * every hand-authored rule shows), or by a shared ATC level-4 subgroup / curated cross-reactivity
+	 * group, which carry no severity and are never floor-filtered.
+	 *
+	 * <p>Either side may come from the question, from the answer's own proposal, or from the patient's
+	 * chart, so there are three joins — a drug in play against an active order (the patient-specific
+	 * one); several drugs the QUESTION names against each other (a reference lookup that may involve
+	 * no drug the patient takes, so it is the one join whose detail does NOT claim an active order —
+	 * issue #114); and, for a question that asks to be screened but names no drug, the patient's own
+	 * active orders against each other (a chart drug on BOTH sides, so its detail names an active
+	 * order exactly as the first join's does — issue #113). See {@code DrugSafetyValidator}.
+	 */
 	public static final String TYPE_INTERACTION = "interaction";
 
 	/** Contraindication: a drug named in the answer is contraindicated by an active allergy or condition. */

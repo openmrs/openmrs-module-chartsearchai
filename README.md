@@ -391,7 +391,7 @@ Each reference also carries `source` and `withheldInteractions`, the citation's 
 
 | field | Meaning |
 | --- | --- |
-| `source` | Where the cited record's content came from — the dataset attribution of a `reference` entry (e.g. `"DDInter 2.0 (via openmrs-ddi-knowledge-base)"`). `null` for a `chart` entry, whose provenance is the patient's own record. |
+| `source` | Where the cited record's content came from — the dataset attribution of an injected **drug-reference** entry (e.g. `"DDInter 2.0 (via openmrs-ddi-knowledge-base)"`). `null` for a `chart` entry, whose provenance is the patient's own record, and `null` for a module-derived finding, which is computed rather than quoted from a dataset. So do not key rendering on `group`: a `reference`-group entry may legitimately carry no attribution — branch on the value, not the group. |
 | `withheldInteractions` | How many of the cited record's interaction partners the per-record render budget left out, so a client can say the citation shows a subset. `0` when none were, and for every record with no interactions. Nothing is withheld from safety checking — the `safetyWarnings` validator reads every interaction regardless. |
 
 Both keys are always present. They are fields rather than sentences inside the record because everything in a record's text is quotable, and the model quoted both into clinician-facing answers — a one-drug safety question came back with the module's own truncation counter and dataset attribution appended to the prose (issue #117). Render them beside the citation, not as part of the answer.

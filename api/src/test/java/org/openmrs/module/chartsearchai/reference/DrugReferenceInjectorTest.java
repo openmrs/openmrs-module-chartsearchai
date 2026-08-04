@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -428,6 +429,37 @@ public class DrugReferenceInjectorTest {
 	}
 
 	@Test
+	public void aModuleDerivedFindingIsAReferenceGroupRecordThatCarriesNoAttribution() {
+		// The pair that makes the README's "branch on the value, not the group" warning true, and the
+		// reason it is a warning at all. referenceGroup puts a safety finding in the SAME `reference`
+		// group as a drug-reference record (pinned by
+		// aDeterministicSafetyFindingIsInjectedAsItsOwnCitableRecord), so a client that keys "show
+		// provenance" off the group renders a source for a record that has none.
+		//
+		// It has none because it is the module's own conclusion, computed from the entry rather than
+		// quoted out of a dataset — and because #110 made that finding a CITABLE record, which is
+		// precisely the carrier #117 proved a source string must never ride on: whatever is inside a
+		// citable record is quotable, and the model quotes what it cites. Nothing is withheld from a
+		// finding either: it is about one specific interaction, not a truncated set.
+		PatientChart result = ddinterInjectorWithSafety().injectRecords(oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, set("simvastatin"), set("C10AA01"), null, null),
+				"is it safe to give clarithromycin?");
+
+		RecordMapping finding = null;
+		for (RecordMapping m : result.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType())) {
+				finding = m;
+			}
+		}
+		assertNotNull(finding, "precondition: a deterministic finding must be injected: " + result.getText());
+		assertNull(finding.getSource(),
+				"a module-derived finding is computed, not quoted from a dataset, so it must declare "
+						+ "no attribution however its group is classified: " + finding.getText());
+		assertEquals(0, finding.getWithheldInteractions(),
+				"and nothing is withheld from a single-interaction finding: " + finding.getText());
+	}
+
+	@Test
 	public void theDatasetTailRepresentativeDropsItsProseWhenAPatientRelevantPartnerIsRendered() {
 		// The other half of #117: the answer's bulk was two full interaction notes for drugs the
 		// patient has nothing to do with (ivosidenib, ixabepilone), which the model reported
@@ -453,6 +485,29 @@ public class DrugReferenceInjectorTest {
 		assertFalse(section.contains("methotrexate"),
 				"and no second dataset-order partner may render: the budget must not be spent on "
 						+ "partners this patient has nothing to do with: " + section);
+	}
+
+	@Test
+	public void withNoPatientRelevantPartnerTheDatasetTailStillRendersFullNotesToTheBudget() {
+		// The other side of the branch the test above pins, and the reason segment 2 is a branch at
+		// all rather than one rule. A compact representative is the right cut only when a promoted
+		// partner already carries the patient-specific content; with nothing promoted the general
+		// material IS the record's content, so the budget is spent on full notes exactly as it was
+		// before #117 — same entry, same question, and the ONLY difference is whether the patient is
+		// on one of the partners.
+		//
+		// Nothing else distinguishes the two sides: renderCapBoundsBroadInteractionSets and
+		// aSubFloorInteractionIsNotPromotedEvenWhenThePatientIsOnThatDrug both still pass if the
+		// branch is collapsed to the single compact representative, and collapsing it is the obvious
+		// simplification to reach for. It would strip every entry the patient has no overlap with —
+		// the common case, since a question naming a drug the patient is not on is the ordinary
+		// question — down to one bare partner name, with no failing test to say so.
+		String section = interactionsSectionFor("Lisinopril");
+		assertTrue(section.contains("metformin (moderate. limited data suggest"),
+				"with nothing promoted the first dataset-order partner keeps its mechanism note, "
+						+ "not the compact form the promoted case uses: " + section);
+		assertTrue(section.contains("methotrexate"),
+				"and the budget keeps admitting further partners rather than stopping at one: " + section);
 	}
 
 	/** The injected drug-reference mapping (not just its text) whose rendering names {@code drug}. */

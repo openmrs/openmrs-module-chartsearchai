@@ -655,8 +655,14 @@ public class DrugSafetyValidator {
 		if (!reportedPairs.add(unorderedPairKey(matchTokenFor(first, reverse), matchTokenFor(second, forward)))) {
 			return;
 		}
-		// Whichever side carries the rule owns the sentence; with symmetric data both do and the
-		// earlier question drug leads.
+		// Whichever side carries the rule owns the sentence; with symmetric data both do, and the tie
+		// goes to whichever entry the DATASET lists first — not whichever the question names first,
+		// because questionDrugs comes from findByQuery, which walks getAll() and so returns dataset
+		// order. Measured on the 3.7.1 standalone: "does voxelotor interact with dexamethasone?" and
+		// "can dexamethasone be given with voxelotor?" both chip with Voxelotor as the subject, its
+		// entry sitting at index 1055 against dexamethasone's 1744. Stable either way, which is what
+		// the chip needs; a rule that followed the question's word order would need the drug's offset
+		// in the question, which findByQuery does not report.
 		boolean fromFirst = !forward.isEmpty();
 		DrugReference subject = fromFirst ? first : second;
 		DrugReference partner = fromFirst ? second : first;

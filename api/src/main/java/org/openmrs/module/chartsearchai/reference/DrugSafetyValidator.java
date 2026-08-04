@@ -56,11 +56,14 @@ import org.springframework.stereotype.Service;
  *       {@code chartsearchai.drugSafety.minInteractionSeverity} is not raised — unrated rules
  *       are never floor-filtered), by sharing an ATC chemical subgroup with an active order
  *       (duplicate-therapy reasoning), or — failing that — by sharing a curated
- *       {@link CrossReactivityGroup} (cross-branch family overlap). The rule arm raises one
- *       warning per (drug, matched partner): several rules can name one partner — DDInter's
- *       route variants of a drug all publish the same match token — and they collapse to the
- *       most severe row, see {@link #bestRulePerPartner}. Separately, and needing no patient data at
- *       all, one question-named drug interacts with ANOTHER DRUG THE SAME QUESTION NAMED — see
+ *       {@link CrossReactivityGroup} (cross-branch family overlap). One warning per (drug, active
+ *       order), whichever of those reasons applies and however many apply at once: several rules can
+ *       name one partner — DDInter's route variants of a drug all publish the same match token — and
+ *       they collapse to the most severe row ({@link #bestRulePerPartner}), while a partner that is
+ *       BOTH an explicit rule partner and class-related yields one chip carrying both relationships
+ *       rather than one chip per arm ({@link #addInteractionWarnings}, issue #88). Separately, and
+ *       needing no patient data at all, one question-named drug interacts with ANOTHER DRUG THE
+ *       SAME QUESTION NAMED — see
  *       {@link #addQuestionPairInteractions}, the arm that answers "does A interact with B?" for a
  *       patient on neither.</li>
  *   <li><b>Contraindications</b> — the drug is contraindicated by an active allergy or
@@ -300,8 +303,10 @@ public class DrugSafetyValidator {
 				addClassContraindications(warnings, ref, context);
 			}
 			if (warnInteractions) {
-				addInteractions(warnings, ref, context, severityFloor);
-				addClassInteractions(warnings, ref, context);
+				// One call, not one per arm: the rule arm and the class arm can both raise a chip about
+				// the same active order, so the decision of how many chips that pair gets belongs to a
+				// method that sees both (issue #88).
+				addInteractionWarnings(warnings, ref, context, severityFloor);
 			}
 			if (warnDose) {
 				addOverdose(warnings, ref, context, lower, all);
@@ -482,17 +487,136 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Rule-based interaction chips for {@code ref}: <b>one chip per (this drug, matched partner)</b>
-	 * — see {@link #bestRulePerPartner} for why several rules can match one order.
+	 * Every interaction chip {@code ref} raises about the patient's own medications: <b>one chip per
+	 * (this drug, active order) pair</b>, with the two arms that can each raise one — the rule arm
+	 * ({@link #bestRulePerPartner}) and the class arm ({@link #classRelationships}) — coordinated
+	 * instead of run independently (issue #88).
+	 *
+	 * <p><b>The defect.</b> A co-medication that is BOTH an explicit interaction partner AND
+	 * class-related raised TWO {@code TYPE_INTERACTION} chips for one clinical fact, because neither
+	 * arm could see the other. Reproduced through this validator on {@code main} at {@code 89d14ab}:
+	 * a patient on one Heparin sodium order (mapped {@code B01AB01}) asked about enoxaparin
+	 * ({@code B01AB05}) got "Enoxaparin interacts with active order heparin — Major. …" from the rule
+	 * arm AND "Enoxaparin is in the same ATC class (B01AB) as active order Heparin — possible
+	 * duplicate therapy" from the class arm. Since issue #110 every chip is also injected as a citable
+	 * safety-finding record ({@code DrugReferenceInjector.preAnswerFindings}), so the duplicate reached
+	 * the prompt as a second near-identical record as well.
+	 *
+	 * <p><b>Fold, rather than "the class arm yields to the rule arm".</b> Preferring the rule chip and
+	 * dropping the class chip is the wrong dedup, because a rule can reach a chip carrying nothing
+	 * while the class chip ("same ATC class … possible duplicate therapy") is the informative one.
+	 * Issue #88 argued that from DDInter's 42,415 Unknown-severity rows, and re-measuring the loaded
+	 * 19 MB KB (295,184 rows) shows that argument no longer describes any RATED row that can chip:
+	 * all 42,415 rows whose mechanism carries no text are rated Unknown, which #108's severity floor
+	 * filters out before this arm sees them (3 above-floor rows do carry an empty mechanism —
+	 * vilanterol, mometasone and bitolterol against regular human insulin, all Moderate — and none of
+	 * the three is a class-related pair). The shape that DOES survive is the UNRATED rule:
+	 * {@link #clearsSeverityFloor} deliberately exempts a rule with no severity rather than treating
+	 * it as low, so every hand-authored curated rule reaches a chip whatever it carries, and one
+	 * authored with no note produces a chip reading only "X interacts with active order Y". No bundled
+	 * dataset holds such a rule (all five curated seed rules carry notes) but any deployment editing
+	 * {@code drug-reference.json} can author one, and the fixture behind
+	 * {@code DuplicateInteractionChipTest} pins exactly that row. Folding is correct for both
+	 * populations without depending on which is the larger, which is why it is preferred over a
+	 * measurement that #108 has already moved once.
+	 *
+	 * <p>The fold leads with the RULE sentence: an explicit rule about this pair is the more specific
+	 * finding, its mechanism note is the actionable half, and it names the partner by the label
+	 * {@link #bestRulePerPartner} groups on — where the class arm can only name it by whatever
+	 * {@link #entryForAtcCode} resolves the order's code to, which is the bare code when the dataset
+	 * does not cover that substance. The class relationship follows as its own sentence, worded exactly
+	 * as its standalone chip words it — see {@link #classRelationships}, where the two shortenings that
+	 * seem obvious are recorded along with the issue #108 assertions each of them broke.
+	 *
+	 * <p><b>How the arms are correlated.</b> By SUBSTANCE identity, since that is what the two arms
+	 * disagree about: the class arm's partner is an active-order ATC code, the rule arm's is a match
+	 * token. Two exact tests, no heuristics — see {@link #ruleAbout}. Correlating on the order's ATC
+	 * code alone (the key issue #88 proposed) is not enough, because a substance is filed under
+	 * several ATC codes while a rule carries only ONE of them: {@code ddinter} writes the partner's
+	 * FIRST code, so every rule naming aspirin in the loaded KB carries {@code A01AD05} while an
+	 * aspirin order in this dictionary maps to {@code N02BA01}, and on that key the pair never
+	 * correlates at all.
+	 *
+	 * <p><b>The residue this cannot correlate</b>, stated rather than papered over: when the loaded
+	 * dataset carries no entry for the active order's ATC code, only the rule's own code is left to
+	 * compare, so a rule that reached its chip by NAME under a different code of the same substance
+	 * stays uncorrelated and both chips are still emitted. That is the bundled curated seed's
+	 * ibuprofen-versus-aspirin shape — the seed carries no aspirin entry at all, which is equally why
+	 * its class chip can only name the order "N02BA01". It cannot be narrowed from here:
+	 * {@link PatientClinicalContext} flattens orders into one name set and one code set, so a code
+	 * cannot be attributed back to the order that contributed it (the same limit
+	 * {@link #activeOrdersOtherThan} documents), which makes "the order this rule matched by name" and
+	 * "the order that contributed this code" the same input. The fix is per-order ATC codes on the
+	 * context, not a cleverer test here.
 	 */
-	private void addInteractions(List<SafetyWarning> warnings, DrugReference ref,
+	private void addInteractionWarnings(List<SafetyWarning> warnings, DrugReference ref,
 			PatientClinicalContext context, int severityFloor) {
 		if (context == null) {
 			return;
 		}
-		for (DrugReference.Interaction i : bestRulePerPartner(ref, context, severityFloor)) {
-			warnings.add(interactionWarning(ref, i));
+		List<DrugReference.Interaction> rules = new ArrayList<DrugReference.Interaction>(
+				bestRulePerPartner(ref, context, severityFloor));
+		// Which rule row carries which class sentence, decided before anything is emitted: the class
+		// arm is walked per active-order CODE while the chips are one per rule ROW, and a substance
+		// filed under several codes reaches this loop once per code.
+		Map<DrugReference.Interaction, String> folded = new LinkedHashMap<DrugReference.Interaction, String>();
+		List<String> classOnly = new ArrayList<String>();
+		for (Map.Entry<String, String> hit : classRelationships(ref, context).entrySet()) {
+			DrugReference.Interaction rule = ruleAbout(hit.getKey(), rules);
+			if (rule == null) {
+				classOnly.add(hit.getValue());
+			} else if (!folded.containsKey(rule)) {
+				folded.put(rule, hit.getValue());
+			}
+			// else: a second ATC code of the substance that rule already covers. One partner, so the
+			// relationship is already stated on that chip; emitting it again — standalone or appended —
+			// would put one pair's duplicate-therapy reasoning in front of a clinician twice, which is
+			// the defect being fixed rather than a second finding.
 		}
+		// Rule chips first, then the class-only chips, which is the order the two arms produced them in
+		// before they were coordinated — a folded chip therefore keeps the rule chip's position and no
+		// client sees the chip sequence reshuffle.
+		for (DrugReference.Interaction rule : rules) {
+			warnings.add(interactionWarning(ref, rule, folded.get(rule)));
+		}
+		for (String detail : classOnly) {
+			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
+		}
+	}
+
+	/**
+	 * @return the rule among {@code rules} that is about the very substance the active-order ATC code
+	 *         {@code orderCode} identifies — so the class arm's finding about that order folds into
+	 *         its chip (issue #88) — or null when no rule is.
+	 *
+	 *         <p>Two tests, both exact identity rather than proximity, because a false correlation
+	 *         SUPPRESSES a chip: (1) the rule's own normalized ATC code IS the order's code; (2) the
+	 *         dataset carries an entry for the order's code and the rule {@link #identifies} that
+	 *         entry. (2) is the general one — it reaches a rule that matched by name, and a rule whose
+	 *         code is a different code of the same substance — and it reuses the name-identity test
+	 *         the question-pair and screening arms already ask, so all three arms agree about when a
+	 *         rule names a given entry. (1) survives for the case (2) cannot resolve: an order whose
+	 *         substance the loaded dataset does not carry, where the rule's code is the only evidence
+	 *         left that the two arms are talking about one drug.
+	 *
+	 *         <p>{@code rules} holds one row per partner LABEL, not per substance, so two labels can
+	 *         both name one order — across the full KB exactly one such pair exists, {@code enalapril}
+	 *         and {@code enalaprilat}, which {@link #bestRulePerPartner} deliberately keeps as two
+	 *         chips. The first in dataset order takes the fold; the other keeps its rule chip
+	 *         unfolded, which is the conservative direction, since the alternative is stating one
+	 *         duplicate-therapy relationship twice.
+	 */
+	private DrugReference.Interaction ruleAbout(String orderCode, List<DrugReference.Interaction> rules) {
+		DrugReference orderEntry = entryForAtcCode(orderCode);
+		for (DrugReference.Interaction rule : rules) {
+			if (orderCode.equals(DrugReference.normalizeAtcToken(rule.getAtc()))) {
+				return rule;
+			}
+			if (orderEntry != null && identifies(rule, orderEntry)) {
+				return rule;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -550,9 +674,12 @@ public class DrugSafetyValidator {
 	 * ({@link #partnerLabel}, case-folded), so rules that would produce the same
 	 * "interacts with active order X" subject collapse while rules naming different partners each
 	 * keep their chip — even when their notes are identical strings. Grouping is per {@code ref}
-	 * and per arm: two different drugs in play still chip separately about the same order, and the
-	 * class arm ({@link #addClassInteractions}) is untouched, so the rule-plus-class double chip
-	 * of issue #88 is a different defect and stays open.
+	 * and per arm: two different drugs in play still chip separately about the same order, and this
+	 * decides only WHICH RULE ROW survives for a partner, never how many arms describe that partner.
+	 * The rule-plus-class double chip of issue #88 is the separate, cross-arm question, answered
+	 * downstream of this method by {@link #addInteractionWarnings} — which folds the class arm's
+	 * finding into the row chosen here, so the two collapses compose in one direction instead of
+	 * competing.
 	 *
 	 * <p><b>Which row wins.</b> The most severe rating, then the longer note — longer in prose, not in
 	 * whitespace, see {@link #noteLength}. Route variants genuinely differ — topical dexamethasone does
@@ -664,14 +791,15 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>The floor is the shared {@code severityFloor} the chart arm is given, so this cannot become a
 	 * route around a decision the chip path enforces; and a pair the chart arm already reports is left
-	 * to {@link #addInteractions}, whose chip states a fact about THIS patient — the stronger statement,
-	 * and reporting both would say one finding in two voices. Stated precisely, because the looser
-	 * version ("either drug is an active order") is not what the code can ask and not what it does: the
-	 * test is whether any RULE joining the pair names an active order, {@link #coveredByActiveOrderArm}
-	 * putting the same question to {@code hasActiveDrug} that {@code addInteractions} answers when it
-	 * decides to chip. The two differ, and the difference is deliberate — a patient can be ON one of the
-	 * pair while no rule joining it names their order (the one-directional case below), and that pair is
-	 * this arm's to report, because the chart arm raises nothing for it.
+	 * to {@link #addInteractionWarnings}, whose chip states a fact about THIS patient — the stronger
+	 * statement, and reporting both would say one finding in two voices. Stated precisely, because the
+	 * looser version ("either drug is an active order") is not what the code can ask and not what it
+	 * does: the test is whether any RULE joining the pair names an active order,
+	 * {@link #coveredByActiveOrderArm} putting the same question to {@code hasActiveDrug} that
+	 * {@code addInteractionWarnings} answers when it decides to chip. The two differ, and the difference
+	 * is deliberate — a patient can be ON one of the pair while no rule joining it names their order
+	 * (the one-directional case below), and that pair is this arm's to report, because the chart arm
+	 * raises nothing for it.
 	 *
 	 * <p>{@link DrugReferenceInjector#orderedInteractionNotes} is deliberately NOT extended to match,
 	 * and its "a partner that raises a chip is exactly a partner promoted here" should be read as scoped
@@ -907,9 +1035,9 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return true when any of {@code rules} points at one of the patient's active orders, i.e.
-	 *         {@link #addInteractions} already raises this pair as a fact about the patient. ANY,
+	 *         {@link #addInteractionWarnings} already raises this pair as a fact about the patient. ANY,
 	 *         over every rule joining the pair rather than only the one this arm would chip, because
-	 *         {@code addInteractions} walks them all: two rules can join one pair under different
+	 *         {@code addInteractionWarnings} walks them all: two rules can join one pair under different
 	 *         tokens — a brand-name row and an INN row — and a pair is the chart arm's as soon as one
 	 *         of them names an active order, so consulting the first alone would report that pair
 	 *         twice, once as a fact about the patient and once as a reference lookup. Asked of both
@@ -1027,13 +1155,45 @@ public class DrugSafetyValidator {
 	 * screening arm below cannot word the same finding differently.
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i) {
+		return interactionWarning(ref, i, null);
+	}
+
+	/**
+	 * As {@link #interactionWarning(DrugReference, DrugReference.Interaction)}, additionally folding
+	 * the class arm's finding about the SAME active order into this one chip (issue #88).
+	 *
+	 * @param alsoSameClass the class arm's own sentence about that order ({@link #classRelationships}),
+	 *        or null when the class arm says nothing about this partner — in which case the detail is
+	 *        byte-identical to what it has always been, so no single-arm chip changes
+	 */
+	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
+			String alsoSameClass) {
 		// partnerLabel, not a second coalesce: it is the label bestRulePerPartner GROUPS on,
 		// and #121's grouping is only correct while the key IS the label the chip says.
 		String detail = ref.displayLabel() + " interacts with active order " + partnerLabel(i);
 		if (i.getNote() != null && !i.getNote().isEmpty()) {
 			detail += " — " + i.getNote();
 		}
+		if (alsoSameClass != null) {
+			detail = endSentence(detail) + " " + alsoSameClass;
+		}
 		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail);
+	}
+
+	/**
+	 * @return {@code detail} closed off as a sentence, so a folded second sentence does not run into
+	 *         it. Needed because what a rule chip ends on is authored data: every DDInter note ends in
+	 *         a full stop, a curated note need not, and a rule carrying no note at all ends on the
+	 *         partner label. Trailing whitespace goes with it — a note padded in the source file would
+	 *         otherwise put the gap inside the sentence rather than between the two.
+	 */
+	private static String endSentence(String detail) {
+		String trimmed = detail.trim();
+		if (trimmed.isEmpty()) {
+			return trimmed;
+		}
+		char last = trimmed.charAt(trimmed.length() - 1);
+		return last == '.' || last == '!' || last == '?' ? trimmed : trimmed + ".";
 	}
 
 	/**
@@ -1041,7 +1201,7 @@ public class DrugSafetyValidator {
 	 * drug interactions with her current medications?" (issue #113).
 	 *
 	 * <p>Nothing here is a new safety rule. It is the same {@link PatientClinicalContext#hasActiveDrug}
-	 * join {@link #addInteractions} performs and the same {@link #clearsSeverityFloor} filter, run
+	 * join {@link #addInteractionWarnings} performs and the same {@link #clearsSeverityFloor} filter, run
 	 * over the reference entries for the patient's active orders instead of over the drugs the
 	 * question named. Because the partner side of the join is by definition another active order, one
 	 * pass over the order entries reaches every pair; no cross-product is enumerated.
@@ -1065,9 +1225,12 @@ public class DrugSafetyValidator {
 	 *       relies on — so pairwise the same pair is reached from each side and would chip twice,
 	 *       in opposite directions, saying the same thing. Collapsed on an unordered pair key. This
 	 *       doubling is created here, so it is fixed here; it is neither the cross-arm rule-vs-class
-	 *       duplication of issue #88 (correlated per {@code ref}, so it cannot see two different
-	 *       {@code ref}s) nor the route-variant duplication of #115, and those remain outstanding —
-	 *       two entries sharing one {@code rxnorm_name} are two ids and so two keys. A second, weaker
+	 *       duplication of issue #88 (correlated per {@code ref} by
+	 *       {@link #addInteractionWarnings}, so it cannot see two different {@code ref}s) nor the
+	 *       route-variant duplication of #115 (collapsed per partner label by
+	 *       {@link #bestRulePerPartner}). Both are fixed now, in their own arms, and neither fix
+	 *       reaches this doubling — two entries sharing one {@code rxnorm_name} are two ids and so two
+	 *       keys, and one pair reached from both sides is one {@code ref} each time. A second, weaker
 	 *       key backs the pair key up: nothing is reported that words a chip already raised
 	 *       identically, whichever arm raised it — see {@link #chipIdentity}.</li>
 	 *   <li><b>Blast radius.</b> Candidates grow quadratically with the medication list, so they are
@@ -1086,7 +1249,7 @@ public class DrugSafetyValidator {
 		// Seeded with the chips the drug-in-play arms already raised, so the screen can add nothing
 		// that merely repeats one of them. The screen's gate reads the QUESTION alone (see the call
 		// site — the pre-answer findings pass and the post-answer chips pass must gate identically),
-		// so a drug the ANSWER named can be in play beside it, and then addInteractions has already
+		// so a drug the ANSWER named can be in play beside it, and then addInteractionWarnings has already
 		// run this very rule over these very orders: measured, an answer naming a subject the screen
 		// also reaches put the identical "X interacts with active order Y — Major" line in
 		// safetyWarnings TWICE. Suppression is on the chip's own identity, not on the gate, and the
@@ -1300,11 +1463,13 @@ public class DrugSafetyValidator {
 	 *         exactly what an already-raised one states can be recognised as a repeat. Only an EXACT
 	 *         repeat: two chips that state the same clinical fact in opposite directions ("A
 	 *         interacts with active order B" / "B interacts with active order A") differ here, and
-	 *         collapsing those is the cross-arm duplication of issues #88/#115 — it needs a
-	 *         rule-versus-class correlation this arm cannot see, so it is left to them rather than
-	 *         approximated on a text key. NUL-separated because the fields are clinical prose carrying
-	 *         spaces, colons and dashes of their own, so any printable delimiter would let two
-	 *         distinct triples key alike.
+	 *         collapsing those needs the pair key above, not this one. The cross-arm duplication of
+	 *         issue #88 is likewise not this key's to catch: {@link #addInteractionWarnings} correlates
+	 *         a rule against the class arm's own finding about the same order, which is a comparison of
+	 *         REASONS rather than of rendered text, and approximating it here on a text key would
+	 *         collapse two chips whose wording happens to agree. NUL-separated because the fields are
+	 *         clinical prose carrying spaces, colons and dashes of their own, so any printable
+	 *         delimiter would let two distinct triples key alike.
 	 */
 	private static String chipIdentity(SafetyWarning warning) {
 		return warning.getType() + '\u0000' + warning.getDrug() + '\u0000' + warning.getDetail();
@@ -1420,17 +1585,37 @@ public class DrugSafetyValidator {
 	 * therapy is not a duplicate. Active orders carry ATC codes (the builder maps them), so this
 	 * matches on codes directly and names the order from the dataset; the most specific match wins,
 	 * so a subgroup + group double-match warns once.
+	 *
+	 * <p>Returns the sentences rather than adding the chips, because whether a relationship gets a chip
+	 * of its own is no longer decidable from this arm alone: a pair the rule arm also raises folds into
+	 * that rule's chip instead (issue #88, see {@link #addInteractionWarnings}). The reasoning itself —
+	 * which codes are skipped, which family wins, how the sentence reads — is unchanged.
+	 *
+	 * <p>A finished sentence rather than its parts, deliberately: it is the SAME string on both
+	 * surfaces, the whole detail of a class-only chip and the second sentence of a folded one. Issue
+	 * #108 made every chip detail a standalone sentence led by the subject's display label and naming
+	 * the order by the dataset entry's, and
+	 * {@code DrugSafetyChipLabelTest.classChipOrderNamesCarryBothVocabularies} pins that phrasing; two
+	 * attempts to shorten it for the folded chip broke that pin in turn — referring back to "that
+	 * order" dropped the synonym-augmented order label, and prefixing "also" (to acknowledge the
+	 * sentence before it) broke the "X is in the same …" wording. Concatenating each arm's own sentence
+	 * unchanged is therefore the fold: the chip gains a sentence and loses nothing, and there is no
+	 * second wording of this relationship for a future change to let drift.
+	 *
+	 * @return the class relationship sentence for each active-order ATC code that has one, keyed by
+	 *         that code, in the context's own code order (so chip order is unchanged); empty when the
+	 *         drug is in no class or group at all
 	 */
-	private void addClassInteractions(List<SafetyWarning> warnings, DrugReference ref,
-			PatientClinicalContext context) {
+	private Map<String, String> classRelationships(DrugReference ref, PatientClinicalContext context) {
+		Map<String, String> out = new LinkedHashMap<String, String>();
 		if (context == null) {
-			return;
+			return out;
 		}
 		Set<String> refClasses = ref.atcSubgroups();
 		List<CrossReactivityGroup> refGroups = CrossReactivityGroup.groupsOf(ref,
 				drugReferenceService.getCrossReactivityGroups());
 		if (refClasses.isEmpty() && refGroups.isEmpty()) {
-			return;
+			return out;
 		}
 		Set<String> refCodes = ref.normalizedAtcCodes();
 		for (String orderCode : context.getActiveDrugAtcCodes()) {
@@ -1440,21 +1625,20 @@ public class DrugSafetyValidator {
 			}
 			if (orderCode.length() >= DrugReference.ATC_SUBGROUP_PREFIX_LENGTH && refClasses
 					.contains(orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH))) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(),
-						ref.displayLabel() + " is in the same ATC class ("
-								+ orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH)
-								+ ") as active order " + displayLabelForAtcCode(orderCode)
-								+ " — possible duplicate therapy"));
+				out.put(orderCode, ref.displayLabel() + " is in the same ATC class ("
+						+ orderCode.substring(0, DrugReference.ATC_SUBGROUP_PREFIX_LENGTH)
+						+ ") as active order " + displayLabelForAtcCode(orderCode)
+						+ " — possible duplicate therapy");
 				continue;
 			}
 			CrossReactivityGroup group = CrossReactivityGroup.sharedGroupForCode(refGroups, orderCode);
 			if (group != null) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(),
-						ref.displayLabel() + " is in the same cross-reactivity group (" + group.getName()
-								+ ") as active order " + displayLabelForAtcCode(orderCode)
-								+ " — possible additive or duplicate-class therapy"));
+				out.put(orderCode, ref.displayLabel() + " is in the same cross-reactivity group ("
+						+ group.getName() + ") as active order " + displayLabelForAtcCode(orderCode)
+						+ " — possible additive or duplicate-class therapy");
 			}
 		}
+		return out;
 	}
 
 	/** @return the ATC level-4 subgroup {@code other} shares with {@code refClasses}, or null when none. */
@@ -1467,16 +1651,28 @@ public class DrugSafetyValidator {
 		return null;
 	}
 
+	/**
+	 * @return the loaded reference entry carrying {@code upperCode} — the dataset's own record for the
+	 *         substance an active order's ATC code identifies — or null when the dataset does not cover
+	 *         it. One definition, because the class chip NAMES this entry while the cross-arm
+	 *         correlation asks WHICH RULE POINTS AT IT ({@link #ruleAbout}): resolving the code two
+	 *         ways would let a chip name one substance while the fold decided about another.
+	 */
+	private DrugReference entryForAtcCode(String upperCode) {
+		for (DrugReference ref : drugReferenceService.getAll()) {
+			if (ref.normalizedAtcCodes().contains(upperCode)) {
+				return ref;
+			}
+		}
+		return null;
+	}
+
 	/** @return the synonym-augmented display label ({@link DrugReference#displayLabel()}) of the
 	 *          reference drug carrying {@code upperCode}, or the bare code when the active
 	 *          order's substance is not present in the loaded dataset. */
 	private String displayLabelForAtcCode(String upperCode) {
-		for (DrugReference ref : drugReferenceService.getAll()) {
-			if (ref.normalizedAtcCodes().contains(upperCode)) {
-				return ref.displayLabel();
-			}
-		}
-		return upperCode;
+		DrugReference entry = entryForAtcCode(upperCode);
+		return entry != null ? entry.displayLabel() : upperCode;
 	}
 
 	private void addOverdose(List<SafetyWarning> warnings, DrugReference ref,

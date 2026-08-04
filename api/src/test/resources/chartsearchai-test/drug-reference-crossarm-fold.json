@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "source": "test fixture — cross-arm folds where the two arms identify one partner by different keys",
+  "description": "Real-shaped: the aspirin entry publishes the same three ATC codes DDInter's does (A01AD05, B01AC06, N02BA01) and the rules against it carry only the FIRST, as the ddinter parser writes them, while a dictionary maps an analgesic aspirin order to N02BA01. Correlating the rule arm and the class arm on the order's ATC code alone therefore cannot see that these are one partner. Ibuprofen and aspirin sit in different ATC branches, so their class link is the curated NSAID cross-reactivity group, not a shared subgroup; naproxen is the same-subgroup order that must keep a chip of its own.",
+  "entries": [
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": ["ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "interactions": [
+        {
+          "token": "aspirin",
+          "atc": "A01AD05",
+          "severity": "Moderate",
+          "note": "Moderate. Additive gastrointestinal mucosal injury and bleeding risk."
+        },
+        {
+          "token": "aspirin",
+          "atc": "A01AD05",
+          "severity": "Major",
+          "note": "Major. Ibuprofen blunts the irreversible platelet inhibition of low-dose aspirin."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "acetylsalicylic-acid",
+      "name": "Acetylsalicylic acid",
+      "genericName": "aspirin",
+      "aliases": ["acetylsalicylic acid", "aspirin"],
+      "atcCodes": ["A01AD05", "B01AC06", "N02BA01"],
+      "interactions": [
+        {
+          "token": "ibuprofen",
+          "atc": "M01AE01",
+          "severity": "Major",
+          "note": "Major. Ibuprofen blunts the irreversible platelet inhibition of low-dose aspirin."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "naproxen",
+      "name": "Naproxen",
+      "aliases": ["naproxen"],
+      "atcCodes": ["M01AE02"],
+      "source": "test fixture"
+    }
+  ]
+}

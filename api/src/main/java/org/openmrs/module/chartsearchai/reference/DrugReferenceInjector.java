@@ -321,7 +321,14 @@ public class DrugReferenceInjector {
 				chartResourceUuids.add(mapping.getResourceUuid());
 			}
 			if (QUERYSTORE_DRUG_ORDER_TYPE.equals(mapping.getResourceType()) && mapping.getText() != null) {
-				drugOrderText.append(mapping.getText().toLowerCase(Locale.ROOT)).append('\n');
+				// Only records describing a LIVE order may substantiate one. A stopped or
+				// discontinued order's record names the drug while saying the patient is no longer
+				// on it, so counting it would answer "the chart already covers this order" with a
+				// record that in fact tells the model the opposite.
+				String lower = mapping.getText().toLowerCase(Locale.ROOT);
+				if (!describesEndedOrder(lower)) {
+					drugOrderText.append(lower).append('\n');
+				}
 			}
 		}
 		String drugOrderTextLower = drugOrderText.toString();
@@ -348,6 +355,53 @@ public class DrugReferenceInjector {
 					unrepresented.size(), context.getActiveDrugOrders().size(), unrepresented);
 		}
 		return unrepresented;
+	}
+
+	/** Lowercased marker querystore renders a drug order's END date under — it emits
+	 *  {@code ". Stopped: <date>"} for both {@code getDateStopped()} and {@code getAutoExpireDate()}
+	 *  (its {@code DrugOrderRecordSerializer} contract). */
+	private static final String QUERYSTORE_STOPPED_MARKER = ". stopped:";
+
+	/** Lowercased marker for a DISCONTINUE order — the record of a drug ENDING. Keyed on the
+	 *  {@code Action} VALUE, never on the {@code ". Action: "} label alone: querystore renders that
+	 *  label on every drug-order record and {@code Order.action} defaults to {@code NEW}, so keying
+	 *  on the label would treat every agreeing chart as drifted and fire the WARN on every query. */
+	private static final String QUERYSTORE_DISCONTINUE_MARKER = ". action: discontinue";
+
+	/**
+	 * Whether {@code lowerRecordText} describes an order that has ENDED, so it must not substantiate
+	 * a currently-active order of the same drug.
+	 *
+	 * <p>Why this reads the rendered text rather than a status field. querystore DOES carry the
+	 * structural signal — its {@code putOrderBaseFields} puts {@code action}, {@code date_stopped}
+	 * and {@code auto_expire_date} into the {@code QueryDocument} metadata — but that metadata is
+	 * dropped three layers upstream of here: {@code QueryStoreChartBuilder.toSerializedRecords}
+	 * carries only the obs-group fields into {@code SerializedRecord}, and the reconciliation sees
+	 * only the resulting {@link RecordMapping} (index, type, uuid, date, text). Threading a status
+	 * flag through would mean widening two shared internal types, and — the reason it is not simply
+	 * the better fix — it would rest on metadata surviving querystore's index round-trip, which is
+	 * unverified here and unverifiable in this module's tests (querystore does not index under
+	 * {@code BaseModuleContextSensitiveTest}). The rendered text, by contrast, is demonstrably what
+	 * the chart carries: it is the same {@code getText()} this method already matches names against.
+	 * Plumbing the structural field is the better long-term fix once that round-trip is confirmed.
+	 *
+	 * <p>Because it keys on rendered prose, the markers are pinned against the REAL querystore
+	 * serializer's output in {@code QuerystoreOrderTextMarkerTest} — a wording change there fails
+	 * loudly instead of silently reopening issue #118.
+	 *
+	 * <p><strong>Known limitation, and the strongest argument for the structural fix above.</strong>
+	 * Running that serializer (rather than reading it) showed querystore does NOT render an
+	 * auto-expire date into the text: an order that lapsed by {@code autoExpireDate} passing carries
+	 * no end marker at all, so it can still substantiate a live order. querystore does carry
+	 * {@code auto_expire_date} in the document METADATA, so the structural route would cover this
+	 * case and rendered prose cannot. The narrower renewal shape this method exists for — an order
+	 * explicitly stopped or discontinued — IS covered, and {@code QuerystoreOrderTextMarkerTest}
+	 * pins the auto-expire gap so it fails loudly if querystore ever starts rendering it.
+	 */
+	static boolean describesEndedOrder(String lowerRecordText) {
+		return lowerRecordText != null
+				&& (lowerRecordText.contains(QUERYSTORE_STOPPED_MARKER)
+						|| lowerRecordText.contains(QUERYSTORE_DISCONTINUE_MARKER));
 	}
 
 	/**

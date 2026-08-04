@@ -238,13 +238,18 @@ public class PatientClinicalContext {
 		}
 
 		/** @return true when {@code lowercasedText} names this order — the fallback for matching an
-		 *          order against chart record text when the uuids do not line up. */
+		 *          order against chart record text when the uuids do not line up. Matched on word
+		 *          boundaries via the module's one such rule ({@link DrugReference#containsWord}),
+		 *          not by plain containment: a short order name ({@code ASA}) otherwise reads as
+		 *          named by an unrelated word ({@code Nasal}), which silently suppresses both the
+		 *          injection and the WARN and so hides the discrepancy instead of leaving it
+		 *          unrepaired. */
 		boolean namedIn(String lowercasedText) {
 			if (lowercasedText == null || lowercasedText.isEmpty()) {
 				return false;
 			}
 			for (String name : names) {
-				if (lowercasedText.contains(name)) {
+				if (DrugReference.containsWord(lowercasedText, name)) {
 					return true;
 				}
 			}

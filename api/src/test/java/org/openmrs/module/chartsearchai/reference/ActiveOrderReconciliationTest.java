@@ -188,6 +188,82 @@ public class ActiveOrderReconciliationTest {
 	}
 
 	@Test
+	public void aStoppedOrdersRecordDoesNotSubstantiateALiveOrder() {
+		// The renewal shape, and the reason the name fallback needed narrowing: stop Simvastatin
+		// 20mg, start Simvastatin 40mg. querystore indexes the stopped order too (it is not voided)
+		// and renders it with ". Stopped: <date>", so under drift — the replacement's document
+		// missing — the OLD record's text names the drug and the new order looked substantiated.
+		// Nothing was injected and nothing WARNed, while the answer, reading "Stopped:", correctly
+		// reported no active medication beside a chip naming one. That is issue #118 verbatim,
+		// reachable through the commonest order-lifecycle event there is.
+		PatientChart chart = DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, "stopped-order-uuid",
+						"Simvastatin Co 20mg. Dose: 20 Milligram Oral Once daily. Stopped: 02 Nov 2025"));
+
+		PatientChart result = injector().injectRecords(chart, oneActiveOrder(),
+				"what are her active medications?");
+
+		assertEquals(1, activeOrderRecords(result).size(),
+				"a record describing a STOPPED order says the patient is not on the drug, so it "
+						+ "cannot substantiate a live order for it: " + result.getText());
+	}
+
+	@Test
+	public void aDiscontinuationRecordDoesNotSubstantiateALiveOrder() {
+		// The other end-of-order shape querystore renders: the DISCONTINUE order itself. ". Action: "
+		// alone is not a stop signal — every record carries it and the default is NEW — so only the
+		// DISCONTINUE value may exclude a record from substantiating.
+		PatientChart chart = DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, "discontinue-order-uuid",
+						"Simvastatin Co 20mg. Action: DISCONTINUE"));
+
+		PatientChart result = injector().injectRecords(chart, oneActiveOrder(),
+				"what are her active medications?");
+
+		assertEquals(1, activeOrderRecords(result).size(),
+				"a discontinuation record is the record of the drug ENDING, so it cannot "
+						+ "substantiate a live order: " + result.getText());
+	}
+
+	@Test
+	public void aLiveOrderRecordCarryingAnActionStillSubstantiates() {
+		// The guard against over-correcting: ". Action: " is on every record (default NEW), and a
+		// REVISE is a live order. Excluding on the marker rather than the DISCONTINUE value would
+		// make every agreeing chart look drifted and fire the WARN on every query — the failure the
+		// whole gate exists to avoid.
+		//
+		// The record deliberately carries a DIFFERENT uuid from the active order, so substantiation
+		// can only come through the NAME fallback. With the order's own uuid the uuid match would
+		// short-circuit first and this would pass however broken the corpus filter was.
+		PatientChart chart = DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, "revised-from-order-uuid",
+						"Simvastatin Co 20mg. Dose: 20 Milligram Oral Once daily. Action: REVISE"));
+
+		assertSame(chart, injector().injectRecords(chart, oneActiveOrder(),
+				"what are her active medications?"),
+				"a live REVISE order still substantiates, so the chart must come back untouched");
+	}
+
+	@Test
+	public void anOrderNameIsNotSubstantiatedByAWordThatMerelyContainsIt() {
+		// The substring half. The corpus was scanned with a plain String.contains, so a short order
+		// name matched inside an unrelated word: an active ASA order read as substantiated by a
+		// record saying "Nasal spray". That suppresses the injection AND the WARN, so the
+		// discrepancy becomes invisible rather than merely unrepaired.
+		PatientChart chart = DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, "nasal-order-uuid", "Nasal spray"));
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("asa"), null, null, null,
+				Collections.singletonList(DrugReferenceTestSupport.activeOrder("asa-order-uuid", "ASA")));
+
+		PatientChart result = injector().injectRecords(chart, context, "what are her active medications?");
+
+		assertEquals(1, activeOrderRecords(result).size(),
+				"\"asa\" inside \"nasal\" is not a mention of the drug, so the order is "
+						+ "unsubstantiated and must be injected: " + result.getText());
+	}
+
+	@Test
 	public void onlyTheOrdersTheChartIsMissingAreInjected() {
 		// Partial drift is the common shape (the observed instance was drug_order core=7 indexed=6),
 		// and an all-or-nothing check would miss it entirely: the chart HAS drug-order records, just

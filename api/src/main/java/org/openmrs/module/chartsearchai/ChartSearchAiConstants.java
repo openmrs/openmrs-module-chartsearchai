@@ -517,18 +517,23 @@ public class ChartSearchAiConstants {
 	public static final String REFERENCE_GROUP_CHART = "chart";
 
 	/**
-	 * Wire value of a serialized reference's {@code group}: module-supplied reference prose
-	 * (a drug knowledge-base entry), not a record about this patient. Kept visible precisely
-	 * so a client can disclose that provenance rather than let it read as chart evidence —
-	 * A drug-reference citation is additionally never grounding-verified as {@code true}, being
-	 * demote-only (see {@code CitationGroundingVerifier}) — but note that gate keys on the
-	 * {@code drug_reference} resource type, not on this group, so the property does NOT extend for
-	 * free to the other injected types. It already does not hold for all of this group:
-	 * {@link #RESOURCE_TYPE_SAFETY_FINDING} is reference-group yet graded normally. And
-	 * {@link #RESOURCE_TYPE_ACTIVE_DRUG_ORDER} is injected but groups as
-	 * {@link #REFERENCE_GROUP_CHART}, so it is graded too (decided in #118: one drug asserted of
-	 * this patient has no subject roles to swap, so a passing verdict is real assurance). A client
-	 * must therefore read {@code grounded} per reference, not infer it from {@code group}.
+	 * Wire value of a serialized reference's {@code group}: module-supplied reference prose (a drug
+	 * knowledge-base entry, or a finding derived from one), not a record about this patient. Kept
+	 * visible precisely so a client can disclose that provenance rather than let it read as chart
+	 * evidence. A citation in this group is additionally never grounding-verified as {@code true},
+	 * being demote-only (see {@code CitationGroundingVerifier}) — a property of the GROUP since issue
+	 * #122, which derived that gate from {@link ChartSearchAiUtils#referenceGroup} instead of from the
+	 * {@code drug_reference} resource type. Keying it on the type is how
+	 * {@link #RESOURCE_TYPE_SAFETY_FINDING} came to be reference-group yet graded as chart evidence.
+	 *
+	 * <p>{@link #RESOURCE_TYPE_ACTIVE_DRUG_ORDER} is injected but groups as
+	 * {@link #REFERENCE_GROUP_CHART}, so it is graded normally (decided in #118: one drug asserted of
+	 * this patient has no subject roles to swap, so a passing verdict is real assurance) — "the module
+	 * injected it" is a different question from this group.
+	 *
+	 * <p>A client must still read {@code grounded} per reference rather than infer it from
+	 * {@code group}: this group only rules {@code true} out, and both {@code false} (an off-topic
+	 * citation, still worth flagging) and {@code null} (unverified) remain.
 	 */
 	public static final String REFERENCE_GROUP_REFERENCE = "reference";
 

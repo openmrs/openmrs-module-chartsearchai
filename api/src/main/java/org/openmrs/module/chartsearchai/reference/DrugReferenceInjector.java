@@ -52,6 +52,12 @@ import org.springframework.stereotype.Service;
  * reflective guard in {@code ChartSearchAiReferenceGroupTest} catches a new
  * {@code RESOURCE_TYPE_*} constant, but it cannot see a bare string literal written here.
  *
+ * <p>That one classification also decides whether the citation can be grounding-verified (issue
+ * #122): reference material is demote-only, so its verdict is never {@code true}, while chart
+ * evidence is graded normally. Both consequences follow from the single provenance judgement and
+ * both are asserted by that guard — they used to be two separate registrations, and the second was
+ * missed when {@code safety_finding} was added.
+ *
  * <p>Three kinds are injected today, and they are not all module-supplied: a
  * {@code drug_reference} entry and a {@code safety_finding} present as reference material, while an
  * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is the patient's own active

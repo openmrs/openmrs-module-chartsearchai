@@ -54,8 +54,8 @@ import org.springframework.stereotype.Service;
  * <p><strong>Tier-2 (optional).</strong> When
  * {@code chartsearchai.grounding.entailment.enabled} is set, the cited references are
  * confirmed by a yes/no LLM entailment verdict that is authoritative. This is what
- * catches the subject/polarity flips cosine cannot — for chart records; drug-reference
- * citations are excepted, see below. It runs on Tier-1 passes
+ * catches the subject/polarity flips cosine cannot — for chart records; citations of
+ * module-supplied reference material are excepted, see below. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
  * citation) is a Tier-1 pass, so confirming only failures would miss it. References are verified
  * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except that, under clause-scoped
@@ -78,9 +78,9 @@ import org.springframework.stereotype.Service;
  * broken or absent Tier-1 embedding model no longer blocks Tier-2 verdicts for unambiguous
  * claim sentences — previously it silently downgraded every citation to "unverified".
  *
- * <p><strong>Drug-reference citations are demote-only.</strong> An injected
- * {@code drug_reference} record
- * ({@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE}) is module-rendered
+ * <p><strong>Module-supplied reference citations are demote-only.</strong> A record whose
+ * resource type groups as reference material
+ * ({@link ChartSearchAiUtils#isGroundingDemoteOnly}) is module-rendered
  * reference prose, and an answer sentence citing it is typically a recitation of that
  * prose. A recitation embeds near-identically to its source whether or not it swaps
  * subject roles ("erythromycin decreases X" vs the record's "ivosidenib decreases X …
@@ -93,8 +93,18 @@ import org.springframework.stereotype.Service;
  * checked deterministically by the {@code DrugSafetyValidator} chips instead. Accepted
  * cost: under entailment mode these citations now take the lazy Tier-1 path (up to two
  * embedding passes each) that the amortized Tier-2 batch previously spared them — the
- * off-topic flag is kept mode-uniform at the price of ~one embed pair per drug-reference
+ * off-topic flag is kept mode-uniform at the price of ~one embed pair per reference
  * citation on CPU deployments.
+ *
+ * <p>Two record types are reference material today —
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE}, the case #106 measured, and
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_SAFETY_FINDING}, the deterministic drug-safety join
+ * #110 injects as a citable record. The finding was graded as chart evidence until issue #122,
+ * because this carve-out named the drug-reference type instead of deriving from the group; its
+ * verdicts tracked embedding noise, and it also spent Tier-2 cap slots meant for chart claims. An
+ * injected {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is NOT reference
+ * material and is graded normally — see the carve-out site in {@link #verify} for why that is
+ * right, and why "the module injected it" is the wrong test.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"
@@ -185,9 +195,9 @@ public class CitationGroundingVerifier {
 	 * inline — e.g. it appeared only in the structured citations array — to the
 	 * best-matching sentence anywhere in the answer). References whose record
 	 * carries no text, or that cannot be embedded, are returned with a
-	 * {@code null} verdict ("could not verify"). Drug-reference citations are
-	 * demote-only — a cosine pass renders {@code null}, never {@code true} — see
-	 * the class javadoc.
+	 * {@code null} verdict ("could not verify"). Citations of module-supplied
+	 * reference material are demote-only — a cosine pass renders {@code null}, never
+	 * {@code true} — see the class javadoc.
 	 *
 	 * @param answer the full answer prose, with inline {@code [N]} markers
 	 * @param references the index-validated references to annotate
@@ -217,8 +227,8 @@ public class CitationGroundingVerifier {
 	 * tests can exercise the grounding logic without an OpenMRS context.
 	 *
 	 * <p>When {@code entailmentEnabled}, every reference with a resolvable claim sentence and
-	 * record text — except drug-reference citations, which never enter Tier-2 (see the class
-	 * javadoc) — is confirmed by a Tier-2 LLM entailment verdict that is authoritative
+	 * record text — except citations of module-supplied reference material, which never enter Tier-2
+	 * (see the class javadoc) — is confirmed by a Tier-2 LLM entailment verdict that is authoritative
 	 * (cosine errs in both directions, and the dangerous error — a high-overlap
 	 * but unsupported citation — is exactly the case Tier-1 cannot self-detect,
 	 * so the LLM must see Tier-1 passes too, not only failures). They are confirmed in a batched
@@ -243,28 +253,35 @@ public class CitationGroundingVerifier {
 		}
 
 		Map<Integer, String> textByIndex = new HashMap<Integer, String>();
-		// Injected drug-reference records get demote-only verdicts (see class javadoc): an answer
-		// sentence citing one is typically a recitation of module-rendered reference prose, which
-		// embeds near-identically to its source whether or not it swaps subject roles — so a
-		// passing verdict would be false assurance (issue #106).
+		// Module-supplied records get demote-only verdicts (see class javadoc): an answer sentence
+		// citing one is typically a recitation of module-rendered reference prose, which embeds
+		// near-identically to its source whether or not it swaps subject roles — so a passing
+		// verdict would be false assurance (issue #106).
 		Set<Integer> demoteOnlyIndexes = new HashSet<Integer>();
 		if (mappings != null) {
 			for (RecordMapping mapping : mappings) {
 				textByIndex.put(mapping.getIndex(), mapping.getText());
-				// Keyed on the resource type, deliberately narrower than
-				// ChartSearchAiUtils.referenceGroup: the measured justification for demote-only
-				// (#106) is about drug-reference recitations specifically. When another kind of
-				// injected record is added, decide whether it belongs here too — the client
-				// suppresses a true verdict for ALL reference-group citations, so leaving a new
-				// REFERENCE-group type out of this set would let it be verified here and hidden
-				// there. A chart-group type has no such asymmetry to resolve, which is what makes
-				// the call below straightforward rather than a trade-off.
-				// Decided for active_drug_order (#118): NOT demote-only. It is chart-group
-				// evidence, so no client hides its verdict, and the #106 hazard does not apply —
-				// that is about reference prose whose subject roles can swap while still embedding
-				// near-identically ("A interacts with B"), whereas this record is one drug name
-				// asserted of this patient, so a passing verdict is real assurance.
-				if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())) {
+				// Membership is DERIVED from the reference group (ChartSearchAiUtils.referenceGroup,
+				// read through isGroundingDemoteOnly), not from a list of type names, so
+				// "module-supplied material is demote-only" is one rule keyed off one classification
+				// and a newly injected type inherits the right side of it. It had to be remembered
+				// here once and was not: #110's safety_finding was classified as reference material
+				// and left out of this set, so the module's own deterministic findings were graded as
+				// retrieved chart evidence and published verdicts that tracked embedding noise —
+				// grounded=false on a MAJOR finding beside two byte-identical siblings at true, and
+				// one finding flipping across runs of a single probe (issue #122). What makes such an
+				// omission dangerous rather than merely wrong is an asymmetry: a client suppresses a
+				// true verdict for ALL reference-group citations, so a REFERENCE-group type missing
+				// from this set is verified here and hidden there.
+				//
+				// active_drug_order (#118) is the case that fixes the rule's SHAPE, and the reason it
+				// cannot be "everything the module injects": it is chart-group evidence, so no client
+				// hides its verdict, and the #106 hazard does not apply — that is about reference
+				// prose whose subject roles can swap while still embedding near-identically ("A
+				// interacts with B"), whereas this record is one drug name asserted of this patient,
+				// so a passing verdict is real assurance. Keyed off the group it stays graded, with
+				// nothing to remember.
+				if (ChartSearchAiUtils.isGroundingDemoteOnly(mapping.getResourceType())) {
 					demoteOnlyIndexes.add(Integer.valueOf(mapping.getIndex()));
 				}
 			}
@@ -322,9 +339,10 @@ public class CitationGroundingVerifier {
 			// Candidacy deliberately does NOT require a Tier-1 verdict: for an unambiguous claim
 			// sentence the verdict is deferred (and may never be needed), and a broken Tier-1
 			// embedder must not block the authoritative Tier-2 check it has no part in.
-			// Drug-reference citations are never candidates: the judge's "yes" is false assurance
-			// on recited reference prose (issue #106), and the skipped pair must not consume the
-			// per-answer entailment cap that chart citations rely on.
+			// Citations of module-supplied reference material are never candidates: the judge's "yes"
+			// is false assurance on recited reference prose (issue #106), and the skipped pair must
+			// not consume the per-answer entailment cap that chart citations rely on — which the
+			// safety findings were doing until issue #122, several per polypharmacy answer.
 			if (entailmentEnabled && tier1.bestSentence != null
 					&& tier1.recordText != null
 					&& !demoteOnlyIndexes.contains(Integer.valueOf(reference.getIndex()))) {

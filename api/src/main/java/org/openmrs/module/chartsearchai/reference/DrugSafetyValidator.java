@@ -406,14 +406,39 @@ public class DrugSafetyValidator {
 			return;
 		}
 		for (DrugReference.Interaction i : bestRulePerPartner(ref, context, severityFloor)) {
-			// A matched rule has a non-blank token or ATC, so the coalesce never yields null.
-			String detail = ref.displayLabel() + " interacts with active order "
-					+ ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
+			String detail = ref.displayLabel() + " interacts with active order " + partnerLabel(i);
 			if (i.getNote() != null && !i.getNote().isEmpty()) {
 				detail += " — " + i.getNote();
 			}
 			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
 		}
+	}
+
+	/**
+	 * The partner label a chip names for {@code interaction} — its match token, else its ATC code.
+	 *
+	 * <p>One definition, because the chip detail renders it and {@link #bestRulePerPartner} groups on
+	 * it: that grouping is only correct while the key IS the label the chip says, and two copies of
+	 * the same coalesce could drift into grouping rules by something a clinician never sees.
+	 *
+	 * <p>Trimmed to fold the way the MATCH folds. {@link PatientClinicalContext#hasActiveDrug} trims
+	 * and case-folds the rule's token before testing it against an order name, so two rows whose
+	 * tokens differ only in case or in surrounding whitespace are one partner to the only predicate
+	 * that decides an interaction concerns this patient — and must be one partner here too, or #115's
+	 * duplicate chip
+	 * returns for a hand-authored dataset with two labels a clinician cannot tell apart. That is a
+	 * live shape, not a hypothetical: the {@code ddinter} and {@code atc} sources normalize their
+	 * tokens at parse, but the curated {@code json} source is plain Jackson over an operator-editable
+	 * file and sanitizes nothing. Trimming also keeps that padding out of the chip text, as
+	 * {@link DrugReferenceInjector#orderedInteractionNotes} already does for its own rendered label.
+	 *
+	 * @return the label, or null when the rule carries neither — which a rule that matched an active
+	 *         order cannot ({@code hasActiveDrug} needs a non-blank token or a non-blank ATC), so
+	 *         callers inside the matched loop never see it
+	 */
+	private static String partnerLabel(DrugReference.Interaction interaction) {
+		String label = ChartSearchAiUtils.firstNonBlank(interaction.getToken(), interaction.getAtc());
+		return label == null ? null : label.trim();
 	}
 
 	/**
@@ -435,7 +460,7 @@ public class DrugSafetyValidator {
 	 * became a near-identical record in the prompt as well.
 	 *
 	 * <p><b>What is grouped.</b> The key is the label the chip actually renders
-	 * ({@code firstNonBlank(token, atc)}, case-folded), so rules that would produce the same
+	 * ({@link #partnerLabel}, case-folded), so rules that would produce the same
 	 * "interacts with active order X" subject collapse while rules naming different partners each
 	 * keep their chip — even when their notes are identical strings. Grouping is per {@code ref}
 	 * and per arm: two different drugs in play still chip separately about the same order, and the
@@ -475,7 +500,7 @@ public class DrugSafetyValidator {
 			if (!context.hasActiveDrug(i.getToken(), i.getAtc())) {
 				continue;
 			}
-			String key = ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc()).toLowerCase(Locale.ROOT);
+			String key = partnerLabel(i).toLowerCase(Locale.ROOT);
 			DrugReference.Interaction incumbent = best.get(key);
 			if (incumbent == null || outranks(i, incumbent)) {
 				// LinkedHashMap keeps a re-put key in its original position, so replacing a group's

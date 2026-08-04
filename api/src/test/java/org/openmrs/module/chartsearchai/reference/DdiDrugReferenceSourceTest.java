@@ -475,6 +475,35 @@ public class DdiDrugReferenceSourceTest {
 	}
 
 	@Test
+	public void replacingAGroupsWinnerLeavesTheChipsInDatasetOrderOfFirstAppearance() throws Exception {
+		// Real slice: Dolutegravir's rows in dataset order are phenytoin (Major), iron (Major, the
+		// shorter note), dexamethasone (Minor), iron (Major, the fuller note). With iron AND
+		// dexamethasone both active, iron's group is opened first, dexamethasone's group is opened
+		// next, and only THEN does iron's second row take its group — so this is the arrangement in
+		// which a collapse that re-inserts a replaced winner (a HashMap, or remove-then-put) puts
+		// dexamethasone's chip ahead of iron's. Chip order is first-appearance order and the
+		// clinician reads the list top-down, so the most severe finding must not be demoted by the
+		// mechanics of the collapse.
+		List<SafetyWarning> warnings = routeVariantValidator().validate(
+				"Dolutegravir could be started.", "Is it safe to start dolutegravir?",
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Iron 65mg", "Dexamethasone 4mg"), null, null, null));
+
+		assertEquals(2, warnings.size(),
+				"two active partners must raise two chips, was: " + warnings);
+		// Asserted on the partner and rating only, not on the winning row's mechanism prose — which
+		// row wins the iron group is equalSeveritiesKeepTheRowCarryingTheFullerMechanismNote's
+		// business, and pinning its opening words here would couple this case to the note text.
+		assertTrue(warnings.get(0).getDetail()
+				.startsWith("Dolutegravir interacts with active order iron — Major. "),
+				"iron's row appears first in the dataset, so its chip must come first even though its"
+						+ " group's winner was decided last, was: " + warnings.get(0).getDetail());
+		assertTrue(warnings.get(1).getDetail()
+				.startsWith("Dolutegravir interacts with active order dexamethasone — Minor. "),
+				"dexamethasone's chip must stay second, was: " + warnings.get(1).getDetail());
+	}
+
+	@Test
 	public void sharedRxcuiDoesNotCollapseEntryIds() throws Exception {
 		// Real slice: three Lidocaine route variants all map to RxCUI 6387. The injector dedups
 		// citations by id, so the rxcui is used only when unique — else the DDInter id — keeping

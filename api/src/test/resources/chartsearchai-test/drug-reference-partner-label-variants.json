@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "description": "Test fixture (issue #115): curated entries whose interaction rows name ONE partner twice. The curated source is the operator-editable one — plain Jackson over a hand-authored file, with no trimming of rule tokens and no required severity — so it is the only source that can produce (a) two rows for one partner whose tokens differ only in case or in surrounding whitespace, which PatientClinicalContext.hasActiveDrug already folds to the same partner, and (b) a hand-authored UNRATED row competing with a source-rated one, which is the mixed configuration in which DrugSafetyValidator.severityPriority's 'unrated outranks Major' ordering is observable at all. Parsed by the real JsonDrugReferenceSource parser.",
+  "entries": [
+    {
+      "id": "fluconazole-curated",
+      "name": "Fluconazole",
+      "drugClass": "Triazole antifungal",
+      "aliases": [
+        "fluconazole"
+      ],
+      "atcCodes": [
+        "J02AC01"
+      ],
+      "interactions": [
+        {
+          "token": "Warfarin",
+          "severity": "Moderate",
+          "note": "Moderate. Fluconazole inhibits CYP2C9 and may increase the anticoagulant effect of warfarin."
+        },
+        {
+          "token": "  warfarin  ",
+          "severity": "Major",
+          "note": "Major. Fluconazole markedly increases warfarin exposure; monitor INR and adjust the warfarin dose."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "phenobarbital-curated",
+      "name": "Phenobarbital",
+      "drugClass": "Barbiturate anticonvulsant",
+      "aliases": [
+        "phenobarbital",
+        "phenobarbitone"
+      ],
+      "atcCodes": [
+        "N03AA02"
+      ],
+      "interactions": [
+        {
+          "token": "valproate",
+          "severity": "Major",
+          "note": "Major. Valproate inhibits phenobarbital metabolism; phenobarbital concentrations and sedation may rise."
+        },
+        {
+          "token": "valproate",
+          "note": "Locally curated rule: do not co-prescribe without measuring the phenobarbital level first."
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

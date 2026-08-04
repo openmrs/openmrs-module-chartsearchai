@@ -304,6 +304,18 @@ public class DrugReferenceInjector {
 	 * a partner that raises a chip is exactly a partner promoted here, and the rendered text cannot
 	 * drift from the chip.
 	 *
+	 * <p>That correspondence is per PARTNER, and since issue #115 it is no longer one note per chip:
+	 * {@link DrugSafetyValidator#bestRulePerPartner} collapses several rules naming one partner —
+	 * DDInter's route variants of a drug all publish the same match token — into a single
+	 * most-severe chip, while this method still promotes one entry per row. A patient on one
+	 * dexamethasone order therefore gets one Major chip beside a record reading "dexamethasone
+	 * (Major …); dexamethasone (Moderate …); dexamethasone (Moderate …)", so a model answering from
+	 * the record can still name a severity the chip deliberately discarded. Collapsing here needs
+	 * the same thing the chip cannot decide either — which variant the order is — and so waits on
+	 * the route vocabulary that is the data-side half of #115. Until then the two paths agree on
+	 * WHICH partners concern the patient, which is what the ordering above exists to guarantee, but
+	 * not on how many rows or which severity.
+	 *
 	 * <p>Ordering alone is not sufficient, which is why {@code render} also overrides the budget for
 	 * this segment: two above-floor partners can exceed {@link #MAX_INTERACTION_RENDER_CHARS}
 	 * between them (measured on the bundled sample: methotrexate 783 + aspirin 809 against a 1500

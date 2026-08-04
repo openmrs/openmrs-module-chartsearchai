@@ -1,0 +1,124 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: real DDInter rows whose mechanism text carries a residual field marker",
+  "note": "Verbatim slice of the full KB (issue #116). Mechanism 2248 is the dolutegravir x iron row observed leaking 'INTERVAL:' onto a live safety chip; mechanism 222 is the other marker in the family, 'RECOMMENDED:'. Drug rows are the real ones (ids, rxcuis, rxnorm names, ATC), with the ciel arrays trimmed to the exact-name concept. Group 9998 and drug DDInterT03 are the one synthetic addition: a degenerate marker-only mechanism, absent from the real KB (all 274 marker rows carry text after the marker) but reachable because the KB file is operator-editable — it pins that stripping the marker degrades to the no-mechanism note rather than leaving a dangling severity. Shaped like the real KB (see ddi-rxcui-collision.json precedent)."
+ },
+ "mechanisms": {
+  "2248": {
+   "text": "INTERVAL: Coadministration with medications containing polyvalent cations such as aluminum, calcium, iron, or magnesium may decrease the oral bioavailability of dolutegravir. The mechanism of interaction has not been established.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "222": {
+   "text": "RECOMMENDED: Coadministration with tazemetostat may decrease the plasma concentrations and efficacy of hormonal contraceptives. The mechanism involves induction of CYP450 3A4, the isoenzyme primarily responsible for the metabolic clearance of sex hormones.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "9998": {
+   "text": "INTERVAL:",
+   "categories": [
+    "others"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter582",
+   "name": "Dolutegravir",
+   "rxcui": "1433868",
+   "rxnorm_name": "dolutegravir",
+   "drugbank_id": "DB08930",
+   "atc": [
+    "J05AJ03"
+   ],
+   "ciel": [
+    {
+     "code": "165085",
+     "uuid": "165085AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dolutegravir"
+    }
+   ]
+  },
+  {
+   "id": "DDInter975",
+   "name": "Iron",
+   "rxcui": "90176",
+   "rxnorm_name": "iron",
+   "drugbank_id": "DB01592",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "78218",
+     "uuid": "78218AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Iron"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1750",
+   "name": "Tazemetostat",
+   "rxcui": "2274378",
+   "rxnorm_name": "tazemetostat",
+   "drugbank_id": "DB12887",
+   "atc": [
+    "L01XX72"
+   ],
+   "ciel": [
+    {
+     "code": "167624",
+     "uuid": "0ace7948-eeca-4ecd-9ae9-ffc261ba824e",
+     "name": "Tazemetostat"
+    }
+   ]
+  },
+  {
+   "id": "DDInter692",
+   "name": "Ethinylestradiol",
+   "rxcui": "4124",
+   "rxnorm_name": "ethinyl estradiol",
+   "drugbank_id": "DB00977",
+   "atc": [
+    "G03CA01",
+    "L02AA03"
+   ],
+   "ciel": [
+    {
+     "code": "75973",
+     "uuid": "75973AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ethinyl estradiol"
+    }
+   ]
+  },
+  {
+   "id": "DDInterT03",
+   "name": "Marker Only",
+   "rxcui": "999999",
+   "rxnorm_name": "marker only",
+   "atc": [],
+   "ciel": []
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter582",
+   "DDInter975",
+   "Major",
+   "2248"
+  ],
+  [
+   "DDInter1750",
+   "DDInter692",
+   "Moderate",
+   "222"
+  ],
+  [
+   "DDInter582",
+   "DDInterT03",
+   "Major",
+   "9998"
+  ]
+ ]
+}

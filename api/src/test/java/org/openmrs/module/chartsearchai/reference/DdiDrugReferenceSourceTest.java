@@ -30,6 +30,19 @@ public class DdiDrugReferenceSourceTest {
 
 	private static final String SEVERITY = "Major Moderate Minor Unknown";
 
+	private static final String MARKER_FIXTURE = "chartsearchai-test/ddi-field-marker-mechanism.json";
+
+	/** The real mechanism text of KB group 2248, verbatim minus the {@code INTERVAL:} marker. */
+	private static final String DOLUTEGRAVIR_MECHANISM = "Coadministration with medications containing "
+			+ "polyvalent cations such as aluminum, calcium, iron, or magnesium may decrease the oral "
+			+ "bioavailability of dolutegravir. The mechanism of interaction has not been established.";
+
+	/** The real mechanism text of KB group 222, verbatim minus the {@code RECOMMENDED:} marker. */
+	private static final String TAZEMETOSTAT_MECHANISM = "Coadministration with tazemetostat may decrease "
+			+ "the plasma concentrations and efficacy of hormonal contraceptives. The mechanism involves "
+			+ "induction of CYP450 3A4, the isoenzyme primarily responsible for the metabolic clearance of "
+			+ "sex hormones.";
+
 	private DrugReference entry(String name) {
 		return new DdiDrugReferenceSource().load().stream()
 				.filter(r -> name.equalsIgnoreCase(r.getName())).findFirst().orElse(null);
@@ -137,6 +150,86 @@ public class DdiDrugReferenceSourceTest {
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Aspirin"), null, null, null));
 		assertTrue(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION, "warfarin"),
 				"warfarin's aspirin interaction should fire against an active order named Aspirin");
+	}
+
+	private static List<DrugReference> markerFixtureEntries() throws Exception {
+		try (InputStream in = DdiDrugReferenceSourceTest.class.getClassLoader()
+				.getResourceAsStream(MARKER_FIXTURE)) {
+			assertNotNull(in, "field-marker fixture should be on the test classpath");
+			return DdiDrugReferenceSource.parse(in);
+		}
+	}
+
+	private static DrugReference.Interaction interaction(List<DrugReference> entries, String drug, String token) {
+		DrugReference ref = entries.stream().filter(r -> drug.equalsIgnoreCase(r.getName())).findFirst()
+				.orElseThrow(() -> new AssertionError("fixture should carry the " + drug + " entry"));
+		return ref.getInteractions().stream().filter(i -> token.equals(i.getToken())).findFirst()
+				.orElseThrow(() -> new AssertionError(drug + " should list an interaction with " + token));
+	}
+
+	@Test
+	public void residualFieldMarkersAreStrippedFromInteractionNotes() throws Exception {
+		// Issue #116: INTERVAL: and RECOMMENDED: are DDInter field markers left over from the
+		// upstream monograph's management tag, not prose — 224 and 50 of the full KB's 8234
+		// mechanisms respectively. Passed through, the marker reaches the clinician verbatim at
+		// the front of a safety chip. The mechanism text after it must survive byte-for-byte.
+		List<DrugReference> entries = markerFixtureEntries();
+
+		assertEquals("Major. " + DOLUTEGRAVIR_MECHANISM, interaction(entries, "Dolutegravir", "iron").getNote(),
+				"the INTERVAL: marker must be stripped and the mechanism text kept intact");
+		assertEquals("Moderate. " + TAZEMETOSTAT_MECHANISM,
+				interaction(entries, "Tazemetostat", "ethinyl estradiol").getNote(),
+				"the RECOMMENDED: marker must be stripped and the mechanism text kept intact");
+	}
+
+	@Test
+	public void markerOnlyMechanismDegradesToTheNoMechanismNote() throws Exception {
+		// Edge case: a mechanism whose whole text is the marker carries no mechanism at all, so
+		// stripping must fall through to the documented no-mechanism note rather than leave a
+		// dangling "Major. ".
+		String note = interaction(markerFixtureEntries(), "Dolutegravir", "marker only").getNote();
+
+		assertFalse(note.contains("INTERVAL"), "the marker must not survive stripping, was: " + note);
+		assertTrue(note.contains("no mechanism description on file"),
+				"a marker-only mechanism must degrade to the no-mechanism note, was: " + note);
+	}
+
+	@Test
+	public void interactionChipDetailIsFreeOfTheResidualFieldMarker() throws Exception {
+		// The clinician-facing leak, through the real validator: this is the live-observed chip
+		// (Melissa Wright, "Can I start dolutegravir?", active order iron) that read
+		// "... — Major. INTERVAL: Coadministration with medications containing polyvalent cations".
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(markerFixtureEntries()));
+
+		List<SafetyWarning> warnings = validator.validate(
+				"Dolutegravir would be a reasonable option.", "Can I start dolutegravir?",
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Iron"), null, null, null));
+
+		assertEquals(1, warnings.size(), "the fixture pair must yield exactly one chip, was: " + warnings);
+		assertEquals("Dolutegravir interacts with active order iron — Major. " + DOLUTEGRAVIR_MECHANISM,
+				warnings.get(0).getDetail(),
+				"the chip detail must read as a sentence, with the mechanism text intact");
+	}
+
+	@Test
+	public void injectedReferenceTextIsFreeOfTheResidualFieldMarker() throws Exception {
+		// The other leak path named in the issue: the note is also the grounding text the model
+		// cites, so the marker reached the prompt as well. One fix at the parse boundary covers
+		// both consumers.
+		DrugReferenceInjector injector = DrugReferenceTestSupport
+				.injector(DrugReferenceTestSupport.serviceWith(markerFixtureEntries()));
+
+		PatientChart result = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Iron"), null, null, null),
+				"Can I start dolutegravir?");
+
+		String text = result.getText();
+		assertTrue(text.contains("Drug reference — Dolutegravir"), "the Dolutegravir reference should be injected");
+		assertFalse(text.contains("INTERVAL"),
+				"no field marker may reach the grounding text the model cites, was: " + text);
+		assertTrue(text.contains(DOLUTEGRAVIR_MECHANISM),
+				"the mechanism text must survive in the injected record, was: " + text);
 	}
 
 	@Test

@@ -9,12 +9,14 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.text.Normalizer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -278,7 +280,8 @@ public class DrugReference {
 	 *         each side by a non-alphanumeric character or the string edge. Whole-word, not
 	 *         substring, so a drug name nested inside a longer one does not spuriously match
 	 *         ("chlorothiazide" is not a whole word in "hydrochlorothiazide"), while a real token
-	 *         still matches ("aspirin" in "Aspirin 81 mg"). Case-insensitive; a null or empty word
+	 *         still matches ("aspirin" in "Aspirin 81 mg"). Case-insensitive and
+	 *         diacritic-insensitive (see {@link #containsBoundedToken}); a null or empty word
 	 *         never matches. Backs {@link #matchesText} (alias-in-prose); the active-order
 	 *         counterpart is {@link #matchesOrderName}, which shares this rule's left boundary but
 	 *         not its right one — see there for why one matcher cannot serve both.
@@ -344,6 +347,45 @@ public class DrugReference {
 	 * the record: 2 of the 829 are a nitroglycerin order matching the token {@code glycerin} through
 	 * its own parenthetical synonym ("glycerine trinitrate") — a mislabel, not a fabricated drug, and
 	 * one every rule that tolerates an inflectional tail shares.
+	 *
+	 * <p><b>Diacritics (issue #129).</b> The comparison folds them — see
+	 * {@link #containsBoundedToken}, which is where the fold lives and why it lives there. DDInter's
+	 * tokens are unaccented RxNorm generics while a localized dictionary spells the same drug with
+	 * accents, so unfolded an order named {@code Budésonide} shared no substring with
+	 * {@code budesonide} at the accented character and that patient was never checked against
+	 * budesonide's interaction rules at all — the same silent absence as a false negative, arriving by
+	 * a different route. Re-measured over the same corpus with the shipped matchers:
+	 *
+	 * <pre>
+	 *   rule                            matches   nested-name collisions leaking   accented names matched
+	 *   this matcher, unfolded (#128)     829     0 of 9   (0 of 12 accented)      2 of 10
+	 *   this matcher, folded (#129)       907     0 of 9   (0 of 12 accented)     10 of 10
+	 * </pre>
+	 *
+	 * 224 of the 2531 names carry a diacritic. Folding both operands makes the change a pure
+	 * relaxation — 78 pairs added, <em>0 removed</em> — which is what let this widening be scored
+	 * against #128's kill set instead of argued about, and the kill set includes the accented
+	 * spellings, which are the ones folding could newly break: {@code nitroglycérine} folds to
+	 * {@code nitroglycerine}, i.e. {@code glycerin} plus one inflectional letter, so it becomes a
+	 * candidate for that token at the very moment {@code glycérine} legitimately does, and only the
+	 * LEFT boundary separates them.
+	 *
+	 * <p>76 of the 78 are an accented spelling of the token's own drug ({@code héparine} ~ heparin,
+	 * {@code lévofloxacine} ~ levofloxacin, {@code énoxaparine} ~ enoxaparin). The other two, for the
+	 * record, are both the PHRASE nesting no boundary rule can see rather than a new class of error:
+	 * {@code preparado de activador del plasminógeno tipo tisular} (tissue plasminogen ACTIVATOR)
+	 * matches {@code plasminogen}, that token's only match in this dictionary, inheriting
+	 * bleeding-risk rules that fit a fibrinolytic anyway; and
+	 * {@code acétaminophene,pseudo-éphédrine,…} matches {@code ephedrine} across the hyphen, which its
+	 * English twin row {@code Acetaminophen,Pseudo-ephedrine,…} already did before this change — so
+	 * the fold makes one product's two spellings agree rather than introducing that imprecision.
+	 * Both are a mislabel of a drug the patient IS on, like the {@code glycerin} case above.
+	 *
+	 * <p>Misspellings are deliberately NOT accommodated. {@code Lisoniazide} and
+	 * {@code Sprironolactone} are typo'd rows in this same dictionary; folding leaves both unmatched
+	 * (measured before and after), and it must stay that way — matching a typo means matching a name
+	 * that differs from the token by an edit, which reopens the substring hazard from the other side.
+	 * They are a data-quality problem, not a matcher problem.
 	 */
 	static boolean matchesOrderName(String orderName, String token) {
 		return containsBoundedToken(orderName, token, MAX_ORDER_NAME_INFLECTION_LETTERS);
@@ -366,13 +408,36 @@ public class DrugReference {
 	 * its token, and the {@code ddinter} and {@code atc} sources drop blank aliases at parse. A
 	 * hand-authored {@code json} KB is NOT sanitized, so a blank alias there still matches any text
 	 * carrying two adjacent spaces — pre-existing, and an authoring guard belongs in that parser.
+	 *
+	 * <p>Diacritic-insensitive on BOTH sides (issue #129), which is why the fold lives here rather
+	 * than in either named matcher: the same accented order name reaches both of them — as the
+	 * haystack when a rule token is matched against it ({@link #matchesOrderName}) and as the
+	 * haystack again when the screening arm resolves that order's own reference entry
+	 * ({@code DrugSafetyValidator.activeOrderEntries} → {@code findByQuery} → {@link #matchesText}),
+	 * and as the NEEDLE when an order name is looked for in a rendered record
+	 * ({@code PatientClinicalContext.ActiveDrugOrder.namedIn}). Folding one matcher would leave the
+	 * same patient half-checked; folding one SIDE would break that third case, whose needle is the
+	 * patient's accented name. Folding both operands also makes the change a pure relaxation —
+	 * everything that matched before still matches — which is what let the widening be measured
+	 * against #128's kill set rather than argued about.
+	 *
+	 * <p>Folding the reference side is a no-op on every shipped dataset and is not there for gain:
+	 * measured over the full DDInter KB, 0 of its 2093 rule tokens and 0 of its 5169 aliases carry a
+	 * combining mark, and no two tokens fold together. It is there because a hand-authored
+	 * {@code json} KB may carry an accented alias, and a one-sided fold would then silently stop
+	 * matching the accented order name it was written for.
 	 */
 	private static boolean containsBoundedToken(String text, String token, int maxTrailingLetters) {
-		if (text == null || token == null || token.isEmpty()) {
+		if (text == null || token == null) {
 			return false;
 		}
-		String t = text.toLowerCase(Locale.ROOT);
-		String w = token.toLowerCase(Locale.ROOT);
+		String t = foldDiacritics(text.toLowerCase(Locale.ROOT));
+		String w = foldDiacritics(token.toLowerCase(Locale.ROOT));
+		if (w.isEmpty()) {
+			// After the fold, not before: a token of nothing but combining marks folds to empty, and
+			// the empty token matches almost anything below.
+			return false;
+		}
 		int idx = t.indexOf(w);
 		while (idx >= 0) {
 			if (idx == 0 || !Character.isLetterOrDigit(t.charAt(idx - 1))) {
@@ -391,6 +456,46 @@ public class DrugReference {
 			idx = t.indexOf(w, idx + 1);
 		}
 		return false;
+	}
+
+	/** Unicode non-spacing marks — the combining accents an NFD decomposition separates out. */
+	private static final Pattern NON_SPACING_MARKS = Pattern.compile("\\p{Mn}+");
+
+	/**
+	 * @return {@code value} with its diacritics folded away — canonically decomposed (NFD) and
+	 *         stripped of combining non-spacing marks, so {@code budésonide} compares as
+	 *         {@code budesonide}. The one definition, used on both operands of
+	 *         {@link #containsBoundedToken}; never call {@link Normalizer} for this elsewhere.
+	 *
+	 *         <p>Decompose-and-strip rather than a hand-rolled character map: a map has to be
+	 *         maintained per language and silently stops folding the first accent nobody listed
+	 *         (this dictionary alone carries {@code é è ï ô û á ó}), whereas NFD is the Unicode
+	 *         standard's own answer to which marks belong to which letter.
+	 *
+	 *         <p><b>Non-Latin scripts.</b> Stripping {@code Mn} is diacritic folding for Latin,
+	 *         Greek, Cyrillic, Arabic harakat and Hebrew niqqud — all cases where the marks are
+	 *         optional pointing over an unambiguous skeleton. It is NOT lossless everywhere: in Thai
+	 *         and Lao the tone marks are {@code Mn}, and in Indic scripts the virama is, so two
+	 *         distinct words in those scripts can fold together and match each other. That is the
+	 *         same widening this fold is for, one script over, and it is bounded by the boundary rules
+	 *         around it; spacing marks ({@code Mc} — Devanagari matras and the like) are deliberately
+	 *         NOT stripped, because those carry the vowel rather than decorate it. Scripts with no
+	 *         canonical decomposition at all (CJK ideographs) are untouched, and Hangul syllables
+	 *         decompose to Jamo, which are letters and so survive the strip — both sides fold
+	 *         identically, so matching within those scripts is unchanged.
+	 *
+	 *         <p>ASCII returns unchanged without normalizing: every reference token is ASCII and so
+	 *         is most order-name text, and this runs once per (rule token, order name) pair — up to a
+	 *         few hundred rules per question — so the common path must not allocate.
+	 */
+	private static String foldDiacritics(String value) {
+		for (int i = 0; i < value.length(); i++) {
+			if (value.charAt(i) > 0x7F) {
+				return NON_SPACING_MARKS
+						.matcher(Normalizer.normalize(value, Normalizer.Form.NFD)).replaceAll("");
+			}
+		}
+		return value;
 	}
 
 	/**

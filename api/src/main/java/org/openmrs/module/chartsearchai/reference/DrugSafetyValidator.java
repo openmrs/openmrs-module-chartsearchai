@@ -642,6 +642,16 @@ public class DrugSafetyValidator {
 		// being the KB's own canonical name for a drug, and precisely what the variants share. Which
 		// variant's row then supplies the severity is #115's open half; the dataset's first is kept,
 		// as the chart arm keeps its first.
+		//   De-duplicating inside a safety net can only be done where nothing actionable is lost, and
+		// two entries collapse here only when the reference data gives them the SAME name. In the
+		// shape this exists for, one rule then identifies both, so the surviving chip carries that
+		// very rule's severity and mechanism and all that is dropped is a second spelling of the
+		// partner. Entries the data can tell apart are named by different tokens and keep their own
+		// chips — asserted over three drugs named in one question. The residual is a KB that gives two
+		// genuinely different drugs one token and separates them only by ATC code: the first is
+		// reported. Such a token is ambiguous in the reference data itself: the chart arm reads that
+		// same token to decide which of the patient's orders a rule names, so it cannot resolve the
+		// ambiguity either.
 		if (!reportedPairs.add(unorderedPairKey(matchTokenFor(first, reverse), matchTokenFor(second, forward)))) {
 			return;
 		}

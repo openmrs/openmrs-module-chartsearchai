@@ -247,6 +247,27 @@ public class DrugSafetyQuestionPairInteractionTest {
 	}
 
 	@Test
+	public void everyDistinctPairAmongThreeNamedDrugsIsReported() {
+		// The other edge of the one-chip-per-pair grouping: it must collapse only what IS one pair.
+		// Keying pairs on the drugs' match tokens is a de-duplication inside a safety net, so its
+		// failure direction is the dangerous one — a key too coarse drops a real interaction silently
+		// — and this pins it against real data: three drugs named in one question, three above-floor
+		// pairs among them in the bundled sample, three chips.
+		List<SafetyWarning> warnings = ddinterValidator().validate(
+				"These are commonly co-prescribed.",
+				"Is it safe to combine lisinopril, spironolactone and ibuprofen?", patientOnNeitherDrug());
+
+		assertEquals(3, interactionChips(warnings),
+				"each of the three pairs among the named drugs must raise its own chip, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Lisinopril", "Spironolactone", "Major"), "lisinopril x spironolactone: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Lisinopril", "Ibuprofen", "Moderate"), "lisinopril x ibuprofen: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Spironolactone", "Ibuprofen", "Moderate"), "spironolactone x ibuprofen: " + warnings);
+	}
+
+	@Test
 	public void aPairAlsoJoinedByARuleNamingAnActiveOrderStaysWithTheActiveOrderArm() throws IOException {
 		// Chart precedence has to be decided over EVERY rule joining the pair, not just the one this
 		// arm would chip: addInteractions walks all of an entry's rules, so when two rules join one

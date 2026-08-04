@@ -429,6 +429,36 @@ public class DrugReferenceInjectorTest {
 	}
 
 	@Test
+	public void whenThePatientIsOnEveryPartnerThereIsNoDatasetTailLeftAndNothingIsWithheld() {
+		// Segment 2's third case: the patient is on ALL of this entry's above-floor partners, so the
+		// dataset tail is empty and the representative must simply not render. It is the only arm of
+		// that branch nothing else reaches — the two tests either side of this one cover "a tail
+		// exists alongside a promoted partner" and "nothing was promoted".
+		//
+		// It is worth its own test because the guard protecting it is the kind that reads redundant:
+		// `restStart < ordered.size()` looks like a bound check on a list you just measured, and
+		// relaxing it to <= throws IndexOutOfBoundsException out of render. DrugReferenceInjector.inject
+		// catches every RuntimeException and returns the chart unmodified, so the failure would not
+		// surface as an error — the entire drug-reference feature, including the deterministic
+		// safety_finding records #110 added to stop safety abstentions, would silently vanish behind one
+		// log.warn, for exactly the polypharmacy patients it matters most for.
+		//
+		// The bundled curated entry Paracetamol carries exactly one interaction (warfarin, unrated —
+		// and unrated is floor-exempt, so it promotes), which makes promotedCount == ordered.size().
+		PatientChart result = injector().injectRecords(oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, set("warfarin"), null, null, null),
+				"is it safe to give paracetamol?");
+		RecordMapping ref = referenceMappingFor(result, "Paracetamol");
+		String section = ref.getText().substring(ref.getText().indexOf("Interactions:")).toLowerCase();
+
+		assertTrue(section.contains("warfarin"),
+				"precondition: the patient's own partner must be promoted and rendered: " + section);
+		assertEquals(0, ref.getWithheldInteractions(),
+				"with every partner rendered the count must be 0 — reporting a withheld partner that "
+						+ "does not exist would make the citation claim a subset of itself: " + section);
+	}
+
+	@Test
 	public void aModuleDerivedFindingIsAReferenceGroupRecordThatCarriesNoAttribution() {
 		// The pair that makes the README's "branch on the value, not the group" warning true, and the
 		// reason it is a warning at all. referenceGroup puts a safety finding in the SAME `reference`

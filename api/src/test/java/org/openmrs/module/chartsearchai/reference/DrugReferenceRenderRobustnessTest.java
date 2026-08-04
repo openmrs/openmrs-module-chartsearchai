@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -19,6 +20,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * The injector renders operator-authored data straight into the citable chart line, and
@@ -32,12 +34,22 @@ public class DrugReferenceRenderRobustnessTest {
 
 	private static final String FIXTURE = "chartsearchai-test/drug-reference-malformed.json";
 
+	/** Separate fixture: a valid entry cannot be added to {@link #FIXTURE} without changing the
+	 *  entry count {@link #unusableEntriesAreDroppedAtParse} pins. */
+	private static final String BLANK_SOURCE_FIXTURE = "chartsearchai-test/drug-reference-blank-source.json";
+
 	private List<DrugReference> fixtureEntries() throws IOException {
 		return DrugReferenceTestSupport.fixtureEntries(FIXTURE);
 	}
 
 	private PatientChart oneRecordChart() {
 		return DrugReferenceTestSupport.oneRecordChart();
+	}
+
+	/** The injected drug-reference mapping for {@code question}, via the real injector. */
+	private RecordMapping injectedReference(DrugReferenceInjector injector, String question) {
+		return DrugReferenceTestSupport.injectedReference(injector.injectRecords(oneRecordChart(),
+				DrugReferenceTestSupport.ctx(40, null, null, null, null, null), question));
 	}
 
 	@Test
@@ -81,6 +93,31 @@ public class DrugReferenceRenderRobustnessTest {
 		List<SafetyWarning> warnings = validator.validate("Mangled 100 mg may be considered.",
 				DrugReferenceTestSupport.ctx(40, null, null, null, null, null));
 		assertNotNull(warnings);
+	}
+
+	@Test
+	public void whitespaceOnlySourceIsPublishedAsNoAttributionAndAPaddedOneArrivesTrimmed()
+			throws IOException {
+		// `source` used to be appended to the citable record only when non-empty, so a whitespace-only
+		// operator value rendered the literal " Source:    ." into the text. Issue #117 moved it onto
+		// the mapping, which changes where a bad value lands: it is now published unconditionally as a
+		// citation field, so blank must coalesce to "no attribution" rather than travel to a client as
+		// whitespace it would render as a visible-but-empty provenance line. Same operator-editable
+		// boundary the rest of this class covers, on the field that boundary now reaches.
+		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(BLANK_SOURCE_FIXTURE)));
+
+		RecordMapping blank = injectedReference(injector, "is blanksource safe here?");
+		assertNull(blank.getSource(),
+				"a whitespace-only source must publish as no attribution, not as blank text: ["
+						+ blank.getSource() + "]");
+		assertFalse(blank.getText().contains("Source:"),
+				"and nothing may be rendered into the citable record either: " + blank.getText());
+
+		RecordMapping padded = injectedReference(injector, "is paddedsource safe here?");
+		assertEquals("WHO Padded Attribution", padded.getSource(),
+				"a padded source must arrive trimmed — a client renders this verbatim beside the "
+						+ "citation: [" + padded.getSource() + "]");
 	}
 
 	@Test

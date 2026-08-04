@@ -314,7 +314,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | `warnings` | string[] | injection | Optional free-text prose warnings (e.g. a Reye-syndrome caution) rendered verbatim into the injected, citable record so the LLM can ground and cite them. **Display-only** — no matchable token, so the validator never fires on them; enforceable facts belong in the rule fields. |
 | `interactions` | object[] | interaction warning | Drug–drug interaction rules (below). |
 | `contraindications` | object[] | contraindication warning | Allergy/condition rules (below). |
-| `source` | string | injection | Provenance string rendered in the reference text. |
+| `source` | string | injection | Dataset attribution for the entry. **Never rendered into the reference text the LLM sees** — it is published as the `source` field on every citation of this entry, for a client to show beside the citation. It used to be appended to the citable record, and the model recited it into clinician-facing answers (issue #117). Blank or whitespace-only is published as `null`. |
 | `genericName` | string, optional | Everyday generic synonym appended to safety-chip labels when it genuinely diverges from `name` (neither containing the other) — `"Acetylsalicylic acid (aspirin)"`. Display only: never rendered into the reference text the LLM sees, never used for matching. A redundant value (equal to, containing, or contained in `name`) is ignored. |
 
 **`ageBands[]` object**

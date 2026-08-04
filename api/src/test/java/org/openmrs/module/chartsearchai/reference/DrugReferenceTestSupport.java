@@ -41,13 +41,25 @@ public final class DrugReferenceTestSupport {
 	 * without reimplementing the renderer.
 	 */
 	public static String injectedDdinterReferenceText(String question) {
-		PatientChart chart = injector(ddinterService()).injectRecords(oneRecordChart(),
-				ctx(60, null, null, null, null, null), question);
+		return injectedReference(injector(ddinterService()).injectRecords(oneRecordChart(),
+				ctx(60, null, null, null, null, null), question)).getText();
+	}
+
+	/**
+	 * The injected drug-reference record's mapping in {@code chart} — the mapping rather than only
+	 * its text, because it is the carrier of the citation metadata (source, withheld count) that is
+	 * deliberately absent from the record text (issue #117).
+	 *
+	 * <p>The one matcher for "the injected reference", so the reference-shaped filter cannot drift
+	 * between the test files that need it. {@code DrugReferenceInjectorTest.referenceMappingFor} is
+	 * deliberately separate: it selects by the drug the rendering names, which is a different
+	 * question once more than one entry is injected.
+	 */
+	static RecordMapping injectedReference(PatientChart chart) {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType()))
-				.map(RecordMapping::getText).findFirst()
-				.orElseThrow(() -> new IllegalStateException(
-						"no drug-reference record was injected for question: " + question));
+				.findFirst().orElseThrow(() -> new IllegalStateException(
+						"no drug-reference record was injected into the chart: " + chart.getText()));
 	}
 
 	/**

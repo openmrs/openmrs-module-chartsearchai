@@ -65,9 +65,12 @@ public class DrugReferenceInjector {
 	 * Per-entry character budget for the rendered {@code Interactions:} section. Bounds the
 	 * grounding text a single reference line contributes to the prompt so a broad dataset cannot
 	 * overflow the LLM context window; the deterministic {@link DrugSafetyValidator} still reads
-	 * every interaction off the entry, so nothing is lost from safety checking. How many were left
-	 * out is reported on the {@link RecordMapping} as a field — never as a text tail, which the
-	 * model recited into answers (issue #117).
+	 * every interaction off the entry, so nothing is lost from safety checking. How many the record
+	 * does not name is reported on the {@link RecordMapping} as a field — never as a text tail, which
+	 * the model recited into answers (issue #117). Note that this budget is not the only reason a
+	 * partner goes unnamed, nor usually the main one: segment 2 of {@code render} represents the
+	 * whole dataset tail with a single partner whenever a patient-relevant one was promoted, so most
+	 * of that count is normally "not relevant to this patient" rather than "did not fit".
 	 *
 	 * <p>Two guarantees override the budget, so the rendered length is the cap plus a bounded
 	 * overshoot rather than a hard ceiling — see {@code render}: every partner the patient is
@@ -342,6 +345,12 @@ public class DrugReferenceInjector {
 			// does not fit the budget (see render()). Severity is kept because it is the one thing a
 			// clinician needs when the mechanism prose has to go; a labelless rule has nothing
 			// shorter to fall back to, so it keeps its full text.
+			//
+			// It has a SECOND consumer, and in the common case the primary one: segment 2 renders the
+			// dataset-tail representative compact unconditionally whenever a partner was promoted,
+			// with budget still to spare (issue #117 — mechanism prose about a drug the patient is not
+			// on is what the model recited). So do not assume reaching this form means the budget ran
+			// out; it also means "breadth is all this partner is here for".
 			String severity = ChartSearchAiUtils.firstNonBlank(i.getSeverity());
 			String compact = (label == null ? rendered
 					: (severity != null ? label + " (" + severity + ")" : label)).trim();
@@ -444,7 +453,8 @@ public class DrugReferenceInjector {
 		/** Dataset attribution, or null when the entry declares none. */
 		final String source;
 
-		/** Interaction partners the render budget left out; 0 when none were. */
+		/** Interaction partners the text does not name — dropped by the budget or, more often, by
+		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all. */
 		final int withheldInteractions;
 
 		RenderedReference(String text, String source, int withheldInteractions) {

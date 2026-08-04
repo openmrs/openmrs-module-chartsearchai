@@ -18,7 +18,6 @@ import java.io.InputStream;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -40,10 +39,7 @@ public class DdiDrugReferenceSourceTest {
 	/** The injected drug-reference record's mapping — the carrier of the citation metadata that is
 	 *  deliberately absent from the record text (issue #117). */
 	private RecordMapping injectedReference(PatientChart chart) {
-		return chart.getMappings().stream()
-				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType()))
-				.findFirst().orElseThrow(() -> new AssertionError(
-						"no drug-reference record was injected into the chart"));
+		return DrugReferenceTestSupport.injectedReference(chart);
 	}
 
 	@Test
@@ -109,8 +105,9 @@ public class DdiDrugReferenceSourceTest {
 	@Test
 	public void renderCapBoundsBroadInteractionSets() {
 		// A broad interaction set (Warfarin, many partners) must not write every full note into
-		// the injected record — that overruns the LLM context window. The render caps it and
-		// summarises the remainder; the validator still sees every interaction (tested below).
+		// the injected record — that overruns the LLM context window. The render caps what it
+		// renders and reports the remainder as a count on the mapping, NOT as a summary sentence in
+		// the record (issue #117); the validator still sees every interaction (tested below).
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(DrugReferenceTestSupport.ddinterService());
 		PatientChart result = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 				DrugReferenceTestSupport.ctx(60, null, null, null, null, null), "is warfarin safe to add?");

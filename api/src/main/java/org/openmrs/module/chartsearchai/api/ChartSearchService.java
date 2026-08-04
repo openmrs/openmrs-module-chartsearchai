@@ -372,8 +372,9 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * How many interaction partners the cited record's render budget left out, so a client can
-		 * say the citation shows a subset. 0 when nothing was withheld. See
+		 * How many interaction partners the cited record does not show, so a client can say the
+		 * citation shows a subset — not that they were omitted for length, which is usually not why.
+		 * 0 when it shows them all. See
 		 * {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping#getWithheldInteractions()}.
 		 */
 		public int getWithheldInteractions() {

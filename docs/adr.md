@@ -775,13 +775,13 @@ Response:
   "answer": "The patient is currently on...[1]...[3]",
   "disclaimer": "This response is AI-generated and may not be accurate...",
   "references": [
-    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15", "grounded": null, "group": "chart" },
-    { "index": 1, "resourceType": "obs", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10", "grounded": null, "group": "chart" }
+    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15", "grounded": null, "group": "chart", "source": null, "withheldInteractions": 0 },
+    { "index": 1, "resourceType": "obs", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10", "grounded": null, "group": "chart", "source": null, "withheldInteractions": 0 }
   ]
 }
 ```
 
-`grounded` is the citation-grounding verdict — `true`/`false` once verified, `null` when grounding is disabled (the default) or did not check that citation; clients must render `null` as unverified, never as verified. `group` is derived from `resourceType` and separates `chart` (a record retrieved from this patient's chart) from `reference` (module-supplied drug knowledge-base prose, not a record about this patient); the array is ordered `chart` group first, preserving the upstream order (most recent first, undated last) within each group.
+`grounded` is the citation-grounding verdict — `true`/`false` once verified, `null` when grounding is disabled (the default) or did not check that citation; clients must render `null` as unverified, never as verified. `group` is derived from `resourceType` and separates `chart` (a record retrieved from this patient's chart) from `reference` (module-supplied drug knowledge-base prose, not a record about this patient); the array is ordered `chart` group first, preserving the upstream order (most recent first, undated last) within each group. `source` and `withheldInteractions` are the citation's metadata — the dataset an injected drug-reference entry came from, and how many of its interaction partners the record left unrendered. Both keys are always present (`null` / `0` for a chart record, and for a module-derived safety finding, which is computed rather than quoted). They are fields rather than sentences inside the record because everything in a record's text is quotable and the model recited both into answers (issue #117); render them beside the citation, never as part of the answer.
 
 #### Streaming endpoint (SSE)
 
@@ -795,7 +795,7 @@ POST /ws/rest/v1/chartsearchai/search/stream
 
 Returns a `text/event-stream` with three event types:
 - `token` — a chunk of the answer text, streamed as generated
-- `done` — final JSON with the complete answer, references (with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`, `group`), and disclaimer
+- `done` — final JSON with the complete answer, references (with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`, `group`, `source`, `withheldInteractions`), and disclaimer
 - `error` — an error message if something goes wrong
 
 Both search endpoints return a `questionId` (the audit log row ID as a string) that the frontend uses to submit user feedback.

@@ -303,16 +303,32 @@ public interface ChartSearchService {
 
 		private final Boolean grounded;
 
+		private final String source;
+
+		private final int withheldInteractions;
+
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date) {
 			this(index, resourceType, resourceUuid, date, null);
 		}
 
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded) {
+			this(index, resourceType, resourceUuid, date, grounded, null, 0);
+		}
+
+		/**
+		 * Full constructor, carrying the citation metadata a client renders beside the reference —
+		 * see {@link #getSource()} and {@link #getWithheldInteractions()}. The shorter constructors
+		 * default both to "none", which is a chart record's real shape.
+		 */
+		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded,
+				String source, int withheldInteractions) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
 			this.date = date;
 			this.grounded = grounded;
+			this.source = source;
+			this.withheldInteractions = withheldInteractions;
 		}
 
 		public int getIndex() {
@@ -345,10 +361,32 @@ public interface ChartSearchService {
 		}
 
 		/**
+		 * Provenance for this citation — the dataset an injected reference record came from,
+		 * {@code null} for a chart record (see
+		 * {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping#getSource()}).
+		 * Carried as a field precisely so it does not have to be inside the record text, where
+		 * the model quoted it into the answer (issue #117).
+		 */
+		public String getSource() {
+			return source;
+		}
+
+		/**
+		 * How many interaction partners the cited record does not show, so a client can say the
+		 * citation shows a subset — not that they were omitted for length, which is usually not why.
+		 * 0 when it shows them all. See
+		 * {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping#getWithheldInteractions()}.
+		 */
+		public int getWithheldInteractions() {
+			return withheldInteractions;
+		}
+
+		/**
 		 * @return a copy of this reference carrying the given grounding verdict
 		 */
 		public RecordReference withGrounded(Boolean verdict) {
-			return new RecordReference(index, resourceType, resourceUuid, date, verdict);
+			return new RecordReference(index, resourceType, resourceUuid, date, verdict, source,
+					withheldInteractions);
 		}
 	}
 }

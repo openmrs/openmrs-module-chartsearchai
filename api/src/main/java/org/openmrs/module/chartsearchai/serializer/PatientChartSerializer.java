@@ -365,6 +365,13 @@ public class PatientChartSerializer {
 
 	/**
 	 * Maps a sequential index used in the LLM prompt back to the OpenMRS resource.
+	 *
+	 * <p>{@link #getText()} is the record's content — the part the LLM reads and may quote.
+	 * {@link #getSource()} and {@link #getWithheldInteractions()} are <em>about</em> the record
+	 * rather than part of it, and are deliberately kept off the text: anything inside it is
+	 * quotable, and a model told to cite records recited the module's own truncation counter and
+	 * dataset attribution into a clinician-facing answer (issue #117). Metadata a client should
+	 * render beside a citation therefore travels as its own field, never as prose.
 	 */
 	public static class RecordMapping {
 
@@ -378,6 +385,10 @@ public class PatientChartSerializer {
 
 		private final String text;
 
+		private final String source;
+
+		private final int withheldInteractions;
+
 		/**
 		 * Backward-compatible constructor that carries no source text. Mappings
 		 * built this way cannot be grounding-checked; the grounding verifier
@@ -389,11 +400,23 @@ public class PatientChartSerializer {
 		}
 
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text) {
+			this(index, resourceType, resourceUuid, date, text, null, 0);
+		}
+
+		/**
+		 * Full constructor, including the citation metadata that must not live in {@code text}
+		 * (see the class doc). A chart record has neither, so the shorter constructors default
+		 * them to "no attribution, nothing withheld".
+		 */
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String source, int withheldInteractions) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
 			this.date = date;
 			this.text = text;
+			this.source = source;
+			this.withheldInteractions = withheldInteractions;
 		}
 
 		public int getIndex() {
@@ -427,6 +450,39 @@ public class PatientChartSerializer {
 		 */
 		public String getText() {
 			return text;
+		}
+
+		/**
+		 * Where this record's content came from, for a client to render as provenance beside the
+		 * citation — the dataset attribution of an injected drug-reference record (e.g.
+		 * {@code "DDInter 2.0 (via openmrs-ddi-knowledge-base)"}). {@code null} for a chart
+		 * record, whose provenance is the patient's own record.
+		 *
+		 * <p>Structural rather than appended to {@link #getText()} on purpose: it used to be
+		 * rendered into the citable text, and the model quoted it into the answer (issue #117).
+		 */
+		public String getSource() {
+			return source;
+		}
+
+		/**
+		 * How many of this record's interaction partners it does not show, so a client can be honest
+		 * that the citation shows a subset. 0 when it shows them all, and for every record that has
+		 * no interactions to withhold.
+		 *
+		 * <p>Two rules withhold, and outside a broad dataset the second dominates: the per-record
+		 * render budget, and — once a partner the patient is actually on is shown — the remaining
+		 * dataset being represented by one partner rather than rendered in full. A large count
+		 * therefore usually means "not relevant to this patient" rather than "did not fit", so it
+		 * must not be presented to a clinician as an omission for length.
+		 *
+		 * <p>Structural for the same reason as {@link #getSource()}: as a text tail ("and 824 more
+		 * interactions on file") the model recited it as though it were clinical content. The
+		 * deterministic {@code DrugSafetyValidator} reads every interaction off the entry either
+		 * way, so a withheld partner is withheld from the prompt only, never from safety checking.
+		 */
+		public int getWithheldInteractions() {
+			return withheldInteractions;
 		}
 	}
 }

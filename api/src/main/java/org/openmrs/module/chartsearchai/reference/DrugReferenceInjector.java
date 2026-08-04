@@ -65,13 +65,18 @@ public class DrugReferenceInjector {
 	 * Per-entry character budget for the rendered {@code Interactions:} section. Bounds the
 	 * grounding text a single reference line contributes to the prompt so a broad dataset cannot
 	 * overflow the LLM context window; the deterministic {@link DrugSafetyValidator} still reads
-	 * every interaction off the entry, so nothing is lost from safety checking. The rest are
-	 * summarised as "and N more interactions on file".
+	 * every interaction off the entry, so nothing is lost from safety checking. How many the record
+	 * does not name is reported on the {@link RecordMapping} as a field — never as a text tail, which
+	 * the model recited into answers (issue #117). Note that this budget is not the only reason a
+	 * partner goes unnamed, nor usually the main one: segment 2 of {@code render} represents the
+	 * whole dataset tail with a single partner whenever a patient-relevant one was promoted, so most
+	 * of that count is normally "not relevant to this patient" rather than "did not fit".
 	 *
 	 * <p>Two guarantees override the budget, so the rendered length is the cap plus a bounded
 	 * overshoot rather than a hard ceiling — see {@code render}: every partner the patient is
 	 * actually on is represented (full note, or a compact {@code name (Severity)} form when the
-	 * note will not fit), and at least one dataset-order partner renders alongside them.
+	 * note will not fit), and one dataset-order partner renders alongside them — compact when the
+	 * patient has a relevant partner (breadth is all it is there for), in full when they do not.
 	 */
 	static final int MAX_INTERACTION_RENDER_CHARS = 1500;
 
@@ -170,10 +175,13 @@ public class DrugReferenceInjector {
 		int index = mappings.size() + 1;
 
 		for (DrugReference ref : matched) {
-			String rendered = render(ref, age, context);
+			RenderedReference rendered = render(ref, age, context);
+			// The rendering's own bookkeeping rides on the mapping, not in the line — see
+			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
+			// grounding verifier still compares against exactly what the model read.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
-					ref.getId(), null, rendered));
-			text.append("[").append(index).append("] ").append(rendered).append("\n");
+					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions));
+			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
 
@@ -337,6 +345,12 @@ public class DrugReferenceInjector {
 			// does not fit the budget (see render()). Severity is kept because it is the one thing a
 			// clinician needs when the mechanism prose has to go; a labelless rule has nothing
 			// shorter to fall back to, so it keeps its full text.
+			//
+			// It has a SECOND consumer, and in the common case the primary one: segment 2 renders the
+			// dataset-tail representative compact unconditionally whenever a partner was promoted,
+			// with budget still to spare (issue #117 — mechanism prose about a drug the patient is not
+			// on is what the model recited). So do not assume reaching this form means the budget ran
+			// out; it also means "breadth is all this partner is here for".
 			String severity = ChartSearchAiUtils.firstNonBlank(i.getSeverity());
 			String compact = (label == null ? rendered
 					: (severity != null ? label + " (" + severity + ")" : label)).trim();
@@ -420,15 +434,47 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Renders one reference entry into the citable line the LLM sees. Numeric dosing
-	 * is included only when an age band matches {@code age}; prose warnings,
+	 * One reference entry rendered for the prompt, separated from the bookkeeping that describes
+	 * the rendering.
+	 *
+	 * <p>{@code text} is the citable record: everything in it is quotable, because the model is
+	 * instructed to cite records and it quotes what it cites. {@code source} and
+	 * {@code withheldInteractions} are facts <em>about</em> that text — a dataset attribution and
+	 * how many partners the text does not name — which used to be appended to it and were duly recited
+	 * into clinician-facing answers ("…and 824 more interactions on file. Source: DDInter 2.0…",
+	 * issue #117). They travel here instead, onto the {@link RecordMapping} and out to the client,
+	 * where a citation chip can show provenance and honest truncation without the model ever
+	 * seeing either.
+	 */
+	static final class RenderedReference {
+
+		final String text;
+
+		/** Dataset attribution, or null when the entry declares none. */
+		final String source;
+
+		/** Interaction partners the text does not name — dropped by the budget or, more often, by
+		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all. */
+		final int withheldInteractions;
+
+		RenderedReference(String text, String source, int withheldInteractions) {
+			this.text = text;
+			this.source = source;
+			this.withheldInteractions = withheldInteractions;
+		}
+	}
+
+	/**
+	 * Renders one reference entry into the citable line the LLM sees, plus the metadata that
+	 * describes the rendering and must stay out of it — see {@link RenderedReference}. Numeric
+	 * dosing is included only when an age band matches {@code age}; prose warnings,
 	 * contraindications and interactions are always rendered.
 	 *
 	 * <p>{@code context} orders the capped {@code Interactions:} section — see
 	 * {@link #orderedInteractionNotes}. It may be null (nothing to prioritise by), in which case
 	 * the section keeps dataset order.
 	 */
-	static String render(DrugReference ref, Integer age, PatientClinicalContext context) {
+	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context) {
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
 		StringBuilder paren = new StringBuilder();
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {
@@ -482,12 +528,14 @@ public class DrugReferenceInjector {
 
 		OrderedInteractions interactions = orderedInteractionNotes(ref, context);
 		List<InteractionNote> ordered = interactions.ordered;
+		int withheld = 0;
 		if (!ordered.isEmpty()) {
 			// Cap what is *rendered* into the prompt, not what is parsed: a broad interaction
 			// dataset (e.g. the ddinter source's Warfarin, ~934 partners) would otherwise write
 			// tens of thousands of tokens into a single citable line and blow the LLM context
 			// window. The safety validator still reads every interaction off the entry, so this
-			// only bounds the grounding text. A blank tail records how many were withheld.
+			// only bounds the grounding text. How many were withheld is reported on the
+			// RecordMapping, never in this text — see RenderedReference.
 			List<String> shown = new ArrayList<String>();
 			int used = 0;
 
@@ -504,39 +552,55 @@ public class DrugReferenceInjector {
 				used += piece.length() + 2;
 			}
 
-			// Segment 2 — the dataset tail, budget-limited, but never empty when partners remain:
-			// this entry is also the only reference material the model has about the drug in
-			// general, and a promoted note can be long enough to consume the budget alone (the
-			// bundled aspirin x ibuprofen note is ~800 of the 1500 chars). That extends the
-			// pre-existing "at least one interaction is always shown" guarantee to one per segment
-			// rather than narrowing it to "only the patient's own".
+			// Segment 2 — the dataset tail. It exists because this entry is also the only reference
+			// material the model has about the drug in general, so the record must not read as if
+			// the patient's own overlap were the drug's only interaction. What it does NOT need to
+			// do is put mechanism prose for drugs this patient has nothing to do with in front of a
+			// model that reports what it can see: measured live (issue #117), a patient on
+			// simvastatin asked about erythromycin got the correct simvastatin finding in sentence
+			// one and then ~1150 further characters reciting the ivosidenib and ixabepilone notes —
+			// which rendered only because a short promoted note left budget to spend. The tail's job
+			// is breadth, and one partner named with its severity states breadth; the mechanism text
+			// is what is actionable for a partner the patient is actually on, and #117 also records
+			// this quantised model garbling long verbatim copies, so every irrelevant paragraph
+			// offered is a paragraph of mangled clinical prose a clinician may be shown.
+			//
+			// So: with a promoted partner present, exactly one representative, in the compact
+			// "name (Severity)" form — with one operator-authored exception, since InteractionNote
+			// keeps the full text for a rule carrying no token and no ATC (there is no name to shorten
+			// to), so such a row can still land a full paragraph in this slot. That stays inside the
+			// same one-note overshoot the budget already tolerates; it just is not always ~20 chars.
+			// With none, the record has nothing patient-specific to say and
+			// the general material IS its content, so the budget is spent on full notes exactly as
+			// before, the first always rendering however long it is — the pre-existing "at least one
+			// interaction is always shown" guarantee, which is why the explicit re-add this replaced
+			// could only ever fire in the promoted case, and that case now always shows one.
+			// MAX_INTERACTION_RENDER_CHARS stays a soft budget whose overshoot is at most one note,
+			// and a compact representative shrinks that overshoot rather than widening it.
 			int restStart = interactions.promotedCount;
-			int restShown = 0;
-			for (int i = restStart; i < ordered.size(); i++) {
-				String n = ordered.get(i).full;
-				if (!shown.isEmpty() && used + n.length() > MAX_INTERACTION_RENDER_CHARS) {
-					break;
+			if (restStart == 0) {
+				for (int i = 0; i < ordered.size(); i++) {
+					String n = ordered.get(i).full;
+					if (!shown.isEmpty() && used + n.length() > MAX_INTERACTION_RENDER_CHARS) {
+						break;
+					}
+					shown.add(n);
+					used += n.length() + 2;
 				}
-				shown.add(n);
-				used += n.length() + 2;
-				restShown++;
-			}
-			if (restShown == 0 && restStart < ordered.size()) {
-				shown.add(ordered.get(restStart).full);
+			} else if (restStart < ordered.size()) {
+				shown.add(ordered.get(restStart).compact);
 			}
 
-			sb.append(" Interactions: ").append(String.join("; ", shown));
-			int withheld = ordered.size() - shown.size();
-			if (withheld > 0) {
-				sb.append("; and ").append(withheld).append(" more interactions on file");
-			}
-			sb.append(".");
+			sb.append(" Interactions: ").append(String.join("; ", shown)).append(".");
+			withheld = ordered.size() - shown.size();
 		}
 
-		if (ref.getSource() != null && !ref.getSource().isEmpty()) {
-			sb.append(" Source: ").append(ref.getSource()).append(".");
-		}
-		return sb.toString();
+		// The dataset attribution and the withheld count leave with the RenderedReference instead of
+		// being appended here: everything in this string is quotable, and the model quoted both into
+		// clinician-facing answers (issue #117). Trimmed and blank-coalesced for the same reason the
+		// sections above are — the dataset is operator-editable.
+		String source = ChartSearchAiUtils.firstNonBlank(ref.getSource());
+		return new RenderedReference(sb.toString(), source != null ? source.trim() : null, withheld);
 	}
 
 	/** Adds {@code value} to {@code out} only when it is non-null and non-blank. */

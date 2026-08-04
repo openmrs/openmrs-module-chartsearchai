@@ -367,8 +367,8 @@ Response:
   "disclaimer": "This response is AI-generated and may not be accurate...",
   "questionId": "42",
   "references": [
-    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15", "grounded": null, "group": "chart" },
-    { "index": 1, "resourceType": "order", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10", "grounded": null, "group": "chart" }
+    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15", "grounded": null, "group": "chart", "source": null, "withheldInteractions": 0 },
+    { "index": 1, "resourceType": "order", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10", "grounded": null, "group": "chart", "source": null, "withheldInteractions": 0 }
   ],
   "safetyWarnings": []
 }
@@ -386,6 +386,15 @@ Each reference also carries a `group`, derived from its `resourceType`, telling 
 | `reference` | **Module-supplied reference prose** (a drug knowledge-base entry injected by [drug-reference injection](#drug-reference-injection--safety-validation)), not a record about this patient. |
 
 Render the two groups distinctly: a `reference` entry is a pointer into a drug knowledge base, so presenting it alongside chart records without distinction lets module-supplied text read as chart evidence. Prefer `group` over testing `resourceType` against `drug_reference` client-side — that is what `group` is for, and it keeps the classification in one place when another kind of injected record is added. Do not use `group` to hide references — a `reference` entry is the disclosure of where a drug-interaction statement came from, and the answer prose still cites it by number. Note that a **drug-reference** entry is never `grounded: true`, because those citations are [demote-only](#citation-grounding); their faithfulness is checked by the `safetyWarnings` chips instead. That guarantee is keyed on the `drug_reference` resource type rather than on `group`, so it does not automatically extend to a second kind of injected record — whoever adds one must decide whether the demote-only gate should key off `group` instead, and align the client's verdict suppression with it.
+
+Each reference also carries `source` and `withheldInteractions`, the citation's metadata:
+
+| field | Meaning |
+| --- | --- |
+| `source` | Where the cited record's content came from — the dataset attribution of an injected **drug-reference** entry (e.g. `"DDInter 2.0 (via openmrs-ddi-knowledge-base)"`). `null` for a `chart` entry, whose provenance is the patient's own record, and `null` for a module-derived finding, which is computed rather than quoted from a dataset. So do not key rendering on `group`: a `reference`-group entry may legitimately carry no attribution — branch on the value, not the group. |
+| `withheldInteractions` | How many of the cited record's interaction partners the record does not show, so a client can say the citation shows a subset. `0` when it shows them all, and for every record with no interactions. Two rules withhold, and the second is usually the bigger one: the per-record render budget, and — once a partner the patient is actually on is shown — the rest of the dataset being represented by a single partner instead of in full. So a large count normally means "not relevant to this patient", not "too long to fit": say the citation shows a subset, **not** that partners were omitted for length. Nothing is withheld from safety checking — the `safetyWarnings` validator reads every interaction regardless. |
+
+Both keys are always present. They are fields rather than sentences inside the record because everything in a record's text is quotable, and the model quoted both into clinician-facing answers — a one-drug safety question came back with the module's own truncation counter and dataset attribution appended to the prose (issue #117). Render them beside the citation, not as part of the answer.
 
 The array is ordered so the groups are contiguous, `chart` first, preserving the upstream order (most recent first, undated last) within each group — so a client that just renders the array in order gets the grouping without doing any work. `index` is unaffected by that ordering; it remains each record's citation number, matching the inline `[N]` markers in the answer.
 
@@ -413,7 +422,7 @@ SSE events:
 | `thinking` | A chunk of the model's reasoning, emitted before the answer; render distinctly (e.g. a collapsible panel), never as the answer |
 | `token` | A chunk of the answer text as it is generated |
 | `references` | The answer's citations the moment the answer is complete — before grounding verdicts exist; render as unverified until verdicts arrive |
-| `done` | Final JSON with the complete answer, references (`chart` group first, upstream order — most recent first, undated last — within each group, with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`, `group`), `safetyWarnings`, `questionId`, and disclaimer. With `chartsearchai.grounding.async=true`, `done` is emitted as soon as the answer is complete — its references carry no verdicts yet and `safetyWarnings` is empty (validation runs with grounding) |
+| `done` | Final JSON with the complete answer, references (`chart` group first, upstream order — most recent first, undated last — within each group, with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`, `group`, `source`, `withheldInteractions`), `safetyWarnings`, `questionId`, and disclaimer. With `chartsearchai.grounding.async=true`, `done` is emitted as soon as the answer is complete — its references carry no verdicts yet and `safetyWarnings` is empty (validation runs with grounding) |
 | `grounded` | Only with `chartsearchai.grounding.async=true`: the references re-sent with their grounding verdicts (`grounded` true/false/null) once Tier-2 verification completes, plus the final `safetyWarnings`, with the same `questionId`. Keep consuming the stream after `done` to receive it |
 | `error` | Error message if something goes wrong |
 

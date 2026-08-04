@@ -211,6 +211,35 @@ public class ChartSearchAiSearchResponseGroupingTest {
 		assertTrue(drugRef.containsKey("grounded"), "the grounded key must be present even when null");
 	}
 
+	@Test
+	public void searchResponse_alsoPublishesTheCitationMetadataKeys() {
+		// Issue #117 moved a drug-reference record's dataset attribution and its withheld-partner
+		// count off the citable record text — where the model recited them into clinician-facing
+		// answers — and onto the reference, for a client to render beside the citation chip. That
+		// relocation only holds where the keys actually reach a client, and this endpoint is the one
+		// emission site the three SSE assertions cannot speak for: per this class's own reason for
+		// existing, covering the shared helper proves the helper, not that /search calls it.
+		//
+		// Presence rather than values, because this fixture's reference carries neither (it is built
+		// with the short constructor, so null / 0 — a real shape, and the one a chart record always
+		// has). That the populated values survive the trip is pinned where a populated fixture
+		// exists: ChartSearchAiReferenceProvenanceTest for the SSE sites, and
+		// LlmInferenceServiceTest for the mapping -> reference hop. What is unique to this site, and
+		// all that is missing without this test, is whether the blocking endpoint goes through the
+		// shared serialization at all.
+		for (Map<String, Object> ref : searchReferences()) {
+			assertTrue(ref.containsKey("source"),
+					"reference [" + ref.get("index") + "] carries no source key: " + ref);
+			assertTrue(ref.containsKey("withheldInteractions"),
+					"reference [" + ref.get("index") + "] carries no withheldInteractions key: " + ref);
+			assertEquals(null, ref.get("source"),
+					"this fixture declares no attribution, so the key must be present and null "
+							+ "rather than absent — a client reads it unconditionally: " + ref);
+			assertEquals(0, ref.get("withheldInteractions"),
+					"and nothing is withheld from it: " + ref);
+		}
+	}
+
 	/** Mirrors the SSE fixture: an injected drug reference listed FIRST, so ordering is proved. */
 	private static class MixedReferenceStubService implements ChartSearchService {
 

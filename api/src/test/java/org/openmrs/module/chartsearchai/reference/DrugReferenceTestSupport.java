@@ -26,7 +26,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 
 /**
  * The one set of drug-reference test helpers, shared by the reference test classes (and, via
- * the one public accessor, the grounding tests in {@code api.impl}) so the
+ * the public accessors, the grounding and inference tests in {@code api.impl}) so the
  * arrangement/matcher bodies cannot drift between files (the same rule CLAUDE.md states for
  * {@code TestDatasetHelper}). Everything here constructs REAL production objects and calls
  * real production paths — no mocks, no pipeline reimplementation; the individual test files
@@ -41,13 +41,40 @@ public final class DrugReferenceTestSupport {
 	 * without reimplementing the renderer.
 	 */
 	public static String injectedDdinterReferenceText(String question) {
-		PatientChart chart = injector(ddinterService()).injectRecords(oneRecordChart(),
+		return injectedReference(injectedDdinterChart(question)).getText();
+	}
+
+	/** The one arrangement behind both public DDInter accessors, so they cannot drift apart. */
+	private static PatientChart injectedDdinterChart(String question) {
+		return injector(ddinterService()).injectRecords(oneRecordChart(),
 				ctx(60, null, null, null, null, null), question);
+	}
+
+	/**
+	 * The injected drug-reference record's mapping in {@code chart} — the mapping rather than only
+	 * its text, because it is the carrier of the citation metadata (source, withheld count) that is
+	 * deliberately absent from the record text (issue #117).
+	 *
+	 * <p>The one matcher for "the injected reference", so the reference-shaped filter cannot drift
+	 * between the test files that need it. {@code DrugReferenceInjectorTest.referenceMappingFor} is
+	 * deliberately separate: it selects by the drug the rendering names, which is a different
+	 * question once more than one entry is injected.
+	 */
+	static RecordMapping injectedReference(PatientChart chart) {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType()))
-				.map(RecordMapping::getText).findFirst()
-				.orElseThrow(() -> new IllegalStateException(
-						"no drug-reference record was injected for question: " + question));
+				.findFirst().orElseThrow(() -> new IllegalStateException(
+						"no drug-reference record was injected into the chart: " + chart.getText()));
+	}
+
+	/**
+	 * The real record mappings the REAL injector produces for {@code question} (bundled DDInter
+	 * sample, real load → parse → injectRecords chain), for tests outside this package that need
+	 * genuine injected mappings — including their citation metadata (source, withheld count) —
+	 * rather than hand-built stand-ins.
+	 */
+	public static List<RecordMapping> injectedDdinterMappings(String question) {
+		return injectedDdinterChart(question).getMappings();
 	}
 
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */

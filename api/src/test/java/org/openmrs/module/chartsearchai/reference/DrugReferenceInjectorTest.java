@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -240,8 +241,11 @@ public class DrugReferenceInjectorTest {
 		String section = interactionsSectionFor("Lisinopril", "ibuprofen");
 		assertTrue(section.length() <= 2 * DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS,
 				"the rendered interactions section must stay bounded by cap + one note: " + section.length());
-		assertTrue(section.contains("more interactions on file"),
-				"partners dropped by the cap must still be summarised in the withheld tail: " + section);
+		// Truncation must still be reported — the bound above is worthless if the cap never bit. The
+		// report moved from a text tail to the mapping in issue #117 (the model recited the tail into
+		// answers); this asserts the same fact on its new carrier.
+		assertTrue(injectedMappingFor("Lisinopril", "ibuprofen").getWithheldInteractions() > 0,
+				"partners dropped by the cap must still be reported as withheld: " + section);
 	}
 
 	@Test
@@ -385,6 +389,179 @@ public class DrugReferenceInjectorTest {
 						+ "path must agree on the floor: " + warnings);
 	}
 
+	@Test
+	public void theRenderersOwnBookkeepingIsStructuralNotCitableText() {
+		// Issue #117. The withheld-partner count and the dataset attribution were appended to the
+		// same string the model is told to cite, so there was no boundary marking them as metadata
+		// and the model recited them. Live on the 3.7.1 standalone (full 19MB KB): a patient on
+		// simvastatin asked "can I prescribe erythromycin?" got a 1492-char answer whose first
+		// sentence was the answer and whose tail read "...and 824 mor e interactions on file.
+		// Source: DDInter 2.0 (via openmrs-ddi-knowledge-base). [75]" — the module's own truncation
+		// counter, mangled by the quantised model, presented to a clinician as clinical content.
+		//
+		// Both facts are worth keeping, so they move to the mapping as fields: the client can render
+		// provenance and honest truncation on the citation chip, and the model has nothing to quote.
+		PatientChart result = ddinterInjector().injectRecords(oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, set("ibuprofen"), null, null, null),
+				"is it safe to give lisinopril?");
+		RecordMapping ref = referenceMappingFor(result, "Lisinopril");
+
+		// Both the mapping text and the chart line, because they are the same string and BOTH are
+		// what the model reads: the chart text is the prompt, the mapping text is what the grounding
+		// verifier compares against, and a divergence here would mean grounding a claim against
+		// words the model never saw.
+		assertFalse(ref.getText().contains("more interactions on file"),
+				"the withheld count must not be inside the citable record: " + ref.getText());
+		assertFalse(ref.getText().contains("Source:"),
+				"the dataset attribution must not be inside the citable record: " + ref.getText());
+		assertFalse(result.getText().contains("more interactions on file"),
+				"nor anywhere in the prompt chart text: " + result.getText());
+		assertFalse(result.getText().contains("Source:"),
+				"nor anywhere in the prompt chart text: " + result.getText());
+		// The two pairs above only differ if the mapping text and the chart line can differ, so pin
+		// that they cannot: the chart line is "[N] " + the mapping text, byte for byte. This is the
+		// invariant the grounding verifier rests on — it compares an answer sentence against
+		// mapping.getText() to judge a claim the model formed from the chart text — so a divergence
+		// would ground claims against words the model never read. Nothing else asserts it.
+		assertTrue(result.getText().contains("[" + ref.getIndex() + "] " + ref.getText() + "\n"),
+				"the chart line must be the mapping text verbatim: " + result.getText());
+
+		// And still exposed — removing them from the text must not lose them. The bundled Lisinopril
+		// entry carries 15 interaction partners and this record renders two (the promoted ibuprofen
+		// plus one tail representative), so 13 are withheld.
+		assertEquals(13, ref.getWithheldInteractions(),
+				"the withheld count must survive structurally: " + ref.getText());
+		assertEquals("DDInter 2.0 (via openmrs-ddi-knowledge-base)", ref.getSource(),
+				"the dataset attribution must survive structurally");
+	}
+
+	@Test
+	public void whenThePatientIsOnEveryPartnerThereIsNoDatasetTailLeftAndNothingIsWithheld() {
+		// Segment 2's third case: the patient is on ALL of this entry's above-floor partners, so the
+		// dataset tail is empty and the representative must simply not render. It is the only arm of
+		// that branch nothing else reaches — the two tests either side of this one cover "a tail
+		// exists alongside a promoted partner" and "nothing was promoted".
+		//
+		// It is worth its own test because the guard protecting it is the kind that reads redundant:
+		// `restStart < ordered.size()` looks like a bound check on a list you just measured, and
+		// relaxing it to <= throws IndexOutOfBoundsException out of render. DrugReferenceInjector.inject
+		// catches every RuntimeException and returns the chart unmodified, so the failure would not
+		// surface as an error — the entire drug-reference feature, including the deterministic
+		// safety_finding records #110 added to stop safety abstentions, would silently vanish behind one
+		// log.warn, for exactly the polypharmacy patients it matters most for.
+		//
+		// The bundled curated entry Paracetamol carries exactly one interaction (warfarin, unrated —
+		// and unrated is floor-exempt, so it promotes), which makes promotedCount == ordered.size().
+		PatientChart result = injector().injectRecords(oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, set("warfarin"), null, null, null),
+				"is it safe to give paracetamol?");
+		RecordMapping ref = referenceMappingFor(result, "Paracetamol");
+		String section = ref.getText().substring(ref.getText().indexOf("Interactions:")).toLowerCase();
+
+		assertTrue(section.contains("warfarin"),
+				"precondition: the patient's own partner must be promoted and rendered: " + section);
+		assertEquals(0, ref.getWithheldInteractions(),
+				"with every partner rendered the count must be 0 — reporting a withheld partner that "
+						+ "does not exist would make the citation claim a subset of itself: " + section);
+	}
+
+	@Test
+	public void aModuleDerivedFindingIsAReferenceGroupRecordThatCarriesNoAttribution() {
+		// The pair that makes the README's "branch on the value, not the group" warning true, and the
+		// reason it is a warning at all. referenceGroup puts a safety finding in the SAME `reference`
+		// group as a drug-reference record (pinned by
+		// aDeterministicSafetyFindingIsInjectedAsItsOwnCitableRecord), so a client that keys "show
+		// provenance" off the group renders a source for a record that has none.
+		//
+		// It has none because it is the module's own conclusion, computed from the entry rather than
+		// quoted out of a dataset — and because #110 made that finding a CITABLE record, which is
+		// precisely the carrier #117 proved a source string must never ride on: whatever is inside a
+		// citable record is quotable, and the model quotes what it cites. Nothing is withheld from a
+		// finding either: it is about one specific interaction, not a truncated set.
+		PatientChart result = ddinterInjectorWithSafety().injectRecords(oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, set("simvastatin"), set("C10AA01"), null, null),
+				"is it safe to give clarithromycin?");
+
+		RecordMapping finding = null;
+		for (RecordMapping m : result.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType())) {
+				finding = m;
+				// First, not last — so this test and its sibling above describe the SAME record if a
+				// question ever yields more than one finding.
+				break;
+			}
+		}
+		assertNotNull(finding, "precondition: a deterministic finding must be injected: " + result.getText());
+		assertNull(finding.getSource(),
+				"a module-derived finding is computed, not quoted from a dataset, so it must declare "
+						+ "no attribution however its group is classified: " + finding.getText());
+		assertEquals(0, finding.getWithheldInteractions(),
+				"and nothing is withheld from a single-interaction finding: " + finding.getText());
+	}
+
+	@Test
+	public void theDatasetTailRepresentativeDropsItsProseWhenAPatientRelevantPartnerIsRendered() {
+		// The other half of #117: the answer's bulk was two full interaction notes for drugs the
+		// patient has nothing to do with (ivosidenib, ixabepilone), which the model reported
+		// alongside the real finding as though equally actionable. They were there because segment 2
+		// spends whatever the budget has left on dataset-order partners in FULL — so a short
+		// promoted note buys several irrelevant mechanism paragraphs.
+		//
+		// The tail's purpose (see render) is that the record is also the only general reference
+		// material about the drug, i.e. that it must not read as if the patient's own overlap were
+		// the drug's only interaction. One partner named with its severity says exactly that. The
+		// mechanism prose is the part that is only useful for a partner the patient is actually on —
+		// and, per #117's corruption observation, the part this model degrades while reciting.
+		//
+		// The bundled Lisinopril entry with a patient on digoxin (Moderate, 313 chars) leaves ~1200
+		// of the 1500-char budget, which previously rendered five full dataset-order notes.
+		String section = interactionsSectionFor("Lisinopril", "digoxin");
+		assertTrue(section.contains("digoxin (moderate. some ace inhibitors"),
+				"precondition: the patient's own partner keeps its full mechanism note: " + section);
+		assertTrue(section.contains("metformin (moderate)"),
+				"the one dataset-tail representative renders as name + severity: " + section);
+		assertFalse(section.contains("limited data suggest"),
+				"its mechanism prose — useful only for a partner the patient is on — must go: " + section);
+		assertFalse(section.contains("methotrexate"),
+				"and no second dataset-order partner may render: the budget must not be spent on "
+						+ "partners this patient has nothing to do with: " + section);
+	}
+
+	@Test
+	public void withNoPatientRelevantPartnerTheDatasetTailStillRendersFullNotesToTheBudget() {
+		// The other side of the branch the test above pins, and the reason segment 2 is a branch at
+		// all rather than one rule. A compact representative is the right cut only when a promoted
+		// partner already carries the patient-specific content; with nothing promoted the general
+		// material IS the record's content, so the budget is spent on full notes exactly as it was
+		// before #117 — same entry, same question, and the ONLY difference is whether the patient is
+		// on one of the partners.
+		//
+		// Nothing else distinguishes the two sides: renderCapBoundsBroadInteractionSets and
+		// aSubFloorInteractionIsNotPromotedEvenWhenThePatientIsOnThatDrug both still pass if the
+		// branch is collapsed to the single compact representative, and collapsing it is the obvious
+		// simplification to reach for. It would strip every entry the patient has no overlap with —
+		// the common case, since a question naming a drug the patient is not on is the ordinary
+		// question — down to one bare partner name, with no failing test to say so.
+		String section = interactionsSectionFor("Lisinopril");
+		assertTrue(section.contains("metformin (moderate. limited data suggest"),
+				"with nothing promoted the first dataset-order partner keeps its mechanism note, "
+						+ "not the compact form the promoted case uses: " + section);
+		assertTrue(section.contains("methotrexate"),
+				"and the budget keeps admitting further partners rather than stopping at one: " + section);
+	}
+
+	/** The injected drug-reference mapping (not just its text) whose rendering names {@code drug}. */
+	private RecordMapping referenceMappingFor(PatientChart chart, String drug) {
+		for (RecordMapping m : chart.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType())
+					&& m.getText() != null && m.getText().contains(drug)) {
+				return m;
+			}
+		}
+		throw new AssertionError("no injected drug-reference record mentions " + drug
+				+ "; mappings=" + chart.getMappings().size());
+	}
+
 	/**
 	 * The lowercased {@code Interactions:} section of the injected {@code entry} record, for a
 	 * patient on {@code activeDrugs} asking about {@code entry}. The seven interaction-rendering
@@ -392,23 +569,23 @@ public class DrugReferenceInjectorTest {
 	 * inject-then-locate-then-slice plumbing lives here rather than in each of them.
 	 */
 	private String interactionsSectionFor(String entry, String... activeDrugs) {
+		String record = injectedMappingFor(entry, activeDrugs).getText();
+		return record.substring(record.indexOf("Interactions:")).toLowerCase();
+	}
+
+	/** The injected {@code entry} record itself, for a patient on {@code activeDrugs} asking about
+	 *  it — the mapping rather than only its text, for the assertions about the citation metadata
+	 *  that deliberately is not in the text (issue #117). */
+	private RecordMapping injectedMappingFor(String entry, String... activeDrugs) {
 		PatientChart result = ddinterInjector().injectRecords(oneRecordChart(),
 				DrugReferenceTestSupport.ctx(60, null, set(activeDrugs), null, null, null),
 				"is it safe to give " + entry.toLowerCase() + "?");
-		String record = referenceRecordContaining(result, entry);
-		return record.substring(record.indexOf("Interactions:")).toLowerCase();
+		return referenceMappingFor(result, entry);
 	}
 
 	/** The text of the injected drug-reference record whose rendering names {@code drug}. */
 	private String referenceRecordContaining(PatientChart chart, String drug) {
-		for (RecordMapping m : chart.getMappings()) {
-			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType())
-					&& m.getText() != null && m.getText().contains(drug)) {
-				return m.getText();
-			}
-		}
-		throw new AssertionError("no injected drug-reference record mentions " + drug
-				+ "; mappings=" + chart.getMappings().size());
+		return referenceMappingFor(chart, drug).getText();
 	}
 
 	@Test

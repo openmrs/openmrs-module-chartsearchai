@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,11 +57,22 @@ public class LlmProvider {
 			+ "Records beginning with \"Drug reference\" are clinical reference data, not this "
 			+ "patient's data; cite them the same way, but never present reference dosing as a value "
 			+ "already recorded for the patient. "
+			// SAFETY GUIDANCE LIVES IN TWO PLACES: this record-type sentence (#110, #112) and the
+			// safety/suitability paragraph below (#107, #112). They are one rule split across the
+			// prompt's two natural sections — what a record type means here, and how to answer a
+			// safety question — and both are gated on the same thing: a "Safety finding" record,
+			// which DrugReferenceInjector emits only when DrugSafetyValidator found something.
+			// Change either and read the other: #112 diagnosed a missing verdict rule from this
+			// paragraph alone and proposed adding one beside it, which would have left two
+			// contradictory lead instructions in one prompt. That was ruled out on the issue itself,
+			// on the measured history that added instructions in this area regress — all three
+			// candidate arms in eval/drift-metric/README.md did, and were reverted. Its lead clause
+			// was re-pointed instead.
 			+ "Records beginning with \"Safety finding\" ARE about this patient — this module derived "
 			+ "them from the patient's own records — so a safety finding naming the drug asked about "
-			+ "means the records DO address that drug: open with what the finding says and cite it, "
-			+ "and never put a sentence saying the records do not address the drug in front of one, "
-			+ "which contradicts it in the same breath. "
+			+ "means the records DO address that drug: answer the question from that finding and cite "
+			+ "it, and never put a sentence saying the records do not address the drug in front of "
+			+ "one, which contradicts it in the same breath. "
 			+ "Include ALL relevant records in your answer — never omit any for brevity. "
 			+ "Cite EVERY record you reference by its number in brackets (e.g. [1], [3]). "
 			+ "Respond with ONLY a JSON object with a \"reasoning\" string, then an \"answer\" string "
@@ -89,7 +101,13 @@ public class LlmProvider {
 			+ "about, the whole answer is one sentence stating that the records do not address "
 			+ "it — never \"Yes\" or \"No\" — and cite nothing with it: a record about a "
 			+ "different drug or condition is never evidence for or against it, and attaching "
-			+ "one only suggests a connection the records do not make.\n"
+			+ "one only suggests a connection the records do not make. "
+			+ "When a safety finding DOES name the drug or intervention asked about, the opposite "
+			+ "branch applies: that finding is evidence against giving it, so begin the answer with "
+			+ "the call it supports — \"No\", and what to avoid — then the finding itself, carrying "
+			+ "its own severity, and every record it rests on, cited. The finding's mechanism is the "
+			+ "evidence for that call: it belongs after the call, not in place of it. Never open such "
+			+ "an answer with \"Yes\".\n"
 			+ "Your answer must not vary based on the punctuation or phrasing of the query "
 			+ "— focus only on its semantic meaning.\n\n"
 			+ "The following is a FORMAT DEMONSTRATION ONLY using fake non-medical data. "
@@ -97,7 +115,14 @@ public class LlmProvider {
 			+ "Records:\n"
 			+ "[1] (2024-03-10) Fruit delivery: 12 apples\n"
 			+ "[2] (2024-02-15) Fruit delivery: 8 oranges\n"
-			+ "[3] (2024-01-20) Fruit delivery: 5 apples\n\n"
+			+ "[3] (2024-01-20) Fruit delivery: 5 apples\n"
+			// Undated and last, the shape DrugReferenceInjector.renderFinding produces and
+			// injectRecords appends after the dated chart records. The prefix is the production
+			// constant, not a copy, so the demonstration cannot drift from the line the model
+			// actually sees — the same coupling FOCUS_HINT_LABEL gives the focus-hint demo.
+			+ "[4] " + DrugReferenceInjector.FINDING_PREFIX
+			+ "Durian: Durian spoils the oranges in store — Major. "
+			+ "Ethylene released by durian ripens and rots citrus within days.\n\n"
 			+ "Clinician's query: How many apples were delivered?\n"
 			+ "{\"reasoning\": \"The query is about apples. Records [1] and [3] are apple deliveries; "
 			+ "[2] is oranges, a different fruit.\", "
@@ -115,6 +140,13 @@ public class LlmProvider {
 			+ "mango deliveries, so the whole answer states the records do not address it, "
 			+ "citing nothing.\", "
 			+ "\"answer\": \"The records do not address mango deliveries.\", \"citations\": []}\n\n"
+			+ "Clinician's query: Is it safe to deliver durian?\n"
+			+ "{\"reasoning\": \"A safety question about durian. The safety finding [4] names durian "
+			+ "and reports a Major problem with the oranges already in store [2], so the records DO "
+			+ "address durian and that finding is evidence against the delivery. The answer opens "
+			+ "with that call, then the finding and the record it rests on, both cited.\", "
+			+ "\"answer\": \"No — durian should not be delivered: it spoils the oranges already in "
+			+ "store [2], a Major problem [4].\", \"citations\": [2, 4]}\n\n"
 			+ FOCUS_HINT_LABEL + "2.\n"
 			+ "Clinician's query: Were any bananas delivered?\n"
 			+ "{\"reasoning\": \"The query is about bananas. The ranked record [2] is oranges and no "

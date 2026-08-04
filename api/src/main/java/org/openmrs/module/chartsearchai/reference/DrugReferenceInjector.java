@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,8 +65,13 @@ public class DrugReferenceInjector {
 	 * Per-entry character budget for the rendered {@code Interactions:} section. Bounds the
 	 * grounding text a single reference line contributes to the prompt so a broad dataset cannot
 	 * overflow the LLM context window; the deterministic {@link DrugSafetyValidator} still reads
-	 * every interaction off the entry, so nothing is lost from safety checking. At least one
-	 * interaction is always shown; the rest are summarised as "and N more interactions on file".
+	 * every interaction off the entry, so nothing is lost from safety checking. The rest are
+	 * summarised as "and N more interactions on file".
+	 *
+	 * <p>Two guarantees override the budget, so the rendered length is the cap plus a bounded
+	 * overshoot rather than a hard ceiling — see {@code render}: every partner the patient is
+	 * actually on is represented (full note, or a compact {@code name (Severity)} form when the
+	 * note will not fit), and at least one dataset-order partner renders alongside them.
 	 */
 	static final int MAX_INTERACTION_RENDER_CHARS = 1500;
 
@@ -75,6 +81,52 @@ public class DrugReferenceInjector {
 	/** Test seam: production wires {@link DrugReferenceService} via {@link Autowired}. */
 	void setDrugReferenceService(DrugReferenceService drugReferenceService) {
 		this.drugReferenceService = drugReferenceService;
+	}
+
+	@Autowired
+	private DrugSafetyValidator drugSafetyValidator;
+
+	/** Test seam: production wires {@link DrugSafetyValidator} via {@link Autowired}. */
+	void setDrugSafetyValidator(DrugSafetyValidator drugSafetyValidator) {
+		this.drugSafetyValidator = drugSafetyValidator;
+	}
+
+	/**
+	 * The deterministic safety findings for the drugs this question names, as citable records.
+	 *
+	 * <p>Rationale, measured. {@link DrugSafetyValidator} computes the safety join correctly every
+	 * time, but it runs <em>after</em> the answer, so the model is asked to re-derive a conclusion the
+	 * module already holds — and it does not. The eval README records 0 joins across 21 baseline
+	 * cells; on 2026-07-30 two live cases abstained with the evidence rendered, cited and provably
+	 * readable (a patient on simvastatin asked about clarithromycin, 0/6; a patient with a severe
+	 * aspirin allergy asked about ibuprofen, 0/4, while quoting the NSAID family list back verbatim
+	 * when asked). Supplying more evidence is measurably not the lever, and three prompt variants
+	 * regressed. So the finding becomes a record: reporting a line already in front of it is something
+	 * the model does reliably.
+	 *
+	 * <p>Computed by calling {@code validate} with an EMPTY answer — the production path, unmodified.
+	 * That makes the drugs in play exactly the question-named ones (the answer contributes none), and
+	 * runs the contraindication and interaction passes while contributing no dose-excess warning,
+	 * which is correct: a dose warning is about a dose the answer proposes, and there is no answer yet.
+	 * No second definition of any safety rule is introduced.
+	 *
+	 * <p>The list is empty whenever the deterministic layer finds nothing, so a question that nothing
+	 * bears on gains no record and its abstention survives by construction rather than by prompt
+	 * wording — the direction issue #107 guards.
+	 */
+	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question) {
+		// Gated on the SAME toggle that gates the chips, because the two must never disagree. The
+		// validator's public entry point checks this GP; the package-private overload used here does
+		// not, so without this an operator setting validateAnswers=false would switch the chips off
+		// while findings kept flowing into the prompt — the answer asserting "not safe due to a Major
+		// interaction [232]" with no chip beside it. That is precisely the chip-versus-prose divergence
+		// this whole change exists to remove, reappearing silently and only under a non-default config.
+		if (drugSafetyValidator == null || !ChartSearchAiUtils.getBooleanGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
+			return Collections.emptyList();
+		}
+		return drugSafetyValidator.validate("", question, context);
 	}
 
 	/**
@@ -107,7 +159,8 @@ public class DrugReferenceInjector {
 	 */
 	PatientChart injectRecords(PatientChart chart, PatientClinicalContext context, String question) {
 		List<DrugReference> matched = matchingEntries(context, question);
-		if (matched.isEmpty()) {
+		List<SafetyWarning> findings = preAnswerFindings(context, question);
+		if (matched.isEmpty() && findings.isEmpty()) {
 			return chart;
 		}
 
@@ -117,15 +170,25 @@ public class DrugReferenceInjector {
 		int index = mappings.size() + 1;
 
 		for (DrugReference ref : matched) {
-			String rendered = render(ref, age);
+			String rendered = render(ref, age, context);
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
 
-		log.debug("Injected {} drug-reference record(s) into chart for question '{}'",
-				matched.size(), question);
+		// After the reference records, so a finding's citation number always follows the reference it
+		// was derived from — the clinician reads cause then conclusion in chart order.
+		for (SafetyWarning finding : findings) {
+			String rendered = renderFinding(finding);
+			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
+					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered));
+			text.append("[").append(index).append("] ").append(rendered).append("\n");
+			index++;
+		}
+
+		log.debug("Injected {} drug-reference and {} safety-finding record(s) into chart for question '{}'",
+				matched.size(), findings.size(), question);
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
@@ -206,11 +269,166 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * One deterministic finding as a chart line. The detail text is reused verbatim — it is the same
+	 * string the clinician already sees on the chip, so the prose and the chip cannot describe the
+	 * same finding differently.
+	 */
+	static String renderFinding(SafetyWarning finding) {
+		return "Safety finding — " + finding.getDrug() + ": " + finding.getDetail();
+	}
+
+	/**
+	 * The entry's interaction notes, ordered so the partners this patient is actually on come first —
+	 * most severe of those first, see {@link #SEVERITY_DESCENDING} — then the rest in dataset order.
+	 *
+	 * <p>This ordering is what makes the {@link #MAX_INTERACTION_RENDER_CHARS} cut meaningful.
+	 * Rendering in dataset order let the dataset's own sequence decide which partners a clinician's
+	 * model could cite: in the full DDInter KB, Clarithromycin carries 898 partners with Simvastatin
+	 * (Major) at index 324, so a patient on simvastatin asking about clarithromycin got a record
+	 * naming ivosidenib, kanamycin and ketoprofen — none of which they take — and the one
+	 * interaction that concerned them was truncated 300 entries earlier. The model then recited
+	 * what it could see. {@link DrugSafetyValidator} was unaffected throughout, because it reads
+	 * every interaction off the entry and never consults this text, so the chip named simvastatin
+	 * while the prose named ivosidenib: the two disagreed by construction.
+	 *
+	 * <p>Relevance uses {@link PatientClinicalContext#hasActiveDrug} — deliberately the same
+	 * predicate {@link DrugSafetyValidator} uses to decide an interaction concerns this patient, so
+	 * a partner that raises a chip is exactly a partner promoted here, and the rendered text cannot
+	 * drift from the chip.
+	 *
+	 * <p>Ordering alone is not sufficient, which is why {@code render} also overrides the budget for
+	 * this segment: two above-floor partners can exceed {@link #MAX_INTERACTION_RENDER_CHARS}
+	 * between them (measured on the bundled sample: methotrexate 783 + aspirin 809 against a 1500
+	 * budget), and dropping the second reinstates exactly the chip-versus-prose split described
+	 * above for the polypharmacy case. So the cap becomes a soft budget with a bounded overshoot
+	 * rather than a hard ceiling — bounded by the patient's own active-drug count, not the dataset's
+	 * breadth, and paid in the compact {@code name (Severity)} form rather than in full notes.
+	 *
+	 * @param context may be null (nothing to prioritise by) — the section then keeps dataset order
+	 */
+	static OrderedInteractions orderedInteractionNotes(DrugReference ref, PatientClinicalContext context) {
+		List<InteractionNote> promoted = new ArrayList<InteractionNote>();
+		List<InteractionNote> rest = new ArrayList<InteractionNote>();
+		// Promotion honours the SAME severity floor the chips do (issue #84). Measured on the 3.7.1
+		// standalone (2026-07-30): promoting on relevance alone surfaced DDInter's Unknown-severity
+		// rows — which carry no mechanism text and which the floor deliberately suppresses from
+		// chips — into the front of the prompt, and the model then answered from them. Two probe
+		// cells that correctly abstained on the baseline started reporting "an Unknown severity
+		// interaction between Erythromycin and Lisinopril", i.e. the render path was bypassing a
+		// safety decision the chip path enforces. A sub-floor rule is not promoted; it keeps its
+		// dataset position, exactly as before promotion existed.
+		int floor = DrugSafetyValidator.configuredSeverityFloor();
+		for (DrugReference.Interaction i : ref.getInteractions()) {
+			String label = ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
+			String note = ChartSearchAiUtils.firstNonBlank(i.getNote());
+			// Kept identical to the previous rendering: a labelless rule still contributes its bare
+			// note, and a null/blank pair contributes nothing (addIfPresent drops it) — the dataset
+			// is operator-editable and must degrade, never throw or emit a literal "null".
+			String rendered = label != null ? (note != null ? label + " (" + note + ")" : label) : note;
+			if (ChartSearchAiUtils.isBlank(rendered)) {
+				continue;
+			}
+			// Trim before the length comparison below, not after: comparing untrimmed and storing
+			// trimmed lets a row whose note carries trailing whitespace still end up with a "compact"
+			// form longer than the full one, which is the single thing that comparison exists to rule
+			// out.
+			rendered = rendered.trim();
+			// The compact form exists so a relevant partner is never invisible when its full note
+			// does not fit the budget (see render()). Severity is kept because it is the one thing a
+			// clinician needs when the mechanism prose has to go; a labelless rule has nothing
+			// shorter to fall back to, so it keeps its full text.
+			String severity = ChartSearchAiUtils.firstNonBlank(i.getSeverity());
+			String compact = (label == null ? rendered
+					: (severity != null ? label + " (" + severity + ")" : label)).trim();
+			// A row carrying a severity but no mechanism text renders full as just the label, which
+			// the severity-bearing short form would then be LONGER than — a "compact" that costs
+			// more than what it replaces. Fall back to the full text in that case so the name stays
+			// true and the substitution can never grow the piece.
+			if (compact.length() >= rendered.length()) {
+				compact = rendered;
+			}
+			boolean promote = context != null && context.hasActiveDrug(i.getToken(), i.getAtc())
+					&& DrugSafetyValidator.clearsSeverityFloor(i, floor);
+			(promote ? promoted : rest).add(new InteractionNote(rendered, compact,
+					DrugSafetyValidator.severityRank(i.getSeverity())));
+		}
+		// Within the promoted segment, severity — not dataset position — decides who keeps their
+		// mechanism prose when the budget can only afford one full note (see render). Measured on the
+		// bundled sample: a patient on lisinopril (Moderate x ibuprofen, 910 chars) and aspirin
+		// (MAJOR, 809) exceeded the budget, and because lisinopril sits earlier in the dataset it
+		// took the full note while the Major interaction was abbreviated to "aspirin (Major)". Both
+		// severities stayed visible, so nothing was silently dropped — but the actionable half went
+		// to the less dangerous interaction, decided by dataset accident. Stable, so equal severities
+		// keep dataset order.
+		Collections.sort(promoted, SEVERITY_DESCENDING);
+		int promotedCount = promoted.size();
+		// `promoted` becomes the whole ordered list from here — the count above is what keeps the two
+		// segments distinguishable to render().
+		promoted.addAll(rest);
+		return new OrderedInteractions(promoted, promotedCount);
+	}
+
+	/**
+	 * Orders promoted interactions most-severe first. An unrated rule sorts ahead of Major: every
+	 * curated hand-authored rule is unrated, and {@link DrugSafetyValidator#clearsSeverityFloor}
+	 * already treats unrated as exempt rather than low — unrated is not low-rated, so it must not be
+	 * the one abbreviated.
+	 *
+	 * <p>Which source a rule came from decides whether that branch is reachable at all: DDInter rates
+	 * every row (all 295,184 in the full KB are Major/Moderate/Minor/Unknown — none unrecognised), so
+	 * unrated arises only from an operator's curated JSON. A mixed deployment is therefore the only
+	 * configuration in which the unrated-versus-rated tie-break is observable, which is why no
+	 * bundled dataset can cover it.
+	 */
+	private static final Comparator<InteractionNote> SEVERITY_DESCENDING = new Comparator<InteractionNote>() {
+
+		@Override
+		public int compare(InteractionNote a, InteractionNote b) {
+			return Integer.compare(b.severityPriority, a.severityPriority);
+		}
+	};
+
+	/** One interaction's rendered text, with a short form for when the budget cannot take the note. */
+	static final class InteractionNote {
+
+		final String full;
+
+		final String compact;
+
+		/** {@link DrugSafetyValidator#severityRank} with unrated raised above Major — see
+		 *  {@link #SEVERITY_DESCENDING}. */
+		final int severityPriority;
+
+		InteractionNote(String full, String compact, int severityRank) {
+			this.full = full;
+			this.compact = compact;
+			this.severityPriority = severityRank < 0 ? Integer.MAX_VALUE : severityRank;
+		}
+	}
+
+	/** The ordered interaction notes plus the length of their patient-relevant prefix. */
+	static final class OrderedInteractions {
+
+		final List<InteractionNote> ordered;
+
+		final int promotedCount;
+
+		OrderedInteractions(List<InteractionNote> ordered, int promotedCount) {
+			this.ordered = ordered;
+			this.promotedCount = promotedCount;
+		}
+	}
+
+	/**
 	 * Renders one reference entry into the citable line the LLM sees. Numeric dosing
 	 * is included only when an age band matches {@code age}; prose warnings,
 	 * contraindications and interactions are always rendered.
+	 *
+	 * <p>{@code context} orders the capped {@code Interactions:} section — see
+	 * {@link #orderedInteractionNotes}. It may be null (nothing to prioritise by), in which case
+	 * the section keeps dataset order.
 	 */
-	static String render(DrugReference ref, Integer age) {
+	static String render(DrugReference ref, Integer age, PatientClinicalContext context) {
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
 		StringBuilder paren = new StringBuilder();
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {
@@ -262,17 +480,9 @@ public class DrugReferenceInjector {
 			sb.append(" Contraindicated with: ").append(String.join("; ", contraindicationNotes)).append(".");
 		}
 
-		List<String> interactionNotes = new ArrayList<String>();
-		for (DrugReference.Interaction i : ref.getInteractions()) {
-			String label = ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
-			String note = ChartSearchAiUtils.firstNonBlank(i.getNote());
-			if (label != null) {
-				addIfPresent(interactionNotes, note != null ? label + " (" + note + ")" : label);
-			} else {
-				addIfPresent(interactionNotes, note);
-			}
-		}
-		if (!interactionNotes.isEmpty()) {
+		OrderedInteractions interactions = orderedInteractionNotes(ref, context);
+		List<InteractionNote> ordered = interactions.ordered;
+		if (!ordered.isEmpty()) {
 			// Cap what is *rendered* into the prompt, not what is parsed: a broad interaction
 			// dataset (e.g. the ddinter source's Warfarin, ~934 partners) would otherwise write
 			// tens of thousands of tokens into a single citable line and blow the LLM context
@@ -280,15 +490,43 @@ public class DrugReferenceInjector {
 			// only bounds the grounding text. A blank tail records how many were withheld.
 			List<String> shown = new ArrayList<String>();
 			int used = 0;
-			for (String n : interactionNotes) {
+
+			// Segment 1 — the partners this patient is actually on. Never invisible: the full note
+			// while the budget allows, else the compact "name (Severity)" form. Dropping one of
+			// these is how the chip and the prose come to disagree, which is the whole defect this
+			// ordering exists to fix, so the budget yields to them rather than the reverse. Bounded
+			// by the patient's own active-drug list, not by the dataset's breadth.
+			for (int i = 0; i < interactions.promotedCount; i++) {
+				InteractionNote n = ordered.get(i);
+				String piece = shown.isEmpty() || used + n.full.length() <= MAX_INTERACTION_RENDER_CHARS
+						? n.full : n.compact;
+				shown.add(piece);
+				used += piece.length() + 2;
+			}
+
+			// Segment 2 — the dataset tail, budget-limited, but never empty when partners remain:
+			// this entry is also the only reference material the model has about the drug in
+			// general, and a promoted note can be long enough to consume the budget alone (the
+			// bundled aspirin x ibuprofen note is ~800 of the 1500 chars). That extends the
+			// pre-existing "at least one interaction is always shown" guarantee to one per segment
+			// rather than narrowing it to "only the patient's own".
+			int restStart = interactions.promotedCount;
+			int restShown = 0;
+			for (int i = restStart; i < ordered.size(); i++) {
+				String n = ordered.get(i).full;
 				if (!shown.isEmpty() && used + n.length() > MAX_INTERACTION_RENDER_CHARS) {
 					break;
 				}
 				shown.add(n);
 				used += n.length() + 2;
+				restShown++;
 			}
+			if (restShown == 0 && restStart < ordered.size()) {
+				shown.add(ordered.get(restStart).full);
+			}
+
 			sb.append(" Interactions: ").append(String.join("; ", shown));
-			int withheld = interactionNotes.size() - shown.size();
+			int withheld = ordered.size() - shown.size();
 			if (withheld > 0) {
 				sb.append("; and ").append(withheld).append(" more interactions on file");
 			}

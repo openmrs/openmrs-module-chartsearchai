@@ -137,6 +137,23 @@ def verdict_led(cell):
     return classify(cell["answer"]) in ("YES", "NO") and not abstained(cell)
 
 
+def affirms_safety(cell):
+    """A YES lead on a cell whose chip says something is wrong.
+
+    Counting YES and NO alike in verdict_led was this instrument's third blind spot, and it nearly
+    shipped a dangerous change: a candidate that answered "Yes, the records address the drug and its
+    interactions: ... ivosidenib (Major...)" for a patient on simvastatin scored as +1 verdict-led and
+    -1 abstained — an improvement on two columns, exit 0 — when the honest reading is that abstaining
+    beat it. The YES criterion the prompt teaches ('start with Yes ONLY when a record explicitly names
+    what is asked') is a PRESENCE criterion; on a safety question a record naming the drug is usually
+    evidence AGAINST giving it, so the same verdict inverts in meaning. score_directness already
+    models a bare YES with no named record as a safety violation; this is the same idea, gated on the
+    chip rather than on citations: if the deterministic layer raised a warning for this drug, an
+    answer opening "Yes" contradicts it.
+    """
+    return classify(cell["answer"]) == "YES" and not abstained(cell) and bool(cell["chips"])
+
+
 def summarise(name, cells, done, expected=None):
     problems = []
     if not done:
@@ -164,6 +181,12 @@ def summarise(name, cells, done, expected=None):
     ans = sorted(k for k, c in cells.items() if label(c) == "ANSWER")
     abst = sorted(k for k, c in cells.items() if label(c) == "ABSTAIN")
     led = [k for k in ans if verdict_led(cells[k])]
+    unsafe_yes = [k for k in ans if affirms_safety(cells[k])]
+    if unsafe_yes:
+        problems.append("%d cell(s) opened with an affirming \"Yes\" while this drug's own chip "
+                        "reports a problem — the verdict is inverted against the deterministic "
+                        "layer, and abstaining would be safer. NOT a verdict-led win: %s"
+                        % (len(unsafe_yes), unsafe_yes[:4]))
     absd = [k for k in ans if abstained(cells[k])]
     hedge = [k for k in ans if k not in led and k not in absd]
     held = [k for k in abst if abstained(cells[k])]
@@ -173,6 +196,7 @@ def summarise(name, cells, done, expected=None):
         print("  !! %s" % p)
     print("ANSWER cells (chip for this drug, or their own drug): %d" % len(ans))
     print("  verdict-led (YES/NO):       %d" % len(led))
+    print("    of which affirming \"Yes\" against a chip (inverted, unsafe): %d" % len(unsafe_yes))
     print("  stated, no verdict lead:    %d" % len(hedge))
     print("  abstained (the defect):     %d" % len(absd))
     print("ABSTAIN cells (unconnected): %d" % len(abst))
@@ -238,6 +262,8 @@ def main():
              n(ans, a, abstained), n(ans, b, abstained)))
     print("over the same %d ABSTAIN cells: abstention held A=%d B=%d"
           % (len(abst), n(abst, a, abstained), n(abst, b, abstained)))
+    print("inverted \"Yes\" against a chip (never a win):  A=%d B=%d"
+          % (n(ans, a, affirms_safety), n(ans, b, affirms_safety)))
     if sa["problems"] or sb["problems"]:
         print("\n!! one or both arms reported integrity problems above — read them before "
               "treating this as a gate result. Exiting 3 so automation cannot mistake this "

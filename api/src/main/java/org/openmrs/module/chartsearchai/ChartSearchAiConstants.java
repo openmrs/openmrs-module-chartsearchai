@@ -484,6 +484,18 @@ public class ChartSearchAiConstants {
 	public static final String RESOURCE_TYPE_DRUG_REFERENCE = "drug_reference";
 
 	/**
+	 * A finding the deterministic drug-safety layer derived from THIS patient's records plus the drug
+	 * knowledge base, injected pre-answer so the answer can cite it instead of re-deriving it.
+	 *
+	 * <p>Distinct from {@link #RESOURCE_TYPE_DRUG_REFERENCE} because it is patient-specific: the
+	 * system prompt tells the model that "Drug reference" records are NOT this patient's data, so
+	 * folding a patient-specific conclusion into one would contradict the prompt. It is also not
+	 * {@link #RESOURCE_TYPE_ALLERGY} or any other chart type — it is derived, with no chart row to
+	 * navigate to, which is why it groups as reference material rather than chart evidence.
+	 */
+	public static final String RESOURCE_TYPE_SAFETY_FINDING = "safety_finding";
+
+	/**
 	 * Wire value of a serialized reference's {@code group}: a record retrieved from THIS
 	 * patient's chart. Evidence about the patient, citable as such.
 	 */

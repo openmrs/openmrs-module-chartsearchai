@@ -100,6 +100,11 @@ public class ChartSearchAiReferenceGroupTest {
 		expected.put("RESOURCE_TYPE_PROGRAM", ChartSearchAiConstants.REFERENCE_GROUP_CHART);
 		expected.put("RESOURCE_TYPE_MEDICATION_DISPENSE", ChartSearchAiConstants.REFERENCE_GROUP_CHART);
 		expected.put("RESOURCE_TYPE_DRUG_REFERENCE", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
+		// Module-derived, not chart evidence: a safety finding is computed from the patient's records
+		// plus the drug KB, so there is no chart row for a client to navigate to. It is patient-specific
+		// (which is why it is not a drug_reference record — the system prompt tells the model those are
+		// NOT the patient's data), but it is still module-supplied material, so it presents as reference.
+		expected.put("RESOURCE_TYPE_SAFETY_FINDING", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
 
 		List<String> undecided = new ArrayList<String>();
 		List<String> seen = new ArrayList<String>();

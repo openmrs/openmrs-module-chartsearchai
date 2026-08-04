@@ -113,6 +113,36 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void defaultSystemPrompt_shouldTellTheModelWhatASafetyFindingRecordIs() {
+		// Measured live (2026-07-31): with the deterministic finding injected, "Is naproxen safe for
+		// this patient?" answered 3/3 "The records do not address the safety of Naproxen for this
+		// patient, BUT they do indicate a possible cross-reactivity finding: ... [232]" — an abstention
+		// clause sitting in front of evidence that contradicts it. The same build answered the
+		// ibuprofen equivalent cleanly, so the substance was right and only the framing failed.
+		//
+		// Cause: the abstention rule's precondition is "no record addresses the drug asked about", and
+		// a safety-finding record IS such a record — but the prompt describes what a "Drug reference"
+		// record is and says nothing about "Safety finding", a type this change introduced. With no
+		// rule for it the model reads the chart as silent on the drug, emits the abstention, then
+		// appends the finding it cannot ignore.
+		//
+		// So this is a record-TYPE description, deliberately not another verdict or wording rule: four
+		// such rules were measured and reverted (a quoted prohibition primed the phrase it banned; a
+		// verdict-lead deferral inherited a YES criterion that inverts on safety questions; an
+		// "otherwise state what the record shows" fallback let reference material break abstention on
+		// unconnected cells). Being gated on a finding record existing bounds this one structurally:
+		// no finding, no effect, so the ABSTAIN cells issue #107 guards cannot be reached.
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("Safety finding"),
+				"System prompt must describe the safety-finding record type it is given");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("records DO address that drug"),
+				"It must say a finding satisfies the addressed branch, or the abstention rule misfires");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("contradicts it in the same breath"),
+				"It must forbid the measured abstention-then-finding contradiction");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("the records do not address"),
+				"and must not disturb the #107 abstention rule it is scoped around");
+	}
+
+	@Test
 	public void defaultSystemPrompt_shouldInstructAbstentionWhenNoRecordsRelevant() {
 		// The few-shot demonstrates abstention in FOCUS mode (a "Records ranked by
 		// similarity..." line followed by an empty-citations answer). On the non-focus path

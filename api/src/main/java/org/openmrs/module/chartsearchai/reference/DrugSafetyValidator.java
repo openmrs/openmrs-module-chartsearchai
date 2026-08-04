@@ -424,13 +424,14 @@ public class DrugSafetyValidator {
 	 * <p>Trimmed to fold the way the MATCH folds. {@link PatientClinicalContext#hasActiveDrug} trims
 	 * and case-folds the rule's token before testing it against an order name, so two rows whose
 	 * tokens differ only in case or in surrounding whitespace are one partner to the only predicate
-	 * that decides an interaction concerns this patient — and must be one partner here too, or #115's
-	 * duplicate chip
-	 * returns for a hand-authored dataset with two labels a clinician cannot tell apart. That is a
-	 * live shape, not a hypothetical: the {@code ddinter} and {@code atc} sources normalize their
-	 * tokens at parse, but the curated {@code json} source is plain Jackson over an operator-editable
-	 * file and sanitizes nothing. Trimming also keeps that padding out of the chip text, as
-	 * {@link DrugReferenceInjector#orderedInteractionNotes} already does for its own rendered label.
+	 * that decides an interaction concerns this patient — and must be one partner here too, or issue
+	 * #115's duplicate chip returns for a hand-authored dataset, silently and with two labels a
+	 * clinician cannot tell apart. That shape reaches this method: {@code ddinter} lower-cases every
+	 * token it derives and takes it from the trimmed RxNorm generic whenever the partner row has one,
+	 * and {@code atc} carries no rules at all, but the curated {@code json} source is plain Jackson
+	 * over an operator-editable file and sanitizes neither case nor padding. Trimming also keeps that
+	 * padding out of the chip text, as {@link DrugReferenceInjector#orderedInteractionNotes} already
+	 * does for its own rendered label.
 	 *
 	 * @return the label, or null when the rule carries neither — which a rule that matched an active
 	 *         order cannot ({@code hasActiveDrug} needs a non-blank token or a non-blank ATC), so
@@ -467,7 +468,8 @@ public class DrugSafetyValidator {
 	 * class arm ({@link #addClassInteractions}) is untouched, so the rule-plus-class double chip
 	 * of issue #88 is a different defect and stays open.
 	 *
-	 * <p><b>Which row wins.</b> The most severe rating, then the longer note. Route variants
+	 * <p><b>Which row wins.</b> The most severe rating, then the longer note — longer in prose, not
+	 * in whitespace, see {@link #noteLength}. Route variants
 	 * genuinely differ — topical dexamethasone does not have systemic dexamethasone's interaction
 	 * profile, which is why DDInter rates voxelotor Major against one variant and Moderate against
 	 * the others — but nothing on a {@code DrugOrder} tells this layer which variant the order is
@@ -525,8 +527,18 @@ public class DrugSafetyValidator {
 		return noteLength(candidate) > noteLength(incumbent);
 	}
 
+	/**
+	 * @return how much mechanism prose {@code interaction}'s note carries — its <em>trimmed</em>
+	 *         length. Whitespace is not the informativeness signal the tie-break is reading: measured
+	 *         raw, a short referral note with a block of blank lines pasted onto it outranks a longer
+	 *         real mechanism paragraph, and the surviving chip then says nothing about the mechanism
+	 *         while the row explaining it is discarded. Trimmed for the comparison only — the note
+	 *         still renders as authored, exactly as it does for a row with no competitor;
+	 *         {@link DrugReferenceInjector#orderedInteractionNotes} makes the same "trim before you
+	 *         compare lengths" call for the same reason.
+	 */
 	private static int noteLength(DrugReference.Interaction interaction) {
-		return interaction.getNote() == null ? 0 : interaction.getNote().length();
+		return interaction.getNote() == null ? 0 : interaction.getNote().trim().length();
 	}
 
 	/**

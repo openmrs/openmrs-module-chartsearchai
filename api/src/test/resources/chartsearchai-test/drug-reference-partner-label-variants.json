@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Test fixture (issue #115): curated entries whose interaction rows name ONE partner twice. The curated source is the operator-editable one — plain Jackson over a hand-authored file, with no trimming of rule tokens and no required severity — so it is the only source that can produce (a) two rows for one partner whose tokens differ only in case or in surrounding whitespace, which PatientClinicalContext.hasActiveDrug already folds to the same partner, and (b) a hand-authored UNRATED row competing with a source-rated one, which is the mixed configuration in which DrugSafetyValidator.severityPriority's 'unrated outranks Major' ordering is observable at all. Parsed by the real JsonDrugReferenceSource parser.",
+  "description": "Test fixture (issue #115): curated entries whose interaction rows name ONE partner twice. The curated source is the operator-editable one — plain Jackson over a hand-authored file, with no trimming of rule tokens or notes and no required severity — so it is the only source that can produce (a) two rows for one partner whose tokens differ only in case or in surrounding whitespace, which PatientClinicalContext.hasActiveDrug already folds to the same partner, (b) a hand-authored UNRATED row competing with a source-rated one, which is the mixed configuration in which DrugSafetyValidator.severityPriority's 'unrated outranks Major' ordering is observable at all, and (c) two equally-rated rows whose note LENGTHS order one way raw and the other way trimmed, which is what makes the fuller-note tie-break's measurement observable. The padding in (c) is written as \\n escapes rather than trailing spaces on purpose: invisible trailing whitespace in a fixture is one editor away from being stripped, which would leave the test passing while testing nothing. Parsed by the real JsonDrugReferenceSource parser.",
   "entries": [
     {
       "id": "fluconazole-curated",
@@ -46,6 +46,30 @@
         {
           "token": "valproate",
           "note": "Locally curated rule: do not co-prescribe without measuring the phenobarbital level first."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "linezolid-curated",
+      "name": "Linezolid",
+      "drugClass": "Oxazolidinone antibacterial",
+      "aliases": [
+        "linezolid"
+      ],
+      "atcCodes": [
+        "J01XX08"
+      ],
+      "interactions": [
+        {
+          "token": "citalopram",
+          "severity": "Major",
+          "note": "Major. Withhold per the local antimicrobial policy; see the pharmacy monograph.\n\n\n\n\n\n\n\n\n\n\n"
+        },
+        {
+          "token": "citalopram",
+          "severity": "Major",
+          "note": "Major. Linezolid is a reversible MAO inhibitor and risks serotonin syndrome with an SSRI."
         }
       ],
       "source": "Test fixture"

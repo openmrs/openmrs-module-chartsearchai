@@ -84,4 +84,26 @@ public class InteractionPartnerGroupingTest {
 				warnings.get(0).getDetail(),
 				"the operator's unrated rule must keep the chip, not the source-rated Major row");
 	}
+
+	@Test
+	public void theFullerNoteTieBreakMeasuresProseNotPadding() throws IOException {
+		// Severity cannot separate the fixture's two Linezolid rows, so the tie-break falls to the
+		// note — "the only informativeness signal a row carries". Whitespace is not that signal: the
+		// first row's note is a 79-character referral to a policy document with eleven newlines
+		// pasted onto the end (90 raw), the second is the 89-character mechanism. Measured raw, the
+		// referral wins and the clinician gets a chip that says nothing about serotonin syndrome
+		// while the row explaining it is discarded — decided by padding, which is exactly what the
+		// tie-break exists NOT to do.
+		List<SafetyWarning> warnings = validator().validate("Linezolid could be started.",
+				"Is it safe to give linezolid?",
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Citalopram 20mg"),
+						null, null, null));
+
+		assertEquals(1, warnings.size(),
+				"two rows naming one partner must raise one chip, was: " + warnings);
+		assertEquals("Linezolid interacts with active order citalopram — Major. Linezolid is a"
+				+ " reversible MAO inhibitor and risks serotonin syndrome with an SSRI.",
+				warnings.get(0).getDetail(),
+				"the fuller note is the one carrying more PROSE, not the one carrying more whitespace");
+	}
 }

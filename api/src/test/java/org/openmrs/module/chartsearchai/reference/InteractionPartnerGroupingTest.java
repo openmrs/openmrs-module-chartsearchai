@@ -23,11 +23,12 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The DDInter arm of #115 is covered by {@code DdiDrugReferenceSourceTest} against real KB
  * slices. These cases need the <em>curated</em> source instead, because it is the operator-editable
- * one: {@link JsonDrugReferenceSource} is plain Jackson over a hand-authored file, so unlike
- * {@link DdiDrugReferenceSource} (which lower-cases and trims every match token it derives, and
- * whose rows always carry a severity) it can hand the validator a partner token padded with
- * whitespace, and a rule with no severity at all competing with a rated one. Both shapes reach
- * decisions the clinician sees, and neither is expressible in a DDInter dataset.
+ * one: {@link JsonDrugReferenceSource} is plain Jackson over a hand-authored file and sanitizes
+ * nothing, where {@link DdiDrugReferenceSource} lower-cases every match token it derives (taking it
+ * from the trimmed RxNorm generic whenever the partner row has one) and rates every row it builds.
+ * So the three shapes below are the operator's to produce, not the KB's: a partner token padded with
+ * whitespace, two notes whose raw and trimmed lengths rank the rows oppositely, and a rule with no
+ * severity at all competing with a rated one. Each decides something the clinician sees.
  *
  * <p>Tests parse the fixture with the real {@link JsonDrugReferenceSource#parse} and drive the real
  * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)} — the exact

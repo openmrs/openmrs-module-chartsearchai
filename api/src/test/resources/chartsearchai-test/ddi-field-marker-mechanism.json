@@ -1,8 +1,8 @@
 {
  "metadata": {
   "schema_version": "1.0",
-  "title": "Test fixture: real DDInter rows whose mechanism text carries a residual field marker",
-  "note": "Verbatim slice of the full KB (issue #116). Mechanism 2248 is the dolutegravir x iron row observed leaking 'INTERVAL:' onto a live safety chip; mechanism 222 is the other marker in the family, 'RECOMMENDED:'. Drug rows are the real ones (ids, rxcuis, rxnorm names, ATC), with the ciel arrays trimmed to the exact-name concept. Group 9998 and drug DDInterT03 are the one synthetic addition: a degenerate marker-only mechanism, absent from the real KB (all 274 marker rows carry text after the marker) but reachable because the KB file is operator-editable — it pins that stripping the marker degrades to the no-mechanism note rather than leaving a dangling severity. Shaped like the real KB (see ddi-rxcui-collision.json precedent)."
+  "title": "Test fixture: real DDInter rows whose mechanism text carries a residual field marker, plus the real negative control that must NOT be stripped",
+  "note": "Verbatim slice of the full KB (issue #116). Mechanism 2248 is the dolutegravir x iron row observed leaking 'INTERVAL:' onto a live safety chip; mechanism 222 is the other marker in the family, 'RECOMMENDED:'. Mechanism 4945 (nifedipine x theophylline) is the negative control: a real row whose own opening clause is a mixed-case sentence ending in a colon, so it sits inside the marker pattern's negative space and must survive byte-for-byte. It is the single row in the whole 8234-mechanism KB with that shape, and it is what the pattern's documented word bound buys: loosen the run past six words and the note is silently beheaded, opening mid-sentence on a lowercase 'either' with the 'Limited and controversial data suggest' hedge gone. Drug rows are the real ones (ids, rxcuis, rxnorm names, ATC), with the ciel arrays trimmed to the exact-name concept. Group 9998 and drug DDInterT03 are the one synthetic addition: a degenerate marker-only mechanism, absent from the real KB (all 274 marker rows carry text after the marker) but reachable because the KB file is operator-editable — it pins that stripping the marker degrades to the no-mechanism note rather than leaving a dangling severity. Shaped like the real KB (see ddi-rxcui-collision.json precedent)."
  },
  "mechanisms": {
   "2248": {
@@ -15,6 +15,12 @@
    "text": "RECOMMENDED: Coadministration with tazemetostat may decrease the plasma concentrations and efficacy of hormonal contraceptives. The mechanism involves induction of CYP450 3A4, the isoenzyme primarily responsible for the metabolic clearance of sex hormones.",
    "categories": [
     "metabolism"
+   ]
+  },
+  "4945": {
+   "text": "Limited and controversial data suggest the following: either there is no significant interaction between theophylline and dihydropyridine calcium channel blockers, or theophylline serum levels increase after the addition of dihydropyridine calcium channel blockers. Data are available for nifedipine. Theophylline dosage should be reduced if necessary, and plasma levels should be checked when clinically necessary and appropriate. Patients should be advised to report any signs of theophylline toxicity including nausea, vomiting, diarrhea, headache, restlessness, insomnia, or irregular heartbeat to their physician.",
+   "categories": [
+    "others"
    ]
   },
   "9998": {
@@ -93,6 +99,40 @@
    ]
   },
   {
+   "id": "DDInter1291",
+   "name": "Nifedipine",
+   "rxcui": "7417",
+   "rxnorm_name": "nifedipine",
+   "drugbank_id": "DB01115",
+   "atc": [
+    "C08CA05"
+   ],
+   "ciel": [
+    {
+     "code": "80637",
+     "uuid": "80637AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Nifedipine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1791",
+   "name": "Theophylline",
+   "rxcui": "10438",
+   "rxnorm_name": "theophylline",
+   "drugbank_id": "DB00277",
+   "atc": [
+    "R03DA04"
+   ],
+   "ciel": [
+    {
+     "code": "84949",
+     "uuid": "84949AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Theophylline"
+    }
+   ]
+  },
+  {
    "id": "DDInterT03",
    "name": "Marker Only",
    "rxcui": "999999",
@@ -113,6 +153,12 @@
    "DDInter692",
    "Moderate",
    "222"
+  ],
+  [
+   "DDInter1291",
+   "DDInter1791",
+   "Minor",
+   "4945"
   ],
   [
    "DDInter582",

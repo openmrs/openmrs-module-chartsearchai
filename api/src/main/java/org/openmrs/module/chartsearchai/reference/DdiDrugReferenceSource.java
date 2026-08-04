@@ -65,10 +65,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * KB (2026-08-04) there are exactly two: {@code INTERVAL:} (224 mechanisms, 4070 pair rows) and
  * {@code RECOMMENDED:} (50 mechanisms, 1268 pair rows); no other leading {@code TOKEN:} shape
  * occurs, and both markers appear only in that leading position. They are machine artifacts, not
- * prose, and the note is read by clinicians (chip detail) and by the model (rendered reference
- * record) alike, so {@link #noteFor} strips a leading marker instead of passing it through
- * (issue #116). Marker <em>shape</em>, not a fixed list of the two seen today: a KB refresh
- * emitting a sibling tag would otherwise leak it verbatim exactly as these two did.
+ * prose, and the note reaches three surfaces verbatim — the clinician's chip detail, the rendered
+ * reference record, and the pre-answer safety finding that reuses that chip detail
+ * ({@link DrugReferenceInjector#renderFinding}) — so {@link #noteFor} strips a leading marker
+ * instead of passing it through (issue #116). Marker <em>shape</em>, not a fixed list of the two
+ * seen today: a KB refresh emitting a sibling tag would otherwise leak it verbatim exactly as
+ * these two did.
  *
  * <p>The marker is dropped rather than reinterpreted. {@code INTERVAL:} broadly flags
  * administration timing (dose separation is the management for the chelation/absorption rows —

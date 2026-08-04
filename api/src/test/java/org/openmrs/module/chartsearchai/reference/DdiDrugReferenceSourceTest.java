@@ -16,9 +16,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * Exercises the real {@link DdiDrugReferenceSource} and its behaviour through the real injector
@@ -42,6 +45,19 @@ public class DdiDrugReferenceSourceTest {
 			+ "the plasma concentrations and efficacy of hormonal contraceptives. The mechanism involves "
 			+ "induction of CYP450 3A4, the isoenzyme primarily responsible for the metabolic clearance of "
 			+ "sex hormones.";
+
+	/**
+	 * The real mechanism text of KB group 4945, verbatim and entire: it carries no marker, so the
+	 * whole string — including its own colon-terminated opening clause — must reach the note.
+	 */
+	private static final String THEOPHYLLINE_MECHANISM = "Limited and controversial data suggest the "
+			+ "following: either there is no significant interaction between theophylline and "
+			+ "dihydropyridine calcium channel blockers, or theophylline serum levels increase after the "
+			+ "addition of dihydropyridine calcium channel blockers. Data are available for nifedipine. "
+			+ "Theophylline dosage should be reduced if necessary, and plasma levels should be checked "
+			+ "when clinically necessary and appropriate. Patients should be advised to report any signs "
+			+ "of theophylline toxicity including nausea, vomiting, diarrhea, headache, restlessness, "
+			+ "insomnia, or irregular heartbeat to their physician.";
 
 	private DrugReference entry(String name) {
 		return new DdiDrugReferenceSource().load().stream()
@@ -183,6 +199,20 @@ public class DdiDrugReferenceSourceTest {
 	}
 
 	@Test
+	public void mechanismTextOutsideTheMarkerShapeIsPassedThroughUnstripped() throws Exception {
+		// The other half of a conditional deletion: what the pattern must NOT eat. Stripping is the
+		// only place this source deletes clinician-facing text, and over-matching fails silently —
+		// no exception, just a note that opens mid-sentence. KB group 4945 is the real negative
+		// control: the one row in all 8234 mechanisms whose own opening clause is a mixed-case
+		// sentence ending in a colon. It is what the pattern's six-word bound buys — loosen the run
+		// and this note is beheaded down to a lowercase "either ...", with the "Limited and
+		// controversial data suggest" hedge that qualifies the whole finding silently gone.
+		assertEquals("Minor. " + THEOPHYLLINE_MECHANISM,
+				interaction(markerFixtureEntries(), "Nifedipine", "theophylline").getNote(),
+				"a mechanism outside the marker shape must reach the note byte-for-byte");
+	}
+
+	@Test
 	public void markerOnlyMechanismDegradesToTheNoMechanismNote() throws Exception {
 		// Edge case: a mechanism whose whole text is the marker carries no mechanism at all, so
 		// stripping must fall through to the documented no-mechanism note rather than leave a
@@ -216,7 +246,8 @@ public class DdiDrugReferenceSourceTest {
 	public void injectedReferenceTextIsFreeOfTheResidualFieldMarker() throws Exception {
 		// The other leak path named in the issue: the note is also the grounding text the model
 		// cites, so the marker reached the prompt as well. One fix at the parse boundary covers
-		// both consumers.
+		// every consumer, because the mechanism text has a single point of consumption; this pins
+		// the reference record, and the test below pins the other prompt renderer.
 		DrugReferenceInjector injector = DrugReferenceTestSupport
 				.injector(DrugReferenceTestSupport.serviceWith(markerFixtureEntries()));
 
@@ -230,6 +261,37 @@ public class DdiDrugReferenceSourceTest {
 				"no field marker may reach the grounding text the model cites, was: " + text);
 		assertTrue(text.contains(DOLUTEGRAVIR_MECHANISM),
 				"the mechanism text must survive in the injected record, was: " + text);
+	}
+
+	@Test
+	public void injectedSafetyFindingIsFreeOfTheResidualFieldMarker() throws Exception {
+		// The prompt carries the note through TWO renderers, not one: the reference record asserted
+		// above (DrugReferenceInjector.render) and the pre-answer safety finding (#110,
+		// DrugReferenceInjector.renderFinding), which reuses the chip detail verbatim and which the
+		// model is steered to report before anything else. The finding record only exists when the
+		// validator is wired, so the reference-record test above — which wires none — never sees this
+		// line: on 13690b1 it read "Safety finding — Dolutegravir: Dolutegravir interacts with active
+		// order iron — Major. INTERVAL: Coadministration ...", the marker in the highest-signal line
+		// of the prompt.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(markerFixtureEntries());
+		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
+		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
+
+		PatientChart result = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Iron"), null, null, null),
+				"Can I start dolutegravir?");
+
+		List<RecordMapping> findings = result.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
+				.collect(Collectors.toList());
+
+		assertEquals(1, findings.size(),
+				"the fixture pair must yield exactly one citable safety finding, was: " + result.getText());
+		assertEquals("Safety finding — Dolutegravir: Dolutegravir interacts with active order iron — Major. "
+				+ DOLUTEGRAVIR_MECHANISM, findings.get(0).getText(),
+				"the finding line the model reads first must read as a sentence, with no field marker");
+		assertFalse(result.getText().contains("INTERVAL"),
+				"no field marker may reach the prompt through either renderer, was: " + result.getText());
 	}
 
 	@Test

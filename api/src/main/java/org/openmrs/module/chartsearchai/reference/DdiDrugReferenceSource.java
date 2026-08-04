@@ -17,6 +17,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.slf4j.Logger;
@@ -54,8 +56,35 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <p><b>Scope.</b> V1 carries drug-drug interactions only: entries expose {@code interactions},
  * never {@code ageBands} or {@code contraindications} (dosing and drug-allergy/condition are
- * out of scope). {@code management} is not a discrete DDInter field, so it is folded into the
- * interaction note rather than invented.
+ * out of scope). {@code management} is not a discrete DDInter field, so whatever management prose
+ * the mechanism text carries is folded into the interaction note rather than invented — save for
+ * the residual field markers below, which are dropped because they carry no management content
+ * to fold.
+ *
+ * <p><b>Residual field markers.</b> Some mechanism texts are prefixed with an all-caps field
+ * marker followed by a colon — apparently the surviving tail of a management tag from the
+ * monograph the mechanism text was scraped from. Measured over the full 8234-mechanism
+ * KB (2026-08-04) there are exactly two: {@code INTERVAL:} (224 mechanisms, 4070 pair rows) and
+ * {@code RECOMMENDED:} (50 mechanisms, 1268 pair rows); no other leading {@code TOKEN:} shape
+ * occurs, and both markers appear only in that leading position. They are machine artifacts, not
+ * prose, and the note reaches three surfaces verbatim — the clinician's chip detail, the rendered
+ * reference record, and the pre-answer safety finding that reuses that chip detail
+ * ({@link DrugReferenceInjector#renderFinding}) — so {@link #mechanismText} strips a leading
+ * marker instead of passing it through (issue #116). Marker <em>shape</em>, not a fixed list of
+ * the two seen today: a KB refresh emitting a sibling tag would otherwise leak it verbatim
+ * exactly as these two did.
+ *
+ * <p>The marker is dropped rather than reinterpreted. {@code INTERVAL:} broadly flags
+ * administration timing (dose separation is the management for the chelation/absorption rows —
+ * 147 of the 224 are {@code categories: [absorption]}), but it is not reliable enough to render
+ * as advice: nine of the 224 are {@code synergistic_effect} rows where separating doses is
+ * <em>not</em> the management (ibutilide plus a class III antiarrhythmic — additive QT
+ * prolongation; flibanserin plus alcohol; mefloquine convulsion risk). The marker itself carries
+ * no interval, no separation time and no wording, so any management sentence built from it would
+ * be invented, and the mechanism {@code categories} are a PK/PD taxonomy
+ * ({@code metabolism}/{@code absorption}/…) that does not encode management either. Structured
+ * management guidance therefore has to come from the KB builder keeping the whole upstream tag,
+ * not from reverse-engineering its truncated residue here.
  */
 public class DdiDrugReferenceSource implements DrugReferenceSource {
 
@@ -66,6 +95,17 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private static final String SOURCE = "DDInter 2.0 (via openmrs-ddi-knowledge-base)";
+
+	/**
+	 * A residual field marker at the head of a mechanism text: a run of up to six all-caps words
+	 * immediately followed by a colon (see the class javadoc). Words are two letters or more so a
+	 * bare initial cannot look like a marker, and the run is bounded so a shouted sentence ending
+	 * in a colon is not mistaken for one. Verified against the full 8234-mechanism KB: it matches
+	 * exactly the 274 {@code INTERVAL:}/{@code RECOMMENDED:} rows and nothing else, and every
+	 * remainder still begins with a capital, so the stripped note reads as a sentence.
+	 */
+	private static final Pattern RESIDUAL_FIELD_MARKER = Pattern
+			.compile("^\\s*[A-Z]{2,}(?: [A-Z]{2,}){0,5}:\\s*");
 
 	@Override
 	public List<DrugReference> load() {
@@ -194,12 +234,28 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 		if (cached != null) {
 			return cached;
 		}
-		String text = mech.path(gid).path("text").isTextual() ? mech.path(gid).path("text").asText() : null;
+		String text = mechanismText(mech, gid);
 		String note = (text != null && !text.isEmpty())
 				? severity + ". " + text
 				: severity + " severity interaction (DDInter 2.0; no mechanism description on file).";
 		cache.put(key, note);
 		return note;
+	}
+
+	/**
+	 * The mechanism description for {@code gid}, with any leading residual field marker removed
+	 * (see the class javadoc), or {@code null} when the group carries no text. A text that is
+	 * <em>only</em> a marker strips to empty and so degrades to the no-mechanism note in
+	 * {@link #noteFor} — a dangling "Major. " would read worse than saying nothing is on file.
+	 */
+	private static String mechanismText(JsonNode mech, String gid) {
+		JsonNode node = mech.path(gid).path("text");
+		if (!node.isTextual()) {
+			return null;
+		}
+		String text = node.asText();
+		Matcher marker = RESIDUAL_FIELD_MARKER.matcher(text);
+		return marker.lookingAt() ? text.substring(marker.end()) : text;
 	}
 
 	/** A drug row from the {@code drugs} table. */

@@ -23,6 +23,7 @@ import java.util.function.Consumer;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 
 /**
  * Pure unit tests for {@link LlmProvider} response parsing and configuration logic.
@@ -132,6 +133,16 @@ public class LlmProviderTest {
 		// "otherwise state what the record shows" fallback let reference material break abstention on
 		// unconnected cells). Being gated on a finding record existing bounds this one structurally:
 		// no finding, no effect, so the ABSTAIN cells issue #107 guards cannot be reached.
+		//
+		// AMENDED by #112 (2026-08-04): the sentence this test pins is no longer purely a record-TYPE
+		// description. Its lead clause now reads "answer the question from that finding and cite it",
+		// re-pointed from "open with what the finding says" — the recitation lead that clause asked
+		// for is what six of six safety probes complied with, leaving the clinical call only on the
+		// chip (see defaultSystemPrompt_shouldTeachTheVerdictLeadWhenASafetyFindingAddressesTheQuestion).
+		// Every clause this test asserts is untouched, and the structural bound above still holds for
+		// both rules: each is gated on a finding record existing. Read the two together — the safety
+		// guidance for this feature lives in TWO paragraphs written by two changes, and reading one
+		// without the other is exactly how #112 misdiagnosed its own root cause.
 		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("Safety finding"),
 				"System prompt must describe the safety-finding record type it is given");
 		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("records DO address that drug"),
@@ -158,14 +169,20 @@ public class LlmProviderTest {
 		// the mango abstention, so nothing described or demonstrated the addressed branch.
 		//
 		// So the finding's lead is re-pointed at the verdict and the addressed branch is written and
-		// demonstrated. Two constraints come from measured dead ends, and both are pinned below:
+		// demonstrated. THREE constraints come from the arms measured and reverted on 2026-07-30
+		// (eval/drift-metric/README.md, "the two-hop join is impossible"), and each one below carries
+		// its own assertion because a mutation probe showed none of them was pinned: deleting any of
+		// the five load-bearing clauses of this change from DEFAULT_SYSTEM_PROMPT — including the
+		// never-"Yes" token — left the whole suite green, 5/5. Each assertion here was re-run against
+		// its own deletion and fails without it.
 		//   * The verdict's DIRECTION must come from the finding, never by deferring to the general
 		//     yes/no rule: that rule's "start with Yes ONLY when a record explicitly names what is
 		//     asked" is a PRESENCE criterion, and on a safety question a record naming the drug is
-		//     evidence AGAINST it. Arm C of the 2026-07-30 A/B/C/D deferred and produced an inverted
-		//     "Yes ... ivosidenib (Major...)" 5/6 for a patient on simvastatin. Hence never-"Yes"
-		//     here (a token, not a sentence template — arm B showed that quoting a forbidden
-		//     template primes it, 6/6 on a cell that never had it).
+		//     evidence AGAINST it. Arm C of the A/B/C/D deferred and produced an inverted
+		//     "Yes ... ivosidenib (Major...)" 5/6 for a patient on simvastatin.
+		//   * Hence the never-"Yes" token, and it must stay a TOKEN rather than a quoted sentence
+		//     template: arm B forbade a meta-lead by quoting it and the model then emitted that exact
+		//     string 6/6 on a cell that never had it. The README draws that distinction explicitly.
 		//   * The rule's precondition must stay "a safety finding names the drug asked about" with no
 		//     otherwise-branch. Arm D's "otherwise state what the record shows" made drug-reference
 		//     material fair game and broke the #107 abstention on 3 unconnected cells. Gated on a
@@ -178,10 +195,31 @@ public class LlmProviderTest {
 		assertTrue(prompt.contains("belongs after the call, not in place of it"),
 				"System prompt must say the finding's mechanism follows the verdict rather than "
 				+ "replacing it — reciting the mechanism in the verdict slot IS the defect");
+		assertTrue(prompt.contains("Never open such an answer with \"Yes\""),
+				"The never-\"Yes\" token is the arm-C guard: on a safety question a record naming "
+				+ "the drug is evidence AGAINST giving it, so a presence-style \"Yes\" inverts the "
+				+ "clinical meaning. Without this token the addressed branch inherits the general "
+				+ "rule's presence criterion, which is what produced arm C's inverted verdict 5/6");
+		assertTrue(prompt.contains("When a safety finding DOES name the drug or intervention asked about"),
+				"The addressed branch must stay gated on a SAFETY FINDING naming the asked-about "
+				+ "drug. A finding record exists only when DrugSafetyValidator found something, so "
+				+ "that antecedent is objectively false on an unconnected cell and the #107 "
+				+ "abstention stays reachable by construction rather than by wording");
+		assertFalse(prompt.contains("otherwise state what the record shows"),
+				"Arm D's otherwise-branch made drug-reference material fair game on cells nothing "
+				+ "bears on and broke the #107 abstention 3x; the rule keeps a single precondition");
+		assertTrue(prompt.contains("every record it rests on, cited"),
+				"Leading with the verdict must not cost the complete-enumeration property: the "
+				+ "records the finding rests on still have to reach the answer, cited");
 		assertFalse(prompt.contains("open with what the finding says"),
 				"The record-type sentence must no longer point the lead at the finding's own words: "
 				+ "that instruction and a verdict-lead rule contradict each other, and it is the one "
 				+ "the model obeyed 6/6");
+		assertTrue(prompt.contains("answer the question from that finding and cite it"),
+				"and it must be RE-POINTED, not merely deleted — #110's sentence is the only place "
+				+ "that tells the model what to do with a safety finding, so dropping its lead "
+				+ "clause would leave the addressed branch undemonstrated in the record-type "
+				+ "paragraph while the verdict rule below it stands alone");
 		assertTrue(prompt.contains("Is it safe to deliver durian?"),
 				"The few-shot must DEMONSTRATE the addressed safety branch, not only describe it — "
 				+ "in the same fake-fruit vocabulary as its neighbours");
@@ -189,9 +227,18 @@ public class LlmProviderTest {
 				"The demonstration needs a record in the real, undated "
 				+ "'Safety finding — <drug>: <detail>' shape DrugReferenceInjector.renderFinding "
 				+ "appends, or it teaches a shape the model never sees");
+		assertTrue(prompt.contains("[4] " + DrugReferenceInjector.FINDING_PREFIX + "Durian:"),
+				"and that shape must be the PRODUCTION prefix rather than a copy of it: two "
+				+ "independent literals let renderFinding be reworded while the few-shot keeps "
+				+ "demonstrating the old shape, with every test green. This assertion and the "
+				+ "literal one above fail together only while the two agree");
 		assertTrue(prompt.contains("\"answer\": \"No — durian should not be delivered:"),
 				"The demonstrated answer must LEAD with the verdict; a lead that opens on the "
 				+ "mechanism is the behaviour being fixed");
+		assertTrue(prompt.contains("a Major problem [4].\", \"citations\": [2, 4]}"),
+				"and it must carry the finding's own severity and cite BOTH the finding and the "
+				+ "record it rests on. A demonstrated verdict with no citation behind it is exactly "
+				+ "the fabricated-verdict shape the eval gate cannot see (#126), taught by example");
 		// Both branches must stay reachable. #107's abstention is the direction that trades a
 		// missing verdict for a fabricated one, which is the worse defect, so the addressed-case
 		// demonstration must sit AFTER the mango abstention and BEFORE the focus-hint banana

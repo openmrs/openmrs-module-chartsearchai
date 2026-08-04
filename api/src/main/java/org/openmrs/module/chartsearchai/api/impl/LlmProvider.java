@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +57,15 @@ public class LlmProvider {
 			+ "Records beginning with \"Drug reference\" are clinical reference data, not this "
 			+ "patient's data; cite them the same way, but never present reference dosing as a value "
 			+ "already recorded for the patient. "
+			// SAFETY GUIDANCE LIVES IN TWO PLACES: this record-type sentence (#110, #112) and the
+			// safety/suitability paragraph below (#107, #112). They are one rule split across the
+			// prompt's two natural sections — what a record type means here, and how to answer a
+			// safety question — and both are gated on the same thing: a "Safety finding" record,
+			// which DrugReferenceInjector emits only when DrugSafetyValidator found something.
+			// Change either and read the other: #112 diagnosed a missing verdict rule from this
+			// paragraph alone and proposed adding one beside it, which would have left two
+			// contradictory lead instructions — the shape eval/drift-metric/README.md records
+			// regressing. Its lead clause was re-pointed instead.
 			+ "Records beginning with \"Safety finding\" ARE about this patient — this module derived "
 			+ "them from the patient's own records — so a safety finding naming the drug asked about "
 			+ "means the records DO address that drug: answer the question from that finding and cite "
@@ -105,8 +115,11 @@ public class LlmProvider {
 			+ "[2] (2024-02-15) Fruit delivery: 8 oranges\n"
 			+ "[3] (2024-01-20) Fruit delivery: 5 apples\n"
 			// Undated and last, the shape DrugReferenceInjector.renderFinding produces and
-			// injectRecords appends after the dated chart records.
-			+ "[4] Safety finding — Durian: Durian spoils the oranges in store — Major. "
+			// injectRecords appends after the dated chart records. The prefix is the production
+			// constant, not a copy, so the demonstration cannot drift from the line the model
+			// actually sees — the same coupling FOCUS_HINT_LABEL gives the focus-hint demo.
+			+ "[4] " + DrugReferenceInjector.FINDING_PREFIX
+			+ "Durian: Durian spoils the oranges in store — Major. "
 			+ "Ethylene released by durian ripens and rots citrus within days.\n\n"
 			+ "Clinician's query: How many apples were delivered?\n"
 			+ "{\"reasoning\": \"The query is about apples. Records [1] and [3] are apple deliveries; "

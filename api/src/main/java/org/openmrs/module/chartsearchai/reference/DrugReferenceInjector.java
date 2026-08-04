@@ -269,12 +269,23 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * The prefix every injected safety-finding chart line carries — the token
+	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT}'s record-type rule keys on ("Records beginning with
+	 * "Safety finding" ARE about this patient"). Shared with that prompt's format demonstration for
+	 * the same reason {@code LlmProvider.FOCUS_HINT_LABEL} is shared: if the demonstration and the
+	 * real line drift, the few-shot teaches a record shape the model never sees at inference time,
+	 * and the verdict lead demonstrated on it (#112) stops transferring to the real finding. Pinning
+	 * both sides to independent literals would let that drift ship green.
+	 */
+	public static final String FINDING_PREFIX = "Safety finding — ";
+
+	/**
 	 * One deterministic finding as a chart line. The detail text is reused verbatim — it is the same
 	 * string the clinician already sees on the chip, so the prose and the chip cannot describe the
 	 * same finding differently.
 	 */
 	static String renderFinding(SafetyWarning finding) {
-		return "Safety finding — " + finding.getDrug() + ": " + finding.getDetail();
+		return FINDING_PREFIX + finding.getDrug() + ": " + finding.getDetail();
 	}
 
 	/**

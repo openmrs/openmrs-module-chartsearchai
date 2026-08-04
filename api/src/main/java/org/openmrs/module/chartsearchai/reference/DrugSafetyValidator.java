@@ -53,7 +53,9 @@ import org.springframework.stereotype.Service;
  *       {@link CrossReactivityGroup} (cross-branch family overlap). The rule arm raises one
  *       warning per (drug, matched partner): several rules can name one partner — DDInter's
  *       route variants of a drug all publish the same match token — and they collapse to the
- *       most severe row, see {@link #bestRulePerPartner}.</li>
+ *       most severe row, see {@link #bestRulePerPartner}. It also interacts with
+ *       ANOTHER DRUG THE QUESTION NAMED — see {@link #addQuestionPairInteractions}, the arm that
+ *       answers "does A interact with B?" for a patient on neither.</li>
  *   <li><b>Contraindications</b> — the drug is contraindicated by an active allergy or
  *       condition: by a hand-authored rule, by being the same drug as — or sharing an ATC
  *       chemical subgroup with — a recorded allergy (cross-reactivity reasoning), or —
@@ -248,6 +250,11 @@ public class DrugSafetyValidator {
 			if (warnDose) {
 				addOverdose(warnings, ref, context, lower, all);
 			}
+		}
+		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
+		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
+		if (warnInteractions) {
+			addQuestionPairInteractions(warnings, questionDrugs, context, severityFloor);
 		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
@@ -558,6 +565,127 @@ public class DrugSafetyValidator {
 	 */
 	private static int noteLength(DrugReference.Interaction interaction) {
 		return interaction.getNote() == null ? 0 : interaction.getNote().trim().length();
+	}
+
+	/**
+	 * The question-named PAIR arm (issue #114): the drugs the question resolved to, checked against
+	 * EACH OTHER rather than only against the chart.
+	 *
+	 * <p>Every other interaction arm joins one drug to the patient's own data, so a question naming
+	 * two drugs was silently reduced to two independent one-drug questions: asked "does warfarin
+	 * interact with aspirin?" about a patient on neither, the module reported no information about a
+	 * pair its own KB rates Major (measured on the 3.7.1 standalone, 2026-08-04 — it also raised an
+	 * unrequested Minor chip about the one drug that WAS on the chart, which reads as an answer to
+	 * the question asked). The pair is a plain reference lookup: it needs no patient data at all, and
+	 * withholding it because the patient happens not to be on either drug answers a question nobody
+	 * asked.
+	 *
+	 * <p>Deliberately scoped to the QUESTION's drugs, not to all of {@code inPlay}. The
+	 * answer-named additions are the LLM's word choice, and two drugs it names are as often
+	 * alternatives ("ibuprofen, or paracetamol if …") as a proposed combination, so pairing them
+	 * would assert a co-administration risk nobody proposed — the same over-reach echo scoping
+	 * exists to prevent (issue #105). It also keeps the chips aligned with the injected findings:
+	 * {@link DrugReferenceInjector#preAnswerFindings} runs this same validate with an EMPTY answer,
+	 * so an answer-side pair could produce a chip with no record behind it.
+	 *
+	 * <p>The floor is the shared {@code severityFloor} the chart arm is given, so this cannot become
+	 * a route around a decision the chip path enforces; and a pair either of whose drugs is an
+	 * active order is left to {@link #addInteractions}, whose chip states a fact about THIS patient
+	 * — the stronger statement, and reporting both would say one finding in two voices.
+	 */
+	private void addQuestionPairInteractions(List<SafetyWarning> warnings, Set<DrugReference> questionDrugs,
+			PatientClinicalContext context, int severityFloor) {
+		if (questionDrugs.size() < 2) {
+			return;
+		}
+		// Indexed so each UNORDERED pair is visited once: DDInter rows are symmetric and the parser
+		// writes every pair into both drugs' entries, so walking ordered pairs would report each
+		// interaction twice, once from each side.
+		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);
+		for (int i = 0; i < drugs.size() - 1; i++) {
+			for (int j = i + 1; j < drugs.size(); j++) {
+				addQuestionPairInteraction(warnings, drugs.get(i), drugs.get(j), context, severityFloor);
+			}
+		}
+	}
+
+	/** One question-named pair: at most one chip, from whichever side carries the rule. */
+	private void addQuestionPairInteraction(List<SafetyWarning> warnings, DrugReference first,
+			DrugReference second, PatientClinicalContext context, int severityFloor) {
+		DrugReference.Interaction forward = aboveFloorRuleAgainst(first, second, severityFloor);
+		DrugReference.Interaction reverse = aboveFloorRuleAgainst(second, first, severityFloor);
+		if (forward == null && reverse == null) {
+			return;
+		}
+		if (coveredByActiveOrderArm(forward, context) || coveredByActiveOrderArm(reverse, context)) {
+			return;
+		}
+		// Whichever side carries the rule owns the sentence; with symmetric data both do and the
+		// earlier question drug leads.
+		DrugReference subject = forward != null ? first : second;
+		DrugReference partner = forward != null ? second : first;
+		DrugReference.Interaction rule = forward != null ? forward : reverse;
+		// "named in the question" is what keeps this distinguishable from the active-order chip, and
+		// it is a claim about the QUESTION, so it stays true whatever the chart holds. Wording it as
+		// "neither drug is on the chart" instead would be false for the one-sided-data case that
+		// reaches here — the patient IS on one of the pair, but only that drug's entry carries the
+		// rule, so no active-order chip fires from either side — and stating the patient's
+		// medications wrongly is the defect in #86.
+		String detail = subject.displayLabel() + " interacts with "
+				+ ChartSearchAiUtils.firstNonBlank(partner.displayLabel(), rule.getToken(), rule.getAtc())
+				+ ", also named in the question";
+		if (rule.getNote() != null && !rule.getNote().isEmpty()) {
+			detail += " — " + rule.getNote();
+		}
+		warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, subject.displayLabel(), detail));
+	}
+
+	/**
+	 * @return {@code subject}'s first interaction rule that names {@code other} AND clears
+	 *         {@code floor}, or null when it carries none. First rather than every: a pair of
+	 *         reference entries is one clinical fact however many rows join them (route variants
+	 *         sharing a match token can produce several), and the chart arm's one-chip-per-rule
+	 *         behaviour is not extended here.
+	 */
+	private static DrugReference.Interaction aboveFloorRuleAgainst(DrugReference subject, DrugReference other,
+			int floor) {
+		for (DrugReference.Interaction i : subject.getInteractions()) {
+			if (clearsSeverityFloor(i, floor) && identifies(i, other)) {
+				return i;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @return true when interaction rule {@code i} names reference entry {@code other} — the
+	 *         reference-side counterpart of {@link PatientClinicalContext#hasActiveDrug}: the same
+	 *         two arms, the rule's name token and its ATC code, resolved against a loaded entry's
+	 *         aliases and normalized codes instead of against the chart's active orders. Alias
+	 *         matching goes through the shared {@link DrugReference#matchesText} — the same matcher
+	 *         {@code findByQuery}/{@code lookupByToken} use to bind free text to an entry — so
+	 *         "this rule points at that drug" is decided one way throughout.
+	 */
+	private static boolean identifies(DrugReference.Interaction i, DrugReference other) {
+		String token = i.getToken();
+		if (token != null && !token.trim().isEmpty()
+				&& other.matchesText(token.trim().toLowerCase(Locale.ROOT))) {
+			return true;
+		}
+		String atc = DrugReference.normalizeAtcToken(i.getAtc());
+		return atc != null && other.normalizedAtcCodes().contains(atc);
+	}
+
+	/**
+	 * @return true when {@code rule} points at one of the patient's active orders, i.e.
+	 *         {@link #addInteractions} already raises this pair as a fact about the patient. Asked
+	 *         of both sides of a pair by the caller, so it covers "the partner is on the chart" and
+	 *         "the subject is on the chart" alike. Uses the very predicate that arm uses, so the two
+	 *         cannot disagree about which pairs the chart already owns.
+	 */
+	private static boolean coveredByActiveOrderArm(DrugReference.Interaction rule,
+			PatientClinicalContext context) {
+		return rule != null && context != null && context.hasActiveDrug(rule.getToken(), rule.getAtc());
 	}
 
 	/**

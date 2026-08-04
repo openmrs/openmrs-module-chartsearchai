@@ -1,0 +1,94 @@
+{
+  "version": "1.0",
+  "description": "Test fixture for the question-named PAIR arm (issue #114), parsed by the real JsonDrugReferenceSource. Three shapes the bundled DDInter sample cannot express, each a miniature of a shape the FULL KB carries: (1) route variants of one drug sharing a match token — DDInter publishes the same rxnorm_name for every variant, so one question word resolves several entries that all pair off the same rule (142 rxnorm_name values are shared by more than one entry across 332 entries of the full KB; see issue #115); (2) one pair joined by TWO rules whose tokens differ, only the second of which names the patient's active order, so 'is this pair already the chart arm's?' cannot be answered from the first rule alone; (3) a rule that identifies its partner only by ATC code, carrying no name token — the arm the ddinter source never exercises because it always writes a token.",
+  "entries": [
+    {
+      "id": "dexamethasone",
+      "name": "Dexamethasone",
+      "aliases": ["dexamethasone"],
+      "interactions": [
+        {
+          "token": "voxelotor",
+          "severity": "Major",
+          "note": "Major. Coadministration with potent or moderate inducers of CYP450 3A4 may significantly decrease the plasma concentrations and pharmacologic effects of voxelotor."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "dexamethasone-nasal",
+      "name": "Dexamethasone (nasal)",
+      "aliases": ["dexamethasone (nasal)", "dexamethasone"],
+      "interactions": [
+        {
+          "token": "voxelotor",
+          "severity": "Moderate",
+          "note": "Moderate. Coadministration with inhibitors of CYP450 3A4 may increase the plasma concentrations and pharmacologic effects of corticosteroids."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "voxelotor",
+      "name": "Voxelotor",
+      "aliases": ["voxelotor"],
+      "interactions": [
+        {
+          "token": "dexamethasone",
+          "severity": "Major",
+          "note": "Major. Coadministration with potent or moderate inducers of CYP450 3A4 may significantly decrease the plasma concentrations and pharmacologic effects of voxelotor."
+        },
+        {
+          "token": "dexamethasone",
+          "severity": "Moderate",
+          "note": "Moderate. Coadministration with inhibitors of CYP450 3A4 may increase the plasma concentrations and pharmacologic effects of corticosteroids."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "warfarin",
+      "name": "Warfarin",
+      "aliases": ["warfarin", "coumadin"],
+      "source": "Test fixture"
+    },
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": ["ibuprofen"],
+      "interactions": [
+        {
+          "token": "coumadin",
+          "severity": "Major",
+          "note": "Major. NSAIDs may increase the anticoagulant effect of coumarin derivatives."
+        },
+        {
+          "token": "warfarin",
+          "severity": "Major",
+          "note": "Major. NSAIDs may increase the risk of bleeding in patients treated with warfarin."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "miconazole",
+      "name": "Miconazole",
+      "aliases": ["miconazole"],
+      "interactions": [
+        {
+          "atc": "B01AA04",
+          "severity": "Major",
+          "note": "Major. Miconazole may potentiate the anticoagulant effect of coumarin derivatives."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "phenprocoumon",
+      "name": "Phenprocoumon",
+      "aliases": ["phenprocoumon"],
+      "atcCodes": ["B01AA04"],
+      "source": "Test fixture"
+    }
+  ]
+}

@@ -12,9 +12,13 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -34,12 +38,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * checked against the CHART ({@code hasActiveDrug}), never against the other drug the question
  * named — so a two-drug question was silently reduced to two independent one-drug questions.
  *
- * <p>All scenarios run the real pipeline: real bundled datasets parsed by the real sources, real
+ * <p>All scenarios run the real pipeline: real datasets — the bundled DDInter sample and the curated
+ * seed, plus {@link #PAIR_FIXTURE} for shapes neither carries — parsed by the real sources, real
  * {@code validate}/{@code injectRecords} overloads, GP reads on their no-context defaults.
  */
 public class DrugSafetyQuestionPairInteractionTest {
 
 	private static final String PAIR_QUESTION = "Does warfarin interact with aspirin?";
+
+	/** Shapes the bundled DDInter sample cannot express — route variants sharing a match token, a
+	 *  pair joined by two differently-tokened rules, an ATC-only rule — each a miniature of a shape
+	 *  the full KB carries; see the fixture's own description. */
+	private static final String PAIR_FIXTURE = "chartsearchai-test/drug-reference-question-pairs.json";
 
 	/** The abstention the standalone actually produced for {@link #PAIR_QUESTION} — the chip must
 	 *  not depend on the answer naming anything, so the defect's own answer text is used. */
@@ -58,6 +68,11 @@ public class DrugSafetyQuestionPairInteractionTest {
 	private static DrugReference ddinterEntry(String name) {
 		return new DdiDrugReferenceSource().load().stream()
 				.filter(r -> name.equalsIgnoreCase(r.getName())).findFirst().orElseThrow();
+	}
+
+	/** A service over {@link #PAIR_FIXTURE}, parsed by the real {@link JsonDrugReferenceSource}. */
+	private static DrugReferenceService pairFixtureService() throws IOException {
+		return DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(PAIR_FIXTURE));
 	}
 
 	private static long interactionChips(List<SafetyWarning> warnings) {
@@ -202,5 +217,104 @@ public class DrugSafetyQuestionPairInteractionTest {
 				"the finding must name the pair and its severity: " + finding.getText());
 		assertTrue(result.getText().contains("[" + finding.getIndex() + "] "),
 				"it must be a numbered, citable chart line so the answer can cite it: " + result.getText());
+	}
+
+	@Test
+	public void routeVariantEntriesSharingAMatchTokenAreReportedAsOnePair() throws IOException {
+		// One chip per clinical PAIR, not per pair of ENTRIES. DDInter carries a separate entry per
+		// route variant and every variant publishes the same rxnorm_name — which is the token its
+		// rules match on — so ONE question word resolves several entries that all pair off the same
+		// rule. Ungrouped that is N near-identical chips, and N near-identical injected findings, for
+		// a single clinical fact: issue #115's shape arriving on the question side.
+		DrugReferenceService fixture = pairFixtureService();
+		String question = "Does voxelotor interact with dexamethasone?";
+		List<String> resolved = fixture.findByQuery(question).stream().map(DrugReference::getName)
+				.collect(Collectors.toList());
+		assertEquals(Arrays.asList("Dexamethasone", "Dexamethasone (nasal)", "Voxelotor"), resolved,
+				"precondition: the one word 'dexamethasone' must resolve BOTH variant entries alongside"
+						+ " voxelotor — that is what multiplies the pairs");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixture).validate(
+				"The records do not address this combination.", question, patientOnNeitherDrug());
+
+		assertEquals(1, interactionChips(warnings),
+				"route variants of one drug are one drug for this arm, so the pair must be reported"
+						+ " once, not once per variant entry, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Dexamethasone", "Voxelotor", "named in the question"),
+				"the surviving chip is the dataset's first variant, naming the pair asked about, was: "
+						+ warnings);
+	}
+
+	@Test
+	public void aPairAlsoJoinedByARuleNamingAnActiveOrderStaysWithTheActiveOrderArm() throws IOException {
+		// Chart precedence has to be decided over EVERY rule joining the pair, not just the one this
+		// arm would chip: addInteractions walks all of an entry's rules, so when two rules join one
+		// pair under different tokens — a brand-name row and an INN row — and only the second names
+		// the patient's order, consulting the first alone concludes "the chart does not own this" and
+		// the pair is reported twice, once as a fact about the patient and once as a reference lookup.
+		DrugReferenceService fixture = pairFixtureService();
+		DrugReference ibuprofen = fixture.findByQuery("ibuprofen").get(0);
+		assertEquals(Arrays.asList("coumadin", "warfarin"), ibuprofen.getInteractions().stream()
+				.map(DrugReference.Interaction::getToken).collect(Collectors.toList()),
+				"precondition: two rules must join this pair, and the FIRST must name the partner by a"
+						+ " token the active order's name does NOT carry");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixture).validate(
+				"Both are commonly prescribed.", "Can we give ibuprofen with warfarin?",
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Warfarin 5mg"),
+						null, null, null));
+
+		assertEquals(1, interactionChips(warnings),
+				"the pair must be reported exactly once however many rules join it, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Ibuprofen", "active order warfarin"),
+				"the surviving chip must be the patient-specific active-order one, was: " + warnings);
+		for (SafetyWarning warning : warnings) {
+			assertFalse(warning.getDetail().contains("named in the question"),
+					"a pair the chart arm already owns must not also be a reference lookup: " + warning);
+		}
+	}
+
+	@Test
+	public void aQuestionNamedPairIdentifiedOnlyByAtcCodeIsReported() throws IOException {
+		// The ATC arm of the rule-names-that-entry check, which the ddinter source never exercises
+		// because it always writes a name token: a curated rule may carry only the partner's ATC
+		// code, and the pair must still be found — otherwise the arm silently covers one of the two
+		// ways the reference data names a partner.
+		DrugReferenceService fixture = pairFixtureService();
+		DrugReference miconazole = fixture.findByQuery("miconazole").get(0);
+		assertNotNull(miconazole.getInteractions().get(0).getAtc(),
+				"precondition: the rule must identify its partner by ATC code");
+		assertNull(miconazole.getInteractions().get(0).getToken(),
+				"precondition: and carry no name token, so only the ATC arm can match");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixture).validate(
+				"The records do not address this combination.",
+				"Is miconazole safe with phenprocoumon?", patientOnNeitherDrug());
+
+		assertEquals(1, interactionChips(warnings),
+				"a pair joined only by an ATC code must raise its chip, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Miconazole", "Phenprocoumon", "named in the question", "Major"),
+				"and must name the partner ENTRY, not the bare code, was: " + warnings);
+	}
+
+	@Test
+	public void patientSpecificChipsLeadThePairChip() {
+		// Mary Smith's measured shape (active order Simvastatin 20mg, asked about warfarin x aspirin):
+		// the chip list must open with the fact about HER — the arm runs last precisely so a reference
+		// lookup about a pair she may be on neither of never outranks her own chart.
+		List<SafetyWarning> warnings = ddinterValidator().validate(ABSTAINING_ANSWER, PAIR_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Simvastatin 20mg"), null, null, null));
+
+		assertEquals(2, warnings.size(),
+				"precondition: her active order and the question's pair must both be raised, was: "
+						+ warnings);
+		assertTrue(warnings.get(0).getDetail().contains("active order simvastatin"),
+				"the patient-specific chip must lead, was: " + warnings);
+		assertTrue(warnings.get(1).getDetail().contains("named in the question"),
+				"and the question-pair lookup must follow it, was: " + warnings);
 	}
 }

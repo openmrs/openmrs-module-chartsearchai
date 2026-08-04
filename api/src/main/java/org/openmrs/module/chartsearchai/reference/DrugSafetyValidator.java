@@ -592,39 +592,65 @@ public class DrugSafetyValidator {
 	 * a route around a decision the chip path enforces; and a pair either of whose drugs is an
 	 * active order is left to {@link #addInteractions}, whose chip states a fact about THIS patient
 	 * — the stronger statement, and reporting both would say one finding in two voices.
+	 *
+	 * <p>{@link DrugReferenceInjector#orderedInteractionNotes} is deliberately NOT extended to match:
+	 * its documented "a partner that raises a chip is exactly a partner promoted here" is scoped to
+	 * the active-order arm, and stays exact, because a pair chip's partner is by construction not an
+	 * active order. The pair finding's prose grounding comes from elsewhere — since issue #110 the
+	 * deterministic finding is itself injected as a numbered, citable record by
+	 * {@code preAnswerFindings}, carrying this chip's string verbatim — so the promoted-note budget
+	 * and the chip/prose invariant both stay untouched.
 	 */
 	private void addQuestionPairInteractions(List<SafetyWarning> warnings, Set<DrugReference> questionDrugs,
 			PatientClinicalContext context, int severityFloor) {
 		if (questionDrugs.size() < 2) {
 			return;
 		}
-		// Indexed so each UNORDERED pair is visited once: DDInter rows are symmetric and the parser
-		// writes every pair into both drugs' entries, so walking ordered pairs would report each
-		// interaction twice, once from each side.
+		// Indexed so each UNORDERED pair of entries is visited once: DDInter rows are symmetric and
+		// the parser writes every pair into both drugs' entries, so walking ordered pairs would report
+		// each interaction twice, once from each side.
 		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);
+		Set<List<String>> reportedPairs = new LinkedHashSet<List<String>>();
 		for (int i = 0; i < drugs.size() - 1; i++) {
 			for (int j = i + 1; j < drugs.size(); j++) {
-				addQuestionPairInteraction(warnings, drugs.get(i), drugs.get(j), context, severityFloor);
+				addQuestionPairInteraction(warnings, drugs.get(i), drugs.get(j), context, severityFloor,
+						reportedPairs);
 			}
 		}
 	}
 
 	/** One question-named pair: at most one chip, from whichever side carries the rule. */
 	private void addQuestionPairInteraction(List<SafetyWarning> warnings, DrugReference first,
-			DrugReference second, PatientClinicalContext context, int severityFloor) {
-		DrugReference.Interaction forward = aboveFloorRuleAgainst(first, second, severityFloor);
-		DrugReference.Interaction reverse = aboveFloorRuleAgainst(second, first, severityFloor);
-		if (forward == null && reverse == null) {
+			DrugReference second, PatientClinicalContext context, int severityFloor,
+			Set<List<String>> reportedPairs) {
+		List<DrugReference.Interaction> forward = aboveFloorRulesAgainst(first, second, severityFloor);
+		List<DrugReference.Interaction> reverse = aboveFloorRulesAgainst(second, first, severityFloor);
+		if (forward.isEmpty() && reverse.isEmpty()) {
 			return;
 		}
 		if (coveredByActiveOrderArm(forward, context) || coveredByActiveOrderArm(reverse, context)) {
 			return;
 		}
+		// One chip per clinical PAIR, not per pair of ENTRIES. DDInter carries a separate entry per
+		// route variant and every variant publishes the same rxnorm_name — which is the token its
+		// rules match on — so ONE word in the question resolves several entries (findByQuery returns
+		// every entry whose aliases match) that all pair off the same rule: four dexamethasone entries
+		// against voxelotor is four near-identical chips, and four near-identical injected findings,
+		// for a single clinical fact. That is issue #115's shape arriving on the question side (142
+		// rxnorm_name values are shared by more than one entry across 332 entries of the full KB), so
+		// the pair is keyed by the two drugs' MATCH TOKENS rather than by their entries — the token
+		// being the KB's own canonical name for a drug, and precisely what the variants share. Which
+		// variant's row then supplies the severity is #115's open half; the dataset's first is kept,
+		// as the chart arm keeps its first.
+		if (!reportedPairs.add(unorderedPairKey(matchTokenFor(first, reverse), matchTokenFor(second, forward)))) {
+			return;
+		}
 		// Whichever side carries the rule owns the sentence; with symmetric data both do and the
 		// earlier question drug leads.
-		DrugReference subject = forward != null ? first : second;
-		DrugReference partner = forward != null ? second : first;
-		DrugReference.Interaction rule = forward != null ? forward : reverse;
+		boolean fromFirst = !forward.isEmpty();
+		DrugReference subject = fromFirst ? first : second;
+		DrugReference partner = fromFirst ? second : first;
+		DrugReference.Interaction rule = fromFirst ? forward.get(0) : reverse.get(0);
 		// "named in the question" is what keeps this distinguishable from the active-order chip, and
 		// it is a claim about the QUESTION, so it stays true whatever the chart holds. Wording it as
 		// "neither drug is on the chart" instead would be false for the one-sided-data case that
@@ -641,20 +667,22 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return {@code subject}'s first interaction rule that names {@code other} AND clears
-	 *         {@code floor}, or null when it carries none. First rather than every: a pair of
-	 *         reference entries is one clinical fact however many rows join them (route variants
-	 *         sharing a match token can produce several), and the chart arm's one-chip-per-rule
-	 *         behaviour is not extended here.
+	 * @return every interaction rule of {@code subject} that names {@code other} AND clears
+	 *         {@code floor}, in dataset order — empty when it carries none. All of them, not just the
+	 *         first, because the two questions asked of them differ: the CHIP carries one row (a pair
+	 *         of reference entries is one clinical fact however many rows join them, so the chart
+	 *         arm's one-chip-per-rule behaviour is deliberately not extended here), while the
+	 *         chart-precedence check has to see them all — see {@link #coveredByActiveOrderArm}.
 	 */
-	private static DrugReference.Interaction aboveFloorRuleAgainst(DrugReference subject, DrugReference other,
-			int floor) {
+	private static List<DrugReference.Interaction> aboveFloorRulesAgainst(DrugReference subject,
+			DrugReference other, int floor) {
+		List<DrugReference.Interaction> out = new ArrayList<DrugReference.Interaction>();
 		for (DrugReference.Interaction i : subject.getInteractions()) {
 			if (clearsSeverityFloor(i, floor) && identifies(i, other)) {
-				return i;
+				out.add(i);
 			}
 		}
-		return null;
+		return out;
 	}
 
 	/**
@@ -665,6 +693,15 @@ public class DrugSafetyValidator {
 	 *         matching goes through the shared {@link DrugReference#matchesText} — the same matcher
 	 *         {@code findByQuery}/{@code lookupByToken} use to bind free text to an entry — so
 	 *         "this rule points at that drug" is decided one way throughout.
+	 *         <p>
+	 *         Deliberately that matcher and not the order-name one {@code hasActiveDrug} reaches for
+	 *         (issue #128 splits the two): both operands here are canonical reference strings — a
+	 *         rule's match token against an entry's aliases — with no localized, inflected display
+	 *         name to tolerate a trailing letter for, and the orientation is inverted, the rule's
+	 *         TOKEN being the haystack and the entry's aliases the needles. The nesting hazard
+	 *         therefore runs the other way here, and it is the symmetric word boundary that stops an
+	 *         alias nested in a longer token from matching ({@code chlorothiazide} against a
+	 *         {@code hydrochlorothiazide} rule).
 	 */
 	private static boolean identifies(DrugReference.Interaction i, DrugReference other) {
 		String token = i.getToken();
@@ -677,15 +714,55 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return true when {@code rule} points at one of the patient's active orders, i.e.
-	 *         {@link #addInteractions} already raises this pair as a fact about the patient. Asked
-	 *         of both sides of a pair by the caller, so it covers "the partner is on the chart" and
-	 *         "the subject is on the chart" alike. Uses the very predicate that arm uses, so the two
+	 * @return true when any of {@code rules} points at one of the patient's active orders, i.e.
+	 *         {@link #addInteractions} already raises this pair as a fact about the patient. ANY,
+	 *         over every rule joining the pair rather than only the one this arm would chip, because
+	 *         {@code addInteractions} walks them all: two rules can join one pair under different
+	 *         tokens — a brand-name row and an INN row — and a pair is the chart arm's as soon as one
+	 *         of them names an active order, so consulting the first alone would report that pair
+	 *         twice, once as a fact about the patient and once as a reference lookup. Asked of both
+	 *         directions by the caller, so it covers "the partner is on the chart" and "the subject
+	 *         is on the chart" alike, and it asks through the very predicate that arm uses, so the two
 	 *         cannot disagree about which pairs the chart already owns.
 	 */
-	private static boolean coveredByActiveOrderArm(DrugReference.Interaction rule,
+	private static boolean coveredByActiveOrderArm(List<DrugReference.Interaction> rules,
 			PatientClinicalContext context) {
-		return rule != null && context != null && context.hasActiveDrug(rule.getToken(), rule.getAtc());
+		if (context == null) {
+			return false;
+		}
+		for (DrugReference.Interaction rule : rules) {
+			if (context.hasActiveDrug(rule.getToken(), rule.getAtc())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @return the reference data's own name for {@code drug} in this pair, lower-cased: the match
+	 *         token (or, for a rule carrying only a code, the ATC code) of {@code namingRules} — the
+	 *         rules on the OTHER side of the pair, which are the ones that name this drug. Falls back
+	 *         to the entry's own label when no rule names it at all, so a pair with data on one side
+	 *         only still keys on something specific to that drug rather than on a shared blank.
+	 */
+	private static String matchTokenFor(DrugReference drug, List<DrugReference.Interaction> namingRules) {
+		String name = namingRules.isEmpty() ? drug.displayLabel()
+				: ChartSearchAiUtils.firstNonBlank(namingRules.get(0).getToken(), namingRules.get(0).getAtc());
+		return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
+	}
+
+	/**
+	 * @return a key equal for {@code (a, b)} and {@code (b, a)}: the two names, sorted. A two-element
+	 *         list rather than a joined string because every separator a name could be joined on is a
+	 *         character some drug name already contains — "Multivitamines et fer" a space,
+	 *         "Dexamethasone / lidocaine" a slash — and a separator that can appear inside a name
+	 *         lets two different pairs collapse to one key, silently dropping the second pair's chip.
+	 */
+	private static List<String> unorderedPairKey(String one, String other) {
+		List<String> key = new ArrayList<String>(2);
+		key.add(one.compareTo(other) <= 0 ? one : other);
+		key.add(one.compareTo(other) <= 0 ? other : one);
+		return key;
 	}
 
 	/**

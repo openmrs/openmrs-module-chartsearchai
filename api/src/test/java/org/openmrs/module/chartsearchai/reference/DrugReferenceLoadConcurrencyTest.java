@@ -57,9 +57,6 @@ import org.openmrs.module.chartsearchai.LogCapture;
  */
 public class DrugReferenceLoadConcurrencyTest {
 
-	/** Everything the drug-reference load logs lives under this package. */
-	private static final String REFERENCE_LOGGER = "org.openmrs.module.chartsearchai.reference";
-
 	private static final int RACERS = 8;
 
 	@Test
@@ -71,7 +68,7 @@ public class DrugReferenceLoadConcurrencyTest {
 		DrugReferenceService service = countingService(loads, entries);
 
 		List<DrugReferenceLoad> observed;
-		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			observed = raceGetAllThenReadStatus(service);
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"a load that produced entries is healthy and must stay quiet. Captured: "
@@ -104,7 +101,7 @@ public class DrugReferenceLoadConcurrencyTest {
 
 		List<DrugReferenceLoad> observed;
 		List<String> warnings;
-		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			observed = raceGetAllThenReadStatus(service);
 			warnings = capture.messagesAt(Level.WARN);
 		}

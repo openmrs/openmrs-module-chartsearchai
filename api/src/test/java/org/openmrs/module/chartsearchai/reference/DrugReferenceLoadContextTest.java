@@ -61,9 +61,6 @@ import org.openmrs.util.OpenmrsUtil;
  */
 public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest {
 
-	/** Everything the drug-reference load logs lives under this package. */
-	private static final String REFERENCE_LOGGER = "org.openmrs.module.chartsearchai.reference";
-
 	private final List<File> created = new ArrayList<File>();
 
 	@AfterEach
@@ -95,6 +92,11 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		return "chartsearchai/" + asName;
 	}
 
+	/**
+	 * Sets the three global properties a load reads, including turning the feature ON — every case
+	 * here needs the master switch on, so it is not a separate step a case can forget. The one case
+	 * that wants it off sets it directly.
+	 */
 	private void configure(String sourceFormat, String dataFilePath) {
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
@@ -114,7 +116,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
 		List<DrugReference> entries;
-		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			entries = new DrugReferenceService().getAll();
 
 			assertTrue(entries.isEmpty(),
@@ -131,7 +133,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "mismatch-ddi.json");
 		configure(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT, path);
 
-		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			assertTrue(new DrugReferenceService().getAll().isEmpty(),
 					"the curated parser finds no 'entries' key in the DDInter knowledge base");
 			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
@@ -145,7 +147,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "healthy-ddi.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
-		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			assertFalse(new DrugReferenceService().getAll().isEmpty(),
 					"the DDInter parser reads its own dataset");
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
@@ -161,7 +163,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
 
-		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			assertFalse(new DrugReferenceService().getAll().isEmpty(),
 					"with no dataFilePath configured the bundled curated dataset loads");
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
@@ -242,6 +244,39 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	}
 
 	/**
+	 * A {@code sourceFormat} matching no adapter falls back to the curated {@code json} parser, which
+	 * is one of the ways a deployment ends up parsing a dataset with the wrong parser. The status is
+	 * what makes that visible, and only because it reports the configured value and the effective one
+	 * SEPARATELY — this is the divergence {@link DrugReferenceLoad#getSourceFormat()}'s javadoc
+	 * describes, and the only thing that reads the configured value back.
+	 *
+	 * <p>Note what is NOT loud here: this typo happens to point at a dataset the curated parser can
+	 * read, so it loads 4 entries and warns about nothing. The two fields differing is the only signal.
+	 */
+	@Test
+	public void loadStatusReportsAMistypedSourceFormatSeparatelyFromTheOneInForce() throws IOException {
+		String path = copyToAppData(JsonDrugReferenceSource.CLASSPATH_DEFAULT, "typo-curated.json");
+		configure("ddintr", path);
+
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+			assertEquals("ddintr", status.getConfiguredSourceFormat(),
+					"the raw global-property value is reported as configured, typo and all");
+			assertEquals(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT,
+					status.getSourceFormat(),
+					"an unrecognised format silently falls back to the curated parser, and the status "
+							+ "is where that becomes visible rather than silent");
+			assertTrue(status.getEntryCount() > 0, "the curated parser reads the curated dataset");
+			assertFalse(status.isInert(), "it loaded entries, so the safety layer is not inert");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a typo that still yields entries is NOT loud — the two format fields differing is "
+							+ "the only signal, which is why both are reported. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	/**
 	 * The {@code atc} format is the one source that does NOT go through the shared
 	 * {@code ReferenceDataFiles} loader — it has no bundled fallback, so it resolves and tracks its own
 	 * file. Its origin is therefore separate code, and this is the only test that executes it. Uses the
@@ -271,7 +306,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	public void atcFormatWithNoConfiguredPathIsInertAndNamesNoOrigin() {
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC, "");
 
-		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
 
 			assertTrue(status.isInert(), "an ATC source with nothing to read leaves safety checking off");
@@ -313,7 +348,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "false");
 
-		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
 
 			assertFalse(status.isLoaded(), "a disabled feature must not be loaded to report its status");

@@ -318,8 +318,10 @@ public class DrugReferenceService {
 			// A configured source that resolved to nothing is reported LOUDLY, naming both global
 			// properties: this used to print at INFO exactly like a successful load, so the whole
 			// drug-safety feature could be off with nothing at default log levels to say so
-			// (issue #149). "Nothing configured at all" is a different state and stays silent — see
-			// DrugReferenceLoad.
+			// (issue #149). The state that stays silent is the feature being switched OFF, which
+			// never reaches this method — not "no dataset path is set", which is one of the ways to
+			// arrive here with nothing loaded (sourceFormat=atc has no bundled fallback) and is
+			// loud. See DrugReferenceLoad.
 			if (outcome.isInert()) {
 				log.warn("Loaded 0 drug-reference entries — drug-safety checking is INERT: no "
 						+ "interaction, allergy or contraindication warning can be raised, and every "

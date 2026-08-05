@@ -29,6 +29,7 @@ import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ServiceContext;
 import org.openmrs.api.context.UserContext;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -101,7 +102,7 @@ public class ChartSearchAiDrugReferenceStatusTest {
 	public void drugReferenceStatus_reportsTheLiveSwitchAndTheRetainedLoadSeparately() {
 		grantPrivileges(true);
 		Map<String, String> globalProperties = new HashMap<String, String>();
-		globalProperties.put("chartsearchai.drugReference.enabled", "true");
+		globalProperties.put(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
 		installAdministrationService(globalProperties);
 		ChartSearchAiRestController controller = controllerWith(new DrugReferenceService());
 
@@ -117,7 +118,7 @@ public class ChartSearchAiDrugReferenceStatusTest {
 						+ "non-zero count alone cannot distinguish the two. Origin was: "
 						+ enabledBody.get("origin"));
 
-		globalProperties.put("chartsearchai.drugReference.enabled", "false");
+		globalProperties.put(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "false");
 		Map<?, ?> switchedOffBody = statusBody(controller);
 
 		assertEquals(Boolean.FALSE, switchedOffBody.get("enabled"), "the switch is read live");

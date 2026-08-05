@@ -46,9 +46,10 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p>Context-sensitive because the point is the GP: the cases write a real global property through the
  * admin service and read it back through the real {@code validate} path, so a cap assertion cannot pass
- * on a hardcoded default (the exception is the absent-row case, whose whole point is to write none). The knowledge base is the real bundled DDInter sample parsed by the real
- * source; its 16 drugs are exactly the 16 the question below names, and they carry <b>72</b>
- * above-floor pairs (23 Major, 40 Moderate, 9 Minor) — enough to outrun every cap tested here.
+ * on a hardcoded default (the exception is the absent-row case, whose whole point is to write none).
+ * The knowledge base is the real bundled DDInter sample parsed by the real source; its 16 drugs are
+ * exactly the 16 the question below names, and they carry <b>72</b> above-floor pairs (23 Major,
+ * 40 Moderate, 9 Minor) — enough to outrun every cap tested here.
  */
 public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 

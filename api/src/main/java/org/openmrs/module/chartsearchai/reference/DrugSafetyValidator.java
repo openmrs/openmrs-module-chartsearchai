@@ -420,7 +420,7 @@ public class DrugSafetyValidator {
 	 * ordered most-severe-first BEFORE the cut, so what goes is the least severe, and every withheld
 	 * pair is named in a WARN — a silent truncation would read to a clinician as "everything is
 	 * covered". That log line is currently the ONLY place the withheld count surfaces: a clinician-facing
-	 * "10 of 65 shown" needs a per-question container the chip API does not have (chips are per-drug
+	 * "10 of 72 shown" needs a per-question container the chip API does not have (chips are per-drug
 	 * findings), so it is a frontend change rather than a module one. Recorded here as a decision rather
 	 * than left as an oversight.
 	 *
@@ -1443,7 +1443,7 @@ public class DrugSafetyValidator {
 			List<DrugReference> orderDrugs, PatientClinicalContext context) {
 		Set<String> names = new LinkedHashSet<String>();
 		Set<String> codes = new LinkedHashSet<String>(context.getActiveDrugAtcCodes());
-		// Built once: normalizedAtcCodes() allocates, and this method reads it on both branches.
+		// Read on both branches, so it is resolved once here rather than at each use (it allocates).
 		Set<String> refCodes = ref.normalizedAtcCodes();
 		if (!context.getActiveDrugOrders().isEmpty()) {
 			// Per ORDER, not per name — issue #118 / #124 put the orders themselves on the context, and
@@ -1473,8 +1473,10 @@ public class DrugSafetyValidator {
 				// in the demo dictionary — or a caller used the pre-#132 three-argument form), and an
 				// order carrying SOME. Measured both: with only the exact removal, one "Aspirin and
 				// omeprazole" order mapped to N02BA01 reported "interacts with active order
-				// esomeprazole — Minor" off a single tablet, which the pre-#132 code suppressed. The
-				// proxy cannot over-remove, because anything ANOTHER order carries is restored below.
+				// esomeprazole — Minor" off a single tablet, which the pre-#132 code suppressed. What the
+				// proxy removes is restored below whenever another order IN THE PER-ORDER LIST carries it;
+				// a code shared only with a list-omitted nameless order is not, which is the missed-pair
+				// direction the method javadoc bounds.
 				for (DrugReference coResolved : orderDrugs) {
 					if (coResolved != ref && resolvesFrom(coResolved, order)) {
 						ownCodes.addAll(coResolved.normalizedAtcCodes());

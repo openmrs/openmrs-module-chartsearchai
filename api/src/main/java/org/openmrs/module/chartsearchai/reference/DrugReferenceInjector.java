@@ -204,7 +204,7 @@ public class DrugReferenceInjector {
 	 * {@code injectFromQuery} / {@code injectFromOrders} toggles.
 	 */
 	PatientChart injectRecords(PatientChart chart, PatientClinicalContext rawContext, String question) {
-		// The same one-per-pass resolution DrugSafetyValidator.validate applies, for the same reason
+		// The same resolution DrugSafetyValidator.validate applies, for the same reason
 		// (issue #136): orderedInteractionNotes decides which interactions to promote through
 		// PatientClinicalContext.hasActiveDrug, so a context without the reference names here would
 		// promote a different set of partners than the chips name — the exact chip-versus-prose split

@@ -282,7 +282,7 @@ public class DrugReference {
 	/**
 	 * @return true when this entry names the drug in {@code drugName} — a single clinician-entered
 	 *         drug NAME rather than prose: an active order's display name, an allergen as recorded.
-	 *         Case- and diacritic-insensitive; a null/blank name never matches. Not restricted to
+	 *         Case- and diacritic-insensitive; a null name never matches. Not restricted to
 	 *         lowercased input, unlike {@link #matchesText}.
 	 *
 	 *         <p><b>Why this exists (issue #147).</b> Such a string reached {@link #matchesText}
@@ -495,8 +495,10 @@ public class DrugReference {
 	 * Case-insensitive; a null or empty token never matches. Whitespace-only is the caller's
 	 * business, deliberately not this method's: {@link PatientClinicalContext#hasActiveDrug} trims
 	 * its token, and the {@code ddinter} and {@code atc} sources drop blank aliases at parse. A
-	 * hand-authored {@code json} KB is NOT sanitized, so a blank alias there still matches any text
-	 * carrying two adjacent spaces — pre-existing, and an authoring guard belongs in that parser.
+	 * hand-authored {@code json} KB is NOT sanitized, so a blank alias there is scanned like any other
+	 * token and can match — measured, and wider under the tail allowance than under the symmetric rule,
+	 * so #147 giving allergens the tail allowance widened it. Pre-existing, still not this method's to
+	 * decide, and an authoring guard belongs in that parser; reported separately.
 	 *
 	 * <p>Diacritic-insensitive on BOTH sides (issue #129), which is why the fold lives here rather
 	 * than in either named matcher: the same accented order name reaches both of them — as the

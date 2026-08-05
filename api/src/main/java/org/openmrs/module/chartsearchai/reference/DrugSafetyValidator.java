@@ -240,8 +240,8 @@ public class DrugSafetyValidator {
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
-		// The patient's active orders resolved to their reference entries, ONE dataset sweep per pass,
-		// feeding both things this pass needs from that resolution (issue #136):
+		// The patient's active orders resolved to their reference entries, ONE dataset sweep per
+		// validate, feeding both things this pass needs from that resolution (issue #136):
 		//
 		//   - the entries themselves, for the three arms that screen or name them — the chip grouping's
 		//     partner identity below, the active-order contraindication subjects (#143) and the
@@ -252,7 +252,11 @@ public class DrugSafetyValidator {
 		//     accidentally ask the narrower question.
 		//
 		// One resolution for both, so the names the context carries and the subjects the arms read can
-		// never describe different sets of orders.
+		// never describe different sets of orders. Per validate, not per question: the pre-answer
+		// findings pass reaches this method through DrugReferenceInjector.injectRecords, which resolves
+		// the same orders for its own promotion predicate before calling in. That repeat is idempotent
+		// today — neither leg of the resolution reads the names it attaches — so it is cost, and a trap
+		// for the first widening that makes it read them. Reported, not fixed here.
 		List<DrugReference> orderEntries = drugReferenceService.findForActiveOrders(rawContext);
 		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext, orderEntries);
 
@@ -706,10 +710,11 @@ public class DrugSafetyValidator {
 	 *         substance the loaded dataset does not carry, where the rule's code is the only evidence
 	 *         left that the two arms are talking about one drug.
 	 *
-	 *         <p>{@code rules} holds one row per partner LABEL, not per substance, so two labels can
-	 *         both name one order — across the full KB exactly one such pair exists, {@code enalapril}
-	 *         and {@code enalaprilat}, which {@link #bestRulePerPartner} deliberately keeps as two
-	 *         chips. The first in dataset order takes the fold; the other keeps its rule chip
+	 *         <p>{@code rules} holds one row per partner — per ENTRY where the dataset identifies one
+	 *         and per label where it cannot (see {@link #bestRulePerPartner}) — so two rows can still
+	 *         both name one order: across the full KB exactly one such pair exists, {@code enalapril}
+	 *         and {@code enalaprilat}, two genuinely different entries which that grouping deliberately
+	 *         keeps as two chips. The first in dataset order takes the fold; the other keeps its rule chip
 	 *         unfolded, which is the conservative direction, since the alternative is stating one
 	 *         duplicate-therapy relationship twice.
 	 */
@@ -729,9 +734,10 @@ public class DrugSafetyValidator {
 	/**
 	 * The partner label a chip names for {@code interaction} — its match token, else its ATC code.
 	 *
-	 * <p>One definition, because the chip detail renders it and {@link #bestRulePerPartner} groups on
-	 * it: that grouping is only correct while the key IS the label the chip says, and two copies of
-	 * the same coalesce could drift into grouping rules by something a clinician never sees.
+	 * <p>One definition, because the chip detail renders it and {@link #bestRulePerPartner} groups on it
+	 * wherever the dataset identifies no partner entry: on that branch the grouping is only correct
+	 * while the key IS the label the chip says, and two copies of the same coalesce could drift into
+	 * grouping rules by something a clinician never sees.
 	 *
 	 * <p>Trimmed to fold the way the MATCH folds. {@link PatientClinicalContext#hasActiveDrug} trims
 	 * the rule's token and matches it case-insensitively against the order name, so two rows whose
@@ -1287,8 +1293,9 @@ public class DrugSafetyValidator {
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
 			String alsoSameClass) {
-		// partnerLabel, not a second coalesce: it is the label bestRulePerPartner GROUPS on,
-		// and #121's grouping is only correct while the key IS the label the chip says.
+		// partnerLabel, not a second coalesce: it is the label bestRulePerPartner GROUPS on where the
+		// dataset identifies no partner entry, and there #121's grouping is only correct while the key
+		// IS the label the chip says.
 		String detail = ref.displayLabel() + " interacts with active order " + partnerLabel(i);
 		if (i.getNote() != null && !i.getNote().isEmpty()) {
 			detail += " — " + i.getNote();
@@ -1787,8 +1794,10 @@ public class DrugSafetyValidator {
 	 * home; the method name said "class" because two of its three comparisons are class-based.
 	 *
 	 * <p><b>Coverage bound, measured.</b> Identity is only as sound as the resolution behind it, and
-	 * {@link DrugReferenceService#lookupByToken} returns the EARLIEST entry any of whose aliases occurs
-	 * as a whole word in the allergy token. Measured over the full KB on 2026-08-05, asking about each
+	 * {@link DrugReferenceService#lookupByToken} returns the EARLIEST entry any of whose aliases matches
+	 * the allergy token — by the drug-NAME rule since issue #147, not the whole-word one, which is a
+	 * strict relaxation and so can only move the first match earlier. Re-measured through the shipped
+	 * matcher after that swap and unchanged in every figure below. Measured over the full KB, asking about each
 	 * of the 444 ATC-less entries with an allergy recorded under that entry's own name: every one now
 	 * raises a contraindication, but <b>53 of them name a DIFFERENT entry</b> — always one earlier in
 	 * dataset order (0 of the 53 resolve later), though not a shorter-NAMED one: 17 of the 53 resolve

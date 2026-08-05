@@ -1,0 +1,1106 @@
+{
+ "metadata": {
+  "title": "Test fixture - a rule token that is not the name the chart uses (issues #136, #147)",
+  "note": "Verbatim excerpt of the full openmrs-ddi-knowledge-base DDInter 2.0 dataset (2283 drugs, 295184 interaction rows). Eleven drugs whose alias sets carry the shapes these two issues turn on: DDInter20 is named \"Acetylsalicylic acid\" while every rule about it carries the token \"aspirin\" (its rxnorm_name); DDInter2085 Salicylic acid carries both combination-product aliases (\"salicylic acid / urea\") and an alias broader than itself (\"salicylate\"); Opium/Tiotropium and Urea/Hydroxyurea are two of the nested-name collisions issue #86 removed. Every interaction row and mechanism text that falls wholly inside the slice is included. Rows, ids, codes, aliases and mechanism texts are the dataset's own; nothing here is hand-authored.",
+  "source": {
+   "name": "DDInter 2.0",
+   "url": "https://ddinter2.scbdd.com/",
+   "normalization": "RxNorm (NLM)",
+   "bridge": "CIEL v2026-07-20"
+  }
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "5099": {
+   "text": "The chronic use or abuse of laxatives may potentiate the pharmacologic effects of diuretics. Laxatives can cause significant losses of fluid and electrolytes, including sodium, potassium, magnesium and zinc, and these effects may be additive to those of diuretics.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3449": {
+   "text": "Bowel cleansing as well as overuse of certain laxatives may cause electrolyte loss and increase the risk of torsade de pointes ventricular arrhythmia in patients treated with drugs that prolong the QT interval. Electrolyte disturbances including hypokalemia and hypomagnesemia have been reported with laxative abuse and are known risk factors for torsade de pointes associated with QT interval prolongation.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "4965": {
+   "text": "Many psychotherapeutic and CNS-active agents (e.g., anxiolytics, sedatives, hypnotics, antidepressants, antipsychotics, opioids, alcohol, muscle relaxants) exhibit hypotensive effects, especially during initiation of therapy and dose escalation. Coadministration with antihypertensives and other hypotensive agents, in particular vasodilators and alpha-blockers, may result in additive effects on blood pressure and orthostasis.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "2712": {
+   "text": "Simvastatin may slightly increase the anticoagulant response to warfarin. The mechanism may be warfarin displacement from protein binding sites. The clinical significance of this interaction has not been established, however, clinical monitoring of patient warfarin response and tolerance is recommended. Simvastatin may interact in a similar way with other oral anticoagulants. Patients should be advised to promptly report any signs of bleeding to their physician, including pain, swelling, headache, dizziness, weakness, prolonged bleeding from cuts, increased menstrual flow, vaginal bleeding, nosebleeds, bleeding of gums from brushing, unusual bleeding or bruising, red or brown urine, or red or black stools.",
+   "categories": [
+    "distribution"
+   ]
+  },
+  "2085": {
+   "text": "Coadministration with potent inhibitors of CYP450 3A4 may significantly increase the plasma concentrations of simvastatin and lovastatin and their active acid metabolites, all of which are primarily metabolized by the isoenzyme.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3456": {
+   "text": "Spironolactone may cause diuresis and hemoconcentration of clotting factors. The effects of some anticoagulants may be decreased. Data are available for warfarin. The INR or PT should be monitored, and oral coagulant dosage should be increased as needed.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
+  "4247": {
+   "text": "Some salicylates may impair the tubular secretion of canrenone, the main active metabolite of spironolactone. This effect could inhibit the natriuretic properties of spironolactone. Data are available for aspirin. If diuresis is inadequate, the clinician should consider discontinuing the salicylate or increasing spironolactone dosage while paying careful attention to the patient's serum potassium concentration.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "7943": {
+   "text": "Some salicylates may impair the tubular secretion of canrenone, the main active metabolite of spironolactone.  This effect could inhibit the natriuretic properties of spironolactone.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
+  "749": {
+   "text": "Aspirin, even in small doses, may increase the risk of bleeding in patients on oral anticoagulants by inhibiting platelet aggregation, prolonging bleeding time, and inducing gastrointestinal lesions. Analgesic/antipyretic doses of aspirin increase the risk of major bleeding more than low-dose aspirin; however bleeding has also occurred with low-dose aspirin.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "8423": {
+   "text": "Theoretically, salicylates may potentiate the effects of anticoagulants and increase the risk of bleeding.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "615": {
+   "text": "Coadministration with clarithromycin or erythromycin may infrequently but substantially enhance the hypoprothrombinemic effect of warfarin and other coumarin anticoagulants. The exact mechanism of interaction is unknown. Data from clinical studies have not supported a significant, predictable pharmacodynamic or pharmacokinetic interaction in general. Although both macrolides are potent inhibitors of CYP450 3A4 and can inhibit metabolism of the R(+) enantiomer of warfarin, the overall effect on racemic warfarin pharmacokinetics appears to be minor.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "7009": {
+   "text": "Concomitant use of more than one salicylate at a time may increase the potential for gastrointestinal adverse effects (e.g., inflammation, pain, bleeding, ulceration) and bruising or bleeding.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1018",
+   "name": "Lactulose",
+   "rxcui": "6218",
+   "rxnorm_name": "lactulose",
+   "drugbank_id": "DB00581",
+   "atc": [
+    "A06AD11"
+   ],
+   "ciel": [
+    {
+     "code": "78632",
+     "uuid": "78632AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lactulose"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1344",
+   "name": "Opium",
+   "rxcui": "7676",
+   "rxnorm_name": "opium",
+   "drugbank_id": "DB11130",
+   "atc": [
+    "A07DA02",
+    "N02AA02"
+   ],
+   "ciel": [
+    {
+     "code": "103692",
+     "uuid": "103692AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / ipecac / opium"
+    },
+    {
+     "code": "103788",
+     "uuid": "103788AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Belladonna alkaloids / opium"
+    },
+    {
+     "code": "103798",
+     "uuid": "103798AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Belladonna extract / opium"
+    },
+    {
+     "code": "104822",
+     "uuid": "104822AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Homatropine / opium / pectin"
+    },
+    {
+     "code": "170673",
+     "uuid": "fbbb8749-c143-4e62-92ea-76e77db47f32",
+     "name": "Acetaminophen / caffeine / opium"
+    },
+    {
+     "code": "81092",
+     "uuid": "81092AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Opium"
+    },
+    {
+     "code": "81094",
+     "uuid": "81094AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Opium tincture"
+    },
+    {
+     "code": "81095",
+     "uuid": "81095AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Opium, powdered"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1675",
+   "name": "Simvastatin",
+   "rxcui": "36567",
+   "rxnorm_name": "simvastatin",
+   "drugbank_id": "DB00641",
+   "atc": [
+    "C10AA01"
+   ],
+   "ciel": [
+    {
+     "code": "104633",
+     "uuid": "104633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ezetimibe / simvastatin"
+    },
+    {
+     "code": "83936",
+     "uuid": "83936AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Simvastatin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1707",
+   "name": "Spironolactone",
+   "rxcui": "9997",
+   "rxnorm_name": "spironolactone",
+   "drugbank_id": "DB00421",
+   "atc": [
+    "C03DA01"
+   ],
+   "ciel": [
+    {
+     "code": "104694",
+     "uuid": "104694AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Furosemide / spironolactone"
+    },
+    {
+     "code": "104842",
+     "uuid": "104842AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrochlorothiazide / spironolactone"
+    },
+    {
+     "code": "104871",
+     "uuid": "104871AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydroflumethiazide / spironolactone"
+    },
+    {
+     "code": "84239",
+     "uuid": "84239AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Spironolactone"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1815",
+   "name": "Tiotropium",
+   "rxcui": "69120",
+   "rxnorm_name": "tiotropium",
+   "drugbank_id": "DB01409",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "85157",
+     "uuid": "85157AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tiotropium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1903",
+   "name": "Urea",
+   "rxcui": "11002",
+   "rxnorm_name": "urea",
+   "drugbank_id": "DB03904",
+   "atc": [
+    "B05BC02",
+    "D02AE01"
+   ],
+   "ciel": [
+    {
+     "code": "103595",
+     "uuid": "103595AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Antipyrine / benzocaine / urea"
+    },
+    {
+     "code": "104189",
+     "uuid": "104189AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorophyll / papain / urea"
+    },
+    {
+     "code": "104192",
+     "uuid": "104192AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorophyllin copper complex / papain / urea"
+    },
+    {
+     "code": "104403",
+     "uuid": "104403AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cysteine / inositol / methionine / sodium propionate / urea"
+    },
+    {
+     "code": "105127",
+     "uuid": "105127AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Papain / urea"
+    },
+    {
+     "code": "105249",
+     "uuid": "105249AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Salicylic acid / urea"
+    },
+    {
+     "code": "105299",
+     "uuid": "105299AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Triamcinolone / urea"
+    },
+    {
+     "code": "70002",
+     "uuid": "70002AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "[13c] urea"
+    },
+    {
+     "code": "85950",
+     "uuid": "85950AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Urea"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1951",
+   "name": "Warfarin",
+   "rxcui": "11289",
+   "rxnorm_name": "warfarin",
+   "drugbank_id": "DB00682",
+   "atc": [
+    "B01AA03"
+   ],
+   "ciel": [
+    {
+     "code": "86415",
+     "uuid": "86415AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin"
+    },
+    {
+     "code": "86416",
+     "uuid": "86416AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin potassium"
+    },
+    {
+     "code": "86417",
+     "uuid": "86417AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin sodium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter20",
+   "name": "Acetylsalicylic acid",
+   "rxcui": "1191",
+   "rxnorm_name": "aspirin",
+   "drugbank_id": "DB00945",
+   "atc": [
+    "A01AD05",
+    "B01AC06",
+    "N02BA01"
+   ],
+   "ciel": [
+    {
+     "code": "103170",
+     "uuid": "103170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / caffeine / magnesium hydroxide"
+    },
+    {
+     "code": "103171",
+     "uuid": "103171AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / salicylamide"
+    },
+    {
+     "code": "103172",
+     "uuid": "103172AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin"
+    },
+    {
+     "code": "103173",
+     "uuid": "103173AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine"
+    },
+    {
+     "code": "103174",
+     "uuid": "103174AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / calcium gluconate"
+    },
+    {
+     "code": "103175",
+     "uuid": "103175AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / codeine / salicylamide"
+    },
+    {
+     "code": "103176",
+     "uuid": "103176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / hydrocodone"
+    },
+    {
+     "code": "103177",
+     "uuid": "103177AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / salicylamide"
+    },
+    {
+     "code": "103178",
+     "uuid": "103178AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / codeine"
+    },
+    {
+     "code": "103179",
+     "uuid": "103179AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / phenylpropanolamine"
+    },
+    {
+     "code": "103304",
+     "uuid": "103304AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetanilide / aspirin / caffeine / ephedrine"
+    },
+    {
+     "code": "103520",
+     "uuid": "103520AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / calcium carbonate / magnesium hydroxide"
+    },
+    {
+     "code": "103521",
+     "uuid": "103521AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / codeine / magnesium hydroxide"
+    },
+    {
+     "code": "103522",
+     "uuid": "103522AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / magnesium hydroxide"
+    },
+    {
+     "code": "103680",
+     "uuid": "103680AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / brompheniramine / dextromethorphan / phenylpropanolamine"
+    },
+    {
+     "code": "103681",
+     "uuid": "103681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital"
+    },
+    {
+     "code": "103683",
+     "uuid": "103683AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital / caffeine / codeine"
+    },
+    {
+     "code": "103684",
+     "uuid": "103684AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital / caffeine / phenacetin"
+    },
+    {
+     "code": "103685",
+     "uuid": "103685AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine"
+    },
+    {
+     "code": "103686",
+     "uuid": "103686AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / chlorpheniramine"
+    },
+    {
+     "code": "103687",
+     "uuid": "103687AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / cinnamedrine"
+    },
+    {
+     "code": "103688",
+     "uuid": "103688AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / codeine"
+    },
+    {
+     "code": "103689",
+     "uuid": "103689AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / dihydrocodeine"
+    },
+    {
+     "code": "103690",
+     "uuid": "103690AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / dihydrocodeine / promethazine"
+    },
+    {
+     "code": "103691",
+     "uuid": "103691AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / hydrocodone"
+    },
+    {
+     "code": "103692",
+     "uuid": "103692AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / ipecac / opium"
+    },
+    {
+     "code": "103693",
+     "uuid": "103693AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / magnesium salicylate"
+    },
+    {
+     "code": "103694",
+     "uuid": "103694AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / orphenadrine"
+    },
+    {
+     "code": "103695",
+     "uuid": "103695AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / propoxyphene"
+    },
+    {
+     "code": "103696",
+     "uuid": "103696AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / salicylamide"
+    },
+    {
+     "code": "103697",
+     "uuid": "103697AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / calcium carbonate"
+    },
+    {
+     "code": "103699",
+     "uuid": "103699AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / carisoprodol"
+    },
+    {
+     "code": "103700",
+     "uuid": "103700AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / carisoprodol / codeine"
+    },
+    {
+     "code": "103701",
+     "uuid": "103701AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine"
+    },
+    {
+     "code": "103702",
+     "uuid": "103702AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / dextromethorphan"
+    },
+    {
+     "code": "103703",
+     "uuid": "103703AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / dextromethorphan / phenylpropanolamine"
+    },
+    {
+     "code": "103704",
+     "uuid": "103704AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / phenylpropanolamine"
+    },
+    {
+     "code": "103705",
+     "uuid": "103705AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / pseudoephedrine"
+    },
+    {
+     "code": "103706",
+     "uuid": "103706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / citric acid / sodium bicarbonate"
+    },
+    {
+     "code": "103707",
+     "uuid": "103707AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / codeine"
+    },
+    {
+     "code": "103709",
+     "uuid": "103709AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / diphenhydramine"
+    },
+    {
+     "code": "103710",
+     "uuid": "103710AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / diphenhydramine / phenylpropanolamine"
+    },
+    {
+     "code": "103711",
+     "uuid": "103711AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / dipyridamole"
+    },
+    {
+     "code": "103712",
+     "uuid": "103712AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / ethoheptazine / meprobamate"
+    },
+    {
+     "code": "103713",
+     "uuid": "103713AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / glycine"
+    },
+    {
+     "code": "103714",
+     "uuid": "103714AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / hydrocodone"
+    },
+    {
+     "code": "103715",
+     "uuid": "103715AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / isosorbide"
+    },
+    {
+     "code": "103716",
+     "uuid": "103716AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / meprobamate"
+    },
+    {
+     "code": "103717",
+     "uuid": "103717AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / methocarbamol"
+    },
+    {
+     "code": "103718",
+     "uuid": "103718AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / oxycodone"
+    },
+    {
+     "code": "103720",
+     "uuid": "103720AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pentazocine"
+    },
+    {
+     "code": "103721",
+     "uuid": "103721AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenobarbital"
+    },
+    {
+     "code": "103722",
+     "uuid": "103722AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenylephrine"
+    },
+    {
+     "code": "103723",
+     "uuid": "103723AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenylpropanolamine"
+    },
+    {
+     "code": "103724",
+     "uuid": "103724AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenyltoloxamine"
+    },
+    {
+     "code": "103725",
+     "uuid": "103725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pravastatin"
+    },
+    {
+     "code": "103726",
+     "uuid": "103726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / promethazine / pseudoephedrine"
+    },
+    {
+     "code": "103727",
+     "uuid": "103727AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / propoxyphene"
+    },
+    {
+     "code": "103728",
+     "uuid": "103728AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pseudoephedrine"
+    },
+    {
+     "code": "169229",
+     "uuid": "1304b943-339f-403f-aca9-c47b7779c9c7",
+     "name": "Aspirin / clopidogrel"
+    },
+    {
+     "code": "71617",
+     "uuid": "71617AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin"
+    },
+    {
+     "code": "72488",
+     "uuid": "72488AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Buffered aspirin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2085",
+   "name": "Salicylic acid",
+   "rxcui": "9525",
+   "rxnorm_name": "salicylic acid",
+   "drugbank_id": "DB00936",
+   "atc": [
+    "D01AE12",
+    "S01BC08"
+   ],
+   "ciel": [
+    {
+     "code": "103162",
+     "uuid": "103162AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "4-aminobenzoic acid / magnesium"
+    },
+    {
+     "code": "103164",
+     "uuid": "103164AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "4-aminobenzoic acid / salicylic acid"
+    },
+    {
+     "code": "103302",
+     "uuid": "103302AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / salicylic acid"
+    },
+    {
+     "code": "103311",
+     "uuid": "103311AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetic acid / salicylic acid"
+    },
+    {
+     "code": "103589",
+     "uuid": "103589AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Anthralin / coal tar / salicylic acid"
+    },
+    {
+     "code": "103590",
+     "uuid": "103590AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Anthralin / salicylic acid"
+    },
+    {
+     "code": "103591",
+     "uuid": "103591AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Anthraquinone glycoside / salicylic acid"
+    },
+    {
+     "code": "103756",
+     "uuid": "103756AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Attapulgite / salicylic acid"
+    },
+    {
+     "code": "103757",
+     "uuid": "103757AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Attapulgite / salicylic acid / sulfur, colloidal"
+    },
+    {
+     "code": "103825",
+     "uuid": "103825AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / salicylic acid"
+    },
+    {
+     "code": "103845",
+     "uuid": "103845AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / coal tar / salicylic acid"
+    },
+    {
+     "code": "103878",
+     "uuid": "103878AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzoic acid / salicylic acid"
+    },
+    {
+     "code": "103907",
+     "uuid": "103907AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Betamethasone / salicylic acid"
+    },
+    {
+     "code": "103973",
+     "uuid": "103973AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Caffeine / pheniramine / phenylephrine / salicylic acid"
+    },
+    {
+     "code": "103976",
+     "uuid": "103976AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Caffeine / salicylamide / salicylic acid"
+    },
+    {
+     "code": "104099",
+     "uuid": "104099AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cantharidin / podophyllin / salicylic acid"
+    },
+    {
+     "code": "104346",
+     "uuid": "104346AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coal tar / menthol / salicylic acid"
+    },
+    {
+     "code": "104350",
+     "uuid": "104350AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coal tar / salicylic acid"
+    },
+    {
+     "code": "104351",
+     "uuid": "104351AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coal tar / salicylic acid / sulfur"
+    },
+    {
+     "code": "104352",
+     "uuid": "104352AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coal tar / salicylic acid / sulfur, colloidal"
+    },
+    {
+     "code": "104390",
+     "uuid": "104390AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Colloidal oatmeal / salicylic acid"
+    },
+    {
+     "code": "104618",
+     "uuid": "104618AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ethanol / salicylic acid"
+    },
+    {
+     "code": "104813",
+     "uuid": "104813AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparinoids / salicylic acid"
+    },
+    {
+     "code": "104866",
+     "uuid": "104866AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sodium thiosulfate"
+    },
+    {
+     "code": "104867",
+     "uuid": "104867AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sulfur"
+    },
+    {
+     "code": "105050",
+     "uuid": "105050AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Mercury, ammoniated / salicylic acid"
+    },
+    {
+     "code": "105170",
+     "uuid": "105170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenyltoloxamine / salicylic acid"
+    },
+    {
+     "code": "105181",
+     "uuid": "105181AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Podophyllin / salicylic acid"
+    },
+    {
+     "code": "105233",
+     "uuid": "105233AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pyrithione / salicylic acid"
+    },
+    {
+     "code": "105245",
+     "uuid": "105245AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Salicylic acid / sulfur"
+    },
+    {
+     "code": "105246",
+     "uuid": "105246AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Salicylic acid / sulfur, colloidal"
+    },
+    {
+     "code": "105247",
+     "uuid": "105247AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Salicylic acid / trichloroacetaldehyde"
+    },
+    {
+     "code": "105248",
+     "uuid": "105248AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Salicylic acid / undecylenate"
+    },
+    {
+     "code": "105249",
+     "uuid": "105249AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Salicylic acid / urea"
+    },
+    {
+     "code": "105250",
+     "uuid": "105250AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Salicylic acid / zinc oxide"
+    },
+    {
+     "code": "105251",
+     "uuid": "105251AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Salicylic acid / zinc pyrithione"
+    },
+    {
+     "code": "284",
+     "uuid": "284AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Whitfield ointment"
+    },
+    {
+     "code": "79245",
+     "uuid": "79245AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Magnesium salicylate tetrahydrate"
+    },
+    {
+     "code": "82373",
+     "uuid": "82373AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium salicylate"
+    },
+    {
+     "code": "83644",
+     "uuid": "83644AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Salicylate"
+    },
+    {
+     "code": "83645",
+     "uuid": "83645AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Salicylic acid"
+    },
+    {
+     "code": "84102",
+     "uuid": "84102AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium salicylate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter393",
+   "name": "Clarithromycin",
+   "rxcui": "21212",
+   "rxnorm_name": "clarithromycin",
+   "drugbank_id": "DB01211",
+   "atc": [
+    "J01FA09"
+   ],
+   "ciel": [
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "168663",
+     "uuid": "39559906-b467-47a7-abaa-499cf6b51562",
+     "name": "Amoxicillin / clarithromycin / vonoprazan combination kit"
+    },
+    {
+     "code": "73498",
+     "uuid": "73498AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clarithromycin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter894",
+   "name": "Hydroxyurea",
+   "rxcui": "5552",
+   "rxnorm_name": "hydroxyurea",
+   "drugbank_id": "DB01005",
+   "atc": [
+    "L01XX05"
+   ],
+   "ciel": [
+    {
+     "code": "77795",
+     "uuid": "77795AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydroxyurea"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1018",
+   "DDInter1675",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1018",
+   "DDInter1707",
+   "Moderate",
+   "5099"
+  ],
+  [
+   "DDInter1018",
+   "DDInter1815",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1018",
+   "DDInter1903",
+   "Moderate",
+   "5099"
+  ],
+  [
+   "DDInter1018",
+   "DDInter1951",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1018",
+   "DDInter20",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1018",
+   "DDInter393",
+   "Moderate",
+   "3449"
+  ],
+  [
+   "DDInter1018",
+   "DDInter894",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1344",
+   "DDInter1707",
+   "Moderate",
+   "4965"
+  ],
+  [
+   "DDInter1675",
+   "DDInter1707",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1675",
+   "DDInter1815",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1675",
+   "DDInter1951",
+   "Minor",
+   "2712"
+  ],
+  [
+   "DDInter1675",
+   "DDInter20",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1675",
+   "DDInter393",
+   "Major",
+   "2085"
+  ],
+  [
+   "DDInter1675",
+   "DDInter894",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1707",
+   "DDInter1815",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1707",
+   "DDInter1951",
+   "Minor",
+   "3456"
+  ],
+  [
+   "DDInter1707",
+   "DDInter20",
+   "Minor",
+   "4247"
+  ],
+  [
+   "DDInter1707",
+   "DDInter2085",
+   "Minor",
+   "7943"
+  ],
+  [
+   "DDInter1707",
+   "DDInter393",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1707",
+   "DDInter894",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1815",
+   "DDInter1951",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1815",
+   "DDInter20",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1815",
+   "DDInter393",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1815",
+   "DDInter894",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1951",
+   "DDInter20",
+   "Major",
+   "749"
+  ],
+  [
+   "DDInter1951",
+   "DDInter2085",
+   "Moderate",
+   "8423"
+  ],
+  [
+   "DDInter1951",
+   "DDInter393",
+   "Major",
+   "615"
+  ],
+  [
+   "DDInter1951",
+   "DDInter894",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter20",
+   "DDInter2085",
+   "Moderate",
+   "7009"
+  ],
+  [
+   "DDInter20",
+   "DDInter393",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter20",
+   "DDInter894",
+   "Unknown",
+   "-1"
+  ]
+ ]
+}

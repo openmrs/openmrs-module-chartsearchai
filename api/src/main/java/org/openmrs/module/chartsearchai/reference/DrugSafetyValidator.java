@@ -237,9 +237,28 @@ public class DrugSafetyValidator {
 	 * Mappings-aware overload — the seam the public entry point delegates to. See
 	 * {@link #validate(String, String, Patient, List)} for the echo-scoping contract.
 	 */
-	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext context,
+	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
+		// The patient's active orders resolved to their reference entries, ONE dataset sweep per
+		// validate, feeding both things this pass needs from that resolution (issue #136):
+		//
+		//   - the entries themselves, for the three arms that screen or name them — the chip grouping's
+		//     partner identity below, the active-order contraindication subjects (#143) and the
+		//     screening subjects (#113), which were each resolving them for themselves;
+		//   - and those entries' own names on the context, so hasActiveDrug can match a rule token
+		//     against them. Attached here rather than threaded through the arms below: that keeps
+		//     hasActiveDrug the single join, with the same signature for every caller, so no arm can
+		//     accidentally ask the narrower question.
+		//
+		// One resolution for both, so the names the context carries and the subjects the arms read can
+		// never describe different sets of orders. Per validate, not per question: the pre-answer
+		// findings pass reaches this method through DrugReferenceInjector.injectRecords, which resolves
+		// the same orders for its own promotion predicate before calling in. That repeat is idempotent
+		// today — neither leg of the resolution reads the names it attaches — so it is cost, and a trap
+		// for the first widening that makes it read them. Reported, not fixed here.
+		List<DrugReference> orderEntries = drugReferenceService.findForActiveOrders(rawContext);
+		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext, orderEntries);
 
 		boolean warnDose = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_DOSE_EXCESS);
@@ -293,7 +312,7 @@ public class DrugSafetyValidator {
 				// One call, not one per arm: the rule arm and the class arm can both raise a chip about
 				// the same active order, so the decision of how many chips that pair gets belongs to a
 				// method that sees both (issue #88).
-				addInteractionWarnings(warnings, ref, context, severityFloor);
+				addInteractionWarnings(warnings, ref, context, severityFloor, orderEntries);
 			}
 			if (warnDose) {
 				addOverdose(warnings, ref, context, lower, all);
@@ -308,7 +327,7 @@ public class DrugSafetyValidator {
 		// list rather than a finding AGAINST her records, they are the two that grow quadratically, and
 		// they are the two a cap can truncate (maxPairChips, #131).
 		if (warnContra) {
-			addActiveOrderContraindications(warnings, inPlay, context);
+			addActiveOrderContraindications(warnings, inPlay, context, orderEntries);
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
@@ -336,7 +355,7 @@ public class DrugSafetyValidator {
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
-			addActiveOrderPairInteractions(warnings, context, severityFloor);
+			addActiveOrderPairInteractions(warnings, context, severityFloor, orderEntries);
 		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
@@ -642,12 +661,12 @@ public class DrugSafetyValidator {
 	 * against those rather than against the union — not a cleverer test over the union.
 	 */
 	private void addInteractionWarnings(List<SafetyWarning> warnings, DrugReference ref,
-			PatientClinicalContext context, int severityFloor) {
+			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries) {
 		if (context == null) {
 			return;
 		}
 		List<DrugReference.Interaction> rules = new ArrayList<DrugReference.Interaction>(
-				bestRulePerPartner(ref, context, severityFloor));
+				bestRulePerPartner(ref, context, severityFloor, orderEntries));
 		// Which rule row carries which class sentence, decided before anything is emitted: the class
 		// arm is walked per active-order CODE while the chips are one per rule ROW, and a substance
 		// filed under several codes reaches this loop once per code.
@@ -691,10 +710,11 @@ public class DrugSafetyValidator {
 	 *         substance the loaded dataset does not carry, where the rule's code is the only evidence
 	 *         left that the two arms are talking about one drug.
 	 *
-	 *         <p>{@code rules} holds one row per partner LABEL, not per substance, so two labels can
-	 *         both name one order — across the full KB exactly one such pair exists, {@code enalapril}
-	 *         and {@code enalaprilat}, which {@link #bestRulePerPartner} deliberately keeps as two
-	 *         chips. The first in dataset order takes the fold; the other keeps its rule chip
+	 *         <p>{@code rules} holds one row per partner — per ENTRY where the dataset identifies one
+	 *         and per label where it cannot (see {@link #bestRulePerPartner}) — so two rows can still
+	 *         both name one order: across the full KB exactly one such pair exists, {@code enalapril}
+	 *         and {@code enalaprilat}, two genuinely different entries which that grouping deliberately
+	 *         keeps as two chips. The first in dataset order takes the fold; the other keeps its rule chip
 	 *         unfolded, which is the conservative direction, since the alternative is stating one
 	 *         duplicate-therapy relationship twice.
 	 */
@@ -714,9 +734,10 @@ public class DrugSafetyValidator {
 	/**
 	 * The partner label a chip names for {@code interaction} — its match token, else its ATC code.
 	 *
-	 * <p>One definition, because the chip detail renders it and {@link #bestRulePerPartner} groups on
-	 * it: that grouping is only correct while the key IS the label the chip says, and two copies of
-	 * the same coalesce could drift into grouping rules by something a clinician never sees.
+	 * <p>One definition, because the chip detail renders it and {@link #bestRulePerPartner} groups on it
+	 * wherever the dataset identifies no partner entry: on that branch the grouping is only correct
+	 * while the key IS the label the chip says, and two copies of the same coalesce could drift into
+	 * grouping rules by something a clinician never sees.
 	 *
 	 * <p>Trimmed to fold the way the MATCH folds. {@link PatientClinicalContext#hasActiveDrug} trims
 	 * the rule's token and matches it case-insensitively against the order name, so two rows whose
@@ -762,8 +783,9 @@ public class DrugSafetyValidator {
 	 * safety-finding records ({@code DrugReferenceInjector.preAnswerFindings}), each duplicate
 	 * became a near-identical record in the prompt as well.
 	 *
-	 * <p><b>What is grouped.</b> The key is the label the chip actually renders
-	 * ({@link #partnerLabel}, case-folded), so rules that would produce the same
+	 * <p><b>What is grouped.</b> The partner DRUG when the loaded dataset identifies one — the
+	 * active-order entry the rule {@link #identifies} — else the label the chip renders
+	 * ({@link #partnerLabel}, case-folded). Either way rules that would produce the same
 	 * "interacts with active order X" subject collapse while rules naming different partners each
 	 * keep their chip — even when their notes are identical strings. Grouping is per {@code ref}
 	 * and per arm: two different drugs in play still chip separately about the same order, and this
@@ -772,6 +794,20 @@ public class DrugSafetyValidator {
 	 * downstream of this method by {@link #addInteractionWarnings} — which folds the class arm's
 	 * finding into the row chosen here, so the two collapses compose in one direction instead of
 	 * competing.
+	 *
+	 * <p>The label alone was the key until issue #136, and it was a sound proxy for "one partner" only
+	 * while a rule could reach an order by ONE spelling. The reference-name arm of
+	 * {@link PatientClinicalContext#hasActiveDrug} matches every name the dataset gives a drug the
+	 * patient is on, so two rules whose tokens are two names of the SAME partner both match and the
+	 * label key kept them apart: reproduced through the real validator, a patient on
+	 * {@code Warfarin 5mg} against an entry carrying both a {@code coumadin} row and a {@code warfarin}
+	 * row got two Major chips for one pair. Two DISTINCT entries still get two chips even when one order
+	 * name resolves both, which is what leaves the {@code enalapril}/{@code enalaprilat} decision below
+	 * intact — the key is the entry {@link #identifies} names, so it collapses two rules only when the
+	 * dataset itself says they name one drug, with the same alias-collision limit {@link #pairKeyNames}
+	 * records for the question side (an entry whose alias list claims another drug's name). Where the
+	 * dataset carries no entry for the order's substance the label is still the key, and there #121's
+	 * invariant holds unchanged: the key IS what the chip says.
 	 *
 	 * <p><b>Which row wins.</b> The most severe rating, then the longer note — longer in prose, not in
 	 * whitespace, see {@link #noteLength}. Route variants genuinely differ — topical dexamethasone does
@@ -797,16 +833,24 @@ public class DrugSafetyValidator {
 	 * paragraph and the chip then gives no reason — reachable only in hand-authored data, since every
 	 * DDInter row has a note, and left as it is because the alternative (a note outranking a rating)
 	 * would drop the operator's own rule, which is the thing {@link #severityPriority} exists to
-	 * protect. And grouping is by label, so two tokens that both match one order but are not the same
-	 * string stay two chips: across the full KB exactly one such pair exists — {@code enalapril} and
+	 * protect. And two tokens naming two DIFFERENT entries stay two chips even when one order name
+	 * matches both: across the full KB exactly one such pair exists — {@code enalapril} and
 	 * {@code enalaprilat}, which 376 entries carry as separate partners, and which a single order
 	 * named "Enalaprilat 1.25 mg" matches through the order-name matcher's inflection tolerance.
 	 * Prodrug and active metabolite are genuinely different DDInter entries, so that pair is reported
 	 * rather than merged.
+	 *
+	 * @param orderEntries the reference entries the patient's active orders resolve to
+	 *        ({@link DrugReferenceService#findForActiveOrders}), from which
+	 *        {@link #activeOrderEntryFor} identifies the partner drug a rule points at; an empty list
+	 *        falls the grouping back to the label alone
 	 */
 	private static Collection<DrugReference.Interaction> bestRulePerPartner(DrugReference ref,
-			PatientClinicalContext context, int severityFloor) {
-		Map<String, DrugReference.Interaction> best = new LinkedHashMap<String, DrugReference.Interaction>();
+			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries) {
+		// Keys are either the partner DrugReference (object identity — the class defines no equals, and
+		// a DrugReference can never equal a String) or the lowercased partner label, so the two key
+		// spaces cannot collide.
+		Map<Object, DrugReference.Interaction> best = new LinkedHashMap<Object, DrugReference.Interaction>();
 		for (DrugReference.Interaction i : ref.getInteractions()) {
 			// The severity floor (issue #84): a rule the SOURCE rated below the floor is not
 			// raised — DDInter's Unknown-severity rows carry no mechanism text and would bury
@@ -821,7 +865,13 @@ public class DrugSafetyValidator {
 			if (!context.hasActiveDrug(i.getToken(), i.getAtc())) {
 				continue;
 			}
-			String key = partnerLabel(i).toLowerCase(Locale.ROOT);
+			// The partner DRUG when the dataset identifies one, else the label — through the same
+			// resolution the screening arm uses to name a pair, so the two cannot disagree about which
+			// entry a rule points at.
+			Object key = activeOrderEntryFor(orderEntries, ref, i);
+			if (key == null) {
+				key = partnerLabel(i).toLowerCase(Locale.ROOT);
+			}
 			DrugReference.Interaction incumbent = best.get(key);
 			if (incumbent == null || outranks(i, incumbent)) {
 				// LinkedHashMap keeps a re-put key in its original position, so replacing a group's
@@ -1099,18 +1149,13 @@ public class DrugSafetyValidator {
 		return atc != null && other.normalizedAtcCodes().contains(atc);
 	}
 
-	/** @return true when {@code token} is, case-folded, one of {@code other}'s own aliases. */
+	/** @return true when {@code token} is, case-folded, one of {@code other}'s own aliases. Through
+	 *          {@link DrugReference#isNamed}, which is where that rule now lives so that the
+	 *          reference-name arm of {@link PatientClinicalContext#hasActiveDrug} (issue #136) asks it
+	 *          identically — the two decide the same question from opposite sides, and a second copy
+	 *          could drift into answering it differently. */
 	private static boolean namesEntry(String token, DrugReference other) {
-		if (ChartSearchAiUtils.isBlank(token)) {
-			return false;
-		}
-		String name = token.trim().toLowerCase(Locale.ROOT);
-		for (String alias : other.getAliases()) {
-			if (alias != null && name.equals(alias.trim().toLowerCase(Locale.ROOT))) {
-				return true;
-			}
-		}
-		return false;
+		return other.isNamed(token);
 	}
 
 	/**
@@ -1248,8 +1293,9 @@ public class DrugSafetyValidator {
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
 			String alsoSameClass) {
-		// partnerLabel, not a second coalesce: it is the label bestRulePerPartner GROUPS on,
-		// and #121's grouping is only correct while the key IS the label the chip says.
+		// partnerLabel, not a second coalesce: it is the label bestRulePerPartner GROUPS on where the
+		// dataset identifies no partner entry, and there #121's grouping is only correct while the key
+		// IS the label the chip says.
 		String detail = ref.displayLabel() + " interacts with active order " + partnerLabel(i);
 		if (i.getNote() != null && !i.getNote().isEmpty()) {
 			detail += " — " + i.getNote();
@@ -1297,9 +1343,11 @@ public class DrugSafetyValidator {
 	 *       anchor to sanity-check such a chip against, so screening must establish the second order
 	 *       itself. This is a property of pairing, not a copy of the matching rule: the predicate is
 	 *       still {@code hasActiveDrug}, evaluated against the OTHER orders, so it follows whatever
-	 *       #86 settles on. The join has two legs and the guard has to cover both — the ATC leg needs
-	 *       the co-formulation case as well, where ONE order resolves to several entries and the
-	 *       order's own code would otherwise witness a pair between them.</li>
+	 *       #86 settles on. The guard has to cover every leg of that join, not the order-name one alone
+	 *       — the ATC leg needs the co-formulation case as well, where ONE order resolves to several
+	 *       entries and the order's own code would otherwise witness a pair between them, and since
+	 *       issue #136 the reference-NAME leg needs the same reduction, which is the purest form of the
+	 *       self-witness: the subject's own entry naming itself.</li>
 	 *   <li><b>Each pair once.</b> Interaction rows are symmetric — {@link DdiDrugReferenceSource}
 	 *       expands each row onto BOTH drugs' entries, which is what from-either-side matching
 	 *       relies on — so pairwise the same pair is reached from each side and would chip twice,
@@ -1319,11 +1367,10 @@ public class DrugSafetyValidator {
 	 * </ul>
 	 */
 	private void addActiveOrderPairInteractions(List<SafetyWarning> warnings,
-			PatientClinicalContext context, int severityFloor) {
+			PatientClinicalContext context, int severityFloor, List<DrugReference> orderDrugs) {
 		if (context == null) {
 			return;
 		}
-		List<DrugReference> orderDrugs = activeOrderEntries(context);
 		List<ScreenedPair> pairs = new ArrayList<ScreenedPair>();
 		Set<List<String>> seenPairs = new LinkedHashSet<List<String>>();
 		// Seeded with every chip the arms above already raised, so the screen can add nothing that
@@ -1359,7 +1406,7 @@ public class DrugSafetyValidator {
 			// them. Reusing it is what stops this arm keeping a route variant's Moderate row for a
 			// pair whose Major row the other arm reports, and what keeps the cap below sorting on the
 			// severity a clinician would actually be shown.
-			for (DrugReference.Interaction i : bestRulePerPartner(ref, others, severityFloor)) {
+			for (DrugReference.Interaction i : bestRulePerPartner(ref, others, severityFloor, orderDrugs)) {
 				// The partner is an active order too, so it is looked up among the order entries
 				// rather than across the whole dataset. Null when that order carries no reference
 				// entry of its own (a substance the dataset does not cover, matched by name): the
@@ -1409,42 +1456,6 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The reference entries for the patient's active orders — the subjects
-	 * {@link #addActiveOrderPairInteractions} screens against each other, and the subjects
-	 * {@link #addActiveOrderContraindications} checks against the patient's own allergy and condition
-	 * records. The union of the documented order-driven matcher
-	 * ({@link DrugReferenceService#findByActiveOrders}, which keys on ATC codes) and an alias
-	 * resolution of each active order's own name ({@link DrugReferenceService#findByQuery}, the same
-	 * whole-word alias matcher the question path uses). One definition, so the two arms cannot come to
-	 * disagree about which of the patient's prescriptions the reference data covers.
-	 *
-	 * <p>Both keys are needed because {@link PatientClinicalContext#hasActiveDrug} — the join that
-	 * decides whether a rule concerns this patient — matches on name OR ATC, so a subject set
-	 * resolved on only one of them cannot be the subject of every chip that join can raise. Neither
-	 * key can be assumed present: measured on the 3.7.1 standalone's demo dictionary (2026-08-04),
-	 * ATC coverage is sparse but real — 85 of 616 Drug-class concepts carry a map from an ATC-named
-	 * source ({@code Torasemide} → {@code C03CA04}, {@code Heparin sodium} → {@code B01AB01}) and 158
-	 * carry a {@code concept_reference_map} of any kind, so {@link PatientClinicalContextBuilder}
-	 * yields ATC codes for some orders and none for others. Every order on every probe patient there
-	 * (Simvastatin, Spironolactone, Tiotropium, Nitroglycerin, Budesonide, Dexamethasone) fell in the
-	 * unmapped majority, so an ATC-only subject set was empty for every case measured — which makes
-	 * this union a robustness property rather than a workaround for one dictionary: on a
-	 * fully-ATC-mapped dictionary the order-driven matcher carries the subject set, and where mapping
-	 * is absent the name resolution does. The ATC path is dormant on that instance, not dead.
-	 *
-	 * <p>Identity de-duplication is sound because both matchers resolve against the service's shared
-	 * {@code getAll()} cache (the same reason the drugs-in-play set can dedup by identity).
-	 */
-	private List<DrugReference> activeOrderEntries(PatientClinicalContext context) {
-		Set<DrugReference> entries = new LinkedHashSet<DrugReference>(
-				drugReferenceService.findByActiveOrders(context));
-		for (String name : context.getActiveDrugNames()) {
-			entries.addAll(drugReferenceService.findByQuery(name));
-		}
-		return new ArrayList<DrugReference>(entries);
-	}
-
-	/**
 	 * @return the patient's active-order state with everything {@code ref} itself answers for removed
 	 *         — the ORDERS {@code ref} resolves from, whole (their names AND their ATC codes), plus
 	 *         {@code ref}'s own codes — so {@link PatientClinicalContext#hasActiveDrug} against it can
@@ -1488,10 +1499,19 @@ public class DrugSafetyValidator {
 	 *         mapped {@code Torasemida} against a mapped {@code Digoxina}, neither name in the dataset).
 	 *         Production always builds the per-order form ({@link PatientClinicalContextBuilder}), so
 	 *         that is the fallback's own limit rather than the arm's.
+	 *
+	 *         <p>The reference-NAME leg of the join (issue #136) is reduced the same way and from the
+	 *         same evidence: an entry's names are carried over only when that entry resolves from an
+	 *         order this reduction kept, so the arm can reach a partner by its reference name exactly
+	 *         when a DIFFERENT order supplies it. Left un-reduced it would be the self-witness this
+	 *         method exists to prevent, in its purest form — the subject's own entry naming itself. The
+	 *         flattened fallback contributes none, for the same reason it has to clear the names: with
+	 *         no order identity there is nothing to attribute an entry to.
 	 */
 	private static PatientClinicalContext activeOrdersOtherThan(DrugReference ref,
 			List<DrugReference> orderDrugs, PatientClinicalContext context) {
 		Set<String> names = new LinkedHashSet<String>();
+		Set<String> referenceNames = new LinkedHashSet<String>();
 		Set<String> codes = new LinkedHashSet<String>(context.getActiveDrugAtcCodes());
 		// Read on both branches, so it is resolved once here rather than at each use (it allocates).
 		Set<String> refCodes = ref.normalizedAtcCodes();
@@ -1510,6 +1530,14 @@ public class DrugSafetyValidator {
 				if (!resolvesFrom(ref, order)) {
 					names.addAll(order.getNames());
 					otherCodes.addAll(order.getAtcCodes());
+					// And the reference names of the entries THIS order resolves to, so the #136 leg of
+					// the join is witnessed by this order too — never by ref's own, which is why it is
+					// collected here rather than taken whole off the context.
+					for (DrugReference coResolved : orderDrugs) {
+						if (coResolved != ref && resolvesFrom(coResolved, order)) {
+							referenceNames.addAll(coResolved.getAliases());
+						}
+					}
 					continue;
 				}
 				ownCodes.addAll(order.getAtcCodes());
@@ -1548,7 +1576,8 @@ public class DrugSafetyValidator {
 			// ref's own codes, last of all: a rule pointing at ref's own code is answered by ref itself
 			// however the code reached the chart, and restating existing therapy is not an interaction.
 			codes.removeAll(refCodes);
-			return new PatientClinicalContext(null, null, names, codes, null, null);
+			return new PatientClinicalContext(null, null, names, codes, null, null)
+					.withActiveDrugReferenceNames(referenceNames);
 		}
 		codes.removeAll(refCodes);
 		// No per-order structure: a caller built this context from the flat sets (the null-patient
@@ -1559,14 +1588,16 @@ public class DrugSafetyValidator {
 		// and the arm would simply stop finding name-witnessed pairs, with no error anywhere.
 		boolean ownOrderNamed = false;
 		for (String name : context.getActiveDrugNames()) {
-			// Already lowercased by PatientClinicalContext, which is what matchesText expects.
-			if (!ref.matchesText(name)) {
+			// Through the drug-NAME matcher, the same one findForActiveOrders used to choose the
+			// subjects (issue #147): asking a narrower question here than the one that made ref a
+			// subject would leave ref's own order unattributed and let it witness ref's pair.
+			if (!ref.matchesDrugName(name)) {
 				names.add(name);
 				continue;
 			}
 			ownOrderNamed = true;
 			for (DrugReference coResolved : orderDrugs) {
-				if (coResolved != ref && coResolved.matchesText(name)) {
+				if (coResolved != ref && coResolved.matchesDrugName(name)) {
 					codes.removeAll(coResolved.normalizedAtcCodes());
 				}
 			}
@@ -1585,14 +1616,17 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return true when {@code ref} resolves from {@code order} — through either of the two matchers
-	 *         that could have made {@code ref} a subject in {@link #activeOrderEntries}, asked of this
-	 *         one order: a whole-word alias match on one of its names
-	 *         ({@link DrugReferenceService#findByQuery}) or one of its ATC codes
+	 *         that could have made {@code ref} a subject in
+	 *         {@link DrugReferenceService#findForActiveOrders}, asked of this
+	 *         one order: a drug-name alias match on one of its names
+	 *         ({@link DrugReferenceService#findByDrugName}) or one of its ATC codes
 	 *         ({@link DrugReferenceService#findByActiveOrders}). So "which order is this subject's own"
-	 *         is answered by the matchers that chose it, and both legs of
-	 *         {@link PatientClinicalContext#hasActiveDrug} are covered — the name-only form left an
-	 *         ATC-resolved subject unattributable, which is issue #132: a concept mapped to the codes of
-	 *         two interacting entries witnessed the pair between them from one order.
+	 *         is answered by the matchers that chose it, and every arm of
+	 *         {@link PatientClinicalContext#hasActiveDrug} is thereby attributed — the reference-name
+	 *         arm too, since #136's names are collected per order through this same predicate. The
+	 *         name-only form left an ATC-resolved subject unattributable, which is issue #132: a concept
+	 *         mapped to the codes of two interacting entries witnessed the pair between them from one
+	 *         order.
 	 *
 	 *         <p>Sharing an exact ATC code means being the same substance (level 5 is per-substance;
 	 *         class relatedness is {@link DrugReference#atcSubgroups()}'s business, not this one's), so
@@ -1600,7 +1634,7 @@ public class DrugSafetyValidator {
 	 */
 	private static boolean resolvesFrom(DrugReference ref, PatientClinicalContext.ActiveDrugOrder order) {
 		for (String name : order.getNames()) {
-			if (ref.matchesText(name.toLowerCase(Locale.ROOT))) {
+			if (ref.matchesDrugName(name)) {
 				return true;
 			}
 		}
@@ -1665,7 +1699,13 @@ public class DrugSafetyValidator {
 	 * @return the active-order reference entry {@code i} NAMES — through {@link #identifies}, the same
 	 *         name-identity test the question-pair arm uses, so both arms agree about which entry a
 	 *         rule points at — or null when that order carries no entry in the loaded dataset.
-	 *         {@code subject} is never returned: the partner is the OTHER side of the pair.
+	 *         {@code subject} is never returned: the partner is the OTHER side of the pair, and a rule
+	 *         of {@code subject} that {@link #identifies} {@code subject} itself is a self-pair.
+	 *
+	 *         <p>Two consumers since issue #136: this arm, which names a screened pair, and
+	 *         {@link #bestRulePerPartner}, which GROUPS chips on the entry rather than on the rule's
+	 *         label. One resolution for both, so a pair cannot be named after one entry and grouped
+	 *         under another.
 	 *
 	 *         <p>Name IDENTITY, deliberately not {@link DrugReference#matchesText}. A rule's token is
 	 *         exactly its partner's own alias (the {@code ddinter} parser writes it from the partner's
@@ -1754,8 +1794,10 @@ public class DrugSafetyValidator {
 	 * home; the method name said "class" because two of its three comparisons are class-based.
 	 *
 	 * <p><b>Coverage bound, measured.</b> Identity is only as sound as the resolution behind it, and
-	 * {@link DrugReferenceService#lookupByToken} returns the EARLIEST entry any of whose aliases occurs
-	 * as a whole word in the allergy token. Measured over the full KB on 2026-08-05, asking about each
+	 * {@link DrugReferenceService#lookupByToken} returns the EARLIEST entry any of whose aliases matches
+	 * the allergy token — by the drug-NAME rule since issue #147, not the whole-word one, which is a
+	 * strict relaxation and so can only move the first match earlier. Re-measured through the shipped
+	 * matcher after that swap and unchanged in every figure below. Measured over the full KB, asking about each
 	 * of the 444 ATC-less entries with an allergy recorded under that entry's own name: every one now
 	 * raises a contraindication, but <b>53 of them name a DIFFERENT entry</b> — always one earlier in
 	 * dataset order (0 of the 53 resolve later), though not a shorter-NAMED one: 17 of the 53 resolve
@@ -1890,11 +1932,12 @@ public class DrugSafetyValidator {
 	 * {@link PatientClinicalContext#hasConditionToken}, and
 	 * {@link #addAllergyContraindications}'s whole body is a loop over
 	 * {@link PatientClinicalContext#getAllergyTokens()} — so the check is skipped rather than run to
-	 * find nothing. That matters here and not in the loop above: this arm resolves the order subjects
-	 * itself ({@link #activeOrderEntries}, an alias sweep of the full dataset per order name), which
-	 * every question about every patient would otherwise pay for, and most patients carry no allergy
-	 * record at all. Read BOTH token sets, not just allergies: the curated arm's condition leg is half
-	 * of what the scoping was suppressing.
+	 * find nothing. What it saves is the two arms' own work over every order subject, not the
+	 * resolution of those subjects: since issue #136 {@code validate} resolves them once per pass
+	 * whatever the question, because {@link PatientClinicalContext#hasActiveDrug} needs their names.
+	 * (Before that, this precondition also spared the resolution, and its javadoc said so.) Read BOTH
+	 * token sets, not just allergies: the curated arm's condition leg is half of what the scoping was
+	 * suppressing.
 	 *
 	 * <p><b>Composition.</b> An entry already in {@code inPlay} is skipped, so a prescribed drug the
 	 * question also names is checked once rather than twice — identity is the right test because both
@@ -1905,18 +1948,19 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>What it still cannot find</b>, stated rather than implied: an order whose substance the
 	 * loaded dataset does not carry resolves to no entry at all, so it has nothing to compare — the same
-	 * limit {@link #activeOrderEntries} documents for the screen. And the arms it delegates to decide
-	 * the rest: an allergy token that {@link DrugReferenceService#lookupByToken} resolves to the wrong
+	 * limit {@link DrugReferenceService#findForActiveOrders} documents for the screen. And the arms it
+	 * delegates to decide the rest: an allergy token that
+	 * {@link DrugReferenceService#lookupByToken} resolves to the wrong
 	 * entry is mislabelled here exactly as it is on the question path (see
 	 * {@link #addAllergyContraindications}'s measured coverage bound).
 	 */
 	private void addActiveOrderContraindications(List<SafetyWarning> warnings, Set<DrugReference> inPlay,
-			PatientClinicalContext context) {
+			PatientClinicalContext context, List<DrugReference> orderEntries) {
 		if (context == null
 				|| (context.getAllergyTokens().isEmpty() && context.getConditionTokens().isEmpty())) {
 			return;
 		}
-		for (DrugReference ref : activeOrderEntries(context)) {
+		for (DrugReference ref : orderEntries) {
 			if (inPlay.contains(ref)) {
 				continue;
 			}

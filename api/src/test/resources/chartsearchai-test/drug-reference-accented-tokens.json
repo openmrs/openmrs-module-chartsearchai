@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "source": "Test fixture — a francophone deployment's own curated contraindication rules (issue #141)",
+  "description": "The curated source is operator-editable, so a deployment authoring its rules in the locale its clinicians work in puts ACCENTS on the token side of the allergy/condition match, while the data entry the rule has to match is routinely typed without them. This fixture is the mirror image of the shipped drug-reference.json, whose tokens are unaccented English and whose haystacks (concept names in the current locale) carry the accents — so between them the two cover both directions of the fold.",
+  "entries": [
+    {
+      "id": "ibuprofene-fr",
+      "name": "Ibuprofène",
+      "drugClass": "AINS",
+      "aliases": ["ibuprofène", "ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "contraindications": [
+        { "type": "condition", "token": "ulcère gastroduodénal", "note": "ulcère gastroduodénal évolutif" },
+        { "type": "allergy", "token": "anti-inflammatoire non stéroïdien", "note": "hypersensibilité aux AINS" }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "ketoprofene-fr",
+      "name": "Kétoprofène",
+      "drugClass": "AINS",
+      "aliases": ["kétoprofène", "ketoprofen"],
+      "contraindications": [
+        { "type": "allergy", "token": "aspirine", "note": "hypersensibilité croisée aux salicylés" },
+        { "type": "allergy", "token": "\u0301\u0308", "note": "a token of nothing but combining marks - must never match" }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

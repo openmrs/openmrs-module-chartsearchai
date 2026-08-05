@@ -262,6 +262,10 @@ public class DrugReference {
 	 * @return true when any alias equals or is a whole-word token of the given
 	 *         lowercased text. Whole-word so "advil" matches "is advil safe?"
 	 *         but "amox" does not spuriously match unrelated prose.
+	 *
+	 *         <p>For PROSE — a question, an answer, a rendered record. A clinician-entered drug NAME
+	 *         (an order's display name, an allergen) is a different shape and has its own accessor,
+	 *         {@link #matchesDrugName}; see there for why one matcher cannot serve both.
 	 */
 	public boolean matchesText(String lowerText) {
 		if (lowerText == null) {
@@ -273,6 +277,86 @@ public class DrugReference {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * @return true when this entry names the drug in {@code drugName} — a single clinician-entered
+	 *         drug NAME rather than prose: an active order's display name, an allergen as recorded.
+	 *         Case- and diacritic-insensitive; a null name never matches. Not restricted to
+	 *         lowercased input, unlike {@link #matchesText}.
+	 *
+	 *         <p><b>Why this exists (issue #147).</b> Such a string reached {@link #matchesText}
+	 *         by default, and the prose rule's symmetric boundary is wrong for it: a localized
+	 *         dictionary suffixes the INN stem with one inflectional ending, so an allergy recorded as
+	 *         {@code Clarithromycine} resolved to no entry at all while the SAME string as an order
+	 *         name resolved fine — {@link PatientClinicalContext#hasActiveDrug} having been given
+	 *         {@link #matchesOrderName} for exactly that reason (issue #86). A patient on
+	 *         {@code Clarithromycine Co 500mg} was therefore told that simvastatin "interacts with
+	 *         active order clarithromycin — Major" while their own recorded allergy to that drug
+	 *         produced nothing: two matchers with different tolerance on the two halves of one safety
+	 *         check.
+	 *
+	 *         <p>So this borrows {@code matchesOrderName}'s rule rather than introducing a third —
+	 *         an allergen name and an order name are the same shape, one localized display name out of
+	 *         the same dictionary, and the measurement behind that rule's tail allowance is recorded
+	 *         there. What it must NOT be is a relaxation of {@code matchesText} itself: that serves
+	 *         prose, where #86 measured the symmetric boundary as correct ("advil" must not match
+	 *         inside a longer word), so the fix is to give this shape a matcher deliberately rather
+	 *         than to make one rule serve three.
+	 *
+	 *         <p><b>Measured 2026-08-05</b> over the 3.7.1 demo dictionary's 1219 allergen-candidate
+	 *         names against the full 19MB KB: the prose rule resolved 549 of them, this one resolves
+	 *         624 — 75 gained, 0 lost — and the whole #86/#128/#129 kill set was re-scored in this
+	 *         direction, 0 of 21 nesting pairs resolving to the nested drug. On the 2533 order names,
+	 *         117 more (order name, entry) pairs resolve and none stops resolving.
+	 */
+	boolean matchesDrugName(String drugName) {
+		for (String alias : aliases) {
+			if (matchesOrderName(drugName, alias)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @return true when {@code token} IS one of this entry's own names — exact identity after
+	 *         {@link #normalizeName}, deliberately not a scan. Both operands are canonical reference
+	 *         strings (a rule's match token against an entry's own alias list), so the question is name
+	 *         identity; {@code DrugSafetyValidator.identifies} records what scanning them instead
+	 *         produced (a multi-word token naming every drug called after one of its words).
+	 */
+	boolean isNamed(String token) {
+		String name = normalizeName(token);
+		if (name == null) {
+			return false;
+		}
+		for (String alias : aliases) {
+			if (name.equals(normalizeName(alias))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The one normalisation for comparing a reference NAME with a token by identity: trimmed,
+	 * lower-cased ({@link Locale#ROOT}), {@code null} when blank. Shared by {@link #isNamed}, by
+	 * {@code DrugSafetyValidator.namesEntry} and by the name sets {@link PatientClinicalContext}
+	 * holds, so "the same name" means one thing across the three of them.
+	 *
+	 * <p>Deliberately does NOT fold diacritics, unlike {@link #containsBoundedToken}: this decides
+	 * IDENTITY between two reference strings, and folding it would widen
+	 * {@code DrugSafetyValidator.identifies} — the test three arms share for "which entry does this
+	 * rule point at" — by an amount nothing has measured. It would also be a no-op on every shipped
+	 * dataset: 0 of the full KB's 2093 rule tokens and 0 of its 5169 aliases carry a combining mark.
+	 */
+	static String normalizeName(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed.toLowerCase(Locale.ROOT);
 	}
 
 	/**
@@ -304,6 +388,11 @@ public class DrugReference {
 	 * Order-name matching: whether {@code token} — an interaction rule's drug token — names the drug
 	 * in a patient's active drug ORDER, whose {@code orderName} is one display name rather than
 	 * prose.
+	 *
+	 * <p>Since issue #147 this is the rule for a clinician-entered drug NAME generally, not only for
+	 * an order's: {@link #matchesDrugName} borrows it to resolve an allergen, which is the same shape
+	 * read out of the same dictionary. The measurement below is over order names because that is the
+	 * corpus that settled the tail allowance; the allergen corpus was scored separately, see there.
 	 *
 	 * <p>A bare containment test here reports drugs the patient has never taken, because drug names
 	 * nest: {@code "tiotropium".contains("opium")} and {@code "spironolactone".contains("iron")} are
@@ -406,14 +495,17 @@ public class DrugReference {
 	 * Case-insensitive; a null or empty token never matches. Whitespace-only is the caller's
 	 * business, deliberately not this method's: {@link PatientClinicalContext#hasActiveDrug} trims
 	 * its token, and the {@code ddinter} and {@code atc} sources drop blank aliases at parse. A
-	 * hand-authored {@code json} KB is NOT sanitized, so a blank alias there still matches any text
-	 * carrying two adjacent spaces — pre-existing, and an authoring guard belongs in that parser.
+	 * hand-authored {@code json} KB is NOT sanitized, so a blank alias there is scanned like any other
+	 * token and can match — measured, and wider under the tail allowance than under the symmetric rule,
+	 * so #147 giving allergens the tail allowance widened it. Pre-existing, still not this method's to
+	 * decide, and an authoring guard belongs in that parser; reported separately.
 	 *
 	 * <p>Diacritic-insensitive on BOTH sides (issue #129), which is why the fold lives here rather
 	 * than in either named matcher: the same accented order name reaches both of them — as the
 	 * haystack when a rule token is matched against it ({@link #matchesOrderName}) and as the
 	 * haystack again when the order-driven arms resolve that order's own reference entry
-	 * ({@code DrugSafetyValidator.activeOrderEntries} → {@code findByQuery} → {@link #matchesText}),
+	 * ({@link DrugReferenceService#findForActiveOrders} → {@code findByDrugName} →
+	 * {@link #matchesDrugName}, which is this rule again since issue #147),
 	 * and as the NEEDLE when an order name is looked for in a rendered record
 	 * ({@code PatientClinicalContext.ActiveDrugOrder.namedIn}). Folding one matcher would leave the
 	 * same patient half-checked; folding one SIDE would break that third case, whose needle is the
@@ -488,7 +580,7 @@ public class DrugReference {
 	 *         is most order-name text, and this runs once per (rule token, order name) pair — up to a
 	 *         few hundred rules per question — so the common path must not allocate.
 	 */
-	private static String foldDiacritics(String value) {
+	static String foldDiacritics(String value) {
 		for (int i = 0; i < value.length(); i++) {
 			if (value.charAt(i) > 0x7F) {
 				return NON_SPACING_MARKS

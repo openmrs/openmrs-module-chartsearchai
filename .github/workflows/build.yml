@@ -13,10 +13,80 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'pull_request' || github.head_ref != 'harness-integration'
     uses: openmrs/openmrs-contrib-gha-workflows/.github/workflows/build-backend-module.yml@main
     secrets:
       MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
       MAVEN_REPO_API_KEY: ${{ secrets.MAVEN_REPO_API_KEY }}
+
+  # The integration PR consumes QueryStore API additions that are under review in the paired
+  # QueryStore PR. Build that exact public source first so this PR proves the combined source set
+  # without requiring an upstream merge or an unpublished Maven snapshot. Normal OpenMRS builds
+  # continue to use the shared workflow above.
+  paired-build:
+    if: github.event_name == 'pull_request' && github.head_ref == 'harness-integration'
+    name: Paired build with Java ${{ matrix.java }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [11, 17, 21]
+    steps:
+      - name: Checkout ChartSearchAI
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Checkout paired QueryStore source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: pmanko/openmrs-module-querystore
+          ref: f37adc8a6b4c6baceb9a5b79a13c1de736088bf7
+          path: .paired/querystore
+
+      - name: Set up Java ${{ matrix.java }}
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: temurin
+          cache: maven
+          cache-dependency-path: |
+            **/pom.xml
+            .paired/querystore/**/pom.xml
+
+      - name: Install paired QueryStore source
+        run: >-
+          mvn --batch-mode -f .paired/querystore/pom.xml
+          clean install -DskipTests -Dmaven.deploy.skip
+
+      - name: Build ChartSearchAI
+        run: mvn --batch-mode clean install -Dmaven.deploy.skip
+
+      - name: Resolve OMOD filename
+        if: matrix.java == 11
+        id: omod
+        run: echo "name=$(mvn help:evaluate -Dexpression=project.build.finalName -q -DforceStdout -pl omod)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate OMOD checksums
+        if: matrix.java == 11
+        env:
+          OMOD_NAME: ${{ steps.omod.outputs.name }}
+        run: |
+          set -euo pipefail
+          file="omod/target/${OMOD_NAME}.omod"
+          sha1sum "$file" | awk '{print $1}' > "$file.sha1"
+          sha256sum "$file" | awk '{print $1}' > "$file.sha256"
+
+      - name: Upload OMOD and checksums
+        if: matrix.java == 11
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.omod.outputs.name }}
+          path: |
+            omod/target/${{ steps.omod.outputs.name }}.omod
+            omod/target/${{ steps.omod.outputs.name }}.omod.sha1
+            omod/target/${{ steps.omod.outputs.name }}.omod.sha256
+          if-no-files-found: error
 
   # The offline eval harness scores its own fixtures. Nothing here talks to a server or a model, so
   # it runs in seconds — and until #126 nothing ran it at all: five scoring faults in

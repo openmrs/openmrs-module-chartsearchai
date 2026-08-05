@@ -155,13 +155,25 @@ public final class DrugReferenceTestSupport {
 				orders);
 	}
 
-	/** One active drug order as {@link PatientClinicalContextBuilder} builds it: the Order uuid,
-	 *  the display name, and the names that identify it in record text (drug and/or concept name). */
+	/** One active drug order whose concept carries no ATC map — the majority shape, and what
+	 *  {@link PatientClinicalContextBuilder} builds for such an order: the Order uuid, the display name,
+	 *  and the names that identify it in record text (drug and/or concept name). For a mapped concept
+	 *  the builder also attaches the order's own codes — use the four-argument overload below. */
 	static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display, String... names) {
 		Set<String> all = new LinkedHashSet<String>();
 		all.add(display);
 		Collections.addAll(all, names);
 		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, all);
+	}
+
+	/** As {@link #activeOrder}, additionally carrying the ATC codes the order's own concept maps to —
+	 *  the association {@link PatientClinicalContextBuilder} keeps so a code can be attributed to the
+	 *  order it came from (issue #132). Names are an explicit set rather than varargs so that a code
+	 *  set can follow them unambiguously, and so a test can give an order NO names at all — the shape
+	 *  of an order the dataset knows only by its code. */
+	static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display,
+			Set<String> names, Set<String> atcCodes) {
+		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, names, atcCodes);
 	}
 
 	/** A service over the real bundled datasets (classpath fallback — the production default path). */

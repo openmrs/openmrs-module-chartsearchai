@@ -141,37 +141,6 @@ public class DrugSafetyValidator {
 	 *  so a dose far from any drug name is ignored. */
 	private static final int MAX_ALIAS_TO_DOSE_DISTANCE = 120;
 
-	/**
-	 * Most chips the interaction-screening arm may raise for one question (issue #113).
-	 *
-	 * <p>Screening pairs the patient's active orders against each other, so the candidate count is
-	 * quadratic in the medication list — 10 active orders is 45 pairs — where the question-driven
-	 * arms are linear in it. And every chip is also injected into the prompt as a citable finding
-	 * (see {@code DrugReferenceInjector.preAnswerFindings}), so an uncapped arm would both bury the
-	 * clinician under chips and write the whole cross-product into the context window; at DDInter's
-	 * longest mechanism text (~1.2k chars) this cap bounds that contribution at ~12k characters,
-	 * comparable to a handful of the reference records the prompt already carries.
-	 *
-	 * <p>Deliberately a backstop rather than a routine truncation: a realistic regimen produces a
-	 * handful of above-floor pairs, not tens. Candidates are ordered most-severe-first before the
-	 * cut, and the drop is logged at WARN naming every withheld pair — a silent truncation would read
-	 * to a clinician as "everything is covered".
-	 *
-	 * <p>One honest limit on "most severe first": {@link #severityPriority} sorts an UNRATED rule
-	 * above Major, matching {@code DrugReferenceInjector.InteractionNote} and for the same reason —
-	 * {@link #clearsSeverityFloor} treats unrated as exempt rather than low, so unrated is not
-	 * rankable below a rated tier. Where that convention only decides who keeps mechanism prose it
-	 * drops nothing; composed with a cap that DISCARDS, it means a dataset mixing unrated and rated
-	 * rules can withhold a Major pair while reporting an unrated one. That needs an operator-authored
-	 * dataset carrying both kinds (every DDInter row is rated; every curated rule is unrated, so
-	 * neither bundled source mixes them) AND more than {@value #MAX_SCREENING_INTERACTION_WARNINGS}
-	 * above-floor pairs on one chart. The WARN line is what makes it recoverable, and picking the
-	 * other order would instead discard an operator's own hand-authored rule in favour of a
-	 * third-party rating — which is why the convention is shared with the injector rather than
-	 * reversed here.
-	 */
-	static final int MAX_SCREENING_INTERACTION_WARNINGS = 10;
-
 	@Autowired
 	private DrugReferenceService drugReferenceService;
 
@@ -328,13 +297,14 @@ public class DrugSafetyValidator {
 		// Composition with the question-pair arm of issue #114, now that both arms are live, both group
 		// chips and both cap: the two gates are mutually EXCLUSIVE, so on any one question at most one
 		// of them runs at all. That arm needs questionDrugs.size() >= 2; this one needs it empty. No
-		// pair can therefore be reported by one and suppressed by the other, the two caps never apply
-		// to overlapping sets (only one cap is ever reachable per question), and no shared "who owns
-		// this pair" decision is needed between them — which is why this arm needs no analogue of that
-		// arm's coveredByActiveOrderArm precedence check against the chart. What this arm DOES share
-		// with it is the machinery: the same bestRulePerPartner grouping, the same partnerLabel, the
-		// same pairKeyNames/unorderedPairKey keys and the same severityPriority ordering, so the two
-		// cannot drift apart on what a pair is or which of its rows is worth chipping.
+		// pair can therefore be reported by one and suppressed by the other, the cap never applies to
+		// overlapping sets (only one arm is ever reachable per question — which is also why the two
+		// share ONE configured limit, #131), and no shared "who owns this pair" decision is needed
+		// between them — which is why this arm needs no analogue of that arm's coveredByActiveOrderArm
+		// precedence check against the chart. What this arm DOES share with it is the machinery: the
+		// same bestRulePerPartner grouping, the same partnerLabel, the same pairKeyNames/unorderedPairKey
+		// keys, the same severityPriority ordering and the same maxPairChips() bound, so the two cannot
+		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
 			addActiveOrderPairInteractions(warnings, context, severityFloor);
@@ -403,6 +373,77 @@ public class DrugSafetyValidator {
 		return floorRank(ChartSearchAiUtils.getStringGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY));
+	}
+
+	/**
+	 * How many chips one question may raise from a PAIRWISE arm: the question's own drugs checked
+	 * against each other ({@link #addQuestionPairInteractions}, issue #114) or the patient's active
+	 * orders checked against each other ({@link #addActiveOrderPairInteractions}, issue #113).
+	 *
+	 * <p><b>Why a cap at all.</b> Every other safety check is bounded by the patient's own chart, which
+	 * held findings to 0–3; these two are quadratic in a list this module does not choose — N²/2 in the
+	 * drugs a question resolves, and 45 pairs for 10 active orders. And every chip is ALSO injected into
+	 * the prompt as a citable pre-answer finding (see {@code DrugReferenceInjector.preAnswerFindings}),
+	 * so an uncapped arm both buries the clinician under chips and writes the whole cross-product into
+	 * the context window. Measured on the bundled sample with the patient on nothing: one question
+	 * naming its 16 drugs raised 72 chips carrying 42,708 characters of finding text, against a path
+	 * that caps a SINGLE reference record at {@link DrugReferenceInjector#MAX_INTERACTION_RENDER_CHARS}
+	 * = 1500 for precisely this reason. On the screening side, DDInter's longest mechanism text (~1.2k
+	 * chars) puts the default cap's contribution at ~12k characters, comparable to a handful of the
+	 * reference records the prompt already carries. Removing the cap is not an option; this is a
+	 * backstop, not a routine truncation — a realistic regimen produces a handful of above-floor pairs,
+	 * not tens.
+	 *
+	 * <p><b>Why it is a global property (issue #131).</b> The default is the number both arms were
+	 * hardcoded to, and ten covers every pair among five named drugs — well past the "does A interact
+	 * with B?" question the pair arm exists for, and roughly 6k characters of finding text in that worst
+	 * case. But which pairs a clinician should see is a clinical judgement, not a build-time one.
+	 * Measured live on the 3.7.1 standalone against the FULL DDInter knowledge base (2026-08-05), a
+	 * 16-drug polypharmacy question logged {@code 10 of 72 … (cap 10)} and withheld
+	 * {@code [Major ×13, Moderate ×40, Minor ×9]}: a clinician reviewing sixteen medications is shown
+	 * ten Majors while THIRTEEN MORE are withheld. (Issue #131 reports {@code 10 of 65} withholding
+	 * {@code [Major ×10, Moderate ×37, Minor ×8]} for a differently-worded 16-drug question; that
+	 * question is not in the tree and its profile was not reproduced here, so the figures above are the
+	 * ones this cap was sized against.) A polypharmacy review clinic may want 30 where a triage screen
+	 * wants 5, and that belongs in a deployment's hands.
+	 *
+	 * <p><b>One property for both arms</b>, deliberately: their gates are mutually exclusive — the pair
+	 * arm needs the question to resolve two or more reference drugs, the screen needs it to resolve none
+	 * — so at most one of them runs per question and no question can be subject to both. Two separately
+	 * tunable limits for one concept would be arbitrary. Fail-safe like {@code weightMaxAgeDays} and
+	 * {@code minInteractionSeverity}: an unparseable or non-positive value falls back to the default
+	 * rather than disabling the cap, because a typo'd GP must not turn a bounded safety net into an
+	 * unbounded question-controlled prompt expansion.
+	 *
+	 * <p><b>What the cap drops, and how it is visible.</b> A count rather than a character budget: a
+	 * chip is a whole sentence a clinician reads, and half a chip is not a smaller chip. Candidates are
+	 * ordered most-severe-first BEFORE the cut, so what goes is the least severe, and every withheld
+	 * pair is named in a WARN — a silent truncation would read to a clinician as "everything is
+	 * covered". That log line is currently the ONLY place the withheld count surfaces: a clinician-facing
+	 * "10 of 65 shown" needs a per-question container the chip API does not have (chips are per-drug
+	 * findings), so it is a frontend change rather than a module one. Recorded here as a decision rather
+	 * than left as an oversight.
+	 *
+	 * <p><b>One honest limit on "most severe first":</b> {@link #severityPriority} sorts an UNRATED rule
+	 * above Major, matching {@code DrugReferenceInjector.InteractionNote} and for the same reason —
+	 * {@link #clearsSeverityFloor} treats unrated as exempt rather than low, so unrated is not rankable
+	 * below a rated tier. Where that convention only decides who keeps mechanism prose it drops nothing;
+	 * composed with a cap that DISCARDS, it means a dataset mixing unrated and rated rules can withhold
+	 * a Major pair while reporting an unrated one. That needs an operator-authored dataset carrying both
+	 * kinds (every DDInter row is rated; every curated rule is unrated, so neither bundled source mixes
+	 * them) AND more above-floor pairs on one chart than the configured cap. The WARN line is what makes
+	 * it recoverable, and picking the other order would instead discard an operator's own hand-authored
+	 * rule in favour of a third-party rating — which is why the convention is shared with the injector
+	 * rather than reversed here.
+	 *
+	 * @return the configured cap, or {@link ChartSearchAiConstants#DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS}
+	 *         when the GP is absent, unparseable or non-positive
+	 */
+	static int maxPairChips() {
+		int configured = ChartSearchAiUtils.getIntGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_MAX_PAIR_CHIPS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS);
+		return configured > 0 ? configured : ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS;
 	}
 
 	/**
@@ -549,12 +590,13 @@ public class DrugSafetyValidator {
 	 * compare, so a rule that reached its chip by NAME under a different code of the same substance
 	 * stays uncorrelated and both chips are still emitted. That is the bundled curated seed's
 	 * ibuprofen-versus-aspirin shape — the seed carries no aspirin entry at all, which is equally why
-	 * its class chip can only name the order "N02BA01". It cannot be narrowed from here:
-	 * {@link PatientClinicalContext} flattens orders into one name set and one code set, so a code
-	 * cannot be attributed back to the order that contributed it (the same limit
-	 * {@link #activeOrdersOtherThan} documents), which makes "the order this rule matched by name" and
-	 * "the order that contributed this code" the same input. The fix is per-order ATC codes on the
-	 * context, not a cleverer test here.
+	 * its class chip can only name the order "N02BA01". It cannot be narrowed from here AS WRITTEN,
+	 * because this arm reads {@link PatientClinicalContext#getActiveDrugAtcCodes()} — the context-wide
+	 * union, where "the order this rule matched by name" and "the order that contributed this code" are
+	 * the same input. Since issue #132 the per-order codes DO exist
+	 * ({@link PatientClinicalContext.ActiveDrugOrder#getAtcCodes()}, which is how
+	 * {@link #activeOrdersOtherThan} now attributes them), so the narrowing available is to correlate
+	 * against those rather than against the union — not a cleverer test over the union.
 	 */
 	private void addInteractionWarnings(List<SafetyWarning> warnings, DrugReference ref,
 			PatientClinicalContext context, int severityFloor) {
@@ -852,10 +894,16 @@ public class DrugSafetyValidator {
 				found.add(candidate.getValue());
 			}
 		}
-		// Most severe first, and bounded — see MAX_QUESTION_PAIR_CHIPS. Collections.sort is stable, so
+		// Most severe first, and bounded — see maxPairChips(). Collections.sort is stable, so
 		// equally-rated pairs keep the dataset order the entry loop produced them in.
+		if (found.isEmpty()) {
+			// Nothing to order or bound, and no GP read for the common "these two do not interact" case —
+			// the same shape the screening arm's own early return takes.
+			return;
+		}
 		Collections.sort(found, PAIR_SEVERITY_DESCENDING);
-		int shown = Math.min(found.size(), MAX_QUESTION_PAIR_CHIPS);
+		int cap = maxPairChips();
+		int shown = Math.min(found.size(), cap);
 		if (shown < found.size()) {
 			// WARN, not INFO: a clinician reading the chips cannot tell a bounded list from a complete
 			// one, so an operator has to be able to see that this question outran the bound and which
@@ -864,34 +912,16 @@ public class DrugSafetyValidator {
 			for (PairFinding finding : found.subList(shown, found.size())) {
 				withheld.add(finding.severity);
 			}
+			// The CONFIGURED cap, not the default: an operator diagnosing a truncated list has to see
+			// the number that actually did the truncating.
 			log.warn("Question-pair safety: {} of {} question-named drug pairs shown (cap {}); the "
 					+ "question resolved {} reference drugs, and pairs grow as N^2/2. Withheld, least "
-					+ "severe last: {}", shown, found.size(), MAX_QUESTION_PAIR_CHIPS, drugs.size(),
-					withheld);
+					+ "severe last: {}", shown, found.size(), cap, drugs.size(), withheld);
 		}
 		for (PairFinding finding : found.subList(0, shown)) {
 			warnings.add(finding.warning);
 		}
 	}
-
-	/**
-	 * How many question-pair chips one question may raise.
-	 *
-	 * <p>Pairs grow as N²/2 in the number of reference drugs the question resolves, and every chip is
-	 * also injected as a citable pre-answer finding, so this arm is the one safety input a QUESTION
-	 * controls the size of — the others are bounded by the patient's own chart, which held findings to
-	 * 0–3. Measured on the bundled sample with the patient on nothing: one line naming its 16 drugs
-	 * raised 72 chips carrying 42,708 characters of finding text into the prompt, against a path that
-	 * caps a single reference record at {@link DrugReferenceInjector#MAX_INTERACTION_RENDER_CHARS} =
-	 * 1500 for precisely this reason.
-	 *
-	 * <p>Ten covers every pair among five named drugs, which is well past any "does A interact with B?"
-	 * question this arm exists for, and holds that worst case to roughly 6k characters of finding text.
-	 * A count rather than a character budget because a chip is a whole sentence a clinician reads: half
-	 * a chip is not a smaller chip. What is dropped is the least severe — the list is sorted
-	 * most-severe-first — and it is logged, never dropped silently.
-	 */
-	static final int MAX_QUESTION_PAIR_CHIPS = 10;
 
 	/** Orders candidate pair chips most-severe first; see {@link #severityPriority}. */
 	private static final Comparator<PairFinding> PAIR_SEVERITY_DESCENDING = new Comparator<PairFinding>() {
@@ -1241,8 +1271,8 @@ public class DrugSafetyValidator {
 	 *       key backs the pair key up: nothing is reported that words a chip already raised
 	 *       identically, whichever arm raised it — see {@link #chipIdentity}.</li>
 	 *   <li><b>Blast radius.</b> Candidates grow quadratically with the medication list, so they are
-	 *       ordered most-severe-first and cut at {@link #MAX_SCREENING_INTERACTION_WARNINGS}, with
-	 *       every withheld pair logged.</li>
+	 *       ordered most-severe-first and cut at {@link #maxPairChips()}, with every withheld pair
+	 *       logged.</li>
 	 * </ul>
 	 */
 	private void addActiveOrderPairInteractions(List<SafetyWarning> warnings,
@@ -1309,7 +1339,10 @@ public class DrugSafetyValidator {
 			return;
 		}
 		Collections.sort(pairs, SCREENED_PAIR_SEVERITY_DESCENDING);
-		int reported = Math.min(pairs.size(), MAX_SCREENING_INTERACTION_WARNINGS);
+		// The same cap the question-pair arm applies, from the same GP — the two gates are mutually
+		// exclusive, so one question can never meet both, and two limits for one concept would be
+		// arbitrary (issue #131).
+		int reported = Math.min(pairs.size(), maxPairChips());
 		if (pairs.size() > reported) {
 			// Named, not counted: a clinician reading the reported chips has no way to tell a capped
 			// screen from a complete one, so the withheld pairs must at least be recoverable from the
@@ -1363,67 +1396,109 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return the patient's active-order state with everything {@code ref} itself answers for removed
-	 *         — the ORDERS {@code ref} resolves from, {@code ref}'s own ATC codes, and the codes of
-	 *         every other order entry those same orders resolve to — so
-	 *         {@link PatientClinicalContext#hasActiveDrug} against it can only be satisfied by a
-	 *         DIFFERENT order. A derived context rather than a second matching rule: the predicate
-	 *         stays the one the question-driven arm uses.
+	 *         — the ORDERS {@code ref} resolves from, whole (their names AND their ATC codes), plus
+	 *         {@code ref}'s own codes — so {@link PatientClinicalContext#hasActiveDrug} against it can
+	 *         only be satisfied by a DIFFERENT order. A derived context rather than a second matching
+	 *         rule: the predicate stays the one the question-driven arm uses.
 	 *
-	 *         <p>That last clause is the ATC half of "a pair needs two orders", and it is not
-	 *         symmetric with the name half: {@link PatientClinicalContext} flattens orders into a
-	 *         name set and a code set, so a code cannot be attributed back to the order that
-	 *         contributed it. A fixed-dose combination is one order that resolves to SEVERAL entries
-	 *         (the order name whole-word-matches an alias of each constituent), and its single mapped
-	 *         code belongs to just one of them — so dropping only {@code ref}'s codes leaves the
-	 *         co-formulated other half's code standing as if it were a second order. Measured on the
-	 *         bundled sample: one "Aspirin and omeprazole" order reported "Acetylsalicylic acid
-	 *         (aspirin) interacts with active order esomeprazole — Minor", i.e. the two halves of one
-	 *         tablet as an interacting pair, naming a drug the patient is on in no form.
+	 *         <p>Both legs of that join are attributable per order (issue #132): an order carries its
+	 *         own ATC codes on {@link PatientClinicalContext.ActiveDrugOrder} exactly as it carries its
+	 *         own names, so dropping the subject's order drops what it contributed to BOTH legs. Before
+	 *         that, codes lived only in the context-wide set and a code could not be traced to an order:
+	 *         a fixed-dose combination is one order that resolves to SEVERAL entries (the order name
+	 *         whole-word-matches an alias of each constituent) while its single mapped code belongs to
+	 *         just one of them, so dropping only {@code ref}'s codes left the co-formulated other half's
+	 *         code standing as if it were a second order. Measured on the bundled sample: one "Aspirin
+	 *         and omeprazole" order reported "Acetylsalicylic acid (aspirin) interacts with active order
+	 *         esomeprazole — Minor", i.e. the two halves of one tablet as an interacting pair, naming a
+	 *         drug the patient is on in no form.
 	 *
-	 *         <p>Cost, in the conservative direction this feature always takes: a patient on BOTH a
-	 *         combination and a separate order of one of its constituents loses that (genuine,
-	 *         duplicate-therapy) pair if it is witnessed ONLY by the shared ATC code — the separate
-	 *         order's own name still witnesses it whenever the rule's token matches that name, which
-	 *         is the leg that carries the join wherever ATC mappings are sparse.
+	 *         <p>A code the subject's own order carries is removed but then RE-ADDED when another order
+	 *         carries it too, because removal from a flattened set cannot tell contributors apart: a
+	 *         patient on both a combination and a separate order of one of its constituents keeps that
+	 *         (genuine, duplicate-therapy) pair, which the pre-#132 reduction had to give up whenever
+	 *         only the shared code witnessed it. Codes that no per-order set claims are left alone —
+	 *         they come from an order the per-order list omits (the builder's nameless-order KNOWN GAP),
+	 *         which is a real second order and a legitimate witness.
 	 *
-	 *         <p>One case this cannot reach, stated rather than papered over: a subject with NO
-	 *         attributable name loses every name witness (see below), but its codes can only have
-	 *         {@code ref}'s own removed — so a single order whose display name matches no alias in the
-	 *         dataset AND which is mapped to the codes of two entries that interact with each other
-	 *         still pairs those two. Narrowing further is not possible from here: with orders flattened
-	 *         into one name set and one code set, "one order carrying two codes" and "two orders each
-	 *         carrying one" are the same input, so any reduction strong enough to catch it also
-	 *         discards the genuine two-order pair that the ATC leg exists to find (a mapped
-	 *         {@code Torasemida} against a mapped {@code Digoxina}, neither name in the dataset). The
-	 *         real fix is per-order structure in {@link PatientClinicalContext}, not a cleverer
-	 *         reduction over the flattened sets.
+	 *         <p>Restoration reaches every order EXCEPT one that is itself the subject's own, and that
+	 *         bounds what this can find: when every order carrying one member of a pair also carries the
+	 *         other's code, both members' orders are own-classified from both sides and the pair goes
+	 *         unreported — two brand-named, ATC-mapped multi-substance orders covering the same two
+	 *         substances (measured shape: two differently-named orders both mapped to
+	 *         {@code C10AA01} + {@code J01FA09}). Same for a code shared with a list-omitted nameless
+	 *         order, which claims nothing and so cannot restore it. Both are the safe direction — a pair
+	 *         missed, never one invented — and neither can be told from the one-order case without more
+	 *         order structure than a code set carries, which is why the one-order suppression wins.
+	 *
+	 *         <p>The flattened fallback below cannot do any of this, and that is where the residual now
+	 *         lives: with orders reduced to one name set and one code set, "one order carrying two
+	 *         codes" and "two orders each carrying one" are the same input, so no reduction strong
+	 *         enough to catch the first spares the genuine two-order pair the ATC leg exists to find (a
+	 *         mapped {@code Torasemida} against a mapped {@code Digoxina}, neither name in the dataset).
+	 *         Production always builds the per-order form ({@link PatientClinicalContextBuilder}), so
+	 *         that is the fallback's own limit rather than the arm's.
 	 */
 	private static PatientClinicalContext activeOrdersOtherThan(DrugReference ref,
 			List<DrugReference> orderDrugs, PatientClinicalContext context) {
 		Set<String> names = new LinkedHashSet<String>();
 		Set<String> codes = new LinkedHashSet<String>(context.getActiveDrugAtcCodes());
-		codes.removeAll(ref.normalizedAtcCodes());
+		// Built once: normalizedAtcCodes() allocates, and this method reads it on both branches.
+		Set<String> refCodes = ref.normalizedAtcCodes();
 		if (!context.getActiveDrugOrders().isEmpty()) {
-			// Per ORDER, not per name — issue #118 / #124 put the orders themselves on the context. An
-			// order is ref's own when ref resolves from any of ITS names, and then everything that
-			// order contributes goes: its other names (a brand the aliases do not cover is still that
-			// order) and the codes of any other entry the same order resolves to (a co-formulation's
-			// second constituent). What remains is every OTHER order, whole — so a subject can still
-			// pair by name even when nothing names the subject itself, which is what the flattened
-			// fallback below has to give up.
+			// Per ORDER, not per name — issue #118 / #124 put the orders themselves on the context, and
+			// #132 put their ATC codes there too. An order is ref's own when ref resolves from it by
+			// EITHER matcher that could have made ref a subject (a name alias, or a shared code), and
+			// then everything that order contributes goes: its other names (a brand the aliases do not
+			// cover is still that order) and its codes (a co-formulation's second constituent, or the
+			// second of two codes on one concept). What remains is every OTHER order, whole — so a
+			// subject can still pair by name even when nothing names the subject itself, which is what
+			// the flattened fallback below has to give up.
+			Set<String> ownCodes = new LinkedHashSet<String>();
+			Set<String> otherCodes = new LinkedHashSet<String>();
 			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 				if (!resolvesFrom(ref, order)) {
 					names.addAll(order.getNames());
+					otherCodes.addAll(order.getAtcCodes());
 					continue;
 				}
+				ownCodes.addAll(order.getAtcCodes());
+				// AND the pre-#132 proxy, not instead of it: the codes of every other order entry THIS
+				// order resolves to (by the same widened predicate, so a co-resolved entry is found by
+				// name or by code). Attribution is per ORDER, but an order's mapped codes need
+				// not cover every substance in it — a fixed-dose combination whose concept maps to one
+				// constituent's code is the measured #124 shape, and its other half's code is then in
+				// the context-wide set with nothing attributing it. Reached in two ways: an order
+				// carrying NO codes at all (its concept has no ATC map — 531 of 616 Drug-class concepts
+				// in the demo dictionary — or a caller used the pre-#132 three-argument form), and an
+				// order carrying SOME. Measured both: with only the exact removal, one "Aspirin and
+				// omeprazole" order mapped to N02BA01 reported "interacts with active order
+				// esomeprazole — Minor" off a single tablet, which the pre-#132 code suppressed. The
+				// proxy cannot over-remove, because anything ANOTHER order carries is restored below.
 				for (DrugReference coResolved : orderDrugs) {
 					if (coResolved != ref && resolvesFrom(coResolved, order)) {
-						codes.removeAll(coResolved.normalizedAtcCodes());
+						ownCodes.addAll(coResolved.normalizedAtcCodes());
 					}
 				}
 			}
+			codes.removeAll(ownCodes);
+			// Restores a code that ANOTHER order also carries: the two orders contribute one string to
+			// the flattened set, so removing the subject's would silently take the other order's witness
+			// with it. After the removal, so the same code being both own and other resolves as "another
+			// order has it" — and intersected with the context's own union first, so this can only ever
+			// put back a code the chart actually carries. The builder makes that intersection a no-op
+			// (every order's codes are folded into the union in the same pass), but a caller assembling a
+			// context by hand can pass an order carrying codes the union does not, and adding those would
+			// let ONE order witness a pair through a code the patient's chart never held — this arm may
+			// only ever narrow what hasActiveDrug can see.
+			otherCodes.retainAll(context.getActiveDrugAtcCodes());
+			codes.addAll(otherCodes);
+			// ref's own codes, last of all: a rule pointing at ref's own code is answered by ref itself
+			// however the code reached the chart, and restating existing therapy is not an interaction.
+			codes.removeAll(refCodes);
 			return new PatientClinicalContext(null, null, names, codes, null, null);
 		}
+		codes.removeAll(refCodes);
 		// No per-order structure: a caller built this context from the flat sets (the null-patient
 		// early return in the builder, and every context assembled without orders). Names then cannot
 		// be attributed at all, so the guard falls back to matching them against ref itself and, when
@@ -1456,16 +1531,31 @@ public class DrugSafetyValidator {
 		return new PatientClinicalContext(null, null, names, codes, null, null);
 	}
 
-	/** @return true when any of {@code order}'s names resolves to {@code ref} — the same whole-word
-	 *          alias match {@link DrugReferenceService#findByQuery} used to make it a subject, so
-	 *          "which order is this subject's own" is answered by the matcher that chose it. */
+	/**
+	 * @return true when {@code ref} resolves from {@code order} — through either of the two matchers
+	 *         that could have made {@code ref} a subject in {@link #activeOrderEntries}, asked of this
+	 *         one order: a whole-word alias match on one of its names
+	 *         ({@link DrugReferenceService#findByQuery}) or one of its ATC codes
+	 *         ({@link DrugReferenceService#findByActiveOrders}). So "which order is this subject's own"
+	 *         is answered by the matchers that chose it, and both legs of
+	 *         {@link PatientClinicalContext#hasActiveDrug} are covered — the name-only form left an
+	 *         ATC-resolved subject unattributable, which is issue #132: a concept mapped to the codes of
+	 *         two interacting entries witnessed the pair between them from one order.
+	 *
+	 *         <p>Sharing an exact ATC code means being the same substance (level 5 is per-substance;
+	 *         class relatedness is {@link DrugReference#atcSubgroups()}'s business, not this one's), so
+	 *         the code leg cannot mistake a different drug's order for the subject's own.
+	 */
 	private static boolean resolvesFrom(DrugReference ref, PatientClinicalContext.ActiveDrugOrder order) {
 		for (String name : order.getNames()) {
 			if (ref.matchesText(name.toLowerCase(Locale.ROOT))) {
 				return true;
 			}
 		}
-		return false;
+		// Emptiness first: most orders carry no ATC map at all, and this way their subject check costs no
+		// allocation (normalizedAtcCodes builds a set per call).
+		return !order.getAtcCodes().isEmpty()
+				&& !Collections.disjoint(order.getAtcCodes(), ref.normalizedAtcCodes());
 	}
 
 	/**

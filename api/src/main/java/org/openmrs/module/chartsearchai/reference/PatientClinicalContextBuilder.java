@@ -80,7 +80,9 @@ final class PatientClinicalContextBuilder {
 		}
 
 		// Active drug orders -> names + ATC codes (for interaction checks and order-driven injection),
-		// plus the orders themselves (for reconciling this read against the serialized chart).
+		// plus the orders themselves — names AND codes attributed per order, for reconciling this read
+		// against the serialized chart (#118) and so the interaction screen can exclude a subject's own
+		// order from witnessing it (#132).
 		try {
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {
@@ -97,7 +99,15 @@ final class PatientClinicalContextBuilder {
 				if (drugOrder.getDrug() != null && drugOrder.getDrug().getConcept() != null) {
 					concept = drugOrder.getDrug().getConcept();
 				}
-				addAtcCodes(atcCodes, concept);
+				// Per-order codes for the same reason as the per-order names above, read once off the
+				// same concept: flattened, a code cannot be attributed to the order carrying it, so ONE
+				// order's two codes read as two orders and the order witnesses its own interaction
+				// (issue #132). The flattened union is still assembled here — the class arms and
+				// findByActiveOrders want exactly that, and the nameless-order gap below contributes to
+				// it without contributing an ActiveDrugOrder.
+				Set<String> orderAtcCodes = new LinkedHashSet<String>();
+				addAtcCodes(orderAtcCodes, concept);
+				atcCodes.addAll(orderAtcCodes);
 				// An order with no readable name at all is skipped: it can be neither rendered as a
 				// record nor matched against chart text, and injecting it would put a nameless line
 				// ("Active drug order: null") in front of a clinician.
@@ -115,7 +125,7 @@ final class PatientClinicalContextBuilder {
 				// rather than a skip, so the record can be injected with the order's real uuid.
 				if (!orderNames.isEmpty()) {
 					activeOrders.add(new PatientClinicalContext.ActiveDrugOrder(drugOrder.getUuid(),
-							orderNames.iterator().next(), orderNames));
+							orderNames.iterator().next(), orderNames, orderAtcCodes));
 				}
 			}
 		}

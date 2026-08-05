@@ -224,6 +224,20 @@ public final class DrugReferenceTestSupport {
 		}
 	}
 
+	/**
+	 * Entries parsed from a DDInter-shaped test-classpath dataset by the real
+	 * {@link DdiDrugReferenceSource#parse} — the DDInter counterpart of {@link #fixtureEntries},
+	 * which is bound to {@link JsonDrugReferenceSource#parse}, a different parser over a different
+	 * schema. Named for its parser rather than sharing that name for exactly that reason.
+	 */
+	static List<DrugReference> ddiFixtureEntries(String classpathResource) throws IOException {
+		try (InputStream in = DrugReferenceTestSupport.class.getClassLoader()
+				.getResourceAsStream(classpathResource)) {
+			assertNotNull(in, classpathResource + " should be on the test classpath");
+			return DdiDrugReferenceSource.parse(in);
+		}
+	}
+
 	static DrugSafetyValidator validator(DrugReferenceService service) {
 		DrugSafetyValidator validator = new DrugSafetyValidator();
 		validator.setDrugReferenceService(service);

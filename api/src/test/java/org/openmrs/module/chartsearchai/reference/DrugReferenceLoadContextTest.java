@@ -251,7 +251,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	 * describes, and the only thing that reads the configured value back.
 	 *
 	 * <p>Note what is NOT loud here: this typo happens to point at a dataset the curated parser can
-	 * read, so it loads 4 entries and warns about nothing. The two fields differing is the only signal.
+	 * read, so it loads entries and warns about nothing. The two fields differing is the only signal.
 	 */
 	@Test
 	public void loadStatusReportsAMistypedSourceFormatSeparatelyFromTheOneInForce() throws IOException {

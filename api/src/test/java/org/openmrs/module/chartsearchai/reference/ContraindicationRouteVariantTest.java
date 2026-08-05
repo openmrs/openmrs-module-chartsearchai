@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -61,9 +62,10 @@ public class ContraindicationRouteVariantTest {
 	 * ({@code Omeprazole} + {@code Esomeprazole}) with a third PPI to be allergic to
 	 * ({@code Pantoprazole}, {@code A02BC02}, so the shared level-4 subgroup is {@code A02BC}), and
 	 * the four {@code hydrocortisone} rows with {@code Dexamethasone} to be allergic to (both carry
-	 * {@code A01AC}). Its {@code interactions} array is empty, deliberately: this file asserts
-	 * contraindication chip COUNTS, and an interaction chip in the same list would have to be filtered
-	 * out of every assertion here.
+	 * {@code A01AC}), and the five {@code Tozinameran} rows — the group whose allergen row is not its
+	 * first, because only the bare row carries the bare substance name as an alias. Its
+	 * {@code interactions} array is empty, deliberately: this file asserts contraindication chip COUNTS,
+	 * and an interaction chip in the same list would have to be filtered out of every assertion here.
 	 */
 	private static final String FIXTURE = "chartsearchai-test/ddi-contra-route-variants.json";
 
@@ -219,10 +221,10 @@ public class ContraindicationRouteVariantTest {
 
 		DrugReference allergen = service.lookupByToken("Tozinameran");
 		assertNotNull(allergen, "the allergy must resolve to one of the rows");
-		assertEquals(inPlay.get(3), allergen,
+		assertSame(inPlay.get(3), allergen,
 				"and the allergen is the FOURTH: this KB gives each presentation row only its own "
-						+ "qualified name, so the bare substance name skips them — was: "
-						+ (allergen == null ? "null" : allergen.getName()));
+						+ "qualified name as an alias, so the bare substance name skips them — was: "
+						+ allergen.getName());
 		assertEquals(allergen.substanceKey(), inPlay.get(0).substanceKey(),
 				"while all of them are still one substance to the collapse");
 	}
@@ -231,12 +233,13 @@ public class ContraindicationRouteVariantTest {
 	public void theIdentityChipSurvivesWhenTheAllergenRowIsNotItsGroupsFirst() throws IOException {
 		// The collapse must keep the most specific relationship even when the weaker candidate is raised
 		// FIRST — an incumbent chip has to be REPLACED, not merely suppressed. Reachable on the shipped
-		// KB, not a hypothetical: measured through this same entry point over the full 19 MB dataset, 10
-		// of its 121 collapsed groups contain a row whose own name resolves an allergy to a LATER member
-		// of the group (`Tozinameran`, `Insulin aspart (aspart)`, `Iobenguane (I-131)`, …). A first-wins
-		// ledger answers this case with "Tozinameran (12y+) … is in the same ATC class (J07BN) as the
-		// patient's allergy to Tozinameran" — the vacuous self-cross-reactivity issue #145 exists to
-		// remove, kept instead of removed.
+		// KB, not a hypothetical: where a row carries only its own qualified name as an alias and not the
+		// bare substance name, lookupByToken's earliest-match rule skips it and the allergy resolves a
+		// LATER member of the same collapsed group, so the earlier members chip first. `Tozinameran`,
+		// `Insulin aspart (aspart)` and `Iobenguane (I-131)` were each verified this way through
+		// validate() over the full 19 MB KB. A first-wins ledger answers this case with "Tozinameran
+		// (12y+) … is in the same ATC class (J07BN) as the patient's allergy to Tozinameran" — the
+		// vacuous self-cross-reactivity issue #145 exists to remove, kept instead of removed.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
 				"Is it safe to give the Pfizer-BioNTech COVID-19 vaccine?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,

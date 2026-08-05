@@ -245,8 +245,7 @@ public class DrugSafetyValidator {
 		//
 		//   - the entries themselves, for the three arms that screen or name them — the chip grouping's
 		//     partner identity below, the active-order contraindication subjects (#143) and the
-		//     screening subjects (#113), which were resolving them an arm at a time and paying for it
-		//     twice on an allergy-bearing chart;
+		//     screening subjects (#113), which were each resolving them for themselves;
 		//   - and those entries' own names on the context, so hasActiveDrug can match a rule token
 		//     against them. Attached here rather than threaded through the arms below: that keeps
 		//     hasActiveDrug the single join, with the same signature for every caller, so no arm can

@@ -139,12 +139,22 @@ public class DrugReferenceInjector {
 	 * which is correct: a dose warning is about a dose the answer proposes, and there is no answer yet.
 	 * No second definition of any safety rule is introduced.
 	 *
-	 * <p>A question that names no drug is therefore not automatically finding-free: {@code validate}
-	 * screens the patient's own active orders against each other when the question asks to be
-	 * screened for interactions (issue #113), and those findings arrive here as records like any
-	 * other. That gate reads the QUESTION only, so it holds identically for this pre-answer pass and
-	 * for the post-answer chips pass — the property that keeps a finding in the prompt from ever
-	 * being asserted without a chip beside the answer.
+	 * <p>A question that names no drug is therefore not automatically finding-free. Two checks in
+	 * {@code validate} have no drug in play at all, and both reach this pass:
+	 * <ul>
+	 *   <li>the patient's own active orders screened against EACH OTHER when the question asks to be
+	 *       screened for interactions (issue #113) — that gate reads the QUESTION only;</li>
+	 *   <li>the patient's own active orders checked against their own allergy and condition records
+	 *       (issue #143, {@code DrugSafetyValidator.addActiveOrderContraindications}) — whose GATE and
+	 *       whose SUBJECTS read no question and no answer at all, only the chart. It does read the
+	 *       drugs-in-play set, but only to skip what the loop above has already covered; see the
+	 *       parenthetical below.</li>
+	 * </ul>
+	 * Neither can therefore differ between this pre-answer pass and the post-answer chips pass, which
+	 * is the property that keeps a finding in the prompt from ever being asserted without a chip beside
+	 * the answer. (The #143 arm skips a drug already in play, so a question naming one of the patient's
+	 * own orders moves that chip from this arm to the drug-in-play loop rather than adding or dropping
+	 * one — the same chips, from a different arm.)
 	 *
 	 * <p>The list is empty whenever the deterministic layer finds nothing, so a question that nothing
 	 * bears on gains no record and its abstention survives by construction rather than by prompt

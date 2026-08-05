@@ -1,10 +1,19 @@
 # Drug knowledge base — demo setup
 
-A reproducible setup for demonstrating **every** path of the drug-reference / drug-safety
-feature on an OpenMRS standalone (or any RefApp demo database). It creates one dedicated
-test patient with the allergies, conditions and active drug orders needed to trigger each
-warning, adds the ATC concept mappings the class-based paths need, and (for the
-cross-reactivity path) swaps in a small custom knowledge base.
+A reproducible setup for demonstrating the drug-reference / drug-safety feature on an
+OpenMRS standalone (or any RefApp demo database). It creates one dedicated test patient
+with the allergies, conditions and active drug orders needed to trigger each warning,
+adds the ATC concept mappings the class-based paths need, and (for the cross-reactivity
+path) swaps in a small custom knowledge base.
+
+> The table below covered every path when it was written and no longer does: three arms
+> have landed since — the question-named pair lookup
+> ([#114](https://github.com/openmrs/openmrs-module-chartsearchai/issues/114)), the
+> interaction screen ([#113](https://github.com/openmrs/openmrs-module-chartsearchai/issues/113))
+> and the active-order contraindication join
+> ([#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143), which fires
+> on this seeded patient — see the note above the cheat-sheet). The README's GP table is the
+> authoritative list of what the feature does; this document is only the demo data.
 
 For the feature itself — config reference, design, API/SSE shape — see the
 [README "Drug-reference injection & safety validation"](../README.md#drug-reference-injection--safety-validation)
@@ -268,7 +277,12 @@ the external-file mechanism (no rebuild):
    (the bundled four **plus** Naproxen) — just copy it into the app-data dir. Equivalently, copy the
    bundled `api/src/main/resources/chartsearchai/drug-reference.json` and append this fifth entry
    (Naproxen shares ibuprofen's `M01AE` subgroup; it carries **no** contraindications/interactions
-   of its own, so a naproxen query surfaces *only* the cross-reactivity warning):
+   of its own, so on the committed seed the cross-reactivity warning is the only chip a naproxen query
+   raises *about naproxen*. Where the Aspirin order is `N02BA`-mapped — as the long-lived `:8081`
+   instance is, see [Portability](#portability) — a second naproxen chip appears, the NSAID group
+   against that active order, exactly as it does for ibuprofen. And this custom KB still carries the
+   bundled four, so Margaret's own active orders still raise the three chips the
+   [cheat-sheet note](#query-cheat-sheet) describes):
 
    ```json
    {
@@ -392,8 +406,45 @@ entry dataset).
 
 ## Query cheat-sheet
 
-Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless noted. Each
-query surfaces only the warnings for the drug named.
+Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless noted.
+
+> **Since [#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143) a query does
+> NOT surface only the warnings for the drug it names.** Every question additionally has this
+> patient's own active orders checked against her own allergies and conditions, so every row below
+> that runs on Margaret also carries chips about drugs the query never mentions. (The last row is
+> scoped to any patient; on a stock demo patient, who has neither an allergy nor a condition, the
+> arm returns before it looks at any order.) With the bundled KB and **Steps 1-3 run**,
+> two of her orders resolve to an entry her own records contraindicate, and they contribute three
+> chips:
+>
+> - **Amoxicillin** (`DKB-ORD-6`) — its curated `penicillin` rule against her seeded penicillin-class
+>   allergy (`162297…`, which the table above calls *Penicillins* and the current demo DB names
+>   *Penicillin drug class*; the rule is matched by containment, so either name hits):
+>   `Amoxicillin is contraindicated by an active allergy: penicillin-class hypersensitivity`.
+> - **Gentamicin** (`DKB-ORD-8`) — twice, off her non-coded *Aminoglycoside* allergy and her
+>   *Significant renal impairment*.
+>
+> All three are EXTRA only on a query that names neither drug. A query that does name one of them puts
+> that entry in play, and the arm skips an entry already in play, so the chip comes from the
+> drug-in-play loop instead and the row's own stated expectation already covers it — the amoxicillin
+> row gains the two Gentamicin chips and no second penicillin chip, and the gentamicin row gains only
+> the Amoxicillin one.
+>
+> Her Warfarin, Aspirin, Methotrexate, Furosemide, Ampicillin and Amikacin orders resolve to no
+> bundled entry, so they add nothing. Note **how** Gentamicin resolves: `DKB-ORD-8` is on
+> `concept_id` 3923, and Step 3 maps that concept to `J01GB03`, which is the bundled Gentamicin
+> entry's own ATC code — so the ORDER-driven matcher finds the entry by code, whatever the concept is
+> named. On a database where 3923 is not Gentamicin (see the `concept_id` caveat in
+> [Portability](#portability); it is Gemfibrozil on the standalone this note was checked against)
+> those two chips still appear and still say *Gentamicin*, naming a substance the order does not
+> display — a seed-data mismatch, not a module one, and a reason to re-derive the ids before
+> demonstrating. Note also that **both** contraindicated orders are created by Step 3, not Step 2
+> (`atc_drugkb.sql` inserts `DKB-ORD-5..8`; Step 2's `DKB-ORD-1..4` are Warfarin, Aspirin,
+> Methotrexate and Furosemide, none of which the bundled KB carries) — so after Steps 1-2 alone this
+> arm contributes nothing at all.
+>
+> That is the point of the fix: an allergy to a drug she is already taking is a prescribing error the
+> chart already contains, and no wording of a question should hide it.
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|

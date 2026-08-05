@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -46,8 +45,6 @@ public class DdiDrugReferenceSourceTest {
 	private static final String SEVERITY = "Major Moderate Minor Unknown";
 
 	private static final String MARKER_FIXTURE = "chartsearchai-test/ddi-field-marker-mechanism.json";
-
-	private static final String ROUTE_VARIANT_FIXTURE = "chartsearchai-test/ddi-route-variants.json";
 
 	/** The real mechanism text of KB group 2248, verbatim minus the {@code INTERVAL:} marker. */
 	private static final String DOLUTEGRAVIR_MECHANISM = "Coadministration with medications containing "
@@ -207,7 +204,7 @@ public class DdiDrugReferenceSourceTest {
 	 * texts — parsed by the real production parser.
 	 */
 	private static List<DrugReference> routeVariantEntries() throws Exception {
-		return DrugReferenceTestSupport.ddiFixtureEntries(ROUTE_VARIANT_FIXTURE);
+		return DrugReferenceTestSupport.ddiFixtureEntries(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
 	}
 	private static List<DrugReference> markerFixtureEntries() throws Exception {
 		return DrugReferenceTestSupport.ddiFixtureEntries(MARKER_FIXTURE);
@@ -334,9 +331,7 @@ public class DdiDrugReferenceSourceTest {
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Iron"), null, null, null),
 				"Can I start dolutegravir?");
 
-		List<RecordMapping> findings = result.getMappings().stream()
-				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
-				.collect(Collectors.toList());
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(result);
 
 		assertEquals(1, findings.size(),
 				"the fixture pair must yield exactly one citable safety finding, was: " + result.getText());
@@ -498,7 +493,7 @@ public class DdiDrugReferenceSourceTest {
 		// citations by id, so the rxcui is used only when unique — else the DDInter id — keeping
 		// the three entries distinct rather than collapsing to one.
 		List<DrugReference> entries = DrugReferenceTestSupport
-				.ddiFixtureEntries("chartsearchai-test/ddi-rxcui-collision.json");
+				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_RXCUI_COLLISION);
 		assertEquals(3, entries.size(), "fixture has three Lidocaine variants");
 		long distinctIds = entries.stream().map(DrugReference::getId).distinct().count();
 		assertEquals(3, distinctIds, "variants sharing a RxCUI must not collapse to one id");

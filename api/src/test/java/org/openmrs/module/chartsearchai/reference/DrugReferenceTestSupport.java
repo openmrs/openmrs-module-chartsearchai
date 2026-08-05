@@ -19,6 +19,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -120,14 +121,40 @@ public final class DrugReferenceTestSupport {
 		injector.setDrugSafetyValidator(validator(service));
 		PatientChart chart = injector.injectRecords(oneRecordChart(),
 				ctx(60, null, set(activeDrug), set(atcCode), null, null), question);
+		return injectedFindings(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
+				"no safety-finding record was injected for question: " + question));
+	}
+
+	/**
+	 * Every injected {@code safety_finding} mapping in {@code chart}, in injection order — the
+	 * finding-shaped counterpart of {@link #injectedReference}, and the one matcher for it, so the
+	 * filter cannot drift between the test files that assert HOW MANY records a chip yields. Returns
+	 * the list rather than the first, because that count is the assertion in every caller but
+	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
+	 */
+	static List<RecordMapping> injectedFindings(PatientChart chart) {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
-				.findFirst().orElseThrow(() -> new IllegalStateException(
-						"no safety-finding record was injected for question: " + question));
+				.collect(Collectors.toList());
 	}
 
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */
 	static final String ATC_SAMPLE = "atc/atc-sample.tsv";
+
+	/**
+	 * DDInter fixture paths used by MORE THAN ONE test file, owned here for the same reason
+	 * {@link #ATC_SAMPLE} is: a fixture that moves or is renamed must break in one place, naming
+	 * itself, rather than break in one file and silently keep passing in another. Single-file
+	 * fixtures keep their constant in the file that uses them.
+	 *
+	 * <p>{@code ddi-route-variants.json}: one substance filed as several rows sharing an
+	 * {@code rxnorm_name} — the shape behind issue #115's chip collapse, and (its two ATC-less
+	 * {@code Iron} rows) behind issue #135's multi-entry case.
+	 */
+	static final String DDI_ROUTE_VARIANTS = "chartsearchai-test/ddi-route-variants.json";
+
+	/** Several route variants of one drug sharing a RxCUI — the id/label collision slice. */
+	static final String DDI_RXCUI_COLLISION = "chartsearchai-test/ddi-rxcui-collision.json";
 
 	private DrugReferenceTestSupport() {
 	}

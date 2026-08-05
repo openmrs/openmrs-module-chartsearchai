@@ -17,7 +17,6 @@ import java.io.IOException;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
@@ -65,14 +64,6 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 public class DirectAllergyContraindicationTest {
 
 	private static final String FIXTURE = "chartsearchai-test/ddi-unclassified-allergen.json";
-
-	/**
-	 * The route-variant slice of the same dataset, for the one shape {@link #FIXTURE} cannot pose: an
-	 * ATC-less substance the dataset files as SEVERAL entries. Its two {@code Iron} rows
-	 * ({@code DDInter975}, {@code DDInter2187 Iron (bisglycinate)}) are the full KB's only two
-	 * {@code rxnorm_name=iron} entries, both verbatim and both carrying no ATC code.
-	 */
-	private static final String ROUTE_VARIANT_FIXTURE = "chartsearchai-test/ddi-route-variants.json";
 
 	/** The ATC-less entry the patient is allergic to; {@code Leucovorin} is the second one. */
 	private static final String UNCLASSIFIED = "Ledipasvir";
@@ -127,13 +118,11 @@ public class DirectAllergyContraindicationTest {
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
 		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
 
-		List<RecordMapping> findings = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-				DrugReferenceTestSupport.ctx(60, null, null, null,
-						DrugReferenceTestSupport.set(UNCLASSIFIED), null),
-				"Is it safe to give her ledipasvir?")
-				.getMappings().stream()
-				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
-				.collect(java.util.stream.Collectors.toList()); // Stream.toList() is Java 16+; target is 11
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(
+				injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set(UNCLASSIFIED), null),
+						"Is it safe to give her ledipasvir?"));
 
 		assertEquals(1, findings.size(), "the finding must be injected exactly once, was: " + findings);
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
@@ -255,8 +244,12 @@ public class DirectAllergyContraindicationTest {
 		// per-allergen loop as a DIFFERENT reference: they must fall through the in-loop classification
 		// guard rather than each add a chip. Measured through this same path: 0 chips before the fix
 		// (the whole arm returned early for both rows), 1 after.
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(ROUTE_VARIANT_FIXTURE));
+		//
+		// The shared route-variant slice supplies the shape: its two Iron rows (DDInter975 and
+		// DDInter2187 "Iron (bisglycinate)") are the full KB's ONLY two rxnorm_name=iron entries, both
+		// verbatim and both carrying no ATC code — so no new fixture is needed for this case.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.ddiFixtureEntries(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS));
 		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
 
 		// Precondition, through the production matcher the validator itself uses: the question really

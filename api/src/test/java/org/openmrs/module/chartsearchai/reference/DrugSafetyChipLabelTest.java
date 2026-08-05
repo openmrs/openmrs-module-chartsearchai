@@ -54,7 +54,7 @@ public class DrugSafetyChipLabelTest {
 		// The lidocaine variants all share rxnorm "lidocaine"; their suffixed display names
 		// contain it, so no synonym is appended and the variants stay distinguishable.
 		List<DrugReference> entries = DrugReferenceTestSupport
-				.ddiFixtureEntries("chartsearchai-test/ddi-rxcui-collision.json");
+				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_RXCUI_COLLISION);
 		for (DrugReference entry : entries) {
 			assertNull(entry.getGenericName(),
 					entry.getName() + " contains its generic and must not gain a synonym");

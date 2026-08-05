@@ -70,7 +70,10 @@ import org.springframework.stereotype.Service;
  *       condition: by a hand-authored rule, by being the same drug as — or sharing an ATC
  *       chemical subgroup with — a recorded allergy (cross-reactivity reasoning), or —
  *       failing both — by sharing a curated {@link CrossReactivityGroup} with the allergy
- *       (cross-branch cross-reactivity).</li>
+ *       (cross-branch cross-reactivity). These same two checks additionally run over the patient's
+ *       OWN ACTIVE ORDERS, whatever the question and the answer name — "is the patient allergic to
+ *       something they are taking?" is a fact about their chart, and the drug-in-play framing above
+ *       could not ask it (see {@link #addActiveOrderContraindications}, issue #143).</li>
  * </ul>
  *
  * <p>The rule-based checks fire on the entry's own curated {@code interactions}/
@@ -90,7 +93,12 @@ import org.springframework.stereotype.Service;
  * entries (19.4%, none of them carrying any ATC code) consequently raised no chip for the most basic
  * check here. See {@link #addAllergyContraindications}.
  *
- * <p>One check does not need a drug in play at all: a question that asks to be <em>screened</em> for
+ * <p>Two checks do not need a drug in play at all. The first is the patient's own active orders
+ * checked against their own allergy and condition records, on every question — see
+ * {@link #addActiveOrderContraindications}, issue #143, which exists because the echo scoping below
+ * withheld exactly that finding for a drug appearing in a cited {@code drug_order} record.
+ *
+ * <p>The second: a question that asks to be <em>screened</em> for
  * interactions ("are there any drug interactions with her current medications?") names no drug, so
  * the patient's active orders are screened against <em>each other</em> — see
  * {@link #addActiveOrderPairInteractions}, issue #113. It reuses the same rule join and the same
@@ -106,10 +114,12 @@ import org.springframework.stereotype.Service;
  * fresh recorded weight) a per-administration dose over {@code mgPerKgMax} × weight; class-based
  * interactions skip an active order that is the <em>same</em> drug (restating existing therapy
  * is not a duplicate). A question or answer that names no reference drug produces no warnings
- * (the no-false-positive case) — with the one deliberate exception of the interaction screen
- * above, which is still a no-false-positive check: it reports only pairs the reference data
- * actually relates ("rates" would be too narrow — an unrated rule is exempt from the severity
- * floor, not filtered by it, so unrated pairs are screened too).
+ * (the no-false-positive case) unless the patient's own chart supplies the subject — the two
+ * deliberate exceptions above, both still no-false-positive checks. The interaction screen reports
+ * only pairs the reference data actually relates ("rates" would be too narrow — an unrated rule is
+ * exempt from the severity floor, not filtered by it, so unrated pairs are screened too). The
+ * active-order contraindication arm reports only a drug the patient is ON whose own allergy or
+ * condition records contraindicate it, and stands down entirely when neither is recorded.
  */
 @Service("chartSearchAi.drugSafetyValidator")
 public class DrugSafetyValidator {
@@ -286,6 +296,13 @@ public class DrugSafetyValidator {
 			if (warnDose) {
 				addOverdose(warnings, ref, context, lower, all);
 			}
+		}
+		// The patient's own prescriptions against their own allergy and condition records — the one
+		// contraindication question no drug-in-play arm can ask (issue #143). After the loop above so a
+		// drug in play keeps the chip position it has always had, and before the pair arms below, which
+		// are reference lookups rather than facts about this patient.
+		if (warnContra) {
+			addActiveOrderContraindications(warnings, inPlay, context);
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
@@ -495,11 +512,25 @@ public class DrugSafetyValidator {
 	 *         separates a recited drug name from the {@code [N]} marker that vouches for it.
 	 *         An empty corpus (no mappings, an uncited answer, or no cited record carrying text)
 	 *         returns false, keeping the drug validated. The accepted trade-off: an answer that
-	 *         BOTH cites a record naming drug X AND independently proposes X is exempted — but a
-	 *         proposal-worthy X is usually question-named (always validated) or actively ordered
-	 *         (checked directly by the order-driven arms), so the residual shape is rare and the
+	 *         BOTH cites a record naming drug X AND independently proposes X is exempted. The
 	 *         measured alternative was worse (7 of 8 chips about unproposed drugs on one
-	 *         enumeration answer).
+	 *         enumeration answer), and what bounds the residue is that a proposal-worthy X is
+	 *         either question-named (always validated) or actively ordered — and an actively-ordered
+	 *         X is checked against the patient's allergy and condition records by
+	 *         {@link #addActiveOrderContraindications} whatever the answer's wording, so the
+	 *         exemption can no longer withhold a contraindication for a drug the patient is on.
+	 *
+	 *         <p>That second half USED to be asserted here of "the order-driven arms", and was false
+	 *         (issue #143). Counted over this class, those arms — {@link #addInteractionWarnings},
+	 *         {@link #addQuestionPairInteractions}, {@link #addActiveOrderPairInteractions} — read the
+	 *         allergy list ZERO times, because what they check is INTERACTIONS; the contraindication
+	 *         arms read allergies but only ever about the drug in play. Nothing joined the two, so a
+	 *         prescribed drug the patient was allergic to lost its contraindication to this exemption:
+	 *         measured on the bundled curated dataset, an active ibuprofen order plus an ibuprofen
+	 *         allergy, a question naming no drug and an answer citing the {@code drug_order} record
+	 *         gave 0 chips where the same call with null mappings gave 2. What this exemption still
+	 *         withholds is an INTERACTION or OVERDOSE finding about an echoed drug, which is exactly
+	 *         what #105 measured and fixed.
 	 */
 	private static boolean isEchoOfCitedRecord(DrugReference ref, List<String> citedTextsLower) {
 		for (String text : citedTextsLower) {
@@ -1368,11 +1399,14 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The reference entries for the patient's active orders — the subjects screening pairs against
-	 * each other. The union of the documented order-driven matcher
+	 * The reference entries for the patient's active orders — the subjects
+	 * {@link #addActiveOrderPairInteractions} screens against each other, and the subjects
+	 * {@link #addActiveOrderContraindications} checks against the patient's own allergy and condition
+	 * records. The union of the documented order-driven matcher
 	 * ({@link DrugReferenceService#findByActiveOrders}, which keys on ATC codes) and an alias
 	 * resolution of each active order's own name ({@link DrugReferenceService#findByQuery}, the same
-	 * whole-word alias matcher the question path uses).
+	 * whole-word alias matcher the question path uses). One definition, so the two arms cannot come to
+	 * disagree about which of the patient's prescriptions the reference data covers.
 	 *
 	 * <p>Both keys are needed because {@link PatientClinicalContext#hasActiveDrug} — the join that
 	 * decides whether a rule concerns this patient — matches on name OR ATC, so a subject set
@@ -1787,6 +1821,95 @@ public class DrugSafetyValidator {
 								+ ") as the patient's allergy to " + allergen.displayLabel()
 								+ " — possible cross-reactivity"));
 			}
+		}
+	}
+
+	/**
+	 * The contraindication question no other arm asks: <b>is the patient allergic to — or does an
+	 * active condition of theirs contraindicate — something they are already TAKING?</b> (Issue #143.)
+	 * The two contraindication arms above, run over the patient's own active orders instead of over the
+	 * drugs the question and the answer name.
+	 *
+	 * <p><b>The defect.</b> Both contraindication arms were keyed on a drug IN PLAY, and echo scoping
+	 * ({@link #isEchoOfCitedRecord}, issue #105) removes an answer-named drug from that set whenever a
+	 * record the answer cites already names it. A drug the patient is PRESCRIBED appears in a
+	 * {@code drug_order} chart record — which is exactly the record a good answer cites when asked
+	 * about medications — so the scoping fired on the one shape where the finding matters most.
+	 * Measured on the bundled curated dataset (the production default {@code sourceFormat=json}): an
+	 * active ibuprofen order plus an ibuprofen allergy, a question naming no drug and an answer citing
+	 * the real order record raised <b>0 chips</b>, where the identical call with {@code mappings=null}
+	 * raised <b>2</b>. An allergy to a currently-prescribed drug is a prescribing error the chart
+	 * already contains, and it reached the clinician neither as a chip nor — since issue #110 turns
+	 * every chip into a citable pre-answer record — as anything in the prompt.
+	 *
+	 * <p><b>Why this arm rather than exempting contraindications from the scoping.</b> A carve-out
+	 * would fix the measured case and nothing past it, because it still needs the ANSWER to name the
+	 * drug: a prescribing error nobody happened to write down stays invisible, and that is not a corner
+	 * — the pre-answer findings pass ({@code DrugReferenceInjector.preAnswerFindings}) calls
+	 * {@code validate} with an EMPTY answer, so for a question naming no drug there is no answer text
+	 * to name anything. A carve-out would also widen #105's own over-reach onto this surface: a drug the
+	 * answer merely recites out of a cited allergy or reference record would become
+	 * contraindication-checked, chipping about a drug nobody proposed giving. Keyed on the patient's
+	 * active orders, neither happens — and the claim {@code isEchoOfCitedRecord} makes about
+	 * actively-ordered drugs becomes true instead of being relaxed.
+	 *
+	 * <p><b>Contraindications only.</b> Not interactions: {@link #addInteractionWarnings} over an
+	 * active-order entry against the patient's own orders IS {@link #addActiveOrderPairInteractions},
+	 * which is deliberately gated on the question asking to be screened (issue #113) and would here run
+	 * ungated, uncapped, and without that arm's {@link #activeOrdersOtherThan} reduction — so one order
+	 * would witness a pair with itself (issue #86's {@code iron} inside {@code spironolactone}). And not
+	 * overdose: {@link #addOverdose} reads a dose out of the ANSWER, so an order the answer never
+	 * mentions has no dose to check, and reinstating an echoed drug's dose check is precisely what #105
+	 * measured and fixed.
+	 *
+	 * <p><b>Not gated on the question, deliberately.</b> "Is the patient allergic to something they are
+	 * taking?" is a fact about their chart, not about the wording of a query, and gating a
+	 * contraindication on the question's wording is what produced this defect. What bounds the arm
+	 * instead is the chart: it can only fire where an allergy or condition record and an active order
+	 * point at the same drug, and the two arms it delegates to bound it further — one chip per resolved
+	 * allergen ({@code seenAllergens}), one per matching curated rule. That is a bound in the patient's
+	 * own records, the same kind every other contraindication chip has and the reason the pairwise arms
+	 * need {@link #maxPairChips()} while this one does not: nothing here is quadratic in a list the
+	 * module does not choose.
+	 *
+	 * <p><b>The precondition.</b> With neither allergy nor condition tokens recorded both arms are
+	 * provably no-ops — every branch of {@link #addContraindications} requires
+	 * {@link PatientClinicalContext#hasAllergyToken} or
+	 * {@link PatientClinicalContext#hasConditionToken}, and
+	 * {@link #addAllergyContraindications}'s whole body is a loop over
+	 * {@link PatientClinicalContext#getAllergyTokens()} — so the check is skipped rather than run to
+	 * find nothing. That matters here and not in the loop above: this arm resolves the order subjects
+	 * itself ({@link #activeOrderEntries}, an alias sweep of the full dataset per order name), which
+	 * every question about every patient would otherwise pay for, and most patients carry no allergy
+	 * record at all. Read BOTH token sets, not just allergies: the curated arm's condition leg is half
+	 * of what the scoping was suppressing.
+	 *
+	 * <p><b>Composition.</b> An entry already in {@code inPlay} is skipped, so a prescribed drug the
+	 * question also names is checked once rather than twice — identity is the right test because both
+	 * sets resolve against the service's shared {@code getAll()} cache (the same reason the drugs-in-play
+	 * set can dedup by identity). Nothing downstream double-counts either: the screening arm seeds its
+	 * suppression set from the chips raised so far, and these are {@code TYPE_CONTRAINDICATION} while
+	 * every chip that arm can raise is {@code TYPE_INTERACTION}.
+	 *
+	 * <p><b>What it still cannot find</b>, stated rather than implied: an order whose substance the
+	 * loaded dataset does not carry resolves to no entry at all, so it has nothing to compare — the same
+	 * limit {@link #activeOrderEntries} documents for the screen. And the arms it delegates to decide
+	 * the rest: an allergy token that {@link DrugReferenceService#lookupByToken} resolves to the wrong
+	 * entry is mislabelled here exactly as it is on the question path (see
+	 * {@link #addAllergyContraindications}'s measured coverage bound).
+	 */
+	private void addActiveOrderContraindications(List<SafetyWarning> warnings, Set<DrugReference> inPlay,
+			PatientClinicalContext context) {
+		if (context == null
+				|| (context.getAllergyTokens().isEmpty() && context.getConditionTokens().isEmpty())) {
+			return;
+		}
+		for (DrugReference ref : activeOrderEntries(context)) {
+			if (inPlay.contains(ref)) {
+				continue;
+			}
+			addContraindications(warnings, ref, context);
+			addAllergyContraindications(warnings, ref, context);
 		}
 	}
 

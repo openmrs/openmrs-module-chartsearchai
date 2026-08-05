@@ -248,7 +248,8 @@ public class DirectAllergyContraindicationTest {
 		//
 		// The shared route-variant slice supplies the shape: its two Iron rows (DDInter975 and
 		// DDInter2187 "Iron (bisglycinate)") are the full KB's ONLY two rxnorm_name=iron entries, both
-		// byte-identical to their KB rows and both carrying no ATC code — so no new fixture is needed.
+		// field-for-field identical to their KB rows and both carrying no ATC code — so no new fixture
+		// is needed. (Field-for-field, not byte-for-byte: the slice is pretty-printed, the KB is not.)
 		//
 		// Verbatim in CONTENT, but the slice REORDERS them, and order is what the label below turns on.
 		// lookupByToken takes the earliest matching entry, and in the full KB DDInter2187 (index 1320)

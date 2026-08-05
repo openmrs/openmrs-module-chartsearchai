@@ -1715,22 +1715,28 @@ public class DrugSafetyValidator {
 	 * of the 444 ATC-less entries with an allergy recorded under that entry's own name: every one now
 	 * raises a contraindication, but <b>53 of them name a DIFFERENT entry</b> — always one earlier in
 	 * dataset order (0 of the 53 resolve later), though not a shorter-NAMED one: 17 of the 53 resolve
-	 * to a name at least as long as the queried one. What is shorter is the matched ALIAS, and that
-	 * splits the 53 in two:
+	 * to a name at least as long as the queried one. What splits the 53 is whether the entry they land
+	 * on carries the queried name among its OWN aliases, because that is what decides whether any
+	 * matcher could have told them apart:
 	 * <ul>
-	 *   <li><b>43</b> where the matched alias is a FRAGMENT of the queried name — {@code Loteprednol
-	 *       etabonate} resolves to {@code Loteprednol (ophthalmic)} on that entry's alias
-	 *       {@code loteprednol}, {@code Magnesium salicylate} to {@code Salicylic acid (sodium)} on its
-	 *       CIEL alias {@code Salicylate}. This is the nesting hazard {@link #activeOrderEntryFor}
-	 *       already documents and defeats on the rule side ("insulin" inside "insulin glargine") — but
-	 *       not by the same means: a rule's token IS its partner's own alias, so that arm can demand
-	 *       name identity, while an allergy token is a concept name or free text and rarely equals a
-	 *       KB name outright. The analogous fix here is to prefer the LONGEST matching alias rather
-	 *       than the first.</li>
-	 *   <li><b>10</b> where another entry carries the queried drug's FULL name as one of its own CIEL
-	 *       aliases — {@code Moderna covid-19 vaccine} resolves to {@code Pfizer-BioNTech Covid-19
-	 *       Vaccine} because that entry's alias list contains "Moderna COVID-19 vaccine" verbatim.
-	 *       No alias matcher can separate those; it is a defect in the dataset's CIEL bridge.</li>
+	 *   <li><b>43</b> where it does not, so every alias that matched is a strict FRAGMENT of the
+	 *       queried name — {@code Loteprednol etabonate} resolves to {@code Loteprednol (ophthalmic)}
+	 *       on that entry's alias {@code loteprednol}, {@code Magnesium salicylate} to {@code Salicylic
+	 *       acid (sodium)} on its CIEL alias {@code Salicylate}. This is the nesting hazard
+	 *       {@link #activeOrderEntryFor} already documents and defeats on the rule side ("insulin"
+	 *       inside "insulin glargine") — but not by the same means: a rule's token IS its partner's own
+	 *       alias, so that arm can demand name identity, while an allergy token is a concept name or
+	 *       free text. Preferring the LONGEST matching alias over the first resolves exactly these 43
+	 *       to themselves, and none of the 10 below (measured).</li>
+	 *   <li><b>10</b> where the resolved entry carries the queried drug's full name among its own
+	 *       aliases — as a CIEL name for 7 of them, as the {@code rxnorm_name} for the other 3.
+	 *       {@code Moderna covid-19 vaccine} resolves to {@code Pfizer-BioNTech Covid-19 Vaccine}
+	 *       because that entry's CIEL list contains "Moderna COVID-19 vaccine" verbatim;
+	 *       {@code Dotatate} resolves to {@code Lutetium Lu 177 dotatate}. No alias matcher can
+	 *       separate these — two entries genuinely claim one name — so it is a defect in the dataset's
+	 *       alias data, not in the lookup. (In 4 of the 10 a shorter alias matches as well, so these
+	 *       two buckets are a partition on what the target entry CLAIMS, not on which alias happened
+	 *       to win the scan.)</li>
 	 * </ul>
 	 * The refusal is still the right one — the same misresolution is what put that entry in play, so
 	 * the question and the chip agree — but the substance named is not the charted allergen. Neither

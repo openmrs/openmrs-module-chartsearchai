@@ -149,8 +149,8 @@ public final class DrugReferenceTestSupport {
 	 *
 	 * <p>{@code ddi-route-variants.json}: one substance filed as several rows sharing an
 	 * {@code rxnorm_name} — the shape behind issue #115's chip collapse, and (its two ATC-less
-	 * {@code Iron} rows) behind issue #135's multi-entry case. Its rows are byte-identical to their KB
-	 * rows but NOT in KB order: the two Iron rows are transposed, which the #135 case depends on — see
+	 * {@code Iron} rows) behind issue #135's multi-entry case. Its rows are field-for-field identical to
+	 * their KB rows but NOT in KB order: the two Iron rows are transposed, which the #135 case depends on — see
 	 * {@code DirectAllergyContraindicationTest.anUnclassifiedAllergenWithASiblingRouteVariantStillWarnsOnce}
 	 * before regenerating this slice.
 	 */

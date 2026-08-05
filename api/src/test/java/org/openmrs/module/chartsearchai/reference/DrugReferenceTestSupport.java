@@ -142,6 +142,15 @@ public final class DrugReferenceTestSupport {
 	static final String ATC_SAMPLE = "atc/atc-sample.tsv";
 
 	/**
+	 * The logger name everything the drug-reference load logs sits under, for the tests that assert
+	 * the LEVEL an outcome is reported at (issue #149). Owned here for the same reason
+	 * {@link #ATC_SAMPLE} is, and with a sharper consequence: renaming the package leaves a stale
+	 * string literal that no refactor touches, the capture then receives nothing, and every
+	 * "no WARN was logged" assertion passes VACUOUSLY.
+	 */
+	static final String REFERENCE_LOGGER = "org.openmrs.module.chartsearchai.reference";
+
+	/**
 	 * DDInter fixture paths used by MORE THAN ONE test file, owned here for the same reason
 	 * {@link #ATC_SAMPLE} is: a fixture that moves or is renamed must break in one place, naming
 	 * itself, rather than break in one file and silently keep passing in another. Single-file

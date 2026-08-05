@@ -66,11 +66,14 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 	 *  Guards against a non-ATC or malformed file turning any 7-character first token into a drug. */
 	private static final java.util.regex.Pattern ATC_LEVEL5 = java.util.regex.Pattern.compile("[A-Z]\\d{2}[A-Z]{2}\\d{2}");
 
+	private volatile String lastLoadOrigin;
+
 	@Override
 	public List<DrugReference> load() {
 		// Fail-safe read returns "" when unset/blank or no context is available -> run empty.
 		String configuredPath = ChartSearchAiUtils.getStringGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, "");
+		lastLoadOrigin = ReferenceDataFiles.ORIGIN_NONE;
 		if (configuredPath.isEmpty()) {
 			log.info("ATC drug-reference source selected but no dataset path is configured; running empty");
 			return Collections.emptyList();
@@ -81,6 +84,7 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 			try (InputStream in = new FileInputStream(new File(resolved))) {
 				List<DrugReference> loaded = parse(in);
 				log.info("Loaded {} ATC drug-reference entries from {}", loaded.size(), resolved);
+				lastLoadOrigin = ReferenceDataFiles.APPDATA_ORIGIN_PREFIX + configuredPath;
 				return loaded;
 			}
 		}
@@ -92,6 +96,11 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 			log.warn("Failed to read ATC dataset '{}'; running empty", configuredPath, e);
 			return Collections.emptyList();
 		}
+	}
+
+	@Override
+	public String lastLoadOrigin() {
+		return lastLoadOrigin;
 	}
 
 	/**

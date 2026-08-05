@@ -49,8 +49,10 @@ import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.webservices.rest.web.RestConstants;
+import org.openmrs.util.PrivilegeConstants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -125,6 +127,10 @@ public class ChartSearchAiRestController {
 	@Autowired
 	@Qualifier("chartSearchAi.prewarmBootstrapService")
 	private PrewarmBootstrapService prewarmBootstrapService;
+
+	@Autowired
+	@Qualifier("chartSearchAi.drugReferenceService")
+	private DrugReferenceService drugReferenceService;
 
 	@RequestMapping(value = "/search", method = RequestMethod.POST)
 	@ResponseBody
@@ -293,6 +299,46 @@ public class ChartSearchAiRestController {
 	public ResponseEntity<Object> prewarmStatus() {
 		Context.requirePrivilege(ChartSearchAiConstants.PRIV_MANAGE_PREWARM);
 		return new ResponseEntity<Object>(prewarmBootstrapService.getStatus().toMap(), HttpStatus.OK);
+	}
+
+	/**
+	 * Which drug-reference dataset this module is <em>actually</em> using: {@code
+	 * {enabled, loaded, inert, entryCount, sourceFormat, configuredSourceFormat,
+	 * configuredDataFilePath, origin}}.
+	 *
+	 * <p>Exists because the answer cannot be got from the log (issue #149). The dataset load is lazy
+	 * and cached for the life of the module, so the most recent {@code "Loaded N …"} line may belong
+	 * to a load performed before the global properties were last edited, or to a previous process
+	 * that a failed restart left running — which is how a verification pass concluded it had switched
+	 * {@code sourceFormat} when it had not. Reading this endpoint performs the load if it has not
+	 * happened yet and otherwise reports the cached one, so what it returns is what the drug-safety
+	 * layer is using at the moment of the call. {@code origin} distinguishes the operator file from
+	 * the bundled fallback, which an entry count alone cannot.
+	 *
+	 * <p>When {@code chartsearchai.drugReference.enabled} is off, reports {@code enabled:false} and
+	 * loads nothing — the feature being switched off is a legitimate state, and polling a status
+	 * endpoint must not be what triggers a 19 MB parse (or the inert warning) on an install that does
+	 * not use it.
+	 *
+	 * <p>Gated on the core {@code Get Global Properties} privilege rather than a clinical one: this
+	 * reports what the drug-reference global properties actually produced and carries no patient data,
+	 * so it needed no new privilege for an operator (or an administrator diagnosing a silent safety
+	 * layer) to read it. Note what that admits: the {@code Authenticated} role holds that privilege by
+	 * default on a Reference Application install, so in practice any logged-in user can read this —
+	 * which is why the body is confined to configuration metadata such a user can already read through
+	 * {@code GET /systemsetting}, and why {@code origin} names the operator file relative to the
+	 * application data directory rather than absolutely (core keeps the absolute path behind
+	 * {@code View Administration Functions}). Anything patient-derived, or the absolute layout of the
+	 * server, does not belong in this response.
+	 */
+	@RequestMapping(value = "/drugreferencestatus", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> drugReferenceStatus() {
+		Context.requirePrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
+		Map<String, Object> body = new LinkedHashMap<String, Object>();
+		body.put("enabled", ChartSearchAiUtils.isDrugReferenceEnabled());
+		body.putAll(drugReferenceService.getLoadStatus().toMap());
+		return new ResponseEntity<Object>(body, HttpStatus.OK);
 	}
 
 	/**
@@ -623,6 +669,11 @@ public class ChartSearchAiRestController {
 	/** Test seam: production wires {@link PatientAccessCheck} via {@code Autowired}. */
 	void setPatientAccessCheck(PatientAccessCheck patientAccessCheck) {
 		this.patientAccessCheck = patientAccessCheck;
+	}
+
+	/** Test seam: production wires {@link DrugReferenceService} via {@code Autowired}. */
+	void setDrugReferenceService(DrugReferenceService drugReferenceService) {
+		this.drugReferenceService = drugReferenceService;
 	}
 
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)

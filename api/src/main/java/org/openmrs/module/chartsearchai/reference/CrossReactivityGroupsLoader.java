@@ -49,7 +49,7 @@ public class CrossReactivityGroupsLoader {
 	public List<CrossReactivityGroup> load() {
 		return ReferenceDataFiles.loadWithClasspathFallback(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, CLASSPATH_DEFAULT,
-				"cross-reactivity groups", CrossReactivityGroupsLoader::parse);
+				"cross-reactivity groups", CrossReactivityGroupsLoader::parse).getItems();
 	}
 
 	/**

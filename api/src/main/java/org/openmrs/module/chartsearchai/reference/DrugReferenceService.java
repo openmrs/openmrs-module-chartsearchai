@@ -18,6 +18,8 @@ import java.util.Set;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -37,11 +39,21 @@ import org.springframework.stereotype.Service;
  * {@link CrossReactivityGroup} dataset, which loads independently of the source
  * format. Editing either dataset — or switching the source format — therefore
  * requires a module restart.
+ *
+ * <p>Because it is lazy, "which dataset is in force?" cannot be answered from the log: the most
+ * recent {@code "Loaded N …"} line may pre-date the global properties as they read now. Ask
+ * {@link #getLoadStatus()} instead, which reports the load that populated the cache (performing it
+ * if it has not happened yet) — see {@link DrugReferenceLoad} and the module's
+ * {@code GET /chartsearchai/drugreferencestatus} endpoint.
  */
 @Service("chartSearchAi.drugReferenceService")
 public class DrugReferenceService {
 
+	private static final Logger log = LoggerFactory.getLogger(DrugReferenceService.class);
+
 	private volatile List<DrugReference> entries;
+
+	private volatile DrugReferenceLoad load;
 
 	private volatile List<CrossReactivityGroup> crossReactivityGroups;
 
@@ -53,6 +65,33 @@ public class DrugReferenceService {
 	public List<DrugReference> getAll() {
 		ensureLoaded();
 		return entries;
+	}
+
+	/**
+	 * @return the outcome of the dataset load that is IN FORCE — see {@link DrugReferenceLoad}.
+	 *         Triggers the (lazy) load when the feature is enabled and nothing has loaded yet;
+	 *         reports {@link DrugReferenceLoad#notLoaded()} without loading anything when the
+	 *         feature is switched off, so polling the status cannot manufacture the inert warning on
+	 *         an install that does not use the feature.
+	 *
+	 *         <p>This is the answer to "which drug-reference dataset is this module actually using?"
+	 *         that a log line cannot give (issue #149). The load is lazy, so the most recent
+	 *         {@code "Loaded N …"} line may pre-date the global properties as they read now; this
+	 *         either reports the load that populated the cache, or performs it. A load that HAS
+	 *         happened is reported whatever the enabled switch says now — the entries in memory are
+	 *         the ones the safety layer would use, and the switch can be flipped after the fact.
+	 */
+	public DrugReferenceLoad getLoadStatus() {
+		DrugReferenceLoad current = load;
+		if (current != null) {
+			return current;
+		}
+		if (!ChartSearchAiUtils.isDrugReferenceEnabled()) {
+			return DrugReferenceLoad.notLoaded();
+		}
+		ensureLoaded();
+		DrugReferenceLoad afterLoad = load;
+		return afterLoad == null ? DrugReferenceLoad.notLoaded() : afterLoad;
 	}
 
 	/**
@@ -265,33 +304,82 @@ public class DrugReferenceService {
 			if (entries != null) {
 				return;
 			}
-			entries = Collections.unmodifiableList(source().load());
+			String configuredFormat = ChartSearchAiUtils.getStringGlobalProperty(
+					ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT,
+					ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
+			String effectiveFormat = effectiveFormat(configuredFormat);
+			String configuredPath = ChartSearchAiUtils.getStringGlobalProperty(
+					ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, "");
+			// One instance, so the origin read below belongs to the load performed here.
+			DrugReferenceSource active = source != null ? source : sourceFor(effectiveFormat);
+			List<DrugReference> loaded = active.load();
+			DrugReferenceLoad outcome = new DrugReferenceLoad(effectiveFormat, configuredFormat,
+					configuredPath, active.lastLoadOrigin(), loaded.size());
+			// A configured source that resolved to nothing is reported LOUDLY, naming both global
+			// properties: this used to print at INFO exactly like a successful load, so the whole
+			// drug-safety feature could be off with nothing at default log levels to say so
+			// (issue #149). The state that stays silent is the feature being switched OFF, which
+			// never reaches this method — not "no dataset path is set", which is one of the ways to
+			// arrive here with nothing loaded (sourceFormat=atc has no bundled fallback) and is
+			// loud. See DrugReferenceLoad.
+			if (outcome.isInert()) {
+				log.warn("Loaded 0 drug-reference entries — drug-safety checking is INERT: no "
+						+ "interaction, allergy or contraindication warning can be raised, and every "
+						+ "safety question will answer as though there were nothing to find. "
+						+ "{}={} (parser in use: {}), {}={}, read from {}. The usual cause is a "
+						+ "format/path mismatch: each source format parses only its own shape and "
+						+ "returns nothing — without failing — for another's.",
+						ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT, configuredFormat,
+						effectiveFormat, ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
+						outcome.getConfiguredDataFilePath(), outcome.getOrigin());
+			}
+			// `load` before `entries`: the double-checked fast path above keys on `entries`, so a
+			// reader that sees it populated must already be able to see the outcome describing it.
+			load = outcome;
+			entries = Collections.unmodifiableList(loaded);
 		}
 	}
 
 	/**
-	 * @return the active source. The {@code sourceFormat} GP selects the adapter:
-	 *         {@code atc} → {@link AtcDrugReferenceSource}, {@code ddinter} →
-	 *         {@link DdiDrugReferenceSource}; any other value (including the
-	 *         unset/no-context case) defaults to the curated {@link JsonDrugReferenceSource}.
+	 * @return the source format that will actually be used for {@code configuredFormat}: {@code atc}
+	 *         and {@code ddinter} select their own adapters, and any other value (including the
+	 *         unset/no-context case, and a typo) falls back to the curated {@code json} default.
+	 *         Reported in {@link DrugReferenceLoad#getSourceFormat()} so that fallback is visible
+	 *         rather than silent — a mistyped format is one of the ways a deployment ends up parsing
+	 *         a dataset with the wrong parser and loading nothing.
 	 */
-	private DrugReferenceSource source() {
-		if (source != null) {
-			return source;
+	private static String effectiveFormat(String configuredFormat) {
+		if (ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC.equalsIgnoreCase(configuredFormat)) {
+			return ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC;
 		}
-		String format = ChartSearchAiUtils.getStringGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT,
-				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
-		if (ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC.equalsIgnoreCase(format)) {
+		if (ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER.equalsIgnoreCase(configuredFormat)) {
+			return ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER;
+		}
+		return ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT;
+	}
+
+	/**
+	 * @return the adapter for an {@link #effectiveFormat(String)}: {@code atc} →
+	 *         {@link AtcDrugReferenceSource}, {@code ddinter} → {@link DdiDrugReferenceSource}, else
+	 *         the curated {@link JsonDrugReferenceSource}.
+	 */
+	private static DrugReferenceSource sourceFor(String effectiveFormat) {
+		if (ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC.equals(effectiveFormat)) {
 			return new AtcDrugReferenceSource();
 		}
-		if (ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER.equalsIgnoreCase(format)) {
+		if (ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER.equals(effectiveFormat)) {
 			return new DdiDrugReferenceSource();
 		}
 		return new JsonDrugReferenceSource();
 	}
 
-	/** Test seam: inject a known source, bypassing the format GP. */
+	/**
+	 * Test seam: inject a known source, bypassing the format GP. {@link #getLoadStatus()} still
+	 * reports the format the GP selects, which then describes the adapter that WOULD have been used
+	 * rather than the injected one — production never injects a source. The origin reads {@code none}
+	 * for the same reason: an injected source tracks none, so it is the one case where {@code none}
+	 * accompanies a non-zero entry count instead of meaning nothing could be read.
+	 */
 	void setSource(DrugReferenceSource source) {
 		this.source = source;
 	}
@@ -302,6 +390,11 @@ public class DrugReferenceService {
 	 * (an ATC-only dataset really is classification-only, which is what the ADR Decision 24
 	 * boundary tests assert). Tests that want groups set them via
 	 * {@link #setCrossReactivityGroups} afterwards.
+	 *
+	 * <p>No load happens, so {@link #getLoadStatus()} keeps reporting
+	 * {@link DrugReferenceLoad#notLoaded()} for a service seeded this way — the retained outcome
+	 * describes a load, and there was none. It is the one path on which the status and the entries in
+	 * use are not two views of the same event; production never seeds entries.
 	 */
 	void setEntries(List<DrugReference> entries) {
 		this.entries = entries == null ? Collections.<DrugReference> emptyList()

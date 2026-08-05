@@ -107,11 +107,20 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	private static final Pattern RESIDUAL_FIELD_MARKER = Pattern
 			.compile("^\\s*[A-Z]{2,}(?: [A-Z]{2,}){0,5}:\\s*");
 
+	private volatile String lastLoadOrigin;
+
 	@Override
 	public List<DrugReference> load() {
-		return ReferenceDataFiles.loadWithClasspathFallback(
+		ReferenceDataFiles.Loaded<DrugReference> loaded = ReferenceDataFiles.loadWithClasspathFallback(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, CLASSPATH_DEFAULT,
 				"DDInter drug-reference entries", DdiDrugReferenceSource::parse);
+		lastLoadOrigin = loaded.getOrigin();
+		return loaded.getItems();
+	}
+
+	@Override
+	public String lastLoadOrigin() {
+		return lastLoadOrigin;
 	}
 
 	/**

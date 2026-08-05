@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.InputStream;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -54,13 +53,11 @@ public class DrugSafetyChipLabelTest {
 	public void routeVariantNamesAreNotCollapsedIntoTheSharedGeneric() throws Exception {
 		// The lidocaine variants all share rxnorm "lidocaine"; their suffixed display names
 		// contain it, so no synonym is appended and the variants stay distinguishable.
-		try (InputStream in = DrugSafetyChipLabelTest.class.getClassLoader()
-				.getResourceAsStream("chartsearchai-test/ddi-rxcui-collision.json")) {
-			List<DrugReference> entries = DdiDrugReferenceSource.parse(in);
-			for (DrugReference entry : entries) {
-				assertNull(entry.getGenericName(),
-						entry.getName() + " contains its generic and must not gain a synonym");
-			}
+		List<DrugReference> entries = DrugReferenceTestSupport
+				.ddiFixtureEntries("chartsearchai-test/ddi-rxcui-collision.json");
+		for (DrugReference entry : entries) {
+			assertNull(entry.getGenericName(),
+					entry.getName() + " contains its generic and must not gain a synonym");
 		}
 	}
 

@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -201,17 +200,11 @@ public class DdiDrugReferenceSourceTest {
 				"warfarin's aspirin interaction should fire against an active order named Aspirin");
 	}
 
-	/**
-	 * Entries parsed from a DDInter test fixture by the real {@link DdiDrugReferenceSource#parse}.
-	 * Deliberately not named {@code fixtureEntries}: {@link DrugReferenceTestSupport} already owns
-	 * that name bound to {@link JsonDrugReferenceSource#parse}, a different parser.
-	 */
+	/** Entries parsed from a DDInter test fixture by the real {@link DdiDrugReferenceSource#parse} —
+	 *  the shared loader, so the five test files that need one cannot drift apart on how a fixture
+	 *  is opened or on whether a missing resource fails loudly. */
 	private static List<DrugReference> ddiFixtureEntries(String classpathResource) throws Exception {
-		try (InputStream in = DdiDrugReferenceSourceTest.class.getClassLoader()
-				.getResourceAsStream(classpathResource)) {
-			assertNotNull(in, classpathResource + " should be on the test classpath");
-			return DdiDrugReferenceSource.parse(in);
-		}
+		return DrugReferenceTestSupport.ddiFixtureEntries(classpathResource);
 	}
 
 	/**

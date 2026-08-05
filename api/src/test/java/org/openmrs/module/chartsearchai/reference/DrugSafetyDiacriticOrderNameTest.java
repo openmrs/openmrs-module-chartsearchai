@@ -11,11 +11,9 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
 
@@ -85,12 +83,13 @@ public class DrugSafetyDiacriticOrderNameTest {
 	private static final String QUINAPRIL_ANSWER = "Quinapril could be started with monitoring.";
 
 	private DrugSafetyValidator validator() throws IOException {
-		try (InputStream in = DrugSafetyDiacriticOrderNameTest.class.getClassLoader()
-				.getResourceAsStream(DIACRITIC_SLICE)) {
-			assertNotNull(in, DIACRITIC_SLICE + " should be on the test classpath");
-			return DrugReferenceTestSupport
-					.validator(DrugReferenceTestSupport.serviceWith(DdiDrugReferenceSource.parse(in)));
-		}
+		return DrugReferenceTestSupport.validator(diacriticService());
+	}
+
+	/** The slice behind a service, through the shared DDInter fixture loader. */
+	private static DrugReferenceService diacriticService() throws IOException {
+		return DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(DIACRITIC_SLICE));
 	}
 
 	/**
@@ -259,12 +258,7 @@ public class DrugSafetyDiacriticOrderNameTest {
 		// 3.7.1 standalone. What a missed match costs here is not a missing chip but a spurious
 		// record: the reconciliation would call a substantiated order unrepresented and inject a
 		// second citable line for the one prescription (issue #118).
-		DrugReferenceService service;
-		try (InputStream in = DrugSafetyDiacriticOrderNameTest.class.getClassLoader()
-				.getResourceAsStream(DIACRITIC_SLICE)) {
-			assertNotNull(in, DIACRITIC_SLICE + " should be on the test classpath");
-			service = DrugReferenceTestSupport.serviceWith(DdiDrugReferenceSource.parse(in));
-		}
+		DrugReferenceService service = diacriticService();
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
 		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,

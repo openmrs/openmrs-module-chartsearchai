@@ -99,21 +99,19 @@ public class DrugSafetyInteractionSeverityFloorTest {
 		// rated rule chip is floor-filtered; the duplicate-therapy class chip survives — the
 		// pair yields exactly ONE warning, and it is the informative one (this is also what
 		// trims #88's rule+class double chip for Unknown-severity same-class pairs).
-		try (java.io.InputStream in = DrugSafetyInteractionSeverityFloorTest.class.getClassLoader()
-				.getResourceAsStream("chartsearchai-test/ddi-severity-floor-pair.json")) {
-			DrugSafetyValidator validator = DrugReferenceTestSupport
-					.validator(DrugReferenceTestSupport.serviceWith(DdiDrugReferenceSource.parse(in)));
-			List<SafetyWarning> warnings = validator.validate(
-					"Lisinopril could be added.", "Can we add lisinopril?",
-					DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Ramipril"),
-							DrugReferenceTestSupport.set("C09AA05"), null, null));
+		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport
+						.ddiFixtureEntries("chartsearchai-test/ddi-severity-floor-pair.json")));
+		List<SafetyWarning> warnings = validator.validate(
+				"Lisinopril could be added.", "Can we add lisinopril?",
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Ramipril"),
+						DrugReferenceTestSupport.set("C09AA05"), null, null));
 
-			assertEquals(1, warnings.size(),
-					"the pair must yield exactly one warning (rule filtered, class kept), was: " + warnings);
-			assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
-					"Lisinopril", "same ATC class"),
-					"the surviving warning must be the duplicate-therapy class chip, was: " + warnings);
-		}
+		assertEquals(1, warnings.size(),
+				"the pair must yield exactly one warning (rule filtered, class kept), was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Lisinopril", "same ATC class"),
+				"the surviving warning must be the duplicate-therapy class chip, was: " + warnings);
 	}
 
 	@Test

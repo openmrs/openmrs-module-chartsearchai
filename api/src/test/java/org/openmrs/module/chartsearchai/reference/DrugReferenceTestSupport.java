@@ -229,6 +229,12 @@ public final class DrugReferenceTestSupport {
 	 * {@link DdiDrugReferenceSource#parse} — the DDInter counterpart of {@link #fixtureEntries},
 	 * which is bound to {@link JsonDrugReferenceSource#parse}, a different parser over a different
 	 * schema. Named for its parser rather than sharing that name for exactly that reason.
+	 *
+	 * <p>The one place the missing-resource guard lives, which is why it is shared rather than
+	 * re-opened per test file: three of the hand-rolled copies this replaced fed
+	 * {@code getResourceAsStream}'s result straight into the parser, so a fixture absent from the
+	 * test classpath failed with Jackson's {@code IllegalArgumentException: argument "in" is null}
+	 * — a message that names neither the resource nor the test that wanted it.
 	 */
 	static List<DrugReference> ddiFixtureEntries(String classpathResource) throws IOException {
 		try (InputStream in = DrugReferenceTestSupport.class.getClassLoader()

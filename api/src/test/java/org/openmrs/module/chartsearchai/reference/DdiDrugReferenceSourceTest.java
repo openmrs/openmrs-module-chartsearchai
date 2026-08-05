@@ -30,8 +30,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * production default — so these run the real load/parse/inject/validate paths against real data.
  *
  * <p>The tests that need a KB slice the 60-mechanism bundled sample does not contain feed the real
- * {@link DdiDrugReferenceSource#parse} a fixture instead (see {@link #ddiFixtureEntries}); the
- * pipeline exercised is the same, only the dataset is narrowed.
+ * {@link DdiDrugReferenceSource#parse} a fixture instead (through the shared
+ * {@link DrugReferenceTestSupport#ddiFixtureEntries}); the pipeline exercised is the same, only the
+ * dataset is narrowed.
  *
  * <p>Not only parser behaviour: six of these cases specify {@link DrugSafetyValidator}'s
  * one-chip-per-(drug, active order) collapse of issue #115, because the shape that motivates it —
@@ -200,23 +201,16 @@ public class DdiDrugReferenceSourceTest {
 				"warfarin's aspirin interaction should fire against an active order named Aspirin");
 	}
 
-	/** Entries parsed from a DDInter test fixture by the real {@link DdiDrugReferenceSource#parse} —
-	 *  the shared loader, so the five test files that need one cannot drift apart on how a fixture
-	 *  is opened or on whether a missing resource fails loudly. */
-	private static List<DrugReference> ddiFixtureEntries(String classpathResource) throws Exception {
-		return DrugReferenceTestSupport.ddiFixtureEntries(classpathResource);
-	}
-
 	/**
 	 * The real shared-{@code rxnorm_name} slices — the four Dexamethasone route variants, the two
 	 * Sirolimus formulations, the two Iron products and their partners, with their own mechanism
 	 * texts — parsed by the real production parser.
 	 */
 	private static List<DrugReference> routeVariantEntries() throws Exception {
-		return ddiFixtureEntries(ROUTE_VARIANT_FIXTURE);
+		return DrugReferenceTestSupport.ddiFixtureEntries(ROUTE_VARIANT_FIXTURE);
 	}
 	private static List<DrugReference> markerFixtureEntries() throws Exception {
-		return ddiFixtureEntries(MARKER_FIXTURE);
+		return DrugReferenceTestSupport.ddiFixtureEntries(MARKER_FIXTURE);
 	}
 
 	private static DrugReference.Interaction interaction(List<DrugReference> entries, String drug, String token) {
@@ -503,7 +497,8 @@ public class DdiDrugReferenceSourceTest {
 		// Real slice: three Lidocaine route variants all map to RxCUI 6387. The injector dedups
 		// citations by id, so the rxcui is used only when unique — else the DDInter id — keeping
 		// the three entries distinct rather than collapsing to one.
-		List<DrugReference> entries = ddiFixtureEntries("chartsearchai-test/ddi-rxcui-collision.json");
+		List<DrugReference> entries = DrugReferenceTestSupport
+				.ddiFixtureEntries("chartsearchai-test/ddi-rxcui-collision.json");
 		assertEquals(3, entries.size(), "fixture has three Lidocaine variants");
 		long distinctIds = entries.stream().map(DrugReference::getId).distinct().count();
 		assertEquals(3, distinctIds, "variants sharing a RxCUI must not collapse to one id");

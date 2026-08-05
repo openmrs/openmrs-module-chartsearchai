@@ -45,10 +45,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * turns every chip into a citable pre-answer record) nothing in the prompt either.
  *
  * <p><b>The fixture</b> is a verbatim excerpt of that dataset — {@code Ledipasvir} and {@code
- * Leucovorin}, two of the 444, plus {@code Ciprofloxacin} (J01MA02) and {@code Levofloxacin}
- * (J01MA12) as a real same-subgroup pair — parsed by the real {@link DdiDrugReferenceSource}. The
+ * Leucovorin}, two of the 444, plus {@code Ciprofloxacin} and {@code Levofloxacin} as a real
+ * classified pair — parsed by the real {@link DdiDrugReferenceSource}. The
  * bundled sample cannot host these cases: all 16 of its drugs carry ATC codes, which is why no
  * existing test covered a direct allergy to an unclassified drug.
+ *
+ * <p>That pair shares <em>two</em> level-4 subgroups, not one — {@code J01MA} (J01MA02/J01MA12,
+ * fluoroquinolone antibacterials) and {@code S01AE} (S01AE03/S01AE05, ophthalmic
+ * fluoroquinolones) — because DDInter files both substances under several ATC codes. {@code
+ * sharedClass} returns the first of the allergen's subgroups that the drug in play also carries, so
+ * the case below asserting {@code (J01MA)} is pinning the dataset's own code order as well as the
+ * match; a KB refresh that reordered Ciprofloxacin's {@code atc} array would report {@code S01AE}
+ * with the behaviour unchanged.
  *
  * <p>The curated cross-reactivity groups are loaded in every case here, deliberately: the identity
  * chip has to appear for an entry the real curated data genuinely cannot classify, not merely for
@@ -58,23 +66,36 @@ public class DirectAllergyContraindicationTest {
 
 	private static final String FIXTURE = "chartsearchai-test/ddi-unclassified-allergen.json";
 
+	/**
+	 * The route-variant slice of the same dataset, for the one shape {@link #FIXTURE} cannot pose: an
+	 * ATC-less substance the dataset files as SEVERAL entries. Its two {@code Iron} rows
+	 * ({@code DDInter975}, {@code DDInter2187 Iron (bisglycinate)}) are the full KB's only two
+	 * {@code rxnorm_name=iron} entries, both verbatim and both carrying no ATC code.
+	 */
+	private static final String ROUTE_VARIANT_FIXTURE = "chartsearchai-test/ddi-route-variants.json";
+
 	/** The ATC-less entry the patient is allergic to; {@code Leucovorin} is the second one. */
 	private static final String UNCLASSIFIED = "Ledipasvir";
 
 	@Test
-	public void theFixtureEntryReallyCarriesNoClassificationData() throws IOException {
+	public void theFixtureEntriesReallyCarryNoClassificationData() throws IOException {
 		// Precondition, through the real parser and the real curated groups: if a KB refresh ever gave
-		// Ledipasvir an ATC code, every case below would keep passing while testing nothing.
+		// one of these entries an ATC code, the cases below would keep passing while testing the
+		// CLASSIFIED path under names that say "unclassified". Asserted for BOTH ATC-less entries, not
+		// only the headline one: Leucovorin is what two of those cases actually use, and DDInter omits
+		// an ATC code (V03AF03, calcium folinate) that a refresh could plausibly add.
 		DrugReferenceService service = fixtureService();
-		DrugReference ledipasvir = service.lookupByToken(UNCLASSIFIED);
-		assertNotNull(ledipasvir, "the fixture must carry an entry the allergy token resolves to");
-		assertTrue(ledipasvir.normalizedAtcCodes().isEmpty(),
-				"the fixture entry must carry no ATC codes, was: " + ledipasvir.normalizedAtcCodes());
-		assertTrue(ledipasvir.atcSubgroups().isEmpty(), "and therefore no ATC level-4 subgroup");
-		assertTrue(CrossReactivityGroup.groupsOf(ledipasvir, service.getCrossReactivityGroups()).isEmpty(),
-				"and no curated cross-reactivity group, since group membership is by ATC prefix");
-		assertTrue(ledipasvir.getContraindications().isEmpty(),
-				"and no curated contraindication rule, so the rule arm cannot cover it either");
+		for (String token : new String[] { UNCLASSIFIED, "Leucovorin" }) {
+			DrugReference entry = service.lookupByToken(token);
+			assertNotNull(entry, token + ": the fixture must carry an entry the allergy token resolves to");
+			assertTrue(entry.normalizedAtcCodes().isEmpty(),
+					token + " must carry no ATC codes, was: " + entry.normalizedAtcCodes());
+			assertTrue(entry.atcSubgroups().isEmpty(), token + ": and therefore no ATC level-4 subgroup");
+			assertTrue(CrossReactivityGroup.groupsOf(entry, service.getCrossReactivityGroups()).isEmpty(),
+					token + ": and no curated cross-reactivity group, since group membership is by ATC prefix");
+			assertTrue(entry.getContraindications().isEmpty(),
+					token + ": and no curated contraindication rule, so the rule arm cannot cover it either");
+		}
 	}
 
 	@Test
@@ -135,11 +156,38 @@ public class DirectAllergyContraindicationTest {
 	}
 
 	@Test
+	public void anEarlierUnrelatedAllergenDoesNotHideTheDirectOne() throws IOException {
+		// The guard is a per-allergen SKIP, not an exit — and that is the whole of its new placement.
+		// A chart carrying two distinct drug allergies reaches this arm once per allergy token, in the
+		// chart's own order; the classified one comes first here, so it is the one that meets the
+		// classification guard. If that guard left the METHOD instead of the iteration, the direct
+		// allergy behind it would never be looked at and issue #135 would be reinstated for exactly
+		// the patients most likely to hit it — the ones with more than one recorded drug allergy.
+		//
+		// The absences asserted by the two cases below cannot catch that: they pass a single allergen,
+		// so nothing is queued behind the guard. Measured through this same path: 1 chip on this
+		// build, 0 with the guard's `continue` changed to `return` (which still sits after the identity
+		// check, so it reads as correct), and 0 pre-fix.
+		List<SafetyWarning> warnings = fixtureValidator().validate(
+				"", "Is it safe to give her ledipasvir?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Ciprofloxacin", UNCLASSIFIED), null));
+
+		assertEquals(1, warnings.size(),
+				"the allergen listed after an unrelated one must still be compared, was: " + warnings);
+		assertEquals("The patient has a recorded allergy to Ledipasvir.", warnings.get(0).getDetail());
+	}
+
+	@Test
 	public void aClassifiedAllergenRaisesNothingForAnUnclassifiedDrug() throws IOException {
 		// The guard's own contract, which the fix keeps: the two CLASS comparisons still need
 		// classification data. A Ciprofloxacin (J01MA02) allergy says nothing about an entry carrying
 		// no ATC code — there is no subgroup and no group to share — so the arm must stay silent
 		// rather than warn about every allergy once the loop is reachable.
+		//
+		// What this pins is the REQUIREMENT, not the guard statement: with the guard deleted outright
+		// the assertion still holds, because both comparisons are no-ops on empty sets (measured — the
+		// whole suite stays green). The guard's placement is pinned separately, by the case above.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is it safe to give her ledipasvir?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
@@ -194,6 +242,39 @@ public class DirectAllergyContraindicationTest {
 		assertEquals(1, warnings.size(), "identity and a class match must not both fire, was: " + warnings);
 		assertEquals("The patient has a recorded allergy to Ciprofloxacin.", warnings.get(0).getDetail(),
 				"and the surviving chip is the more specific one");
+	}
+
+	@Test
+	public void anUnclassifiedAllergenWithASiblingRouteVariantStillWarnsOnce() throws IOException {
+		// One question can put SEVERAL entries in play, because DDInter files one substance as several
+		// route/formulation rows sharing an rxnorm_name — 142 such groups in the full KB, 28 of them
+		// entirely ATC-less. Only one of those rows is the resolved allergen, so the others reach the
+		// per-allergen loop as a DIFFERENT reference: they must fall through the in-loop classification
+		// guard rather than each add a chip. Measured through this same path: 0 chips before the fix
+		// (the whole arm returned early for both rows), 1 after.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(ROUTE_VARIANT_FIXTURE));
+		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
+
+		// Precondition, through the production matcher the validator itself uses: the question really
+		// does resolve to BOTH rows, so the case is the multi-entry one and not a single-entry retest.
+		List<DrugReference> inPlay = service.findByQuery("Is it safe to give her iron?");
+		assertEquals(2, inPlay.size(), "the question must put both Iron rows in play, was: " + inPlay);
+		for (DrugReference entry : inPlay) {
+			assertTrue(entry.normalizedAtcCodes().isEmpty(),
+					entry.getName() + " must carry no ATC codes, was: " + entry.normalizedAtcCodes());
+		}
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate(
+				"", "Is it safe to give her iron?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Iron"), null));
+
+		assertEquals(1, warnings.size(),
+				"a sibling route variant must not add a second chip, was: " + warnings);
+		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, warnings.get(0).getType());
+		assertEquals("The patient has a recorded allergy to Iron.", warnings.get(0).getDetail(),
+				"and the surviving chip is the identity one, about the row the allergy resolved to");
 	}
 
 	/** The real fixture entries behind a service carrying the real curated cross-reactivity groups. */

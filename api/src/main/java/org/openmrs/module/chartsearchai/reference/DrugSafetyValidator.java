@@ -1320,8 +1320,12 @@ public class DrugSafetyValidator {
 		List<DrugReference> orderDrugs = activeOrderEntries(context);
 		List<ScreenedPair> pairs = new ArrayList<ScreenedPair>();
 		Set<List<String>> seenPairs = new LinkedHashSet<List<String>>();
-		// Seeded with the chips the drug-in-play arms already raised, so the screen can add nothing
-		// that merely repeats one of them. The screen's gate reads the QUESTION alone (see the call
+		// Seeded with every chip the arms above already raised, so the screen can add nothing that
+		// merely repeats one of them. Every chip it could repeat comes from a drug-in-play interaction
+		// arm: the contraindication arms — including the active-order one added by #143, which is why
+		// this says "the arms above" rather than naming them — raise TYPE_CONTRAINDICATION, and
+		// chipIdentity leads with the type, so one of those can never match a candidate here.
+		// The screen's gate reads the QUESTION alone (see the call
 		// site — the pre-answer findings pass and the post-answer chips pass must gate identically),
 		// so a drug the ANSWER named can be in play beside it, and then addInteractionWarnings has already
 		// run this very rule over these very orders: measured, an answer naming a subject the screen

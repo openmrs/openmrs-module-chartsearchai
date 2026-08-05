@@ -236,10 +236,14 @@ public class PatientClinicalContext {
 	 *         acid one, and scanning a rule's token across those names would report a patient on urea
 	 *         alone as being on salicylic acid — issue #86's fabricated drug arriving by a new route.
 	 *         Identity asks the same question {@code DrugSafetyValidator.identifies} asks of the
-	 *         reference side, so the two agree about when a rule names a given drug, and it makes this
-	 *         arm provably equal to resolving the rule's token to its partner entries and matching
-	 *         THEIR names against the order name — the formulation issue #136 proposed, at one dataset
-	 *         sweep per pass instead of one per rule.
+	 *         reference side, so the two agree about when a rule names a given drug, and over the
+	 *         order-NAME leg it makes this arm provably equal to resolving the rule's token to its
+	 *         partner entries and matching THEIR names against the order name — the formulation issue
+	 *         #136 proposed, at one dataset sweep per pass instead of one per rule. (Equal, not merely
+	 *         equal in measurement: an entry supplies a name here exactly when the order name resolves
+	 *         it, which is the same predicate that formulation applies to the partner. Where the two
+	 *         differ is the ATC leg, which this one also reaches — an order mapped to an entry's exact
+	 *         level-5 code is that substance, so the entry's names are the patient's names too.)
 	 */
 	boolean hasActiveDrug(String nameToken, String atcCode) {
 		if (nameToken != null && !nameToken.trim().isEmpty()) {

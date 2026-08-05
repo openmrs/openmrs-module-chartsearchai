@@ -101,9 +101,8 @@ public class DrugReferenceService {
 	}
 
 	/**
-	 * Resolve a clinician-entered drug NAME — an allergen as recorded on the chart, a condition
-	 * naming a drug — to a reference entry. Returns the first matching entry in dataset order, or
-	 * null.
+	 * Resolve a clinician-entered drug NAME — an allergen as recorded on the chart — to a reference
+	 * entry. Returns the first matching entry in dataset order, or null.
 	 *
 	 * <p>Through {@link DrugReference#matchesDrugName}, not {@link DrugReference#matchesText}: the
 	 * input is one localized, inflected display name rather than prose, and resolving it with the
@@ -216,11 +215,25 @@ public class DrugReferenceService {
 	 *         per pass rather than one per rule.
 	 */
 	public PatientClinicalContext withReferenceNames(PatientClinicalContext context) {
+		return context == null ? null : withReferenceNames(context, findForActiveOrders(context));
+	}
+
+	/**
+	 * @return as {@link #withReferenceNames(PatientClinicalContext)}, for a caller that has already
+	 *         resolved {@code orderEntries} and needs them itself — which is
+	 *         {@code DrugSafetyValidator.validate}, whose chip grouping and two order-driven arms take
+	 *         the same list. Passing it rather than resolving twice is not only the cheaper of the two:
+	 *         it makes the names this attaches and the subjects those arms screen ONE resolution by
+	 *         construction, so no later change to {@link #findForActiveOrders} can make the context
+	 *         describe a different set of orders than the arms are reading.
+	 */
+	PatientClinicalContext withReferenceNames(PatientClinicalContext context,
+			List<DrugReference> orderEntries) {
 		if (context == null) {
 			return null;
 		}
 		Set<String> names = new LinkedHashSet<String>();
-		for (DrugReference ref : findForActiveOrders(context)) {
+		for (DrugReference ref : orderEntries) {
 			names.addAll(ref.getAliases());
 		}
 		return names.isEmpty() ? context : context.withActiveDrugReferenceNames(names);

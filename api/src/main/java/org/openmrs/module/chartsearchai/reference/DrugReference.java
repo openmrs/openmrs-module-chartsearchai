@@ -281,9 +281,9 @@ public class DrugReference {
 
 	/**
 	 * @return true when this entry names the drug in {@code drugName} — a single clinician-entered
-	 *         drug NAME rather than prose: an active order's display name, an allergen as recorded, a
-	 *         condition naming a drug. Case- and diacritic-insensitive; a null/blank name never
-	 *         matches. Not restricted to lowercased input, unlike {@link #matchesText}.
+	 *         drug NAME rather than prose: an active order's display name, an allergen as recorded.
+	 *         Case- and diacritic-insensitive; a null/blank name never matches. Not restricted to
+	 *         lowercased input, unlike {@link #matchesText}.
 	 *
 	 *         <p><b>Why this exists (issue #147).</b> Such a string reached {@link #matchesText}
 	 *         by default, and the prose rule's symmetric boundary is wrong for it: a localized

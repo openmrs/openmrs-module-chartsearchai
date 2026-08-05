@@ -1,0 +1,243 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.reference;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * One substance, one contraindication chip — however many rows the reference data files it as
+ * (issue #145).
+ *
+ * <p><b>The defect.</b> Both contraindication arms are keyed on a subject ENTRY, and DDInter files
+ * one substance as several route/formulation rows. One clinician-facing string resolves all of them
+ * ({@code findByQuery} and {@code findByDrugName} return every entry whose aliases match), so one
+ * clinical fact became one chip per row. Worse than duplication: only the row
+ * {@link DrugReferenceService#lookupByToken} resolves the allergy to matched by IDENTITY, so its
+ * siblings fell through to the class comparison and the patient was told a substance is
+ * cross-reactive with their allergy to <em>itself</em> — measured live on the 3.7.1 standalone, a
+ * dexamethasone allergy asked about dexamethasone gave 1 identity chip plus 3
+ * "Dexamethasone (nasal/ophthalmic/topical) is in the same ATC class (A01AC) as the patient's allergy
+ * to Dexamethasone" chips. Since issue #110 every chip is also injected as a citable pre-answer
+ * record, so each duplicate reached the prompt too.
+ *
+ * <p><b>What the grouping key has to get right</b>, and why {@code rxnorm_name} equality alone is not
+ * it. The reference data's own substance name (equivalently its {@code rxcui} — measured over the
+ * shipped 19 MB KB, the two partition the 2283 entries identically: 142 families, 332 entries) is
+ * what the route variants share, but it is also shared by pairs of genuinely DIFFERENT substances:
+ * {@code Omeprazole}/{@code Esomeprazole} (both {@code rxnorm_name=esomeprazole},
+ * {@code rxcui=283742}, both {@code A02BC05}), {@code Amphetamine}/{@code Dextroamphetamine},
+ * {@code Fenfluramine}/{@code Dexfenfluramine}, {@code Gabapentin}/{@code Gabapentin enacarbil},
+ * {@code Netupitant}/{@code Fosnetupitant}, {@code Ketoconazole}/{@code Levoketoconazole},
+ * {@code Fenofibrate}/{@code Fenofibric acid}, {@code Atropine}/{@code Hyoscyamine} — every one of
+ * them the {@code enalapril}/{@code enalaprilat} shape issue #121 decided must stay two chips. So the
+ * key is the substance name AND the display-name stem (the name with trailing parenthesized
+ * qualifiers removed): see {@link DrugReference#substanceKey()}, which records the measurement for
+ * both halves.
+ *
+ * <p>Both shapes are asserted here against slices taken verbatim from the shipped KB, through the
+ * real {@link DdiDrugReferenceSource} parser and the real {@link DrugSafetyValidator#validate}
+ * entry points.
+ */
+public class ContraindicationRouteVariantTest {
+
+	/**
+	 * Verbatim KB rows, in KB order: the two PPI entries the KB files under one substance name
+	 * ({@code Omeprazole} + {@code Esomeprazole}) with a third PPI to be allergic to
+	 * ({@code Pantoprazole}, {@code A02BC02}, so the shared level-4 subgroup is {@code A02BC}), and
+	 * the four {@code hydrocortisone} rows with {@code Dexamethasone} to be allergic to (both carry
+	 * {@code A01AC}). Its {@code interactions} array is empty, deliberately: this file asserts
+	 * contraindication chip COUNTS, and an interaction chip in the same list would have to be filtered
+	 * out of every assertion here.
+	 */
+	private static final String FIXTURE = "chartsearchai-test/ddi-contra-route-variants.json";
+
+	/** A question that resolves no reference drug and is not an interaction screen, so the only arm
+	 *  that can chip is the order-driven one ({@code addActiveOrderContraindications}). */
+	private static final String NO_DRUG_QUESTION = "What are her current medications?";
+
+	@Test
+	public void theFixturesReallyCarryTheTwoShapesUnderTest() throws IOException {
+		// Preconditions, through the production matchers the validator itself uses. Without these the
+		// cases below could pass while resolving one entry each — i.e. while testing nothing.
+		DrugReferenceService ppi = fixtureService(FIXTURE);
+		List<DrugReference> esomeprazole = ppi.findByQuery("Is it safe to give esomeprazole?");
+		assertEquals(2, esomeprazole.size(),
+				"one PPI word must resolve BOTH rows the KB files under it, was: " + names(esomeprazole));
+		assertEquals(esomeprazole.get(0).normalizedAtcCodes(), esomeprazole.get(1).normalizedAtcCodes(),
+				"and their ATC codes must be identical, so no class comparison can tell them apart");
+		assertFalse(esomeprazole.get(0).displayLabel().equals(esomeprazole.get(1).displayLabel()),
+				"while their labels differ — they are two substances, not two routes of one");
+
+		List<DrugReference> hydrocortisone = ppi.findByQuery("Is hydrocortisone safe for her?");
+		assertEquals(4, hydrocortisone.size(),
+				"one order word must resolve all four hydrocortisone rows, was: " + names(hydrocortisone));
+
+		DrugReferenceService variants = fixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
+		List<DrugReference> dexamethasone = variants.findByQuery("Is it safe to give dexamethasone?");
+		assertEquals(4, dexamethasone.size(),
+				"and one question word must resolve all four dexamethasone rows, was: "
+						+ names(dexamethasone));
+		DrugReference allergen = variants.lookupByToken("Dexamethasone");
+		assertNotNull(allergen, "the allergy must resolve to one of them");
+		assertEquals("Dexamethasone", allergen.displayLabel(),
+				"and it is the base row, so the identity chip is the one that must survive");
+	}
+
+	@Test
+	public void anAllergyToADrugFiledAsFourRouteVariantsRaisesOneChip() throws IOException {
+		// THE case, and Richard Jones's live shape: a recorded dexamethasone allergy, asked about
+		// dexamethasone. Four rows are in play; three of them are not the row the allergy resolved to,
+		// so before this fix they each reported the substance as cross-reactive with itself.
+		List<SafetyWarning> warnings = fixtureValidator(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS)
+				.validate("", "Is it safe to give dexamethasone?",
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Dexamethasone"), null));
+
+		assertEquals(1, warnings.size(),
+				"four route variants of one substance are one clinical fact, was: " + warnings);
+		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, warnings.get(0).getType());
+		assertEquals("Dexamethasone", warnings.get(0).getDrug());
+		assertEquals("The patient has a recorded allergy to Dexamethasone.", warnings.get(0).getDetail(),
+				"and the surviving chip is the IDENTITY one — the strongest statement about the "
+						+ "substance, not a sibling's cross-reactivity hedge");
+	}
+
+	@Test
+	public void noSurvivingChipReportsASubstanceAsCrossReactiveWithItself() throws IOException {
+		// The same call, asserted on content rather than on count: whatever the collapse keeps, nothing
+		// may say "X is in the same ATC class as the patient's allergy to X". A collapse that merely
+		// picked one of the four chips at random would satisfy the count above and fail this.
+		List<SafetyWarning> warnings = fixtureValidator(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS)
+				.validate("", "Is it safe to give dexamethasone?",
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Dexamethasone"), null));
+
+		for (SafetyWarning warning : warnings) {
+			assertFalse(warning.getDetail().contains("same ATC class")
+					&& warning.getDetail().contains("allergy to Dexamethasone"),
+					"a dexamethasone row must not be reported as cross-reactive with the patient's "
+							+ "dexamethasone allergy: " + warning.getDetail());
+		}
+	}
+
+	@Test
+	public void routeVariantsOfOneActiveOrderRaiseOneChipPerSubstance() throws IOException {
+		// Sarah Taylor's live shape, on the ORDER-DRIVEN arm (issue #143's), which the question-driven
+		// arm's collapse cannot reach: the patient is on one hydrocortisone order and allergic to
+		// dexamethasone, and the question names no drug at all. Four rows resolve from that one order
+		// name and all four share subgroup A01AC with the allergen, so before this fix it was four
+		// chips.
+		//
+		// TWO chips, not one: `Hydrocortisone butyrate` is an ester whose display name is not the
+		// family stem plus a qualifier, so the key deliberately keeps it separate — the conservative
+		// direction, and the same refusal that keeps Omeprazole and Esomeprazole apart below.
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", NO_DRUG_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Hydrocortisone Injection vial 100mg"), null,
+						DrugReferenceTestSupport.set("Dexamethasone"), null));
+
+		assertEquals(2, warnings.size(),
+				"three route variants collapse and the ester stays its own chip, was: " + warnings);
+		assertEquals("Hydrocortisone is in the same ATC class (A01AC) as the patient's allergy to"
+				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail(),
+				"the surviving variant chip is the dataset's first row, named by displayLabel()");
+		assertEquals("Hydrocortisone butyrate is in the same ATC class (A01AC) as the patient's allergy"
+				+ " to Dexamethasone — possible cross-reactivity", warnings.get(1).getDetail());
+	}
+
+	@Test
+	public void twoDistinctSubstancesTheKbFilesUnderOneSubstanceNameStayTwoChips() throws IOException {
+		// The must-NOT-collapse case, and the sharp edge of the whole key: Omeprazole and Esomeprazole
+		// carry the same rxnorm_name, the same RxCUI and the same single ATC code, so every key made of
+		// reference-data identity alone merges them — and they are two substances, exactly as
+		// enalapril and enalaprilat are (issue #121). One PPI word puts both in play, and a Pantoprazole
+		// allergy is class-related to both, so a merging key would drop one of two real chips.
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
+				"Is it safe to give esomeprazole?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Pantoprazole"), null));
+
+		assertEquals(2, warnings.size(),
+				"two distinct substances sharing one substance name keep their own chips, was: "
+						+ warnings);
+		assertEquals("Omeprazole is in the same ATC class (A02BC) as the patient's allergy to"
+				+ " Pantoprazole — possible cross-reactivity", warnings.get(0).getDetail());
+		assertEquals("Esomeprazole is in the same ATC class (A02BC) as the patient's allergy to"
+				+ " Pantoprazole — possible cross-reactivity", warnings.get(1).getDetail());
+	}
+
+	@Test
+	public void aPrescribedRouteVariantFamilyTheyAreAllergicToRaisesOneChip() throws IOException {
+		// Richard Jones exactly: the dexamethasone allergy AND a dexamethasone order, asked about
+		// dexamethasone. The four rows are in play, so the order-driven arm skips them all and the
+		// question-driven arm owns the finding — one chip, and the identity one. Both arms feeding one
+		// ledger is what makes this hold: a collapse living inside a single arm would still emit the
+		// order arm's chips beside the question arm's.
+		List<SafetyWarning> warnings = fixtureValidator(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS)
+				.validate("", "Is it safe to give dexamethasone?",
+						DrugReferenceTestSupport.ctx(60, null,
+								DrugReferenceTestSupport.set("Dexamethasone: 4.0 Milligram Oral Once daily"),
+								null, DrugReferenceTestSupport.set("Dexamethasone"), null));
+
+		assertEquals(1, warnings.size(), "one substance, one chip, whichever arm reaches it, was: "
+				+ warnings);
+		assertEquals("The patient has a recorded allergy to Dexamethasone.",
+				warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void eachCollapsedChipIsInjectedIntoThePromptExactlyOnce() throws IOException {
+		// The other half of a chip (issue #110): every chip is injected as a numbered, citable
+		// safety-finding record, so N duplicate chips were N near-identical records in the context
+		// window as well. Real injector wired to the real validator, so the record count follows the
+		// chips rather than being asserted separately.
+		DrugReferenceService service = fixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
+		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
+		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
+
+		List<?> findings = DrugReferenceTestSupport.injectedFindings(injector.injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Dexamethasone"), null),
+				"Is it safe to give dexamethasone?"));
+
+		assertEquals(1, findings.size(),
+				"one chip is one citable record, not one per route variant, was: " + findings);
+	}
+
+	private static List<String> names(List<DrugReference> entries) {
+		List<String> out = new ArrayList<String>();
+		for (DrugReference entry : entries) {
+			out.add(entry.getName());
+		}
+		return out;
+	}
+
+	/** The real fixture entries behind a service carrying the real curated cross-reactivity groups —
+	 *  so the class comparisons run against the shipped curated data, not against groups a test
+	 *  pinned empty. */
+	private static DrugReferenceService fixtureService(String fixture) throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(fixture));
+		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
+		return service;
+	}
+
+	private static DrugSafetyValidator fixtureValidator(String fixture) throws IOException {
+		return DrugReferenceTestSupport.validator(fixtureService(fixture));
+	}
+}

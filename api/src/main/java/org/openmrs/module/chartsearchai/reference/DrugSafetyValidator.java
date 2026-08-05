@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -70,7 +71,11 @@ import org.springframework.stereotype.Service;
  *       condition: by a hand-authored rule, by being the same drug as — or sharing an ATC
  *       chemical subgroup with — a recorded allergy (cross-reactivity reasoning), or —
  *       failing both — by sharing a curated {@link CrossReactivityGroup} with the allergy
- *       (cross-branch cross-reactivity). These same two checks additionally run over the patient's
+ *       (cross-branch cross-reactivity). One warning per (SUBSTANCE, recorded finding), not per
+ *       reference row: a dataset that files one substance as several route or formulation rows put
+ *       every one of them in play from one clinician-facing word, and each raised its own chip — the
+ *       siblings of the row the allergy resolved to reporting the substance as cross-reactive with
+ *       itself ({@link ContraindicationChips}, issue #145). These same two checks additionally run over the patient's
  *       OWN ACTIVE ORDERS, whatever the question and the answer name — "is the patient allergic to
  *       something they are taking?" is a fact about their chart, and the drug-in-play framing above
  *       could not ask it (see {@link #addActiveOrderContraindications}, issue #143).</li>
@@ -303,10 +308,17 @@ public class DrugSafetyValidator {
 		// prose, or prose with no chip, which is the exact defect the shared floor exists to prevent.
 		int severityFloor = configuredSeverityFloor();
 
+		// One ledger for every contraindication chip this pass raises, across BOTH arms and both of
+		// their call sites (the drug-in-play loop below and the order-driven arm after it) — see
+		// ContraindicationChips. It has to span them: one substance's route variants can arrive as
+		// several drugs in play, as several entries of one active order, or as some of each, and a
+		// collapse living inside one arm would still let the other emit the siblings.
+		ContraindicationChips contraindications = new ContraindicationChips(warnings);
+
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
-				addContraindications(warnings, ref, context);
-				addAllergyContraindications(warnings, ref, context);
+				addContraindications(contraindications, ref, context);
+				addAllergyContraindications(contraindications, ref, context);
 			}
 			if (warnInteractions) {
 				// One call, not one per arm: the rule arm and the class arm can both raise a chip about
@@ -327,7 +339,7 @@ public class DrugSafetyValidator {
 		// list rather than a finding AGAINST her records, they are the two that grow quadratically, and
 		// they are the two a cap can truncate (maxPairChips, #131).
 		if (warnContra) {
-			addActiveOrderContraindications(warnings, inPlay, context, orderEntries);
+			addActiveOrderContraindications(contraindications, inPlay, context, orderEntries);
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
@@ -566,7 +578,120 @@ public class DrugSafetyValidator {
 		return false;
 	}
 
-	private void addContraindications(List<SafetyWarning> warnings, DrugReference ref,
+	/**
+	 * Every contraindication chip one {@code validate} pass raises: <b>at most one per (substance,
+	 * recorded finding)</b>, whatever arm reaches it and however many reference rows the loaded
+	 * dataset files that substance as (issue #145).
+	 *
+	 * <p><b>The defect.</b> Both contraindication arms are keyed on a subject ENTRY, and DDInter files
+	 * one substance as several route/formulation rows. One clinician-facing string resolves all of them
+	 * — {@link DrugReferenceService#findByQuery} and {@link DrugReferenceService#findByDrugName} return
+	 * every entry whose aliases match — so one clinical fact became one chip per row. Measured live on
+	 * the 3.7.1 standalone: a recorded dexamethasone allergy asked about dexamethasone gave FOUR chips,
+	 * and only the row {@link DrugReferenceService#lookupByToken} resolved the allergy to matched by
+	 * identity, so the other three fell through to the class comparison and reported the substance as
+	 * cross-reactive with the patient's allergy to <em>itself</em> ("Dexamethasone (nasal) is in the
+	 * same ATC class (A01AC) as the patient's allergy to Dexamethasone"). Since issue #110 every chip
+	 * is also injected as a citable pre-answer record, so each duplicate reached the prompt as well.
+	 *
+	 * <p><b>Why a ledger rather than a filter over the finished chip list.</b> Three reasons, and the
+	 * first is the decisive one. (1) The sibling's chip is not merely a duplicate, it is WRONG — the
+	 * true statement about that substance is the identity one — so the collapse has to choose which
+	 * relationship survives, and by the time only rendered text is left the reasons are gone. (2) Those
+	 * chips differ in text (each names its own route), so {@link #chipIdentity}'s exact-repeat key
+	 * cannot see them; recognising "differs only in a route qualifier" from the strings alone means
+	 * pattern-matching a display label, which is the mistake issue #148 had to undo. (3) The two arms
+	 * run at two call sites — the drug-in-play loop and {@link #addActiveOrderContraindications} — and
+	 * a collapse inside either one leaves the other emitting the siblings, which is Sarah Taylor's live
+	 * shape (one hydrocortisone order, four rows, four chips, question naming no drug).
+	 *
+	 * <p><b>The key.</b> {@code (subject substance, recorded finding)}. The subject side is
+	 * {@link DrugReference#substanceKey()}, which is where the measurement behind it lives and why it
+	 * is not simply the dataset's substance name; an entry from a source publishing none keys on its
+	 * own identity, so nothing collapses for the curated {@code json} or the {@code atc} adapter. The
+	 * finding side is what the arm actually compared — the resolved allergen ENTRY for the allergy arm,
+	 * and the curated rule's own {@code (type, token)} for the rule arm. Those are two key spaces on
+	 * purpose: the rule arm's token is free text that may name a class ({@code nsaid},
+	 * {@code aminoglycoside}) rather than a drug, so resolving it to an entry to make the two arms
+	 * comparable would collapse a class-level rule into an identity chip. A curated rule and an
+	 * identity match about ONE allergy therefore still raise two chips — that is issue #146, which is
+	 * filed separately and which {@code ActiveOrderContraindicationTest} currently pins at two.
+	 *
+	 * <p><b>Which chip survives.</b> The most specific relationship, since that is this arm's analogue
+	 * of "the highest severity wins" — a contraindication chip carries no severity, and what it can
+	 * under-report is the STRENGTH of the claim: identity ("the patient has a recorded allergy to X")
+	 * over a shared ATC class over a shared curated group. Ties keep the incumbent, so a group of
+	 * equally-related rows is reported as the dataset's first row, exactly as
+	 * {@link #bestRulePerPartner} keeps its first. The surviving chip is written back into the position
+	 * the group's first candidate took, so no client sees the chip sequence reshuffle when a later,
+	 * stronger row replaces an earlier one.
+	 *
+	 * <p><b>One honest limit.</b> On the shipped resolution semantics the strongest candidate is always
+	 * the group's FIRST: {@code lookupByToken} resolves an allergy to the EARLIEST matching entry,
+	 * every row of a substance carries that substance's name among its aliases, and both subject sets
+	 * are iterated in dataset order — so the identity match belongs to the earliest row of its own
+	 * group. The replacement branch is therefore not reachable through the production path today and no
+	 * test pins it; it is written this way because the ordering coincidence is a property of
+	 * {@code lookupByToken}, not of this ledger, and a first-wins ledger would silently start dropping
+	 * identity chips the moment that changed.
+	 */
+	private static final class ContraindicationChips {
+
+		/** A recorded allergy to this very substance — needs no ATC code and outranks both class
+		 *  comparisons (the precedence {@link #addAllergyContraindications} already applies per
+		 *  allergen, extended across the rows of one substance). */
+		static final int IDENTITY = 3;
+
+		/** A shared ATC level-4 chemical subgroup with the allergen. */
+		static final int SAME_CLASS = 2;
+
+		/** A shared curated {@link CrossReactivityGroup} with the allergen — the fallback the class
+		 *  comparison takes when no subgroup is shared, and so the least specific of the three. */
+		static final int SAME_GROUP = 1;
+
+		/** A curated contraindication rule. Its own key space, so this rank never competes with the
+		 *  three above; it exists so every call reads alike. */
+		static final int CURATED_RULE = 1;
+
+		private final List<SafetyWarning> warnings;
+
+		private final Map<List<Object>, Integer> positions = new LinkedHashMap<List<Object>, Integer>();
+
+		private final Map<List<Object>, Integer> relationships = new LinkedHashMap<List<Object>, Integer>();
+
+		ContraindicationChips(List<SafetyWarning> warnings) {
+			this.warnings = warnings;
+		}
+
+		/**
+		 * Raise {@code chip} for {@code subject} about {@code finding}, unless a chip for that pair is
+		 * already raised — in which case the more specific {@code relationship} wins, in place.
+		 */
+		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip) {
+			List<Object> key = Arrays.asList(subjectKey(subject), finding);
+			Integer at = positions.get(key);
+			if (at == null) {
+				positions.put(key, Integer.valueOf(warnings.size()));
+				relationships.put(key, Integer.valueOf(relationship));
+				warnings.add(chip);
+				return;
+			}
+			if (relationship > relationships.get(key).intValue()) {
+				warnings.set(at.intValue(), chip);
+				relationships.put(key, Integer.valueOf(relationship));
+			}
+		}
+
+		/** @return the substance {@code subject} stands for, else {@code subject} itself. The two are
+		 *          different types — a {@link List} and a {@link DrugReference} — so the two key spaces
+		 *          cannot collide, the same argument {@link #bestRulePerPartner} makes about its own. */
+		private static Object subjectKey(DrugReference subject) {
+			Object substance = subject.substanceKey();
+			return substance != null ? substance : subject;
+		}
+	}
+
+	private void addContraindications(ContraindicationChips chips, DrugReference ref,
 			PatientClinicalContext context) {
 		if (context == null) {
 			return;
@@ -582,9 +707,14 @@ public class DrugSafetyValidator {
 				against = "active condition";
 			}
 			if (hit) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-						ref.displayLabel() + " is contraindicated by an " + against + ": "
-								+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
+				// The rule as the two tests above compared it — type case-insensitively, token through
+				// hasAllergyToken/hasConditionToken, which lower-case — so the key says what the match
+				// said, and two rows differing only in case cannot chip twice.
+				chips.add(ref, Arrays.asList("rule", DrugReference.normalizeName(c.getType()),
+						DrugReference.normalizeName(c.getToken())), ContraindicationChips.CURATED_RULE,
+						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
+								ref.displayLabel() + " is contraindicated by an " + against + ": "
+										+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
 			}
 		}
 	}
@@ -1653,7 +1783,11 @@ public class DrugSafetyValidator {
 	 *         issue #88 is likewise not this key's to catch: {@link #addInteractionWarnings} correlates
 	 *         a rule against the class arm's own finding about the same order, which is a comparison of
 	 *         REASONS rather than of rendered text, and approximating it here on a text key would
-	 *         collapse two chips whose wording happens to agree. NUL-separated because the fields are
+	 *         collapse two chips whose wording happens to agree. Nor is the route-variant duplication of
+	 *         issue #145 this key's to catch, for the opposite reason: those chips each name their own
+	 *         route, so they are not exact repeats at all, and recognising them from the strings would
+	 *         mean pattern-matching a display label — {@link ContraindicationChips} groups them on
+	 *         substance identity instead. NUL-separated because the fields are
 	 *         clinical prose carrying spaces, colons and dashes of their own, so any printable
 	 *         delimiter would let two distinct triples key alike.
 	 */
@@ -1757,10 +1891,13 @@ public class DrugSafetyValidator {
 	 * {@code ref} (a recorded allergy to the very drug being checked), shares {@code ref}'s ATC level-4
 	 * subgroup (cross-reactivity), or — failing both — shares a curated {@link CrossReactivityGroup}
 	 * (cross-<em>branch</em> cross-reactivity, e.g. aspirin vs an ibuprofen allergy, which ATC's tree
-	 * cannot express). One warning per resolved allergen: the most specific match wins, and several
-	 * aliases of one allergy warn once. The two class comparisons need only ATC codes, which is how an
-	 * authoritative classification source carrying no rules ({@link AtcDrugReferenceSource}) still
-	 * produces allergy reasoning.
+	 * cannot express). At most one warning per (SUBSTANCE, resolved allergen): the most specific match
+	 * wins, several aliases of one allergy warn once ({@code seenAllergens} below), and the several
+	 * reference rows one substance is filed as warn once between them
+	 * ({@link ContraindicationChips}, issue #145 — the ledger this arm adds to rather than appending to
+	 * the chip list, and the reason it takes one). The two class comparisons need only ATC codes, which
+	 * is how an authoritative classification source carrying no rules ({@link AtcDrugReferenceSource})
+	 * still produces allergy reasoning.
 	 *
 	 * <p><b>Identity is not classification (issue #135).</b> The three comparisons were all gated on
 	 * one early return taken when {@code ref} had neither an ATC subgroup nor a curated group. That
@@ -1832,7 +1969,7 @@ public class DrugSafetyValidator {
 	 * play before this arm sees it (issue #105, {@link #isEchoOfCitedRecord}) — the 444 measurement is
 	 * of the question-driven path, which is never echo-scoped.
 	 */
-	private void addAllergyContraindications(List<SafetyWarning> warnings, DrugReference ref,
+	private void addAllergyContraindications(ContraindicationChips chips, DrugReference ref,
 			PatientClinicalContext context) {
 		if (context == null) {
 			return;
@@ -1847,8 +1984,9 @@ public class DrugSafetyValidator {
 				continue;
 			}
 			if (allergen == ref) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-						"The patient has a recorded allergy to " + ref.displayLabel() + "."));
+				chips.add(ref, allergen, ContraindicationChips.IDENTITY,
+						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
+								"The patient has a recorded allergy to " + ref.displayLabel() + "."));
 				continue;
 			}
 			if (refClasses.isEmpty() && refGroups.isEmpty()) {
@@ -1860,18 +1998,20 @@ public class DrugSafetyValidator {
 			}
 			String shared = sharedClass(refClasses, allergen);
 			if (shared != null) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-						ref.displayLabel() + " is in the same ATC class (" + shared
-								+ ") as the patient's allergy to " + allergen.displayLabel()
-								+ " — possible cross-reactivity"));
+				chips.add(ref, allergen, ContraindicationChips.SAME_CLASS,
+						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
+								ref.displayLabel() + " is in the same ATC class (" + shared
+										+ ") as the patient's allergy to " + allergen.displayLabel()
+										+ " — possible cross-reactivity"));
 				continue;
 			}
 			CrossReactivityGroup group = CrossReactivityGroup.sharedGroup(refGroups, allergen);
 			if (group != null) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-						ref.displayLabel() + " is in the same cross-reactivity group (" + group.getName()
-								+ ") as the patient's allergy to " + allergen.displayLabel()
-								+ " — possible cross-reactivity"));
+				chips.add(ref, allergen, ContraindicationChips.SAME_GROUP,
+						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
+								ref.displayLabel() + " is in the same cross-reactivity group ("
+										+ group.getName() + ") as the patient's allergy to "
+										+ allergen.displayLabel() + " — possible cross-reactivity"));
 			}
 		}
 	}
@@ -1920,8 +2060,10 @@ public class DrugSafetyValidator {
 	 * taking?" is a fact about their chart, not about the wording of a query, and gating a
 	 * contraindication on the question's wording is what produced this defect. What bounds the arm
 	 * instead is the chart: it can only fire where an allergy or condition record and an active order
-	 * point at the same drug, and the two arms it delegates to bound it further — one chip per resolved
-	 * allergen ({@code seenAllergens}), one per matching curated rule. That is a bound in the patient's
+	 * point at the same drug, and the two arms it delegates to bound it further — one chip per
+	 * (substance, resolved allergen) and one per (substance, matching curated rule), through the same
+	 * {@link ContraindicationChips} ledger the drug-in-play call site uses, which is what stops one
+	 * order that resolves several reference rows raising a chip per row (issue #145). That is a bound in the patient's
 	 * own records, the same kind every other contraindication chip has and the reason the pairwise arms
 	 * need {@link #maxPairChips()} while this one does not: nothing here is quadratic in a list the
 	 * module does not choose.
@@ -1954,7 +2096,7 @@ public class DrugSafetyValidator {
 	 * entry is mislabelled here exactly as it is on the question path (see
 	 * {@link #addAllergyContraindications}'s measured coverage bound).
 	 */
-	private void addActiveOrderContraindications(List<SafetyWarning> warnings, Set<DrugReference> inPlay,
+	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries) {
 		if (context == null
 				|| (context.getAllergyTokens().isEmpty() && context.getConditionTokens().isEmpty())) {
@@ -1964,8 +2106,8 @@ public class DrugSafetyValidator {
 			if (inPlay.contains(ref)) {
 				continue;
 			}
-			addContraindications(warnings, ref, context);
-			addAllergyContraindications(warnings, ref, context);
+			addContraindications(chips, ref, context);
+			addAllergyContraindications(chips, ref, context);
 		}
 	}
 

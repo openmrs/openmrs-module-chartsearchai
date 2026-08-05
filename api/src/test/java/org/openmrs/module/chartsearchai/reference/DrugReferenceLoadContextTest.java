@@ -75,18 +75,21 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	}
 
 	/**
-	 * Copies one of the module's real bundled datasets into {@code <appdata>/chartsearchai/} so the
-	 * operator-configured branch of the load reads a real file of a known format.
+	 * Copies a real dataset from the classpath into {@code <appdata>/chartsearchai/} so the
+	 * operator-configured branch of the load reads a real file of a known format — the module's own
+	 * bundled datasets for the mismatch cases, the real WHO ATC sample for the {@code atc} one.
 	 *
 	 * @return the path to set {@code dataFilePath} to (relative to the application data directory)
 	 */
-	private String copyBundledDataset(String classpathResource, String asName) throws IOException {
+	private String copyToAppData(String classpathResource, String asName) throws IOException {
 		File dir = new File(OpenmrsUtil.getApplicationDataDirectory(), "chartsearchai");
 		dir.mkdirs();
 		File target = new File(dir, asName);
 		created.add(target);
-		try (InputStream in = DrugReferenceService.class.getResourceAsStream(classpathResource)) {
-			assertNotNull(in, "bundled dataset " + classpathResource + " should be on the classpath");
+		String resource = classpathResource.startsWith("/") ? classpathResource.substring(1)
+				: classpathResource;
+		try (InputStream in = getClass().getClassLoader().getResourceAsStream(resource)) {
+			assertNotNull(in, "dataset " + classpathResource + " should be on the classpath");
 			Files.copy(in, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		}
 		return "chartsearchai/" + asName;
@@ -107,7 +110,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 
 	@Test
 	public void ddinterFormatPointedAtTheCuratedDatasetLoadsNothingAndIsReportedAtWarn() throws IOException {
-		String path = copyBundledDataset(JsonDrugReferenceSource.CLASSPATH_DEFAULT, "mismatch-curated.json");
+		String path = copyToAppData(JsonDrugReferenceSource.CLASSPATH_DEFAULT, "mismatch-curated.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
 		List<DrugReference> entries;
@@ -125,7 +128,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 
 	@Test
 	public void curatedFormatPointedAtTheDdiKnowledgeBaseLoadsNothingAndIsReportedAtWarn() throws IOException {
-		String path = copyBundledDataset(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "mismatch-ddi.json");
+		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "mismatch-ddi.json");
 		configure(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT, path);
 
 		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
@@ -139,7 +142,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 
 	@Test
 	public void healthyLoadIsNotReportedAtWarnOrError() throws IOException {
-		String path = copyBundledDataset(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "healthy-ddi.json");
+		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "healthy-ddi.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
 		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
@@ -173,7 +176,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 
 	@Test
 	public void loadStatusReportsTheFormatCountAndFileActuallyInForce() throws IOException {
-		String path = copyBundledDataset(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "inforce-ddi.json");
+		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "inforce-ddi.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
 		DrugReferenceService service = new DrugReferenceService();
@@ -194,7 +197,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 
 	@Test
 	public void loadStatusOfAMismatchedPairIsInertAndNamesBothGlobalProperties() throws IOException {
-		String path = copyBundledDataset(JsonDrugReferenceSource.CLASSPATH_DEFAULT, "inert-curated.json");
+		String path = copyToAppData(JsonDrugReferenceSource.CLASSPATH_DEFAULT, "inert-curated.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
 		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
@@ -225,7 +228,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	 */
 	@Test
 	public void loadStatusNamesTheFileReadWithoutDisclosingItsAbsolutePath() throws IOException {
-		String path = copyBundledDataset(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "relative-ddi.json");
+		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "relative-ddi.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
 		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
@@ -236,6 +239,47 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		assertFalse(status.getOrigin().contains(OpenmrsUtil.getApplicationDataDirectory()),
 				"the status is readable by any authenticated user, so it must not hand out the "
 						+ "server's absolute application-data path. Origin was: " + status.getOrigin());
+	}
+
+	/**
+	 * The {@code atc} format is the one source that does NOT go through the shared
+	 * {@code ReferenceDataFiles} loader — it has no bundled fallback, so it resolves and tracks its own
+	 * file. Its origin is therefore separate code, and this is the only test that executes it. Uses the
+	 * real WHO ATC sample through the real {@link AtcDrugReferenceSource}.
+	 */
+	@Test
+	public void loadStatusNamesTheAtcExportItRead() throws IOException {
+		String path = copyToAppData(DrugReferenceTestSupport.ATC_SAMPLE, "h154-atc-sample.tsv");
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC, path);
+
+		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+		assertEquals(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC, status.getSourceFormat());
+		assertTrue(status.getEntryCount() > 0, "the WHO ATC sample parses to classification entries");
+		assertFalse(status.isInert());
+		assertEquals("appdata:" + path, status.getOrigin(),
+				"the atc source tracks its own origin rather than going through the shared loader, so "
+						+ "it has to report the same form. Origin was: " + status.getOrigin());
+	}
+
+	/**
+	 * The atc format has no bundled fallback, so selecting it without a dataset path loads nothing —
+	 * one of the states the inert verdict has to cover, and the only one that is not a
+	 * format/path mismatch.
+	 */
+	@Test
+	public void atcFormatWithNoConfiguredPathIsInertAndNamesNoOrigin() {
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC, "");
+
+		try (LogCapture capture = LogCapture.on(REFERENCE_LOGGER)) {
+			DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+			assertTrue(status.isInert(), "an ATC source with nothing to read leaves safety checking off");
+			assertEquals(0, status.getEntryCount());
+			assertEquals("none", status.getOrigin(), "nothing was read, and the origin says so");
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"the feature is inert, so it must be loud here too. Captured: " + capture.describeAll());
+		}
 	}
 
 	/**
@@ -289,7 +333,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	 */
 	@Test
 	public void loadStatusSerializesTheFieldsTheStatusEndpointReturns() throws IOException {
-		String path = copyBundledDataset(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "wire-ddi.json");
+		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "wire-ddi.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
 		DrugReferenceService service = new DrugReferenceService();
@@ -313,7 +357,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	@Test
 	public void loadStatusDoesNotDriftFromTheCachedEntriesWhenTheGlobalPropertiesChange()
 			throws IOException {
-		String path = copyBundledDataset(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "stable-ddi.json");
+		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "stable-ddi.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
 		DrugReferenceService service = new DrugReferenceService();

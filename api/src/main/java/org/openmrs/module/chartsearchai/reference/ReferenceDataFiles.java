@@ -47,7 +47,8 @@ final class ReferenceDataFiles {
 	 * absolute layout: core keeps its own disclosure of the application data directory behind
 	 * {@code View Administration Functions}. Nothing is lost — {@code ChartSearchAiUtils.resolveModelPath}
 	 * rejects {@code ..} and confirms the file resolves inside that directory, so this form names the
-	 * file exactly, and the absolute path is still logged. See {@code DrugReferenceLoad#getOrigin()}.
+	 * file exactly, and the absolute path is still logged at INFO by
+	 * {@link #loadWithClasspathFallback}. See {@code DrugReferenceLoad#getOrigin()}.
 	 */
 	static final String APPDATA_ORIGIN_PREFIX = "appdata:";
 

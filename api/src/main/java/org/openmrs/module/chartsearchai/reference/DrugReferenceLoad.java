@@ -131,8 +131,8 @@ public final class DrugReferenceLoad {
 	 *         <p>Deliberately not the absolute path: this is served to any caller holding the core
 	 *         {@code Get Global Properties} privilege, which the {@code Authenticated} role holds by
 	 *         default, and core keeps its own disclosure of the application data directory behind
-	 *         {@code View Administration Functions}. The absolute path is still logged, where the
-	 *         audience is already an administrator.
+	 *         {@code View Administration Functions}. The absolute path is still logged at INFO, where
+	 *         the audience is already an administrator.
 	 */
 	public String getOrigin() {
 		return origin;

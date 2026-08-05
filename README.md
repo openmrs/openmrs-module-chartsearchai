@@ -485,7 +485,7 @@ All query parameters are optional. `fromDate` and `toDate` are epoch millisecond
 
 ### Drug-reference status
 
-Which drug-reference dataset the module is **actually** using. Requires the core **"Get Global Properties"** privilege.
+Which drug-reference dataset the module is **actually** using. Requires the core **"Get Global Properties"** privilege — which the `Authenticated` role holds on a default install, so treat this as readable by any logged-in user. It carries configuration metadata only: no patient data, and no absolute server paths.
 
 ```
 GET /ws/rest/v1/chartsearchai/drugreferencestatus

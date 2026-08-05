@@ -65,14 +65,16 @@ public class ChartSearchAiDrugReferenceStatusTest {
 	}
 
 	/**
-	 * With no {@link AdministrationService} installed, every global-property read in this module
-	 * fails safe to its compiled default — which for {@code drugReference.enabled} is {@code false}.
-	 * That is the default installation: the feature is off, so nothing is loaded, and this is the
-	 * shape an operator sees before configuring anything.
+	 * A reader that answers every global-property read with the caller's own default — an
+	 * installation that has configured nothing. {@code drugReference.enabled} then reads
+	 * {@code false}, so the feature is off and nothing is loaded: the shape an operator sees before
+	 * configuring anything. Installed rather than left to ambient state so the expected values do not
+	 * depend on what an earlier test class in this JVM left in the {@link ServiceContext}.
 	 */
 	@Test
 	public void drugReferenceStatus_reportsEveryDocumentedFieldForADefaultInstallation() {
 		grantPrivileges(true);
+		installAdministrationService(new HashMap<String, String>());
 
 		Map<?, ?> body = statusBody(controllerWith(new DrugReferenceService()));
 
@@ -127,9 +129,9 @@ public class ChartSearchAiDrugReferenceStatusTest {
 	}
 
 	/**
-	 * The status names an absolute filesystem path and the drug-reference global properties, and
-	 * reading it can perform a 19 MB parse. Both are reasons the gate must actually run: this call
-	 * must be refused, not answered.
+	 * The status names the dataset file and the drug-reference global properties, and reading it can
+	 * perform a 19 MB parse. Both are reasons the gate must actually run: this call must be refused,
+	 * not answered.
 	 *
 	 * <p>Discriminating because the service IS set here — with the {@code requirePrivilege} gate
 	 * removed the call would succeed and return 200 rather than fail.

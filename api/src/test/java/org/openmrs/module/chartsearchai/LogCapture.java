@@ -31,8 +31,8 @@ import org.apache.logging.log4j.core.config.Property;
  * whole drug-safety feature off with nothing at default log levels to say so (issue #149). The
  * return value alone cannot pin that fix: an empty list is the correct fail-safe return in BOTH the
  * healthy-but-empty and the misconfigured case, so the only observable difference is the level. A
- * test that asserts on message text instead would let a re-wording silently drop the guard, so
- * these helpers deliberately expose levels, not strings.
+ * test that asserts on the WARN's message text instead would let a re-wording silently drop the
+ * guard.
  *
  * <p>Attaches a collecting appender to the named logger and, because log4j2 appenders are inherited
  * by descendant loggers, sees everything logged under that name — pass a package name to capture a

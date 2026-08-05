@@ -386,6 +386,11 @@ public class DrugReferenceService {
 	 * (an ATC-only dataset really is classification-only, which is what the ADR Decision 24
 	 * boundary tests assert). Tests that want groups set them via
 	 * {@link #setCrossReactivityGroups} afterwards.
+	 *
+	 * <p>No load happens, so {@link #getLoadStatus()} keeps reporting
+	 * {@link DrugReferenceLoad#notLoaded()} for a service seeded this way — the retained outcome
+	 * describes a load, and there was none. It is the one path on which the status and the entries in
+	 * use are not two views of the same event; production never seeds entries.
 	 */
 	void setEntries(List<DrugReference> entries) {
 		this.entries = entries == null ? Collections.<DrugReference> emptyList()

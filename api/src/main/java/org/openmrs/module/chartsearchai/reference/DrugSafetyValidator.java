@@ -1710,17 +1710,31 @@ public class DrugSafetyValidator {
 	 * home; the method name said "class" because two of its three comparisons are class-based.
 	 *
 	 * <p><b>Coverage bound, measured.</b> Identity is only as sound as the resolution behind it, and
-	 * {@link DrugReferenceService#lookupByToken} returns the FIRST entry any of whose aliases occurs as
-	 * a whole word in the allergy token — so a multi-word allergen can resolve to a shorter, earlier
-	 * entry sharing one of its words. Measured over the full KB on 2026-08-05, asking about each of the
-	 * 444 ATC-less entries with an allergy recorded under that entry's own name: every one now raises a
-	 * contraindication, but <b>53 of them name a DIFFERENT entry</b> ({@code Moderna covid-19 vaccine}
-	 * chips as {@code Pfizer-BioNTech Covid-19 Vaccine}; {@code Magnesium salicylate} as {@code
-	 * Salicylic acid (sodium)}). The refusal is still the right one — the same misresolution is what
-	 * put that entry in play, so the question and the chip agree — but the substance named is not the
-	 * charted allergen. That is a defect in the resolver rather than in this arm: it reaches the class
-	 * comparisons below identically, and 206 of all 2283 entries do not resolve to themselves. Reported
-	 * separately; do not read the 444 above as 444 correctly-labelled chips.
+	 * {@link DrugReferenceService#lookupByToken} returns the EARLIEST entry any of whose aliases occurs
+	 * as a whole word in the allergy token. Measured over the full KB on 2026-08-05, asking about each
+	 * of the 444 ATC-less entries with an allergy recorded under that entry's own name: every one now
+	 * raises a contraindication, but <b>53 of them name a DIFFERENT entry</b> — always one earlier in
+	 * dataset order (0 of the 53 resolve later), though not a shorter-NAMED one: 17 of the 53 resolve
+	 * to a name at least as long as the queried one. What is shorter is the matched ALIAS, and that
+	 * splits the 53 in two:
+	 * <ul>
+	 *   <li><b>43</b> where the matched alias is a FRAGMENT of the queried name — {@code Loteprednol
+	 *       etabonate} resolves to {@code Loteprednol (ophthalmic)} on the alias {@code loteprednol},
+	 *       {@code Magnesium salicylate} to {@code Salicylic acid (sodium)} on {@code salicylate}. A
+	 *       most-specific/longest-alias rule would fix these, as {@link #activeOrderEntryFor} already
+	 *       does for the same nesting hazard on the rule side.</li>
+	 *   <li><b>10</b> where another entry carries the queried drug's FULL name as one of its own CIEL
+	 *       aliases — {@code Moderna covid-19 vaccine} resolves to {@code Pfizer-BioNTech Covid-19
+	 *       Vaccine} because that entry's alias list contains "Moderna COVID-19 vaccine" verbatim.
+	 *       No alias matcher can separate those; it is a defect in the dataset's CIEL bridge.</li>
+	 * </ul>
+	 * The refusal is still the right one — the same misresolution is what put that entry in play, so
+	 * the question and the chip agree — but the substance named is not the charted allergen. Neither
+	 * shape is a defect in this arm: both reach the class comparisons below identically, and 206 of all
+	 * 2283 entries do not resolve to themselves. Reported separately; do not read the 444 above as 444
+	 * correctly-labelled chips. Separately again, an ANSWER-named drug can still be echo-scoped out of
+	 * play before this arm sees it (issue #105, {@link #isEchoOfCitedRecord}) — the 444 measurement is
+	 * of the question-driven path, which is never echo-scoped.
 	 */
 	private void addAllergyContraindications(List<SafetyWarning> warnings, DrugReference ref,
 			PatientClinicalContext context) {

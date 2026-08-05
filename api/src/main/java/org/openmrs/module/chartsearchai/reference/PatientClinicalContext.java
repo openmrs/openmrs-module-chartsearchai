@@ -197,10 +197,10 @@ public class PatientClinicalContext {
 	 * {@code ddinter} nor the {@code atc} source emits any, and the allergy contraindication arm
 	 * ({@code DrugSafetyValidator.addAllergyContraindications}) resolves allergens through
 	 * {@link DrugReferenceService#lookupByToken}, which is boundary-aware. Boundary-aware is not the
-	 * same as correct, though, and this is not a clean contrast: that resolver takes the FIRST entry
-	 * whose alias occurs as a whole word, so a multi-word allergen still mis-resolves to a shorter
-	 * entry sharing one of its words (measured, and reported separately). What it does rule out is
-	 * this method's failure mode — a token matching mid-word.
+	 * same as correct, though, and this is not a clean contrast: that resolver takes the EARLIEST entry
+	 * one of whose aliases occurs as a whole word, so a multi-word allergen still mis-resolves when the
+	 * matched alias is only a fragment of it (measured, and reported separately). What it does rule out
+	 * is this method's failure mode — a token matching mid-word.
 	 */
 	private static boolean containsToken(Set<String> haystack, String token) {
 		if (token == null || token.trim().isEmpty()) {

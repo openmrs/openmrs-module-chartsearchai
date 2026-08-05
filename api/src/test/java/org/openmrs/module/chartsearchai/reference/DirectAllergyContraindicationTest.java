@@ -39,7 +39,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * ({@link CrossReactivityGroup#containsCode}), so an entry with no ATC code can never belong to one
  * however much curated data a deployment authors. Nor can the curated-rule arm
  * ({@code addContraindications}): {@link DdiDrugReferenceSource}'s entries expose {@code
- * interactions}, "never {@code ageBands} or {@code contraindications}". For those 444 drugs the
+ * interactions}, never {@code ageBands} or {@code contraindications} — its own documented V1 scope,
+ * and the parser sets neither field. For those 444 drugs the
  * direct-allergy warning had no path to the clinician at all — no chip, and (since issue #110, which
  * turns every chip into a citable pre-answer record) nothing in the prompt either.
  *
@@ -247,7 +248,16 @@ public class DirectAllergyContraindicationTest {
 		//
 		// The shared route-variant slice supplies the shape: its two Iron rows (DDInter975 and
 		// DDInter2187 "Iron (bisglycinate)") are the full KB's ONLY two rxnorm_name=iron entries, both
-		// verbatim and both carrying no ATC code — so no new fixture is needed for this case.
+		// byte-identical to their KB rows and both carrying no ATC code — so no new fixture is needed.
+		//
+		// Verbatim in CONTENT, but the slice REORDERS them, and order is what the label below turns on.
+		// lookupByToken takes the earliest matching entry, and in the full KB DDInter2187 (index 1320)
+		// precedes DDInter975 (index 2256) — so on the shipped KB an allergy recorded as "Iron"
+		// resolves to "Iron (bisglycinate)", making this very pair one of the 53 mis-labelled entries
+		// addAllergyContraindications' javadoc counts. The slice lists DDInter975 first, so here it
+		// resolves to itself. That is deliberate: this case is about the CHIP COUNT with a sibling row
+		// in play, and resolving to itself is what isolates that from the labelling defect. Regenerate
+		// the slice in KB order and the count assertion still holds while the detail assertion flips.
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
 				DrugReferenceTestSupport.ddiFixtureEntries(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS));
 		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());

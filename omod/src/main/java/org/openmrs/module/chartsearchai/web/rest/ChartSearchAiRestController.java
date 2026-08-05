@@ -665,6 +665,11 @@ public class ChartSearchAiRestController {
 		this.patientAccessCheck = patientAccessCheck;
 	}
 
+	/** Test seam: production wires {@link DrugReferenceService} via {@code Autowired}. */
+	void setDrugReferenceService(DrugReferenceService drugReferenceService) {
+		this.drugReferenceService = drugReferenceService;
+	}
+
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)
 	@ResponseBody
 	public ResponseEntity<Object> getAuditLogs(

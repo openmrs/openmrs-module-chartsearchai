@@ -87,10 +87,11 @@ public class ContraindicationRouteVariantTest {
 	public void theFixturesReallyCarryTheTwoShapesUnderTest() throws IOException {
 		// Preconditions, through the production matchers the validator itself uses. Without these the
 		// cases below could pass while resolving one entry each — i.e. while testing nothing.
-		DrugReferenceService ppi = fixtureService(FIXTURE);
+		DrugReferenceService ppi = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 		List<DrugReference> esomeprazole = ppi.findByQuery("Is it safe to give esomeprazole?");
 		assertEquals(2, esomeprazole.size(),
-				"one PPI word must resolve BOTH rows the KB files under it, was: " + names(esomeprazole));
+				"one PPI word must resolve BOTH rows the KB files under it, was: "
+						+ DrugReferenceTestSupport.names(esomeprazole));
 		assertEquals(esomeprazole.get(0).normalizedAtcCodes(), esomeprazole.get(1).normalizedAtcCodes(),
 				"and their ATC codes must be identical, so no class comparison can tell them apart");
 		assertFalse(esomeprazole.get(0).displayLabel().equals(esomeprazole.get(1).displayLabel()),
@@ -98,13 +99,15 @@ public class ContraindicationRouteVariantTest {
 
 		List<DrugReference> hydrocortisone = ppi.findByQuery("Is hydrocortisone safe for her?");
 		assertEquals(4, hydrocortisone.size(),
-				"one order word must resolve all four hydrocortisone rows, was: " + names(hydrocortisone));
+				"one order word must resolve all four hydrocortisone rows, was: "
+						+ DrugReferenceTestSupport.names(hydrocortisone));
 
-		DrugReferenceService variants = fixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
+		DrugReferenceService variants = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
 		List<DrugReference> dexamethasone = variants.findByQuery("Is it safe to give dexamethasone?");
 		assertEquals(4, dexamethasone.size(),
 				"and one question word must resolve all four dexamethasone rows, was: "
-						+ names(dexamethasone));
+						+ DrugReferenceTestSupport.names(dexamethasone));
 		DrugReference allergen = variants.lookupByToken("Dexamethasone");
 		assertNotNull(allergen, "the allergy must resolve to one of them");
 		assertEquals("Dexamethasone", allergen.displayLabel(),
@@ -182,9 +185,10 @@ public class ContraindicationRouteVariantTest {
 	 */
 	@Test
 	public void theTwoPpiRowsShareTheSubstanceNameTheStemHasToVeto() throws IOException {
-		List<DrugReference> ppis = fixtureService(FIXTURE).findByQuery("Is it safe to give esomeprazole?");
+		List<DrugReference> ppis = DrugReferenceTestSupport.ddiFixtureService(FIXTURE)
+				.findByQuery("Is it safe to give esomeprazole?");
 
-		assertEquals(2, ppis.size(), "was: " + names(ppis));
+		assertEquals(2, ppis.size(), "was: " + DrugReferenceTestSupport.names(ppis));
 		assertEquals(DrugReference.normalizeName(ppis.get(0).getSubstanceName()),
 				DrugReference.normalizeName(ppis.get(1).getSubstanceName()),
 				"the two rows must share ONE substance name, or the stem is not what keeps them apart");
@@ -239,12 +243,13 @@ public class ContraindicationRouteVariantTest {
 	 */
 	@Test
 	public void theFixtureReallyCarriesAnAllergenRowThatIsNotItsGroupsFirst() throws IOException {
-		DrugReferenceService service = fixtureService(FIXTURE);
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 
 		List<DrugReference> inPlay = service
 				.findByQuery("Is it safe to give the Pfizer-BioNTech COVID-19 vaccine?");
 		assertEquals(5, inPlay.size(),
-				"one brand word must resolve every presentation row, was: " + names(inPlay));
+				"one brand word must resolve every presentation row, was: "
+						+ DrugReferenceTestSupport.names(inPlay));
 		assertEquals("Tozinameran (12y+)", inPlay.get(0).getName(),
 				"and a presentation comes FIRST, so it is the group's incumbent chip");
 
@@ -283,7 +288,7 @@ public class ContraindicationRouteVariantTest {
 	}
 
 	@Test
-	public void oneLedgerSpansBothCallSitesRatherThanOnePerArm() throws IOException {
+	public void oneLedgerSpansBothCallSites() throws IOException {
 		// The decisive reason this is a ledger and not a filter: the two arms run at TWO call sites, so a
 		// collapse living inside either one leaves the other emitting the siblings. Here both call sites
 		// raise a candidate for the SAME (substance, allergen) key and neither is redundant with the
@@ -293,7 +298,7 @@ public class ContraindicationRouteVariantTest {
 		// one call site supplies the whole group.
 		String question = "Is it safe to give Tozinameran (12y+)?";
 		String order = "Tozinameran (5y-11y)";
-		DrugReferenceService service = fixtureService(FIXTURE);
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 		// The premise, through the production resolvers: without it the order arm could stop reaching a
 		// row of its own and this would pass on the question arm's collapse alone, testing nothing.
 		List<DrugReference> fromQuestion = service.findByQuery(question);
@@ -301,7 +306,7 @@ public class ContraindicationRouteVariantTest {
 		orderOnly.removeAll(fromQuestion);
 		assertEquals(1, orderOnly.size(),
 				"the order must resolve exactly one row no question word reaches, was: "
-						+ names(orderOnly));
+						+ DrugReferenceTestSupport.names(orderOnly));
 		assertEquals(orderOnly.get(0).substanceKey(), fromQuestion.get(0).substanceKey(),
 				"and it must be the same substance, or the two call sites share no key");
 
@@ -345,7 +350,8 @@ public class ContraindicationRouteVariantTest {
 		// safety-finding record, so N duplicate chips were N near-identical records in the context
 		// window as well. Real injector wired to the real validator, so the record count follows the
 		// chips rather than being asserted separately.
-		DrugReferenceService service = fixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
 		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
 
@@ -406,25 +412,8 @@ public class ContraindicationRouteVariantTest {
 				"so the re-spelling's own note is the one dropped, was: " + warnings);
 	}
 
-	private static List<String> names(List<DrugReference> entries) {
-		List<String> out = new ArrayList<String>();
-		for (DrugReference entry : entries) {
-			out.add(entry.getName());
-		}
-		return out;
-	}
-
-	/** The real fixture entries behind a service carrying the real curated cross-reactivity groups —
-	 *  so the class comparisons run against the shipped curated data, not against groups a test
-	 *  pinned empty. */
-	private static DrugReferenceService fixtureService(String fixture) throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(fixture));
-		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
-		return service;
-	}
 
 	private static DrugSafetyValidator fixtureValidator(String fixture) throws IOException {
-		return DrugReferenceTestSupport.validator(fixtureService(fixture));
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(fixture));
 	}
 }

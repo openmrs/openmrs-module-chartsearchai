@@ -672,13 +672,13 @@ public class DrugSafetyValidator {
 		 *  rank cannot desync — a position with no rank beside it would throw inside a {@code validate}
 		 *  whose callers catch {@link RuntimeException} and return nothing, i.e. it would silently drop
 		 *  every chip on the request rather than the one it mishandled. */
-		private static final class Raised {
+		private static final class RaisedChip {
 
 			private final int position;
 
 			private int relationship;
 
-			Raised(int position, int relationship) {
+			RaisedChip(int position, int relationship) {
 				this.position = position;
 				this.relationship = relationship;
 			}
@@ -686,7 +686,7 @@ public class DrugSafetyValidator {
 
 		private final List<SafetyWarning> warnings;
 
-		private final Map<List<Object>, Raised> raised = new LinkedHashMap<List<Object>, Raised>();
+		private final Map<List<Object>, RaisedChip> raised = new LinkedHashMap<List<Object>, RaisedChip>();
 
 		ContraindicationChips(List<SafetyWarning> warnings) {
 			this.warnings = warnings;
@@ -698,9 +698,9 @@ public class DrugSafetyValidator {
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip) {
 			List<Object> key = Arrays.asList(subjectKey(subject), finding);
-			Raised already = raised.get(key);
+			RaisedChip already = raised.get(key);
 			if (already == null) {
-				raised.put(key, new Raised(warnings.size(), relationship));
+				raised.put(key, new RaisedChip(warnings.size(), relationship));
 				warnings.add(chip);
 				return;
 			}

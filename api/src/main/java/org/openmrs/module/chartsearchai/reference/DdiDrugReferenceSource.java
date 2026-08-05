@@ -190,6 +190,15 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 					&& rxcuiCounts.get(row.rxcui) == 1;
 			ref.setId(uniqueRxcui ? row.rxcui : row.id);
 			ref.setName(row.name);
+			// The substance this row is a route/formulation of, ALWAYS — unlike the chip-label synonym
+			// below, which is deliberately withheld when the display name already contains it. That is
+			// what makes it usable as an identity: it is the field the route variants sharing one RxCUI
+			// agree on ("Dexamethasone", "Dexamethasone (nasal)", … all publish "dexamethasone"), and
+			// the safety chips group on it so one substance is one finding (issue #145, see
+			// DrugReference.substanceKey). Not the RxCUI itself, though it partitions this KB's entries
+			// identically: setId above already spends the RxCUI on entry identity, where a shared one is
+			// precisely what it must NOT be.
+			ref.setSubstanceName(row.rxnormName);
 			// Chip-label synonym (never renaming): when the DDInter display name diverges from
 			// the RxNorm generic the question and chart use ("Acetylsalicylic acid" vs
 			// "aspirin"), carry the generic so safety chips can show both vocabularies. A name

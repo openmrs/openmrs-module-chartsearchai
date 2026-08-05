@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.text.Normalizer;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -43,6 +44,10 @@ public class DrugReference {
 
 	/** Diverging everyday generic name, or null — see {@link #getGenericName()}. */
 	private String genericName;
+
+	/** The reference data's own canonical name for the SUBSTANCE, or null — see
+	 *  {@link #getSubstanceName()}. */
+	private String substanceName;
 
 	private String drugClass;
 
@@ -109,6 +114,102 @@ public class DrugReference {
 
 	public void setName(String name) {
 		this.name = name;
+	}
+
+	/**
+	 * @return the reference data's own canonical name for the SUBSTANCE this entry is a row of — the
+	 *         DDInter {@code rxnorm_name} — or null for a source that publishes none: the {@code atc}
+	 *         adapter, which has no such field, and the shipped curated {@code json} dataset, whose
+	 *         entries carry none. Null there is the dataset's silence, not a schema ban — the curated
+	 *         schema binds this class directly, so a hand-authored file that sets this field opts into
+	 *         the grouping below. Unlike {@link #getGenericName()}, which
+	 *         is a chip-label synonym and is deliberately null whenever the display name already
+	 *         contains it, this is set whether or not the two agree: it is an identity, not a label,
+	 *         and it is exactly the field that is EQUAL across a substance's route/formulation rows
+	 *         ({@code Dexamethasone}, {@code Dexamethasone (nasal)}, … all publish
+	 *         {@code dexamethasone}). Consumed by {@link #substanceKey()}.
+	 */
+	public String getSubstanceName() {
+		return substanceName;
+	}
+
+	public void setSubstanceName(String substanceName) {
+		this.substanceName = substanceName;
+	}
+
+	/** A trailing parenthesized qualifier on a display name — the route or formulation a DDInter row
+	 *  is distinguished from its siblings by ({@code Dexamethasone (nasal)},
+	 *  {@code Amphotericin B (lipid complex)}, {@code Tozinameran (5y-11y)}). Anchored at the END, so a
+	 *  parenthetical in the middle of a name is left alone. {@link #displayStem} applies it repeatedly,
+	 *  so a name carrying more than one trailing qualifier reduces fully rather than partly. */
+	private static final Pattern TRAILING_QUALIFIER = Pattern.compile("\\s*\\([^()]*\\)\\s*$");
+
+	/**
+	 * The substance-level identity of this entry, or {@code null} when the loaded source publishes no
+	 * substance name and this entry can therefore only stand for itself.
+	 *
+	 * <p><b>What it is for.</b> One substance is filed as several rows, so one clinician-facing string
+	 * resolves several entries and a per-entry safety chip becomes several chips for one clinical fact
+	 * (issue #145 on the contraindication arms; #115/#121 solved the partner side of the same problem
+	 * for interactions). This is the key those chips group on. It is deliberately NOT
+	 * {@link #displayLabel()}: grouping on a rendered label is the mistake issue #148 had to undo.
+	 *
+	 * <p><b>Two components, each load-bearing, both measured over the shipped 19 MB KB (2283 entries;
+	 * re-measure before relying on the figures).</b>
+	 * <ul>
+	 *   <li>{@link #getSubstanceName()} — the data's own claim that two rows are one substance. 142
+	 *       values are shared by more than one entry, across 332 entries, and the {@code rxcui}
+	 *       partitions those entries identically, so this is the dataset's substance identity rather
+	 *       than a spelling coincidence.</li>
+	 *   <li>The <b>display stem</b> — the name with trailing qualifiers removed — as a VETO on that
+	 *       claim, because the claim over-merges. Among those 142 families sit pairs of genuinely
+	 *       different substances: {@code Omeprazole}/{@code Esomeprazole} (one
+	 *       {@code rxnorm_name}, one {@code rxcui}, one ATC code),
+	 *       {@code Amphetamine}/{@code Dextroamphetamine}, {@code Fenfluramine}/{@code Dexfenfluramine},
+	 *       {@code Gabapentin}/{@code Gabapentin enacarbil}, {@code Netupitant}/{@code Fosnetupitant},
+	 *       {@code Ketoconazole}/{@code Levoketoconazole}, {@code Fenofibrate}/{@code Fenofibric acid},
+	 *       {@code Atropine}/{@code Hyoscyamine} — each of them the {@code enalapril}/{@code enalaprilat}
+	 *       shape issue #121 decided must stay two chips. The stem separates every one of them.</li>
+	 * </ul>
+	 * Neither half works alone. Where one stem covers two substances the stem alone merges them and the
+	 * substance name is what refuses: {@code Varicella Zoster Vaccine (Recombinant)} against
+	 * {@code (live/attenuated)} — a distinction that decides whether an immunocompromised patient may
+	 * have it at all — and likewise {@code Manganese (chloride)}/{@code (sulfate)},
+	 * {@code Dextran (-1)}/{@code (low molecular weight)}, {@code Insulin human}/{@code (isophane)},
+	 * {@code Insulin lispro}/{@code (protamine)}, {@code Iron}/{@code (polysaccharide)}. A few more
+	 * one-stem groups are kept apart because a row publishes NO substance name rather than a differing
+	 * one ({@code Typhoid vaccine (live)}/{@code (inactivated)}) — that is the null-key fallback below,
+	 * not this comparison. Together the two reduce those 332 entries to 177 substances.
+	 *
+	 * <p>Conservative where it cannot tell, in BOTH directions. A name that extends the family's stem
+	 * by a WORD rather than a qualifier ({@code Hydrocortisone butyrate}, {@code Estrone sulfate},
+	 * {@code Procaine benzylpenicillin}) keeps its own key and so its own chip — including where the KB
+	 * is in fact naming one substance two ways ({@code Thallous Chloride}/{@code Thallous chloride
+	 * tl-201}, {@code Typhoid vaccine (live)}/{@code Typhoid vaccine live}). Over-reporting one chip is
+	 * the safe direction for a non-blocking advisory; dropping a real one is not.
+	 *
+	 * @return an opaque key, equal exactly for two entries this module treats as one substance
+	 */
+	Object substanceKey() {
+		String substance = normalizeName(substanceName);
+		if (substance == null) {
+			return null;
+		}
+		return Arrays.asList(substance, displayStem());
+	}
+
+	/** @return {@link #getName()} with any trailing parenthesized qualifier(s) removed, normalized by
+	 *          {@link #normalizeName} — the empty string when the name is blank or is nothing but a
+	 *          qualifier, which keeps the key total. */
+	private String displayStem() {
+		String stem = name == null ? "" : name;
+		String previous;
+		do {
+			previous = stem;
+			stem = TRAILING_QUALIFIER.matcher(stem).replaceFirst("");
+		} while (!stem.equals(previous));
+		String normalized = normalizeName(stem);
+		return normalized == null ? "" : normalized;
 	}
 
 	public String getDrugClass() {

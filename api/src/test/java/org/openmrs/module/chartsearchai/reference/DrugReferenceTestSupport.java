@@ -284,6 +284,29 @@ public final class DrugReferenceTestSupport {
 		}
 	}
 
+	/**
+	 * A service over a DDInter-shaped test fixture, carrying the real curated cross-reactivity groups —
+	 * so the class comparisons run against the shipped curated data rather than groups a test pinned
+	 * empty. The arrangement lives here rather than in each test file because the two steps have to stay
+	 * together: {@link #serviceWith} pins the groups EMPTY through its {@code setEntries} seam, so a
+	 * fixture service built without the second call silently cannot raise a curated-group chip.
+	 */
+	static DrugReferenceService ddiFixtureService(String classpathResource) throws IOException {
+		DrugReferenceService service = serviceWith(ddiFixtureEntries(classpathResource));
+		service.setCrossReactivityGroups(bundledGroups());
+		return service;
+	}
+
+	/** @return the entries' own {@code name}s. {@link DrugReference} defines no {@code toString}, so a
+	 *          failure message built from the list itself prints identity hashes. */
+	static List<String> names(List<DrugReference> entries) {
+		List<String> out = new ArrayList<String>();
+		for (DrugReference entry : entries) {
+			out.add(entry.getName());
+		}
+		return out;
+	}
+
 	static DrugSafetyValidator validator(DrugReferenceService service) {
 		DrugSafetyValidator validator = new DrugSafetyValidator();
 		validator.setDrugReferenceService(service);

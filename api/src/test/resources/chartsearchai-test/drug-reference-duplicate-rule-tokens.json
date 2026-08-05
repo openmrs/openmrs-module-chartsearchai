@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "source": "test fixture — one curated contraindication rule authored twice, differing only in case",
+  "entries": [
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": [
+        "ibuprofen"
+      ],
+      "atcCodes": [
+        "M01AE01"
+      ],
+      "contraindications": [
+        {
+          "type": "allergy",
+          "token": "ibuprofen",
+          "note": "documented ibuprofen allergy"
+        },
+        {
+          "type": "ALLERGY",
+          "token": "Ibuprofen",
+          "note": "avoid all NSAIDs"
+        }
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

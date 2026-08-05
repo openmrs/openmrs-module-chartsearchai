@@ -34,10 +34,17 @@ public interface DrugReferenceSource {
 	List<DrugReference> load();
 
 	/**
-	 * @return where the entries {@link #load()} last returned were actually read from — the
-	 *         resolved operator file, {@code classpath:<resource>} for the bundled fallback, or
-	 *         {@code none} when nothing could be read. {@code null} when the implementation does
-	 *         not track it (the test seam).
+	 * @return where the entries {@link #load()} last returned were actually read from, marked with the
+	 *         space it came from: {@code appdata:<path within the application data directory>} for an
+	 *         operator file, {@code classpath:<resource>} for the bundled fallback, or {@code none}
+	 *         when nothing could be read. {@code null} when the implementation does not track it (the
+	 *         test seam).
+	 *
+	 *         <p>An implementation must NOT return the absolute path: this value is served over REST
+	 *         to any caller holding the core {@code Get Global Properties} privilege, which the
+	 *         {@code Authenticated} role holds by default, while core keeps its own disclosure of the
+	 *         application data directory behind {@code View Administration Functions}. See
+	 *         {@link DrugReferenceLoad#getOrigin()}, which is where this value surfaces.
 	 *
 	 *         <p>Part of the load's outcome rather than of the log, because the load is lazy: a
 	 *         reader who consults the log for "which dataset is in force?" can be handed a line

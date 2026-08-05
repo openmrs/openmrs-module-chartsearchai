@@ -233,14 +233,25 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "relative-ddi.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
-		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
 
-		assertEquals("appdata:" + path, status.getOrigin(),
-				"the origin must name the operator file relative to the application data directory, "
-						+ "marked with the space it names");
-		assertFalse(status.getOrigin().contains(OpenmrsUtil.getApplicationDataDirectory()),
-				"the status is readable by any authenticated user, so it must not hand out the "
-						+ "server's absolute application-data path. Origin was: " + status.getOrigin());
+			assertEquals("appdata:" + path, status.getOrigin(),
+					"the origin must name the operator file relative to the application data directory, "
+							+ "marked with the space it names");
+			assertFalse(status.getOrigin().contains(OpenmrsUtil.getApplicationDataDirectory()),
+					"the status is readable by any authenticated user, so it must not hand out the "
+							+ "server's absolute application-data path. Origin was: " + status.getOrigin());
+			// The other half of that trade-off, and the reason nothing is lost by it: the log still
+			// carries the absolute path, where the audience is already an administrator. Asserted
+			// because it is the compensating control — logging the relative path here instead would
+			// leave no route to it at all, and would do so with a green build.
+			assertTrue(
+					capture.messagesAt(Level.INFO).stream()
+							.anyMatch(m -> m.contains(OpenmrsUtil.getApplicationDataDirectory())),
+					"the load must still report the absolute path at INFO. Captured: "
+							+ capture.describeAll());
+		}
 	}
 
 	/**

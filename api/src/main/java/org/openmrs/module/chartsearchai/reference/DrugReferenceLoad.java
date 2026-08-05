@@ -25,7 +25,9 @@ import java.util.Map;
  * {@code "Loaded 2283 …"} line and concluded the switch had taken effect. Exposed through
  * {@link DrugReferenceService#getLoadStatus()} and the module's
  * {@code GET /chartsearchai/drugreferencestatus} endpoint, both of which report this object rather
- * than re-reading the global properties, so what they report is what is loaded.
+ * than re-deriving it from the global properties, so what it says is what is loaded. (The endpoint
+ * adds one field of its own, {@code enabled}, which IS a live read — the master switch can be
+ * flipped after a load, and then it is meant to disagree with {@link #isLoaded()}.)
  *
  * <p>{@link #isInert()} is the single verdict that distinguishes the two states an empty dataset can
  * be in, and it drives BOTH the WARN at load time and the reported status, so the two cannot drift:

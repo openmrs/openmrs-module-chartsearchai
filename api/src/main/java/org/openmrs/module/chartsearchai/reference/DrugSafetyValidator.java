@@ -1719,10 +1719,14 @@ public class DrugSafetyValidator {
 	 * splits the 53 in two:
 	 * <ul>
 	 *   <li><b>43</b> where the matched alias is a FRAGMENT of the queried name — {@code Loteprednol
-	 *       etabonate} resolves to {@code Loteprednol (ophthalmic)} on the alias {@code loteprednol},
-	 *       {@code Magnesium salicylate} to {@code Salicylic acid (sodium)} on {@code salicylate}. A
-	 *       most-specific/longest-alias rule would fix these, as {@link #activeOrderEntryFor} already
-	 *       does for the same nesting hazard on the rule side.</li>
+	 *       etabonate} resolves to {@code Loteprednol (ophthalmic)} on that entry's alias
+	 *       {@code loteprednol}, {@code Magnesium salicylate} to {@code Salicylic acid (sodium)} on its
+	 *       CIEL alias {@code Salicylate}. This is the nesting hazard {@link #activeOrderEntryFor}
+	 *       already documents and defeats on the rule side ("insulin" inside "insulin glargine") — but
+	 *       not by the same means: a rule's token IS its partner's own alias, so that arm can demand
+	 *       name identity, while an allergy token is a concept name or free text and rarely equals a
+	 *       KB name outright. The analogous fix here is to prefer the LONGEST matching alias rather
+	 *       than the first.</li>
 	 *   <li><b>10</b> where another entry carries the queried drug's FULL name as one of its own CIEL
 	 *       aliases — {@code Moderna covid-19 vaccine} resolves to {@code Pfizer-BioNTech Covid-19
 	 *       Vaccine} because that entry's alias list contains "Moderna COVID-19 vaccine" verbatim.

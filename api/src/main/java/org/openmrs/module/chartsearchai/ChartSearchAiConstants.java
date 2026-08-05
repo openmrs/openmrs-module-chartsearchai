@@ -444,6 +444,17 @@ public class ChartSearchAiConstants {
 
 	public static final int DEFAULT_DRUG_SAFETY_WEIGHT_MAX_AGE_DAYS = 90;
 
+	/** Most interaction chips one question may raise from a PAIRWISE arm — the question's own drugs
+	 *  checked against each other, or the patient's active orders checked against each other. Both are
+	 *  quadratic in a list this module does not control, and both feed the prompt as citable findings,
+	 *  so the number is a clinical judgement a deployment makes (a polypharmacy review clinic may want
+	 *  30, a triage screen 5) rather than one this module fixes at build time — issue #131. An
+	 *  unparseable or non-positive value falls back to the default rather than disabling the cap; see
+	 *  {@code DrugSafetyValidator.maxPairChips} for why a cap cannot simply be removed. */
+	public static final String GP_DRUG_SAFETY_MAX_PAIR_CHIPS = "chartsearchai.drugSafety.maxPairChips";
+
+	public static final int DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS = 10;
+
 	/**
 	 * When {@code > 0}, the {@code reasoning} scratchpad in the chart-answer schema is capped at
 	 * this many characters via a grammar-enforced {@code maxLength} — bounding the dominant

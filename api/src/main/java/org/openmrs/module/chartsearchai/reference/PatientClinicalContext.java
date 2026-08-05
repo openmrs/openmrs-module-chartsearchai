@@ -21,9 +21,10 @@ import java.util.Set;
  * age (for dose-band selection and age-gated injection), weight in kg (for the
  * weight-aware per-dose overdose check; {@code null} = unknown, check skipped),
  * the names/ATC codes of active drug orders (for interaction checks and
- * order-driven injection), the active drug orders themselves (for reconciling the
- * safety layer's read against the serialized chart — see
- * {@link DrugReferenceInjector#unrepresentedActiveOrders}), and lowercased text tokens
+ * order-driven injection), the active drug orders themselves — names and codes attributed to the
+ * order they came from, both for reconciling the safety layer's read against the serialized chart
+ * (see {@link DrugReferenceInjector#unrepresentedActiveOrders}) and so the interaction screen can
+ * exclude a subject's own order from witnessing it — and lowercased text tokens
  * from active allergies and conditions (for contraindication checks).
  *
  * <p>This is a pure value object so the injector and validator can be unit-tested
@@ -56,8 +57,11 @@ public class PatientClinicalContext {
 	/**
 	 * Full form, carrying the active drug orders as individually-identified orders in addition to
 	 * the flattened name/ATC sets the matching uses. The flattened sets stay independent of this
-	 * list: they are what every interaction and contraindication check reads, and a caller that
-	 * supplies only them keeps exactly the pre-reconciliation behaviour (nothing to reconcile).
+	 * list: they are what the {@link #hasActiveDrug} predicate and every class-based check read, so a
+	 * caller supplying only them still gets every match those make. What such a caller does NOT get is
+	 * attribution — which order a name or a code came from — so the interaction screen falls back to
+	 * the weaker guard documented on {@code DrugSafetyValidator.activeOrdersOtherThan} (names since
+	 * #118, ATC codes since #132), and nothing can be reconciled against the chart.
 	 */
 	public PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
@@ -116,7 +120,17 @@ public class PatientClinicalContext {
 		return activeDrugNames;
 	}
 
-	/** @return uppercased ATC codes mapped from the patient's active drug orders. */
+	/**
+	 * @return uppercased ATC codes mapped from the patient's active drug orders — the UNION over every
+	 *         order, which is what the class-based arms and
+	 *         {@link DrugReferenceService#findByActiveOrders} want (neither asks which order a code came
+	 *         from). Held independently rather than derived from {@link #getActiveDrugOrders()}: a
+	 *         caller may supply only the flattened sets (issue #118 deliberately kept that fallback),
+	 *         and even in production the per-order list can be narrower than this set — an order with no
+	 *         readable name is skipped there while its codes still land here (the builder's KNOWN GAP).
+	 *         Deriving this from the list would silently drop those codes; a caller that needs to know
+	 *         WHICH order a code belongs to reads {@link ActiveDrugOrder#getAtcCodes()} instead.
+	 */
 	public Set<String> getActiveDrugAtcCodes() {
 		return activeDrugAtcCodes;
 	}
@@ -203,6 +217,15 @@ public class PatientClinicalContext {
 	 * under, so the two reads can be matched exactly), the display name, and every name that
 	 * identifies the order in record text.
 	 *
+	 * <p>Also carries the ATC codes the order's own concept maps to, so a code can be attributed back
+	 * to the order that contributed it (issue #132). Without that, {@link #getActiveDrugAtcCodes()} is
+	 * the only place codes live and "one order carrying two codes" is indistinguishable from "two
+	 * orders each carrying one" — which let a single order witness an interaction between the two
+	 * reference entries its own codes resolve to (see
+	 * {@code DrugSafetyValidator.activeOrdersOtherThan}). Kept as an association rather than gathered
+	 * separately: {@link PatientClinicalContextBuilder} already reads these codes off the order's
+	 * concept in the same single {@code getActiveOrders} pass that fills the names.
+	 *
 	 * <p>Deliberately carries no dosing. The whole point of the reconciliation is that this module
 	 * must not hold one fact and present it two ways, and a second dose-rendering path beside
 	 * querystore's is exactly that. The display name already carries the strength in real data
@@ -216,10 +239,24 @@ public class PatientClinicalContext {
 
 		private final Set<String> names;
 
+		private final Set<String> atcCodes;
+
+		/** An order whose concept carries no ATC map — the majority in practice: only 85 of the 616
+		 *  Drug-class concepts in the 3.7.1 reference demo dictionary carry one (measured 2026-08-04,
+		 *  the same count {@code DrugSafetyValidator.activeOrderEntries} cites) — so the code-carrying
+		 *  form is not the only legitimate one. Equivalent to no codes, never to "unknown codes". */
 		public ActiveDrugOrder(String uuid, String display, Set<String> names) {
+			this(uuid, display, names, null);
+		}
+
+		public ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes) {
 			this.uuid = uuid;
 			this.display = display;
 			this.names = lower(names);
+			// Through the outer class's own normalizer, so a per-order code and the same code in the
+			// flattened set are the same string — otherwise attributing one to the other silently
+			// stops matching.
+			this.atcCodes = upper(atcCodes);
 		}
 
 		/** @return the {@code Order} uuid, or {@code null} when unknown. */
@@ -235,6 +272,14 @@ public class PatientClinicalContext {
 		/** @return lowercased names identifying this order (drug name and/or concept name). */
 		public Set<String> getNames() {
 			return names;
+		}
+
+		/** @return the uppercased ATC codes THIS order's concept maps to; empty when it maps to none.
+		 *          The per-order half of {@link PatientClinicalContext#getActiveDrugAtcCodes()}, which
+		 *          stays the union every class arm and {@link DrugReferenceService#findByActiveOrders}
+		 *          legitimately wants. */
+		public Set<String> getAtcCodes() {
+			return atcCodes;
 		}
 
 		/**

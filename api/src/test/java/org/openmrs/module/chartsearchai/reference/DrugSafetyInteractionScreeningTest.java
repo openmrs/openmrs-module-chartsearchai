@@ -481,7 +481,8 @@ public class DrugSafetyInteractionScreeningTest {
 	@Test
 	public void aQuestionNamingTwoDrugsGoesToThePairArmAndNotToTheScreen() {
 		// The boundary with issue #114/#120's question-pair arm, pinned rather than reasoned. Both arms
-		// now group chips and both cap at ten, so "can one arm report a pair the other suppresses?"
+		// now group chips and both cap at the same configured limit (#131's maxPairChips, ten by
+		// default here since no GP is set), so "can one arm report a pair the other suppresses?"
 		// has to have an answer: no, because the gates are mutually exclusive and at most one of them
 		// runs per question. That arm needs the question to resolve >= 2 drugs; this one needs it to
 		// resolve none. This question does both jobs at once — it names warfarin and aspirin (a real
@@ -526,7 +527,7 @@ public class DrugSafetyInteractionScreeningTest {
 								"J02AC01", "C01BD01"),
 						null, null));
 
-		assertEquals(DrugSafetyValidator.MAX_SCREENING_INTERACTION_WARNINGS, warnings.size(),
+		assertEquals(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS, warnings.size(),
 				"the screening arm must cap the chips it raises, was: " + warnings.size());
 		for (SafetyWarning warning : warnings) {
 			assertTrue(warning.getDetail().contains("— Major."),

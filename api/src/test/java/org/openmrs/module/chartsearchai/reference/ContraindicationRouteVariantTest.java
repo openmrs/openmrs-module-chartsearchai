@@ -251,6 +251,28 @@ public class ContraindicationRouteVariantTest {
 	}
 
 	@Test
+	public void oneLedgerSpansBothCallSitesRatherThanOnePerArm() throws IOException {
+		// The decisive reason this is a ledger and not a filter: the two arms run at TWO call sites, so a
+		// collapse living inside either one leaves the other emitting the siblings. Here both call sites
+		// raise a candidate for the SAME (substance, allergen) key and neither is redundant with the
+		// other — the question resolves the (12y+) presentation and the bare row, the active order
+		// resolves the (5y-11y) presentation, which no question word reaches. A ledger per call site
+		// answers this with two chips; the tests above cannot see the difference, because in each of them
+		// one call site supplies the whole group.
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
+				"Is it safe to give Tozinameran (12y+)?",
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Tozinameran (5y-11y)"), null,
+						DrugReferenceTestSupport.set("Tozinameran"), null));
+
+		assertEquals(1, warnings.size(),
+				"a question-driven chip and an order-driven one about one substance are one chip, was: "
+						+ warnings);
+		assertEquals("The patient has a recorded allergy to Tozinameran (sars-cov-2 (covid-19) vaccine,"
+				+ " mrna spike protein).", warnings.get(0).getDetail());
+	}
+
+	@Test
 	public void oneSubstanceStillReportsEveryRecordedFindingSeparately() throws IOException {
 		// The other half of the key: the RECORDED FINDING is in it, so the collapse is per (substance,
 		// finding) and never per substance. Two allergies about one substance are two clinical facts and

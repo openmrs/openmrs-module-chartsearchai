@@ -626,6 +626,14 @@ public class DrugSafetyValidator {
 	 * the group's first candidate took, so no client sees the chip sequence reshuffle when a later,
 	 * stronger row replaces an earlier one.
 	 *
+	 * <p>Resolving a tie by position is lossless rather than merely tidier, and that rests on the rows
+	 * of one substance publishing the SAME ATC codes — which the shipped KB does for every group this
+	 * key merges, and which is the thing to re-measure before widening the key, since the class chip
+	 * names a code and a divergent row's code would be dropped unheard. Curated-group membership needs
+	 * no separate check: {@link CrossReactivityGroup#groupsOf} is a pure function of those same codes,
+	 * so equal codes are equal membership. What is left for a tie to choose between is then only the
+	 * route qualifier in the subject's own label.
+	 *
 	 * <p><b>Why replacing an incumbent is not dead code.</b> It is tempting to read this ledger as
 	 * first-wins, and on the dexamethasone family the two would agree: {@code lookupByToken} resolves an
 	 * allergy to the EARLIEST matching entry, every dexamethasone row carries the bare substance name

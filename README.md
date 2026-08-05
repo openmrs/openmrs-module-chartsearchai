@@ -53,6 +53,7 @@ The standalone download above includes the backend module, frontend ESM, and the
   - [Streaming search (SSE)](#streaming-search-sse)
   - [Feedback](#feedback)
   - [Audit log](#audit-log)
+  - [Drug-reference status](#drug-reference-status)
 - [Patient access control](#patient-access-control)
 - [Evals](#evals)
 - [Evaluated models](#evaluated-models)
@@ -501,6 +502,27 @@ GET /ws/rest/v1/chartsearchai/auditlog?patient=...&user=...&fromDate=...&toDate=
 ```
 
 All query parameters are optional. `fromDate` and `toDate` are epoch milliseconds. Returns paginated results ordered by most recent first, with a `totalCount` for pagination. Each entry includes `rating` and `feedbackComment` fields (null if no feedback was submitted).
+
+### Drug-reference status
+
+Which drug-reference dataset the module is **actually** using. Requires the core **"Get Global Properties"** privilege — which the `Authenticated` role holds on a default install, so treat this as readable by any logged-in user. It carries configuration metadata only: no patient data, and no absolute server paths.
+
+```
+GET /ws/rest/v1/chartsearchai/drugreferencestatus
+```
+
+```json
+{"enabled": true, "loaded": true, "inert": false, "entryCount": 2283,
+ "sourceFormat": "ddinter", "configuredSourceFormat": "ddinter",
+ "configuredDataFilePath": "chartsearchai/ddi_knowledge_base.json",
+ "origin": "appdata:chartsearchai/ddi_knowledge_base.json"}
+```
+
+Ask this — not the log — after editing `sourceFormat` or `dataFilePath`. The dataset load is lazy and cached for the life of the module, so the most recent `Loaded N …` line may belong to a load performed before those properties were last edited, or to a process a failed restart left running. Reading this endpoint reports the load that filled the cache, performing it if it has not happened yet.
+
+- **`inert: true`** means a source *was* selected and produced **zero** entries: no interaction, allergy or contraindication warning can be raised, and every safety question answers as though there were nothing to find, while the module looks healthy. Usually a `sourceFormat`/`dataFilePath` mismatch — each format parses only its own shape and returns nothing, without failing, for another's. Also logged at WARN when it happens.
+- **`enabled: false`** with `loaded: false` is the default, legitimate state: the feature is off, so nothing is loaded. Reading the status does not trigger a load in that case.
+- **`origin`** is what was *read*, marked with the space it came from — `appdata:<path>` for an operator file, `classpath:/chartsearchai/…` for the bundled dataset; `configuredDataFilePath` is what was *asked for*. **Your file loaded exactly when `origin` is `appdata:` + that path.** They differ when the configured file could not be read and the bundled dataset was used — which yields a plausible non-zero `entryCount`, so the count alone does not tell you your file loaded. `origin` is relative rather than absolute because `Get Global Properties` is held by the `Authenticated` role on a default install, so any logged-in user can read this endpoint, while core keeps the absolute application-data path behind `View Administration Functions`.
 
 ## Patient access control
 

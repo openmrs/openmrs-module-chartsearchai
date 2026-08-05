@@ -203,7 +203,13 @@ public class DrugReferenceInjector {
 	 * so the matching/rendering logic is unit-testable. Honours the
 	 * {@code injectFromQuery} / {@code injectFromOrders} toggles.
 	 */
-	PatientChart injectRecords(PatientChart chart, PatientClinicalContext context, String question) {
+	PatientChart injectRecords(PatientChart chart, PatientClinicalContext rawContext, String question) {
+		// The same one-per-pass resolution DrugSafetyValidator.validate applies, for the same reason
+		// (issue #136): orderedInteractionNotes decides which interactions to promote through
+		// PatientClinicalContext.hasActiveDrug, so a context without the reference names here would
+		// promote a different set of partners than the chips name — the exact chip-versus-prose split
+		// that method's javadoc exists to rule out.
+		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext);
 		List<DrugReference> matched = matchingEntries(context, question);
 		List<SafetyWarning> findings = preAnswerFindings(context, question);
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);

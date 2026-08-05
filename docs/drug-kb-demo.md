@@ -405,12 +405,18 @@ Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless not
 
 > **Since [#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143) a query does
 > NOT surface only the warnings for the drug it names.** Every question additionally has this
-> patient's own active orders checked against her own allergies and conditions, so each row below
-> also carries contraindication chips for her **Amoxicillin** order (her Penicillins allergy) and
-> her **Gentamicin** order (her non-coded Aminoglycoside allergy and her renal impairment) — drugs
-> the query never mentions. That is the point of the fix: an allergy to a drug she is already
-> taking is a prescribing error the chart already contains. Expect them alongside every
-> expectation in the table.
+> patient's own active orders checked against her own allergies and conditions, so every row below
+> also carries chips about drugs the query never mentions. With the bundled KB and the seed above,
+> exactly one of her eight orders resolves to an entry that her own records contraindicate:
+> **Amoxicillin** (`DKB-ORD-6`), whose curated `penicillin` rule matches her *Penicillin drug class*
+> allergy — so expect `Amoxicillin is contraindicated by an active allergy: penicillin-class
+> hypersensitivity` on top of every expectation in the table. Her Warfarin, Aspirin, Methotrexate,
+> Furosemide, Ampicillin and Amikacin orders resolve to no bundled entry at all, so they add
+> nothing. Add the Gentamicin order the ATC step intends (see the `concept_id` caveat in
+> [Portability](#portability) — `3923` is Gentamicin only on the database that comment was written
+> against) and two more appear, off her non-coded *Aminoglycoside* allergy and her *Significant
+> renal impairment*. That is the point of the fix: an allergy to a drug she is already taking is a
+> prescribing error the chart already contains, and no wording of a question should hide it.
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|

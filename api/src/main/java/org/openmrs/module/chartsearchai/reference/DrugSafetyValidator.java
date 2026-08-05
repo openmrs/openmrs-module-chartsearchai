@@ -223,9 +223,11 @@ public class DrugSafetyValidator {
 	 * answer phrases it by class ("an NSAID allergy") and never writes the drug name. Overdose still
 	 * reads the dose from the answer, so a question-only drug with no stated dose yields no overdose.
 	 *
-	 * <p>One check has no drug in play at all: when the question asks to be SCREENED for interactions
-	 * and names no drug, the patient's own active orders are additionally screened against each other
-	 * — see {@link #addActiveOrderPairInteractions}.
+	 * <p>Two checks have no drug in play at all, so the union above is not the whole subject set: the
+	 * patient's own active orders are checked against their own allergy and condition records on every
+	 * question ({@link #addActiveOrderContraindications}, issue #143), and — when the question asks to be
+	 * SCREENED for interactions and names no drug — screened against each other
+	 * ({@link #addActiveOrderPairInteractions}, issue #113).
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext context) {
 		return validate(answer, question, context, null);

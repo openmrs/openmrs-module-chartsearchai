@@ -67,6 +67,12 @@ public class ActiveOrderContraindicationTest {
 	 *  question-driven arm nor the screen has an anchor — the shape the defect needs. */
 	private static final String NO_DRUG_QUESTION = "What are her current medications?";
 
+	/** The question that opens the interaction screen's gate (issue #113) — it resolves no reference
+	 *  drug, which is exactly what that arm requires, so it is the one question shape under which the
+	 *  new arm and the screen both run. See {@link #thePatientsOwnContraindicationsLeadTheScreensPairChips}. */
+	private static final String SCREENING_QUESTION =
+			"Are there any drug interactions with her current medications?";
+
 	/** The patient's real querystore {@code drug_order} chart record for that order — the record an
 	 *  answer about her medications cites, and so the record echo scoping attributes the mention to. */
 	private static final RecordMapping ORDER_RECORD =
@@ -193,6 +199,78 @@ public class ActiveOrderContraindicationTest {
 		assertEquals(2, contraindications(warnings).size(),
 				"a prescribed drug the question also names must be checked once, not twice, was: "
 						+ warnings);
+	}
+
+	@Test
+	public void everyActiveOrderIsCheckedRatherThanOnlyTheFirst() {
+		// The arm's subject is the order LIST, so a patient on several medications has every one of
+		// them compared — the live shape behind this fix's headline capture (one patient, an allergy,
+		// and two different orders each raising their own chip). Deliberately arranged so the
+		// contraindicated orders are NOT first: paracetamol resolves ahead of them, so an arm that
+		// checked one order and stopped would find nothing at all here while still passing every other
+		// case in this class (mutation-verified — `break` after the first order left all 889 tests
+		// green before this case existed). Paracetamol is the discriminator in the other direction
+		// too: an arm that chipped from "this patient has an allergy AND has orders", without
+		// comparing the two, would raise something about the one drug neither allergy relates to.
+		List<SafetyWarning> warnings = validator().validate("", NO_DRUG_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Paracetamol 500mg", IBUPROFEN_ORDER,
+								"Amoxicillin 500mg"),
+						null, DrugReferenceTestSupport.set("ibuprofen", "penicillin"), null),
+				null);
+
+		assertEquals(3, warnings.size(),
+				"two of the three orders are contraindicated, and only contraindications may be "
+						+ "raised here, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", "documented ibuprofen allergy"),
+				"the second order's curated allergy rule fires, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen",
+				"The patient has a recorded allergy to Ibuprofen."),
+				"and so does its identity check, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Amoxicillin", "penicillin-class hypersensitivity"),
+				"the THIRD order's curated rule fires too — the allergy names a class, not the drug, "
+						+ "so only the curated arm can reach it, was: " + warnings);
+		assertFalse(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_CONTRAINDICATION,
+				"Paracetamol"), "the order neither allergy relates to must raise nothing, was: " + warnings);
+	}
+
+	@Test
+	public void thePatientsOwnContraindicationsLeadTheScreensPairChips() {
+		// The one question shape under which BOTH order-driven arms run: a screening question resolves
+		// no reference drug, which opens the screen's gate (issue #113) while leaving the new arm's
+		// subjects unchanged. Two properties, neither previously exercised together.
+		//
+		// ORDER. The new arm is called between the drug-in-play loop and the pair arms deliberately —
+		// "the patient's own findings lead", because a chip about their allergy outranks a reference
+		// lookup about a pair. That is not cosmetic: every chip is also injected into the prompt as a
+		// citable finding in this order (issue #110), and record ordering is a measured lever on
+		// whether the model reports the finding at all — eval/drift-metric/README.md's own table moves
+		// abstentions 8 -> 5 of 10 on render ordering with the prompt held constant. Moving this call
+		// after the screen would reverse the order silently.
+		//
+		// COMPOSITION. The screen seeds its suppression set from the chips already raised, so these
+		// contraindications now reach it; it must add its pair anyway (they are TYPE_CONTRAINDICATION
+		// and everything it raises is TYPE_INTERACTION, and chipIdentity leads with the type).
+		List<SafetyWarning> warnings = validator().validate("", SCREENING_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set(IBUPROFEN_ORDER, "Warfarin 5mg"), null,
+						DrugReferenceTestSupport.set("ibuprofen"), null),
+				null);
+
+		assertEquals(3, warnings.size(),
+				"both contraindications and the screened pair must be raised, was: " + warnings);
+		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, warnings.get(0).getType(),
+				"the patient's own contraindication must lead, was: " + warnings);
+		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, warnings.get(1).getType(),
+				"and so must the second, was: " + warnings);
+		assertEquals(SafetyWarning.TYPE_INTERACTION, warnings.get(2).getType(),
+				"with the reference lookup about a pair last, was: " + warnings);
+		assertTrue(warnings.get(2).getDetail().toLowerCase().contains("warfarin"),
+				"precondition: the screen must really have chipped the ibuprofen x warfarin pair, "
+						+ "or the ordering above is asserted over the wrong arm, was: " + warnings);
 	}
 
 	@Test

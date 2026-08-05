@@ -101,6 +101,30 @@ public class AllergenNameResolutionTest {
 	}
 
 	@Test
+	public void theLocalizedNameIsCheckedAgainstTheChartWithNoDrugInTheQuestion() throws IOException {
+		// The same asymmetry on the arm that needs no question at all — the patient's own active orders
+		// against their own allergy records (issue #143) — which is where this defect does its real
+		// damage: nobody has to ask about the drug for the module to notice that a prescription and an
+		// allergy name the same substance, and both halves of that comparison were resolving a localized
+		// name with the prose matcher. It takes BOTH fixes at once and is the only case here that
+		// depends on neither the question nor the answer naming the drug: the subject comes from
+		// DrugReferenceService.findForActiveOrders resolving the ORDER name, and the allergen from
+		// lookupByToken resolving the ALLERGY text. Reverting either leg to the prose matcher leaves
+		// this silent.
+		List<SafetyWarning> warnings = validator().validate("Her current medications are listed above.",
+				"What are her active medications?", DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Clarithromycine Co 500mg"), null,
+						DrugReferenceTestSupport.set("Clarithromycine"), null));
+
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_CONTRAINDICATION,
+				"Clarithromycin", "recorded allergy to Clarithromycin"),
+				"a prescription and an allergy that name one drug in the localized spelling must be "
+						+ "reported without the question naming it, was: " + warnings);
+		assertEquals(1, warnings.size(),
+				"and exactly once — one resolved allergen, one chip, was: " + warnings);
+	}
+
+	@Test
 	public void localizedAllergenSpellingsResolveToTheirDrug() throws IOException {
 		// The keep direction, over the localized spellings this dictionary actually carries. Each row
 		// is {allergen as recorded, the question's drug word, the entry's display label}, and each is

@@ -253,7 +253,7 @@ public class PatientClinicalContext {
 					return true;
 				}
 			}
-			if (activeDrugReferenceNames.contains(DrugReference.normalizeName(n))) {
+			if (false) {
 				return true;
 			}
 		}

@@ -75,10 +75,11 @@ import org.springframework.stereotype.Service;
  *       reference row: a dataset that files one substance as several route or formulation rows put
  *       every one of them in play from one clinician-facing word, and each raised its own chip — the
  *       siblings of the row the allergy resolved to reporting the substance as cross-reactive with
- *       itself ({@link ContraindicationChips}, issue #145). These same two checks additionally run over the patient's
- *       OWN ACTIVE ORDERS, whatever the question and the answer name — "is the patient allergic to
- *       something they are taking?" is a fact about their chart, and the drug-in-play framing above
- *       could not ask it (see {@link #addActiveOrderContraindications}, issue #143).</li>
+ *       itself ({@link ContraindicationChips}, issue #145). These same two checks additionally run
+ *       over the patient's OWN ACTIVE ORDERS, whatever the question and the answer name — "is the
+ *       patient allergic to something they are taking?" is a fact about their chart, and the
+ *       drug-in-play framing above could not ask it (see
+ *       {@link #addActiveOrderContraindications}, issue #143).</li>
  * </ul>
  *
  * <p>The rule-based checks fire on the entry's own curated {@code interactions}/
@@ -666,11 +667,26 @@ public class DrugSafetyValidator {
 		 *  three above; it exists so every call reads alike. */
 		static final int CURATED_RULE = 1;
 
+		/** A chip already raised for one key: where it sits in {@code warnings}, and how specific the
+		 *  relationship behind it is. ONE entry rather than two maps keyed alike, so the position and the
+		 *  rank cannot desync — a position with no rank beside it would throw inside a {@code validate}
+		 *  whose callers catch {@link RuntimeException} and return nothing, i.e. it would silently drop
+		 *  every chip on the request rather than the one it mishandled. */
+		private static final class Raised {
+
+			private final int position;
+
+			private int relationship;
+
+			Raised(int position, int relationship) {
+				this.position = position;
+				this.relationship = relationship;
+			}
+		}
+
 		private final List<SafetyWarning> warnings;
 
-		private final Map<List<Object>, Integer> positions = new LinkedHashMap<List<Object>, Integer>();
-
-		private final Map<List<Object>, Integer> relationships = new LinkedHashMap<List<Object>, Integer>();
+		private final Map<List<Object>, Raised> raised = new LinkedHashMap<List<Object>, Raised>();
 
 		ContraindicationChips(List<SafetyWarning> warnings) {
 			this.warnings = warnings;
@@ -682,16 +698,15 @@ public class DrugSafetyValidator {
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip) {
 			List<Object> key = Arrays.asList(subjectKey(subject), finding);
-			Integer at = positions.get(key);
-			if (at == null) {
-				positions.put(key, Integer.valueOf(warnings.size()));
-				relationships.put(key, Integer.valueOf(relationship));
+			Raised already = raised.get(key);
+			if (already == null) {
+				raised.put(key, new Raised(warnings.size(), relationship));
 				warnings.add(chip);
 				return;
 			}
-			if (relationship > relationships.get(key).intValue()) {
-				warnings.set(at.intValue(), chip);
-				relationships.put(key, Integer.valueOf(relationship));
+			if (relationship > already.relationship) {
+				warnings.set(already.position, chip);
+				already.relationship = relationship;
 			}
 		}
 
@@ -2076,10 +2091,10 @@ public class DrugSafetyValidator {
 	 * point at the same drug, and the two arms it delegates to bound it further — one chip per
 	 * (substance, resolved allergen) and one per (substance, matching curated rule), through the same
 	 * {@link ContraindicationChips} ledger the drug-in-play call site uses, which is what stops one
-	 * order that resolves several reference rows raising a chip per row (issue #145). That is a bound in the patient's
-	 * own records, the same kind every other contraindication chip has and the reason the pairwise arms
-	 * need {@link #maxPairChips()} while this one does not: nothing here is quadratic in a list the
-	 * module does not choose.
+		 * order that resolves several reference rows raising a chip per row (issue #145). That is a bound
+	 * in the patient's own records, the same kind every other contraindication chip has and the reason
+	 * the pairwise arms need {@link #maxPairChips()} while this one does not: nothing here is quadratic
+	 * in a list the module does not choose.
 	 *
 	 * <p><b>The precondition.</b> With neither allergy nor condition tokens recorded both arms are
 	 * provably no-ops — every branch of {@link #addContraindications} requires

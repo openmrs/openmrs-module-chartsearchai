@@ -139,9 +139,9 @@ public class DrugReference {
 
 	/** A trailing parenthesized qualifier on a display name — the route or formulation a DDInter row
 	 *  is distinguished from its siblings by ({@code Dexamethasone (nasal)},
-	 *  {@code Amphotericin B (lipid complex)}, {@code Tozinameran (5y-11y)}). Anchored at the END, so
-	 *  a parenthetical in the middle of a name is left alone; applied repeatedly by
-	 *  {@link #displayStem} for the handful of names carrying two. */
+	 *  {@code Amphotericin B (lipid complex)}, {@code Tozinameran (5y-11y)}). Anchored at the END, so a
+	 *  parenthetical in the middle of a name is left alone. {@link #displayStem} applies it repeatedly,
+	 *  so a name carrying more than one trailing qualifier reduces fully rather than partly. */
 	private static final Pattern TRAILING_QUALIFIER = Pattern.compile("\\s*\\([^()]*\\)\\s*$");
 
 	/**

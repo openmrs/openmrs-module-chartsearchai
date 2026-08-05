@@ -56,9 +56,18 @@ public class PatientClinicalContext {
 
 	private final Set<String> activeDrugReferenceNames;
 
+	private final boolean exposureComplete;
+
+	private final boolean mappingComplete;
+
+	private final int activeOrderCount;
+
+	private final int mappedActiveOrderCount;
+
 	public PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens) {
-		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens, null);
+		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
+				null, null, true, true, 0, 0);
 	}
 
 	/**
@@ -74,7 +83,18 @@ public class PatientClinicalContext {
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
 			List<ActiveDrugOrder> activeDrugOrders) {
 		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
-				activeDrugOrders, null);
+				activeDrugOrders, null, true, true,
+				activeDrugOrders == null ? 0 : activeDrugOrders.size(),
+				activeDrugOrders == null ? 0 : activeDrugOrders.size());
+	}
+
+	PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
+			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
+			List<ActiveDrugOrder> activeDrugOrders, boolean exposureComplete,
+			int activeOrderCount) {
+		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
+				activeDrugOrders, null, exposureComplete, activeOrderCount == 0,
+				activeOrderCount, 0);
 	}
 
 	/**
@@ -86,7 +106,9 @@ public class PatientClinicalContext {
 	 */
 	private PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
-			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames) {
+			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
+			boolean exposureComplete, boolean mappingComplete, int activeOrderCount,
+			int mappedActiveOrderCount) {
 		this.ageYears = ageYears;
 		this.weightKg = weightKg;
 		this.activeDrugNames = lower(activeDrugNames);
@@ -96,6 +118,10 @@ public class PatientClinicalContext {
 		this.activeDrugOrders = activeDrugOrders == null ? Collections.<ActiveDrugOrder> emptyList()
 				: Collections.unmodifiableList(new ArrayList<ActiveDrugOrder>(activeDrugOrders));
 		this.activeDrugReferenceNames = lower(activeDrugReferenceNames);
+		this.exposureComplete = exposureComplete;
+		this.mappingComplete = mappingComplete;
+		this.activeOrderCount = Math.max(0, activeOrderCount);
+		this.mappedActiveOrderCount = Math.max(0, mappedActiveOrderCount);
 	}
 
 	/**
@@ -104,7 +130,15 @@ public class PatientClinicalContext {
 	 */
 	PatientClinicalContext withActiveDrugReferenceNames(Set<String> referenceNames) {
 		return new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
-				allergyTokens, conditionTokens, activeDrugOrders, referenceNames);
+				allergyTokens, conditionTokens, activeDrugOrders, referenceNames, exposureComplete,
+				mappingComplete, activeOrderCount, mappedActiveOrderCount);
+	}
+
+	PatientClinicalContext withActiveDrugReferenceNames(Set<String> referenceNames,
+			int mappedOrderCount) {
+		return new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
+				allergyTokens, conditionTokens, activeDrugOrders, referenceNames, exposureComplete,
+				mappedOrderCount == activeOrderCount, activeOrderCount, mappedOrderCount);
 	}
 
 	/** Pre-weight constructor, retained for test convenience (production uses the weight-carrying
@@ -195,6 +229,22 @@ public class PatientClinicalContext {
 	 *          only the flattened name/ATC sets. */
 	public List<ActiveDrugOrder> getActiveDrugOrders() {
 		return activeDrugOrders;
+	}
+
+	public boolean isExposureComplete() {
+		return exposureComplete;
+	}
+
+	public boolean isMappingComplete() {
+		return mappingComplete;
+	}
+
+	public int getActiveOrderCount() {
+		return activeOrderCount;
+	}
+
+	public int getMappedActiveOrderCount() {
+		return mappedActiveOrderCount;
 	}
 
 	/** @return lowercased allergen text of the patient's active allergies — the coded allergen's name

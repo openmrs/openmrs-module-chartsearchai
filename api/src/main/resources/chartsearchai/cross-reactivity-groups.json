@@ -1,6 +1,8 @@
 {
+  "packageId": "chartsearchai-cross-reactivity-research-seed-v1",
   "version": "1.0",
-  "description": "Curated cross-reactivity groups, consumed alongside any drug-reference source (json or atc). ATC classification cannot express cross-branch pharmacological cross-reactivity — aspirin (N02BA01, salicylates) and ibuprofen (M01AE01, propionic-acid derivatives) sit in different ATC branches yet share the NSAID hypersensitivity family — so that linkage is carried here as data (the boundary documented in ADR Decision 24, closed by this file). A group links every drug whose ATC code falls under any of its atcPrefixes; the safety validator warns when a checked drug shares a group with a recorded allergy (cross-reactivity) or with an active order (additive / duplicate-class therapy), and the injector treats group-related active orders as relevant to a drug-specific question. Seed data — expand per deployment.",
+  "reviewState": "proposed",
+  "description": "Unreviewed research seed for cross-reactivity code paths. ATC classification alone does not establish cross-reactivity or duplicate therapy, and this file is not a clinically approved deterministic warning source.",
   "groups": [
     {
       "name": "NSAID",

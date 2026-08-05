@@ -57,14 +57,24 @@ public final class DrugReferenceLoad {
 
 	private final int entryCount;
 
+	private final DrugReferencePackage sourcePackage;
+
 	DrugReferenceLoad(String sourceFormat, String configuredSourceFormat, String configuredDataFilePath,
 			String origin, int entryCount) {
+		this(sourceFormat, configuredSourceFormat, configuredDataFilePath, origin, entryCount,
+				DrugReferencePackage.proposed(sourceFormat, origin));
+	}
+
+	DrugReferenceLoad(String sourceFormat, String configuredSourceFormat, String configuredDataFilePath,
+			String origin, int entryCount, DrugReferencePackage sourcePackage) {
 		this.loaded = true;
 		this.sourceFormat = sourceFormat;
 		this.configuredSourceFormat = configuredSourceFormat;
 		this.configuredDataFilePath = configuredDataFilePath;
 		this.origin = origin == null ? ReferenceDataFiles.ORIGIN_NONE : origin;
 		this.entryCount = entryCount;
+		this.sourcePackage = sourcePackage == null
+				? DrugReferencePackage.proposed(sourceFormat, this.origin) : sourcePackage;
 	}
 
 	private DrugReferenceLoad() {
@@ -74,6 +84,7 @@ public final class DrugReferenceLoad {
 		this.configuredDataFilePath = null;
 		this.origin = null;
 		this.entryCount = 0;
+		this.sourcePackage = DrugReferencePackage.notLoaded();
 	}
 
 	/** @return the outcome for "no load has happened", which is not a failure — see the class javadoc. */
@@ -148,6 +159,10 @@ public final class DrugReferenceLoad {
 		return entryCount;
 	}
 
+	public DrugReferencePackage getSourcePackage() {
+		return sourcePackage;
+	}
+
 	/** @return this outcome as a JSON-serializable map, for the REST status endpoint. */
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new LinkedHashMap<String, Object>();
@@ -158,6 +173,7 @@ public final class DrugReferenceLoad {
 		map.put("configuredSourceFormat", configuredSourceFormat);
 		map.put("configuredDataFilePath", configuredDataFilePath);
 		map.put("origin", origin);
+		map.put("package", sourcePackage.toMap());
 		return map;
 	}
 

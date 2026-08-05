@@ -27,12 +27,12 @@ import org.springframework.stereotype.Service;
  * pluggable: the active {@link DrugReferenceSource} is selected by
  * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_SOURCE_FORMAT}
  * ({@code json} = the curated {@link JsonDrugReferenceSource}, {@code atc} = the
- * authoritative {@link AtcDrugReferenceSource}, {@code ddinter} = the DDInter-backed
+ * classification-only {@link AtcDrugReferenceSource}, {@code ddinter} = the DDInter-backed
  * {@link DdiDrugReferenceSource}); each resolves its file from
  * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH}, with a bundled
  * classpath default. This lets the
- * feature consume authoritative datasets by pointing at them, rather than
- * hand-maintaining a chartsearchai-specific file. See ADR Decision 24.
+ * feature consume different research formats without treating format selection as clinical
+ * approval. See the safety-boundary correction on ADR Decision 24.
  *
  * <p>Loading is lazy and cached: the first lookup triggers a load, and the result
  * is held for the life of the bean. The same applies to the curated
@@ -275,7 +275,30 @@ public class DrugReferenceService {
 		for (DrugReference ref : orderEntries) {
 			names.addAll(ref.getAliases());
 		}
-		return names.isEmpty() ? context : context.withActiveDrugReferenceNames(names);
+		int mappedOrderCount = 0;
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (resolves(order, orderEntries)) {
+				mappedOrderCount++;
+			}
+		}
+		return context.withActiveDrugReferenceNames(names, mappedOrderCount);
+	}
+
+	private static boolean resolves(PatientClinicalContext.ActiveDrugOrder order,
+			List<DrugReference> candidates) {
+		for (DrugReference ref : candidates) {
+			for (String code : ref.normalizedAtcCodes()) {
+				if (order.getAtcCodes().contains(code)) {
+					return true;
+				}
+			}
+			for (String name : order.getNames()) {
+				if (ref.matchesDrugName(name)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**

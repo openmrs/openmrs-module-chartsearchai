@@ -59,9 +59,12 @@ final class PatientClinicalContextBuilder {
 		Set<String> conditionTokens = new LinkedHashSet<String>();
 		List<PatientClinicalContext.ActiveDrugOrder> activeOrders =
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		boolean exposureComplete = true;
+		int activeOrderCount = 0;
 
 		if (patient == null) {
-			return new PatientClinicalContext(null, null, drugNames, atcCodes, allergyTokens, conditionTokens);
+			return new PatientClinicalContext(null, null, drugNames, atcCodes, allergyTokens,
+					conditionTokens, activeOrders, false, 0);
 		}
 
 		try {
@@ -88,6 +91,7 @@ final class PatientClinicalContextBuilder {
 				if (!(order instanceof DrugOrder)) {
 					continue;
 				}
+				activeOrderCount++;
 				DrugOrder drugOrder = (DrugOrder) order;
 				// Per-order names, collected BEFORE they are folded into the flattened set: the
 				// reconciliation must be able to tell one order's names from another's, which the
@@ -130,6 +134,7 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
+			exposureComplete = false;
 			log.debug("Could not read active orders for drug-reference context", e);
 		}
 
@@ -143,6 +148,7 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
+			exposureComplete = false;
 			log.debug("Could not read allergies for drug-reference context", e);
 		}
 
@@ -157,11 +163,12 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
+			exposureComplete = false;
 			log.debug("Could not read conditions for drug-reference context", e);
 		}
 
-		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
-				activeOrders);
+		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens,
+				conditionTokens, activeOrders, exposureComplete, activeOrderCount);
 	}
 
 	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by

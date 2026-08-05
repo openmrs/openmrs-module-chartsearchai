@@ -287,6 +287,9 @@ public final class DrugReferenceTestSupport {
 	static DrugSafetyValidator validator(DrugReferenceService service) {
 		DrugSafetyValidator validator = new DrugSafetyValidator();
 		validator.setDrugReferenceService(service);
+		// Pure rule tests use an explicit approved fixture package. Production never receives this
+		// override; its review state comes from the loaded package metadata.
+		validator.setReviewStateForTest(DrugReferencePackage.REVIEW_CLINICALLY_APPROVED);
 		return validator;
 	}
 

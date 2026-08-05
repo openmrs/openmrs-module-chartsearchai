@@ -1,6 +1,8 @@
 {
  "metadata": {
   "schema_version": "1.0",
+  "package_id": "openmrs-ddi-knowledge-base-bundled-sample",
+  "review_state": "proposed",
   "title": "OpenMRS DDI knowledge base — bundled sample",
   "note": "Small representative default (16 common drugs, self-contained). Point chartsearchai.drugReference.dataFilePath at the full ddi_knowledge_base.json from openmrs-ddi-knowledge-base for full coverage.",
   "source": {

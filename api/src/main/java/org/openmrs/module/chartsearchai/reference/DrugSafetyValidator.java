@@ -34,8 +34,9 @@ import org.springframework.stereotype.Service;
 
 /**
  * Part 2 of the drug-reference feature: a deterministic post-LLM check that runs
- * after the answer is generated and <em>annotates</em> it with {@link SafetyWarning}s.
- * It never rewrites or blocks the answer — the clinician decides.
+ * after the answer is generated. It always reports package and coverage state; only
+ * a clinically-approved package may annotate an answer with {@link SafetyWarning}s.
+ * It never rewrites or blocks the answer.
  *
  * <p>For every reference drug in play — those the question asks about, plus those the answer
  * names on its own authority (a drug the answer mentions only by echoing a cited record's own
@@ -76,10 +77,10 @@ import org.springframework.stereotype.Service;
  *       could not ask it (see {@link #addActiveOrderContraindications}, issue #143).</li>
  * </ul>
  *
- * <p>The rule-based checks fire on the entry's own curated {@code interactions}/
- * {@code contraindications}; the <em>class-based</em> checks need only ATC codes, so they
- * are the mechanism by which an authoritative classification source ({@link AtcDrugReferenceSource},
- * which carries no rules) still produces safety reasoning. "Same class" means a shared ATC
+ * <p>When an approved package explicitly activates these mechanisms, rule-based checks read the
+ * entry's {@code interactions}/{@code contraindications}. The retained class-matching engine uses
+ * ATC codes, but ATC classification by itself is not approved rule evidence and cannot activate it.
+ * "Same class" means a shared ATC
  * level-4 chemical subgroup ({@link DrugReference#ATC_SUBGROUP_PREFIX_LENGTH}), e.g. ibuprofen {@code M01AE01}
  * and naproxen {@code M01AE02} both {@code M01AE}. ATC's tree does not capture cross-branch
  * pharmacological cross-reactivity (aspirin {@code N02BA01} vs ibuprofen {@code M01AE01}); that
@@ -168,9 +169,17 @@ public class DrugSafetyValidator {
 	@Autowired
 	private DrugReferenceService drugReferenceService;
 
+	private String reviewStateOverride;
+
 	/** Test seam: production wires {@link DrugReferenceService} via {@link Autowired}. */
 	void setDrugReferenceService(DrugReferenceService drugReferenceService) {
 		this.drugReferenceService = drugReferenceService;
+	}
+
+	/** Test-only approval seam for hermetic in-memory rule fixtures. Production review state comes
+	 *  from the loaded package and has no global-property bypass. */
+	void setReviewStateForTest(String reviewState) {
+		this.reviewStateOverride = reviewState;
 	}
 
 	/** checked/limited/unavailable alongside the raised warnings (dual-provider-conformance.v1
@@ -181,9 +190,30 @@ public class DrugSafetyValidator {
 
 		private final List<SafetyWarning> warnings;
 
+		private final Map<String, Object> sourcePackage;
+
+		private final Map<String, Object> coverage;
+
+		private final String identityConfidence;
+
+		private final List<String> issues;
+
 		SafetyCheckResult(String status, List<SafetyWarning> warnings) {
+			this(status, warnings, Collections.<String, Object> emptyMap(),
+					Collections.<String, Object> emptyMap(), "unavailable",
+					Collections.<String> emptyList());
+		}
+
+		SafetyCheckResult(String status, List<SafetyWarning> warnings,
+				Map<String, Object> sourcePackage, Map<String, Object> coverage,
+				String identityConfidence, List<String> issues) {
 			this.status = status;
-			this.warnings = warnings;
+			this.warnings = Collections.unmodifiableList(new ArrayList<SafetyWarning>(warnings));
+			this.sourcePackage = Collections.unmodifiableMap(
+					new LinkedHashMap<String, Object>(sourcePackage));
+			this.coverage = Collections.unmodifiableMap(new LinkedHashMap<String, Object>(coverage));
+			this.identityConfidence = identityConfidence;
+			this.issues = Collections.unmodifiableList(new ArrayList<String>(issues));
 		}
 
 		/** One of {@link #STATUS_CHECKED}, {@link #STATUS_LIMITED}, {@link #STATUS_UNAVAILABLE}. */
@@ -193,6 +223,26 @@ public class DrugSafetyValidator {
 
 		public List<SafetyWarning> getWarnings() {
 			return warnings;
+		}
+
+		public Map<String, Object> toMap() {
+			Map<String, Object> map = new LinkedHashMap<String, Object>();
+			map.put("schema_version", "drug_safety.v1");
+			map.put("status", status);
+			List<Map<String, Object>> serializedWarnings = new ArrayList<Map<String, Object>>();
+			for (SafetyWarning warning : warnings) {
+				Map<String, Object> item = new LinkedHashMap<String, Object>();
+				item.put("type", warning.getType());
+				item.put("drug", warning.getDrug());
+				item.put("detail", warning.getDetail());
+				serializedWarnings.add(item);
+			}
+			map.put("warnings", serializedWarnings);
+			map.put("package", sourcePackage);
+			map.put("coverage", coverage);
+			map.put("identity_confidence", identityConfidence);
+			map.put("issues", issues);
+			return map;
 		}
 	}
 
@@ -236,17 +286,17 @@ public class DrugSafetyValidator {
 					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
 							ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
 							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
-				return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
+				return unavailable(null, "check_disabled");
 			}
 			if (patient == null) {
-				return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
+				return unavailable(null, "patient_context_unavailable");
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
 			return validateWithStatus(answer, question, context, mappings);
 		}
 		catch (RuntimeException e) {
 			log.warn("Drug-safety validation failed; returning unavailable status — the answer path is never broken", e);
-			return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
+			return unavailable(null, "execution_failed");
 		}
 	}
 
@@ -280,12 +330,91 @@ public class DrugSafetyValidator {
 			PatientClinicalContext context, List<RecordMapping> mappings,
 			boolean warnDose, boolean warnInteractions, boolean warnContra) {
 		if (context == null) {
-			return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
+			return unavailable(null, "patient_context_unavailable");
 		}
-		List<SafetyWarning> warnings = validate(answer, question, context, mappings,
+		PatientClinicalContext resolved = drugReferenceService.withReferenceNames(context);
+		DrugReferencePackage sourcePackage = effectiveSourcePackage();
+		if (!sourceAvailable()) {
+			return new SafetyCheckResult(STATUS_UNAVAILABLE,
+					Collections.<SafetyWarning> emptyList(), sourcePackage.toMap(),
+					coverage(resolved, false), "unavailable",
+					Collections.singletonList("source_unavailable"));
+		}
+		List<String> issues = new ArrayList<String>();
+		if (!resolved.isMappingComplete()) {
+			issues.add("mapping_incomplete");
+		}
+		if (!resolved.isExposureComplete()) {
+			issues.add("exposure_incomplete");
+		}
+		if (sourcePackage.isRetired()) {
+			issues.add("source_retired");
+		}
+		else if (!sourcePackage.isClinicallyApproved()) {
+			issues.add("source_not_clinically_approved");
+		}
+		if (!(warnDose && warnInteractions && warnContra)) {
+			issues.add("check_scope_limited");
+		}
+
+		Map<String, Object> coverage = coverage(resolved, true);
+		String identity = resolved.isMappingComplete() && resolved.isExposureComplete()
+				? "high" : "limited";
+		if (!sourcePackage.isClinicallyApproved()) {
+			return new SafetyCheckResult(sourcePackage.isRetired() ? STATUS_UNAVAILABLE : STATUS_LIMITED,
+					Collections.<SafetyWarning> emptyList(), sourcePackage.toMap(), coverage,
+					identity, issues);
+		}
+		List<SafetyWarning> warnings = validate(answer, question, resolved, mappings,
 				warnDose, warnInteractions, warnContra);
-		String status = (warnDose && warnInteractions && warnContra) ? STATUS_CHECKED : STATUS_LIMITED;
-		return new SafetyCheckResult(status, warnings);
+		return new SafetyCheckResult(issues.isEmpty() ? STATUS_CHECKED : STATUS_LIMITED,
+				warnings, sourcePackage.toMap(), coverage, identity, issues);
+	}
+
+	private DrugReferencePackage effectiveSourcePackage() {
+		if (reviewStateOverride != null) {
+			return new DrugReferencePackage("approved-test-rules", "test", "1",
+					Collections.<String, Object> singletonMap("fixture", "in-memory"),
+					reviewStateOverride);
+		}
+		try {
+			return drugReferenceService.getLoadStatus().getSourcePackage();
+		}
+		catch (RuntimeException e) {
+			return DrugReferencePackage.notLoaded();
+		}
+	}
+
+	private boolean sourceAvailable() {
+		if (reviewStateOverride != null) {
+			return true;
+		}
+		try {
+			DrugReferenceLoad load = drugReferenceService.getLoadStatus();
+			return load.isLoaded() && !load.isInert();
+		}
+		catch (RuntimeException e) {
+			return false;
+		}
+	}
+
+	private SafetyCheckResult unavailable(PatientClinicalContext context, String issue) {
+		List<String> issues = new ArrayList<String>();
+		issues.add(issue);
+		return new SafetyCheckResult(STATUS_UNAVAILABLE, Collections.<SafetyWarning> emptyList(),
+				effectiveSourcePackage().toMap(), coverage(context, false), "unavailable", issues);
+	}
+
+	private static Map<String, Object> coverage(PatientClinicalContext context,
+			boolean executionComplete) {
+		Map<String, Object> coverage = new LinkedHashMap<String, Object>();
+		coverage.put("mapping_complete", context != null && context.isMappingComplete());
+		coverage.put("exposure_complete", context != null && context.isExposureComplete());
+		coverage.put("execution_complete", executionComplete);
+		coverage.put("active_order_count", context == null ? 0 : context.getActiveOrderCount());
+		coverage.put("mapped_active_order_count",
+				context == null ? 0 : context.getMappedActiveOrderCount());
+		return coverage;
 	}
 
 	/**

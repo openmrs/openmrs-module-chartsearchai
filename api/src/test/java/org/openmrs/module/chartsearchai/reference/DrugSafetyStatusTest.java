@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -104,5 +105,46 @@ public class DrugSafetyStatusTest {
 
 		assertEquals(DrugSafetyValidator.STATUS_CHECKED, result.getStatus());
 		assertTrue(DrugReferenceTestSupport.has(result.getWarnings(), SafetyWarning.TYPE_OVERDOSE, "ibuprofen"));
+	}
+
+	@Test
+	public void proposedPackageIsLimitedAndCannotSurfaceWarnings() {
+		DrugSafetyValidator validator = validator();
+		validator.setReviewStateForTest(DrugReferencePackage.REVIEW_PROPOSED);
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(5, null, null, null, null, null);
+
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Ibuprofen 600 mg every 6 hours can be given for pain.", null, context);
+
+		assertEquals(DrugSafetyValidator.STATUS_LIMITED, result.getStatus());
+		assertTrue(result.getWarnings().isEmpty());
+		assertEquals(DrugReferencePackage.REVIEW_PROPOSED,
+				((java.util.Map<?, ?>) result.toMap().get("package")).get("review_state"));
+		assertTrue(((java.util.List<?>) result.toMap().get("issues"))
+				.contains("source_not_clinically_approved"));
+	}
+
+	@Test
+	public void mappingAndExposureFailuresAreReportedSeparately() {
+		PatientClinicalContext incomplete = new PatientClinicalContext(30, null,
+				java.util.Collections.singleton("unknown drug"),
+				java.util.Collections.<String> emptySet(),
+				java.util.Collections.<String> emptySet(),
+				java.util.Collections.<String> emptySet(),
+				java.util.Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList(),
+				false, 1);
+
+		DrugSafetyValidator.SafetyCheckResult result = validator().validateWithStatus(
+				"No medication recommendation.", null, incomplete);
+		java.util.Map<?, ?> wire = result.toMap();
+		java.util.List<?> issues = (java.util.List<?>) wire.get("issues");
+		java.util.Map<?, ?> coverage = (java.util.Map<?, ?>) wire.get("coverage");
+
+		assertEquals(DrugSafetyValidator.STATUS_LIMITED, result.getStatus());
+		assertTrue(issues.contains("mapping_incomplete"));
+		assertTrue(issues.contains("exposure_incomplete"));
+		assertFalse((Boolean) coverage.get("mapping_complete"));
+		assertFalse((Boolean) coverage.get("exposure_complete"));
+		assertEquals("limited", wire.get("identity_confidence"));
 	}
 }

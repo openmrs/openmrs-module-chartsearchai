@@ -32,8 +32,8 @@ import org.springframework.stereotype.Service;
 /**
  * Part 1 of the drug-reference feature: injects matching {@link DrugReference}
  * entries into the serialized chart as additional numbered records the LLM can
- * cite, so it can ground reference facts (dosing, prose warnings,
- * contraindications, interactions) the same way it grounds chart records.
+ * cite. Non-approved packages expose classification and an explicit research-only
+ * notice; clinical rule prose is rendered only for an approved package.
  *
  * <p>Injection is appended <em>after</em> the retrieved chart records, continuing
  * the citation numbering. A {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE} record
@@ -189,7 +189,7 @@ public class DrugReferenceInjector {
 				return chart;
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-			return injectRecords(chart, context, question);
+			return injectRecords(chart, context, question, clinicallyApprovedPackage());
 		}
 		catch (RuntimeException e) {
 			log.warn("Drug-reference injection failed; leaving the chart unmodified — the answer path is never broken",
@@ -204,6 +204,11 @@ public class DrugReferenceInjector {
 	 * {@code injectFromQuery} / {@code injectFromOrders} toggles.
 	 */
 	PatientChart injectRecords(PatientChart chart, PatientClinicalContext rawContext, String question) {
+		return injectRecords(chart, rawContext, question, true);
+	}
+
+	PatientChart injectRecords(PatientChart chart, PatientClinicalContext rawContext,
+			String question, boolean clinicallyApproved) {
 		// The same resolution DrugSafetyValidator.validate applies, for the same reason
 		// (issue #136): orderedInteractionNotes decides which interactions to promote through
 		// PatientClinicalContext.hasActiveDrug, so a context without the reference names here would
@@ -211,7 +216,8 @@ public class DrugReferenceInjector {
 		// that method's javadoc exists to rule out.
 		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext);
 		List<DrugReference> matched = matchingEntries(context, question);
-		List<SafetyWarning> findings = preAnswerFindings(context, question);
+		List<SafetyWarning> findings = clinicallyApproved
+				? preAnswerFindings(context, question) : Collections.<SafetyWarning> emptyList();
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
 		if (matched.isEmpty() && findings.isEmpty() && unrepresented.isEmpty()) {
 			return chart;
@@ -234,7 +240,8 @@ public class DrugReferenceInjector {
 		}
 
 		for (DrugReference ref : matched) {
-			RenderedReference rendered = render(ref, age, context);
+			RenderedReference rendered = clinicallyApproved
+					? render(ref, age, context) : renderResearchClassification(ref);
 			// The rendering's own bookkeeping rides on the mapping, not in the line — see
 			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
 			// grounding verifier still compares against exactly what the model read.
@@ -271,6 +278,33 @@ public class DrugReferenceInjector {
 		// it would silently turn the rebuilt slice into one whose absences look uninformative.
 		injected.markCompleteFor(chart.getCompleteResourceTypes());
 		return injected;
+	}
+
+	private boolean clinicallyApprovedPackage() {
+		try {
+			return drugReferenceService.getLoadStatus().getSourcePackage().isClinicallyApproved();
+		}
+		catch (RuntimeException e) {
+			return false;
+		}
+	}
+
+	private static RenderedReference renderResearchClassification(DrugReference ref) {
+		StringBuilder text = new StringBuilder("Drug reference — ").append(ref.getName());
+		List<String> classification = new ArrayList<String>();
+		if (ref.getDrugClass() != null && !ref.getDrugClass().trim().isEmpty()) {
+			classification.add(ref.getDrugClass().trim());
+		}
+		if (!ref.normalizedAtcCodes().isEmpty()) {
+			classification.add("ATC " + String.join(", ", ref.normalizedAtcCodes()));
+		}
+		if (!classification.isEmpty()) {
+			text.append(" (").append(String.join("; ", classification)).append(")");
+		}
+		text.append(". Informational research classification only; this source package is not "
+				+ "clinically approved for deterministic dosing, interaction, contraindication, "
+				+ "duplicate-therapy, or cross-reactivity decisions.");
+		return new RenderedReference(text.toString(), ref.getSource(), ref.getInteractions().size());
 	}
 
 	/**

@@ -38,14 +38,10 @@ import org.slf4j.LoggerFactory;
  * nearest parent group <em>present in the same dataset</em> (level 4, else 3, else 2).
  *
  * <p><b>Classification only.</b> ATC publishes a hierarchy, not clinical rules, so
- * these entries carry NO dosing, interaction, or contraindication data. An ATC-only
- * dataset therefore feeds the {@link DrugSafetyValidator} no per-entry rules to fire on;
- * the validator instead reasons at the <em>class</em> level (a recorded allergy or active
- * order that shares a drug's ATC level-4 subgroup), which is what turns this rule-less
- * classification into safety warnings. ATC's tree does not capture cross-<em>branch</em>
- * pharmacological cross-reactivity (e.g. aspirin {@code N02BA01} vs ibuprofen
- * {@code M01AE01}); that linkage is curated data — the {@link CrossReactivityGroup}s
- * loaded alongside this source (ADR Decision 27), not ATC itself. See ADR Decision 24.
+ * these entries carry NO dosing, interaction, contraindication, duplicate-therapy, or
+ * cross-reactivity rules. ATC is classification and candidate-discovery evidence only;
+ * sharing a hierarchy cannot activate a deterministic warning. Configured ATC content is
+ * therefore reported as a proposed research package by the current safety boundary.
  *
  * <p>Unlike {@link JsonDrugReferenceSource} there is no bundled classpath fallback:
  * the operator points {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH}

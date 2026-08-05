@@ -105,7 +105,14 @@ public class ChatHistoryEndpointTest {
 		turn.setAnswerText("Aspirin 81mg [1].");
 		turn.setProviderPayload("{\"answer\":\"Aspirin 81mg [1].\","
 				+ "\"references\":[{\"index\":1,\"resourceType\":\"drugOrder\"}],"
+				+ "\"blocks\":[{\"type\":\"table\",\"title\":\"Medications\","
+				+ "\"columns\":[\"Medication\"],\"rows\":[[\"Aspirin 81mg\"]]}],"
 				+ "\"answerValidation\":{\"status\":\"checked\"},"
+				+ "\"safetyStatus\":\"limited\","
+				+ "\"safetyWarnings\":[{\"type\":\"interaction\",\"drug\":\"Aspirin\","
+				+ "\"detail\":\"Review interacting medicines.\"}],"
+				+ "\"safetyCheck\":{\"status\":\"limited\","
+				+ "\"issues\":[\"exposure_incomplete\"]},"
 				+ "\"inDepth\":{\"status\":\"needs_review\"}}");
 		ChartSearchAuditLog audit = new ChartSearchAuditLog();
 		audit.setAuditLogId(42);
@@ -126,6 +133,13 @@ public class ChatHistoryEndpointTest {
 		assertEquals(1, ((List<?>) assistant.get("references")).size());
 		Map<String, Object> validation = (Map<String, Object>) assistant.get("answerValidation");
 		assertEquals("checked", validation.get("status"));
+		List<Map<String, Object>> blocks = (List<Map<String, Object>>) assistant.get("blocks");
+		assertEquals("table", blocks.get(0).get("type"));
+		assertEquals("Aspirin 81mg", ((List<List<String>>) blocks.get(0).get("rows")).get(0).get(0));
+		assertEquals("limited", assistant.get("safetyStatus"));
+		assertEquals(1, ((List<?>) assistant.get("safetyWarnings")).size());
+		Map<String, Object> safetyCheck = (Map<String, Object>) assistant.get("safetyCheck");
+		assertEquals("exposure_incomplete", ((List<?>) safetyCheck.get("issues")).get(0));
 		Map<String, Object> inDepth = (Map<String, Object>) assistant.get("inDepth");
 		assertEquals("needs_review", inDepth.get("status"));
 	}

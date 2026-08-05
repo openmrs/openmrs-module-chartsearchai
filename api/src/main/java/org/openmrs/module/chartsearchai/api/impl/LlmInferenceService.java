@@ -134,7 +134,8 @@ public class LlmInferenceService implements ChartSearchService {
 							chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus());
+					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus(),
+					safetyResult.toMap());
 			outcome = "ok";
 			return answer;
 		}
@@ -396,6 +397,9 @@ public class LlmInferenceService implements ChartSearchService {
 			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
 					response.getCitations(), chart.getMappings());
 			citationsConsumer.accept(cited);
+			DrugSafetyValidator.SafetyCheckResult safetyResult =
+					drugSafetyValidator.validateWithStatus(response.getAnswer(), question, patient,
+							chart.getMappings());
 
 			// The answer is complete: hand the whole (not yet grounding-verified) result to the
 			// caller before the grounding pass, so the REST layer can finish the user-visible
@@ -403,19 +407,18 @@ public class LlmInferenceService implements ChartSearchService {
 			// Fires regardless of whether grounding is enabled — see the interface contract.
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens()));
+					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus(),
+					safetyResult.toMap()));
 
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			groundMs = System.currentTimeMillis() - groundStart;
 
-			DrugSafetyValidator.SafetyCheckResult safetyResult =
-					drugSafetyValidator.validateWithStatus(response.getAnswer(), question, patient,
-							chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus());
+					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus(),
+					safetyResult.toMap());
 			outcome = "ok";
 			return answer;
 		}

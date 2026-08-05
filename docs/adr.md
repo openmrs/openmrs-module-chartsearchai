@@ -1616,6 +1616,12 @@ Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440
 
 ## Decision 23: Drug-reference injection + post-answer drug-safety validation
 
+> **Safety-boundary correction (August 2026):** The activation and provenance claims in this
+> historical decision are superseded. The bundled seed is an unreviewed research fixture, not a WHO
+> clinical rule package. The matching engine remains implemented, but only a package explicitly
+> marked `clinically_approved` may emit deterministic warnings. Current bundled/configured sources
+> are `proposed` and return a visible `limited` result without warnings.
+
 **Status: Accepted** (June 2026)
 
 ### Context
@@ -1652,6 +1658,13 @@ The overdose check parses `(drug, mg, frequency)` from the free-text answer. To 
 ## Decision 24: Drug-reference as a pluggable consumer of authoritative datasets
 
 **Status: Accepted** (June 2026) — implemented. Extends [Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation).
+
+> **Safety-boundary correction (August 2026):** A source adapter proves only that a format can be
+> parsed. It does not approve the content for clinical decision support. ATC is classification and
+> candidate-discovery evidence; shared ATC hierarchy, alone or with an unreviewed class seed, cannot
+> activate interaction, contraindication, duplicate-therapy, or cross-reactivity warnings. The
+> class-matching implementation described below is retained behind the approved-package gate; the
+> original automatic-activation claims are historical and superseded.
 
 ### Context
 

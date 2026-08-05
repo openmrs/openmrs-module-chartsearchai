@@ -89,6 +89,25 @@ public class DrugReferenceInjectorTest {
 	}
 
 	@Test
+	public void proposedPackageInjectsClassificationOnlyAndNoSafetyFinding() {
+		PatientChart result = injector().injectRecords(oneRecordChart(),
+				context(5, null), "what is the safe dose of ibuprofen?", false);
+
+		RecordMapping reference = DrugReferenceTestSupport.injectedReference(result);
+		assertTrue(reference.getText().contains("Drug reference — Ibuprofen"));
+		assertTrue(reference.getText().contains("ATC M01AE01"));
+		assertTrue(reference.getText().contains("Informational research classification only"));
+		assertFalse(reference.getText().contains("Dosing for ages"));
+		assertFalse(reference.getText().contains("Interactions:"));
+		assertFalse(reference.getText().contains("Contraindicated with:"));
+		for (RecordMapping mapping : result.getMappings()) {
+			assertFalse(ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(
+					mapping.getResourceType()),
+					"an unapproved package cannot inject a deterministic finding");
+		}
+	}
+
+	@Test
 	public void injectionPreservesQueryScopedStamp() {
 		// A query-scoped slice that gains a drug-reference record MUST stay stamped query-scoped:
 		// LlmInferenceService.searchStreaming derives the KV-cache decision from

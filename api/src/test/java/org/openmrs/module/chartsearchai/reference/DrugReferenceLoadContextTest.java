@@ -378,6 +378,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	 * disappearing key would leave that check silently reading {@code null}.
 	 */
 	@Test
+	@SuppressWarnings("unchecked")
 	public void loadStatusSerializesTheFieldsTheStatusEndpointReturns() throws IOException {
 		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "wire-ddi.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
@@ -386,13 +387,18 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		Map<String, Object> map = service.getLoadStatus().toMap();
 
 		assertEquals(new LinkedHashSet<String>(Arrays.asList("loaded", "inert", "entryCount",
-				"sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin")),
+				"sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin", "package")),
 				map.keySet());
 		assertEquals(Boolean.TRUE, map.get("loaded"));
 		assertEquals(Boolean.FALSE, map.get("inert"));
 		assertEquals(service.getAll().size(), map.get("entryCount"));
 		assertEquals(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, map.get("sourceFormat"));
 		assertEquals(path, map.get("configuredDataFilePath"));
+		Map<String, Object> sourcePackage = (Map<String, Object>) map.get("package");
+		assertEquals("openmrs-ddi-knowledge-base-unreviewed", sourcePackage.get("id"));
+		assertEquals(DrugReferencePackage.REVIEW_PROPOSED, sourcePackage.get("review_state"));
+		assertEquals("appdata:" + path,
+				((Map<String, Object>) sourcePackage.get("provenance")).get("origin"));
 	}
 
 	/**

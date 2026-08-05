@@ -119,7 +119,24 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		Map<String, Object> payload = new LinkedHashMap<>();
 		payload.put("answer", "Use caution [1].");
 		payload.put("references", Collections.singletonList(reference));
+		Map<String, Object> tableBlock = new LinkedHashMap<>();
+		tableBlock.put("type", "table");
+		tableBlock.put("title", "Medication summary");
+		tableBlock.put("columns", java.util.Arrays.asList("Medication", "Status"));
+		tableBlock.put("rows", Collections.singletonList(
+				java.util.Arrays.asList("Ibuprofen", "Use caution")));
+		payload.put("blocks", Collections.singletonList(tableBlock));
 		payload.put("answerValidation", Collections.singletonMap("status", "needs_review"));
+		payload.put("safetyStatus", "limited");
+		Map<String, Object> warning = new LinkedHashMap<>();
+		warning.put("type", "contraindication");
+		warning.put("drug", "Ibuprofen");
+		warning.put("detail", "Recorded allergy requires review.");
+		payload.put("safetyWarnings", Collections.singletonList(warning));
+		Map<String, Object> safetyCheck = new LinkedHashMap<>();
+		safetyCheck.put("status", "limited");
+		safetyCheck.put("issues", Collections.singletonList("mapping_incomplete"));
+		payload.put("safetyCheck", safetyCheck);
 		payload.put("providerExtension", providerExtension);
 
 		conversationService.finishTurn(turn,
@@ -140,6 +157,15 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 				stored.get("providerExtension").get("futureValue").get("score").asDouble());
 		assertEquals("needs_review",
 				stored.get("answerValidation").get("status").asText());
+		assertEquals("table", stored.get("blocks").get(0).get("type").asText(),
+				"structured answer blocks must survive the real database round-trip");
+		assertEquals("Ibuprofen",
+				stored.get("blocks").get(0).get("rows").get(0).get(0).asText());
+		assertEquals("limited", stored.get("safetyStatus").asText());
+		assertEquals("contraindication",
+				stored.get("safetyWarnings").get(0).get("type").asText());
+		assertEquals("mapping_incomplete",
+				stored.get("safetyCheck").get("issues").get(0).asText());
 
 		ChartSearchAuditLog audit = reloaded.getAuditLog();
 		assertNotNull(audit, "every accepted turn is independently auditable");

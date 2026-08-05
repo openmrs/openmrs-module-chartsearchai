@@ -214,6 +214,8 @@ public interface ChartSearchService {
 
 		private final String safetyStatus;
 
+		private final java.util.Map<String, Object> safetyCheck;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -239,6 +241,14 @@ public interface ChartSearchService {
 		public ChartAnswer(String answer, List<RecordReference> references,
 				int inputTokens, int outputTokens, int cachedTokens,
 				List<SafetyWarning> safetyWarnings, String safetyStatus) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings,
+					safetyStatus, java.util.Collections.<String, Object> emptyMap());
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String safetyStatus,
+				java.util.Map<String, Object> safetyCheck) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -249,6 +259,9 @@ public interface ChartSearchService {
 					new java.util.ArrayList<>(safetyWarnings == null
 							? java.util.Collections.<SafetyWarning> emptyList() : safetyWarnings));
 			this.safetyStatus = safetyStatus;
+			this.safetyCheck = java.util.Collections.unmodifiableMap(
+					new java.util.LinkedHashMap<String, Object>(safetyCheck == null
+							? java.util.Collections.<String, Object> emptyMap() : safetyCheck));
 		}
 
 		/**
@@ -305,6 +318,11 @@ public interface ChartSearchService {
 		 */
 		public String getSafetyStatus() {
 			return safetyStatus;
+		}
+
+		/** Canonical provenance/coverage-bearing safety result for provider-neutral clients. */
+		public java.util.Map<String, Object> getSafetyCheck() {
+			return safetyCheck;
 		}
 	}
 

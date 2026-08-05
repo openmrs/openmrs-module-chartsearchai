@@ -13,9 +13,8 @@ import java.util.List;
 
 /**
  * A source of {@link DrugReference} entries. Decouples the drug-reference data
- * <em>layer</em> from any one file format so the feature can consume datasets
- * published by authoritative bodies (e.g. the WHO ATC classification) by simply
- * pointing at them, rather than hand-maintaining a chartsearchai-specific file.
+ * <em>layer</em> from any one file format. Selecting an adapter describes how data is
+ * parsed; it does not establish clinical approval or permit the data to emit warnings.
  *
  * <p>Each implementation maps one external format to the internal model;
  * {@link DrugReferenceService} selects the active source by the

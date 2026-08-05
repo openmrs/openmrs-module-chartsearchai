@@ -50,7 +50,7 @@ public class ChartSearchAiDrugReferenceStatusTest {
 
 	/** Every key the endpoint documents, in the order it serializes them. */
 	private static final List<String> DOCUMENTED_FIELDS = Arrays.asList("enabled", "loaded", "inert",
-			"entryCount", "sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin");
+				"entryCount", "sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin", "package");
 
 	private AdministrationService priorAdministrationService;
 
@@ -87,6 +87,8 @@ public class ChartSearchAiDrugReferenceStatusTest {
 		assertEquals(Boolean.FALSE, body.get("inert"),
 				"'nothing configured at all' is not 'a configured source yielded nothing'");
 		assertEquals(Integer.valueOf(0), body.get("entryCount"));
+		assertEquals("proposed", ((Map<?, ?>) body.get("package")).get("review_state"),
+				"the status must disclose that the built-in research seed is not approved clinical CDS");
 	}
 
 	/**

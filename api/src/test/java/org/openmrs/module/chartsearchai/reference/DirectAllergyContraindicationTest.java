@@ -46,9 +46,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p><b>The fixture</b> is a verbatim excerpt of that dataset — {@code Ledipasvir} and {@code
  * Leucovorin}, two of the 444, plus {@code Ciprofloxacin} and {@code Levofloxacin} as a real
- * classified pair — parsed by the real {@link DdiDrugReferenceSource}. The
- * bundled sample cannot host these cases: all 16 of its drugs carry ATC codes, which is why no
- * existing test covered a direct allergy to an unclassified drug.
+ * classified pair — parsed by the real {@link DdiDrugReferenceSource}. The bundled sample cannot host
+ * these cases: all 16 of its drugs carry ATC codes, which is why no existing test covered a direct
+ * allergy to an unclassified drug.
  *
  * <p>That pair shares <em>two</em> level-4 subgroups, not one — {@code J01MA} (J01MA02/J01MA12,
  * fluoroquinolone antibacterials) and {@code S01AE} (S01AE03/S01AE05, ophthalmic
@@ -158,16 +158,19 @@ public class DirectAllergyContraindicationTest {
 	@Test
 	public void anEarlierUnrelatedAllergenDoesNotHideTheDirectOne() throws IOException {
 		// The guard is a per-allergen SKIP, not an exit — and that is the whole of its new placement.
-		// A chart carrying two distinct drug allergies reaches this arm once per allergy token, in the
-		// chart's own order; the classified one comes first here, so it is the one that meets the
-		// classification guard. If that guard left the METHOD instead of the iteration, the direct
-		// allergy behind it would never be looked at and issue #135 would be reinstated for exactly
+		// The guard tests the DRUG IN PLAY, not the allergen, so with an unclassified drug in play
+		// every iteration meets it; each recorded allergy is one iteration, in the chart's own order.
+		// Here the unrelated allergen is listed FIRST, so it is the one that trips the guard and the
+		// identity match is queued behind it. If the guard left the METHOD instead of the iteration,
+		// that queued match would never be looked at and issue #135 would be reinstated for exactly
 		// the patients most likely to hit it — the ones with more than one recorded drug allergy.
 		//
-		// The absences asserted by the two cases below cannot catch that: they pass a single allergen,
-		// so nothing is queued behind the guard. Measured through this same path: 1 chip on this
-		// build, 0 with the guard's `continue` changed to `return` (which still sits after the identity
-		// check, so it reads as correct), and 0 pre-fix.
+		// The token order is therefore load-bearing and must not be "tidied": with the identity
+		// allergen first its chip is already added before the guard is ever reached, and a method-exit
+		// guard looks correct. Nor can the two single-allergen absence cases either side of this one
+		// catch it: they pass one allergen, so nothing is ever queued. Measured through this path: 1 on
+		// this build, 0 with the guard's `continue` changed to `return` (which still sits after the
+		// identity check, so it reads as correct), and 0 pre-fix.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is it safe to give her ledipasvir?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,

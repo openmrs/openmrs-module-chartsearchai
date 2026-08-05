@@ -1708,6 +1708,19 @@ public class DrugSafetyValidator {
 	 * text), so hosting the allergen walk there would put two unrelated loops in one method and still
 	 * leave the precedence decision spanning both. What was wrong was the guard's placement, not the
 	 * home; the method name said "class" because two of its three comparisons are class-based.
+	 *
+	 * <p><b>Coverage bound, measured.</b> Identity is only as sound as the resolution behind it, and
+	 * {@link DrugReferenceService#lookupByToken} returns the FIRST entry any of whose aliases occurs as
+	 * a whole word in the allergy token — so a multi-word allergen can resolve to a shorter, earlier
+	 * entry sharing one of its words. Measured over the full KB on 2026-08-05, asking about each of the
+	 * 444 ATC-less entries with an allergy recorded under that entry's own name: every one now raises a
+	 * contraindication, but <b>53 of them name a DIFFERENT entry</b> ({@code Moderna covid-19 vaccine}
+	 * chips as {@code Pfizer-BioNTech Covid-19 Vaccine}; {@code Magnesium salicylate} as {@code
+	 * Salicylic acid (sodium)}). The refusal is still the right one — the same misresolution is what
+	 * put that entry in play, so the question and the chip agree — but the substance named is not the
+	 * charted allergen. That is a defect in the resolver rather than in this arm: it reaches the class
+	 * comparisons below identically, and 206 of all 2283 entries do not resolve to themselves. Reported
+	 * separately; do not read the 444 above as 444 correctly-labelled chips.
 	 */
 	private void addAllergyContraindications(List<SafetyWarning> warnings, DrugReference ref,
 			PatientClinicalContext context) {

@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -155,6 +156,34 @@ public class ContraindicationTokenDiacriticFoldTest {
 		assertTrue(DrugReferenceTestSupport.detailContains(allergyTypedFlat,
 				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofène", "hypersensibilité aux AINS"),
 				"and the same on the allergy arm, which shares the matcher, was: " + allergyTypedFlat);
+	}
+
+	@Test
+	public void aCuratedTokenOfNothingButCombiningMarksMatchesNothing() throws IOException {
+		// The one branch the fold ADDS rather than relaxes, and the reason it is needed: folding is
+		// applied to the token as well, so a token that is nothing but combining marks folds to the
+		// EMPTY string — and the empty string is contained in every haystack, which would
+		// contraindicate the drug for every patient carrying any allergy at all. Unlike every other
+		// case here this is not a defect the unfolded code had (unfolded, such a token simply matched
+		// nothing); it pins the guard the relaxation makes necessary, on the same operator-authored
+		// surface that can produce it — a curated file is not sanitized, and a mis-typed token is a
+		// dead accent with no letter attached.
+		//
+		// The entry's other rule is the precondition in the same call: it must fire, so the absence
+		// below is attributable to the guard and not to an entry that never reached the loop.
+		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(FRENCH_RULES)));
+
+		List<SafetyWarning> warnings = validator.validate("Ketoprofen could be given.",
+				"Is it safe to give her ketoprofen?", allergicTo("Aspirine"));
+
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_CONTRAINDICATION,
+				"Kétoprofène", "hypersensibilité croisée aux salicylés"),
+				"precondition: the entry's ordinary token must fire, else the absence below proves "
+						+ "nothing, was: " + warnings);
+		assertEquals(1, warnings.size(),
+				"a token of nothing but combining marks folds to the empty string, which every haystack "
+						+ "contains — it must match nothing rather than everything, was: " + warnings);
 	}
 
 	@Test

@@ -14,6 +14,17 @@
         { "type": "allergy", "token": "anti-inflammatoire non stéroïdien", "note": "hypersensibilité aux AINS" }
       ],
       "source": "Test fixture"
+    },
+    {
+      "id": "ketoprofene-fr",
+      "name": "Kétoprofène",
+      "drugClass": "AINS",
+      "aliases": ["kétoprofène", "ketoprofen"],
+      "contraindications": [
+        { "type": "allergy", "token": "aspirine", "note": "hypersensibilité croisée aux salicylés" },
+        { "type": "allergy", "token": "\u0301\u0308", "note": "a token of nothing but combining marks - must never match" }
+      ],
+      "source": "Test fixture"
     }
   ]
 }

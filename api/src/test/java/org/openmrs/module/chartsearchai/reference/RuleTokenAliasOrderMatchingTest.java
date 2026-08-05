@@ -9,10 +9,13 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -78,6 +81,13 @@ public class RuleTokenAliasOrderMatchingTest {
 	private static final String WARFARIN_QUESTION = "Is it safe to start warfarin?";
 
 	private static final String WARFARIN_ANSWER = "Warfarin could be started with INR monitoring.";
+
+	/** The screening question verbatim from issue #113, which names no drug — so the active-order
+	 *  screening arm is the only thing that can chip and an assertion about it cannot be satisfied by
+	 *  a question-driven arm. The empty answer is the PRE-answer production shape
+	 *  ({@code DrugReferenceInjector.preAnswerFindings} calls the validator exactly that way). */
+	private static final String SCREENING_QUESTION =
+			"Are there any drug interactions with her current medications?";
 
 	private DrugReferenceService service() throws IOException {
 		return DrugReferenceTestSupport
@@ -207,6 +217,63 @@ public class RuleTokenAliasOrderMatchingTest {
 							+ " x " + row[3] + " chip, else the assertion above proves nothing, was: "
 							+ onNestedDrug);
 		}
+	}
+
+	@Test
+	public void oneCombinationOrderUnderALocalizedNameDoesNotInteractWithItself() throws IOException {
+		// The ATTRIBUTION side of the same matcher choice, and the only site where asking a NARROWER
+		// question than the one that chose the subjects fabricates a pair instead of missing one.
+		// DrugSafetyValidator.resolvesFrom decides which order is a subject's own so the screening arm's
+		// reduction can drop it; asked through the prose matcher it does not recognise an INFLECTED
+		// order name as the subject's own, leaves that order standing as somebody else's, and the two
+		// halves of one tablet are then reported as an interacting pair — issue #124's measured shape
+		// ("Aspirin and omeprazole" reported against itself), reached here by a localized name.
+		// "X et Y" is this dictionary's own combination shape ("Salbutamol et bromhexine",
+		// "Multivitamines et fer"), and Simvastatin x Clarithromycin is a real Major row.
+		DrugSafetyValidator validator = validator();
+		String combination = "Simvastatine et clarithromycine 500mg";
+		List<SafetyWarning> onOneTablet = validator.validate("", SCREENING_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(combination), null,
+						null, null, Collections.singletonList(
+								DrugReferenceTestSupport.activeOrder("order-combination", combination))));
+		assertTrue(onOneTablet.isEmpty(),
+				"one combination order is one medication: its two constituents must not be screened "
+						+ "against each other, however the order names them, was: " + onOneTablet);
+
+		// The precondition, and the reason the reduction cannot simply suppress every pair a localized
+		// name reaches: the same two substances as two SEPARATE orders are a real pair and must chip.
+		List<SafetyWarning> onTwoOrders = validator.validate("", SCREENING_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Simvastatine 20mg", "Clarithromycine Co 500mg"),
+						null, null, null, Arrays.asList(
+								DrugReferenceTestSupport.activeOrder("order-1", "Simvastatine 20mg"),
+								DrugReferenceTestSupport.activeOrder("order-2", "Clarithromycine Co 500mg"))));
+		assertEquals(1, onTwoOrders.size(),
+				"two localized orders of two interacting drugs are one pair and one chip, was: "
+						+ onTwoOrders);
+		assertTrue(DrugReferenceTestSupport.detailContains(onTwoOrders, SafetyWarning.TYPE_INTERACTION,
+				"Simvastatin", "active order clarithromycin", "Major"),
+				"and it is the real Major row, was: " + onTwoOrders);
+	}
+
+	@Test
+	public void aPairBetweenTwoLocalizedOrderNamesIsScreenedWithoutPerOrderStructure() throws IOException {
+		// The same two orders through the flattened fallback — a context carrying the name sets but no
+		// per-order structure, which is what every caller of the public context-taking overload builds
+		// and what the null-patient early return in the builder produces. That branch cannot attribute a
+		// name to an order, so it decides "is this the subject's own name?" by asking the subject
+		// directly, and it deliberately carries NO reference names (nothing to attribute them to) — so
+		// the order-name leg of the join is the only thing that can witness this pair. Asked there
+		// through the prose matcher, an inflected name resolves to nobody, no name is trusted at all,
+		// and the pair silently stops being reported.
+		List<SafetyWarning> warnings = validator().validate("", SCREENING_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Simvastatine 20mg", "Clarithromycine Co 500mg"),
+						null, null, null));
+
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Simvastatin", "active order clarithromycin", "Major"),
+				"two localized order names must still screen as the pair they are, was: " + warnings);
 	}
 
 	@Test

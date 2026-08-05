@@ -135,6 +135,7 @@ public class HubClinicalAnswerProviderTest {
 		HubClinicalAnswerProvider provider = provider(new ScriptedHubTransport(), "");
 		ProviderDescriptor descriptor = provider.descriptor();
 		assertEquals(HubClinicalAnswerProvider.PROVIDER_ID, descriptor.getId());
+		assertEquals("Med-Agent Hub", descriptor.getLabel());
 		assertFalse(descriptor.isReady());
 		assertNotNull(descriptor.getUnavailableReason());
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.ANSWER));

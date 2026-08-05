@@ -83,7 +83,7 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 				ProviderCapability.ANSWER_REVIEW, ProviderCapability.INDEPTH,
 				ProviderCapability.GROUNDING, ProviderCapability.DRUG_SAFETY,
 				ProviderCapability.STRUCTURED_BLOCKS, ProviderCapability.MULTI_TURN_CONTEXT);
-		return new ProviderDescriptor(PROVIDER_ID, "med-agent-hub", true, ready, false,
+		return new ProviderDescriptor(PROVIDER_ID, "Med-Agent Hub", true, ready, false,
 				Collections.singletonList(ProviderMode.QUERY_SCOPED), capabilities,
 				ready ? null : ChartSearchAiConstants.GP_HUB_ENDPOINT_URL + " is not set");
 	}

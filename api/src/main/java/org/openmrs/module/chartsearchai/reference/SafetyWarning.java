@@ -39,7 +39,12 @@ public class SafetyWarning {
 	 */
 	public static final String TYPE_INTERACTION = "interaction";
 
-	/** Contraindication: a drug named in the answer is contraindicated by an active allergy or condition. */
+	/**
+	 * Contraindication: a drug IN PLAY — asked about in the question, or named by the answer on its own
+	 * authority — is contraindicated by an active allergy or condition. Keyed off the question, not
+	 * ONLY the answer: the headline case is a recorded allergy to the very drug the clinician asked
+	 * about, where the answer may never write the drug's name at all (issue #135).
+	 */
 	public static final String TYPE_CONTRAINDICATION = "contraindication";
 
 	private final String type;

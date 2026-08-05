@@ -1,0 +1,131 @@
+{
+ "metadata": {
+  "title": "Test fixture — a DDInter entry carrying no ATC codes (issue #135)",
+  "note": "Verbatim excerpt of the full openmrs-ddi-knowledge-base DDInter 2.0 dataset (2283 drugs, 295184 interaction rows): two of its 444 ATC-less drugs (Ledipasvir, Leucovorin) and one same-ATC-subgroup pair (Ciprofloxacin J01MA02, Levofloxacin J01MA12), with every interaction row and mechanism text that falls wholly inside that slice. Rows, ids, codes and mechanism texts are the dataset's own; nothing here is hand-authored.",
+  "source": {
+   "name": "DDInter 2.0",
+   "url": "https://ddinter2.scbdd.com/",
+   "normalization": "RxNorm (NLM)",
+   "bridge": "CIEL v2026-07-20"
+  }
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1031",
+   "name": "Ledipasvir",
+   "rxcui": "1591922",
+   "rxnorm_name": "ledipasvir",
+   "drugbank_id": "DB09027",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "168554",
+     "uuid": "7224e5d1-2c6d-4816-84dc-7dc5001a332c",
+     "name": "Ledipasvir / sofosbuvir"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1041",
+   "name": "Leucovorin",
+   "rxcui": "6313",
+   "rxnorm_name": "leucovorin",
+   "drugbank_id": "DB00650",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "78742",
+     "uuid": "78742AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Leucovorin"
+    },
+    {
+     "code": "78743",
+     "uuid": "78743AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Leucovorin calcium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter384",
+   "name": "Ciprofloxacin",
+   "rxcui": "2551",
+   "rxnorm_name": "ciprofloxacin",
+   "drugbank_id": "DB00537",
+   "atc": [
+    "J01MA02",
+    "S01AE03",
+    "S02AA15",
+    "S03AA07"
+   ],
+   "ciel": [
+    {
+     "code": "104317",
+     "uuid": "104317AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / dexamethasone"
+    },
+    {
+     "code": "104318",
+     "uuid": "104318AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / hydrocortisone"
+    },
+    {
+     "code": "73449",
+     "uuid": "73449AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin"
+    },
+    {
+     "code": "73450",
+     "uuid": "73450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin hydrochloride"
+    },
+    {
+     "code": "73451",
+     "uuid": "73451AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin lactate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1055",
+   "name": "Levofloxacin",
+   "rxcui": "82122",
+   "rxnorm_name": "levofloxacin",
+   "drugbank_id": "DB01137",
+   "atc": [
+    "J01MA12",
+    "S01AE05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "78788",
+     "uuid": "78788AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Levofloxacin"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1041",
+   "DDInter384",
+   "Unknown",
+   "-1"
+  ]
+ ]
+}

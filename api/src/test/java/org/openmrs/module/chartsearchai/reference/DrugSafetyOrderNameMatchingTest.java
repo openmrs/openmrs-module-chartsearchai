@@ -9,11 +9,9 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -70,12 +68,8 @@ public class DrugSafetyOrderNameMatchingTest {
 	private static final String COLLISION_SLICE = "chartsearchai-test/ddi-order-name-collisions.json";
 
 	private DrugSafetyValidator collisionValidator() throws IOException {
-		try (InputStream in = DrugSafetyOrderNameMatchingTest.class.getClassLoader()
-				.getResourceAsStream(COLLISION_SLICE)) {
-			assertNotNull(in, COLLISION_SLICE + " should be on the test classpath");
-			return DrugReferenceTestSupport
-					.validator(DrugReferenceTestSupport.serviceWith(DdiDrugReferenceSource.parse(in)));
-		}
+		return DrugReferenceTestSupport.validator(
+				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(COLLISION_SLICE)));
 	}
 
 	/** A validator over the real bundled DDInter sample, parsed by the real source. */

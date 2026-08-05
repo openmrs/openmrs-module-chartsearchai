@@ -58,13 +58,10 @@ public class DrugSafetyInteractionScreeningTest {
 	}
 
 	/** Validator over a test-classpath DDInter-shaped fixture, parsed by the real
-	 *  {@link DdiDrugReferenceSource} — no hand-built entries anywhere. */
+	 *  {@link DdiDrugReferenceSource} through the shared loader — no hand-built entries anywhere. */
 	private static DrugSafetyValidator fixtureValidator(String fixture) throws Exception {
-		try (java.io.InputStream in = DrugSafetyInteractionScreeningTest.class.getClassLoader()
-				.getResourceAsStream("chartsearchai-test/" + fixture)) {
-			return DrugReferenceTestSupport.validator(
-					DrugReferenceTestSupport.serviceWith(DdiDrugReferenceSource.parse(in)));
-		}
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries("chartsearchai-test/" + fixture)));
 	}
 
 	/**

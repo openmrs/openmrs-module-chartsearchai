@@ -14,13 +14,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -31,8 +29,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * production default — so these run the real load/parse/inject/validate paths against real data.
  *
  * <p>The tests that need a KB slice the 60-mechanism bundled sample does not contain feed the real
- * {@link DdiDrugReferenceSource#parse} a fixture instead (see {@link #ddiFixtureEntries}); the
- * pipeline exercised is the same, only the dataset is narrowed.
+ * {@link DdiDrugReferenceSource#parse} a fixture instead (through the shared
+ * {@link DrugReferenceTestSupport#ddiFixtureEntries}); the pipeline exercised is the same, only the
+ * dataset is narrowed.
  *
  * <p>Not only parser behaviour: six of these cases specify {@link DrugSafetyValidator}'s
  * one-chip-per-(drug, active order) collapse of issue #115, because the shape that motivates it —
@@ -46,8 +45,6 @@ public class DdiDrugReferenceSourceTest {
 	private static final String SEVERITY = "Major Moderate Minor Unknown";
 
 	private static final String MARKER_FIXTURE = "chartsearchai-test/ddi-field-marker-mechanism.json";
-
-	private static final String ROUTE_VARIANT_FIXTURE = "chartsearchai-test/ddi-route-variants.json";
 
 	/** The real mechanism text of KB group 2248, verbatim minus the {@code INTERVAL:} marker. */
 	private static final String DOLUTEGRAVIR_MECHANISM = "Coadministration with medications containing "
@@ -202,28 +199,15 @@ public class DdiDrugReferenceSourceTest {
 	}
 
 	/**
-	 * Entries parsed from a DDInter test fixture by the real {@link DdiDrugReferenceSource#parse}.
-	 * Deliberately not named {@code fixtureEntries}: {@link DrugReferenceTestSupport} already owns
-	 * that name bound to {@link JsonDrugReferenceSource#parse}, a different parser.
-	 */
-	private static List<DrugReference> ddiFixtureEntries(String classpathResource) throws Exception {
-		try (InputStream in = DdiDrugReferenceSourceTest.class.getClassLoader()
-				.getResourceAsStream(classpathResource)) {
-			assertNotNull(in, classpathResource + " should be on the test classpath");
-			return DdiDrugReferenceSource.parse(in);
-		}
-	}
-
-	/**
 	 * The real shared-{@code rxnorm_name} slices — the four Dexamethasone route variants, the two
 	 * Sirolimus formulations, the two Iron products and their partners, with their own mechanism
 	 * texts — parsed by the real production parser.
 	 */
 	private static List<DrugReference> routeVariantEntries() throws Exception {
-		return ddiFixtureEntries(ROUTE_VARIANT_FIXTURE);
+		return DrugReferenceTestSupport.ddiFixtureEntries(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
 	}
 	private static List<DrugReference> markerFixtureEntries() throws Exception {
-		return ddiFixtureEntries(MARKER_FIXTURE);
+		return DrugReferenceTestSupport.ddiFixtureEntries(MARKER_FIXTURE);
 	}
 
 	private static DrugReference.Interaction interaction(List<DrugReference> entries, String drug, String token) {
@@ -347,9 +331,7 @@ public class DdiDrugReferenceSourceTest {
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Iron"), null, null, null),
 				"Can I start dolutegravir?");
 
-		List<RecordMapping> findings = result.getMappings().stream()
-				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
-				.collect(Collectors.toList());
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(result);
 
 		assertEquals(1, findings.size(),
 				"the fixture pair must yield exactly one citable safety finding, was: " + result.getText());
@@ -510,7 +492,8 @@ public class DdiDrugReferenceSourceTest {
 		// Real slice: three Lidocaine route variants all map to RxCUI 6387. The injector dedups
 		// citations by id, so the rxcui is used only when unique — else the DDInter id — keeping
 		// the three entries distinct rather than collapsing to one.
-		List<DrugReference> entries = ddiFixtureEntries("chartsearchai-test/ddi-rxcui-collision.json");
+		List<DrugReference> entries = DrugReferenceTestSupport
+				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_RXCUI_COLLISION);
 		assertEquals(3, entries.size(), "fixture has three Lidocaine variants");
 		long distinctIds = entries.stream().map(DrugReference::getId).distinct().count();
 		assertEquals(3, distinctIds, "variants sharing a RxCUI must not collapse to one id");

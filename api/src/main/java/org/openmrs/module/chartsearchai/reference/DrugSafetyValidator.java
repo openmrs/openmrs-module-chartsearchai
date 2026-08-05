@@ -84,6 +84,12 @@ import org.springframework.stereotype.Service;
  * source — and both class checks fall back to it when no ATC subgroup is shared, so the family
  * reasoning stays data-driven end to end. See ADR Decision 24.
  *
+ * <p>One contraindication check is neither rule-based nor class-based: a recorded allergy to the very
+ * drug in play is IDENTITY, and needs no rule, no ATC code and no curated group. It is therefore not
+ * gated on classification data — issue #135, where it was, and 444 of the full DDInter dataset's 2283
+ * entries (19.4%, none of them carrying any ATC code) consequently raised no chip for the most basic
+ * check here. See {@link #addAllergyContraindications}.
+ *
  * <p>One check does not need a drug in play at all: a question that asks to be <em>screened</em> for
  * interactions ("are there any drug interactions with her current medications?") names no drug, so
  * the patient's active orders are screened against <em>each other</em> — see
@@ -269,7 +275,7 @@ public class DrugSafetyValidator {
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
 				addContraindications(warnings, ref, context);
-				addClassContraindications(warnings, ref, context);
+				addAllergyContraindications(warnings, ref, context);
 			}
 			if (warnInteractions) {
 				// One call, not one per arm: the rule arm and the class arm can both raise a chip about
@@ -1662,17 +1668,85 @@ public class DrugSafetyValidator {
 	};
 
 	/**
-	 * Class-based contraindication reasoning (needs only ATC codes, so it works for an
-	 * authoritative classification source that carries no rules). For the drug {@code ref}
-	 * being checked, each recorded allergy token is resolved to a reference drug; a
-	 * warning fires when that allergen <em>is</em> {@code ref} (a recorded allergy to the very
-	 * drug being checked), shares {@code ref}'s ATC level-4 subgroup (cross-reactivity), or —
-	 * failing both — shares a curated {@link CrossReactivityGroup} (cross-<em>branch</em>
-	 * cross-reactivity, e.g. aspirin vs an ibuprofen allergy, which ATC's tree cannot express).
-	 * One warning per resolved allergen: the most specific match wins, and several aliases of
-	 * one allergy warn once.
+	 * Allergy-driven contraindication reasoning: for the drug {@code ref} being checked, each recorded
+	 * allergy token is resolved to a reference drug and a warning fires when that allergen <em>is</em>
+	 * {@code ref} (a recorded allergy to the very drug being checked), shares {@code ref}'s ATC level-4
+	 * subgroup (cross-reactivity), or — failing both — shares a curated {@link CrossReactivityGroup}
+	 * (cross-<em>branch</em> cross-reactivity, e.g. aspirin vs an ibuprofen allergy, which ATC's tree
+	 * cannot express). One warning per resolved allergen: the most specific match wins, and several
+	 * aliases of one allergy warn once. The two class comparisons need only ATC codes, which is how an
+	 * authoritative classification source carrying no rules ({@link AtcDrugReferenceSource}) still
+	 * produces allergy reasoning.
+	 *
+	 * <p><b>Identity is not classification (issue #135).</b> The three comparisons were all gated on
+	 * one early return taken when {@code ref} had neither an ATC subgroup nor a curated group. That
+	 * guard is right for the two class comparisons — without a subgroup or a group there is nothing to
+	 * compare against — but {@code allergen == ref} is a comparison of two object references: it needs
+	 * no ATC code, no group, and no dataset support of any kind, and gating it on classification data
+	 * silently skipped the most basic check the module makes. Measured over the full
+	 * openmrs-ddi-knowledge-base DDInter 2.0 dataset (2283 drugs) on 2026-08-05: <b>444 entries
+	 * (19.4%) carry no ATC codes at all</b>, and 0 carry ATC codes without a level-4 subgroup — so the
+	 * guard's two halves fail together, on nearly a fifth of the dataset (Ledipasvir, Leucovorin,
+	 * Levomefolic acid, Kava, Lactic acid, Anthrax vaccine …). Nothing else covered those drugs:
+	 * {@link #addContraindications} reads only curated {@code contraindications}, which
+	 * {@link DdiDrugReferenceSource} never emits, and a curated {@link CrossReactivityGroup} cannot
+	 * rescue them <em>in principle</em> rather than merely in practice — membership is defined by ATC
+	 * PREFIX ({@link CrossReactivityGroup#containsCode}), so an entry with no ATC code can belong to no
+	 * group however much curated data a deployment authors. The warning had no path to the clinician at
+	 * all: no chip, and since issue #110 turns every chip into a citable pre-answer record, nothing in
+	 * the prompt either.
+	 *
+	 * <p><b>Why the identity check stays here</b> rather than moving to {@link #addContraindications},
+	 * the curated/rule arm. Two invariants are decided per resolved allergen and need code that sees
+	 * all three comparisons at once: <em>most-specific-match wins</em> (an allergen that IS this drug
+	 * also shares every one of its subgroups, so identity must pre-empt the class arms rather than
+	 * stack on them) and <em>one warning per resolved allergen</em> ({@code seenAllergens} below, so
+	 * several aliases of one allergy warn once). Split across two methods, each would need its own copy
+	 * of the other's state — which is precisely the two-arms-cannot-see-each-other shape that produced
+	 * issue #88's duplicate interaction chip. {@link #addContraindications} also walks a different
+	 * collection ({@code ref.getContraindications()}, matched by token against allergy AND condition
+	 * text), so hosting the allergen walk there would put two unrelated loops in one method and still
+	 * leave the precedence decision spanning both. What was wrong was the guard's placement, not the
+	 * home; the method name said "class" because two of its three comparisons are class-based.
+	 *
+	 * <p><b>Coverage bound, measured.</b> Identity is only as sound as the resolution behind it, and
+	 * {@link DrugReferenceService#lookupByToken} returns the EARLIEST entry any of whose aliases occurs
+	 * as a whole word in the allergy token. Measured over the full KB on 2026-08-05, asking about each
+	 * of the 444 ATC-less entries with an allergy recorded under that entry's own name: every one now
+	 * raises a contraindication, but <b>53 of them name a DIFFERENT entry</b> — always one earlier in
+	 * dataset order (0 of the 53 resolve later), though not a shorter-NAMED one: 17 of the 53 resolve
+	 * to a name at least as long as the queried one. What splits the 53 is whether the entry they land
+	 * on carries the queried name among its OWN aliases, because that is what decides whether any
+	 * matcher could have told them apart:
+	 * <ul>
+	 *   <li><b>43</b> where it does not, so every alias that matched is a strict FRAGMENT of the
+	 *       queried name — {@code Loteprednol etabonate} resolves to {@code Loteprednol (ophthalmic)}
+	 *       on that entry's alias {@code loteprednol}, {@code Magnesium salicylate} to {@code Salicylic
+	 *       acid (sodium)} on its CIEL alias {@code Salicylate}. This is the nesting hazard
+	 *       {@link #activeOrderEntryFor} already documents and defeats on the rule side ("insulin"
+	 *       inside "insulin glargine") — but not by the same means: a rule's token IS its partner's own
+	 *       alias, so that arm can demand name identity, while an allergy token is a concept name or
+	 *       free text. Preferring the LONGEST matching alias over the first resolves exactly these 43
+	 *       to themselves, and none of the 10 below (measured).</li>
+	 *   <li><b>10</b> where the resolved entry carries the queried drug's full name among its own
+	 *       aliases — as a CIEL name for 7 of them, as the {@code rxnorm_name} for the other 3.
+	 *       {@code Moderna covid-19 vaccine} resolves to {@code Pfizer-BioNTech Covid-19 Vaccine}
+	 *       because that entry's CIEL list contains "Moderna COVID-19 vaccine" verbatim;
+	 *       {@code Dotatate} resolves to {@code Lutetium Lu 177 dotatate}. No alias matcher can
+	 *       separate these — two entries genuinely claim one name — so it is a defect in the dataset's
+	 *       alias data, not in the lookup. (In 4 of the 10 a shorter alias matches as well, so these
+	 *       two buckets are a partition on what the target entry CLAIMS, not on which alias happened
+	 *       to win the scan.)</li>
+	 * </ul>
+	 * The refusal is still the right one — the same misresolution is what put that entry in play, so
+	 * the question and the chip agree — but the substance named is not the charted allergen. Neither
+	 * shape is a defect in this arm: both reach the class comparisons below identically, and 206 of all
+	 * 2283 entries do not resolve to themselves. Reported separately; do not read the 444 above as 444
+	 * correctly-labelled chips. Separately again, an ANSWER-named drug can still be echo-scoped out of
+	 * play before this arm sees it (issue #105, {@link #isEchoOfCitedRecord}) — the 444 measurement is
+	 * of the question-driven path, which is never echo-scoped.
 	 */
-	private void addClassContraindications(List<SafetyWarning> warnings, DrugReference ref,
+	private void addAllergyContraindications(List<SafetyWarning> warnings, DrugReference ref,
 			PatientClinicalContext context) {
 		if (context == null) {
 			return;
@@ -1680,9 +1754,6 @@ public class DrugSafetyValidator {
 		Set<String> refClasses = ref.atcSubgroups();
 		List<CrossReactivityGroup> refGroups = CrossReactivityGroup.groupsOf(ref,
 				drugReferenceService.getCrossReactivityGroups());
-		if (refClasses.isEmpty() && refGroups.isEmpty()) {
-			return;
-		}
 		Set<DrugReference> seenAllergens = new LinkedHashSet<DrugReference>();
 		for (String allergyToken : context.getAllergyTokens()) {
 			DrugReference allergen = drugReferenceService.lookupByToken(allergyToken);
@@ -1692,6 +1763,13 @@ public class DrugSafetyValidator {
 			if (allergen == ref) {
 				warnings.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
 						"The patient has a recorded allergy to " + ref.displayLabel() + "."));
+				continue;
+			}
+			if (refClasses.isEmpty() && refGroups.isEmpty()) {
+				// The class comparisons' own precondition, kept where it belongs — after the identity
+				// check, which needs none of it. Both comparisons below are provably no-ops on empty
+				// sets, so this states the requirement in code rather than leaving it to be re-derived:
+				// "same class as" and "same group as" are questions only a classified drug can be asked.
 				continue;
 			}
 			String shared = sharedClass(refClasses, allergen);

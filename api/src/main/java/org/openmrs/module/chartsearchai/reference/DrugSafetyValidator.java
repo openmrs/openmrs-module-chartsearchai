@@ -301,8 +301,12 @@ public class DrugSafetyValidator {
 		}
 		// The patient's own prescriptions against their own allergy and condition records — the one
 		// contraindication question no drug-in-play arm can ask (issue #143). After the loop above so a
-		// drug in play keeps the chip position it has always had, and before the pair arms below, which
-		// are reference lookups rather than facts about this patient.
+		// drug in play keeps the chip position it has always had, and before the PAIRWISE arms below so
+		// that a check against her own allergy and condition records is read before any pair the
+		// reference data merely relates. Not because those arms are less about her — the #113 screen's
+		// pairs are her own orders on both sides — but because they are a lookup OVER her medication
+		// list rather than a finding AGAINST her records, they are the two that grow quadratically, and
+		// they are the two a cap can truncate (maxPairChips, #131).
 		if (warnContra) {
 			addActiveOrderContraindications(warnings, inPlay, context);
 		}
@@ -1863,7 +1867,9 @@ public class DrugSafetyValidator {
 	 * active-order entry against the patient's own orders IS {@link #addActiveOrderPairInteractions},
 	 * which is deliberately gated on the question asking to be screened (issue #113) and would here run
 	 * ungated, uncapped, and without that arm's {@link #activeOrdersOtherThan} reduction — so one order
-	 * would witness a pair with itself (issue #86's {@code iron} inside {@code spironolactone}). And not
+	 * would witness a pair with itself, as one {@code Aspirin and omeprazole} order did when it reported
+	 * "Acetylsalicylic acid (aspirin) interacts with active order esomeprazole", the two halves of one
+	 * tablet as an interacting pair (measured; see {@link #activeOrdersOtherThan}). And not
 	 * overdose: {@link #addOverdose} reads a dose out of the ANSWER, so an order the answer never
 	 * mentions has no dose to check, and reinstating an echoed drug's dose check is precisely what #105
 	 * measured and fixed.

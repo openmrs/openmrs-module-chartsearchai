@@ -52,11 +52,24 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * arm's subject set is the patient's own active orders and nothing else. Adding the arm makes the
  * comment's claim true instead of relaxing the scoping that #105 measured.
  *
- * <p>Every case runs the real pipeline: the real bundled curated dataset (the production default
- * {@code sourceFormat=json}, whose ibuprofen entry carries both a curated allergy rule and an
- * identity-resolvable name), real querystore-shaped chart records, the real {@code validate}
- * overload production calls with the chart's mappings, and — for the prompt half — the real injector
- * wired to the real validator.
+ * <p>Every case runs the real pipeline — the real {@code validate} overloads production calls, and,
+ * for the prompt half, the real injector wired to the real validator — with no mock and no
+ * reimplementation anywhere. Two details vary by case, deliberately:
+ * <ul>
+ *   <li>The cases that need echo scoping to be ACTIVE pass real querystore-shaped chart records and
+ *       the mappings overload, because scoping is what those cases are about; the three that do not
+ *       ({@link #aConditionContraindicatingAnActiveOrderIsRaisedToo},
+ *       {@link #everyActiveOrderIsCheckedRatherThanOnlyTheFirst},
+ *       {@link #thePatientsOwnContraindicationsLeadTheScreensPairChips}) pass {@code null} mappings,
+ *       the documented no-scoping shape, so nothing about them depends on it.</li>
+ *   <li>All but one run on the real bundled curated dataset (the production default
+ *       {@code sourceFormat=json}, whose ibuprofen entry carries both a curated allergy rule and an
+ *       identity-resolvable name).
+ *       {@link #aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck} needs the bundled
+ *       DDInter sample instead: the partner its answer recites has to be an ENTRY in the loaded
+ *       dataset, or no scoping carve-out could have chipped it and the case would assert nothing.
+ *       The curated four carry no lisinopril.</li>
+ * </ul>
  */
 public class ActiveOrderContraindicationTest {
 
@@ -129,7 +142,7 @@ public class ActiveOrderContraindicationTest {
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
 				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen",
 				"The patient has a recorded allergy to Ibuprofen."),
-				"and so does the identity check issue #140 added, was: " + warnings);
+				"and so does the identity check issue #135 un-suppressed, was: " + warnings);
 	}
 
 	@Test
@@ -165,9 +178,11 @@ public class ActiveOrderContraindicationTest {
 	@Test
 	public void theFindingReachesThePromptAsACitableRecord() {
 		// The other half of "it reaches the clinician" (issue #110): the pre-answer pass runs the same
-		// validate with an EMPTY answer, so before this arm existed a question naming no drug put no
-		// finding in the prompt at all and the deterministic layer contributed nothing. Real injector
-		// wired to the real validator.
+		// validate with an EMPTY answer, so before this arm existed a question like this one — naming no
+		// drug AND not asking to be screened — put no finding in the prompt at all. (A question naming no
+		// drug that DOES ask to be screened already contributed one, through the #113 arm; that is why
+		// this case uses NO_DRUG_QUESTION rather than SCREENING_QUESTION.) Real injector wired to the
+		// real validator.
 		DrugReferenceService service = DrugReferenceTestSupport.bundledService();
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
 		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
@@ -188,7 +203,8 @@ public class ActiveOrderContraindicationTest {
 
 	@Test
 	public void aDrugAlreadyInPlayIsNotCheckedTwice() {
-		// Composition with the question-driven arms, and with #140's identity check: the same patient
+		// Composition with the question-driven arms, and with the identity check of issue #135: the
+		// same patient
 		// asked ABOUT the drug by name. Question-named drugs were never echo-scoped out, so the
 		// in-play loop already raises both chips — the new arm must skip an entry it has covered
 		// rather than double every one of them. Two, not four.
@@ -243,13 +259,18 @@ public class ActiveOrderContraindicationTest {
 		// no reference drug, which opens the screen's gate (issue #113) while leaving the new arm's
 		// subjects unchanged. Two properties, neither previously exercised together.
 		//
-		// ORDER. The new arm is called between the drug-in-play loop and the pair arms deliberately —
-		// "the patient's own findings lead", because a chip about their allergy outranks a reference
-		// lookup about a pair. That is not cosmetic: every chip is also injected into the prompt as a
-		// citable finding in this order (issue #110), and record ordering is a measured lever on
-		// whether the model reports the finding at all — eval/drift-metric/README.md's own table moves
-		// abstentions 8 -> 5 of 10 on render ordering with the prompt held constant. Moving this call
-		// after the screen would reverse the order silently.
+		// ORDER. The new arm is called between the drug-in-play loop and the pairwise arms
+		// deliberately: a check against her own allergy and condition records is read before a pair the
+		// reference data merely relates. (Not because the screen's pairs are less about her — they are
+		// her own orders on both sides — but because they are a lookup over her medication list rather
+		// than a finding against her records, and they are the ones a cap can truncate.) It is not only a
+		// chip-strip concern: since issue #110 every chip is also injected into the prompt as a citable
+		// finding IN THIS ORDER, so this list decides what the model reads first. No measurement here
+		// claims a size for that effect — eval/drift-metric/README.md's "render ordering" arm varied the
+		// order of partners WITHIN one rendered record, which is a different lever, and that file warns
+		// that any wording claim on that host needs repeats. What is pinned is therefore the deliberate
+		// choice, not a measured gain: moving this call after the pairwise arms would reverse it silently
+		// and nothing else would notice.
 		//
 		// COMPOSITION. The screen seeds its suppression set from the chips already raised, so these
 		// contraindications now reach it; it must add its pair anyway (they are TYPE_CONTRAINDICATION

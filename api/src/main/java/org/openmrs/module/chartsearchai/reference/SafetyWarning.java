@@ -40,9 +40,11 @@ public class SafetyWarning {
 	public static final String TYPE_INTERACTION = "interaction";
 
 	/**
-	 * Contraindication: a drug is contraindicated by an active allergy or condition. Two joins, as with
-	 * {@link #TYPE_INTERACTION} — a drug IN PLAY (asked about in the question, or named by the answer on
-	 * its own authority), and the patient's OWN ACTIVE ORDERS whatever the question and the answer name.
+	 * Contraindication: a drug is contraindicated by an active allergy or condition. Two joins — a drug
+	 * IN PLAY (asked about in the question, or named by the answer on its own authority), and the
+	 * patient's OWN ACTIVE ORDERS whatever the question and the answer name. (Enumerated for the same
+	 * reason {@link #TYPE_INTERACTION} enumerates its three: which joins a chip type can come from is
+	 * what a renderer needs to know about it.)
 	 *
 	 * <p>The first is keyed off the question, not ONLY the answer: the headline case is a recorded
 	 * allergy to the very drug the clinician asked about, where the answer may never write the drug's

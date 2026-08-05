@@ -145,8 +145,10 @@ public class DrugReferenceInjector {
 	 *   <li>the patient's own active orders screened against EACH OTHER when the question asks to be
 	 *       screened for interactions (issue #113) — that gate reads the QUESTION only;</li>
 	 *   <li>the patient's own active orders checked against their own allergy and condition records
-	 *       (issue #143, {@code DrugSafetyValidator.addActiveOrderContraindications}) — which reads no
-	 *       question and no answer at all, only the chart.</li>
+	 *       (issue #143, {@code DrugSafetyValidator.addActiveOrderContraindications}) — whose GATE and
+	 *       whose SUBJECTS read no question and no answer at all, only the chart. It does read the
+	 *       drugs-in-play set, but only to skip what the loop above has already covered; see the
+	 *       parenthetical below.</li>
 	 * </ul>
 	 * Neither can therefore differ between this pre-answer pass and the post-answer chips pass, which
 	 * is the property that keeps a finding in the prompt from ever being asserted without a chip beside

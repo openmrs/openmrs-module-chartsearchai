@@ -277,7 +277,12 @@ the external-file mechanism (no rebuild):
    (the bundled four **plus** Naproxen) — just copy it into the app-data dir. Equivalently, copy the
    bundled `api/src/main/resources/chartsearchai/drug-reference.json` and append this fifth entry
    (Naproxen shares ibuprofen's `M01AE` subgroup; it carries **no** contraindications/interactions
-   of its own, so a naproxen query surfaces *only* the cross-reactivity warning):
+   of its own, so on the committed seed the cross-reactivity warning is the only chip a naproxen query
+   raises *about naproxen*. Where the Aspirin order is `N02BA`-mapped — as the long-lived `:8081`
+   instance is, see [Portability](#portability) — a second naproxen chip appears, the NSAID group
+   against that active order, exactly as it does for ibuprofen. And this custom KB still carries the
+   bundled four, so Margaret's own active orders still raise the three chips the
+   [cheat-sheet note](#query-cheat-sheet) describes):
 
    ```json
    {
@@ -406,17 +411,40 @@ Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless not
 > **Since [#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143) a query does
 > NOT surface only the warnings for the drug it names.** Every question additionally has this
 > patient's own active orders checked against her own allergies and conditions, so every row below
-> also carries chips about drugs the query never mentions. With the bundled KB and the seed above,
-> exactly one of her eight orders resolves to an entry that her own records contraindicate:
-> **Amoxicillin** (`DKB-ORD-6`), whose curated `penicillin` rule matches her *Penicillin drug class*
-> allergy — so expect `Amoxicillin is contraindicated by an active allergy: penicillin-class
-> hypersensitivity` on top of every expectation in the table. Her Warfarin, Aspirin, Methotrexate,
-> Furosemide, Ampicillin and Amikacin orders resolve to no bundled entry at all, so they add
-> nothing. Add the Gentamicin order the ATC step intends (see the `concept_id` caveat in
-> [Portability](#portability) — `3923` is Gentamicin only on the database that comment was written
-> against) and two more appear, off her non-coded *Aminoglycoside* allergy and her *Significant
-> renal impairment*. That is the point of the fix: an allergy to a drug she is already taking is a
-> prescribing error the chart already contains, and no wording of a question should hide it.
+> that runs on Margaret also carries chips about drugs the query never mentions. (The last row is
+> scoped to any patient; on a stock demo patient, who has neither an allergy nor a condition, the
+> arm returns before it looks at any order.) With the bundled KB and **Steps 1-3 run**,
+> two of her orders resolve to an entry her own records contraindicate, and they contribute three
+> chips:
+>
+> - **Amoxicillin** (`DKB-ORD-6`) — its curated `penicillin` rule against her seeded penicillin-class
+>   allergy (`162297…`, which the table above calls *Penicillins* and the current demo DB names
+>   *Penicillin drug class*; the rule is matched by containment, so either name hits):
+>   `Amoxicillin is contraindicated by an active allergy: penicillin-class hypersensitivity`.
+> - **Gentamicin** (`DKB-ORD-8`) — twice, off her non-coded *Aminoglycoside* allergy and her
+>   *Significant renal impairment*.
+>
+> All three are EXTRA only on a query that names neither drug. A query that does name one of them puts
+> that entry in play, and the arm skips an entry already in play, so the chip comes from the
+> drug-in-play loop instead and the row's own stated expectation already covers it — the amoxicillin
+> row gains the two Gentamicin chips and no second penicillin chip, and the gentamicin row gains only
+> the Amoxicillin one.
+>
+> Her Warfarin, Aspirin, Methotrexate, Furosemide, Ampicillin and Amikacin orders resolve to no
+> bundled entry, so they add nothing. Note **how** Gentamicin resolves: `DKB-ORD-8` is on
+> `concept_id` 3923, and Step 3 maps that concept to `J01GB03`, which is the bundled Gentamicin
+> entry's own ATC code — so the ORDER-driven matcher finds the entry by code, whatever the concept is
+> named. On a database where 3923 is not Gentamicin (see the `concept_id` caveat in
+> [Portability](#portability); it is Gemfibrozil on the standalone this note was checked against)
+> those two chips still appear and still say *Gentamicin*, naming a substance the order does not
+> display — a seed-data mismatch, not a module one, and a reason to re-derive the ids before
+> demonstrating. Note also that **both** contraindicated orders are created by Step 3, not Step 2
+> (`atc_drugkb.sql` inserts `DKB-ORD-5..8`; Step 2's `DKB-ORD-1..4` are Warfarin, Aspirin,
+> Methotrexate and Furosemide, none of which the bundled KB carries) — so after Steps 1-2 alone this
+> arm contributes nothing at all.
+>
+> That is the point of the fix: an allergy to a drug she is already taking is a prescribing error the
+> chart already contains, and no wording of a question should hide it.
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|

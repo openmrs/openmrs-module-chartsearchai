@@ -118,8 +118,11 @@ public class DrugReference {
 
 	/**
 	 * @return the reference data's own canonical name for the SUBSTANCE this entry is a row of — the
-	 *         DDInter {@code rxnorm_name} — or null for a source that publishes none (the curated
-	 *         {@code json} file and the {@code atc} adapter). Unlike {@link #getGenericName()}, which
+	 *         DDInter {@code rxnorm_name} — or null for a source that publishes none: the {@code atc}
+	 *         adapter, which has no such field, and the shipped curated {@code json} dataset, whose
+	 *         entries carry none. Null there is the dataset's silence, not a schema ban — the curated
+	 *         schema binds this class directly, so a hand-authored file that sets this field opts into
+	 *         the grouping below. Unlike {@link #getGenericName()}, which
 	 *         is a chip-label synonym and is deliberately null whenever the display name already
 	 *         contains it, this is set whether or not the two agree: it is an identity, not a label,
 	 *         and it is exactly the field that is EQUAL across a substance's route/formulation rows
@@ -168,11 +171,15 @@ public class DrugReference {
 	 *       {@code Atropine}/{@code Hyoscyamine} — each of them the {@code enalapril}/{@code enalaprilat}
 	 *       shape issue #121 decided must stay two chips. The stem separates every one of them.</li>
 	 * </ul>
-	 * Neither half works alone: the stem alone merges 9 groups the substance name keeps apart, 8 of
-	 * them different substances sharing one stem ({@code Manganese (chloride)}/{@code (sulfate)},
+	 * Neither half works alone. Where one stem covers two substances the stem alone merges them and the
+	 * substance name is what refuses: {@code Varicella Zoster Vaccine (Recombinant)} against
+	 * {@code (live/attenuated)} — a distinction that decides whether an immunocompromised patient may
+	 * have it at all — and likewise {@code Manganese (chloride)}/{@code (sulfate)},
 	 * {@code Dextran (-1)}/{@code (low molecular weight)}, {@code Insulin human}/{@code (isophane)},
-	 * {@code Iron}/{@code (polysaccharide)}, {@code Typhoid vaccine (live)}/{@code (inactivated)} …).
-	 * Together the two reduce those 332 entries to 177 substances.
+	 * {@code Insulin lispro}/{@code (protamine)}, {@code Iron}/{@code (polysaccharide)}. A few more
+	 * one-stem groups are kept apart because a row publishes NO substance name rather than a differing
+	 * one ({@code Typhoid vaccine (live)}/{@code (inactivated)}) — that is the null-key fallback below,
+	 * not this comparison. Together the two reduce those 332 entries to 177 substances.
 	 *
 	 * <p>Conservative where it cannot tell, in BOTH directions. A name that extends the family's stem
 	 * by a WORD rather than a qualifier ({@code Hydrocortisone butyrate}, {@code Estrone sulfate},

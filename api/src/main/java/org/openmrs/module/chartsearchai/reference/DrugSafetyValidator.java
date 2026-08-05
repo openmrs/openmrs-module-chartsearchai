@@ -608,14 +608,14 @@ public class DrugSafetyValidator {
 	 * <p><b>The key.</b> {@code (subject substance, recorded finding)}. The subject side is
 	 * {@link DrugReference#substanceKey()}, which is where the measurement behind it lives and why it
 	 * is not simply the dataset's substance name; an entry from a source publishing none keys on its
-	 * own identity, so nothing collapses for the curated {@code json} or the {@code atc} adapter. The
-	 * finding side is what the arm actually compared — the resolved allergen ENTRY for the allergy arm,
-	 * and the curated rule's own {@code (type, token)} for the rule arm. Those are two key spaces on
-	 * purpose: the rule arm's token is free text that may name a class ({@code nsaid},
-	 * {@code aminoglycoside}) rather than a drug, so resolving it to an entry to make the two arms
-	 * comparable would collapse a class-level rule into an identity chip. A curated rule and an
-	 * identity match about ONE allergy therefore still raise two chips — that is issue #146, which is
-	 * filed separately and which {@code ActiveOrderContraindicationTest} currently pins at two.
+	 * own identity, so nothing collapses for the {@code atc} adapter or the shipped curated
+	 * {@code json} dataset. The finding side is what the arm actually compared — the resolved allergen
+	 * ENTRY for the allergy arm, and the curated rule's own {@code (type, token)} for the rule arm.
+	 * Those are two key spaces on purpose: the rule arm's token is free text that may name a class
+	 * ({@code nsaid}, {@code aminoglycoside}) rather than a drug, so resolving it to an entry to make
+	 * the two arms comparable would collapse a class-level rule into an identity chip. A curated rule
+	 * and an identity match about ONE allergy therefore still raise two chips — that is issue #146,
+	 * filed separately, which {@code ActiveOrderContraindicationTest} currently pins at two.
 	 *
 	 * <p><b>Which chip survives.</b> The most specific relationship, since that is this arm's analogue
 	 * of "the highest severity wins" — a contraindication chip carries no severity, and what it can
@@ -626,14 +626,19 @@ public class DrugSafetyValidator {
 	 * the group's first candidate took, so no client sees the chip sequence reshuffle when a later,
 	 * stronger row replaces an earlier one.
 	 *
-	 * <p><b>One honest limit.</b> On the shipped resolution semantics the strongest candidate is always
-	 * the group's FIRST: {@code lookupByToken} resolves an allergy to the EARLIEST matching entry,
-	 * every row of a substance carries that substance's name among its aliases, and both subject sets
-	 * are iterated in dataset order — so the identity match belongs to the earliest row of its own
-	 * group. The replacement branch is therefore not reachable through the production path today and no
-	 * test pins it; it is written this way because the ordering coincidence is a property of
-	 * {@code lookupByToken}, not of this ledger, and a first-wins ledger would silently start dropping
-	 * identity chips the moment that changed.
+	 * <p><b>Why replacing an incumbent is not dead code.</b> It is tempting to read this ledger as
+	 * first-wins, and on the dexamethasone family the two would agree: {@code lookupByToken} resolves an
+	 * allergy to the EARLIEST matching entry, every dexamethasone row carries the bare substance name
+	 * among its aliases, and both subject sets are iterated in dataset order — so there the identity
+	 * match IS the group's first candidate. That premise does not hold generally. Where no alias of a
+	 * row is the bare substance name, the allergy skips that row and resolves a LATER member of its own
+	 * group, and the earlier members raise their class chips first: {@code Tozinameran} behind the
+	 * {@code Pfizer-BioNTech} presentations, {@code Insulin aspart (aspart)},
+	 * {@code Iobenguane (I-131)}. First-wins answers those with the vacuous "in the same ATC class as
+	 * your allergy to &lt;this same substance&gt;" chip this ledger exists to remove, which is what
+	 * {@code ContraindicationRouteVariantTest.theIdentityChipSurvivesWhenTheAllergenRowIsNotItsGroupsFirst}
+	 * pins. How many groups the shipped KB reaches it through is a property of that dataset — measure it
+	 * rather than trusting a number here.
 	 */
 	private static final class ContraindicationChips {
 

@@ -1254,6 +1254,196 @@
           "name": "Hydrocortisone valerate"
         }
       ]
+    },
+    {
+      "id": "DDInter2110",
+      "name": "Tozinameran (12y+)",
+      "rxcui": "2468231",
+      "rxnorm_name": "SARS-CoV-2 (COVID-19) vaccine, mRNA spike protein",
+      "drugbank_id": null,
+      "atc": [
+        "J07BN01",
+        "J07BN04"
+      ],
+      "ciel": [
+        {
+          "code": "166154",
+          "uuid": "166154AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Moderna COVID-19 vaccine"
+        },
+        {
+          "code": "166155",
+          "uuid": "166155AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine"
+        },
+        {
+          "code": "167039",
+          "uuid": "167039AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (adolescent)"
+        },
+        {
+          "code": "167040",
+          "uuid": "167040AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (child)"
+        },
+        {
+          "code": "167041",
+          "uuid": "167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (infant)"
+        }
+      ]
+    },
+    {
+      "id": "DDInter2111",
+      "name": "Tozinameran (5y-11y)",
+      "rxcui": "2468231",
+      "rxnorm_name": "SARS-CoV-2 (COVID-19) vaccine, mRNA spike protein",
+      "drugbank_id": null,
+      "atc": [
+        "J07BN01",
+        "J07BN04"
+      ],
+      "ciel": [
+        {
+          "code": "166154",
+          "uuid": "166154AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Moderna COVID-19 vaccine"
+        },
+        {
+          "code": "166155",
+          "uuid": "166155AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine"
+        },
+        {
+          "code": "167039",
+          "uuid": "167039AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (adolescent)"
+        },
+        {
+          "code": "167040",
+          "uuid": "167040AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (child)"
+        },
+        {
+          "code": "167041",
+          "uuid": "167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (infant)"
+        }
+      ]
+    },
+    {
+      "id": "DDInter2112",
+      "name": "Tozinameran (6m-4y)",
+      "rxcui": "2468231",
+      "rxnorm_name": "SARS-CoV-2 (COVID-19) vaccine, mRNA spike protein",
+      "drugbank_id": null,
+      "atc": [
+        "J07BN01",
+        "J07BN04"
+      ],
+      "ciel": [
+        {
+          "code": "166154",
+          "uuid": "166154AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Moderna COVID-19 vaccine"
+        },
+        {
+          "code": "166155",
+          "uuid": "166155AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine"
+        },
+        {
+          "code": "167039",
+          "uuid": "167039AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (adolescent)"
+        },
+        {
+          "code": "167040",
+          "uuid": "167040AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (child)"
+        },
+        {
+          "code": "167041",
+          "uuid": "167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (infant)"
+        }
+      ]
+    },
+    {
+      "id": "DDInter2164",
+      "name": "Tozinameran",
+      "rxcui": "2468231",
+      "rxnorm_name": "SARS-CoV-2 (COVID-19) vaccine, mRNA spike protein",
+      "drugbank_id": "DB15696",
+      "atc": [
+        "J07BN01",
+        "J07BN04"
+      ],
+      "ciel": [
+        {
+          "code": "166154",
+          "uuid": "166154AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Moderna COVID-19 vaccine"
+        },
+        {
+          "code": "166155",
+          "uuid": "166155AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine"
+        },
+        {
+          "code": "167039",
+          "uuid": "167039AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (adolescent)"
+        },
+        {
+          "code": "167040",
+          "uuid": "167040AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (child)"
+        },
+        {
+          "code": "167041",
+          "uuid": "167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (infant)"
+        }
+      ]
+    },
+    {
+      "id": "DDInter2220",
+      "name": "Tozinameran (tris-sucrose)",
+      "rxcui": "2468231",
+      "rxnorm_name": "SARS-CoV-2 (COVID-19) vaccine, mRNA spike protein",
+      "drugbank_id": null,
+      "atc": [
+        "J07BN01",
+        "J07BN04"
+      ],
+      "ciel": [
+        {
+          "code": "166154",
+          "uuid": "166154AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Moderna COVID-19 vaccine"
+        },
+        {
+          "code": "166155",
+          "uuid": "166155AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine"
+        },
+        {
+          "code": "167039",
+          "uuid": "167039AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (adolescent)"
+        },
+        {
+          "code": "167040",
+          "uuid": "167040AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (child)"
+        },
+        {
+          "code": "167041",
+          "uuid": "167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Pfizer-BioNtech COVID-19 vaccine (infant)"
+        }
+      ]
     }
   ],
   "mechanisms": {},

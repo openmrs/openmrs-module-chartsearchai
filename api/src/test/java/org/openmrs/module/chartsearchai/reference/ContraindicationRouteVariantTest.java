@@ -49,8 +49,9 @@ import org.junit.jupiter.api.Test;
  * qualifiers removed): see {@link DrugReference#substanceKey()}, which records the measurement for
  * both halves.
  *
- * <p>Both shapes are asserted here against slices taken verbatim from the shipped KB, through the
- * real {@link DdiDrugReferenceSource} parser and the real {@link DrugSafetyValidator#validate}
+ * <p>Both directions are asserted here — and so is the ordering the collapse cannot assume, a group
+ * whose allergen row is not its first — against slices taken verbatim from the shipped KB, through
+ * the real {@link DdiDrugReferenceSource} parser and the real {@link DrugSafetyValidator#validate}
  * entry points.
  */
 public class ContraindicationRouteVariantTest {
@@ -197,6 +198,79 @@ public class ContraindicationRouteVariantTest {
 				+ warnings);
 		assertEquals("The patient has a recorded allergy to Dexamethasone.",
 				warnings.get(0).getDetail());
+	}
+
+	/**
+	 * The premise that makes the case below what it is, asserted through the production resolvers so it
+	 * cannot rot into a test of nothing: a question naming the vaccine resolves all five presentation
+	 * rows, while an allergy to {@code Tozinameran} resolves the FOURTH of them — so the identity match
+	 * arrives after three class matches rather than before them, unlike the dexamethasone shape above.
+	 */
+	@Test
+	public void theFixtureReallyCarriesAnAllergenRowThatIsNotItsGroupsFirst() throws IOException {
+		DrugReferenceService service = fixtureService(FIXTURE);
+
+		List<DrugReference> inPlay = service
+				.findByQuery("Is it safe to give the Pfizer-BioNTech COVID-19 vaccine?");
+		assertEquals(5, inPlay.size(),
+				"one brand word must resolve every presentation row, was: " + names(inPlay));
+		assertEquals("Tozinameran (12y+)", inPlay.get(0).getName(),
+				"and a presentation comes FIRST, so it is the group's incumbent chip");
+
+		DrugReference allergen = service.lookupByToken("Tozinameran");
+		assertNotNull(allergen, "the allergy must resolve to one of the rows");
+		assertEquals(inPlay.get(3), allergen,
+				"and the allergen is the FOURTH: this KB gives each presentation row only its own "
+						+ "qualified name, so the bare substance name skips them — was: "
+						+ (allergen == null ? "null" : allergen.getName()));
+		assertEquals(allergen.substanceKey(), inPlay.get(0).substanceKey(),
+				"while all of them are still one substance to the collapse");
+	}
+
+	@Test
+	public void theIdentityChipSurvivesWhenTheAllergenRowIsNotItsGroupsFirst() throws IOException {
+		// The collapse must keep the most specific relationship even when the weaker candidate is raised
+		// FIRST — an incumbent chip has to be REPLACED, not merely suppressed. Reachable on the shipped
+		// KB, not a hypothetical: measured through this same entry point over the full 19 MB dataset, 10
+		// of its 121 collapsed groups contain a row whose own name resolves an allergy to a LATER member
+		// of the group (`Tozinameran`, `Insulin aspart (aspart)`, `Iobenguane (I-131)`, …). A first-wins
+		// ledger answers this case with "Tozinameran (12y+) … is in the same ATC class (J07BN) as the
+		// patient's allergy to Tozinameran" — the vacuous self-cross-reactivity issue #145 exists to
+		// remove, kept instead of removed.
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
+				"Is it safe to give the Pfizer-BioNTech COVID-19 vaccine?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Tozinameran"), null));
+
+		assertEquals(1, warnings.size(),
+				"five presentations of one vaccine are one clinical fact, was: " + warnings);
+		assertEquals("The patient has a recorded allergy to Tozinameran (sars-cov-2 (covid-19) vaccine,"
+				+ " mrna spike protein).", warnings.get(0).getDetail(),
+				"and the IDENTITY chip is the survivor, replacing the class chip an earlier row had "
+						+ "already raised — not the other way round");
+	}
+
+	@Test
+	public void oneSubstanceStillReportsEveryRecordedFindingSeparately() throws IOException {
+		// The other half of the key: the RECORDED FINDING is in it, so the collapse is per (substance,
+		// finding) and never per substance. Two allergies about one substance are two clinical facts and
+		// must stay two chips — a collapse keyed on the subject alone would answer this with one, dropping
+		// the identity statement or the cross-reactivity one depending on which arrived first.
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
+				"Is hydrocortisone safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Dexamethasone", "Hydrocortisone"), null));
+
+		assertEquals(4, warnings.size(), "two substances x two findings, was: " + warnings);
+		assertEquals("Hydrocortisone is in the same ATC class (A01AC) as the patient's allergy to"
+				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail());
+		assertEquals("The patient has a recorded allergy to Hydrocortisone.",
+				warnings.get(1).getDetail(),
+				"the identity finding about the SAME substance keeps its own chip beside the "
+						+ "cross-reactivity one");
+		assertEquals("Hydrocortisone butyrate is in the same ATC class (A01AC) as the patient's allergy"
+				+ " to Dexamethasone — possible cross-reactivity", warnings.get(2).getDetail());
+		assertEquals("Hydrocortisone butyrate is in the same ATC class (A01AC) as the patient's allergy"
+				+ " to Hydrocortisone — possible cross-reactivity", warnings.get(3).getDetail());
 	}
 
 	@Test

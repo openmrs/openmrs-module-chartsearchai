@@ -775,11 +775,13 @@ Response:
   "answer": "The patient is currently on...[1]...[3]",
   "disclaimer": "This response is AI-generated and may not be accurate...",
   "references": [
-    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15" },
-    { "index": 1, "resourceType": "obs", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10" }
+    { "index": 3, "resourceType": "order", "resourceUuid": "a8f5f167-4ee2-4d2a-94f9-3f3f86d2e9b6", "date": "2025-03-15", "grounded": null, "group": "chart", "source": null, "withheldInteractions": 0 },
+    { "index": 1, "resourceType": "obs", "resourceUuid": "5946f880-b197-400b-9caa-a3c661d71165", "date": "2025-01-10", "grounded": null, "group": "chart", "source": null, "withheldInteractions": 0 }
   ]
 }
 ```
+
+`grounded` is the citation-grounding verdict — `true`/`false` once verified, `null` when grounding is disabled (the default) or did not check that citation; clients must render `null` as unverified, never as verified. `group` is derived from `resourceType` and separates `chart` (a record retrieved from this patient's chart) from `reference` (module-supplied drug knowledge-base prose, not a record about this patient); the array is ordered `chart` group first, preserving the upstream order (most recent first, undated last) within each group. `source` and `withheldInteractions` are the citation's metadata — the dataset an injected drug-reference entry came from, and how many of its interaction partners the record left unrendered. Both keys are always present (`null` / `0` for a chart record, and for a module-derived safety finding, which is computed rather than quoted). They are fields rather than sentences inside the record because everything in a record's text is quotable and the model recited both into answers (issue #117); render them beside the citation, never as part of the answer.
 
 #### Streaming endpoint (SSE)
 
@@ -793,7 +795,7 @@ POST /ws/rest/v1/chartsearchai/search/stream
 
 Returns a `text/event-stream` with three event types:
 - `token` — a chunk of the answer text, streamed as generated
-- `done` — final JSON with the complete answer, references (with `index`, `resourceType`, `resourceUuid`, `date`), and disclaimer
+- `done` — final JSON with the complete answer, references (with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`, `group`, `source`, `withheldInteractions`), and disclaimer
 - `error` — an error message if something goes wrong
 
 Both search endpoints return a `questionId` (the audit log row ID as a string) that the frontend uses to submit user feedback.
@@ -1637,7 +1639,7 @@ The overdose check parses `(drug, mg, frequency)` from the free-text answer. To 
 
 ### Wire & frontend
 
-`ChartAnswer` carries `safetyWarnings`; the REST controller emits a `safetyWarnings` array (`{ type, drug, detail }`) on both the blocking `/search` response and the streaming `done` event (always present, possibly empty). The [frontend ESM](https://github.com/openmrs/openmrs-esm-chartsearchai) renders them as colour-coded chips below the answer and renders `drug_reference` citations as non-navigating reference chips. With the feature off (the default), the wire carries an empty array and the frontend is a no-op.
+`ChartAnswer` carries `safetyWarnings`; the REST controller emits a `safetyWarnings` array (`{ type, drug, detail }`) on both the blocking `/search` response and the streaming `done` event (always present, possibly empty). The [frontend ESM](https://github.com/openmrs/openmrs-esm-chartsearchai) renders them as colour-coded chips below the answer and renders `drug_reference` citations as non-navigating reference chips — it currently identifies those by testing `resourceType` itself, which the per-reference `group` discriminator now supersedes (see the `references` shape above); adopting `group` there is outstanding follow-up. With the feature off (the default), the wire carries an empty array and the frontend is a no-op.
 
 ### Trade-offs
 
@@ -1712,7 +1714,7 @@ So pointing at WHO ATC delivers **class-based contraindication/interaction reaso
 - `DrugReferenceSource` interface; `JsonDrugReferenceSource` (the bespoke schema, retained as one adapter + bundled fallback); `AtcDrugReferenceSource` (WHO ATC / RxNorm-ATC crosswalk → one classification entry per level-5 substance, `drugClass` derived from the nearest parent group present in the dataset).
 - GP `chartsearchai.drugReference.sourceFormat` (`json` | `atc` | `ddinter`) alongside the existing `dataFilePath`.
 - **Class-level contraindication / interaction matching in `DrugSafetyValidator`**, keyed on ATC class rather than per-drug rules, so a rule-less classification source still produces safety reasoning:
-  - **Contraindication** — fires when a recorded allergy resolves (by name) to the drug the answer recommends (a direct allergy that the rule-less source would otherwise miss) **or** to a drug sharing its ATC class (cross-reactivity). Deduplicated per resolved allergen, so several aliases of one allergy warn once.
+  - **Contraindication** — fires when a recorded allergy resolves (by name) to the drug in play (a direct allergy that the rule-less source would otherwise miss) **or** to a drug sharing its ATC class (cross-reactivity). Deduplicated per resolved allergen, so several aliases of one allergy warn once. The first of those two is **not** class-level reasoning, even though it lives in the same method: it compares two object references, so it needs no ATC code and must not be gated on one. Listing it under this bullet is what made a classification guard in front of the whole method look right, and that guard silently suppressed the direct-allergy chip for every entry carrying no ATC code — 444 of the full DDInter dataset's 2283 ([#135](https://github.com/openmrs/openmrs-module-chartsearchai/issues/135)); the guard now sits inside the per-allergen loop, after the identity comparison and before the class comparisons that follow it (the shared-subgroup one here, plus the curated cross-reactivity group added by Decision 27). **All three comparisons also run over the patient's own ACTIVE ORDERS**, not only over the drug in play: keyed on the drug in play alone, the check could not ask "is the patient allergic to something they are *taking*?", and echo scoping ([#105](https://github.com/openmrs/openmrs-module-chartsearchai/issues/105)) actively withheld it — a drug the patient is prescribed appears in a cited `drug_order` chart record, so the answer's mention of it counted as an echo rather than a proposal ([#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143)). The order subjects come from the same `activeOrderEntries` definition the interaction screen uses, an entry already in play is skipped so nothing is checked twice, and the arm stands down when the patient has neither an allergy nor a condition record.
   - **Interaction** — fires when the answer's drug shares an ATC class with an active order (additive effects / duplicate therapy), skipping an order that is the *same* drug (restating existing therapy is not a duplicate).
   - Both are **additive** to the rule-based checks and reuse the existing `warnOnContraindications` / `warnOnInteractions` toggles.
 - **"Same class" = ATC level-4 (chemical subgroup, the 5-character prefix `M01AE`), not level-3.** Level 4 groups structurally-related drugs (ibuprofen/naproxen) with the fewest false positives; level 3 (`M01A` = all NSAIDs) fans out far more broadly with no curated data to justify it. This is the project's standing anti-false-positive stance (the dose-parser hardening existed for the same reason) applied to class breadth.
@@ -1750,6 +1752,10 @@ The grounding pass is pure overhead on the user's critical path, and on CPU-only
 ### Model-dependent cosine floor
 
 `minCosine` is **not** a universal constant — it tracks the embedding model's score-spread geometry. `0.40` suits a wide-spread model like all-MiniLM-L6-v2 but is far too low for e5, whose grounded pairs sit much higher; on an e5/querystore deployment the floor must be ~`0.82`. When `chartsearchai.querystore.enabled=true` the verifier **reuses querystore's own e5 embedding provider** rather than loading a second model, so the floor must match that model. This is the same per-model-tuning stance as the retrieval pipeline (see [Decision 19](#decision-19-retain-all-minilm-l6-v2-as-the-embedding-model) / [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path)).
+
+### Drug-reference citations: demote-only (July 2026)
+
+Injected `drug_reference` records (Decision 24) break both tiers' assumptions once a broad source like DDInter makes reference prose long and drug-dense ([#106](https://github.com/openmrs/openmrs-module-chartsearchai/issues/106)). An answer sentence citing one is a recitation of module-rendered prose: it embeds near-identically to its source even when it swaps subject roles ("erythromycin decreases X" where the record says "ivosidenib decreases X … including erythromycin"), and the same lexical containment defeats the Tier-2 judge — measured live, 4/4 role-swapped recitations were judged entailed while the one faithful recitation was judged not. So drug-reference citations never enter Tier-2 (and do not consume its per-answer cap), and Tier-1 may only **demote**: an off-topic citation still flags `false`, but a pass renders `null` (unverified), never `true`. The faithfulness check for reference content is the deterministic safety validator (Decision 24), not this pass.
 
 ### Trade-offs
 

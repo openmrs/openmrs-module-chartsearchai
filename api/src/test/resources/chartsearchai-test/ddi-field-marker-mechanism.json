@@ -1,0 +1,190 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: real DDInter rows whose mechanism text carries a residual field marker, plus the real negative control that must NOT be stripped",
+  "note": "Verbatim slice of the full KB (issue #116). Mechanism 2248 is the dolutegravir x iron row observed leaking 'INTERVAL:' onto a live safety chip; mechanism 222 is the other marker in the family, 'RECOMMENDED:'. Mechanism 4945 (nifedipine x theophylline) is the real negative control: the single row in the whole 8234-mechanism KB whose own opening clause is a sentence ending in a colon, so it must survive byte-for-byte. Note what it does and does not pin — it sits outside the pattern on TWO axes at once (its clause is mixed-case AND seven words long, past the six-word run bound), so measured against the real KB no single loosening reaches it: dropping the case constraint alone, the word bound alone, or the two-letter minimum alone all still match exactly the same 274 rows and spare 4945. It pins the conjunction, and it is beheaded only when case and bound are loosened together (the note then opens mid-sentence on a lowercase 'either', with the 'Limited and controversial data suggest' hedge that qualifies the whole finding gone). Drug rows are the real ones (ids, rxcuis, rxnorm names, ATC), with the ciel arrays trimmed to the exact-name concept. Groups 9998/9997 and drugs DDInterT03/DDInterT04 are the two synthetic additions — absent from the real KB but reachable because the KB file is operator-editable. 9998 is a degenerate marker-only mechanism (all 274 real marker rows carry text after the marker): it pins that stripping degrades to the no-mechanism note rather than leaving a dangling severity. 9997 is a seven-word ALL-CAPS run before its colon, which no real row supplies (the longest real all-caps run is one word): it is the only case that isolates the six-word bound, stripping the moment that bound alone is loosened while the shipped pattern spares it. Shaped like the real KB (see ddi-rxcui-collision.json precedent)."
+ },
+ "mechanisms": {
+  "2248": {
+   "text": "INTERVAL: Coadministration with medications containing polyvalent cations such as aluminum, calcium, iron, or magnesium may decrease the oral bioavailability of dolutegravir. The mechanism of interaction has not been established.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "222": {
+   "text": "RECOMMENDED: Coadministration with tazemetostat may decrease the plasma concentrations and efficacy of hormonal contraceptives. The mechanism involves induction of CYP450 3A4, the isoenzyme primarily responsible for the metabolic clearance of sex hormones.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4945": {
+   "text": "Limited and controversial data suggest the following: either there is no significant interaction between theophylline and dihydropyridine calcium channel blockers, or theophylline serum levels increase after the addition of dihydropyridine calcium channel blockers. Data are available for nifedipine. Theophylline dosage should be reduced if necessary, and plasma levels should be checked when clinically necessary and appropriate. Patients should be advised to report any signs of theophylline toxicity including nausea, vomiting, diarrhea, headache, restlessness, insomnia, or irregular heartbeat to their physician.",
+   "categories": [
+    "others"
+   ]
+  },
+  "9997": {
+   "text": "PATIENTS SHOULD BE ADVISED TO REPORT SIGNS: coadministration may increase the risk of theophylline toxicity.",
+   "categories": [
+    "others"
+   ]
+  },
+  "9998": {
+   "text": "INTERVAL:",
+   "categories": [
+    "others"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter582",
+   "name": "Dolutegravir",
+   "rxcui": "1433868",
+   "rxnorm_name": "dolutegravir",
+   "drugbank_id": "DB08930",
+   "atc": [
+    "J05AJ03"
+   ],
+   "ciel": [
+    {
+     "code": "165085",
+     "uuid": "165085AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dolutegravir"
+    }
+   ]
+  },
+  {
+   "id": "DDInter975",
+   "name": "Iron",
+   "rxcui": "90176",
+   "rxnorm_name": "iron",
+   "drugbank_id": "DB01592",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "78218",
+     "uuid": "78218AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Iron"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1750",
+   "name": "Tazemetostat",
+   "rxcui": "2274378",
+   "rxnorm_name": "tazemetostat",
+   "drugbank_id": "DB12887",
+   "atc": [
+    "L01XX72"
+   ],
+   "ciel": [
+    {
+     "code": "167624",
+     "uuid": "0ace7948-eeca-4ecd-9ae9-ffc261ba824e",
+     "name": "Tazemetostat"
+    }
+   ]
+  },
+  {
+   "id": "DDInter692",
+   "name": "Ethinylestradiol",
+   "rxcui": "4124",
+   "rxnorm_name": "ethinyl estradiol",
+   "drugbank_id": "DB00977",
+   "atc": [
+    "G03CA01",
+    "L02AA03"
+   ],
+   "ciel": [
+    {
+     "code": "75973",
+     "uuid": "75973AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ethinyl estradiol"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1291",
+   "name": "Nifedipine",
+   "rxcui": "7417",
+   "rxnorm_name": "nifedipine",
+   "drugbank_id": "DB01115",
+   "atc": [
+    "C08CA05"
+   ],
+   "ciel": [
+    {
+     "code": "80637",
+     "uuid": "80637AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Nifedipine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1791",
+   "name": "Theophylline",
+   "rxcui": "10438",
+   "rxnorm_name": "theophylline",
+   "drugbank_id": "DB00277",
+   "atc": [
+    "R03DA04"
+   ],
+   "ciel": [
+    {
+     "code": "84949",
+     "uuid": "84949AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Theophylline"
+    }
+   ]
+  },
+  {
+   "id": "DDInterT03",
+   "name": "Marker Only",
+   "rxcui": "999999",
+   "rxnorm_name": "marker only",
+   "atc": [],
+   "ciel": []
+  },
+  {
+   "id": "DDInterT04",
+   "name": "Bound Probe",
+   "rxcui": "999998",
+   "rxnorm_name": "bound probe",
+   "atc": [],
+   "ciel": []
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter582",
+   "DDInter975",
+   "Major",
+   "2248"
+  ],
+  [
+   "DDInter1750",
+   "DDInter692",
+   "Moderate",
+   "222"
+  ],
+  [
+   "DDInter1291",
+   "DDInter1791",
+   "Minor",
+   "4945"
+  ],
+  [
+   "DDInter582",
+   "DDInterT03",
+   "Major",
+   "9998"
+  ],
+  [
+   "DDInter1791",
+   "DDInterT04",
+   "Minor",
+   "9997"
+  ]
+ ]
+}

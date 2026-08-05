@@ -41,6 +41,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * would still pass. The stub LLM reproduces the
  * exact demo failure: it cites {@code [8]} inline but lists only {@code [9]}
  * in its structured array.</p>
+ *
+ * <p>The same call-site concern covers the safety validator: the mappings-passthrough tests
+ * below pin that both paths hand the chart's mappings to {@code DrugSafetyValidator} — echo
+ * scoping (issue #105) is silently inert without them.</p>
  */
 public class LlmInferenceServiceCitationWiringTest {
 
@@ -61,15 +65,28 @@ public class LlmInferenceServiceCitationWiringTest {
 				return chart;
 			}
 		});
-		service.setDrugSafetyValidator(new org.openmrs.module.chartsearchai.reference.DrugSafetyValidator() {
-
-			@Override
-			public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
-					String answer, String question, org.openmrs.Patient patient) {
-				return java.util.Collections.emptyList();
-			}
-		});
+		// Production calls the status-aware, mappings-carrying overload (echo scoping, issue #105).
+		// Override that exact path so the test cannot pass through an obsolete list-only seam.
+		recordingValidator = new RecordingValidator();
+		service.setDrugSafetyValidator(recordingValidator);
 	}
+
+	/** Recording seam over the production status-aware overload. */
+	private static final class RecordingValidator
+			extends org.openmrs.module.chartsearchai.reference.DrugSafetyValidator {
+
+		java.util.List<RecordMapping> mappingsSeen;
+
+		@Override
+		public SafetyCheckResult validateWithStatus(
+				String answer, String question, org.openmrs.Patient patient,
+				java.util.List<RecordMapping> mappings) {
+			this.mappingsSeen = mappings;
+			return super.validateWithStatus(answer, question, patient, mappings);
+		}
+	}
+
+	private RecordingValidator recordingValidator;
 
 	private static Patient patient() {
 		Patient p = new Patient();
@@ -96,6 +113,36 @@ public class LlmInferenceServiceCitationWiringTest {
 		ChartAnswer answer = service.searchStreaming(patient(), "any infections?",
 				token -> { });
 		assertReferencesInclude(answer, 8);
+	}
+
+	@Test
+	public void search_shouldPassChartMappingsToTheSafetyValidator() {
+		// Echo scoping (issue #105) is inert without the chart's mappings: a refactor that
+		// reverted to the mappings-less validate() would silently re-enable the recited-mention
+		// chip cascade on the blocking path, and every logic-level test would still pass.
+		service.search(patient(), "any infections?");
+		assertMappingsSeenIncludeIndex(8);
+	}
+
+	@Test
+	public void searchStreaming_shouldPassChartMappingsToTheSafetyValidator() {
+		// Twin on the PRIMARY production path (see class javadoc) — the streaming call site is
+		// where a silently-dropped mappings argument would actually reach users.
+		service.searchStreaming(patient(), "any infections?", token -> { });
+		assertMappingsSeenIncludeIndex(8);
+	}
+
+	private void assertMappingsSeenIncludeIndex(int index) {
+		assertTrue(recordingValidator.mappingsSeen != null && !recordingValidator.mappingsSeen.isEmpty(),
+				"the validator must receive the chart's record mappings for echo scoping");
+		boolean found = false;
+		for (RecordMapping mapping : recordingValidator.mappingsSeen) {
+			if (mapping.getIndex() == index) {
+				found = true;
+			}
+		}
+		assertTrue(found, "the mappings handed to the validator must be the chart's; expected index "
+				+ index + " in " + recordingValidator.mappingsSeen);
 	}
 
 	@Test

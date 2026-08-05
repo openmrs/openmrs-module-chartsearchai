@@ -12,7 +12,9 @@ package org.openmrs.module.chartsearchai.web.rest;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -333,19 +335,9 @@ public class ChartSearchAiRestController {
 		response.put("answer", chartAnswer.getAnswer());
 		response.put("disclaimer", DISCLAIMER);
 
-		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
-		for (RecordReference ref : chartAnswer.getReferences()) {
-			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
-			refMap.put("index", ref.getIndex());
-			refMap.put("resourceType", ref.getResourceType());
-			refMap.put("resourceUuid", ref.getResourceUuid());
-			refMap.put("date", formatDate(ref.getDate()));
-			// null when grounding is disabled or could not run — clients must
-			// render null as "unverified", never as "verified".
-			refMap.put("grounded", ref.getGrounded());
-			refs.add(refMap);
-		}
-		response.put("references", refs);
+		// Shared with the SSE emission sites so all four stay in step — carries the
+		// tri-state `grounded` verdict and the `group` discriminator; see serializeReferences.
+		response.put("references", serializeReferences(chartAnswer.getReferences()));
 		response.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
 		response.put("safetyStatus", chartAnswer.getSafetyStatus());
 		if (auditLog.getAuditLogId() != null) {
@@ -1181,6 +1173,11 @@ public class ChartSearchAiRestController {
 		return ProviderMode.fromWireName(mode.trim());
 	}
 
+	/** Test seam: production wires {@link PatientAccessCheck} via {@code Autowired}. */
+	void setPatientAccessCheck(PatientAccessCheck patientAccessCheck) {
+		this.patientAccessCheck = patientAccessCheck;
+	}
+
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)
 	@ResponseBody
 	public ResponseEntity<Object> getAuditLogs(
@@ -1451,32 +1448,100 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Serializes references to the SSE wire shape shared by the early {@code references} event
-	 * (grounding verdicts not yet attached) and the final {@code done} event (grounded).
-	 * {@code grounded} is null when grounding is disabled or could not run — clients must render
+	 * Serializes references to the wire shape shared by every emission site: the {@code /search}
+	 * response, the early {@code references} SSE event (grounding verdicts not yet attached), the
+	 * final {@code done} event (grounded) and the trailing {@code grounded} event of the async
+	 * path. One implementation so a field added here cannot reach some clients and not others.
+	 *
+	 * <p>{@code grounded} is null when grounding is disabled or could not run — clients must render
 	 * null as "unverified", never as "verified".
+	 *
+	 * <p>{@code group} classifies each reference as chart evidence or module-supplied reference
+	 * prose (see {@link ChartSearchAiUtils#referenceGroup}), and the list is ordered so the groups
+	 * are contiguous with chart evidence first — a client that simply renders the array in order
+	 * gets the grouping for free, and one that buckets by {@code group} gets stable buckets. The
+	 * sort is stable, so within a group the order established upstream is preserved. It reorders
+	 * only the serialized view; {@code index} remains each record's citation number, so inline
+	 * {@code [N]} markers in the answer prose keep resolving.
+	 *
+	 * <p>The sort is narrower in effect than it looks, which is worth knowing before anyone
+	 * removes it as redundant: {@code LlmInferenceService.extractCitedReferences} already sorts
+	 * date-descending with nulls LAST, and an injected drug-reference record always carries a null
+	 * date — so it usually lands at the tail unaided. What this sort actually fixes is the case
+	 * where chart records are ALSO null-dated and can therefore sort after it: an allergy, whose
+	 * querystore date is administrative and deliberately not rendered. That is not a corner case —
+	 * it is exactly the shape of a drug-safety answer, the one place drug-reference records get
+	 * cited at all.
 	 */
 	private List<Map<String, Object>> serializeReferences(List<RecordReference> references) {
+		// The copy is load-bearing — do NOT sort `references` in place.
+		//
+		// Every ChartAnswer-derived path would throw outright: ChartAnswer wraps its references in
+		// an unmodifiableList, and that includes each cache hit, which replays the cached answer's
+		// own list.
+		//
+		// On the streaming path the failure would instead be silent. The early "references" event
+		// is handed the very list object LlmInferenceService still owns and reuses for its
+		// grounding pass, where Tier-2's per-answer cap is allocated walking the list in order.
+		// Today's permutation happens not to shift which citations get verified — it is a stable
+		// partition on group alone, so chart citations keep their relative order, and
+		// reference-group citations never consume the entailment budget anyway (the #106
+		// demote-only carve-out). A comparator that later gained a second key would shift cap
+		// membership, and nothing would report it.
+		List<RecordReference> ordered = new ArrayList<RecordReference>(references);
+		// Stable sort on the group rank alone: chart evidence before reference material, with the
+		// upstream order untouched inside each group.
+		Collections.sort(ordered, Comparator.comparingInt(
+			(RecordReference ref) -> groupRank(ref.getResourceType())));
+
 		List<Map<String, Object>> refs = new ArrayList<Map<String, Object>>();
-		for (RecordReference ref : references) {
+		for (RecordReference ref : ordered) {
 			Map<String, Object> refMap = new LinkedHashMap<String, Object>();
 			refMap.put("index", ref.getIndex());
 			refMap.put("resourceType", ref.getResourceType());
 			refMap.put("resourceUuid", ref.getResourceUuid());
 			refMap.put("date", formatDate(ref.getDate()));
 			refMap.put("grounded", ref.getGrounded());
+			refMap.put("group", ChartSearchAiUtils.referenceGroup(ref.getResourceType()));
+			// Citation metadata, for rendering beside the chip: where the cited record came from,
+			// and how many of its interaction partners the cited record does not name (usually because
+			// they are not relevant to this patient, not because they did not fit). Both used to be
+			// appended to the record text itself, where the model recited them into the answer
+			// (issue #117) — they are fields so the model has nothing to quote. `source` is null and
+			// `withheldInteractions` 0 for a chart record, which is that record's real shape.
+			refMap.put("source", ref.getSource());
+			refMap.put("withheldInteractions", ref.getWithheldInteractions());
 			refs.add(refMap);
 		}
 		return refs;
 	}
 
 	/**
-	 * Emits the {@code references} SSE event carrying the answer's citations before the grounding
-	 * pass completes, so the UI can render clickable citations without waiting on Tier-2
-	 * verification. A serialization failure is non-fatal — the final {@code done} event re-sends the
-	 * references with verdicts — but a client disconnect during the write unwinds the stream like the
-	 * other channels (via {@link #writeSseEventOrThrow}).
+	 * Render order of the reference groups: chart evidence first, module-supplied reference
+	 * material last. Adding a group constant without adding it here would leave its entries
+	 * ranked as unknown, so {@code ChartSearchAiReferenceGroupingTest} asserts this list covers
+	 * every declared {@code REFERENCE_GROUP_*} constant. Package-private for that test only.
 	 */
+	static final List<String> REFERENCE_GROUP_ORDER = Collections.unmodifiableList(Arrays.asList(
+			ChartSearchAiConstants.REFERENCE_GROUP_CHART,
+			ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE));
+
+	/**
+	 * Sort rank of a resource type's reference group, as its position in
+	 * {@link #REFERENCE_GROUP_ORDER}. Derived via {@link ChartSearchAiUtils#referenceGroup} rather
+	 * than from {@code resourceType} directly, so ordering and labelling can never disagree.
+	 *
+	 * <p>Ranks off the ordered list rather than testing for one group, so a third group added
+	 * later slots in at its declared position instead of silently tying with chart evidence and
+	 * interleaving — which would quietly falsify the contiguous-groups contract this method
+	 * exists to uphold. A group missing from the list sorts last rather than first, so an
+	 * unranked group is visibly grouped at the end instead of being mistaken for chart evidence.
+	 */
+	private static int groupRank(String resourceType) {
+		int rank = REFERENCE_GROUP_ORDER.indexOf(ChartSearchAiUtils.referenceGroup(resourceType));
+		return rank < 0 ? REFERENCE_GROUP_ORDER.size() : rank;
+	}
+
 	/**
 	 * Serializes the post-answer drug-safety advisories to the wire shape rendered as chips below the
 	 * answer. Empty list when the drug-reference feature is off or nothing was flagged. The key is
@@ -1497,6 +1562,13 @@ public class ChartSearchAiRestController {
 		return out;
 	}
 
+	/**
+	 * Emits the {@code references} SSE event carrying the answer's citations before the grounding
+	 * pass completes, so the UI can render clickable citations without waiting on Tier-2
+	 * verification. A serialization failure is non-fatal — the final {@code done} event re-sends the
+	 * references with verdicts — but a client disconnect during the write unwinds the stream like the
+	 * other channels (via {@link #writeSseEventOrThrow}).
+	 */
 	private void sendReferencesEvent(OutputStream out, List<RecordReference> references) {
 		String json;
 		try {

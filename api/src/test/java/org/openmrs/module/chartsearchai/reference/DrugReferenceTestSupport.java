@@ -19,22 +19,146 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
- * The one set of drug-reference test helpers, shared by the reference test classes so the
+ * The one set of drug-reference test helpers, shared by the reference test classes (and, via
+ * the public accessors, the grounding and inference tests in {@code api.impl}) so the
  * arrangement/matcher bodies cannot drift between files (the same rule CLAUDE.md states for
  * {@code TestDatasetHelper}). Everything here constructs REAL production objects and calls
  * real production paths — no mocks, no pipeline reimplementation; the individual test files
  * keep thin, file-shaped delegates so their call sites read naturally.
  */
-final class DrugReferenceTestSupport {
+public final class DrugReferenceTestSupport {
+
+	/**
+	 * The real rendered text of the drug-reference record the REAL injector injects for
+	 * {@code question} (bundled DDInter sample, real load → parse → injectRecords → render
+	 * chain). The one cross-package accessor for tests that need genuine injected record text
+	 * without reimplementing the renderer.
+	 */
+	public static String injectedDdinterReferenceText(String question) {
+		return injectedReference(injectedDdinterChart(question)).getText();
+	}
+
+	/** The one arrangement behind both public DDInter accessors, so they cannot drift apart. */
+	private static PatientChart injectedDdinterChart(String question) {
+		return injector(ddinterService()).injectRecords(oneRecordChart(),
+				ctx(60, null, null, null, null, null), question);
+	}
+
+	/**
+	 * The injected drug-reference record's mapping in {@code chart} — the mapping rather than only
+	 * its text, because it is the carrier of the citation metadata (source, withheld count) that is
+	 * deliberately absent from the record text (issue #117).
+	 *
+	 * <p>The one matcher for "the injected reference", so the reference-shaped filter cannot drift
+	 * between the test files that need it. {@code DrugReferenceInjectorTest.referenceMappingFor} is
+	 * deliberately separate: it selects by the drug the rendering names, which is a different
+	 * question once more than one entry is injected.
+	 */
+	static RecordMapping injectedReference(PatientChart chart) {
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType()))
+				.findFirst().orElseThrow(() -> new IllegalStateException(
+						"no drug-reference record was injected into the chart: " + chart.getText()));
+	}
+
+	/**
+	 * The real record mappings the REAL injector produces for {@code question} (bundled DDInter
+	 * sample, real load → parse → injectRecords chain), for tests outside this package that need
+	 * genuine injected mappings — including their citation metadata (source, withheld count) —
+	 * rather than hand-built stand-ins.
+	 */
+	public static List<RecordMapping> injectedDdinterMappings(String question) {
+		return injectedDdinterChart(question).getMappings();
+	}
+
+	/**
+	 * The real rendered text of the active-order record the REAL injector injects for an active
+	 * order the chart cannot substantiate (issue #118) — the real reconciliation → render chain,
+	 * not a hand-assembled imitation of the format. The second cross-package accessor, for the
+	 * grounding tests: how this record text embeds against an answer sentence is exactly what
+	 * decides whether treating it as ordinary chart evidence is right, so a test asserting that
+	 * must read the text production actually produces.
+	 */
+	public static String injectedActiveOrderText(String orderUuid, String display) {
+		PatientChart chart = injector(ddinterService()).injectRecords(oneRecordChart(),
+				ctx(60, null, null, null, null, null,
+						Collections.singletonList(activeOrder(orderUuid, display))),
+				"what are the patient's active medications?");
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER.equals(m.getResourceType()))
+				.map(RecordMapping::getText).findFirst()
+				.orElseThrow(() -> new IllegalStateException(
+						"no active-order record was injected for order: " + display));
+	}
+
+	/**
+	 * The real safety-finding record the REAL pipeline injects for {@code question} asked about a
+	 * patient on {@code activeDrug} (with ATC code {@code atcCode}) — the whole production chain,
+	 * bundled DDInter sample through {@code DrugSafetyValidator.validate} and
+	 * {@code injectRecords}/{@code renderFinding}, with the real validator behind the real injector
+	 * (through the same {@code set*} seams the other helpers here use, in place of production's
+	 * autowiring). The third cross-package accessor, for the grounding tests.
+	 *
+	 * <p>Returns the {@link RecordMapping} rather than only its text because a grounding test needs
+	 * the resource type and the citation index too, and because the argument for treating this record
+	 * as module-supplied material is an argument about what THIS prose does under a cosine pass
+	 * (issue #122) — a hand-assembled imitation of the finding line would not be testing it.
+	 *
+	 * @throws IllegalStateException when the question raises no deterministic finding, so a test
+	 *         cannot silently assert nothing
+	 */
+	public static RecordMapping injectedSafetyFinding(String question, String activeDrug, String atcCode) {
+		DrugReferenceService service = ddinterService();
+		service.setCrossReactivityGroups(bundledGroups());
+		DrugReferenceInjector injector = injector(service);
+		injector.setDrugSafetyValidator(validator(service));
+		PatientChart chart = injector.injectRecords(oneRecordChart(),
+				ctx(60, null, set(activeDrug), set(atcCode), null, null), question);
+		return injectedFindings(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
+				"no safety-finding record was injected for question: " + question));
+	}
+
+	/**
+	 * Every injected {@code safety_finding} mapping in {@code chart}, in injection order — the
+	 * finding-shaped counterpart of {@link #injectedReference}, and the one matcher for it, so the
+	 * filter cannot drift between the test files that assert HOW MANY records a chip yields. Returns
+	 * the list rather than the first, because that count is the assertion in every caller but
+	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
+	 */
+	static List<RecordMapping> injectedFindings(PatientChart chart) {
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
+				.collect(Collectors.toList());
+	}
 
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */
 	static final String ATC_SAMPLE = "atc/atc-sample.tsv";
+
+	/**
+	 * DDInter fixture paths used by MORE THAN ONE test file, owned here for the same reason
+	 * {@link #ATC_SAMPLE} is: a fixture that moves or is renamed must break in one place, naming
+	 * itself, rather than break in one file and silently keep passing in another. Single-file
+	 * fixtures keep their constant in the file that uses them.
+	 *
+	 * <p>{@code ddi-route-variants.json}: one substance filed as several rows sharing an
+	 * {@code rxnorm_name} — the shape behind issue #115's chip collapse, and (its two ATC-less
+	 * {@code Iron} rows) behind issue #135's multi-entry case. Its rows are field-for-field identical
+	 * to their KB rows but NOT in KB order: the two Iron rows are transposed, which the #135 case
+	 * depends on — see
+	 * {@code DirectAllergyContraindicationTest.anUnclassifiedAllergenWithASiblingRouteVariantStillWarnsOnce}
+	 * before regenerating this slice.
+	 */
+	static final String DDI_ROUTE_VARIANTS = "chartsearchai-test/ddi-route-variants.json";
+
+	/** Several route variants of one drug sharing a RxCUI — the id/label collision slice. */
+	static final String DDI_RXCUI_COLLISION = "chartsearchai-test/ddi-rxcui-collision.json";
 
 	private DrugReferenceTestSupport() {
 	}
@@ -46,11 +170,41 @@ final class DrugReferenceTestSupport {
 	/** Canonical context builder: any null set means empty; weight null means unknown. */
 	static PatientClinicalContext ctx(Integer age, Double weightKg, Set<String> drugs, Set<String> atc,
 			Set<String> allergies, Set<String> conditions) {
+		return ctx(age, weightKg, drugs, atc, allergies, conditions, null);
+	}
+
+	/** As {@link #ctx}, additionally carrying the identified active drug orders the
+	 *  chart/service reconciliation reads (null means none). */
+	static PatientClinicalContext ctx(Integer age, Double weightKg, Set<String> drugs, Set<String> atc,
+			Set<String> allergies, Set<String> conditions,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		return new PatientClinicalContext(age, weightKg,
 				drugs == null ? Collections.<String> emptySet() : drugs,
 				atc == null ? Collections.<String> emptySet() : atc,
 				allergies == null ? Collections.<String> emptySet() : allergies,
-				conditions == null ? Collections.<String> emptySet() : conditions);
+				conditions == null ? Collections.<String> emptySet() : conditions,
+				orders);
+	}
+
+	/** One active drug order whose concept carries no ATC map — the majority shape, and what
+	 *  {@link PatientClinicalContextBuilder} builds for such an order: the Order uuid, the display name,
+	 *  and the names that identify it in record text (drug and/or concept name). For a mapped concept
+	 *  the builder also attaches the order's own codes — use the four-argument overload below. */
+	static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display, String... names) {
+		Set<String> all = new LinkedHashSet<String>();
+		all.add(display);
+		Collections.addAll(all, names);
+		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, all);
+	}
+
+	/** As {@link #activeOrder}, additionally carrying the ATC codes the order's own concept maps to —
+	 *  the association {@link PatientClinicalContextBuilder} keeps so a code can be attributed to the
+	 *  order it came from (issue #132). Names are an explicit set rather than varargs so that a code
+	 *  set can follow them unambiguously, and so a test can give an order NO names at all — the shape
+	 *  of an order the dataset knows only by its code. */
+	static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display,
+			Set<String> names, Set<String> atcCodes) {
+		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, names, atcCodes);
 	}
 
 	/** A service over the real bundled datasets (classpath fallback — the production default path). */
@@ -101,6 +255,26 @@ final class DrugReferenceTestSupport {
 		}
 	}
 
+	/**
+	 * Entries parsed from a DDInter-shaped test-classpath dataset by the real
+	 * {@link DdiDrugReferenceSource#parse} — the DDInter counterpart of {@link #fixtureEntries},
+	 * which is bound to {@link JsonDrugReferenceSource#parse}, a different parser over a different
+	 * schema. Named for its parser rather than sharing that name for exactly that reason.
+	 *
+	 * <p>The one place the missing-resource guard lives, which is why it is shared rather than
+	 * re-opened per test file: three of the hand-rolled copies this replaced fed
+	 * {@code getResourceAsStream}'s result straight into the parser, so a fixture absent from the
+	 * test classpath failed with Jackson's {@code IllegalArgumentException: argument "in" is null}
+	 * — a message that names neither the resource nor the test that wanted it.
+	 */
+	static List<DrugReference> ddiFixtureEntries(String classpathResource) throws IOException {
+		try (InputStream in = DrugReferenceTestSupport.class.getClassLoader()
+				.getResourceAsStream(classpathResource)) {
+			assertNotNull(in, classpathResource + " should be on the test classpath");
+			return DdiDrugReferenceSource.parse(in);
+		}
+	}
+
 	static DrugSafetyValidator validator(DrugReferenceService service) {
 		DrugSafetyValidator validator = new DrugSafetyValidator();
 		validator.setDrugReferenceService(service);
@@ -115,11 +289,33 @@ final class DrugReferenceTestSupport {
 
 	/** A one-record chart to inject into; the injected reference must append as record [2]. */
 	static PatientChart oneRecordChart() {
-		List<RecordMapping> mappings = new ArrayList<RecordMapping>();
-		mappings.add(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,
+		return chartOf(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,
 				"obs-uuid-1", null, "BP 120/80"));
-		return new PatientChart("Patient\n\n[1] BP 120/80\n",
-				Collections.unmodifiableList(mappings), Collections.<Integer> emptyList());
+	}
+
+	/** A chart of {@code records}, rendered as the numbered "[N] text" lines
+	 *  {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer} produces — so a
+	 *  test can place a real drug-order record in the chart, or leave it out. */
+	static PatientChart chartOf(RecordMapping... records) {
+		StringBuilder text = new StringBuilder("Patient\n\n");
+		for (RecordMapping record : records) {
+			text.append("[").append(record.getIndex()).append("] ").append(record.getText()).append("\n");
+		}
+		return new PatientChart(text.toString(),
+				Collections.unmodifiableList(new ArrayList<RecordMapping>(Arrays.asList(records))),
+				Collections.<Integer> emptyList());
+	}
+
+	/** A querystore drug-order chart record: its resource type is querystore's {@code drug_order}
+	 *  and its resourceUuid is the Order uuid (its {@code DrugOrderRecordSerializer} contract). */
+	static RecordMapping drugOrderRecord(int index, String orderUuid, String drugText) {
+		return new RecordMapping(index, "drug_order", orderUuid, null, "Drug order: " + drugText);
+	}
+
+	/** An obs chart record, for filling a chart with records that are not drug orders. */
+	static RecordMapping obsRecord(int index, String text) {
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_OBS, "obs-uuid-" + index,
+				null, text);
 	}
 
 	static boolean has(List<SafetyWarning> warnings, String type, String drugContains) {

@@ -1,0 +1,29 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: one same-ATC-subgroup pair joined by an Unknown-severity row",
+  "note": "Pins the severity floor x class-arm seam: the Unknown rule chip is floor-filtered while the duplicate-therapy class chip survives, so the pair yields exactly one warning. Shaped like the real KB (see ddi-rxcui-collision.json precedent)."
+ },
+ "mechanisms": {},
+ "drugs": [
+  {
+   "id": "DDInterT01",
+   "name": "Lisinopril",
+   "rxcui": "29046",
+   "rxnorm_name": "lisinopril",
+   "atc": ["C09AA03"],
+   "ciel": []
+  },
+  {
+   "id": "DDInterT02",
+   "name": "Ramipril",
+   "rxcui": "35296",
+   "rxnorm_name": "ramipril",
+   "atc": ["C09AA05"],
+   "ciel": []
+  }
+ ],
+ "interactions": [
+  ["DDInterT01", "DDInterT02", "Unknown", "9999"]
+ ]
+}

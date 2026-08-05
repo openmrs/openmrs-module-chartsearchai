@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -100,20 +101,142 @@ public class DrugReferenceService {
 	}
 
 	/**
-	 * Resolve a free-text drug token (e.g. a name parsed out of the LLM answer) to
-	 * a reference entry via alias match. Returns the first matching entry, or null.
+	 * Resolve a clinician-entered drug NAME — an allergen as recorded on the chart — to a reference
+	 * entry. Returns the first matching entry in dataset order, or null.
+	 *
+	 * <p>Through {@link DrugReference#matchesDrugName}, not {@link DrugReference#matchesText}: the
+	 * input is one localized, inflected display name rather than prose, and resolving it with the
+	 * prose rule is issue #147 — the same string resolved as an active order's name and not as an
+	 * allergen, so a patient's own recorded allergy to a drug they were taking produced no
+	 * contraindication while the interaction it caused was reported. The matcher is named at this call
+	 * site deliberately: it was inherited by default before, which is how the two halves of one safety
+	 * check came to have different tolerance.
+	 *
+	 * <p>Coverage bound, unchanged by that fix and measured over the full KB: this takes the EARLIEST
+	 * matching entry, so a multi-drug name resolves to whichever constituent the dataset lists first,
+	 * and an entry whose alias list claims another drug's name can capture it — see
+	 * {@code DrugSafetyValidator.addAllergyContraindications}, which reports the measurement and is
+	 * where the consequence for a chip's wording is recorded.
 	 */
 	public DrugReference lookupByToken(String drugToken) {
 		if (drugToken == null || drugToken.trim().isEmpty()) {
 			return null;
 		}
-		String lower = drugToken.toLowerCase(Locale.ROOT);
 		for (DrugReference ref : getAll()) {
-			if (ref.matchesText(lower)) {
+			if (ref.matchesDrugName(drugToken)) {
 				return ref;
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Name-driven matching for a clinician-entered drug NAME: EVERY entry that name resolves to, in
+	 * dataset order. The multi-entry counterpart of {@link #lookupByToken} — a combination product's
+	 * name resolves each of its constituents, and a drug the dataset files as several route variants
+	 * resolves all of them — and the order-name counterpart of {@link #findByQuery}, which stays bound
+	 * to the prose matcher because a question and an answer are prose.
+	 */
+	public List<DrugReference> findByDrugName(String drugName) {
+		if (drugName == null || drugName.trim().isEmpty()) {
+			return Collections.emptyList();
+		}
+		List<DrugReference> out = new ArrayList<DrugReference>();
+		for (DrugReference ref : getAll()) {
+			if (ref.matchesDrugName(drugName)) {
+				out.add(ref);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The reference entries the patient's active orders resolve to — the subjects
+	 * {@code DrugSafetyValidator.addActiveOrderPairInteractions} screens against each other, the
+	 * subjects {@code addActiveOrderContraindications} checks against the patient's own allergy and
+	 * condition records, and the source of the names {@link #withReferenceNames} attaches. The union of
+	 * the documented order-driven matcher ({@link #findByActiveOrders}, which keys on ATC codes) and a
+	 * name resolution of each active order's own display name ({@link #findByDrugName}). One
+	 * definition, so those consumers cannot come to disagree about which of the patient's
+	 * prescriptions the reference data covers.
+	 *
+	 * <p>Both keys are needed because {@link PatientClinicalContext#hasActiveDrug} — the join that
+	 * decides whether a rule concerns this patient — matches on name OR ATC, so a subject set resolved
+	 * on only one of them cannot be the subject of every chip that join can raise. Neither key can be
+	 * assumed present: measured on the 3.7.1 standalone's demo dictionary (2026-08-04), ATC coverage is
+	 * sparse but real — 85 of 616 Drug-class concepts carry a map from an ATC-named source
+	 * ({@code Torasemide} → {@code C03CA04}, {@code Heparin sodium} → {@code B01AB01}) and 158 carry a
+	 * {@code concept_reference_map} of any kind, so {@link PatientClinicalContextBuilder} yields ATC
+	 * codes for some orders and none for others. Every order on every probe patient there
+	 * (Simvastatin, Spironolactone, Tiotropium, Nitroglycerin, Budesonide, Dexamethasone) fell in the
+	 * unmapped majority, so an ATC-only subject set was empty for every case measured — which makes
+	 * this union a robustness property rather than a workaround for one dictionary: on a
+	 * fully-ATC-mapped dictionary the order-driven matcher carries the subject set, and where mapping
+	 * is absent the name resolution does. The ATC path is dormant on that instance, not dead.
+	 *
+	 * <p>The name leg is {@link #findByDrugName} rather than {@link #findByQuery} since issue #147: an
+	 * order's display name is a localized drug name, not prose, so resolving it with the prose rule
+	 * left {@code Aspirine Co 81mg} and {@code Clarithromycine Co 500mg} matching no entry at all —
+	 * measured, 117 (order name, entry) pairs gained and 0 lost over the 3.7.1 dictionary's 2533 names.
+	 *
+	 * <p>Identity de-duplication is sound because both matchers resolve against this bean's shared
+	 * {@link #getAll()} cache (the same reason the drugs-in-play set can dedup by identity).
+	 */
+	public List<DrugReference> findForActiveOrders(PatientClinicalContext context) {
+		if (context == null) {
+			return Collections.emptyList();
+		}
+		Set<DrugReference> entries = new LinkedHashSet<DrugReference>(findByActiveOrders(context));
+		for (String name : context.getActiveDrugNames()) {
+			entries.addAll(findByDrugName(name));
+		}
+		return new ArrayList<DrugReference>(entries);
+	}
+
+	/**
+	 * @return {@code context} carrying the reference data's own names for the drugs its active orders
+	 *         name ({@link PatientClinicalContext#getActiveDrugReferenceNames()}), resolved through
+	 *         {@link #findForActiveOrders}. The same context back when there is nothing to add.
+	 *
+	 *         <p>This is issue #136's fix, and it is applied ONCE per pass at each of the two pure
+	 *         entry points that own a context ({@code DrugSafetyValidator.validate} and
+	 *         {@code DrugReferenceInjector.injectRecords}) rather than being threaded through their
+	 *         call trees, so that {@link PatientClinicalContext#hasActiveDrug} stays the single join
+	 *         both of them reach with an unchanged signature — no call site can accidentally ask the
+	 *         narrower question, which is what would let the chips and the promoted prompt text
+	 *         disagree about which orders a rule matches.
+	 *
+	 *         <p>A drug ordered under a name the dataset carries as an alias rather than as the rule's
+	 *         match token had no interaction coverage at all: every DDInter rule about aspirin carries
+	 *         the token {@code aspirin} (the partner row's {@code rxnorm_name}) while that row's own
+	 *         name is {@code Acetylsalicylic acid}, a real drug-concept name in the 3.7.1 demo
+	 *         dictionary that does not contain the string {@code aspirin}. Resolving the ORDER to its
+	 *         entry and carrying that entry's names is what closes it, and it costs one dataset sweep
+	 *         per pass rather than one per rule.
+	 */
+	public PatientClinicalContext withReferenceNames(PatientClinicalContext context) {
+		return context == null ? null : withReferenceNames(context, findForActiveOrders(context));
+	}
+
+	/**
+	 * @return as {@link #withReferenceNames(PatientClinicalContext)}, for a caller that has already
+	 *         resolved {@code orderEntries} and needs them itself — which is
+	 *         {@code DrugSafetyValidator.validate}, whose chip grouping and two order-driven arms take
+	 *         the same list. Passing it rather than resolving twice is not only the cheaper of the two:
+	 *         it makes the names this attaches and the subjects those arms screen ONE resolution by
+	 *         construction, so no later change to {@link #findForActiveOrders} can make the context
+	 *         describe a different set of orders than the arms are reading.
+	 */
+	PatientClinicalContext withReferenceNames(PatientClinicalContext context,
+			List<DrugReference> orderEntries) {
+		if (context == null) {
+			return null;
+		}
+		Set<String> names = new LinkedHashSet<String>();
+		for (DrugReference ref : orderEntries) {
+			names.addAll(ref.getAliases());
+		}
+		return names.isEmpty() ? context : context.withActiveDrugReferenceNames(names);
 	}
 
 	/**

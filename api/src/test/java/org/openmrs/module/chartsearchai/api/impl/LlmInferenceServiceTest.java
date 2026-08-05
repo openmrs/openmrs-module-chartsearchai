@@ -212,6 +212,76 @@ public class LlmInferenceServiceTest {
 	}
 
 	@Test
+	public void extractCitedReferences_shouldCarryCitationMetadataFromTheMapping() {
+		// Issue #117 moved a drug-reference record's dataset attribution and withheld-partner count
+		// off the citable text — where the model recited them into answers — and onto the mapping,
+		// so a client can render provenance on the citation chip instead. This is the hop that makes
+		// that reachable: without it the two facts stop at the mapping and are effectively lost.
+		//
+		// Real mappings from the real injector over the real bundled DDInter sample, so the values
+		// asserted are the ones production computes, not hand-set stand-ins.
+		List<RecordMapping> mappings = org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
+				.injectedDdinterMappings("is warfarin safe to add?");
+		RecordMapping reference = null;
+		RecordMapping chartRecord = null;
+		for (RecordMapping mapping : mappings) {
+			if ("drug_reference".equals(mapping.getResourceType())) {
+				reference = mapping;
+			} else {
+				chartRecord = mapping;
+			}
+		}
+		assertTrue(reference != null && chartRecord != null,
+				"precondition: the fixture chart must hold one chart record and one injected reference");
+		assertTrue(reference.getWithheldInteractions() > 0,
+				"precondition: the Warfarin entry must be broad enough for the cap to withhold partners");
+
+		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
+				"Warfarin interacts with several drugs [" + reference.getIndex() + "] per the chart ["
+						+ chartRecord.getIndex() + "].",
+				Arrays.asList(reference.getIndex(), chartRecord.getIndex()), mappings);
+
+		// Both citations resolved, or the loop below leaves one side null and the assertions fail as a
+		// NullPointerException instead of naming which citation went missing.
+		assertEquals(2, result.size(), "both cited records must resolve to references: " + result);
+		RecordReference cited = null;
+		RecordReference citedChart = null;
+		for (RecordReference ref : result) {
+			if (ref.getIndex() == reference.getIndex()) {
+				cited = ref;
+			} else {
+				citedChart = ref;
+			}
+		}
+		assertEquals(reference.getSource(), cited.getSource(),
+				"the cited reference must carry the record's dataset attribution");
+		assertEquals(reference.getWithheldInteractions(), cited.getWithheldInteractions(),
+				"and the count of partners the render budget withheld");
+		assertNull(citedChart.getSource(),
+				"a chart record has no dataset attribution — its provenance is the patient's record");
+		assertEquals(0, citedChart.getWithheldInteractions(),
+				"and nothing withheld");
+	}
+
+	@Test
+	public void groundingVerdictMustNotDropCitationMetadata() {
+		// withGrounded copies the reference to attach a verdict, so it is the one place the metadata
+		// added in #117 can silently fall off — and it runs on every grounded answer, i.e. the
+		// default path. A dropped source there would make provenance appear on ungrounded answers
+		// only, which is exactly the kind of divergence nobody notices.
+		RecordReference reference = new RecordReference(7, "drug_reference", "11289", null, null,
+				"DDInter 2.0 (via openmrs-ddi-knowledge-base)", 12);
+
+		RecordReference grounded = reference.withGrounded(Boolean.FALSE);
+
+		assertEquals(Boolean.FALSE, grounded.getGrounded(), "the verdict must be attached");
+		assertEquals("DDInter 2.0 (via openmrs-ddi-knowledge-base)", grounded.getSource(),
+				"attaching a verdict must not drop the citation's provenance");
+		assertEquals(12, grounded.getWithheldInteractions(),
+				"nor the withheld-partner count");
+	}
+
+	@Test
 	public void stripQueryStopwords_shouldNormalizeDifferentPhrasingsToSameResult() {
 		// Both queries have only 1 content word ("medications"), so both
 		// preserve the full sentence. The embedding model handles both
@@ -305,9 +375,11 @@ public class LlmInferenceServiceTest {
 		});
 		service.setDrugSafetyValidator(new org.openmrs.module.chartsearchai.reference.DrugSafetyValidator() {
 
+			// overrides the mappings-carrying overload production actually calls (issue #105)
 			@Override
 			public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
-					String answer, String question, org.openmrs.Patient patient) {
+					String answer, String question, org.openmrs.Patient patient,
+					java.util.List<RecordMapping> mappings) {
 				return java.util.Collections.emptyList();
 			}
 		});

@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -131,7 +130,8 @@ public class LlmInferenceService implements ChartSearchService {
 							chart.getMappings()),
 					chart.getMappings());
 			DrugSafetyValidator.SafetyCheckResult safetyResult =
-					drugSafetyValidator.validateWithStatus(response.getAnswer(), question, patient);
+					drugSafetyValidator.validateWithStatus(response.getAnswer(), question, patient,
+							chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus());
@@ -411,7 +411,8 @@ public class LlmInferenceService implements ChartSearchService {
 			groundMs = System.currentTimeMillis() - groundStart;
 
 			DrugSafetyValidator.SafetyCheckResult safetyResult =
-					drugSafetyValidator.validateWithStatus(response.getAnswer(), question, patient);
+					drugSafetyValidator.validateWithStatus(response.getAnswer(), question, patient,
+							chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus());
@@ -502,11 +503,7 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 		}
 		if (answer != null) {
-			Set<Integer> inline = new LinkedHashSet<Integer>();
-			Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(answer);
-			while (marker.find()) {
-				inline.add(Integer.valueOf(marker.group(1)));
-			}
+			Set<Integer> inline = ChartSearchAiUtils.citedIndexes(answer);
 			// Real answer prose that anchors NO citation inline: the structured
 			// array is unanchored (the abstention-dump failure mode), so surface
 			// nothing rather than the records the model merely reviewed. The
@@ -521,8 +518,12 @@ public class LlmInferenceService implements ChartSearchService {
 		for (Integer index : seen) {
 			RecordMapping mapping = indexMap.get(index);
 			if (mapping != null) {
+				// Citation metadata travels with the reference, not inside the record text the model
+				// reads (issue #117): a client renders provenance and the withheld-partner count on
+				// the citation chip, so the record has nothing about itself for the model to recite.
 				references.add(new RecordReference(index, mapping.getResourceType(),
-						mapping.getResourceUuid(), mapping.getDate()));
+						mapping.getResourceUuid(), mapping.getDate(), null, mapping.getSource(),
+						mapping.getWithheldInteractions()));
 			} else {
 				log.warn("LLM cited record [{}] which does not exist in the provided records", index);
 			}

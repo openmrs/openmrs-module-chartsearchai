@@ -9,12 +9,14 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.text.Normalizer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -38,6 +40,9 @@ public class DrugReference {
 	private String id;
 
 	private String name;
+
+	/** Diverging everyday generic name, or null — see {@link #getGenericName()}. */
+	private String genericName;
 
 	private String drugClass;
 
@@ -65,6 +70,41 @@ public class DrugReference {
 
 	public String getName() {
 		return name;
+	}
+
+	/** The everyday generic name (e.g. RxNorm's {@code aspirin}) when it genuinely diverges
+	 *  from {@link #getName()} (e.g. {@code Acetylsalicylic acid}), else {@code null}. Set by
+	 *  sources whose display vocabulary can differ from the chart's; consumed by
+	 *  {@link #displayLabel()}. */
+	public String getGenericName() {
+		return genericName;
+	}
+
+	public void setGenericName(String genericName) {
+		this.genericName = genericName;
+	}
+
+	/**
+	 * The clinician-facing label for safety chips: the display name, with the diverging generic
+	 * appended as a synonym — {@code "Acetylsalicylic acid (aspirin)"} — so a warning is
+	 * recognizable against both the dataset's vocabulary and the question/chart's. The synonym
+	 * renders only when the two genuinely diverge (neither contains the other, case-insensitive):
+	 * route variants like {@code Lidocaine (topical)} and redundancy like
+	 * {@code Kava (kava preparation)} render unchanged — the check lives here, not only in the
+	 * ddinter parser, because a curated json file can bind {@code genericName} directly. Never
+	 * used in prompt text — record rendering keeps {@link #getName()} — so this is a
+	 * chip-display concern only.
+	 */
+	public String displayLabel() {
+		if (genericName == null || genericName.isEmpty() || name == null) {
+			return name;
+		}
+		String n = name.toLowerCase(Locale.ROOT);
+		String g = genericName.toLowerCase(Locale.ROOT);
+		if (n.contains(g) || g.contains(n)) {
+			return name;
+		}
+		return name + " (" + genericName + ")";
 	}
 
 	public void setName(String name) {
@@ -222,28 +262,332 @@ public class DrugReference {
 	 * @return true when any alias equals or is a whole-word token of the given
 	 *         lowercased text. Whole-word so "advil" matches "is advil safe?"
 	 *         but "amox" does not spuriously match unrelated prose.
+	 *
+	 *         <p>For PROSE — a question, an answer, a rendered record. A clinician-entered drug NAME
+	 *         (an order's display name, an allergen) is a different shape and has its own accessor,
+	 *         {@link #matchesDrugName}; see there for why one matcher cannot serve both.
 	 */
 	public boolean matchesText(String lowerText) {
 		if (lowerText == null) {
 			return false;
 		}
 		for (String alias : aliases) {
-			if (alias == null || alias.isEmpty()) {
-				continue;
-			}
-			String a = alias.toLowerCase(Locale.ROOT);
-			int idx = lowerText.indexOf(a);
-			while (idx >= 0) {
-				boolean leftOk = idx == 0 || !Character.isLetterOrDigit(lowerText.charAt(idx - 1));
-				int end = idx + a.length();
-				boolean rightOk = end >= lowerText.length() || !Character.isLetterOrDigit(lowerText.charAt(end));
-				if (leftOk && rightOk) {
-					return true;
-				}
-				idx = lowerText.indexOf(a, idx + 1);
+			if (containsWord(lowerText, alias)) {
+				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * @return true when this entry names the drug in {@code drugName} — a single clinician-entered
+	 *         drug NAME rather than prose: an active order's display name, an allergen as recorded.
+	 *         Case- and diacritic-insensitive; a null name never matches. Not restricted to
+	 *         lowercased input, unlike {@link #matchesText}.
+	 *
+	 *         <p><b>Why this exists (issue #147).</b> Such a string reached {@link #matchesText}
+	 *         by default, and the prose rule's symmetric boundary is wrong for it: a localized
+	 *         dictionary suffixes the INN stem with one inflectional ending, so an allergy recorded as
+	 *         {@code Clarithromycine} resolved to no entry at all while the SAME string as an order
+	 *         name resolved fine — {@link PatientClinicalContext#hasActiveDrug} having been given
+	 *         {@link #matchesOrderName} for exactly that reason (issue #86). A patient on
+	 *         {@code Clarithromycine Co 500mg} was therefore told that simvastatin "interacts with
+	 *         active order clarithromycin — Major" while their own recorded allergy to that drug
+	 *         produced nothing: two matchers with different tolerance on the two halves of one safety
+	 *         check.
+	 *
+	 *         <p>So this borrows {@code matchesOrderName}'s rule rather than introducing a third —
+	 *         an allergen name and an order name are the same shape, one localized display name out of
+	 *         the same dictionary, and the measurement behind that rule's tail allowance is recorded
+	 *         there. What it must NOT be is a relaxation of {@code matchesText} itself: that serves
+	 *         prose, where #86 measured the symmetric boundary as correct ("advil" must not match
+	 *         inside a longer word), so the fix is to give this shape a matcher deliberately rather
+	 *         than to make one rule serve three.
+	 *
+	 *         <p><b>Measured 2026-08-05</b> over the 3.7.1 demo dictionary's 1219 allergen-candidate
+	 *         names against the full 19MB KB: the prose rule resolved 549 of them, this one resolves
+	 *         624 — 75 gained, 0 lost — and the whole #86/#128/#129 kill set was re-scored in this
+	 *         direction, 0 of 21 nesting pairs resolving to the nested drug. On the 2533 order names,
+	 *         117 more (order name, entry) pairs resolve and none stops resolving.
+	 */
+	boolean matchesDrugName(String drugName) {
+		for (String alias : aliases) {
+			if (matchesOrderName(drugName, alias)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @return true when {@code token} IS one of this entry's own names — exact identity after
+	 *         {@link #normalizeName}, deliberately not a scan. Both operands are canonical reference
+	 *         strings (a rule's match token against an entry's own alias list), so the question is name
+	 *         identity; {@code DrugSafetyValidator.identifies} records what scanning them instead
+	 *         produced (a multi-word token naming every drug called after one of its words).
+	 */
+	boolean isNamed(String token) {
+		String name = normalizeName(token);
+		if (name == null) {
+			return false;
+		}
+		for (String alias : aliases) {
+			if (name.equals(normalizeName(alias))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The one normalisation for comparing a reference NAME with a token by identity: trimmed,
+	 * lower-cased ({@link Locale#ROOT}), {@code null} when blank. Shared by {@link #isNamed}, by
+	 * {@code DrugSafetyValidator.namesEntry} and by the name sets {@link PatientClinicalContext}
+	 * holds, so "the same name" means one thing across the three of them.
+	 *
+	 * <p>Deliberately does NOT fold diacritics, unlike {@link #containsBoundedToken}: this decides
+	 * IDENTITY between two reference strings, and folding it would widen
+	 * {@code DrugSafetyValidator.identifies} — the test three arms share for "which entry does this
+	 * rule point at" — by an amount nothing has measured. It would also be a no-op on every shipped
+	 * dataset: 0 of the full KB's 2093 rule tokens and 0 of its 5169 aliases carry a combining mark.
+	 */
+	static String normalizeName(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed.toLowerCase(Locale.ROOT);
+	}
+
+	/**
+	 * @return true when {@code word} occurs in {@code text} as a <em>whole word</em> — bounded on
+	 *         each side by a non-alphanumeric character or the string edge. Whole-word, not
+	 *         substring, so a drug name nested inside a longer one does not spuriously match
+	 *         ("chlorothiazide" is not a whole word in "hydrochlorothiazide"), while a real token
+	 *         still matches ("aspirin" in "Aspirin 81 mg"). Case-insensitive and
+	 *         diacritic-insensitive (see {@link #containsBoundedToken}); a null or empty word
+	 *         never matches. Backs {@link #matchesText} (alias-in-prose); the active-order
+	 *         counterpart is {@link #matchesOrderName}, which shares this rule's left boundary but
+	 *         not its right one — see there for why one matcher cannot serve both.
+	 */
+	static boolean containsWord(String text, String word) {
+		return containsBoundedToken(text, word, 0);
+	}
+
+	/**
+	 * How many trailing letters an active-order display name may carry past a matched drug token
+	 * before the token stops naming that drug. Two: a localized drug name suffixes the INN stem with
+	 * one inflectional ending — Romance singulars ({@code Aspirine}, {@code Aspirina},
+	 * {@code Ondansetrona}) and their plurals ({@code Multivitamines}) — while a longer tail is a
+	 * different substance ({@code Heparinoids}, {@code Multi-Vitamin Adult}). See
+	 * {@link #matchesOrderName} for the measurement behind the number.
+	 */
+	private static final int MAX_ORDER_NAME_INFLECTION_LETTERS = 2;
+
+	/**
+	 * Order-name matching: whether {@code token} — an interaction rule's drug token — names the drug
+	 * in a patient's active drug ORDER, whose {@code orderName} is one display name rather than
+	 * prose.
+	 *
+	 * <p>Since issue #147 this is the rule for a clinician-entered drug NAME generally, not only for
+	 * an order's: {@link #matchesDrugName} borrows it to resolve an allergen, which is the same shape
+	 * read out of the same dictionary. The measurement below is over order names because that is the
+	 * corpus that settled the tail allowance; the allergen corpus was scored separately, see there.
+	 *
+	 * <p>A bare containment test here reports drugs the patient has never taken, because drug names
+	 * nest: {@code "tiotropium".contains("opium")} and {@code "spironolactone".contains("iron")} are
+	 * both true, and both were raised as Major interaction chips on the 3.7.1 standalone (issue #86).
+	 * The discriminating half of the fix is the LEFT boundary shared with {@link #containsWord}: an
+	 * alphanumeric character immediately before the token means the token sits inside a longer word,
+	 * i.e. a different molecule — {@code tiotr|opium}, {@code sp|iron|olactone},
+	 * {@code nitro|glycerin}, {@code bud|esonide}, {@code hydro|chlorothiazide},
+	 * {@code cipr|ofloxacin}.
+	 *
+	 * <p>The right-hand side is where this deliberately differs from {@link #containsWord}, because
+	 * the two kinds of string differ: prose is words, an order name is one localized, inflected
+	 * display name with a dose appended. Measured over the 3.7.1 demo dictionary (2531 drug and
+	 * drug-concept names x the full KB's 2093 rule tokens), by tolerated trailing letters:
+	 *
+	 * <pre>
+	 *   rule                    matches   nested-name collisions leaking   what enters at this step
+	 *   contains (the defect)     896     9 of 9                           —
+	 *   symmetric boundary        761     0 of 9                           —
+	 *   left + &lt;=1 letter         828     0 of 9   67 localized spellings (Aspirine Co 81mg, Aspirina,
+	 *                                              Amoxicilline, Clarithromycine Co 500mg, Ondansetrona)
+	 *   left + &lt;=2 letters        829     0 of 9   1 localized plural (Multivitamines et fer)
+	 *   left + &lt;=3 letters        829     0 of 9   nothing
+	 *   left + &lt;=4 letters        834     0 of 9   5 FALSE positives (Heparinoids ~ heparin,
+	 *                                              Multi-Vitamin Adult ~ vitamin a)
+	 * </pre>
+	 *
+	 * A symmetric boundary would therefore stop checking a patient on {@code Aspirine Co 81mg} for
+	 * aspirin interactions at all — trading a false positive for a false NEGATIVE, the wrong
+	 * direction for a safety net, and one that looks exactly like the noise being removed. Two is the
+	 * far edge of the plateau where every legitimate name is matched and no false positive has yet
+	 * appeared; the first ones appear at four. Stopping at one (this issue's originally measured
+	 * recommendation) leaves exactly one legitimate name unmatched, {@code Multivitamines et fer},
+	 * whose reference entry carries 2 Major and 8 Moderate rules that would silently stop being
+	 * checked.
+	 *
+	 * <p>A bound on the tail, rather than a list of known inflections: stripping
+	 * {@code -e}/{@code -a}/{@code -o} from both sides was measured on the same corpus at 826
+	 * matches, a strict subset of this rule, and trades one bound for a per-language whitelist that a
+	 * differently-localized deployment falls off silently. Residual imprecision this rule keeps, for
+	 * the record: 2 of the 829 are a nitroglycerin order matching the token {@code glycerin} through
+	 * its own parenthetical synonym ("glycerine trinitrate") — a mislabel, not a fabricated drug, and
+	 * one every rule that tolerates an inflectional tail shares.
+	 *
+	 * <p><b>Diacritics (issue #129).</b> The comparison folds them — see
+	 * {@link #containsBoundedToken}, which is where the fold lives and why it lives there. DDInter's
+	 * tokens are unaccented RxNorm generics while a localized dictionary spells the same drug with
+	 * accents, so unfolded an order named {@code Budésonide} shared no substring with
+	 * {@code budesonide} at the accented character and that patient was never checked against
+	 * budesonide's interaction rules at all — the same silent absence as a false negative, arriving by
+	 * a different route. Re-measured over the same corpus with the shipped matchers:
+	 *
+	 * <pre>
+	 *   rule                            matches   nested-name collisions leaking   accented names matched
+	 *   this matcher, unfolded (#128)     829     0 of 9   (0 of 12 accented)      2 of 10
+	 *   this matcher, folded (#129)       907     0 of 9   (0 of 12 accented)     10 of 10
+	 * </pre>
+	 *
+	 * 224 of the 2531 names carry a diacritic. Folding both operands makes the change a pure
+	 * relaxation — 78 pairs added, <em>0 removed</em> — which is what let this widening be scored
+	 * against #128's kill set instead of argued about, and the kill set includes the accented
+	 * spellings, which are the ones folding could newly break: {@code nitroglycérine} folds to
+	 * {@code nitroglycerine}, i.e. {@code glycerin} plus one inflectional letter, so it becomes a
+	 * candidate for that token at the very moment {@code glycérine} legitimately does, and only the
+	 * LEFT boundary separates them.
+	 *
+	 * <p>76 of the 78 are an accented spelling of the token's own drug ({@code héparine} ~ heparin,
+	 * {@code lévofloxacine} ~ levofloxacin, {@code énoxaparine} ~ enoxaparin). The other two, for the
+	 * record, are both the PHRASE nesting no boundary rule can see rather than a new class of error:
+	 * {@code preparado de activador del plasminógeno tipo tisular} (tissue plasminogen ACTIVATOR)
+	 * matches {@code plasminogen}, that token's only match in this dictionary, inheriting
+	 * bleeding-risk rules that fit a fibrinolytic anyway; and
+	 * {@code acétaminophene,pseudo-éphédrine,…} matches {@code ephedrine} across the hyphen, which its
+	 * English twin row {@code Acetaminophen,Pseudo-ephedrine,…} already did before this change — so
+	 * the fold makes one product's two spellings agree rather than introducing that imprecision.
+	 * Both are a mislabel of a drug the patient IS on, like the {@code glycerin} case above.
+	 *
+	 * <p>Misspellings are deliberately NOT accommodated. {@code Lisoniazide} and
+	 * {@code Sprironolactone} are typo'd rows in this same dictionary; folding leaves both unmatched
+	 * (measured before and after), and it must stay that way — matching a typo means matching a name
+	 * that differs from the token by an edit, which reopens the substring hazard from the other side.
+	 * They are a data-quality problem, not a matcher problem.
+	 */
+	static boolean matchesOrderName(String orderName, String token) {
+		return containsBoundedToken(orderName, token, MAX_ORDER_NAME_INFLECTION_LETTERS);
+	}
+
+	/**
+	 * The one boundary-aware containment scan, shared by prose matching ({@link #containsWord}) and
+	 * order-name matching ({@link #matchesOrderName}) so the boundary rule cannot drift between
+	 * them. A match needs {@code token} to start at a word boundary in {@code text} and to end at
+	 * one, give or take up to {@code maxTrailingLetters} letters. Letters only: a digit is never an
+	 * inflection, so a digit sitting against the token is neither stepped over nor treated as the
+	 * end of the name, and a display name that glues its strength straight onto the drug name
+	 * ({@code Aspirin81mg}) therefore does not match. That shape does not occur in the measured
+	 * dictionary — of the 67 matches this rule drops relative to bare containment, 61 are a token
+	 * inside a longer word and 6 are tails longer than two letters, none is a glued digit — and
+	 * treating a digit as the end of the name instead scores identically over that corpus (829
+	 * either way), so the two are indistinguishable on real data and this is the conservative one.
+	 * Case-insensitive; a null or empty token never matches. Whitespace-only is the caller's
+	 * business, deliberately not this method's: {@link PatientClinicalContext#hasActiveDrug} trims
+	 * its token, and the {@code ddinter} and {@code atc} sources drop blank aliases at parse. A
+	 * hand-authored {@code json} KB is NOT sanitized, so a blank alias there is scanned like any other
+	 * token and can match — measured, and wider under the tail allowance than under the symmetric rule,
+	 * so #147 giving allergens the tail allowance widened it. Pre-existing, still not this method's to
+	 * decide, and an authoring guard belongs in that parser; reported separately.
+	 *
+	 * <p>Diacritic-insensitive on BOTH sides (issue #129), which is why the fold lives here rather
+	 * than in either named matcher: the same accented order name reaches both of them — as the
+	 * haystack when a rule token is matched against it ({@link #matchesOrderName}) and as the
+	 * haystack again when the order-driven arms resolve that order's own reference entry
+	 * ({@link DrugReferenceService#findForActiveOrders} → {@code findByDrugName} →
+	 * {@link #matchesDrugName}, which is this rule again since issue #147),
+	 * and as the NEEDLE when an order name is looked for in a rendered record
+	 * ({@code PatientClinicalContext.ActiveDrugOrder.namedIn}). Folding one matcher would leave the
+	 * same patient half-checked; folding one SIDE would break that third case, whose needle is the
+	 * patient's accented name. Folding both operands also makes the change a pure relaxation —
+	 * everything that matched before still matches — which is what let the widening be measured
+	 * against #128's kill set rather than argued about.
+	 *
+	 * <p>Folding the reference side is a no-op on every shipped dataset and is not there for gain:
+	 * measured over the full DDInter KB, 0 of its 2093 rule tokens and 0 of its 5169 aliases carry a
+	 * combining mark, and no two tokens fold together. It is there because a hand-authored
+	 * {@code json} KB may carry an accented alias, and a one-sided fold would then silently stop
+	 * matching the accented order name it was written for.
+	 */
+	private static boolean containsBoundedToken(String text, String token, int maxTrailingLetters) {
+		if (text == null || token == null) {
+			return false;
+		}
+		String t = foldDiacritics(text.toLowerCase(Locale.ROOT));
+		String w = foldDiacritics(token.toLowerCase(Locale.ROOT));
+		if (w.isEmpty()) {
+			// After the fold, not before: a token of nothing but combining marks folds to empty, and
+			// the empty token matches almost anything below.
+			return false;
+		}
+		int idx = t.indexOf(w);
+		while (idx >= 0) {
+			if (idx == 0 || !Character.isLetterOrDigit(t.charAt(idx - 1))) {
+				int end = idx + w.length();
+				for (int tail = 0; tail <= maxTrailingLetters; tail++) {
+					int at = end + tail;
+					// A tail character must itself be a letter to be stepped over.
+					if (tail > 0 && !Character.isLetter(t.charAt(at - 1))) {
+						break;
+					}
+					if (at >= t.length() || !Character.isLetterOrDigit(t.charAt(at))) {
+						return true;
+					}
+				}
+			}
+			idx = t.indexOf(w, idx + 1);
+		}
+		return false;
+	}
+
+	/** Unicode non-spacing marks — the combining accents an NFD decomposition separates out. */
+	private static final Pattern NON_SPACING_MARKS = Pattern.compile("\\p{Mn}+");
+
+	/**
+	 * @return {@code value} with its diacritics folded away — canonically decomposed (NFD) and
+	 *         stripped of combining non-spacing marks, so {@code budésonide} compares as
+	 *         {@code budesonide}. The one definition, used on both operands of
+	 *         {@link #containsBoundedToken}; never call {@link Normalizer} for this elsewhere.
+	 *
+	 *         <p>Decompose-and-strip rather than a hand-rolled character map: a map has to be
+	 *         maintained per language and silently stops folding the first accent nobody listed
+	 *         (this dictionary alone carries {@code é è ï ô û á ó}), whereas NFD is the Unicode
+	 *         standard's own answer to which marks belong to which letter.
+	 *
+	 *         <p><b>Non-Latin scripts.</b> Stripping {@code Mn} is diacritic folding for Latin,
+	 *         Greek, Cyrillic, Arabic harakat and Hebrew niqqud — all cases where the marks are
+	 *         optional pointing over an unambiguous skeleton. It is NOT lossless everywhere: in Thai
+	 *         and Lao the tone marks are {@code Mn}, and in Indic scripts the virama is, so two
+	 *         distinct words in those scripts can fold together and match each other. That is the
+	 *         same widening this fold is for, one script over, and it is bounded by the boundary rules
+	 *         around it; spacing marks ({@code Mc} — Devanagari matras and the like) are deliberately
+	 *         NOT stripped, because those carry the vowel rather than decorate it. Scripts with no
+	 *         canonical decomposition at all (CJK ideographs) are untouched, and Hangul syllables
+	 *         decompose to Jamo, which are letters and so survive the strip — both sides fold
+	 *         identically, so matching within those scripts is unchanged.
+	 *
+	 *         <p>ASCII returns unchanged without normalizing: every reference token is ASCII and so
+	 *         is most order-name text, and this runs once per (rule token, order name) pair — up to a
+	 *         few hundred rules per question — so the common path must not allocate.
+	 */
+	static String foldDiacritics(String value) {
+		for (int i = 0; i < value.length(); i++) {
+			if (value.charAt(i) > 0x7F) {
+				return NON_SPACING_MARKS
+						.matcher(Normalizer.normalize(value, Normalizer.Form.NFD)).replaceAll("");
+			}
+		}
+		return value;
 	}
 
 	/**
@@ -329,6 +673,11 @@ public class DrugReference {
 
 		private String note;
 
+		/** Source-assigned severity ({@code Major}/{@code Moderate}/{@code Minor}/{@code Unknown}
+		 *  for DDInter rows), or {@code null} for sources that don't rate rules (the curated
+		 *  seed) — a null severity is exempt from the validator's severity floor. */
+		private String severity;
+
 		public String getToken() {
 			return token;
 		}
@@ -351,6 +700,14 @@ public class DrugReference {
 
 		public void setNote(String note) {
 			this.note = note;
+		}
+
+		public String getSeverity() {
+			return severity;
+		}
+
+		public void setSeverity(String severity) {
+			this.severity = severity;
 		}
 	}
 

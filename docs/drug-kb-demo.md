@@ -1,10 +1,19 @@
 # Drug knowledge base — demo setup
 
-A reproducible setup for demonstrating **every** path of the drug-reference / drug-safety
-feature on an OpenMRS standalone (or any RefApp demo database). It creates one dedicated
-test patient with the allergies, conditions and active drug orders needed to trigger each
-warning, adds the ATC concept mappings the class-based paths need, and (for the
-cross-reactivity path) swaps in a small custom knowledge base.
+A reproducible setup for demonstrating the drug-reference / drug-safety feature on an
+OpenMRS standalone (or any RefApp demo database). It creates one dedicated test patient
+with the allergies, conditions and active drug orders needed to trigger each warning,
+adds the ATC concept mappings the class-based paths need, and (for the cross-reactivity
+path) swaps in a small custom knowledge base.
+
+> The table below covered every path when it was written and no longer does: three arms
+> have landed since — the question-named pair lookup
+> ([#114](https://github.com/openmrs/openmrs-module-chartsearchai/issues/114)), the
+> interaction screen ([#113](https://github.com/openmrs/openmrs-module-chartsearchai/issues/113))
+> and the active-order contraindication join
+> ([#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143), which fires
+> on this seeded patient — see the note above the cheat-sheet). The README's GP table is the
+> authoritative list of what the feature does; this document is only the demo data.
 
 For the feature itself — config reference, design, API/SSE shape — see the
 [README "Drug-reference injection & safety validation"](../README.md#drug-reference-injection--safety-validation)
@@ -268,7 +277,12 @@ the external-file mechanism (no rebuild):
    (the bundled four **plus** Naproxen) — just copy it into the app-data dir. Equivalently, copy the
    bundled `api/src/main/resources/chartsearchai/drug-reference.json` and append this fifth entry
    (Naproxen shares ibuprofen's `M01AE` subgroup; it carries **no** contraindications/interactions
-   of its own, so a naproxen query surfaces *only* the cross-reactivity warning):
+   of its own, so on the committed seed the cross-reactivity warning is the only chip a naproxen query
+   raises *about naproxen*. Where the Aspirin order is `N02BA`-mapped — as the long-lived `:8081`
+   instance is, see [Portability](#portability) — a second naproxen chip appears, the NSAID group
+   against that active order, exactly as it does for ibuprofen. And this custom KB still carries the
+   bundled four, so Margaret's own active orders still raise the three chips the
+   [cheat-sheet note](#query-cheat-sheet) describes):
 
    ```json
    {
@@ -314,7 +328,8 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | `warnings` | string[] | injection | Optional free-text prose warnings (e.g. a Reye-syndrome caution) rendered verbatim into the injected, citable record so the LLM can ground and cite them. **Display-only** — no matchable token, so the validator never fires on them; enforceable facts belong in the rule fields. |
 | `interactions` | object[] | interaction warning | Drug–drug interaction rules (below). |
 | `contraindications` | object[] | contraindication warning | Allergy/condition rules (below). |
-| `source` | string | injection | Provenance string rendered in the reference text. |
+| `source` | string | injection | Dataset attribution for the entry. **Never rendered into the reference text the LLM sees** — it is published as the `source` field on every citation of this entry, for a client to show beside the citation. It used to be appended to the citable record, and the model recited it into clinician-facing answers (issue #117). Blank or whitespace-only is published as `null`. |
+| `genericName` | string, optional | Everyday generic synonym appended to safety-chip labels when it genuinely diverges from `name` (neither containing the other) — `"Acetylsalicylic acid (aspirin)"`. Display only: never rendered into the reference text the LLM sees, never used for matching. A redundant value (equal to, containing, or contained in `name`) is ignored. |
 
 **`ageBands[]` object**
 
@@ -328,9 +343,10 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 
 | Field | Type | Purpose / notes |
 |-------|------|-----------------|
-| `token` | string | Substring matched (case-insensitive) against the patient's active-order drug names. |
+| `token` | string | Matched (case-insensitive) against the patient's active-order drug names by **word start**, tolerating up to two trailing letters so localized spellings still match (issue #86): `iron` matches `Iron IR 325mg` and `aspirin` matches the French `Aspirine Co 81mg`, but `iron` does **not** match `Spironolactone`. Write the token as the drug's own name, not a fragment of it. |
 | `atc` | string | ATC code matched against the active order's ATC mapping (an alternative to `token`). |
 | `note` | string | Free text appended to the interaction warning (e.g. "increased risk of GI bleeding"). |
+| `severity` | string, optional | Source-assigned rating (`Unknown`/`Minor`/`Moderate`/`Major`). **Rating a rule opts it into the severity floor** (`chartsearchai.drugSafety.minInteractionSeverity`, default `minor`): a rule rated below the floor raises no warning. Omit it (the usual case for hand-authored rules) and the rule always fires. |
 
 **`contraindications[]` object**
 
@@ -379,9 +395,10 @@ entry dataset).
 > clean patient), and map the Aspirin concept to ATC `N02BA01` for the cross-branch group chip.
 > The committed `atc_drugkb.sql` maps only the J01CA/J01GB antibiotics, but the long-lived
 > :8081 instance **already carries** an `N02BA01` mapping on Aspirin — live-verified 2026-07-10:
-> the ibuprofen query there shows an extra *"same cross-reactivity group (NSAID) as active order
-> N02BA01 — possible additive or duplicate-class therapy"* chip (the bare code appears because
-> no KB entry carries `N02BA01`). Both Decision-27 paths were live-verified end-to-end that day
+> the ibuprofen query there shows an extra *"Ibuprofen is in the same cross-reactivity group
+> (NSAID) as active order N02BA01 — possible additive or duplicate-class therapy"* chip (the
+> bare code appears because no KB entry carries `N02BA01`; wording as of the sentence-detail
+> refactor — the 2026-07-10 capture predates the leading subject). Both Decision-27 paths were live-verified end-to-end that day
 > (weight arm: `~1000 mg exceeds the 15 mg/kg per-dose maximum (~750 mg) … weight 50 kg`,
 > driven by the bundled CIEL default with no GP row).
 
@@ -389,16 +406,53 @@ entry dataset).
 
 ## Query cheat-sheet
 
-Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless noted. Each
-query surfaces only the warnings for the drug named.
+Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless noted.
+
+> **Since [#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143) a query does
+> NOT surface only the warnings for the drug it names.** Every question additionally has this
+> patient's own active orders checked against her own allergies and conditions, so every row below
+> that runs on Margaret also carries chips about drugs the query never mentions. (The last row is
+> scoped to any patient; on a stock demo patient, who has neither an allergy nor a condition, the
+> arm returns before it looks at any order.) With the bundled KB and **Steps 1-3 run**,
+> two of her orders resolve to an entry her own records contraindicate, and they contribute three
+> chips:
+>
+> - **Amoxicillin** (`DKB-ORD-6`) — its curated `penicillin` rule against her seeded penicillin-class
+>   allergy (`162297…`, which the table above calls *Penicillins* and the current demo DB names
+>   *Penicillin drug class*; the rule is matched by containment, so either name hits):
+>   `Amoxicillin is contraindicated by an active allergy: penicillin-class hypersensitivity`.
+> - **Gentamicin** (`DKB-ORD-8`) — twice, off her non-coded *Aminoglycoside* allergy and her
+>   *Significant renal impairment*.
+>
+> All three are EXTRA only on a query that names neither drug. A query that does name one of them puts
+> that entry in play, and the arm skips an entry already in play, so the chip comes from the
+> drug-in-play loop instead and the row's own stated expectation already covers it — the amoxicillin
+> row gains the two Gentamicin chips and no second penicillin chip, and the gentamicin row gains only
+> the Amoxicillin one.
+>
+> Her Warfarin, Aspirin, Methotrexate, Furosemide, Ampicillin and Amikacin orders resolve to no
+> bundled entry, so they add nothing. Note **how** Gentamicin resolves: `DKB-ORD-8` is on
+> `concept_id` 3923, and Step 3 maps that concept to `J01GB03`, which is the bundled Gentamicin
+> entry's own ATC code — so the ORDER-driven matcher finds the entry by code, whatever the concept is
+> named. On a database where 3923 is not Gentamicin (see the `concept_id` caveat in
+> [Portability](#portability); it is Gemfibrozil on the standalone this note was checked against)
+> those two chips still appear and still say *Gentamicin*, naming a substance the order does not
+> display — a seed-data mismatch, not a module one, and a reason to re-derive the ids before
+> demonstrating. Note also that **both** contraindicated orders are created by Step 3, not Step 2
+> (`atc_drugkb.sql` inserts `DKB-ORD-5..8`; Step 2's `DKB-ORD-1..4` are Warfarin, Aspirin,
+> Methotrexate and Furosemide, none of which the bundled KB carries) — so after Steps 1-2 alone this
+> arm contributes nothing at all.
+>
+> That is the point of the fix: an allergy to a drug she is already taking is a prescribing error the
+> chart already contains, and no wording of a question should hide it.
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|
-| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication (ibuprofen allergy, GI bleed, peptic ulcer), "recorded allergy to Ibuprofen", interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), a "same cross-reactivity group (NSAID)" interaction |
+| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication (ibuprofen allergy, GI bleed, peptic ulcer), "The patient has a recorded allergy to Ibuprofen.", interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), an "Ibuprofen is in the same cross-reactivity group (NSAID)…" interaction |
 | *Is amoxicillin safe for this patient?* | injected `amoxicillin`; contraindication (penicillin-class), interaction (methotrexate), **duplicate therapy J01CA** (Ampicillin) |
-| *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "recorded allergy to Paracetamol", interaction (warfarin) |
+| *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "The patient has a recorded allergy to Paracetamol.", interaction (warfarin) |
 | *Is gentamicin appropriate for this patient?* | injected `gentamicin`; contraindication (aminoglycoside allergy, renal impairment), interaction (furosemide), **duplicate therapy J01GB** (Amikacin) |
-| *Is naproxen safe for this patient?* | injected `naproxen`; **cross-reactivity** "same ATC class (M01AE) as the patient's allergy to Ibuprofen" *(needs Step 4)* |
+| *Is naproxen safe for this patient?* | injected `naproxen`; **cross-reactivity** "Naproxen is in the same ATC class (M01AE) as the patient's allergy to Ibuprofen…" *(needs Step 4)* |
 | any KB alias (brufen, advil, panadol, tylenol, amoxil…) on **any** patient | a `drug_reference` citation (question-driven injection needs no patient data) |
 
 **Order-driven injection (path 7)** — set `injectFromQuery=false`, then ask
@@ -417,8 +471,8 @@ e.g. a stock demo patient) with a phrasing that keeps drug + dose together:
 
 > *"Repeat back the proposed order and state if it is safe: paracetamol 6000 mg daily."*
 
-→ answer "The proposed order is paracetamol 6000 mg daily…" → `overdose: stated dose ~6000 mg/day
-exceeds the 4000 mg/day maximum`. (Phrasings where the model writes the drug and the dose in
+→ answer "The proposed order is paracetamol 6000 mg daily…" → `overdose: The stated Paracetamol
+dose ~6000 mg/day exceeds the 4000 mg/day maximum for ages 12-120`. (Phrasings where the model writes the drug and the dose in
 *separate* sentences will not fire, even when the arithmetic is right.)
 
 ---

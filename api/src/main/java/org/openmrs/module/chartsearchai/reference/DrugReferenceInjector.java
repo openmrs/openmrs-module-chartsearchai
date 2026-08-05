@@ -11,8 +11,11 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -33,9 +36,35 @@ import org.springframework.stereotype.Service;
  * contraindications, interactions) the same way it grounds chart records.
  *
  * <p>Injection is appended <em>after</em> the retrieved chart records, continuing
- * the citation numbering, and carries the {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE}
- * resource type so the frontend can render its citation chip distinctly (a side
- * panel, not a chart-tab navigation).
+ * the citation numbering. A {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE} record
+ * carries that resource type so the frontend can render its citation chip distinctly (a side
+ * panel, not a chart-tab navigation). That is NOT true of every injected type — an
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is deliberately the
+ * opposite, carrying the patient's real {@code Order} uuid precisely so a client CAN navigate to
+ * it like any other chart citation (see below).
+ *
+ * <p><strong>Adding another kind of injected record?</strong> Its resource type must also be
+ * classified by {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#referenceGroup}, which
+ * decides whether a client presents a citation as evidence about the patient or as module-supplied
+ * reference material. That method fails safe to <em>chart evidence</em> for types it does not
+ * recognise — the wrong default for module-supplied material — so an unclassified injected type is
+ * published to clinicians as if it came from the patient's own record, with no error raised. The
+ * reflective guard in {@code ChartSearchAiReferenceGroupTest} catches a new
+ * {@code RESOURCE_TYPE_*} constant, but it cannot see a bare string literal written here.
+ *
+ * <p>That one classification also decides whether the citation can be grounding-verified (issue
+ * #122): reference material is demote-only, so its verdict is never {@code true}, while chart
+ * evidence is graded normally. Both consequences follow from the single provenance judgement and
+ * both are asserted by that guard — they used to be two separate registrations, and the second was
+ * missed when {@code safety_finding} was added.
+ *
+ * <p>Three kinds are injected today, and they are not all module-supplied: a
+ * {@code drug_reference} entry and a {@code safety_finding} present as reference material, while an
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is the patient's own active
+ * order (read from {@code OrderService} when the chart cannot substantiate it — see
+ * {@link #unrepresentedActiveOrders}) and so deliberately presents as chart evidence. For that one
+ * the fail-safe default happens to be the correct classification; the decision is recorded
+ * explicitly in the guard test rather than left to the default.
  *
  * <p>Matching is deterministic and age-gated:
  * <ul>
@@ -55,10 +84,25 @@ public class DrugReferenceInjector {
 	 * Per-entry character budget for the rendered {@code Interactions:} section. Bounds the
 	 * grounding text a single reference line contributes to the prompt so a broad dataset cannot
 	 * overflow the LLM context window; the deterministic {@link DrugSafetyValidator} still reads
-	 * every interaction off the entry, so nothing is lost from safety checking. At least one
-	 * interaction is always shown; the rest are summarised as "and N more interactions on file".
+	 * every interaction off the entry, so nothing is lost from safety checking. How many the record
+	 * does not name is reported on the {@link RecordMapping} as a field — never as a text tail, which
+	 * the model recited into answers (issue #117). Note that this budget is not the only reason a
+	 * partner goes unnamed, nor usually the main one: segment 2 of {@code render} represents the
+	 * whole dataset tail with a single partner whenever a patient-relevant one was promoted, so most
+	 * of that count is normally "not relevant to this patient" rather than "did not fit".
+	 *
+	 * <p>Two guarantees override the budget, so the rendered length is the cap plus a bounded
+	 * overshoot rather than a hard ceiling — see {@code render}: every partner the patient is
+	 * actually on is represented (full note, or a compact {@code name (Severity)} form when the
+	 * note will not fit), and one dataset-order partner renders alongside them — compact when the
+	 * patient has a relevant partner (breadth is all it is there for), in full when they do not.
 	 */
 	static final int MAX_INTERACTION_RENDER_CHARS = 1500;
+
+	/** querystore's resource type for a drug-order document (its {@code DrugOrderRecordSerializer}
+	 *  contract), which the chart carries through unchanged. The type the active-order
+	 *  reconciliation looks for, and the type it asks the chart's completeness declaration about. */
+	private static final String QUERYSTORE_DRUG_ORDER_TYPE = "drug_order";
 
 	@Autowired
 	private DrugReferenceService drugReferenceService;
@@ -66,6 +110,69 @@ public class DrugReferenceInjector {
 	/** Test seam: production wires {@link DrugReferenceService} via {@link Autowired}. */
 	void setDrugReferenceService(DrugReferenceService drugReferenceService) {
 		this.drugReferenceService = drugReferenceService;
+	}
+
+	@Autowired
+	private DrugSafetyValidator drugSafetyValidator;
+
+	/** Test seam: production wires {@link DrugSafetyValidator} via {@link Autowired}. */
+	void setDrugSafetyValidator(DrugSafetyValidator drugSafetyValidator) {
+		this.drugSafetyValidator = drugSafetyValidator;
+	}
+
+	/**
+	 * The deterministic safety findings this question raises, as citable records.
+	 *
+	 * <p>Rationale, measured. {@link DrugSafetyValidator} computes the safety join correctly every
+	 * time, but it runs <em>after</em> the answer, so the model is asked to re-derive a conclusion the
+	 * module already holds — and it does not. The eval README records 0 joins across 21 baseline
+	 * cells; on 2026-07-30 two live cases abstained with the evidence rendered, cited and provably
+	 * readable (a patient on simvastatin asked about clarithromycin, 0/6; a patient with a severe
+	 * aspirin allergy asked about ibuprofen, 0/4, while quoting the NSAID family list back verbatim
+	 * when asked). Supplying more evidence is measurably not the lever, and three prompt variants
+	 * regressed. So the finding becomes a record: reporting a line already in front of it is something
+	 * the model does reliably.
+	 *
+	 * <p>Computed by calling {@code validate} with an EMPTY answer — the production path, unmodified.
+	 * That makes the drugs in play exactly the question-named ones (the answer contributes none), and
+	 * runs the contraindication and interaction passes while contributing no dose-excess warning,
+	 * which is correct: a dose warning is about a dose the answer proposes, and there is no answer yet.
+	 * No second definition of any safety rule is introduced.
+	 *
+	 * <p>A question that names no drug is therefore not automatically finding-free. Two checks in
+	 * {@code validate} have no drug in play at all, and both reach this pass:
+	 * <ul>
+	 *   <li>the patient's own active orders screened against EACH OTHER when the question asks to be
+	 *       screened for interactions (issue #113) — that gate reads the QUESTION only;</li>
+	 *   <li>the patient's own active orders checked against their own allergy and condition records
+	 *       (issue #143, {@code DrugSafetyValidator.addActiveOrderContraindications}) — whose GATE and
+	 *       whose SUBJECTS read no question and no answer at all, only the chart. It does read the
+	 *       drugs-in-play set, but only to skip what the loop above has already covered; see the
+	 *       parenthetical below.</li>
+	 * </ul>
+	 * Neither can therefore differ between this pre-answer pass and the post-answer chips pass, which
+	 * is the property that keeps a finding in the prompt from ever being asserted without a chip beside
+	 * the answer. (The #143 arm skips a drug already in play, so a question naming one of the patient's
+	 * own orders moves that chip from this arm to the drug-in-play loop rather than adding or dropping
+	 * one — the same chips, from a different arm.)
+	 *
+	 * <p>The list is empty whenever the deterministic layer finds nothing, so a question that nothing
+	 * bears on gains no record and its abstention survives by construction rather than by prompt
+	 * wording — the direction issue #107 guards.
+	 */
+	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question) {
+		// Gated on the SAME toggle that gates the chips, because the two must never disagree. The
+		// validator's public entry point checks this GP; the package-private overload used here does
+		// not, so without this an operator setting validateAnswers=false would switch the chips off
+		// while findings kept flowing into the prompt — the answer asserting "not safe due to a Major
+		// interaction [232]" with no chip beside it. That is precisely the chip-versus-prose divergence
+		// this whole change exists to remove, reappearing silently and only under a non-default config.
+		if (drugSafetyValidator == null || !ChartSearchAiUtils.getBooleanGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
+			return Collections.emptyList();
+		}
+		return drugSafetyValidator.validate("", question, context);
 	}
 
 	/**
@@ -96,9 +203,17 @@ public class DrugReferenceInjector {
 	 * so the matching/rendering logic is unit-testable. Honours the
 	 * {@code injectFromQuery} / {@code injectFromOrders} toggles.
 	 */
-	PatientChart injectRecords(PatientChart chart, PatientClinicalContext context, String question) {
+	PatientChart injectRecords(PatientChart chart, PatientClinicalContext rawContext, String question) {
+		// The same resolution DrugSafetyValidator.validate applies, for the same reason
+		// (issue #136): orderedInteractionNotes decides which interactions to promote through
+		// PatientClinicalContext.hasActiveDrug, so a context without the reference names here would
+		// promote a different set of partners than the chips name — the exact chip-versus-prose split
+		// that method's javadoc exists to rule out.
+		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext);
 		List<DrugReference> matched = matchingEntries(context, question);
-		if (matched.isEmpty()) {
+		List<SafetyWarning> findings = preAnswerFindings(context, question);
+		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
+		if (matched.isEmpty() && findings.isEmpty() && unrepresented.isEmpty()) {
 			return chart;
 		}
 
@@ -107,16 +222,40 @@ public class DrugReferenceInjector {
 		List<RecordMapping> mappings = new ArrayList<RecordMapping>(chart.getMappings());
 		int index = mappings.size() + 1;
 
-		for (DrugReference ref : matched) {
-			String rendered = render(ref, age);
-			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
-					ref.getId(), null, rendered));
+		// The patient's own records first, before the module's reference material and the findings
+		// derived from it — the order the REST layer also renders references in (chart evidence
+		// before reference material), so the clinician reads evidence then conclusion.
+		for (PatientClinicalContext.ActiveDrugOrder order : unrepresented) {
+			String rendered = renderActiveOrder(order);
+			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
+					order.getUuid(), null, rendered));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
 
-		log.debug("Injected {} drug-reference record(s) into chart for question '{}'",
-				matched.size(), question);
+		for (DrugReference ref : matched) {
+			RenderedReference rendered = render(ref, age, context);
+			// The rendering's own bookkeeping rides on the mapping, not in the line — see
+			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
+			// grounding verifier still compares against exactly what the model read.
+			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
+					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions));
+			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
+			index++;
+		}
+
+		// After the reference records, so a finding's citation number always follows the reference it
+		// was derived from — the clinician reads cause then conclusion in chart order.
+		for (SafetyWarning finding : findings) {
+			String rendered = renderFinding(finding);
+			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
+					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered));
+			text.append("[").append(index).append("] ").append(rendered).append("\n");
+			index++;
+		}
+
+		log.debug("Injected {} active-order, {} drug-reference and {} safety-finding record(s) into chart "
+				+ "for question '{}'", unrepresented.size(), matched.size(), findings.size(), question);
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
@@ -127,7 +266,183 @@ public class DrugReferenceInjector {
 		if (chart.isQueryScoped()) {
 			injected.markQueryScoped();
 		}
+		// Same reasoning for the completeness stamp: it is what tells a consumer whether a record's
+		// ABSENCE from this chart is meaningful, and a fresh PatientChart declares nothing. Dropping
+		// it would silently turn the rebuilt slice into one whose absences look uninformative.
+		injected.markCompleteFor(chart.getCompleteResourceTypes());
 		return injected;
+	}
+
+	/**
+	 * The patient's active drug orders that {@code chart} carries no drug-order record for — the
+	 * reconciliation of the drug-safety layer's {@code OrderService} read against the serialized
+	 * chart the answer is grounded in (issue #118). WARNs when it finds any: the two reads
+	 * disagreeing is an anomaly an operator needs to see, and it was previously silent.
+	 *
+	 * <p>Why this exists. The safety layer reads active orders straight from {@code OrderService}
+	 * ({@link PatientClinicalContextBuilder}); the answer is grounded only in the querystore chart.
+	 * That independence is a strength — it is what kept the chips correct when the index was behind
+	 * — but nothing compared the two, so a divergence surfaced to the clinician as the module
+	 * contradicting itself: a chip naming "active order simvastatin" beside an answer stating "No
+	 * active medications are recorded." (3.7.1 standalone, HEAD {@code 13690b1}; three phrasings,
+	 * so not phrasing sensitivity). Injecting the orders the chart cannot substantiate degrades the
+	 * divergence into a missing-record repair instead: the model has the medication list in front of
+	 * it, which is the mechanism #110 established for the safety findings.
+	 *
+	 * <p>Index drift was only the trigger, and fixing it belongs to querystore, which owns
+	 * indexing. The same divergence is reachable from a query racing an in-flight index write, a
+	 * failed indexing advice, or a partial reindex, so the reconciliation is not conditioned on any
+	 * cause.
+	 *
+	 * <p>An order is substantiated by a chart record carrying its {@code Order} uuid (querystore
+	 * indexes its {@code drug_order} document under exactly that — its
+	 * {@code DrugOrderRecordSerializer} contract, so the match is exact), or failing that by a
+	 * drug-order record whose text names the drug. The name fallback is deliberate insurance in the
+	 * conservative direction: were the uuid contract to change, uuid-only matching would report
+	 * every order as missing on every query, and a WARN that fires always reports nothing. A
+	 * <em>live</em> drug-order record naming the drug already tells the model the patient has an
+	 * order for it, so there is nothing for the answer to deny and nothing to repair.
+	 *
+	 * <p><strong>Two ways that fallback used to over-match, both fixed, both of which suppressed the
+	 * WARN as well as the repair</strong> — so the discrepancy became invisible rather than merely
+	 * unrepaired, which is worse than not having the check.
+	 *
+	 * <p>First, the corpus was every {@code drug_order} record's text regardless of whether the
+	 * record described a LIVE order. querystore indexes stopped and discontinued orders too (they
+	 * are not voided). So in the renewal shape — stop Simvastatin 20mg, start Simvastatin 40mg, the
+	 * replacement's document missing under drift — the stopped record's text named the drug, the new
+	 * order counted as substantiated, and the answer reading "Stopped: …" correctly reported no
+	 * active medication beside a chip naming one. Issue #118 verbatim, through the ordinary revise
+	 * flow. Only records describing a live order now substantiate one
+	 * ({@link #describesEndedOrder}).
+	 *
+	 * <p>Second, the match itself was a plain substring test, so a short order name was found inside
+	 * an unrelated word — an active {@code ASA} order read as substantiated by
+	 * {@code "Drug order: Nasal spray"} — and a sibling record could mask an order whose name is a
+	 * substring of it ({@code Aspirin} inside {@code Aspirin/Dipyridamole}).
+	 * {@code ActiveDrugOrder.namedIn} now shares {@link DrugReference#containsWord} — the existing
+	 * symmetric-boundary rule that already backs alias-in-prose matching — rather than introducing a
+	 * third matcher beside it and {@code matchesOrderName}. Which of those two it borrows is a real
+	 * decision, not a coin toss; {@code namedIn}'s javadoc records why the symmetric one is the
+	 * correct and the safe choice for this direction.
+	 *
+	 * <p>Only reconciled when the chart claims to carry every drug-order record
+	 * ({@link PatientChart#isCompleteFor}). A query-scoped slice — the DEFAULT chart mode — omits
+	 * everything outside the question's typed scope by design, so absence there says nothing about
+	 * the index; treating it as drift would WARN and inject a medication list on nearly every
+	 * query. A medications question does scope the slice to drug orders, which is precisely the
+	 * question that produced the observed contradiction, so the default mode is still covered.
+	 */
+	static List<PatientClinicalContext.ActiveDrugOrder> unrepresentedActiveOrders(PatientChart chart,
+			PatientClinicalContext context) {
+		if (chart == null || context == null || context.getActiveDrugOrders().isEmpty()
+				|| !chart.isCompleteFor(QUERYSTORE_DRUG_ORDER_TYPE)) {
+			return Collections.emptyList();
+		}
+
+		Set<String> chartResourceUuids = new HashSet<String>();
+		StringBuilder drugOrderText = new StringBuilder();
+		List<RecordMapping> mappings = chart.getMappings();
+		for (RecordMapping mapping : mappings == null ? Collections.<RecordMapping>emptyList() : mappings) {
+			// Uuid matching is type-agnostic: a resource uuid is globally unique, so a record
+			// carrying this order's uuid IS this order however it is typed.
+			if (mapping.getResourceUuid() != null) {
+				chartResourceUuids.add(mapping.getResourceUuid());
+			}
+			if (QUERYSTORE_DRUG_ORDER_TYPE.equals(mapping.getResourceType()) && mapping.getText() != null) {
+				// Only records describing a LIVE order may substantiate one. A stopped or
+				// discontinued order's record names the drug while saying the patient is no longer
+				// on it, so counting it would answer "the chart already covers this order" with a
+				// record that in fact tells the model the opposite.
+				String lower = mapping.getText().toLowerCase(Locale.ROOT);
+				if (!describesEndedOrder(lower)) {
+					drugOrderText.append(lower).append('\n');
+				}
+			}
+		}
+		String drugOrderTextLower = drugOrderText.toString();
+
+		List<PatientClinicalContext.ActiveDrugOrder> unrepresented =
+				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			boolean substantiated = (order.getUuid() != null && chartResourceUuids.contains(order.getUuid()))
+					|| order.namedIn(drugOrderTextLower);
+			if (!substantiated) {
+				unrepresented.add(order);
+			}
+		}
+		if (!unrepresented.isEmpty()) {
+			// WARN, not INFO: the two reads disagreeing means the chart the answer is grounded in is
+			// behind the authoritative order list, which an operator must be able to see. The chart
+			// comes from the querystore index, so the usual cause is that index being behind — a
+			// querystore concern, named here so the log points at the right module.
+			log.warn("Active-order reconciliation: {} of {} active drug order(s) have no drug-order record "
+					+ "in the retrieved chart, so the answer could deny a medication the drug-safety "
+					+ "chips name; injecting them as records. The chart is built from the querystore "
+					+ "index, so this normally means that index is behind the OrderService read "
+					+ "(querystore owns indexing). Unrepresented: {}",
+					unrepresented.size(), context.getActiveDrugOrders().size(), unrepresented);
+		}
+		return unrepresented;
+	}
+
+	/** Lowercased marker querystore renders a drug order's END date under — it emits
+	 *  {@code ". Stopped: <date>"} for both {@code getDateStopped()} and {@code getAutoExpireDate()}
+	 *  (its {@code DrugOrderRecordSerializer} contract). */
+	private static final String QUERYSTORE_STOPPED_MARKER = ". stopped:";
+
+	/** Lowercased marker for a DISCONTINUE order — the record of a drug ENDING. Keyed on the
+	 *  {@code Action} VALUE, never on the {@code ". Action: "} label alone: querystore renders that
+	 *  label on every drug-order record and {@code Order.action} defaults to {@code NEW}, so keying
+	 *  on the label would treat every agreeing chart as drifted and fire the WARN on every query. */
+	private static final String QUERYSTORE_DISCONTINUE_MARKER = ". action: discontinue";
+
+	/**
+	 * Whether {@code lowerRecordText} describes an order that has ENDED, so it must not substantiate
+	 * a currently-active order of the same drug.
+	 *
+	 * <p>Why this reads the rendered text rather than a status field. querystore DOES carry the
+	 * structural signal — its {@code putOrderBaseFields} puts {@code action}, {@code date_stopped}
+	 * and {@code auto_expire_date} into the {@code QueryDocument} metadata — but that metadata is
+	 * dropped three layers upstream of here: {@code QueryStoreChartBuilder.toSerializedRecords}
+	 * carries only the obs-group fields into {@code SerializedRecord}, and the reconciliation sees
+	 * only the resulting {@link RecordMapping} (index, type, uuid, date, text). Threading a status
+	 * flag through would mean widening two shared internal types, and — the reason it is not simply
+	 * the better fix — it would rest on metadata surviving querystore's index round-trip, which is
+	 * unverified here and unverifiable in this module's tests (querystore does not index under
+	 * {@code BaseModuleContextSensitiveTest}). The rendered text, by contrast, is demonstrably what
+	 * the chart carries: it is the same {@code getText()} this method already matches names against.
+	 * Plumbing the structural field is the better long-term fix once that round-trip is confirmed.
+	 *
+	 * <p>Because it keys on rendered prose, the markers are pinned against the REAL querystore
+	 * serializer's output in {@code QuerystoreOrderTextMarkerTest} — a wording change there fails
+	 * loudly instead of silently reopening issue #118.
+	 *
+	 * <p><strong>Known limitation, and the strongest argument for the structural fix above.</strong>
+	 * Running that serializer (rather than reading it) showed querystore does NOT render an
+	 * auto-expire date into the text: an order that lapsed by {@code autoExpireDate} passing carries
+	 * no end marker at all, so it can still substantiate a live order. querystore does carry
+	 * {@code auto_expire_date} in the document METADATA, so the structural route would cover this
+	 * case and rendered prose cannot. The narrower renewal shape this method exists for — an order
+	 * explicitly stopped or discontinued — IS covered, and {@code QuerystoreOrderTextMarkerTest}
+	 * pins the auto-expire gap so it fails loudly if querystore ever starts rendering it.
+	 */
+	static boolean describesEndedOrder(String lowerRecordText) {
+		return lowerRecordText != null
+				&& (lowerRecordText.contains(QUERYSTORE_STOPPED_MARKER)
+						|| lowerRecordText.contains(QUERYSTORE_DISCONTINUE_MARKER));
+	}
+
+	/**
+	 * One unrepresented active order as a chart line. Shaped like querystore's own drug-order text
+	 * ({@code "Drug order: <drug>. Dose: …"}) so the model reads it as the chart record it stands in
+	 * for, and stated as plain fact: a hedge inside the record ("no matching record was retrieved")
+	 * is the shape that made the model put an abstention clause in front of its own evidence in
+	 * #110. The provenance is carried by the record's resource type and the WARN above, where an
+	 * operator looks for it, rather than by prose in front of a clinician.
+	 */
+	static String renderActiveOrder(PatientClinicalContext.ActiveDrugOrder order) {
+		return "Active drug order: " + order.getDisplay() + ".";
 	}
 
 	/**
@@ -138,9 +453,9 @@ public class DrugReferenceInjector {
 	 * chemical subgroup or a curated cross-reactivity group — a real duplicate-therapy /
 	 * cross-reactivity concern). An active medication unrelated to the asked-about drug — or a
 	 * question that names no drug at all — is not injected: it would be noise that helps the
-	 * clinician in no way. The model still sees the active-order records in the chart, and the
-	 * safety validator reads active orders directly, so neither the answer's medication awareness
-	 * nor the safety chips depend on this injection.
+	 * clinician in no way. The safety validator reads active orders directly, so the chips never
+	 * depend on this injection; the answer's medication awareness comes from the chart's own
+	 * drug-order records, and from {@link #unrepresentedActiveOrders} for any the chart is missing.
 	 */
 	List<DrugReference> matchingEntries(PatientClinicalContext context, String question) {
 		Map<String, DrugReference> byId = new LinkedHashMap<String, DrugReference>();
@@ -197,11 +512,230 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Renders one reference entry into the citable line the LLM sees. Numeric dosing
-	 * is included only when an age band matches {@code age}; prose warnings,
-	 * contraindications and interactions are always rendered.
+	 * The prefix every injected safety-finding chart line carries — the token
+	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT}'s record-type rule keys on ("Records beginning with
+	 * "Safety finding" ARE about this patient"). Shared with that prompt's format demonstration for
+	 * the same reason {@code LlmProvider.FOCUS_HINT_LABEL} is shared: if the demonstration and the
+	 * real line drift, the few-shot teaches a record shape the model never sees at inference time,
+	 * and the verdict lead demonstrated on it (#112) stops transferring to the real finding. Pinning
+	 * both sides to independent literals would let that drift ship green.
 	 */
-	static String render(DrugReference ref, Integer age) {
+	public static final String FINDING_PREFIX = "Safety finding — ";
+
+	/**
+	 * One deterministic finding as a chart line. The detail text is reused verbatim — it is the same
+	 * string the clinician already sees on the chip, so the prose and the chip cannot describe the
+	 * same finding differently.
+	 */
+	static String renderFinding(SafetyWarning finding) {
+		return FINDING_PREFIX + finding.getDrug() + ": " + finding.getDetail();
+	}
+
+	/**
+	 * The entry's interaction notes, ordered so the partners this patient is actually on come first —
+	 * most severe of those first, see {@link #SEVERITY_DESCENDING} — then the rest in dataset order.
+	 *
+	 * <p>This ordering is what makes the {@link #MAX_INTERACTION_RENDER_CHARS} cut meaningful.
+	 * Rendering in dataset order let the dataset's own sequence decide which partners a clinician's
+	 * model could cite: in the full DDInter KB, Clarithromycin carries 898 partners with Simvastatin
+	 * (Major) at index 324, so a patient on simvastatin asking about clarithromycin got a record
+	 * naming ivosidenib, kanamycin and ketoprofen — none of which they take — and the one
+	 * interaction that concerned them was truncated 300 entries earlier. The model then recited
+	 * what it could see. {@link DrugSafetyValidator} was unaffected throughout, because it reads
+	 * every interaction off the entry and never consults this text, so the chip named simvastatin
+	 * while the prose named ivosidenib: the two disagreed by construction.
+	 *
+	 * <p>Relevance uses {@link PatientClinicalContext#hasActiveDrug} — deliberately the same
+	 * predicate {@link DrugSafetyValidator} uses to decide an interaction concerns this patient, so
+	 * a partner that raises a chip is exactly a partner promoted here, and the rendered text cannot
+	 * drift from the chip.
+	 *
+	 * <p>That correspondence is per PARTNER, and since issue #115 it is no longer one note per chip:
+	 * {@link DrugSafetyValidator#bestRulePerPartner} collapses several rules naming one partner —
+	 * DDInter's route variants of a drug all publish the same match token — into a single
+	 * most-severe chip, while this method still promotes one entry per row. A patient on one
+	 * dexamethasone order therefore gets one Major chip beside a record reading "dexamethasone
+	 * (Major …); dexamethasone (Moderate …); dexamethasone (Moderate …)", so a model answering from
+	 * the record can still name a severity the chip deliberately discarded — and does so from the
+	 * more quotable half, because in that measured case the discarded Moderate note is 659 characters
+	 * against the surviving Major row's 326. Nothing goes missing: {@code render} emits every promoted
+	 * note, so a duplicated partner can only push another partner into its compact
+	 * {@code name (Severity)} form, never out. Collapsing here needs the same thing the chip cannot
+	 * decide either — which variant the order is — and so waits on the route vocabulary that is the
+	 * data-side half of #115. Until then the two paths agree on WHICH partners concern the patient,
+	 * which is what the ordering above exists to guarantee, but not on how many rows or which
+	 * severity.
+	 *
+	 * <p>Ordering alone is not sufficient, which is why {@code render} also overrides the budget for
+	 * this segment: two above-floor partners can exceed {@link #MAX_INTERACTION_RENDER_CHARS}
+	 * between them (measured on the bundled sample: methotrexate 783 + aspirin 809 against a 1500
+	 * budget), and dropping the second reinstates exactly the chip-versus-prose split described
+	 * above for the polypharmacy case. So the cap becomes a soft budget with a bounded overshoot
+	 * rather than a hard ceiling — bounded by the patient's own active-drug count, not the dataset's
+	 * breadth, and paid in the compact {@code name (Severity)} form rather than in full notes.
+	 *
+	 * @param context may be null (nothing to prioritise by) — the section then keeps dataset order
+	 */
+	static OrderedInteractions orderedInteractionNotes(DrugReference ref, PatientClinicalContext context) {
+		List<InteractionNote> promoted = new ArrayList<InteractionNote>();
+		List<InteractionNote> rest = new ArrayList<InteractionNote>();
+		// Promotion honours the SAME severity floor the chips do (issue #84). Measured on the 3.7.1
+		// standalone (2026-07-30): promoting on relevance alone surfaced DDInter's Unknown-severity
+		// rows — which carry no mechanism text and which the floor deliberately suppresses from
+		// chips — into the front of the prompt, and the model then answered from them. Two probe
+		// cells that correctly abstained on the baseline started reporting "an Unknown severity
+		// interaction between Erythromycin and Lisinopril", i.e. the render path was bypassing a
+		// safety decision the chip path enforces. A sub-floor rule is not promoted; it keeps its
+		// dataset position, exactly as before promotion existed.
+		int floor = DrugSafetyValidator.configuredSeverityFloor();
+		for (DrugReference.Interaction i : ref.getInteractions()) {
+			String label = ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
+			String note = ChartSearchAiUtils.firstNonBlank(i.getNote());
+			// Kept identical to the previous rendering: a labelless rule still contributes its bare
+			// note, and a null/blank pair contributes nothing (addIfPresent drops it) — the dataset
+			// is operator-editable and must degrade, never throw or emit a literal "null".
+			String rendered = label != null ? (note != null ? label + " (" + note + ")" : label) : note;
+			if (ChartSearchAiUtils.isBlank(rendered)) {
+				continue;
+			}
+			// Trim before the length comparison below, not after: comparing untrimmed and storing
+			// trimmed lets a row whose note carries trailing whitespace still end up with a "compact"
+			// form longer than the full one, which is the single thing that comparison exists to rule
+			// out.
+			rendered = rendered.trim();
+			// The compact form exists so a relevant partner is never invisible when its full note
+			// does not fit the budget (see render()). Severity is kept because it is the one thing a
+			// clinician needs when the mechanism prose has to go; a labelless rule has nothing
+			// shorter to fall back to, so it keeps its full text.
+			//
+			// It has a SECOND consumer, and in the common case the primary one: segment 2 renders the
+			// dataset-tail representative compact unconditionally whenever a partner was promoted,
+			// with budget still to spare (issue #117 — mechanism prose about a drug the patient is not
+			// on is what the model recited). So do not assume reaching this form means the budget ran
+			// out; it also means "breadth is all this partner is here for".
+			String severity = ChartSearchAiUtils.firstNonBlank(i.getSeverity());
+			String compact = (label == null ? rendered
+					: (severity != null ? label + " (" + severity + ")" : label)).trim();
+			// A row carrying a severity but no mechanism text renders full as just the label, which
+			// the severity-bearing short form would then be LONGER than — a "compact" that costs
+			// more than what it replaces. Fall back to the full text in that case so the name stays
+			// true and the substitution can never grow the piece.
+			if (compact.length() >= rendered.length()) {
+				compact = rendered;
+			}
+			boolean promote = context != null && context.hasActiveDrug(i.getToken(), i.getAtc())
+					&& DrugSafetyValidator.clearsSeverityFloor(i, floor);
+			(promote ? promoted : rest).add(new InteractionNote(rendered, compact, i.getSeverity()));
+		}
+		// Within the promoted segment, severity — not dataset position — decides who keeps their
+		// mechanism prose when the budget can only afford one full note (see render). Measured on the
+		// bundled sample: a patient on lisinopril (Moderate x ibuprofen, 910 chars) and aspirin
+		// (MAJOR, 809) exceeded the budget, and because lisinopril sits earlier in the dataset it
+		// took the full note while the Major interaction was abbreviated to "aspirin (Major)". Both
+		// severities stayed visible, so nothing was silently dropped — but the actionable half went
+		// to the less dangerous interaction, decided by dataset accident. Stable, so equal severities
+		// keep dataset order.
+		Collections.sort(promoted, SEVERITY_DESCENDING);
+		int promotedCount = promoted.size();
+		// `promoted` becomes the whole ordered list from here — the count above is what keeps the two
+		// segments distinguishable to render().
+		promoted.addAll(rest);
+		return new OrderedInteractions(promoted, promotedCount);
+	}
+
+	/**
+	 * Orders promoted interactions most-severe first. An unrated rule sorts ahead of Major: every
+	 * curated hand-authored rule is unrated, and {@link DrugSafetyValidator#clearsSeverityFloor}
+	 * already treats unrated as exempt rather than low — unrated is not low-rated, so it must not be
+	 * the one abbreviated.
+	 *
+	 * <p>Which source a rule came from decides whether that branch is reachable at all: DDInter rates
+	 * every row (all 295,184 in the full KB are Major/Moderate/Minor/Unknown — none unrecognised), so
+	 * unrated arises only from an operator's curated JSON. A mixed deployment is therefore the only
+	 * configuration in which the unrated-versus-rated tie-break is observable, which is why no
+	 * bundled dataset can cover it.
+	 */
+	private static final Comparator<InteractionNote> SEVERITY_DESCENDING = new Comparator<InteractionNote>() {
+
+		@Override
+		public int compare(InteractionNote a, InteractionNote b) {
+			return Integer.compare(b.severityPriority, a.severityPriority);
+		}
+	};
+
+	/** One interaction's rendered text, with a short form for when the budget cannot take the note. */
+	static final class InteractionNote {
+
+		final String full;
+
+		final String compact;
+
+		/** {@link DrugSafetyValidator#severityPriority} — the shared ordering in which unrated sits
+		 *  above Major; see {@link #SEVERITY_DESCENDING}. */
+		final int severityPriority;
+
+		InteractionNote(String full, String compact, String severity) {
+			this.full = full;
+			this.compact = compact;
+			this.severityPriority = DrugSafetyValidator.severityPriority(severity);
+		}
+	}
+
+	/** The ordered interaction notes plus the length of their patient-relevant prefix. */
+	static final class OrderedInteractions {
+
+		final List<InteractionNote> ordered;
+
+		final int promotedCount;
+
+		OrderedInteractions(List<InteractionNote> ordered, int promotedCount) {
+			this.ordered = ordered;
+			this.promotedCount = promotedCount;
+		}
+	}
+
+	/**
+	 * One reference entry rendered for the prompt, separated from the bookkeeping that describes
+	 * the rendering.
+	 *
+	 * <p>{@code text} is the citable record: everything in it is quotable, because the model is
+	 * instructed to cite records and it quotes what it cites. {@code source} and
+	 * {@code withheldInteractions} are facts <em>about</em> that text — a dataset attribution and
+	 * how many partners the text does not name — which used to be appended to it and were duly recited
+	 * into clinician-facing answers ("…and 824 more interactions on file. Source: DDInter 2.0…",
+	 * issue #117). They travel here instead, onto the {@link RecordMapping} and out to the client,
+	 * where a citation chip can show provenance and honest truncation without the model ever
+	 * seeing either.
+	 */
+	static final class RenderedReference {
+
+		final String text;
+
+		/** Dataset attribution, or null when the entry declares none. */
+		final String source;
+
+		/** Interaction partners the text does not name — dropped by the budget or, more often, by
+		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all. */
+		final int withheldInteractions;
+
+		RenderedReference(String text, String source, int withheldInteractions) {
+			this.text = text;
+			this.source = source;
+			this.withheldInteractions = withheldInteractions;
+		}
+	}
+
+	/**
+	 * Renders one reference entry into the citable line the LLM sees, plus the metadata that
+	 * describes the rendering and must stay out of it — see {@link RenderedReference}. Numeric
+	 * dosing is included only when an age band matches {@code age}; prose warnings,
+	 * contraindications and interactions are always rendered.
+	 *
+	 * <p>{@code context} orders the capped {@code Interactions:} section — see
+	 * {@link #orderedInteractionNotes}. It may be null (nothing to prioritise by), in which case
+	 * the section keeps dataset order.
+	 */
+	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context) {
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
 		StringBuilder paren = new StringBuilder();
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {
@@ -253,43 +787,81 @@ public class DrugReferenceInjector {
 			sb.append(" Contraindicated with: ").append(String.join("; ", contraindicationNotes)).append(".");
 		}
 
-		List<String> interactionNotes = new ArrayList<String>();
-		for (DrugReference.Interaction i : ref.getInteractions()) {
-			String label = ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
-			String note = ChartSearchAiUtils.firstNonBlank(i.getNote());
-			if (label != null) {
-				addIfPresent(interactionNotes, note != null ? label + " (" + note + ")" : label);
-			} else {
-				addIfPresent(interactionNotes, note);
-			}
-		}
-		if (!interactionNotes.isEmpty()) {
+		OrderedInteractions interactions = orderedInteractionNotes(ref, context);
+		List<InteractionNote> ordered = interactions.ordered;
+		int withheld = 0;
+		if (!ordered.isEmpty()) {
 			// Cap what is *rendered* into the prompt, not what is parsed: a broad interaction
 			// dataset (e.g. the ddinter source's Warfarin, ~934 partners) would otherwise write
 			// tens of thousands of tokens into a single citable line and blow the LLM context
 			// window. The safety validator still reads every interaction off the entry, so this
-			// only bounds the grounding text. A blank tail records how many were withheld.
+			// only bounds the grounding text. How many were withheld is reported on the
+			// RecordMapping, never in this text — see RenderedReference.
 			List<String> shown = new ArrayList<String>();
 			int used = 0;
-			for (String n : interactionNotes) {
-				if (!shown.isEmpty() && used + n.length() > MAX_INTERACTION_RENDER_CHARS) {
-					break;
+
+			// Segment 1 — the partners this patient is actually on. Never invisible: the full note
+			// while the budget allows, else the compact "name (Severity)" form. Dropping one of
+			// these is how the chip and the prose come to disagree, which is the whole defect this
+			// ordering exists to fix, so the budget yields to them rather than the reverse. Bounded
+			// by the patient's own active-drug list, not by the dataset's breadth.
+			for (int i = 0; i < interactions.promotedCount; i++) {
+				InteractionNote n = ordered.get(i);
+				String piece = shown.isEmpty() || used + n.full.length() <= MAX_INTERACTION_RENDER_CHARS
+						? n.full : n.compact;
+				shown.add(piece);
+				used += piece.length() + 2;
+			}
+
+			// Segment 2 — the dataset tail. It exists because this entry is also the only reference
+			// material the model has about the drug in general, so the record must not read as if
+			// the patient's own overlap were the drug's only interaction. What it does NOT need to
+			// do is put mechanism prose for drugs this patient has nothing to do with in front of a
+			// model that reports what it can see: measured live (issue #117), a patient on
+			// simvastatin asked about erythromycin got the correct simvastatin finding in sentence
+			// one and then ~1150 further characters reciting the ivosidenib and ixabepilone notes —
+			// which rendered only because a short promoted note left budget to spend. The tail's job
+			// is breadth, and one partner named with its severity states breadth; the mechanism text
+			// is what is actionable for a partner the patient is actually on, and #117 also records
+			// this quantised model garbling long verbatim copies, so every irrelevant paragraph
+			// offered is a paragraph of mangled clinical prose a clinician may be shown.
+			//
+			// So: with a promoted partner present, exactly one representative, in the compact
+			// "name (Severity)" form — with one operator-authored exception, since InteractionNote
+			// keeps the full text for a rule carrying no token and no ATC (there is no name to shorten
+			// to), so such a row can still land a full paragraph in this slot. That stays inside the
+			// same one-note overshoot the budget already tolerates; it just is not always ~20 chars.
+			// With none, the record has nothing patient-specific to say and
+			// the general material IS its content, so the budget is spent on full notes exactly as
+			// before, the first always rendering however long it is — the pre-existing "at least one
+			// interaction is always shown" guarantee, which is why the explicit re-add this replaced
+			// could only ever fire in the promoted case, and that case now always shows one.
+			// MAX_INTERACTION_RENDER_CHARS stays a soft budget whose overshoot is at most one note,
+			// and a compact representative shrinks that overshoot rather than widening it.
+			int restStart = interactions.promotedCount;
+			if (restStart == 0) {
+				for (int i = 0; i < ordered.size(); i++) {
+					String n = ordered.get(i).full;
+					if (!shown.isEmpty() && used + n.length() > MAX_INTERACTION_RENDER_CHARS) {
+						break;
+					}
+					shown.add(n);
+					used += n.length() + 2;
 				}
-				shown.add(n);
-				used += n.length() + 2;
+			} else if (restStart < ordered.size()) {
+				shown.add(ordered.get(restStart).compact);
 			}
-			sb.append(" Interactions: ").append(String.join("; ", shown));
-			int withheld = interactionNotes.size() - shown.size();
-			if (withheld > 0) {
-				sb.append("; and ").append(withheld).append(" more interactions on file");
-			}
-			sb.append(".");
+
+			sb.append(" Interactions: ").append(String.join("; ", shown)).append(".");
+			withheld = ordered.size() - shown.size();
 		}
 
-		if (ref.getSource() != null && !ref.getSource().isEmpty()) {
-			sb.append(" Source: ").append(ref.getSource()).append(".");
-		}
-		return sb.toString();
+		// The dataset attribution and the withheld count leave with the RenderedReference instead of
+		// being appended here: everything in this string is quotable, and the model quoted both into
+		// clinician-facing answers (issue #117). Trimmed and blank-coalesced for the same reason the
+		// sections above are — the dataset is operator-editable.
+		String source = ChartSearchAiUtils.firstNonBlank(ref.getSource());
+		return new RenderedReference(sb.toString(), source != null ? source.trim() : null, withheld);
 	}
 
 	/** Adds {@code value} to {@code out} only when it is non-null and non-blank. */

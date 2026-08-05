@@ -111,7 +111,11 @@ public class DrugSafetyValidatorTest {
 
 	@Test
 	public void noFalsePositiveWhenAnswerNeedsNoReference() {
-		// Chart-sufficient answer naming no reference drug -> no warnings.
+		// Chart-sufficient answer naming no reference drug -> no warnings. Read the arrangement, not
+		// only the assertion: since issue #143 that is no longer an unconditional property of the
+		// module. The patient's own active orders are checked against her allergies on every question,
+		// so what keeps this case at zero is that her one order (warfarin) resolves to no entry in the
+		// bundled dataset — give her an order the dataset carries and the same call warns.
 		List<SafetyWarning> warnings = validator().validate(
 				"The patient's most recent blood pressure is 120/80 mmHg [1].",
 				ctx(40, set("warfarin"), set("nsaid"), null));
@@ -204,8 +208,9 @@ public class DrugSafetyValidatorTest {
 	@Test
 	public void classContraindicationForRecordedAllergyToTheNamedDrug() throws IOException {
 		// The single most important case: the answer names a drug the patient is allergic to. ATC
-		// entries carry no rules, so only the class layer catches it (the allergy resolves to the
-		// same reference drug the answer recommends).
+		// entries carry no rules, so only the allergen arm catches it — by IDENTITY, not by class
+		// (the allergy resolves to the very entry the answer recommends). That distinction is what
+		// issue #135 turned on: identity needs no ATC code, so it must not be gated on one.
 		List<SafetyWarning> warnings = atcValidator().validate(
 				"Ibuprofen 200 mg as needed.",
 				ctx(40, null, set("ibuprofen"), null));
@@ -330,9 +335,11 @@ public class DrugSafetyValidatorTest {
 	@Test
 	public void duplicateAllergyAliasesProduceASingleContraindication() {
 		// advil and brufen are both ibuprofen aliases; two allergy records that resolve to the same
-		// reference drug must produce ONE class contraindication, not one per alias. (Real bundled
-		// JSON dataset, whose curated rules do NOT key on these brand aliases — so the class layer is
-		// the only thing that fires, and it must dedupe by resolved allergen.)
+		// reference drug must produce ONE contraindication, not one per alias. (Real bundled JSON
+		// dataset, whose curated rules do NOT key on these brand aliases — so the only thing that
+		// fires is the allergen arm's IDENTITY comparison, which must dedupe by resolved allergen.
+		// Not the class comparison, despite both living in that arm: the aliases resolve to the very
+		// entry in play, which is the distinction issue #135 turned on.)
 		List<SafetyWarning> warnings = validator().validate(
 				"Ibuprofen 200 mg as needed.",
 				ctx(40, null, set("advil", "brufen"), null));

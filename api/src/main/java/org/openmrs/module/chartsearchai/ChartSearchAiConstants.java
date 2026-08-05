@@ -403,11 +403,24 @@ public class ChartSearchAiConstants {
 
 	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS = true;
 
-	/** Cross-check drugs named in the answer against the patient's allergies/conditions for contraindications. */
+	/** Cross-check the drugs in play — those the question asks about and those the answer names on its own
+	 *  authority — against the patient's allergies/conditions for contraindications, and, on every question,
+	 *  the patient's own active orders against those same records (issue #143). */
 	public static final String GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS =
 			"chartsearchai.drugSafety.warnOnContraindications";
 
 	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS = true;
+
+	/** Minimum source-assigned severity ({@code unknown} &lt; {@code minor} &lt; {@code moderate} &lt;
+	 *  {@code major}) a rule-based interaction must carry to raise a warning chip. Rules without a
+	 *  severity (e.g. the curated seed's hand-authored rules) are always shown, as are class-based and
+	 *  contraindication chips. {@code unknown} shows every rated rule; the default {@code minor}
+	 *  filters exactly DDInter's Unknown-severity rows, which carry no mechanism text (14% of the
+	 *  full knowledge base) and dilute the chips that matter. See issue #84. */
+	public static final String GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY =
+			"chartsearchai.drugSafety.minInteractionSeverity";
+
+	public static final String DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY = "minor";
 
 	/** Concept UUID (a kg-valued numeric concept) used to read the patient's most recent weight for
 	 *  the weight-aware per-dose overdose check. The value {@link #DRUG_SAFETY_WEIGHT_CONCEPT_DISABLED}
@@ -432,6 +445,17 @@ public class ChartSearchAiConstants {
 	public static final String GP_DRUG_SAFETY_WEIGHT_MAX_AGE_DAYS = "chartsearchai.drugSafety.weightMaxAgeDays";
 
 	public static final int DEFAULT_DRUG_SAFETY_WEIGHT_MAX_AGE_DAYS = 90;
+
+	/** Most interaction chips one question may raise from a PAIRWISE arm — the question's own drugs
+	 *  checked against each other, or the patient's active orders checked against each other. Both are
+	 *  quadratic in a list this module does not control, and both feed the prompt as citable findings,
+	 *  so the number is a clinical judgement a deployment makes (a polypharmacy review clinic may want
+	 *  30, a triage screen 5) rather than one this module fixes at build time — issue #131. An
+	 *  unparseable or non-positive value falls back to the default rather than disabling the cap; see
+	 *  {@code DrugSafetyValidator.maxPairChips} for why a cap cannot simply be removed. */
+	public static final String GP_DRUG_SAFETY_MAX_PAIR_CHIPS = "chartsearchai.drugSafety.maxPairChips";
+
+	public static final int DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS = 10;
 
 	/**
 	 * When {@code > 0}, the {@code reasoning} scratchpad in the chart-answer schema is capped at
@@ -483,6 +507,60 @@ public class ChartSearchAiConstants {
 	 * ({@code chartsearchai.hub.apikey} in OpenMRS runtime properties — never a global property).
 	 */
 	public static final String RP_HUB_API_KEY = "chartsearchai.hub.apikey";
+
+	/**
+	 * A finding the deterministic drug-safety layer derived from THIS patient's records plus the drug
+	 * knowledge base, injected pre-answer so the answer can cite it instead of re-deriving it.
+	 *
+	 * <p>Distinct from {@link #RESOURCE_TYPE_DRUG_REFERENCE} because it is patient-specific: the
+	 * system prompt tells the model that "Drug reference" records are NOT this patient's data, so
+	 * folding a patient-specific conclusion into one would contradict the prompt. It is also not
+	 * {@link #RESOURCE_TYPE_ALLERGY} or any other chart type — it is derived, with no chart row to
+	 * navigate to, which is why it groups as reference material rather than chart evidence.
+	 */
+	public static final String RESOURCE_TYPE_SAFETY_FINDING = "safety_finding";
+
+	/**
+	 * One of the patient's ACTIVE drug orders, read from {@code OrderService}, that the serialized
+	 * chart carries no drug-order record for — injected by
+	 * {@link org.openmrs.module.chartsearchai.reference.DrugReferenceInjector} so the answer cannot
+	 * deny a medication the drug-safety chips simultaneously name (issue #118).
+	 *
+	 * <p>Unlike {@link #RESOURCE_TYPE_DRUG_REFERENCE} and {@link #RESOURCE_TYPE_SAFETY_FINDING},
+	 * which are module-supplied material, this is the patient's own record — the authoritative read
+	 * of it — and it carries the real {@code Order} uuid, so it groups as
+	 * {@link #REFERENCE_GROUP_CHART} evidence and stays navigable. Kept as its own type rather than
+	 * borrowing querystore's {@code drug_order} so the reconciliation is visible on the wire: a
+	 * reference of this type is the module reporting that the retrieved chart was incomplete.
+	 */
+	public static final String RESOURCE_TYPE_ACTIVE_DRUG_ORDER = "active_drug_order";
+
+	/**
+	 * Wire value of a serialized reference's {@code group}: a record retrieved from THIS
+	 * patient's chart. Evidence about the patient, citable as such.
+	 */
+	public static final String REFERENCE_GROUP_CHART = "chart";
+
+	/**
+	 * Wire value of a serialized reference's {@code group}: module-supplied reference prose (a drug
+	 * knowledge-base entry, or a finding derived from one), not a record about this patient. Kept
+	 * visible precisely so a client can disclose that provenance rather than let it read as chart
+	 * evidence. A citation in this group is additionally never grounding-verified as {@code true},
+	 * being demote-only (see {@code CitationGroundingVerifier}) — a property of the GROUP since issue
+	 * #122, which derived that gate from {@link ChartSearchAiUtils#referenceGroup} instead of from the
+	 * {@code drug_reference} resource type. Keying it on the type is how
+	 * {@link #RESOURCE_TYPE_SAFETY_FINDING} came to be reference-group yet graded as chart evidence.
+	 *
+	 * <p>{@link #RESOURCE_TYPE_ACTIVE_DRUG_ORDER} is injected but groups as
+	 * {@link #REFERENCE_GROUP_CHART}, so it is graded normally (decided in #118: one drug asserted of
+	 * this patient has no subject roles to swap, so a passing verdict is real assurance) — "the module
+	 * injected it" is a different question from this group.
+	 *
+	 * <p>A client must still read {@code grounded} per reference rather than infer it from
+	 * {@code group}: this group only rules {@code true} out, and both {@code false} (an off-topic
+	 * citation, still worth flagging) and {@code null} (unverified) remain.
+	 */
+	public static final String REFERENCE_GROUP_REFERENCE = "reference";
 
 	private ChartSearchAiConstants() {
 	}

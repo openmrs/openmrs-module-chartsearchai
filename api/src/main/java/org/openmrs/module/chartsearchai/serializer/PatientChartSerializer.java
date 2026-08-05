@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.serializer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -329,6 +330,15 @@ public class PatientChartSerializer {
 		 *  a slice prompt under a patient's KV scope would purge their real full-chart entry. */
 		private boolean queryScoped;
 
+		/** The resource types this chart carries COMPLETELY — every record querystore holds of
+		 *  that type for this patient. Only a query-scoped slice needs to state this: the full
+		 *  chart carries everything by construction, so {@link #isCompleteFor} answers from
+		 *  {@link #queryScoped} unless a slice has declared its scope. Stamped by the scoped
+		 *  builder, for the same reason the queryScoped flag is: a consumer deciding whether a
+		 *  record's ABSENCE is meaningful must read the chart that was built, not re-derive the
+		 *  routing from the question. */
+		private Set<String> completeResourceTypes = Collections.emptySet();
+
 		public PatientChart(String text, List<RecordMapping> mappings) {
 			this(text, mappings, Collections.<Integer>emptyList());
 		}
@@ -351,7 +361,10 @@ public class PatientChartSerializer {
 			return focusIndices;
 		}
 
-		/** Marks this chart as a query-scoped slice; called only by the scoped chart builder. */
+		/** Marks this chart as a query-scoped slice. Called by the scoped chart builder, and again by
+		 *  {@code DrugReferenceInjector} when it rebuilds the chart to append injected records —
+		 *  a rebuild that dropped the stamp would silently turn a slice into something downstream
+		 *  reads as a full chart. */
 		public void markQueryScoped() {
 			this.queryScoped = true;
 		}
@@ -361,10 +374,63 @@ public class PatientChartSerializer {
 		public boolean isQueryScoped() {
 			return queryScoped;
 		}
+
+		/** Declares the resource types this chart carries completely. Called by the scoped chart
+		 *  builder with the typed scope it filtered on, and again by {@code DrugReferenceInjector}
+		 *  on its rebuilt chart (via {@link #getCompleteResourceTypes}) for the same reason
+		 *  {@link #markQueryScoped} is. A null/empty set declares nothing. */
+		public void markCompleteFor(Set<String> resourceTypes) {
+			this.completeResourceTypes = resourceTypes == null || resourceTypes.isEmpty()
+					? Collections.<String>emptySet()
+					: Collections.unmodifiableSet(new HashSet<String>(resourceTypes));
+		}
+
+		/**
+		 * True when this chart carries every record of {@code resourceType} that was RETRIEVED for
+		 * this patient — so a record's ABSENCE from it is informative (nothing here dropped it on
+		 * purpose) rather than merely out of scope.
+		 *
+		 * <p>A statement about this chart, deliberately, not about the index. A scoped slice built at
+		 * querystore's ES chart cap declares completeness even though the fetch itself dropped the
+		 * older tail, so absence can mean "the retrieved chart lacks it" as well as "the index lacks
+		 * it". That is the contract the consumers this exists for need — they repair the chart the
+		 * ANSWER is grounded in, and at the cap it genuinely lacks the record — but it means a caller
+		 * must not report absence as an indexing defect without hedging. See
+		 * {@code QueryStoreChartBuilder.buildScoped}, which explains why suppressing the stamp there
+		 * would be the wrong fix.
+		 *
+		 * <p>A full chart is complete for every type by construction, which is why only the scoped
+		 * builder stamps anything: a mode that fetches the whole chart cannot forget to. A
+		 * query-scoped slice is complete only for the types it declared via
+		 * {@link #markCompleteFor} — a slice omits everything outside its typed scope by design, so
+		 * absence there carries no information, and a consumer reading it as drift would fire on
+		 * almost every query.
+		 *
+		 * <p>Ask this only of a chart from the chart-assembly entry point
+		 * ({@code ChartBuildingStrategy.buildChart}). The progressive-reasoning preview's focused
+		 * top-K chart is neither of those shapes and declares nothing, so it would answer as a full
+		 * chart; nothing consults it, and nothing should.
+		 */
+		public boolean isCompleteFor(String resourceType) {
+			return !queryScoped || completeResourceTypes.contains(resourceType);
+		}
+
+		/** The types declared via {@link #markCompleteFor}, so a caller rebuilding this chart can
+		 *  carry the declaration across; empty on a full chart, which needs none. */
+		public Set<String> getCompleteResourceTypes() {
+			return completeResourceTypes;
+		}
 	}
 
 	/**
 	 * Maps a sequential index used in the LLM prompt back to the OpenMRS resource.
+	 *
+	 * <p>{@link #getText()} is the record's content — the part the LLM reads and may quote.
+	 * {@link #getSource()} and {@link #getWithheldInteractions()} are <em>about</em> the record
+	 * rather than part of it, and are deliberately kept off the text: anything inside it is
+	 * quotable, and a model told to cite records recited the module's own truncation counter and
+	 * dataset attribution into a clinician-facing answer (issue #117). Metadata a client should
+	 * render beside a citation therefore travels as its own field, never as prose.
 	 */
 	public static class RecordMapping {
 
@@ -378,6 +444,10 @@ public class PatientChartSerializer {
 
 		private final String text;
 
+		private final String source;
+
+		private final int withheldInteractions;
+
 		/**
 		 * Backward-compatible constructor that carries no source text. Mappings
 		 * built this way cannot be grounding-checked; the grounding verifier
@@ -389,11 +459,23 @@ public class PatientChartSerializer {
 		}
 
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text) {
+			this(index, resourceType, resourceUuid, date, text, null, 0);
+		}
+
+		/**
+		 * Full constructor, including the citation metadata that must not live in {@code text}
+		 * (see the class doc). A chart record has neither, so the shorter constructors default
+		 * them to "no attribution, nothing withheld".
+		 */
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String source, int withheldInteractions) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
 			this.date = date;
 			this.text = text;
+			this.source = source;
+			this.withheldInteractions = withheldInteractions;
 		}
 
 		public int getIndex() {
@@ -427,6 +509,39 @@ public class PatientChartSerializer {
 		 */
 		public String getText() {
 			return text;
+		}
+
+		/**
+		 * Where this record's content came from, for a client to render as provenance beside the
+		 * citation — the dataset attribution of an injected drug-reference record (e.g.
+		 * {@code "DDInter 2.0 (via openmrs-ddi-knowledge-base)"}). {@code null} for a chart
+		 * record, whose provenance is the patient's own record.
+		 *
+		 * <p>Structural rather than appended to {@link #getText()} on purpose: it used to be
+		 * rendered into the citable text, and the model quoted it into the answer (issue #117).
+		 */
+		public String getSource() {
+			return source;
+		}
+
+		/**
+		 * How many of this record's interaction partners it does not show, so a client can be honest
+		 * that the citation shows a subset. 0 when it shows them all, and for every record that has
+		 * no interactions to withhold.
+		 *
+		 * <p>Two rules withhold, and outside a broad dataset the second dominates: the per-record
+		 * render budget, and — once a partner the patient is actually on is shown — the remaining
+		 * dataset being represented by one partner rather than rendered in full. A large count
+		 * therefore usually means "not relevant to this patient" rather than "did not fit", so it
+		 * must not be presented to a clinician as an omission for length.
+		 *
+		 * <p>Structural for the same reason as {@link #getSource()}: as a text tail ("and 824 more
+		 * interactions on file") the model recited it as though it were clinical content. The
+		 * deterministic {@code DrugSafetyValidator} reads every interaction off the entry either
+		 * way, so a withheld partner is withheld from the prompt only, never from safety checking.
+		 */
+		public int getWithheldInteractions() {
+			return withheldInteractions;
 		}
 	}
 }

@@ -17,6 +17,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.slf4j.Logger;
@@ -54,8 +56,35 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <p><b>Scope.</b> V1 carries drug-drug interactions only: entries expose {@code interactions},
  * never {@code ageBands} or {@code contraindications} (dosing and drug-allergy/condition are
- * out of scope). {@code management} is not a discrete DDInter field, so it is folded into the
- * interaction note rather than invented.
+ * out of scope). {@code management} is not a discrete DDInter field, so whatever management prose
+ * the mechanism text carries is folded into the interaction note rather than invented — save for
+ * the residual field markers below, which are dropped because they carry no management content
+ * to fold.
+ *
+ * <p><b>Residual field markers.</b> Some mechanism texts are prefixed with an all-caps field
+ * marker followed by a colon — apparently the surviving tail of a management tag from the
+ * monograph the mechanism text was scraped from. Measured over the full 8234-mechanism
+ * KB (2026-08-04) there are exactly two: {@code INTERVAL:} (224 mechanisms, 4070 pair rows) and
+ * {@code RECOMMENDED:} (50 mechanisms, 1268 pair rows); no other leading {@code TOKEN:} shape
+ * occurs, and both markers appear only in that leading position. They are machine artifacts, not
+ * prose, and the note reaches three surfaces verbatim — the clinician's chip detail, the rendered
+ * reference record, and the pre-answer safety finding that reuses that chip detail
+ * ({@link DrugReferenceInjector#renderFinding}) — so {@link #mechanismText} strips a leading
+ * marker instead of passing it through (issue #116). Marker <em>shape</em>, not a fixed list of
+ * the two seen today: a KB refresh emitting a sibling tag would otherwise leak it verbatim
+ * exactly as these two did.
+ *
+ * <p>The marker is dropped rather than reinterpreted. {@code INTERVAL:} broadly flags
+ * administration timing (dose separation is the management for the chelation/absorption rows —
+ * 147 of the 224 are {@code categories: [absorption]}), but it is not reliable enough to render
+ * as advice: nine of the 224 are {@code synergistic_effect} rows where separating doses is
+ * <em>not</em> the management (ibutilide plus a class III antiarrhythmic — additive QT
+ * prolongation; flibanserin plus alcohol; mefloquine convulsion risk). The marker itself carries
+ * no interval, no separation time and no wording, so any management sentence built from it would
+ * be invented, and the mechanism {@code categories} are a PK/PD taxonomy
+ * ({@code metabolism}/{@code absorption}/…) that does not encode management either. Structured
+ * management guidance therefore has to come from the KB builder keeping the whole upstream tag,
+ * not from reverse-engineering its truncated residue here.
  */
 public class DdiDrugReferenceSource implements DrugReferenceSource {
 
@@ -66,6 +95,17 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private static final String SOURCE = "DDInter 2.0 (via openmrs-ddi-knowledge-base)";
+
+	/**
+	 * A residual field marker at the head of a mechanism text: a run of up to six all-caps words
+	 * immediately followed by a colon (see the class javadoc). Words are two letters or more so a
+	 * bare initial cannot look like a marker, and the run is bounded so a shouted sentence ending
+	 * in a colon is not mistaken for one. Verified against the full 8234-mechanism KB: it matches
+	 * exactly the 274 {@code INTERVAL:}/{@code RECOMMENDED:} rows and nothing else, and every
+	 * remainder still begins with a capital, so the stripped note reads as a sentence.
+	 */
+	private static final Pattern RESIDUAL_FIELD_MARKER = Pattern
+			.compile("^\\s*[A-Z]{2,}(?: [A-Z]{2,}){0,5}:\\s*");
 
 	@Override
 	public List<DrugReference> load() {
@@ -95,9 +135,14 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			}
 		}
 
-		// mechanisms table (text stored once); note strings interned per severity+group
+		// mechanisms table (text stored once); note strings interned per severity+group.
+		// Severity strings are interned too: the vocabulary is four values across ~300k
+		// full-KB rows, and Jackson allocates a fresh String per row — without this cache the
+		// structured severity field alone would retain ~13.5 MB for the module lifetime,
+		// reintroducing exactly the per-pair cost the note interning exists to avoid.
 		JsonNode mech = root.path("mechanisms");
 		Map<String, String> noteCache = new HashMap<String, String>();
+		Map<String, String> severityCache = new HashMap<String, String>();
 
 		// group interaction rows by drug id -> partner links
 		Map<String, List<Link>> partners = new HashMap<String, List<Link>>();
@@ -107,14 +152,14 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			}
 			String a = row.get(0).asText();
 			String b = row.get(1).asText();
-			String severity = row.get(2).asText();
+			String severity = severityCache.computeIfAbsent(row.get(2).asText(), s -> s);
 			String gid = row.get(3).asText();
 			if (!byId.containsKey(a) || !byId.containsKey(b)) {
 				continue;
 			}
 			String note = noteFor(severity, gid, mech, noteCache);
-			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, note));
-			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, note));
+			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, severity, note));
+			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, severity, note));
 		}
 
 		// RxCUI frequency: some route variants share a RxCUI (e.g. the Lidocaine variants all
@@ -136,6 +181,17 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 					&& rxcuiCounts.get(row.rxcui) == 1;
 			ref.setId(uniqueRxcui ? row.rxcui : row.id);
 			ref.setName(row.name);
+			// Chip-label synonym (never renaming): when the DDInter display name diverges from
+			// the RxNorm generic the question and chart use ("Acetylsalicylic acid" vs
+			// "aspirin"), carry the generic so safety chips can show both vocabularies. A name
+			// that already contains its generic — including the route variants sharing one
+			// RxNorm name ("Lidocaine (topical)") — carries none. Renaming outright was
+			// measured and rejected: 276 of the full KB's names diverge, mostly INN-vs-USAN
+			// pairs a swap would mistranslate.
+			if (row.rxnormName != null && !row.rxnormName.isEmpty()
+					&& !row.name.toLowerCase(Locale.ROOT).contains(row.rxnormName.toLowerCase(Locale.ROOT))) {
+				ref.setGenericName(row.rxnormName.toLowerCase(Locale.ROOT));
+			}
 			ref.setAliases(row.aliases);
 			ref.setAtcCodes(row.atc);
 			ref.setInteractions(interactionsFor(links, byId));
@@ -159,10 +215,12 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			DrugReference.Interaction i = new DrugReference.Interaction();
 			// Match on the RxNorm generic name (e.g. "aspirin", "acetaminophen") rather than the
 			// DDInter display name ("Acetylsalicylic acid"), since the validator matches this token
-			// as a substring of the order's display name; fall back to the display name.
+			// against the order's display name (by DrugReference.matchesOrderName, which needs the
+			// token to start a word of that name); fall back to the display name.
 			String token = p.rxnormName != null && !p.rxnormName.isEmpty() ? p.rxnormName : p.name;
 			i.setToken(token.toLowerCase(Locale.ROOT));
 			i.setAtc(p.atc.isEmpty() ? null : p.atc.get(0));
+			i.setSeverity(link.severity);
 			i.setNote(link.note);
 			out.add(i);
 		}
@@ -176,12 +234,28 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 		if (cached != null) {
 			return cached;
 		}
-		String text = mech.path(gid).path("text").isTextual() ? mech.path(gid).path("text").asText() : null;
+		String text = mechanismText(mech, gid);
 		String note = (text != null && !text.isEmpty())
 				? severity + ". " + text
 				: severity + " severity interaction (DDInter 2.0; no mechanism description on file).";
 		cache.put(key, note);
 		return note;
+	}
+
+	/**
+	 * The mechanism description for {@code gid}, with any leading residual field marker removed
+	 * (see the class javadoc), or {@code null} when the group carries no text. A text that is
+	 * <em>only</em> a marker strips to empty and so degrades to the no-mechanism note in
+	 * {@link #noteFor} — a dangling "Major. " would read worse than saying nothing is on file.
+	 */
+	private static String mechanismText(JsonNode mech, String gid) {
+		JsonNode node = mech.path(gid).path("text");
+		if (!node.isTextual()) {
+			return null;
+		}
+		String text = node.asText();
+		Matcher marker = RESIDUAL_FIELD_MARKER.matcher(text);
+		return marker.lookingAt() ? text.substring(marker.end()) : text;
 	}
 
 	/** A drug row from the {@code drugs} table. */
@@ -215,7 +289,10 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 				return null;
 			}
 			String rxcui = d.path("rxcui").isTextual() ? d.get("rxcui").asText() : null;
-			String rxnormName = d.path("rxnorm_name").isTextual() ? d.get("rxnorm_name").asText() : null;
+			// Trimmed once here so the match token, the divergence guard, and the chip-label
+			// synonym all see the same clean value — a padded name would defeat the guard and
+			// leak padding into the label.
+			String rxnormName = d.path("rxnorm_name").isTextual() ? d.get("rxnorm_name").asText().trim() : null;
 			List<String> atc = new ArrayList<String>();
 			for (JsonNode a : d.path("atc")) {
 				atc.add(a.asText());
@@ -245,15 +322,18 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 		}
 	}
 
-	/** A partner link: the other drug's id and the shared interaction note. */
+	/** A partner link: the other drug's id, the row's severity, and the shared interaction note. */
 	private static final class Link {
 
 		final String partnerId;
 
+		final String severity;
+
 		final String note;
 
-		Link(String partnerId, String note) {
+		Link(String partnerId, String severity, String note) {
 			this.partnerId = partnerId;
+			this.severity = severity;
 			this.note = note;
 		}
 	}

@@ -51,6 +51,116 @@ public class ChartSearchAiUtils {
 	public static final Pattern INLINE_CITATION = Pattern.compile("\\[(\\d{1,9})\\]");
 
 	/**
+	 * Decodes every inline {@code [N]} citation marker in {@code text} to its record index,
+	 * in first-appearance order. The shared decode step over {@link #INLINE_CITATION} for
+	 * citation extraction ({@code LlmInferenceService}), grounding
+	 * ({@code CitationGroundingVerifier}) and safety echo-scoping ({@code DrugSafetyValidator})
+	 * so those consumers cannot drift. (The clause-scoped splitter keeps its own matcher — it
+	 * needs each marker's text offset, which a set of indexes cannot carry.) Returns an empty
+	 * set for null/blank text.
+	 */
+	public static Set<Integer> citedIndexes(String text) {
+		Set<Integer> indexes = new java.util.LinkedHashSet<Integer>();
+		if (text == null || text.isEmpty()) {
+			return indexes;
+		}
+		java.util.regex.Matcher marker = INLINE_CITATION.matcher(text);
+		while (marker.find()) {
+			indexes.add(Integer.valueOf(marker.group(1)));
+		}
+		return indexes;
+	}
+
+	/**
+	 * Classifies a cited record's resource type into the group a client renders it under:
+	 * {@link ChartSearchAiConstants#REFERENCE_GROUP_CHART} for evidence retrieved from this
+	 * patient's chart, {@link ChartSearchAiConstants#REFERENCE_GROUP_REFERENCE} for
+	 * module-supplied reference prose. This is the single entry point for the PROVENANCE decision:
+	 * code that labels or orders references for a client must ask here rather than
+	 * compare {@code resourceType} itself, so the split stays in one place as further kinds of
+	 * injected record are added — three exist already, and they do not all fall on the same side
+	 * (see below).
+	 *
+	 * <p>Two behaviours now hang off this one classification, not just the display grouping: the
+	 * demote-only grounding carve-out in {@code CitationGroundingVerifier} is derived from it via
+	 * {@link #isGroundingDemoteOnly}. That gate used to test the {@code drug_reference} type directly,
+	 * so when {@code safety_finding} arrived (#110) it was classified here and NOT registered there,
+	 * and the module's own deterministic findings were graded as retrieved chart evidence — publishing
+	 * unstable {@code grounded} verdicts with no error anywhere (issue #122). Deriving both from one
+	 * classification is what makes that class of omission unrepresentable, and it is why editing this
+	 * method now also changes whether a type's citations can be verified. Both consequences are swept
+	 * off one enumeration in {@code ChartSearchAiReferenceGroupTest}.
+	 *
+	 * <p>The two groups are exhaustive because exactly two code paths mint a
+	 * {@code RecordMapping}: {@code PatientChartSerializer}, which passes through whatever
+	 * type querystore retrieved, and {@code DrugReferenceInjector}, which writes
+	 * {@code drug_reference}, {@code safety_finding} and {@code active_drug_order}. Not everything
+	 * injected is reference material: an {@code active_drug_order} record is the patient's own
+	 * active order, read from {@code OrderService} when the retrieved chart cannot substantiate it,
+	 * so it groups as chart evidence — which is also what the fallback below yields, deliberately
+	 * rather than by omission (the decision is recorded in {@code ChartSearchAiReferenceGroupTest}).
+	 *
+	 * <p>Anything unrecognised — including {@code null} — fails safe to chart evidence.
+	 * Labelling an unknown type as reference material would assert a module provenance we
+	 * cannot demonstrate; grouping it as chart evidence keeps it in the main list where it is
+	 * judged against the record it points at.
+	 *
+	 * @param resourceType the cited record's resource type, may be null
+	 * @return the group wire value, never null
+	 */
+	public static String referenceGroup(String resourceType) {
+		return ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(resourceType)
+				|| ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(resourceType)
+						? ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE
+						: ChartSearchAiConstants.REFERENCE_GROUP_CHART;
+	}
+
+	/**
+	 * Whether a cited record of {@code resourceType} is DEMOTE-ONLY for citation grounding: its
+	 * verdict may render {@code false} (an off-topic citation) or {@code null} (unverified), never
+	 * {@code true}, and it never enters — nor consumes the per-answer cap of — the Tier-2 entailment
+	 * pass. True exactly for {@link ChartSearchAiConstants#REFERENCE_GROUP_REFERENCE} material: this
+	 * is a named view of {@link #referenceGroup}, not a second classification, so there is no list of
+	 * type names here to fall out of step with that one.
+	 *
+	 * <p><strong>Why module-supplied material cannot be verified.</strong> An answer sentence citing
+	 * module-rendered reference prose is typically a recitation of it, and a recitation embeds
+	 * near-identically to its source whether or not it swaps subject roles ("erythromycin decreases X"
+	 * against the record's "ivosidenib decreases X … including erythromycin"). The same lexical
+	 * containment defeats the Tier-2 judge: measured on the live pipeline, 4/4 role-swapped
+	 * recitations were judged entailed while the one faithful recitation was judged not (issue #106).
+	 * A passing verdict is therefore false assurance. A FAILING verdict still carries information — it
+	 * says the citation is not about the record at all — so the flag is kept and only the pass is
+	 * withheld. Faithfulness of reference content is checked deterministically by the
+	 * {@code DrugSafetyValidator} chips instead.
+	 *
+	 * <p><strong>It follows from provenance, not from being injected.</strong> An
+	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is injected yet groups as
+	 * chart evidence — one drug name asserted of this patient, carrying the real {@code Order} uuid,
+	 * with no subject roles to swap — so it is graded normally; demoting it would strip the
+	 * faithfulness check from the very record injected to stop the answer contradicting the safety
+	 * chips (#118). Conversely a {@link ChartSearchAiConstants#RESOURCE_TYPE_SAFETY_FINDING} is
+	 * patient-specific but module-derived, and its rendering ("&lt;Drug&gt; interacts with active order
+	 * &lt;Partner&gt; — Major. &lt;mechanism&gt;") is precisely the role-swappable prose above, which is why
+	 * grading it produced verdicts that tracked embedding noise rather than the finding (issue #122).
+	 *
+	 * <p><strong>The unrecognised-type fallback grades normally</strong>, following
+	 * {@link #referenceGroup}'s fail-safe, and that is deliberate in this direction too: querystore
+	 * passes through chart types this module declares no constant for ({@code drug_order},
+	 * {@code visit}, {@code encounter} …), so demoting unknown types would silently stop verifying
+	 * most real chart citations. The cost is that a module-supplied type introduced as a bare string
+	 * literal — rather than as a {@code RESOURCE_TYPE_*} constant, which
+	 * {@code ChartSearchAiReferenceGroupTest}'s sweep would catch — would be graded as chart evidence;
+	 * {@code DrugReferenceInjector}'s class javadoc warns against exactly that.
+	 *
+	 * @param resourceType the cited record's resource type, may be null
+	 * @return true when a grounding pass may only demote this record's citation
+	 */
+	public static boolean isGroundingDemoteOnly(String resourceType) {
+		return ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(referenceGroup(resourceType));
+	}
+
+	/**
 	 * Builds a composite key from a resource type and resource UUID.
 	 * This is the single canonical format for resource keys used across
 	 * retrieval pipelines, filter methods, and result sets.

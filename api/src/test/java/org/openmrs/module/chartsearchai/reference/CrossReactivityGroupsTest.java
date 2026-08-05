@@ -105,7 +105,7 @@ public class CrossReactivityGroupsTest {
 
 	@Test
 	public void unusableGroupsAreDroppedAtParse() throws IOException {
-		// A nameless group would render "same cross-reactivity group (null)" into a safety warning,
+		// A nameless group would render "… is in the same cross-reactivity group (null) …" into a warning,
 		// and a group with no usable prefixes can never match — both are dropped at the parse boundary.
 		List<CrossReactivityGroup> groups = CrossReactivityGroupsLoader.parse(stream(
 				"{\"groups\":[{\"note\":\"nameless\",\"atcPrefixes\":[\"M01AE\"]},"

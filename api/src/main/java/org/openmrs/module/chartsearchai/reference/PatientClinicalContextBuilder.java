@@ -9,8 +9,10 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.openmrs.Allergy;
@@ -55,6 +57,8 @@ final class PatientClinicalContextBuilder {
 		Set<String> atcCodes = new LinkedHashSet<String>();
 		Set<String> allergyTokens = new LinkedHashSet<String>();
 		Set<String> conditionTokens = new LinkedHashSet<String>();
+		List<PatientClinicalContext.ActiveDrugOrder> activeOrders =
+				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 
 		if (patient == null) {
 			return new PatientClinicalContext(null, null, drugNames, atcCodes, allergyTokens, conditionTokens);
@@ -75,19 +79,54 @@ final class PatientClinicalContextBuilder {
 			log.debug("Could not read patient weight for drug-reference context", e);
 		}
 
-		// Active drug orders -> names + ATC codes (for interaction checks and order-driven injection).
+		// Active drug orders -> names + ATC codes (for interaction checks and order-driven injection),
+		// plus the orders themselves — names AND codes attributed per order, for reconciling this read
+		// against the serialized chart (#118) and so the interaction screen can exclude a subject's own
+		// order from witnessing it (#132).
 		try {
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {
 					continue;
 				}
 				DrugOrder drugOrder = (DrugOrder) order;
-				addDrugName(drugNames, drugOrder);
+				// Per-order names, collected BEFORE they are folded into the flattened set: the
+				// reconciliation must be able to tell one order's names from another's, which the
+				// flattened set (drug name AND concept name, all orders together) cannot.
+				Set<String> orderNames = new LinkedHashSet<String>();
+				addDrugName(orderNames, drugOrder);
+				drugNames.addAll(orderNames);
 				Concept concept = drugOrder.getConcept();
 				if (drugOrder.getDrug() != null && drugOrder.getDrug().getConcept() != null) {
 					concept = drugOrder.getDrug().getConcept();
 				}
-				addAtcCodes(atcCodes, concept);
+				// Per-order codes for the same reason as the per-order names above, read once off the
+				// same concept: flattened, a code cannot be attributed to the order carrying it, so ONE
+				// order's two codes read as two orders and the order witnesses its own interaction
+				// (issue #132). The flattened union is still assembled here — the class arms and
+				// findByActiveOrders want exactly that, and the nameless-order gap below contributes to
+				// it without contributing an ActiveDrugOrder.
+				Set<String> orderAtcCodes = new LinkedHashSet<String>();
+				addAtcCodes(orderAtcCodes, concept);
+				atcCodes.addAll(orderAtcCodes);
+				// An order with no readable name at all is skipped: it can be neither rendered as a
+				// record nor matched against chart text, and injecting it would put a nameless line
+				// ("Active drug order: null") in front of a clinician.
+				//
+				// KNOWN GAP, to follow with the reconciliation's other corpus issue: skipping is the
+				// one outcome that reproduces issue #118 rather than repairing it. addAtcCodes above
+				// needs no name, and a safety chip's drug name comes from the KB entry the ATC code
+				// resolves to (DrugSafetyValidator's displayLabelForAtcCode), not from the order — so
+				// a nameless order can still raise a chip reading "as active order simvastatin" while
+				// being invisible to the reconciliation that exists to substantiate it. Reachable, not
+				// theoretical: addConceptName swallows a RuntimeException from concept.getName() (a
+				// detached/lazy-init proxy) in its own try, and addAtcCodes then runs in a separate
+				// one and can still succeed; likewise a concept named only outside the current locale
+				// yields a null name with its ATC mappings intact. The fix is a fallback display
+				// rather than a skip, so the record can be injected with the order's real uuid.
+				if (!orderNames.isEmpty()) {
+					activeOrders.add(new PatientClinicalContext.ActiveDrugOrder(drugOrder.getUuid(),
+							orderNames.iterator().next(), orderNames, orderAtcCodes));
+				}
 			}
 		}
 		catch (RuntimeException e) {
@@ -121,7 +160,25 @@ final class PatientClinicalContextBuilder {
 			log.debug("Could not read conditions for drug-reference context", e);
 		}
 
-		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens);
+		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
+				activeOrders);
+	}
+
+	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by
+	 *  the weight and renal lookups so both apply one freshness rule and one validity rule. */
+	private static Obs latestNumericObs(Patient patient, Concept concept) {
+		Date cutoff = new Date(System.currentTimeMillis() - maxWeightAgeDays() * MILLIS_PER_DAY);
+		Obs latest = null;
+		for (Obs obs : Context.getObsService().getObservationsByPersonAndConcept(patient, concept)) {
+			if (obs.getValueNumeric() == null || obs.getValueNumeric() <= 0 || obs.getObsDatetime() == null
+					|| obs.getObsDatetime().before(cutoff)) {
+				continue;
+			}
+			if (latest == null || obs.getObsDatetime().after(latest.getObsDatetime())) {
+				latest = obs;
+			}
+		}
+		return latest;
 	}
 
 	/**
@@ -150,17 +207,7 @@ final class PatientClinicalContextBuilder {
 			log.debug("Weight concept {} not found; skipping weight for drug-reference context", conceptUuid);
 			return null;
 		}
-		Date cutoff = new Date(System.currentTimeMillis() - maxWeightAgeDays() * MILLIS_PER_DAY);
-		Obs latest = null;
-		for (Obs obs : Context.getObsService().getObservationsByPersonAndConcept(patient, weightConcept)) {
-			if (obs.getValueNumeric() == null || obs.getValueNumeric() <= 0 || obs.getObsDatetime() == null
-					|| obs.getObsDatetime().before(cutoff)) {
-				continue;
-			}
-			if (latest == null || obs.getObsDatetime().after(latest.getObsDatetime())) {
-				latest = obs;
-			}
-		}
+		Obs latest = latestNumericObs(patient, weightConcept);
 		return latest == null ? null : latest.getValueNumeric();
 	}
 

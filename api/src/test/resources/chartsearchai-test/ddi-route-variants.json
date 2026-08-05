@@ -1,0 +1,793 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: DDInter variants sharing one rxnorm_name (issue #115)",
+  "note": "Three real slices of the full DDInter KB, each the induced subgraph over the named drugs, with their own mechanism texts and in dataset row order. (1) The four Dexamethasone route variants x Voxelotor: all four publish rxnorm_name \"dexamethasone\" and an identical ATC list, and Voxelotor carries a row against three of them at Major/Moderate/Moderate, so one active dexamethasone order matches every row; Phenytoin is a second Voxelotor partner sharing the Major row's mechanism group. (2) Sirolimus / Sirolimus (protein-bound) x Lapatinib: the strongest severity is the SECOND row, so keeping the first row is not the same as keeping the most severe. (3) Iron / Iron (bisglycinate) x Dolutegravir (the pair in the issue description): both Major, and the longer mechanism note is the SECOND row."
+ },
+ "mechanisms": {
+  "3758": {
+   "text": "Coadministration with potent inducers of CYP450 3A4 may significantly decrease the plasma concentrations of lapatinib, which is primarily metabolized by the isoenzyme.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "981": {
+   "text": "Coadministration with lapatinib may increase the plasma concentrations of drugs that are substrates of the CYP450 2C8 isoenzyme, CYP450 3A4 isoenzyme, and/or P-glycoprotein (P-gp) efflux transporter. The mechanism is decreased clearance via these routes due to inhibition by lapatinib.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4680": {
+   "text": "Coadministration with inhibitors of CYP450 3A4 may increase the plasma concentrations of lapatinib, which is primarily metabolized by the isoenzyme.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "8505": {
+   "text": "Coadministration of protein-bound sirolimus intravenous suspension with moderate or weak inhibitors of CYP450 3A4 may increase the systemic exposure to sirolimus, which is primarily metabolized by the isoenzyme and also a substrate of the P-glycoprotein (P-gp) efflux transporter.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4318": {
+   "text": "Coadministration with potent inducers of CYP450 3A4 and/or P-glycoprotein may significantly decrease the plasma concentrations and pharmacologic effects of sirolimus. The mechanism probably involves reduced absorption as well as accelerated clearance of sirolimus due to induction of both intestinal P-glycoprotein drug efflux transporter and hepatic/intestinal CYP450 3A4 isoenzymes.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3595": {
+   "text": "Coadministration with potent or moderate inducers of CYP450 3A4 may significantly decrease the plasma concentrations and pharmacologic effects of voxelotor. The proposed mechanism is accelerated clearance of voxelotor due to induction of the CYP450 3A4 isoenzyme, which is the primary route of elimination of voxelotor.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "7071": {
+   "text": "Coadministration of protein-bound sirolimus intravenous suspension with potent inducers of CYP450 3A4 and/or P-glycoprotein (P-gp) may significantly decrease the systemic exposure to sirolimus, which is a known substrate for both the isoenzyme and efflux transporter.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "2280": {
+   "text": "Phenytoin and other hydantoins may induce the CYP450 3A4 hepatic metabolism of corticosteroids and increase their clearance and decrease their half-lives, possibly reducing their therapeutic efficacy.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3062": {
+   "text": "Coadministration with potent inducers of UGT1A1 and CYP450 3A4 isoenzymes may significantly decrease the plasma concentrations of dolutegravir, which is primarily metabolized by UGT1A1 with some contribution from CYP450 3A4. Dolutegravir is also a substrate of UGT1A3, UGT1A9, and P-glycoprotein in vitro.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3362": {
+   "text": "Coadministration with drugs that are inhibitors of CYP450 3A4 may increase the blood concentrations of the macrolide immunosuppressants sirolimus and tacrolimus, both of which are metabolized by the isoenzyme.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4815": {
+   "text": "Coadministration with inducers of CYP450 3A4 may decrease the plasma concentrations of sirolimus and tacrolimus, both of which are primarily metabolized by the isoenzyme.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3270": {
+   "text": "Coadministration with inhibitors of CYP450 3A4 may increase the plasma concentrations and pharmacologic effects of corticosteroids, which are primarily metabolized by the isoenzyme. The interaction has been reported with potent inhibitors such as clarithromycin, erythromycin, itraconazole, nefazodone, cobicistat, and ritonavir during concomitant use of various corticosteroids, including inhaled, nasal, and ophthalmic formulations. Systemic corticosteroid adverse effects may occur following intensive or long-term continuous ophthalmic corticosteroid therapy. Cushing's syndrome and adrenal insufficiency have been attributed to the interaction.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "8190": {
+   "text": "Coadministration of protein-bound sirolimus intravenous suspension with inducers of CYP450 3A4 may decrease the systemic exposure to sirolimus, which is primarily metabolized by the isoenzyme and also a substrate of the P-glycoprotein (P-gp) efflux transporter.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "7199": {
+   "text": "Coadministration with medications containing polyvalent cations such as aluminum, calcium, iron, or magnesium may decrease the oral bioavailability of dolutegravir.",
+   "categories": [
+    "absorption"
+   ]
+  },
+  "1619": {
+   "text": "Coadministration with inducers of UGT1A and CYP450 3A4 isoenzymes may decrease the plasma concentrations of dolutegravir, which is primarily metabolized by UGT1A1 with some contribution from CYP450 3A4. Given the risk of reduced viral susceptibility and resistance development associated with subtherapeutic antiretroviral drug levels, caution may be advisable if dolutegravir is used in combination with mild or moderate UGT1A/CYP450 3A4 inducers.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "2248": {
+   "text": "INTERVAL: Coadministration with medications containing polyvalent cations such as aluminum, calcium, iron, or magnesium may decrease the oral bioavailability of dolutegravir. The mechanism of interaction has not been established.",
+   "categories": [
+    "absorption"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter513",
+   "name": "Dexamethasone",
+   "rxcui": "3264",
+   "rxnorm_name": "dexamethasone",
+   "drugbank_id": "DB01234",
+   "atc": [
+    "A01AC02",
+    "C05AA09",
+    "D07AB19",
+    "D07XB05",
+    "D10AA03",
+    "H02AB02",
+    "R01AD03",
+    "S01BA01",
+    "S01CB01",
+    "S02BA06",
+    "S03BA01"
+   ],
+   "ciel": [
+    {
+     "code": "104317",
+     "uuid": "104317AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / dexamethasone"
+    },
+    {
+     "code": "104422",
+     "uuid": "104422AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / hypromellose"
+    },
+    {
+     "code": "104423",
+     "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / lidocaine"
+    },
+    {
+     "code": "104424",
+     "uuid": "104424AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin"
+    },
+    {
+     "code": "104425",
+     "uuid": "104425AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104426",
+     "uuid": "104426AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tobramycin"
+    },
+    {
+     "code": "104427",
+     "uuid": "104427AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tramazoline"
+    },
+    {
+     "code": "168548",
+     "uuid": "f5c7c86c-2b95-42d4-95f2-6d9e8949f39e",
+     "name": "Dexamethasone / gentamicin"
+    },
+    {
+     "code": "170697",
+     "uuid": "d2a620d9-138d-4125-a84a-7ddbf3b2ee45",
+     "name": "Dexamethasone / framycetin"
+    },
+    {
+     "code": "74609",
+     "uuid": "74609AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone"
+    },
+    {
+     "code": "74610",
+     "uuid": "74610AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone acetate"
+    },
+    {
+     "code": "74612",
+     "uuid": "74612AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone isonicotinate"
+    },
+    {
+     "code": "74613",
+     "uuid": "74613AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone phosphate"
+    },
+    {
+     "code": "74614",
+     "uuid": "74614AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone sodium phosphate"
+    },
+    {
+     "code": "74615",
+     "uuid": "74615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone trimethyl acetate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter514",
+   "name": "Dexamethasone (nasal)",
+   "rxcui": "3264",
+   "rxnorm_name": "dexamethasone",
+   "drugbank_id": "DB01234",
+   "atc": [
+    "A01AC02",
+    "C05AA09",
+    "D07AB19",
+    "D07XB05",
+    "D10AA03",
+    "H02AB02",
+    "R01AD03",
+    "S01BA01",
+    "S01CB01",
+    "S02BA06",
+    "S03BA01"
+   ],
+   "ciel": [
+    {
+     "code": "104317",
+     "uuid": "104317AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / dexamethasone"
+    },
+    {
+     "code": "104422",
+     "uuid": "104422AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / hypromellose"
+    },
+    {
+     "code": "104423",
+     "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / lidocaine"
+    },
+    {
+     "code": "104424",
+     "uuid": "104424AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin"
+    },
+    {
+     "code": "104425",
+     "uuid": "104425AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104426",
+     "uuid": "104426AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tobramycin"
+    },
+    {
+     "code": "104427",
+     "uuid": "104427AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tramazoline"
+    },
+    {
+     "code": "168548",
+     "uuid": "f5c7c86c-2b95-42d4-95f2-6d9e8949f39e",
+     "name": "Dexamethasone / gentamicin"
+    },
+    {
+     "code": "170697",
+     "uuid": "d2a620d9-138d-4125-a84a-7ddbf3b2ee45",
+     "name": "Dexamethasone / framycetin"
+    },
+    {
+     "code": "74609",
+     "uuid": "74609AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone"
+    },
+    {
+     "code": "74610",
+     "uuid": "74610AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone acetate"
+    },
+    {
+     "code": "74612",
+     "uuid": "74612AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone isonicotinate"
+    },
+    {
+     "code": "74613",
+     "uuid": "74613AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone phosphate"
+    },
+    {
+     "code": "74614",
+     "uuid": "74614AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone sodium phosphate"
+    },
+    {
+     "code": "74615",
+     "uuid": "74615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone trimethyl acetate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter515",
+   "name": "Dexamethasone (ophthalmic)",
+   "rxcui": "3264",
+   "rxnorm_name": "dexamethasone",
+   "drugbank_id": "DB01234",
+   "atc": [
+    "A01AC02",
+    "C05AA09",
+    "D07AB19",
+    "D07XB05",
+    "D10AA03",
+    "H02AB02",
+    "R01AD03",
+    "S01BA01",
+    "S01CB01",
+    "S02BA06",
+    "S03BA01"
+   ],
+   "ciel": [
+    {
+     "code": "104317",
+     "uuid": "104317AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / dexamethasone"
+    },
+    {
+     "code": "104422",
+     "uuid": "104422AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / hypromellose"
+    },
+    {
+     "code": "104423",
+     "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / lidocaine"
+    },
+    {
+     "code": "104424",
+     "uuid": "104424AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin"
+    },
+    {
+     "code": "104425",
+     "uuid": "104425AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104426",
+     "uuid": "104426AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tobramycin"
+    },
+    {
+     "code": "104427",
+     "uuid": "104427AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tramazoline"
+    },
+    {
+     "code": "168548",
+     "uuid": "f5c7c86c-2b95-42d4-95f2-6d9e8949f39e",
+     "name": "Dexamethasone / gentamicin"
+    },
+    {
+     "code": "170697",
+     "uuid": "d2a620d9-138d-4125-a84a-7ddbf3b2ee45",
+     "name": "Dexamethasone / framycetin"
+    },
+    {
+     "code": "74609",
+     "uuid": "74609AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone"
+    },
+    {
+     "code": "74610",
+     "uuid": "74610AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone acetate"
+    },
+    {
+     "code": "74612",
+     "uuid": "74612AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone isonicotinate"
+    },
+    {
+     "code": "74613",
+     "uuid": "74613AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone phosphate"
+    },
+    {
+     "code": "74614",
+     "uuid": "74614AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone sodium phosphate"
+    },
+    {
+     "code": "74615",
+     "uuid": "74615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone trimethyl acetate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter516",
+   "name": "Dexamethasone (topical)",
+   "rxcui": "3264",
+   "rxnorm_name": "dexamethasone",
+   "drugbank_id": "DB01234",
+   "atc": [
+    "A01AC02",
+    "C05AA09",
+    "D07AB19",
+    "D07XB05",
+    "D10AA03",
+    "H02AB02",
+    "R01AD03",
+    "S01BA01",
+    "S01CB01",
+    "S02BA06",
+    "S03BA01"
+   ],
+   "ciel": [
+    {
+     "code": "104317",
+     "uuid": "104317AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / dexamethasone"
+    },
+    {
+     "code": "104422",
+     "uuid": "104422AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / hypromellose"
+    },
+    {
+     "code": "104423",
+     "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / lidocaine"
+    },
+    {
+     "code": "104424",
+     "uuid": "104424AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin"
+    },
+    {
+     "code": "104425",
+     "uuid": "104425AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104426",
+     "uuid": "104426AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tobramycin"
+    },
+    {
+     "code": "104427",
+     "uuid": "104427AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tramazoline"
+    },
+    {
+     "code": "168548",
+     "uuid": "f5c7c86c-2b95-42d4-95f2-6d9e8949f39e",
+     "name": "Dexamethasone / gentamicin"
+    },
+    {
+     "code": "170697",
+     "uuid": "d2a620d9-138d-4125-a84a-7ddbf3b2ee45",
+     "name": "Dexamethasone / framycetin"
+    },
+    {
+     "code": "74609",
+     "uuid": "74609AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone"
+    },
+    {
+     "code": "74610",
+     "uuid": "74610AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone acetate"
+    },
+    {
+     "code": "74612",
+     "uuid": "74612AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone isonicotinate"
+    },
+    {
+     "code": "74613",
+     "uuid": "74613AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone phosphate"
+    },
+    {
+     "code": "74614",
+     "uuid": "74614AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone sodium phosphate"
+    },
+    {
+     "code": "74615",
+     "uuid": "74615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone trimethyl acetate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1460",
+   "name": "Phenytoin",
+   "rxcui": "8183",
+   "rxnorm_name": "phenytoin",
+   "drugbank_id": "DB00252",
+   "atc": [
+    "N03AB02"
+   ],
+   "ciel": [
+    {
+     "code": "105152",
+     "uuid": "105152AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenobarbital / phenytoin"
+    },
+    {
+     "code": "82023",
+     "uuid": "82023AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenytoin"
+    },
+    {
+     "code": "82024",
+     "uuid": "82024AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenytoin sodium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1949",
+   "name": "Voxelotor",
+   "rxcui": "2265678",
+   "rxnorm_name": "voxelotor",
+   "drugbank_id": "DB14975",
+   "atc": [
+    "B06AX03"
+   ],
+   "ciel": [
+    {
+     "code": "167645",
+     "uuid": "de5159de-adc3-4e71-ba84-4b09396a54db",
+     "name": "Voxelotor"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1678",
+   "name": "Sirolimus",
+   "rxcui": "35302",
+   "rxnorm_name": "sirolimus",
+   "drugbank_id": "DB00877",
+   "atc": [
+    "L01EG04",
+    "L04AH01",
+    "S01XA23"
+   ],
+   "ciel": [
+    {
+     "code": "83983",
+     "uuid": "83983AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sirolimus"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2041",
+   "name": "Sirolimus (protein-bound)",
+   "rxcui": "35302",
+   "rxnorm_name": "sirolimus",
+   "drugbank_id": null,
+   "atc": [
+    "L01EG04",
+    "L04AH01",
+    "S01XA23"
+   ],
+   "ciel": [
+    {
+     "code": "83983",
+     "uuid": "83983AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sirolimus"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1024",
+   "name": "Lapatinib",
+   "rxcui": "480167",
+   "rxnorm_name": "lapatinib",
+   "drugbank_id": "DB01259",
+   "atc": [
+    "L01EH01"
+   ],
+   "ciel": [
+    {
+     "code": "167558",
+     "uuid": "6146d372-0b8a-4fc9-a9c4-f513067aeb01",
+     "name": "Lapatinib"
+    }
+   ]
+  },
+  {
+   "id": "DDInter975",
+   "name": "Iron",
+   "rxcui": "90176",
+   "rxnorm_name": "iron",
+   "drugbank_id": "DB01592",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "78218",
+     "uuid": "78218AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Iron"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2187",
+   "name": "Iron (bisglycinate)",
+   "rxcui": "90176",
+   "rxnorm_name": "iron",
+   "drugbank_id": "DB01592",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "78218",
+     "uuid": "78218AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Iron"
+    }
+   ]
+  },
+  {
+   "id": "DDInter582",
+   "name": "Dolutegravir",
+   "rxcui": "1433868",
+   "rxnorm_name": "dolutegravir",
+   "drugbank_id": "DB08930",
+   "atc": [
+    "J05AJ03"
+   ],
+   "ciel": [
+    {
+     "code": "165085",
+     "uuid": "165085AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dolutegravir"
+    },
+    {
+     "code": "165606",
+     "uuid": "165606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / dolutegravir / lamivudine"
+    },
+    {
+     "code": "169361",
+     "uuid": "0af318f4-94a2-4dbe-9727-fb1d682e75fb",
+     "name": "Dolutegravir / lamivudine / tenofovir alafenamide"
+    },
+    {
+     "code": "170472",
+     "uuid": "72f7a185-3673-4499-a314-9487a715eabc",
+     "name": "Dolutegravir / lamivudine"
+    },
+    {
+     "code": "170548",
+     "uuid": "66e5599c-7424-4252-b357-6949b0a50459",
+     "name": "Dolutegravir / rilpivirine"
+    },
+    {
+     "code": "170670",
+     "uuid": "7e00083b-c345-4c2d-9b87-81be50eff8b1",
+     "name": "Dolutegravir / emtricitabine / tenofovir alafenamide"
+    },
+    {
+     "code": "170671",
+     "uuid": "b944c518-10b4-4a93-a928-d0e4d10a66e4",
+     "name": "Dolutegravir / lamivudine / tenofovir disoproxil"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1024",
+   "DDInter1460",
+   "Moderate",
+   "3758"
+  ],
+  [
+   "DDInter1024",
+   "DDInter1678",
+   "Moderate",
+   "981"
+  ],
+  [
+   "DDInter1024",
+   "DDInter1949",
+   "Moderate",
+   "4680"
+  ],
+  [
+   "DDInter1024",
+   "DDInter2041",
+   "Major",
+   "8505"
+  ],
+  [
+   "DDInter1024",
+   "DDInter513",
+   "Moderate",
+   "3758"
+  ],
+  [
+   "DDInter1460",
+   "DDInter1678",
+   "Major",
+   "4318"
+  ],
+  [
+   "DDInter1460",
+   "DDInter1949",
+   "Major",
+   "3595"
+  ],
+  [
+   "DDInter1460",
+   "DDInter2041",
+   "Major",
+   "7071"
+  ],
+  [
+   "DDInter1460",
+   "DDInter513",
+   "Moderate",
+   "2280"
+  ],
+  [
+   "DDInter1460",
+   "DDInter582",
+   "Major",
+   "3062"
+  ],
+  [
+   "DDInter1678",
+   "DDInter1949",
+   "Moderate",
+   "3362"
+  ],
+  [
+   "DDInter1678",
+   "DDInter513",
+   "Moderate",
+   "4815"
+  ],
+  [
+   "DDInter1949",
+   "DDInter2041",
+   "Major",
+   "8505"
+  ],
+  [
+   "DDInter1949",
+   "DDInter513",
+   "Major",
+   "3595"
+  ],
+  [
+   "DDInter1949",
+   "DDInter514",
+   "Moderate",
+   "3270"
+  ],
+  [
+   "DDInter1949",
+   "DDInter515",
+   "Moderate",
+   "3270"
+  ],
+  [
+   "DDInter2041",
+   "DDInter513",
+   "Moderate",
+   "8190"
+  ],
+  [
+   "DDInter2187",
+   "DDInter582",
+   "Major",
+   "7199"
+  ],
+  [
+   "DDInter513",
+   "DDInter582",
+   "Minor",
+   "1619"
+  ],
+  [
+   "DDInter582",
+   "DDInter975",
+   "Major",
+   "2248"
+  ]
+ ]
+}

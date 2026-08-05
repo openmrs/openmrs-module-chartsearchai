@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "description": "Test fixture for the operator-authored `source` boundary (issue #117). `source` is no longer rendered into the citable record — it is published as a citation field — so a whitespace-only value must reach the client as null rather than as blank text, and a padded one must arrive trimmed. Two entries so one question selects one entry.",
+  "entries": [
+    {
+      "id": "blanksource",
+      "name": "Blanksource",
+      "aliases": ["blanksource"],
+      "warnings": ["A warning so the entry renders something citable."],
+      "source": "   "
+    },
+    {
+      "id": "paddedsource",
+      "name": "Paddedsource",
+      "aliases": ["paddedsource"],
+      "warnings": ["A warning so the entry renders something citable."],
+      "source": "  WHO Padded Attribution  "
+    }
+  ]
+}

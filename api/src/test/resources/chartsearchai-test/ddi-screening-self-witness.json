@@ -1,0 +1,34 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: a partner token that is a SUBSTRING of another drug's name",
+  "note": "Reproduces the live shape from issue #115/#86 — the token 'iron' sits inside 'spironolactone', so hasActiveDrug's substring matching reports a patient on spironolactone alone as also being on iron. Pins that interaction screening needs a SECOND active order to raise a pair, so one order cannot pair with itself. Real KB ids/rxcuis/ATC codes; shaped like ddi-severity-floor-pair.json."
+ },
+ "mechanisms": {
+  "7199": {
+   "text": "Coadministration with medications containing polyvalent cations may decrease the oral bioavailability of either agent by forming insoluble chelates.",
+   "categories": []
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1707",
+   "name": "Spironolactone",
+   "rxcui": "9997",
+   "rxnorm_name": "spironolactone",
+   "atc": ["C03DA01"],
+   "ciel": []
+  },
+  {
+   "id": "DDInter975",
+   "name": "Iron",
+   "rxcui": "6101",
+   "rxnorm_name": "iron",
+   "atc": ["B03AA07"],
+   "ciel": []
+  }
+ ],
+ "interactions": [
+  ["DDInter1707", "DDInter975", "Major", "7199"]
+ ]
+}

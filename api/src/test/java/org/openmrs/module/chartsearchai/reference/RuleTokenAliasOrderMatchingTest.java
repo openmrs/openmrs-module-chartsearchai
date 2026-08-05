@@ -118,8 +118,9 @@ public class RuleTokenAliasOrderMatchingTest {
 	@Test
 	public void theChipStillNamesTheRulesOwnTokenNotTheAliasItMatched() throws IOException {
 		// The label decision issue #136 records: a rule matched THROUGH an alias still says the token,
-		// because that is the label bestRulePerPartner groups on and partnerLabel renders — so the
-		// grouping stays correct and no client sees two spellings of one partner.
+		// which is what partnerLabel renders, so no client sees a partner's spelling change under it.
+		// Which alias the order matched is not part of the chip; the grouping key is a separate
+		// decision (bestRulePerPartner keys on the partner ENTRY, see its javadoc).
 		List<SafetyWarning> warnings = validator().validate(WARFARIN_ANSWER, WARFARIN_QUESTION,
 				onOrders("Acetylsalicylic acid"));
 		assertFalse(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,

@@ -66,6 +66,16 @@ public class ActiveOrderContraindicationTest {
 	 *  question-driven arm nor the screen has an anchor — the shape the defect needs. */
 	private static final String NO_DRUG_QUESTION = "What are her current medications?";
 
+	/** The patient's real querystore {@code drug_order} chart record for that order — the record an
+	 *  answer about her medications cites, and so the record echo scoping attributes the mention to. */
+	private static final RecordMapping ORDER_RECORD =
+			DrugReferenceTestSupport.drugOrderRecord(2, "order-uuid-1", IBUPROFEN_ORDER);
+
+	/** An answer that names the drug ONLY by reciting the cited drug-order record — the echo the
+	 *  scoping attributes to that record, and so the answer shape the defect needs. */
+	private static final String ECHOING_ANSWER = "Her only active medication is " + IBUPROFEN_ORDER
+			+ " [" + ORDER_RECORD.getIndex() + "].";
+
 	private static DrugSafetyValidator validator() {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
 	}
@@ -76,11 +86,10 @@ public class ActiveOrderContraindicationTest {
 				null, allergies, conditions);
 	}
 
-	/** A chart holding the patient's real querystore {@code drug_order} record for that order. */
+	/** A chart holding an obs and that drug-order record, as the serializer numbers them. */
 	private static PatientChart chartWithTheOrderRecord() {
 		return DrugReferenceTestSupport.chartOf(
-				DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
-				DrugReferenceTestSupport.drugOrderRecord(2, "order-uuid-1", IBUPROFEN_ORDER));
+				DrugReferenceTestSupport.obsRecord(1, "BP 120/80"), ORDER_RECORD);
 	}
 
 	private static List<SafetyWarning> contraindications(List<SafetyWarning> warnings) {
@@ -99,13 +108,10 @@ public class ActiveOrderContraindicationTest {
 		// names the drug out of it, so echo scoping takes ibuprofen out of play; the question names
 		// no drug, so nothing puts it back. Pre-fix: 0 chips.
 		PatientChart chart = chartWithTheOrderRecord();
-		RecordMapping orderRecord = chart.getMappings().get(1);
-		assertTrue(orderRecord.getText().toLowerCase().contains("ibuprofen"),
+		assertTrue(ORDER_RECORD.getText().toLowerCase().contains("ibuprofen"),
 				"precondition: the cited drug_order record must name the drug, or nothing is echoed");
 
-		String answer = "Her only active medication is " + IBUPROFEN_ORDER + " ["
-				+ orderRecord.getIndex() + "].";
-		List<SafetyWarning> warnings = validator().validate(answer, NO_DRUG_QUESTION,
+		List<SafetyWarning> warnings = validator().validate(ECHOING_ANSWER, NO_DRUG_QUESTION,
 				ctx(DrugReferenceTestSupport.set("ibuprofen"), null), chart.getMappings());
 
 		assertEquals(2, contraindications(warnings).size(),
@@ -194,7 +200,7 @@ public class ActiveOrderContraindicationTest {
 		// the drug she is taking. An arm that chipped from the presence of an active order alone — or
 		// that warned on any resolved allergen the way the in-loop class guard forbids — fails here.
 		List<SafetyWarning> warnings = validator().validate(
-				"Her only active medication is " + IBUPROFEN_ORDER + " [2].", NO_DRUG_QUESTION,
+				ECHOING_ANSWER, NO_DRUG_QUESTION,
 				ctx(DrugReferenceTestSupport.set("penicillin"), DrugReferenceTestSupport.set("hypertension")),
 				chartWithTheOrderRecord().getMappings());
 
@@ -210,7 +216,7 @@ public class ActiveOrderContraindicationTest {
 		// gains no chip from being on it. This is the common case — every question about every
 		// patient carrying no allergy and no condition record.
 		List<SafetyWarning> warnings = validator().validate(
-				"Her only active medication is " + IBUPROFEN_ORDER + " [2].", NO_DRUG_QUESTION,
+				ECHOING_ANSWER, NO_DRUG_QUESTION,
 				ctx(null, null), chartWithTheOrderRecord().getMappings());
 
 		assertTrue(warnings.isEmpty(), "an active order alone must raise nothing, was: " + warnings);

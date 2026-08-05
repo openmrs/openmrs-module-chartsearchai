@@ -50,6 +50,21 @@ public class HttpHubStreamTransportTest {
 
 	private ExecutorService executor;
 
+	private static final class CloseTrackingInputStream extends ByteArrayInputStream {
+
+		private boolean closed;
+
+		private CloseTrackingInputStream(byte[] body) {
+			super(body);
+		}
+
+		@Override
+		public void close() throws IOException {
+			closed = true;
+			super.close();
+		}
+	}
+
 	@AfterEach
 	public void tearDown() {
 		if (server != null) {
@@ -178,5 +193,16 @@ public class HttpHubStreamTransportTest {
 				() -> HttpHubStreamTransport.requireSuccess(422, "{\"detail\":{\"code\":\"x\"}}"));
 		assertEquals(422, failure.getStatusCode());
 		assertTrue(failure.getBody().contains("\"code\":\"x\""));
+	}
+
+	@Test
+	public void readingANonSuccessBodyAlwaysClosesTheResponseStream() throws Exception {
+		CloseTrackingInputStream body = new CloseTrackingInputStream(
+				"{\"detail\":{\"code\":\"x\"}}".getBytes(StandardCharsets.UTF_8));
+
+		String content = HttpHubStreamTransport.readErrorBody(body);
+
+		assertTrue(body.closed, "the non-success response body must release its HTTP connection");
+		assertTrue(content.contains("\"code\":\"x\""));
 	}
 }

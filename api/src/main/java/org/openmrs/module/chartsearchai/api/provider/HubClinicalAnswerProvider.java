@@ -121,11 +121,15 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 			return failed(events, sequence, request.getMode(), problemCodeFromHubBody(e.getBody()));
 		}
 		catch (RuntimeException e) {
-			if (cancellation.isCancelled() && latestAnswer.get() != null) {
-				AnswerEnvelope answer = withInDepthInterrupted(latestAnswer.get());
-				events.accept(TurnEvent.of(TurnEventType.TURN_DONE, sequence.getAndIncrement(), PROVIDER_ID));
-				return CompletableFuture.completedFuture(
-						TurnResult.done(PROVIDER_ID, request.getMode(), answer));
+			if (cancellation.isCancelled()) {
+				AnswerEnvelope current = latestAnswer.get();
+				if (current != null) {
+					AnswerEnvelope answer = withInDepthInterrupted(current);
+					events.accept(TurnEvent.of(TurnEventType.TURN_DONE, sequence.getAndIncrement(), PROVIDER_ID));
+					return CompletableFuture.completedFuture(
+							TurnResult.done(PROVIDER_ID, request.getMode(), answer));
+				}
+				return failed(events, sequence, request.getMode(), PROBLEM_CANCELLED);
 			}
 			log.warn("Hub provider turn failed for request {}", request.getRequestId(), e);
 			return failed(events, sequence, request.getMode(), PROBLEM_PROVIDER_FAILURE);
@@ -149,6 +153,9 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 	private void handleWire(HubWireEvent wire, TurnEventSink events, AtomicInteger sequence,
 			AtomicReference<AnswerEnvelope> latestAnswer, AtomicReference<String> streamError,
 			boolean[] doneSeen) {
+		if (doneSeen[0]) {
+			return;
+		}
 		String event = wire.getEvent();
 		if (event == null || event.isEmpty()) {
 			return;

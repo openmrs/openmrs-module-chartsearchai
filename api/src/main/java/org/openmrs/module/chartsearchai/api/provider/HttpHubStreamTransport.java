@@ -74,7 +74,7 @@ public class HttpHubStreamTransport implements HubStreamTransport {
 			HttpResponse<InputStream> response = httpClient.send(builder.build(),
 					HttpResponse.BodyHandlers.ofInputStream());
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+				String errorBody = readErrorBody(response.body());
 				requireSuccess(response.statusCode(), errorBody);
 			}
 			// Bind the open response body so a preempting turn can force it closed from another
@@ -100,6 +100,12 @@ public class HttpHubStreamTransport implements HubStreamTransport {
 	static void requireSuccess(int statusCode, String body) {
 		if (statusCode < 200 || statusCode >= 300) {
 			throw new HubTransportException(statusCode, body);
+		}
+	}
+
+	static String readErrorBody(InputStream body) throws IOException {
+		try (InputStream errorBody = body) {
+			return new String(errorBody.readAllBytes(), StandardCharsets.UTF_8);
 		}
 	}
 

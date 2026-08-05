@@ -304,7 +304,7 @@ public class HubClinicalAnswerProviderTest {
 	}
 
 	@Test
-	public void aCancelledStreamThatNeverProducedAnAnswerStillFailsNormally() throws Exception {
+	public void aCancelledStreamThatNeverProducedAnAnswerReportsCancellation() throws Exception {
 		ScriptedHubTransport transport = new ScriptedHubTransport();
 		transport.failure = new RuntimeException("connection reset");
 		HubClinicalAnswerProvider provider = provider(transport,
@@ -317,6 +317,28 @@ public class HubClinicalAnswerProviderTest {
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
 		assertNull(result.getAnswer());
+		assertEquals("cancelled", result.getProblemCode());
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_ERROR), sink.types());
+	}
+
+	@Test
+	public void eventsAfterTheFirstTerminalHubEventAreIgnored() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		Map<String, Object> answer = answerPayload("Aspirin 81mg.");
+		transport.events = Arrays.asList(
+				wire("done", answer),
+				wire("error", Collections.singletonMap("code", "late_error")),
+				wire("answer_validation", answer));
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
+				.toCompletableFuture().get();
+
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_DONE), sink.types());
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		assertEquals("Aspirin 81mg.", result.getAnswer().getText());
 	}
 
 	@Test

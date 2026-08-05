@@ -321,9 +321,15 @@ public class ChartSearchAiRestController {
 	 * not use it.
 	 *
 	 * <p>Gated on the core {@code Get Global Properties} privilege rather than a clinical one: this
-	 * reports what the drug-reference global properties actually produced, carries no patient data,
-	 * and needed no new privilege for an operator (or an administrator diagnosing a silent safety
-	 * layer) to read it.
+	 * reports what the drug-reference global properties actually produced and carries no patient data,
+	 * so it needed no new privilege for an operator (or an administrator diagnosing a silent safety
+	 * layer) to read it. Note what that admits: the {@code Authenticated} role holds that privilege by
+	 * default on a Reference Application install, so in practice any logged-in user can read this —
+	 * which is why the body is confined to configuration metadata such a user can already read through
+	 * {@code GET /systemsetting}, and why {@code origin} names the operator file relative to the
+	 * application data directory rather than absolutely (core keeps the absolute path behind
+	 * {@code View Administration Functions}). Anything patient-derived, or the absolute layout of the
+	 * server, does not belong in this response.
 	 */
 	@RequestMapping(value = "/drugreferencestatus", method = RequestMethod.GET)
 	@ResponseBody

@@ -93,7 +93,7 @@ The drug-reference load is **lazy and cached for the life of the module**, so th
 
 - `inert: true` means a source **was** selected and produced **zero** entries: drug-safety checking is off while the module looks healthy. Usually a `sourceFormat`/`dataFilePath` mismatch — each format parses only its own shape and returns nothing, without failing, for another's. Also logged at WARN when it happens.
 - `enabled: false` + `loaded: false` is the default, legitimate, silent state: the feature is off, so nothing is loaded and nothing is warned about. Reading the status does not trigger a load in that case.
-- `origin` is what was **read** (an absolute path, or `classpath:/chartsearchai/…` for the bundled dataset); `configuredDataFilePath` is what was **asked for**. They differ when a configured file could not be read and the bundled dataset was used — which yields a plausible non-zero count, so the count alone cannot tell you your file loaded.
+- `origin` is what was **read**, marked with the space it came from — `appdata:<path>` for an operator file, `classpath:/chartsearchai/…` for the bundled dataset; `configuredDataFilePath` is what was **asked for**. Your file loaded exactly when `origin` is `appdata:` + that path. They differ when a configured file could not be read and the bundled dataset was used — which yields a plausible non-zero count, so the count alone cannot tell you your file loaded. It is relative on purpose: any authenticated user can read this (the `Authenticated` role holds `Get Global Properties`), while core keeps the absolute application-data path behind `View Administration Functions`.
 
 ```bash
 A=$(printf 'admin:Admin123' | base64); B=http://localhost:8081/openmrs/ws/rest/v1

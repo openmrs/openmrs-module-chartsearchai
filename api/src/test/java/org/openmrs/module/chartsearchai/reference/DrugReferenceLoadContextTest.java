@@ -208,6 +208,37 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	}
 
 	/**
+	 * The origin says WHICH dataset was read; it must not additionally disclose where on the server
+	 * it lives. Both forms are marked with the space they name — {@code appdata:} for an operator file
+	 * (always relative: the resolver rejects {@code ..} and confirms the file is inside the
+	 * application data directory) and {@code classpath:} for the bundled one — so the distinction the
+	 * status exists to make is unaffected.
+	 *
+	 * <p>The gate on this status is the core {@code Get Global Properties} privilege, which the
+	 * {@code Authenticated} role holds by default on a Reference Application install, so every logged-in
+	 * user can read it. That is right for the two configured global properties, which such a user can
+	 * already read through {@code GET /systemsetting}, and wrong for an absolute path: core keeps its
+	 * own disclosure of the application data directory behind {@code View Administration Functions}
+	 * ({@code GET /systeminformation}). Measured on the 3.7.1 standalone, 2026-08-05: a user whose only
+	 * role carried no privileges got 200 from both this status and {@code /systemsetting}, and 403 from
+	 * {@code /systeminformation}.
+	 */
+	@Test
+	public void loadStatusNamesTheFileReadWithoutDisclosingItsAbsolutePath() throws IOException {
+		String path = copyBundledDataset(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "relative-ddi.json");
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
+
+		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+		assertEquals("appdata:" + path, status.getOrigin(),
+				"the origin must name the operator file relative to the application data directory, "
+						+ "marked with the space it names");
+		assertFalse(status.getOrigin().contains(OpenmrsUtil.getApplicationDataDirectory()),
+				"the status is readable by any authenticated user, so it must not hand out the "
+						+ "server's absolute application-data path. Origin was: " + status.getOrigin());
+	}
+
+	/**
 	 * A configured path that cannot be read falls back to the bundled dataset and produces a
 	 * perfectly plausible entry count — the state in which "the count is non-zero, so my source is
 	 * loaded" is FALSE. The origin is what separates the two, which is why it is reported.

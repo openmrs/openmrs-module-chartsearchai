@@ -117,13 +117,22 @@ public final class DrugReferenceLoad {
 	}
 
 	/**
-	 * @return where the entries were read from: an absolute file path, {@code classpath:<resource>}
-	 *         for the bundled dataset, or {@code none}. Null when not loaded.
+	 * @return where the entries were read from, each form naming the space it came from:
+	 *         {@code appdata:<path within the application data directory>} for an operator file,
+	 *         {@code classpath:<resource>} for the bundled dataset, or {@code none}. Null when not
+	 *         loaded.
 	 *
 	 *         <p>Reported separately from {@link #getConfiguredDataFilePath()} because a configured
 	 *         path that cannot be read falls back to the bundled dataset and yields a perfectly
 	 *         plausible entry count — the state in which "the count is non-zero, so my file loaded"
-	 *         is false.
+	 *         is false. So a configured file loaded exactly when this reads {@code appdata:} + that
+	 *         path.
+	 *
+	 *         <p>Deliberately not the absolute path: this is served to any caller holding the core
+	 *         {@code Get Global Properties} privilege, which the {@code Authenticated} role holds by
+	 *         default, and core keeps its own disclosure of the application data directory behind
+	 *         {@code View Administration Functions}. The absolute path is still logged, where the
+	 *         audience is already an administrator.
 	 */
 	public String getOrigin() {
 		return origin;

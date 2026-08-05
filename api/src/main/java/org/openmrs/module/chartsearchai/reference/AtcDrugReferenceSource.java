@@ -84,7 +84,7 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 			try (InputStream in = new FileInputStream(new File(resolved))) {
 				List<DrugReference> loaded = parse(in);
 				log.info("Loaded {} ATC drug-reference entries from {}", loaded.size(), resolved);
-				lastLoadOrigin = resolved;
+				lastLoadOrigin = ReferenceDataFiles.APPDATA_ORIGIN_PREFIX + configuredPath;
 				return loaded;
 			}
 		}

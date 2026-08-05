@@ -37,6 +37,20 @@ final class ReferenceDataFiles {
 	/** Prefix marking a {@link Loaded#getOrigin()} that names a bundled classpath resource. */
 	static final String CLASSPATH_ORIGIN_PREFIX = "classpath:";
 
+	/**
+	 * Prefix marking a {@link Loaded#getOrigin()} that names an operator file, relative to the
+	 * OpenMRS application data directory — the same form the path global property holds.
+	 *
+	 * <p>Relative rather than absolute because the origin is reported over REST to any caller with
+	 * the core {@code Get Global Properties} privilege, which the {@code Authenticated} role holds by
+	 * default. Such a caller can already read the path global property itself, but not the server's
+	 * absolute layout: core keeps its own disclosure of the application data directory behind
+	 * {@code View Administration Functions}. Nothing is lost — {@code ChartSearchAiUtils.resolveModelPath}
+	 * rejects {@code ..} and confirms the file resolves inside that directory, so this form names the
+	 * file exactly, and the absolute path is still logged. See {@code DrugReferenceLoad#getOrigin()}.
+	 */
+	static final String APPDATA_ORIGIN_PREFIX = "appdata:";
+
 	/** {@link Loaded#getOrigin()} when nothing could be read at all. */
 	static final String ORIGIN_NONE = "none";
 
@@ -77,9 +91,10 @@ final class ReferenceDataFiles {
 		}
 
 		/**
-		 * @return the absolute path of the operator file the items were read from, or
-		 *         {@link #CLASSPATH_ORIGIN_PREFIX} + the bundled resource when the fallback was
-		 *         used, or {@link #ORIGIN_NONE} when nothing could be read
+		 * @return {@link #APPDATA_ORIGIN_PREFIX} + the operator file's path within the application
+		 *         data directory, or {@link #CLASSPATH_ORIGIN_PREFIX} + the bundled resource when the
+		 *         fallback was used, or {@link #ORIGIN_NONE} when nothing could be read. Every form
+		 *         names the space it came from, which is the distinction a reader needs.
 		 */
 		String getOrigin() {
 			return origin;
@@ -108,7 +123,7 @@ final class ReferenceDataFiles {
 				try (InputStream in = new FileInputStream(new File(resolved))) {
 					List<T> loaded = parser.parse(in);
 					log.info("Loaded {} {} from {}", loaded.size(), datasetLabel, resolved);
-					return new Loaded<T>(loaded, resolved);
+					return new Loaded<T>(loaded, APPDATA_ORIGIN_PREFIX + configuredPath);
 				}
 			}
 			catch (IllegalStateException e) {

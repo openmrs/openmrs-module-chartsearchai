@@ -829,8 +829,9 @@ public class DrugSafetyValidator {
 	 * rather than merged.
 	 *
 	 * @param orderEntries the reference entries the patient's active orders resolve to
-	 *        ({@link DrugReferenceService#findForActiveOrders}), for identifying the partner drug a
-	 *        rule points at; an empty list falls the grouping back to the label alone
+	 *        ({@link DrugReferenceService#findForActiveOrders}), from which
+	 *        {@link #activeOrderEntryFor} identifies the partner drug a rule points at; an empty list
+	 *        falls the grouping back to the label alone
 	 */
 	private static Collection<DrugReference.Interaction> bestRulePerPartner(DrugReference ref,
 			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries) {
@@ -852,7 +853,10 @@ public class DrugSafetyValidator {
 			if (!context.hasActiveDrug(i.getToken(), i.getAtc())) {
 				continue;
 			}
-			Object key = partnerEntry(i, ref, orderEntries);
+			// The partner DRUG when the dataset identifies one, else the label — through the same
+			// resolution the screening arm uses to name a pair, so the two cannot disagree about which
+			// entry a rule points at.
+			Object key = activeOrderEntryFor(orderEntries, ref, i);
 			if (key == null) {
 				key = partnerLabel(i).toLowerCase(Locale.ROOT);
 			}
@@ -864,25 +868,6 @@ public class DrugSafetyValidator {
 			}
 		}
 		return best.values();
-	}
-
-	/**
-	 * @return the active-order entry {@code rule} points at — the grouping key
-	 *         {@link #bestRulePerPartner} prefers over the rule's label — or null when none of
-	 *         {@code orderEntries} is the one it names, which is the case for an order whose substance
-	 *         the loaded dataset does not carry. {@code subject} is never returned, for the same reason
-	 *         {@link #activeOrderEntryFor} excludes it: the partner is the OTHER side of the pair, and a
-	 *         rule of {@code subject} that {@link #identifies} {@code subject} itself is a self-pair no
-	 *         chip should key on.
-	 */
-	private static DrugReference partnerEntry(DrugReference.Interaction rule, DrugReference subject,
-			List<DrugReference> orderEntries) {
-		for (DrugReference candidate : orderEntries) {
-			if (candidate != subject && identifies(rule, candidate)) {
-				return candidate;
-			}
-		}
-		return null;
 	}
 
 	/**
@@ -1697,7 +1682,13 @@ public class DrugSafetyValidator {
 	 * @return the active-order reference entry {@code i} NAMES — through {@link #identifies}, the same
 	 *         name-identity test the question-pair arm uses, so both arms agree about which entry a
 	 *         rule points at — or null when that order carries no entry in the loaded dataset.
-	 *         {@code subject} is never returned: the partner is the OTHER side of the pair.
+	 *         {@code subject} is never returned: the partner is the OTHER side of the pair, and a rule
+	 *         of {@code subject} that {@link #identifies} {@code subject} itself is a self-pair.
+	 *
+	 *         <p>Two consumers since issue #136: this arm, which names a screened pair, and
+	 *         {@link #bestRulePerPartner}, which GROUPS chips on the entry rather than on the rule's
+	 *         label. One resolution for both, so a pair cannot be named after one entry and grouped
+	 *         under another.
 	 *
 	 *         <p>Name IDENTITY, deliberately not {@link DrugReference#matchesText}. A rule's token is
 	 *         exactly its partner's own alias (the {@code ddinter} parser writes it from the partner's

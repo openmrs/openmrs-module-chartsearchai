@@ -159,8 +159,8 @@ public class DrugReference {
 	 *       partitions those entries identically, so this is the dataset's substance identity rather
 	 *       than a spelling coincidence.</li>
 	 *   <li>The <b>display stem</b> — the name with trailing qualifiers removed — as a VETO on that
-	 *       claim, because the claim over-merges. 21 of those 142 families hold rows that are
-	 *       genuinely different substances: {@code Omeprazole}/{@code Esomeprazole} (one
+	 *       claim, because the claim over-merges. Among those 142 families sit pairs of genuinely
+	 *       different substances: {@code Omeprazole}/{@code Esomeprazole} (one
 	 *       {@code rxnorm_name}, one {@code rxcui}, one ATC code),
 	 *       {@code Amphetamine}/{@code Dextroamphetamine}, {@code Fenfluramine}/{@code Dexfenfluramine},
 	 *       {@code Gabapentin}/{@code Gabapentin enacarbil}, {@code Netupitant}/{@code Fosnetupitant},
@@ -168,16 +168,19 @@ public class DrugReference {
 	 *       {@code Atropine}/{@code Hyoscyamine} — each of them the {@code enalapril}/{@code enalaprilat}
 	 *       shape issue #121 decided must stay two chips. The stem separates every one of them.</li>
 	 * </ul>
-	 * Neither half works alone: the stem alone merges 9 groups the substance name keeps apart
-	 * ({@code Manganese (chloride)}/{@code (sulfate)}, {@code Dextran (-1)}/{@code (low molecular
-	 * weight)}, {@code Insulin human}/{@code (isophane)}, {@code Iron}/{@code (polysaccharide)},
-	 * {@code Typhoid vaccine (live)}/{@code (inactivated)} …), which are different substances sharing
-	 * one stem. Together they reduce those 332 entries to 177 substances.
+	 * Neither half works alone: the stem alone merges 9 groups the substance name keeps apart, 8 of
+	 * them different substances sharing one stem ({@code Manganese (chloride)}/{@code (sulfate)},
+	 * {@code Dextran (-1)}/{@code (low molecular weight)}, {@code Insulin human}/{@code (isophane)},
+	 * {@code Iron}/{@code (polysaccharide)}, {@code Typhoid vaccine (live)}/{@code (inactivated)} …).
+	 * Together the two reduce those 332 entries to 177 substances.
 	 *
-	 * <p>Conservative where it cannot tell: a name that extends the family's stem by a WORD rather
-	 * than a qualifier ({@code Hydrocortisone butyrate}, {@code Estrone sulfate},
-	 * {@code Procaine benzylpenicillin}) keeps its own key and so its own chip. Over-reporting one
-	 * chip is the safe direction for a non-blocking advisory; dropping a real one is not.
+	 * <p>Conservative where it cannot tell, in BOTH directions. A name that extends the family's stem
+	 * by a WORD rather than a qualifier ({@code Hydrocortisone butyrate}, {@code Estrone sulfate},
+	 * {@code Procaine benzylpenicillin}) keeps its own key and so its own chip, and 21 of the 142
+	 * families are left entirely unmerged for that reason — some of which the KB is in fact naming one
+	 * substance two ways ({@code Thallous Chloride}/{@code Thallous chloride tl-201},
+	 * {@code Typhoid vaccine (live)}/{@code Typhoid vaccine live}). Over-reporting one chip is the safe
+	 * direction for a non-blocking advisory; dropping a real one is not.
 	 *
 	 * @return an opaque key, equal exactly for two entries this module treats as one substance
 	 */

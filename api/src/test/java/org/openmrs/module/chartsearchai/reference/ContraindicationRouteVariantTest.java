@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -290,10 +291,22 @@ public class ContraindicationRouteVariantTest {
 		// resolves the (5y-11y) presentation, which no question word reaches. A ledger per call site
 		// answers this with two chips; the tests above cannot see the difference, because in each of them
 		// one call site supplies the whole group.
-		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
-				"Is it safe to give Tozinameran (12y+)?",
-				DrugReferenceTestSupport.ctx(60, null,
-						DrugReferenceTestSupport.set("Tozinameran (5y-11y)"), null,
+		String question = "Is it safe to give Tozinameran (12y+)?";
+		String order = "Tozinameran (5y-11y)";
+		DrugReferenceService service = fixtureService(FIXTURE);
+		// The premise, through the production resolvers: without it the order arm could stop reaching a
+		// row of its own and this would pass on the question arm's collapse alone, testing nothing.
+		List<DrugReference> fromQuestion = service.findByQuery(question);
+		List<DrugReference> orderOnly = new ArrayList<DrugReference>(service.findByDrugName(order));
+		orderOnly.removeAll(fromQuestion);
+		assertEquals(1, orderOnly.size(),
+				"the order must resolve exactly one row no question word reaches, was: "
+						+ names(orderOnly));
+		assertEquals(orderOnly.get(0).substanceKey(), fromQuestion.get(0).substanceKey(),
+				"and it must be the same substance, or the two call sites share no key");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("", question,
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(order), null,
 						DrugReferenceTestSupport.set("Tozinameran"), null));
 
 		assertEquals(1, warnings.size(),
@@ -366,10 +379,16 @@ public class ContraindicationRouteVariantTest {
 				"precondition: a curated entry publishes no substance name, so it keys on itself");
 		assertEquals(2, ibuprofen.getContraindications().size(),
 				"precondition: the fixture must really carry the rule twice");
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null,
+				DrugReferenceTestSupport.set("ibuprofen"), null);
+		for (DrugReference.Contraindication rule : ibuprofen.getContraindications()) {
+			assertTrue(context.hasAllergyToken(rule.getToken()),
+					"precondition: BOTH spellings must MATCH the recorded allergy, or the collapse is "
+							+ "not what makes this one chip — unmatched: " + rule.getToken());
+		}
 
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
-				"Is ibuprofen safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null,
-						DrugReferenceTestSupport.set("ibuprofen"), null));
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Is ibuprofen safe for her?", context);
 
 		assertEquals(2, warnings.size(),
 				"the rule collapses to one chip, and the identity chip beside it is issue #146's separate "

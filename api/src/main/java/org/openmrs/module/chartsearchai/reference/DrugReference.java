@@ -183,11 +183,10 @@ public class DrugReference {
 	 *
 	 * <p>Conservative where it cannot tell, in BOTH directions. A name that extends the family's stem
 	 * by a WORD rather than a qualifier ({@code Hydrocortisone butyrate}, {@code Estrone sulfate},
-	 * {@code Procaine benzylpenicillin}) keeps its own key and so its own chip, and 21 of the 142
-	 * families are left entirely unmerged for that reason — some of which the KB is in fact naming one
-	 * substance two ways ({@code Thallous Chloride}/{@code Thallous chloride tl-201},
-	 * {@code Typhoid vaccine (live)}/{@code Typhoid vaccine live}). Over-reporting one chip is the safe
-	 * direction for a non-blocking advisory; dropping a real one is not.
+	 * {@code Procaine benzylpenicillin}) keeps its own key and so its own chip — including where the KB
+	 * is in fact naming one substance two ways ({@code Thallous Chloride}/{@code Thallous chloride
+	 * tl-201}, {@code Typhoid vaccine (live)}/{@code Typhoid vaccine live}). Over-reporting one chip is
+	 * the safe direction for a non-blocking advisory; dropping a real one is not.
 	 *
 	 * @return an opaque key, equal exactly for two entries this module treats as one substance
 	 */

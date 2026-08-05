@@ -1,10 +1,19 @@
 # Drug knowledge base — demo setup
 
-A reproducible setup for demonstrating **every** path of the drug-reference / drug-safety
-feature on an OpenMRS standalone (or any RefApp demo database). It creates one dedicated
-test patient with the allergies, conditions and active drug orders needed to trigger each
-warning, adds the ATC concept mappings the class-based paths need, and (for the
-cross-reactivity path) swaps in a small custom knowledge base.
+A reproducible setup for demonstrating the drug-reference / drug-safety feature on an
+OpenMRS standalone (or any RefApp demo database). It creates one dedicated test patient
+with the allergies, conditions and active drug orders needed to trigger each warning,
+adds the ATC concept mappings the class-based paths need, and (for the cross-reactivity
+path) swaps in a small custom knowledge base.
+
+> The table below covered every path when it was written and no longer does: three arms
+> have landed since — the question-named pair lookup
+> ([#114](https://github.com/openmrs/openmrs-module-chartsearchai/issues/114)), the
+> interaction screen ([#113](https://github.com/openmrs/openmrs-module-chartsearchai/issues/113))
+> and the active-order contraindication join
+> ([#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143), which fires
+> on this seeded patient — see the note above the cheat-sheet). The README's GP table is the
+> authoritative list of what the feature does; this document is only the demo data.
 
 For the feature itself — config reference, design, API/SSE shape — see the
 [README "Drug-reference injection & safety validation"](../README.md#drug-reference-injection--safety-validation)
@@ -392,8 +401,16 @@ entry dataset).
 
 ## Query cheat-sheet
 
-Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless noted. Each
-query surfaces only the warnings for the drug named.
+Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless noted.
+
+> **Since [#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143) a query does
+> NOT surface only the warnings for the drug it names.** Every question additionally has this
+> patient's own active orders checked against her own allergies and conditions, so each row below
+> also carries contraindication chips for her **Amoxicillin** order (her Penicillins allergy) and
+> her **Gentamicin** order (her non-coded Aminoglycoside allergy and her renal impairment) — drugs
+> the query never mentions. That is the point of the fix: an allergy to a drug she is already
+> taking is a prescribing error the chart already contains. Expect them alongside every
+> expectation in the table.
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|

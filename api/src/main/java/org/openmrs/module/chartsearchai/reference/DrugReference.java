@@ -412,7 +412,7 @@ public class DrugReference {
 	 * <p>Diacritic-insensitive on BOTH sides (issue #129), which is why the fold lives here rather
 	 * than in either named matcher: the same accented order name reaches both of them — as the
 	 * haystack when a rule token is matched against it ({@link #matchesOrderName}) and as the
-	 * haystack again when the screening arm resolves that order's own reference entry
+	 * haystack again when the order-driven arms resolve that order's own reference entry
 	 * ({@code DrugSafetyValidator.activeOrderEntries} → {@code findByQuery} → {@link #matchesText}),
 	 * and as the NEEDLE when an order name is looked for in a rendered record
 	 * ({@code PatientClinicalContext.ActiveDrugOrder.namedIn}). Folding one matcher would leave the

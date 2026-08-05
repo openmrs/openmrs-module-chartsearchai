@@ -403,7 +403,9 @@ public class ChartSearchAiConstants {
 
 	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS = true;
 
-	/** Cross-check drugs named in the answer against the patient's allergies/conditions for contraindications. */
+	/** Cross-check the drugs in play — those the question asks about and those the answer names on its own
+	 *  authority — against the patient's allergies/conditions for contraindications, and, on every question,
+	 *  the patient's own active orders against those same records (issue #143). */
 	public static final String GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS =
 			"chartsearchai.drugSafety.warnOnContraindications";
 

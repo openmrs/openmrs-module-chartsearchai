@@ -47,12 +47,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  *       {@code Lévofloxacine/Ciprofloxacine ~ ofloxacin}), which are the ones folding could newly
  *       break.</li>
  *   <li><b>Every matcher the same name reaches.</b> The fold lives in the one shared boundary scan, so
- *       these also cover the two arms where the accented name is not a rule token's haystack: the
- *       interaction screen, which resolves an order's own reference entry through
- *       {@link DrugReference#matchesText}, and the chart reconciliation, where the accented name is
- *       the NEEDLE inside a rendered record. Moving the fold into
+ *       these also cover the arms where the accented name is not a rule token's haystack: the two
+ *       that resolve an order's own reference entry through {@link DrugReference#matchesText} (the
+ *       interaction screen, and — since issue #143 — the active-order contraindication arm, both
+ *       through the one {@code activeOrderEntries} definition), and the chart reconciliation, where
+ *       the accented name is the NEEDLE inside a rendered record. Moving the fold into
  *       {@link DrugReference#matchesOrderName} alone, or applying it to one side only, leaves the
- *       other tests green and fails those two.</li>
+ *       other tests green and fails those.</li>
  *   <li><b>Not tuned for misspellings.</b> {@code Lisoniazide} and {@code Sprironolactone} are typos
  *       in this same dictionary. They stay unmatched deliberately: accommodating them reopens the
  *       substring hazard from the other side, and a data-quality problem is not a matcher problem.
@@ -287,7 +288,8 @@ public class DrugSafetyDiacriticOrderNameTest {
 		// active-order name through findByQuery -> DrugReference.matchesText, where the order name is
 		// the haystack and the unaccented alias is the needle. Folding only the order-name matcher
 		// would leave a francophone patient's whole medication list invisible to the screen — the same
-		// absent safety net, one arm over.
+		// absent safety net, one arm over. Since issue #143 the same resolution also supplies the
+		// subjects of the active-order contraindication arm, so this one fold covers both.
 		DrugSafetyValidator validator = validator();
 		String screeningQuestion = "Are there any interactions between her medications?";
 

@@ -1,6 +1,6 @@
 {
   "dataset": "drug-safety-v1",
-  "description": "Post-LLM drug-safety validator eval cases. Each case feeds a simulated answer plus a patient clinical context (age, optional weightKg, active drug names and/or ATC codes, allergies, conditions) to the real DrugSafetyValidator and asserts the warning types raised. Model-free: it exercises the deterministic post-check, not the LLM. The 'question' field is fed to the validator, which is question-aware: it checks the drug the question asks about, not only the drug the answer names.",
+  "description": "Post-LLM drug-safety validator eval cases. Each case feeds a simulated answer plus a patient clinical context (age, optional weightKg, active drug names and/or ATC codes, allergies, conditions) to the real DrugSafetyValidator and asserts the warning types raised. Model-free: it exercises the deterministic post-check, not the LLM. The 'question' field is fed to the validator, which is question-aware: it checks the drug the question asks about, not only the drug the answer names. Neither field is the whole subject set: the patient's own active orders are checked against their allergies and conditions on every question (issue #143), and screened against each other on an interaction-screening question (issue #113).",
   "cases": [
     {
       "id": "dosing-overdose-flag",

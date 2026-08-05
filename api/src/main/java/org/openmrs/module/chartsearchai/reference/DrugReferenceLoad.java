@@ -104,7 +104,10 @@ public final class DrugReferenceLoad {
 		return sourceFormat;
 	}
 
-	/** @return the raw {@code chartsearchai.drugReference.sourceFormat} value; null when not loaded. */
+	/**
+	 * @return the configured {@code chartsearchai.drugReference.sourceFormat} value, which reads
+	 *         {@code json} when the global property is unset or blank; null when not loaded.
+	 */
 	public String getConfiguredSourceFormat() {
 		return configuredSourceFormat;
 	}

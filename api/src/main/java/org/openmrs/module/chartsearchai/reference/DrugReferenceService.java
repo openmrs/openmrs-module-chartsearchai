@@ -376,7 +376,9 @@ public class DrugReferenceService {
 	/**
 	 * Test seam: inject a known source, bypassing the format GP. {@link #getLoadStatus()} still
 	 * reports the format the GP selects, which then describes the adapter that WOULD have been used
-	 * rather than the injected one — production never injects a source.
+	 * rather than the injected one — production never injects a source. The origin reads {@code none}
+	 * for the same reason: an injected source tracks none, so it is the one case where {@code none}
+	 * accompanies a non-zero entry count instead of meaning nothing could be read.
 	 */
 	void setSource(DrugReferenceSource source) {
 		this.source = source;

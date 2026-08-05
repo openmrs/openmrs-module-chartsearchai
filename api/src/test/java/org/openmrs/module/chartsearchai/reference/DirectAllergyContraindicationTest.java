@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -66,6 +67,7 @@ public class DirectAllergyContraindicationTest {
 		// Ledipasvir an ATC code, every case below would keep passing while testing nothing.
 		DrugReferenceService service = fixtureService();
 		DrugReference ledipasvir = service.lookupByToken(UNCLASSIFIED);
+		assertNotNull(ledipasvir, "the fixture must carry an entry the allergy token resolves to");
 		assertTrue(ledipasvir.normalizedAtcCodes().isEmpty(),
 				"the fixture entry must carry no ATC codes, was: " + ledipasvir.normalizedAtcCodes());
 		assertTrue(ledipasvir.atcSubgroups().isEmpty(), "and therefore no ATC level-4 subgroup");

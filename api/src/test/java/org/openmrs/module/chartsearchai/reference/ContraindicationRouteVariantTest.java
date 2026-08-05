@@ -11,7 +11,9 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.io.IOException;
@@ -62,12 +64,19 @@ public class ContraindicationRouteVariantTest {
 	 * ({@code Omeprazole} + {@code Esomeprazole}) with a third PPI to be allergic to
 	 * ({@code Pantoprazole}, {@code A02BC02}, so the shared level-4 subgroup is {@code A02BC}), and
 	 * the four {@code hydrocortisone} rows with {@code Dexamethasone} to be allergic to (both carry
-	 * {@code A01AC}), and the five {@code Tozinameran} rows — the group whose allergen row is not its
+	 * {@code A01AC}), plus the five {@code Tozinameran} rows — the group whose allergen row is not its
 	 * first, because only the bare row carries the bare substance name as an alias. Its
 	 * {@code interactions} array is empty, deliberately: this file asserts contraindication chip COUNTS,
 	 * and an interaction chip in the same list would have to be filtered out of every assertion here.
 	 */
 	private static final String FIXTURE = "chartsearchai-test/ddi-contra-route-variants.json";
+
+	/** One curated entry carrying the same contraindication rule twice, differing only in the CASE of
+	 *  its type and token — the ledger's other key space, on the source that publishes no substance
+	 *  name. Curated schema, so it is parsed by {@link JsonDrugReferenceSource} rather than the DDInter
+	 *  parser above. */
+	private static final String DUPLICATE_RULE_FIXTURE =
+			"chartsearchai-test/drug-reference-duplicate-rule-tokens.json";
 
 	/** A question that resolves no reference drug and is not an interaction screen, so the only arm
 	 *  that can chip is the order-driven one ({@code addActiveOrderContraindications}). */
@@ -161,6 +170,25 @@ public class ContraindicationRouteVariantTest {
 				"the surviving variant chip is the dataset's first row, named by displayLabel()");
 		assertEquals("Hydrocortisone butyrate is in the same ATC class (A01AC) as the patient's allergy"
 				+ " to Dexamethasone — possible cross-reactivity", warnings.get(1).getDetail());
+	}
+
+	/**
+	 * The must-not-collapse case below is a test of the display-stem VETO only while its two rows
+	 * genuinely share the reference data's substance name. Pinned separately, because a fixture
+	 * regenerated with differing {@code rxnorm_name}s would leave that case passing 2-for-2 on the
+	 * substance name alone — and the stem half, which a mutation sweep showed drops real chips when
+	 * removed, would then be exercised by nothing.
+	 */
+	@Test
+	public void theTwoPpiRowsShareTheSubstanceNameTheStemHasToVeto() throws IOException {
+		List<DrugReference> ppis = fixtureService(FIXTURE).findByQuery("Is it safe to give esomeprazole?");
+
+		assertEquals(2, ppis.size(), "was: " + names(ppis));
+		assertEquals(DrugReference.normalizeName(ppis.get(0).getSubstanceName()),
+				DrugReference.normalizeName(ppis.get(1).getSubstanceName()),
+				"the two rows must share ONE substance name, or the stem is not what keeps them apart");
+		assertNotEquals(ppis.get(0).substanceKey(), ppis.get(1).substanceKey(),
+				"while the combined key still separates them");
 	}
 
 	@Test
@@ -316,6 +344,47 @@ public class ContraindicationRouteVariantTest {
 
 		assertEquals(1, findings.size(),
 				"one chip is one citable record, not one per route variant, was: " + findings);
+	}
+
+	@Test
+	public void oneCuratedRuleAuthoredTwiceRaisesOneChip() throws IOException {
+		// The ledger's OTHER key space, and the one source that publishes no substance name at all: a
+		// curated entry keys on its own identity, so nothing about it collapses across rows — but its
+		// rules still key on (type, token) NORMALIZED the way the arm compared them, so one rule authored
+		// twice in different case is one chip rather than two. Pre-fix both were appended unconditionally.
+		//
+		// The cost this pins: ties keep the incumbent, so the second rule's NOTE is dropped. That is the
+		// right call for a re-spelling of one rule and a lossy one for two genuinely different notes
+		// under one token; the latter is authoring pathology no shipped dataset contains, and is
+		// reported rather than designed around here.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(DUPLICATE_RULE_FIXTURE));
+		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
+		DrugReference ibuprofen = service.lookupByToken("Ibuprofen");
+		assertNotNull(ibuprofen, "precondition: the fixture entry must resolve");
+		assertNull(ibuprofen.substanceKey(),
+				"precondition: a curated entry publishes no substance name, so it keys on itself");
+		assertEquals(2, ibuprofen.getContraindications().size(),
+				"precondition: the fixture must really carry the rule twice");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"Is ibuprofen safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("ibuprofen"), null));
+
+		assertEquals(2, warnings.size(),
+				"the rule collapses to one chip, and the identity chip beside it is issue #146's separate "
+						+ "key space — deliberately NOT collapsed with it, was: " + warnings);
+		List<String> ruleChips = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			if (warning.getDetail().contains("is contraindicated by an")) {
+				ruleChips.add(warning.getDetail());
+			}
+		}
+		assertEquals(1, ruleChips.size(), "one rule is one chip however it is spelled, was: " + ruleChips);
+		assertEquals("Ibuprofen is contraindicated by an active allergy: documented ibuprofen allergy",
+				ruleChips.get(0), "and the incumbent survives");
+		assertFalse(warnings.toString().contains("avoid all NSAIDs"),
+				"so the re-spelling's own note is the one dropped, was: " + warnings);
 	}
 
 	private static List<String> names(List<DrugReference> entries) {

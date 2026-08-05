@@ -54,6 +54,7 @@ Base path: `/ws/rest/v1/chartsearchai`. Every endpoint gates on a privilege up f
 | **GET** | **`/prewarmstatus`** | **Manage AI Prewarm** | **Bulk-prewarm progress/status** |
 | GET | `/auditlog` | View AI Audit Logs | Query the AI audit log |
 | POST | `/feedback` | AI Query Patient Data | Submit thumbs-up/down on an answer |
+| GET | `/drugreferencestatus` | Get Global Properties | Which drug-reference dataset is actually loaded |
 
 ### KV warmup & the prewarm bootstrap
 
@@ -83,3 +84,18 @@ curl -s -H "Authorization: Basic $A" "$B/chartsearchai/prewarmstatus"
 - `chartsearchai.prewarm.refreshDebounceMs` — quiet-period (default 5000) before a `refreshOnEdit` re-pin fires, collapsing a burst of writes to one patient into a single re-pin.
 
 > Note: a pinned entry becomes stale when that patient's chart changes; the next query re-prefills and re-saves it as an ordinary (unpinned) entry, so the pinned corpus erodes over time — re-run the sweep (or enable `prewarm.refreshOnEdit`) to refresh it. Only meaningful with `engine=local`.
+
+### Which drug-reference dataset is loaded
+
+**`GET /drugreferencestatus`** → `{enabled, loaded, inert, entryCount, sourceFormat, configuredSourceFormat, configuredDataFilePath, origin}`.
+
+The drug-reference load is **lazy and cached for the life of the module**, so the log cannot answer "which dataset is in force?" — the most recent `Loaded N …` line may belong to a load performed before the global properties were last edited, or to a process a failed restart left running. This endpoint reports the load that populated the cache, performing it if it has not happened yet, so its answer is current by construction. Use it — not a log grep — after changing `sourceFormat` or `dataFilePath`.
+
+- `inert: true` means a source **was** selected and produced **zero** entries: drug-safety checking is off while the module looks healthy. Usually a `sourceFormat`/`dataFilePath` mismatch — each format parses only its own shape and returns nothing, without failing, for another's. Also logged at WARN when it happens.
+- `enabled: false` + `loaded: false` is the default, legitimate, silent state: the feature is off, so nothing is loaded and nothing is warned about. Reading the status does not trigger a load in that case.
+- `origin` is what was **read** (an absolute path, or `classpath:/chartsearchai/…` for the bundled dataset); `configuredDataFilePath` is what was **asked for**. They differ when a configured file could not be read and the bundled dataset was used — which yields a plausible non-zero count, so the count alone cannot tell you your file loaded.
+
+```bash
+A=$(printf 'admin:Admin123' | base64); B=http://localhost:8081/openmrs/ws/rest/v1
+curl -s -H "Authorization: Basic $A" "$B/chartsearchai/drugreferencestatus"
+```

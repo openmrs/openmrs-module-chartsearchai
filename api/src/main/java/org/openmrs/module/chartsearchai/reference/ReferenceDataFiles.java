@@ -34,11 +34,56 @@ final class ReferenceDataFiles {
 
 	private static final Logger log = LoggerFactory.getLogger(ReferenceDataFiles.class);
 
+	/** Prefix marking a {@link Loaded#getOrigin()} that names a bundled classpath resource. */
+	static final String CLASSPATH_ORIGIN_PREFIX = "classpath:";
+
+	/** {@link Loaded#getOrigin()} when nothing could be read at all. */
+	static final String ORIGIN_NONE = "none";
+
 	/** Parses one dataset stream into its items. */
 	@FunctionalInterface
 	interface DatasetParser<T> {
 
 		List<T> parse(InputStream in) throws IOException;
+	}
+
+	/**
+	 * One dataset load's outcome: the items, and <em>where they came from</em>.
+	 *
+	 * <p>The origin is returned rather than only logged because the log line is a historical
+	 * record. The drug-reference load is lazy, so by the time anyone asks "which dataset is in
+	 * force?" the most recent matching line may belong to a previous load or a previous process —
+	 * which is exactly how a verification pass came to believe it had switched source when it had
+	 * not (issue #149). Returning it lets {@link DrugReferenceService} retain the answer alongside
+	 * the entries it describes.
+	 */
+	static final class Loaded<T> {
+
+		private final List<T> items;
+
+		private final String origin;
+
+		private Loaded(List<T> items, String origin) {
+			this.items = items;
+			this.origin = origin;
+		}
+
+		static <T> Loaded<T> nothing() {
+			return new Loaded<T>(Collections.<T> emptyList(), ORIGIN_NONE);
+		}
+
+		List<T> getItems() {
+			return items;
+		}
+
+		/**
+		 * @return the absolute path of the operator file the items were read from, or
+		 *         {@link #CLASSPATH_ORIGIN_PREFIX} + the bundled resource when the fallback was
+		 *         used, or {@link #ORIGIN_NONE} when nothing could be read
+		 */
+		String getOrigin() {
+			return origin;
+		}
 	}
 
 	private ReferenceDataFiles() {
@@ -49,10 +94,10 @@ final class ReferenceDataFiles {
 	 * @param classpathDefault absolute classpath resource of the bundled dataset
 	 * @param datasetLabel human label used in log lines (e.g. "drug-reference entries")
 	 * @param parser the dataset's parser
-	 * @return the parsed items from the operator file, else from the bundled dataset, else empty —
-	 *         never null, never an exception
+	 * @return the parsed items from the operator file, else from the bundled dataset, else empty,
+	 *         with the origin that produced them — never null, never an exception
 	 */
-	static <T> List<T> loadWithClasspathFallback(String pathGlobalProperty, String classpathDefault,
+	static <T> Loaded<T> loadWithClasspathFallback(String pathGlobalProperty, String classpathDefault,
 			String datasetLabel, DatasetParser<T> parser) {
 		// Fail-safe read returns "" when unset/blank or no context is available -> classpath default.
 		String configuredPath = ChartSearchAiUtils.getStringGlobalProperty(pathGlobalProperty, "");
@@ -63,7 +108,7 @@ final class ReferenceDataFiles {
 				try (InputStream in = new FileInputStream(new File(resolved))) {
 					List<T> loaded = parser.parse(in);
 					log.info("Loaded {} {} from {}", loaded.size(), datasetLabel, resolved);
-					return loaded;
+					return new Loaded<T>(loaded, resolved);
 				}
 			}
 			catch (IllegalStateException e) {
@@ -80,15 +125,15 @@ final class ReferenceDataFiles {
 			if (in == null) {
 				log.warn("Bundled {} dataset {} not found on classpath; running empty",
 						datasetLabel, classpathDefault);
-				return Collections.emptyList();
+				return Loaded.nothing();
 			}
 			List<T> loaded = parser.parse(in);
 			log.info("Loaded {} {} from bundled default {}", loaded.size(), datasetLabel, classpathDefault);
-			return loaded;
+			return new Loaded<T>(loaded, CLASSPATH_ORIGIN_PREFIX + classpathDefault);
 		}
 		catch (IOException e) {
 			log.error("Failed to parse bundled {} dataset; running empty", datasetLabel, e);
-			return Collections.emptyList();
+			return Loaded.nothing();
 		}
 	}
 }

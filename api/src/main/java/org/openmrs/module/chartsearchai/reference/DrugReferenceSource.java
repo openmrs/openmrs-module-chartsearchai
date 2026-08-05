@@ -32,4 +32,21 @@ public interface DrugReferenceSource {
 	 *         the answer path.
 	 */
 	List<DrugReference> load();
+
+	/**
+	 * @return where the entries {@link #load()} last returned were actually read from — the
+	 *         resolved operator file, {@code classpath:<resource>} for the bundled fallback, or
+	 *         {@code none} when nothing could be read. {@code null} when the implementation does
+	 *         not track it (the test seam).
+	 *
+	 *         <p>Part of the load's outcome rather than of the log, because the load is lazy: a
+	 *         reader who consults the log for "which dataset is in force?" can be handed a line
+	 *         from a previous load or a previous process, which is how a source switch came to be
+	 *         believed that had not happened (issue #149). {@link DrugReferenceService} reads this
+	 *         immediately after {@code load()}, on the same instance, and retains it — see
+	 *         {@link DrugReferenceService#getLoadStatus()}.
+	 */
+	default String lastLoadOrigin() {
+		return null;
+	}
 }

@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -170,12 +171,13 @@ public class ActiveOrderContraindicationTest {
 						ctx(DrugReferenceTestSupport.set("ibuprofen"), null), NO_DRUG_QUESTION));
 
 		assertEquals(2, findings.size(), "both chips must be injected as citable records, was: " + findings);
-		boolean identity = false;
+		List<String> texts = new ArrayList<String>();
 		for (RecordMapping finding : findings) {
-			identity |= finding.getText().equals(DrugReferenceInjector.FINDING_PREFIX
-					+ "Ibuprofen: The patient has a recorded allergy to Ibuprofen.");
+			texts.add(finding.getText());
 		}
-		assertTrue(identity, "a record must carry the identity chip's own detail verbatim, was: " + findings);
+		assertTrue(texts.contains(DrugReferenceInjector.FINDING_PREFIX
+				+ "Ibuprofen: The patient has a recorded allergy to Ibuprofen."),
+				"a record must carry the identity chip's own detail verbatim, was: " + texts);
 	}
 
 	@Test
@@ -197,11 +199,17 @@ public class ActiveOrderContraindicationTest {
 	public void anActiveOrderThePatientIsNotAllergicToRaisesNothing() {
 		// The no-false-positive direction, with the arm's body genuinely executing: the patient has a
 		// recorded allergy and a recorded condition, so the precondition is met, but neither bears on
-		// the drug she is taking. An arm that chipped from the presence of an active order alone — or
-		// that warned on any resolved allergen the way the in-loop class guard forbids — fails here.
-		List<SafetyWarning> warnings = validator().validate(
+		// the drug she is taking. The allergen is one the dataset RESOLVES — asserted below, because an
+		// unresolvable token would exit the per-allergen loop before any comparison and the case would
+		// silently stop testing them. An arm that chipped from the presence of an active order alone, or
+		// that warned on any resolved allergen rather than a related one, fails here.
+		DrugReferenceService service = DrugReferenceTestSupport.bundledService();
+		assertNotNull(service.lookupByToken("gentamicin"),
+				"precondition: the allergen must resolve, so the class comparisons really run");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate(
 				ECHOING_ANSWER, NO_DRUG_QUESTION,
-				ctx(DrugReferenceTestSupport.set("penicillin"), DrugReferenceTestSupport.set("hypertension")),
+				ctx(DrugReferenceTestSupport.set("gentamicin"), DrugReferenceTestSupport.set("hypertension")),
 				chartWithTheOrderRecord().getMappings());
 
 		assertTrue(contraindications(warnings).isEmpty(),

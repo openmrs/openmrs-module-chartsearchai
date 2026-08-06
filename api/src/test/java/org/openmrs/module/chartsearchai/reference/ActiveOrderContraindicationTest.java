@@ -272,9 +272,11 @@ public class ActiveOrderContraindicationTest {
 		// choice, not a measured gain: moving this call after the pairwise arms would reverse it silently
 		// and nothing else would notice.
 		//
-		// COMPOSITION. The screen seeds its suppression set from the chips already raised, so these
-		// contraindications now reach it; it must add its pair anyway (they are TYPE_CONTRAINDICATION
-		// and everything it raises is TYPE_INTERACTION, and chipIdentity leads with the type).
+		// COMPOSITION. The screen stands down only from a pair a drug-in-play INTERACTION chip already
+		// covers (DrugSafetyValidator.InteractionPairs, keyed on the pair's identity), so these
+		// contraindications cannot suppress it and it must add its pair. That used to be an argument about
+		// the chips' rendered text — the two arms' chip types differ — and is now one about what the
+		// ledger records; the outcome asserted below is the same either way.
 		List<SafetyWarning> warnings = validator().validate("", SCREENING_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set(IBUPROFEN_ORDER, "Warfarin 5mg"), null,

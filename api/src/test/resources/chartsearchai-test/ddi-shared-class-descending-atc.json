@@ -1,0 +1,49 @@
+{
+    "metadata": {
+        "schema_version": "1.0",
+        "title": "Test fixture: the ALLERGEN row with its atc array written in DESCENDING code order",
+        "note": "The Ketoconazole and Tioconazole rows of ddi-shared-class-choice.json, field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, with ONE deliberate deviation: Ketoconazole's atc array is written in descending code order. sharedClass scans the ALLERGEN's subgroups, and all 1839 KB entries that carry codes are in ascending order, so a verbatim slice cannot observe whether the scan depends on array position. This pair shares two locally-applied subgroups and no systemic one (D01AC, G01AF), which is the only tier where the order of equals decides the answer. Interactions are empty for the same reason as the sibling fixture."
+    },
+    "mechanisms": {},
+    "drugs": [
+        {
+            "id": "DDInter1008",
+            "name": "Ketoconazole",
+            "rxcui": "6135",
+            "rxnorm_name": "ketoconazole",
+            "drugbank_id": "DB01026",
+            "atc": [
+                "J02AB02",
+                "H02CA03",
+                "G01AF11",
+                "D01AC08"
+            ],
+            "ciel": [
+                {
+                    "code": "78476",
+                    "uuid": "78476AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ketoconazole"
+                }
+            ]
+        },
+        {
+            "id": "DDInter1813",
+            "name": "Tioconazole",
+            "rxcui": "38298",
+            "rxnorm_name": "tioconazole",
+            "drugbank_id": "DB01007",
+            "atc": [
+                "D01AC07",
+                "G01AF08"
+            ],
+            "ciel": [
+                {
+                    "code": "85156",
+                    "uuid": "85156AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Tioconazole"
+                }
+            ]
+        }
+    ],
+    "interactions": []
+}

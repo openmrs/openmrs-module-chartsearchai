@@ -35,6 +35,9 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 27: Drug-safety parity follow-through — weight-aware dosing, curated cross-reactivity groups, prose warnings](#decision-27-drug-safety-parity-follow-through--weight-aware-dosing-curated-cross-reactivity-groups-prose-warnings)
 - [Decision 28: Query-scoped slice charts (chartMode=queryScoped)](#decision-28-query-scoped-slice-charts-chartmodequeryscoped)
 - [Decision 29: Module-extensible query-scope routing (QueryScopeContributor SPI)](#decision-29-module-extensible-query-scope-routing-queryscopecontributor-spi)
+- [Decision 30: One chip per substance — the contraindication ledger and its collapse key](#decision-30-one-chip-per-substance--the-contraindication-ledger-and-its-collapse-key)
+- [Decision 31: Name the class that explains the relationship, not the first one shared](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared)
+- [Decision 32: Observable drug-reference load status](#decision-32-observable-drug-reference-load-status)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -83,7 +86,7 @@ Fine-tune a small model to generate SQL or API calls from natural language.
 #### Option C: Traditional search (no LLM at all)
 Full-text search index (Lucene/Solr/Elasticsearch) over patient data.
 
-**Now implemented as an alternative retrieval pipeline.** Solves 70% of the problem with 20% of the complexity. No hallucination risk from retrieval errors, no extra model files required, works offline. Weakness: no semantic understanding — relies on lexical matching with stemming. Implemented using Apache Lucene 8.11.2 (already on the classpath via Hibernate Search) with `EnglishAnalyzer` for Porter stemming. Selectable via the `chartsearchai.retrieval.pipeline` global property. See Decision 13 for details. An Elasticsearch pipeline (Decision 14) addresses the semantic gap by combining BM25 text search with kNN vector search via Reciprocal Rank Fusion.
+Solves 70% of the problem with 20% of the complexity. No hallucination risk from retrieval errors, no extra model files required, works offline. Weakness: no semantic understanding — relies on lexical matching with stemming. Was implemented in-process as a selectable alternative pipeline ([Decision 13](#decision-13-lucene-bm25-as-an-alternative-retrieval-pipeline)) and later removed with the rest of that stack in #51; BM25 now lives in querystore.
 
 #### Option D: Agent/tool-use pattern
 Give the LLM access to OpenMRS APIs as tools and let it autonomously decide what to call.
@@ -105,9 +108,11 @@ Retrieve relevant records first using deterministic search, then use the LLM onl
 
 ### Decision
 
-The initial plan was full RAG with a deterministic retrieval layer feeding a small subset of records to the LLM. Decision 10 refined this into the current architecture: a **single LLM approach** where all patient records are sent to the LLM (or narrowed by an optional embedding pre-filter). The two-step structure remains — retrieval then synthesis — but the LLM handles all queries, not just "hard" ones. See Decision 10 for the full rationale.
+The initial plan was full RAG with a deterministic retrieval layer feeding a small subset of records to the LLM. Decision 10 refined it into a **single LLM approach**, and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) settled where it landed: querystore assembles a query-scoped slice, and one LLM call reasons over it. The two-step structure remains — retrieval then synthesis — but the LLM handles all queries, not just "hard" ones.
 
 ## Decision 3: Embedding approach — semantic search index
+
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
 
 ### Options evaluated for retrieval
 
@@ -149,6 +154,8 @@ Semantic search index as the primary retrieval mechanism. Concept graph traversa
 
 ## Decision 4: Concise text as LLM input format
 
+**Status: Partly superseded** — the principle (flat, concise clinical text rather than FHIR JSON) still holds and is what querystore emits. The `ClinicalTextSerializer` implementations named below, and the OpenMRS service reads that fed them, were **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)); querystore produces record text now, and this module's `PatientChartSerializer` only numbers and date-labels it.
+
 ### Analysis
 
 Standard serialization formats (FHIR JSON, full OpenMRS domain objects) are poor formats for LLM context windows:
@@ -169,6 +176,8 @@ Serialized: "Systolic Blood Pressure: 120 mmHg (ABNORMAL)"  ~10 tokens
 
 ## Decision 5: Embedding granularity
 
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
+
 ### Options
 
 | Granularity | Pros | Cons |
@@ -183,6 +192,8 @@ Embed at the **individual record level**. Each record is serialized to concise c
 
 ## Decision 6: Embedding model
 
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
+
 ### Decision
 
 Semantic vectors via **all-MiniLM-L6-v2** running in-process through ONNX Runtime. ~90MB model file, runs on CPU, no GPU needed. Produces 384-dimensional vectors. Requires two files configured via `chartsearchai.embedding.modelFilePath` and `chartsearchai.embedding.vocabFilePath`. Captures semantic meaning — effective for clinical queries where synonyms and related concepts matter (e.g., "hypertension" and "high blood pressure" are recognized as related). Embedding dimensions are auto-detected from the model output on first use, so models with different dimensions (e.g., 768-dim pubmedbert-base-embeddings) work without code changes.
@@ -190,6 +201,8 @@ Semantic vectors via **all-MiniLM-L6-v2** running in-process through ONNX Runtim
 A term-frequency hashing approach was considered as a simpler alternative (no model file needed, keyword-overlap retrieval). It was rejected because it cannot capture semantic similarity — for a clinical question like "any infections?", it would find records containing the word "infection" but miss "tuberculosis", "malaria", or "UTI". This defeats the purpose of pre-filtering, since the LLM with the full chart would catch all of these.
 
 ## Decision 7: Vector storage — MySQL, not a vector database
+
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
 
 ### Analysis
 
@@ -224,6 +237,8 @@ Only one query store is active at a time, selected via the `chartsearchai.retrie
 
 ## Decision 8: Index population strategy
 
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
+
 ### Decision
 
 Three complementary strategies ensure embeddings stay current:
@@ -247,6 +262,8 @@ Three complementary strategies ensure embeddings stay current:
 - **Backfill**: A one-time scheduled task (`EmbeddingIndexTask`) indexes all patients that don't yet have embeddings. Handles initial population when the module is installed on a system with existing data. Skips already-indexed patients, so it is safe to re-run and picks up where it left off if stopped. Admins trigger it from the scheduler UI; it does not run automatically.
 
 ## Decision 9: Text serialization — ClinicalTextSerializer pattern
+
+**Status: Superseded** — every `*TextSerializer` class named here, and `PatientRecordLoader`, were **deleted** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Record text is now produced by querystore's own serializers; this module's `PatientChartSerializer` numbers records, attaches dates and obs-group labels, and strips synonyms. The per-record-type field lists below therefore describe **another module's** code and are not verifiable from this repo. Two further corrections for anyone reading the body: obs-group members are indexed **atomically**, not flattened into one record; and patient demographics are a numbered, citable record, the un-numbered header line being only a fallback. Kept as the record of *why*; **read as history.**
 
 ### Decision
 
@@ -461,6 +478,8 @@ Resource types (e.g., `"obs"`, `"condition"`, `"order"`) are defined as `public 
 `ArchitectureGuardTest` enforces API surface rules at build time by scanning all production source files for violations. If any code bypasses the required entry points — for example, calling `getEmbeddingPrefix()` directly instead of `buildPrefixedText()`, hardcoding prefix strings like `"Clinical observation: "`, reimplementing the cosine similarity formula, or duplicating test dataset helpers — the build fails. This prevents regression where a developer unfamiliar with the API contracts accidentally reimplements pipeline logic inline.
 
 ## Decision 10: Single LLM architecture with optional embedding pre-filter
+
+**Status: Partly superseded** — the single-LLM architecture stands and is what runs. Everything below about an embedding pre-filter narrowing the chart, and the whole "Embedding model selection" / "Similarity threshold algorithm" / "Retrieval precision improvements" / "Chunking strategy" tail, describes machinery **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Two claims to correct explicitly, because they are load-bearing and still repeated: the full chart is **not** what the LLM sees by default (`chartsearchai.chartMode` defaults to `queryScoped`, [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped)), and `chartsearchai.embedding.preFilter` **narrows nothing** — it adds a trailing focus hint to a full chart, in `fullChart` mode only.
 
 ### Context
 
@@ -756,7 +775,20 @@ No chunking is used. Each patient record (obs, condition, diagnosis, allergy, or
 
 ### REST endpoints
 
-The module exposes REST endpoints for chart search queries and user feedback. Query endpoints require the `AI Query Patient Data` privilege and are registered under the OpenMRS `webservices.rest` module namespace.
+The module exposes eight endpoints under `/ws/rest/v1/chartsearchai`, all on one controller (`ChartSearchAiRestController`), registered under the OpenMRS `webservices.rest` module namespace. Every one gates on a privilege as the first statement of its handler, so an unprivileged caller gets 401/403 before any argument is validated.
+
+| Method | Path | Privilege |
+|---|---|---|
+| POST | `/search` | `AI Query Patient Data` |
+| POST | `/search/stream` | `AI Query Patient Data` |
+| POST | `/warmup` | `AI Query Patient Data` |
+| POST | `/feedback` | `AI Query Patient Data` |
+| GET | `/auditlog` | `View AI Audit Logs` |
+| POST | `/prewarm` | `Manage AI Prewarm` |
+| GET | `/prewarmstatus` | `Manage AI Prewarm` |
+| GET | `/drugreferencestatus` | core `Get Global Properties` |
+
+`Manage AI Prewarm` is deliberately not the clinician privilege: a sweep prefills every patient's chart and monopolises the single inference slot, so it is a system operation. `/drugreferencestatus` gates on core's `Get Global Properties` because it discloses configuration, not patient data — see [Decision 32](#decision-32-observable-drug-reference-load-status).
 
 #### Synchronous endpoint
 
@@ -793,10 +825,15 @@ POST /ws/rest/v1/chartsearchai/search/stream
 }
 ```
 
-Returns a `text/event-stream` with three event types:
+Returns a `text/event-stream`. The event names are literals at the `writeSseEvent` call sites in `ChartSearchAiRestController`, and README's [Streaming search (SSE)](../README.md#streaming-search-sse) table documents each one's payload:
+- `thinking`, `preliminary` — reasoning chunks, rendered distinctly from the answer, never as it
 - `token` — a chunk of the answer text, streamed as generated
-- `done` — final JSON with the complete answer, references (with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`, `group`, `source`, `withheldInteractions`), and disclaimer
+- `references` — the citations, as soon as the answer is complete and before any grounding verdict exists
+- `done` — final JSON: answer, references, `safetyWarnings`, `questionId`, disclaimer
+- `grounded` — a *trailing* event after `done`, only under async grounding, carrying the verdicts
 - `error` — an error message if something goes wrong
+
+A client must therefore keep reading past `done`, and must not assume `done` is terminal.
 
 Both search endpoints return a `questionId` (the audit log row ID as a string) that the frontend uses to submit user feedback.
 
@@ -809,7 +846,7 @@ POST /ws/rest/v1/chartsearchai/warmup
 }
 ```
 
-Pre-warms the LLM prompt cache for a patient's chart so the first AI query on that patient skips full prefill cost. The frontend hits this when a patient chart is opened. Returns `202 Accepted` immediately; the warmup runs on a background daemon thread. Requires the same `AI Query Patient Data` privilege as the search endpoints. No-op when the engine is remote and when `chartsearchai.embedding.preFilter` is `true`. Disabled globally by setting `chartsearchai.warmupEnabled=false`.
+Pre-warms the LLM prompt cache for a patient's chart so the first AI query on that patient skips full prefill cost. The frontend hits this when a patient chart is opened. Returns `202 Accepted` immediately; the warmup runs on a background daemon thread. Requires the same `AI Query Patient Data` privilege as the search endpoints. No-op when the engine is remote, and whenever `chartsearchai.chartMode` is `queryScoped` — the default — because a per-question slice has no reusable chart prefix to prime; `LlmInferenceService.shouldRunWarmup` is the gate. Disabled globally by setting `chartsearchai.warmupEnabled=false`.
 
 #### Feedback endpoint
 
@@ -839,8 +876,8 @@ Requires the `View AI Audit Logs` privilege. All query parameters are optional. 
   1. **Structured-output constraint (primary defense)**: Both engines send `response_format: {"type": "json_schema", "strict": true, ...}` declaring the exact `{answer: string, citations: int[]}` shape — extracted into the shared `ChartAnswerResponseFormat` helper. The local llama-server enforces it by deriving a GBNF grammar from the schema internally. Remote OpenAI-compatible providers enforce it server-side; this is also what Anthropic's OpenAI-compat endpoint requires (it rejects the older `json_object` form with HTTP 400). Either way, the LLM cannot emit arbitrary text — even if a prompt injection manipulates the model's reasoning it cannot produce system information, execute instructions, or output anything outside the declared shape. This is the primary defense because it operates at the output level regardless of what the model "wants" to say.
   2. **Input regex filter**: Questions are checked against a regex pattern that rejects common prompt injection phrases (e.g., "ignore previous instructions", "you are now", "system prompt:"). Rejected questions return a 400 error without reaching the LLM.
 - **AI disclaimer**: Every response includes a disclaimer stating the output is AI-generated and not a substitute for clinical judgment.
-- **Answer caching**: An in-memory LRU cache (`ChartSearchServiceRouter`) stores recent answers keyed by `patientUuid::preFilter::pipeline::topK::similarityRatio::keywordWeight::scoreGapMultiplier::minScoreGap::gapValidationCosine::grounding::groundingMinCosine::groundingEntailment::question`. The cache key includes all retrieval **and grounding** parameters so that changing any tuning setting (including a grounding flag, which changes a citation's `grounded` verdict) correctly invalidates cached results. Configurable TTL via `chartsearchai.cacheTtlMinutes` (default 0 = disabled). When enabled, identical queries with the same parameters within the TTL window return the cached answer without invoking the LLM. The cache uses an access-ordered `LinkedHashMap` with a fixed maximum size, automatically evicting the least-recently-used entry when the size limit is exceeded. Expired entries are cleaned up periodically (every 10 cache puts) rather than on every access, to avoid scanning the entire cache on each insertion. **Chart-write invalidation**: a chart write to a patient (obs, encounter, order, condition, diagnosis, allergy, program, medication dispense, patient demographics, merge) evicts that patient's cached answers via `ChartSearchServiceRouter.invalidatePatient`. Chart writes are detected through core #6084 service events (`ChartSearchEventListener` → `IndexingHelper.onChartWrite`), which replaced the former per-service AOP advice — see [Decision 26](#decision-26-chart-write-detection-via-core-service-events). This eviction is independent of the preFilter/querystore gating that governs embedding indexing, so a repeated identical question after an edit recomputes against the new chart rather than serving a stale answer — this is what makes the cache safe to enable. It is a backstop, not a guarantee for every path: writes that bypass the OpenMRS service layer (direct DAO, SQL load) do not publish these events, so the TTL must stay finite as the catch-all for those.
-- **Serialized chart sourcing**: Querystore's `getPatientChart(patientUuid)` (querystore Decision 15) is the supported full-chart shape when `chartsearchai.querystore.enabled=true` (default). The read store keeps per-type indices current via the events-first sync pipeline, so the chart returns at index-read latency without round-tripping core or maintaining a parallel serialization cache. The legacy `chartsearchai.querystore.enabled=false` + `chartsearchai.embedding.preFilter=false` configuration falls back to `chartSerializer.serialize(patient)` per request — the 300–500 ms of OpenMRS DB roundtrips and Hibernate work are paid on every call, which is the migration's accepted operational cost on the legacy path. The pre-Decision-15 in-memory `ChartCache` that amortized this cost was removed once querystore became the supported full-chart shape; the AOP-driven invalidation overhead exceeded the savings on a per-call serialize. The LLM-side prompt-prefix cache (KV cache reuse on llama-server, provider-managed caching on remote) is unaffected and continues to shave prefill cost on follow-up queries against the same patient.
+- **Answer caching**: An in-memory LRU cache (`ChartSearchServiceRouter`) stores recent answers keyed by every setting that changes what the LLM sees or what verdict a citation carries, so that changing one invalidates rather than serves a stale answer. `ChartSearchServiceRouter.buildCacheKey` is the definition; today that is the patient, `preFilter`, `chartMode`, `querystore.topK`, the three grounding GPs, and the question. `chartMode` is in the key because it swaps the entire context — the largest possible change to what the LLM sees. The legacy embedding/Lucene/Elasticsearch tuning GPs left the key when that pipeline was removed (#51). Configurable TTL via `chartsearchai.cacheTtlMinutes` (default 0 = disabled). When enabled, identical queries with the same parameters within the TTL window return the cached answer without invoking the LLM. The cache uses an access-ordered `LinkedHashMap` with a fixed maximum size, automatically evicting the least-recently-used entry when the size limit is exceeded. Expired entries are cleaned up periodically (every 10 cache puts) rather than on every access, to avoid scanning the entire cache on each insertion. **Chart-write invalidation**: a chart write to a patient (obs, encounter, order, condition, diagnosis, allergy, program, medication dispense, patient demographics, merge) evicts that patient's cached answers via `ChartSearchServiceRouter.invalidatePatient`. Chart writes are detected through core #6084 service events (`ChartSearchEventListener` → `IndexingHelper.onChartWrite`), which replaced the former per-service AOP advice — see [Decision 26](#decision-26-chart-write-detection-via-core-service-events). This eviction is independent of the preFilter/querystore gating that governs embedding indexing, so a repeated identical question after an edit recomputes against the new chart rather than serving a stale answer — this is what makes the cache safe to enable. It is a backstop, not a guarantee for every path: writes that bypass the OpenMRS service layer (direct DAO, SQL load) do not publish these events, so the TTL must stay finite as the catch-all for those.
+- **Serialized chart sourcing**: querystore is the only source of chart records — `getPatientChart(patientUuid)` for the whole chart, a typed/similarity slice for the default `queryScoped` mode. There is no in-process fallback and no toggle: the legacy path, and the in-memory `ChartCache` that amortized it, were removed in the querystore migration (#51). The read store keeps per-type indices current off core's events, so the chart returns at index-read latency without round-tripping core. The LLM-side prompt-prefix cache (KV reuse on llama-server, provider-managed caching on remote) is unaffected.
 - **Rate limiting**: Configurable per-user rate limit (`chartsearchai.rateLimitPerMinute`, default 10). Set to 0 to disable.
 - **Database audit logging**: Every query is recorded in the `chartsearchai_audit_log` table with:
   - The authenticated user and patient
@@ -903,6 +940,8 @@ For the initial release targeting small clinics with low concurrent usage, the s
 
 ## Decision 13: Lucene BM25 as an alternative retrieval pipeline
 
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
+
 ### Context
 
 The embedding pipeline (Decision 3) uses a custom scoring system: cosine similarity from an ONNX model combined with keyword matching, gap detection, and type boosting. This produces high-quality retrieval but requires downloading model files (~90MB ONNX model + vocabulary), and the custom scoring logic is complex with many tunable parameters.
@@ -925,6 +964,8 @@ Add Lucene BM25 as an alternative retrieval pipeline, selectable via the `charts
 **Why Lucene 8.11.2 with `scope: provided`?** OpenMRS Platform bundles this version via Hibernate Search. Using the same version with `provided` scope avoids classpath conflicts and doesn't increase the module's `.omod` size.
 
 ## Decision 14: Elasticsearch hybrid search pipeline with RRF
+
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
 
 ### Context
 
@@ -961,6 +1002,8 @@ Add an Elasticsearch hybrid search pipeline as a third retrieval option (`charts
 
 ## Decision 15: In-process hybrid pipeline (Lucene BM25 + embedding kNN with RRF)
 
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
+
 ### Context
 
 Each existing retrieval pipeline has a blind spot. The Lucene pipeline (Decision 13) provides fast keyword search with no external dependencies, but misses semantic matches — "any cancer?" returns nothing when the patient has Kaposi sarcoma records because no record contains the literal word "cancer." The embedding pipeline (Decision 3) captures these semantic relationships, but misses exact keyword matches — a search for a specific drug name may rank semantically similar but wrong medications higher than an exact match. The Elasticsearch pipeline (Decision 14) solves both problems with hybrid RRF search, but requires a running Elasticsearch 8.14+ instance — a dependency that many OpenMRS deployments do not have, especially in low-resource settings where the platform runs with only MySQL.
@@ -991,6 +1034,8 @@ Add an in-process hybrid retrieval pipeline (`chartsearchai.retrieval.pipeline=h
 **Trade-off vs. Elasticsearch pipeline**: The in-process kNN search is exact (brute-force cosine similarity over all patient embeddings), not approximate. This is fine for typical patient chart sizes (hundreds to low thousands of records) but would not scale to corpus-wide search. The Elasticsearch pipeline uses approximate kNN via HNSW, which scales better for large indexes.
 
 ## Decision 16: LangChain / LangChain4j not adopted
+
+**Status: Accepted; the comparison table is stale.** The decision stands. Several "existing implementation" entries below name code **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)) — `PatientRecordLoader`, the per-type text serializers, `OnnxEmbeddingProvider`, the `chartsearchai_embedding` table, and the three retrieval pipelines. Read the table as what the module had when the decision was taken.
 
 ### Context
 
@@ -1330,6 +1375,8 @@ Variant of GraphRAG worth knowing about for this specific case: **LazyGraphRAG**
 
 ## Decision 19: Retain all-MiniLM-L6-v2 as the embedding model
 
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
+
 **Status: Accepted** (April 2026)
 
 ### Problem
@@ -1397,6 +1444,8 @@ This reinforces the original finding: **the failure mode is not model capacity b
 
 ## Decision 20: MedCPT dual-encoder as an alternative embedding model
 
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
+
 **Status: Accepted** (April 2026)
 
 ### Problem
@@ -1441,6 +1490,8 @@ Each model has its own eval baseline (`enriched-retrieval-eval.json` for L6-v2, 
 MedCPT's ONNX models split weights into `model.onnx` + `model.onnx.data`. The ONNX runtime 1.24.3 has a bug where it resolves the data file path as `<model_path>/model.onnx.data` instead of `<model_dir>/model.onnx.data`. The workaround is to merge weights back into a single file using `onnx.save()`. A `createSessionWithExternalData()` method attempts canonical path resolution first, falling back to byte-array loading.
 
 ## Decision 21: Concept-name re-ranking for subword-tokenized queries
+
+**Status: Superseded** — the in-process retrieval stack this decision describes (embedding index, vector store, Lucene/Elasticsearch pipelines, the `chartsearchai.retrieval.pipeline` and `chartsearchai.embedding.*` global properties) was **removed** in the querystore migration ([#51](https://github.com/openmrs/openmrs-module-chartsearchai/issues/51)). Retrieval now belongs entirely to [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) — see [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) and [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for what runs today. Kept as the record of *why* the approach was taken; **read the body as history, not as current behaviour.**
 
 **Status: Accepted** (April 2026)
 
@@ -1561,7 +1612,7 @@ All query-expansion code was reverted. The lesson is captured here so future mai
 
 ### Context
 
-Decisions 19–21 cover the chartsearchai-side pre-filter pipeline — `all-MiniLM-L6-v2` + adaptive filtering (similarity ratio, gap detection, z-score gates, concept-name re-ranking) co-evolved against the 485-case eval baseline. That pipeline is **not** what runs when `chartsearchai.querystore.enabled=true` (the recommended deployment).
+Decisions 19–21 cover the chartsearchai-side pre-filter pipeline — `all-MiniLM-L6-v2` + adaptive filtering (similarity ratio, gap detection, z-score gates, concept-name re-ranking) co-evolved against the 485-case eval baseline. That pipeline no longer exists — it was removed in #51, and querystore is now the only retrieval path.
 
 In the querystore-backed path:
 
@@ -1578,7 +1629,7 @@ With the LLM doing the filtering, the embedder's job changes. It no longer needs
 
 ### Evaluation
 
-Three embedders were compared on the demo standalone (Betty Williams and Richard Jones charts, real OpenMRS data) with `chartsearchai.querystore.enabled=true`, `chartsearchai.querystore.topK=30`, and Gemma 4 E4B as the filtering LLM:
+Three embedders were compared on a standalone with real OpenMRS demo data, over the querystore path, with Gemma 4 E4B as the filtering LLM:
 
 | Embedder | Colloquial → clinical bridge | Source | Notes |
 |---|---|---|---|
@@ -1588,7 +1639,7 @@ Three embedders were compared on the demo standalone (Betty Williams and Richard
 
 ### Decision
 
-For deployments running `chartsearchai.querystore.enabled=true`, use `intfloat/e5-base-v2` as the querystore embedder. `backend-init.sh` provisions it automatically for Docker deployments; non-Docker installs should download it manually to `<openmrs-application-data-directory>/querystore/`.
+Use `intfloat/e5-base-v2` as the querystore embedder. `backend-init.sh` provisions it automatically for Docker deployments; non-Docker installs should download it manually to `<openmrs-application-data-directory>/querystore/`.
 
 ### Why this does not contradict Decision 19
 
@@ -1751,7 +1802,7 @@ The grounding pass is pure overhead on the user's critical path, and on CPU-only
 
 ### Model-dependent cosine floor
 
-`minCosine` is **not** a universal constant — it tracks the embedding model's score-spread geometry. `0.40` suits a wide-spread model like all-MiniLM-L6-v2 but is far too low for e5, whose grounded pairs sit much higher; on an e5/querystore deployment the floor must be ~`0.82`. When `chartsearchai.querystore.enabled=true` the verifier **reuses querystore's own e5 embedding provider** rather than loading a second model, so the floor must match that model. This is the same per-model-tuning stance as the retrieval pipeline (see [Decision 19](#decision-19-retain-all-minilm-l6-v2-as-the-embedding-model) / [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path)).
+`minCosine` is **not** a universal constant — it tracks the embedding model's score-spread geometry. `0.40` suits a wide-spread model like all-MiniLM-L6-v2 but is far too low for e5, whose grounded pairs sit much higher; on an e5/querystore deployment the floor must be ~`0.82`. The verifier **reuses querystore's own embedding provider** rather than loading a second model, so the floor must match whatever model querystore is configured with. This is the same per-model-tuning stance as the retrieval pipeline (see [Decision 19](#decision-19-retain-all-minilm-l6-v2-as-the-embedding-model) / [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path)).
 
 ### Drug-reference citations: demote-only (July 2026)
 
@@ -1904,7 +1955,7 @@ Three additive, data-driven extensions:
 
 ## Decision 28: Query-scoped slice charts (chartMode=queryScoped)
 
-**Status: Accepted** (July 2026) — implemented behind `chartsearchai.chartMode`, initially default `fullChart` (unchanged behavior). Complements — and in scoped mode disengages — the warmup/prewarm/KV-persistence machinery of Decisions 12 and 26.
+**Status: Accepted** (July 2026) — implemented behind `chartsearchai.chartMode`, which now defaults to `queryScoped` (it shipped defaulting to `fullChart`; see the update below). Complements — and in scoped mode disengages — the warmup/prewarm/KV-persistence machinery of Decisions 12 and 26.
 
 **Update (2026-07, default flipped to `queryScoped`).** After validation, `queryScoped` became the default (`config.xml` defaultValue + the `CHART_MODE_DEFAULT` constant both readers use). Evidence: a 22-patient drift-metric A/B — scoped beat fullChart on meanF1 (0.748 vs 0.668), abstention (0.86 vs 0.74), and off-topic drift (181 vs 477: the focused slice keeps the small model from citing a whole chart's worth of noise) — plus a CPU latency check where scoped's cold first answer was ~3× faster (no full-chart prefill). Consequences: (1) the full-chart prefill machinery (warmup, prewarm bootstrap, per-patient KV persistence, progressive-reasoning preview) is now dormant by default — it re-engages only when an operator sets `chartMode=fullChart`; (2) the fail-safe direction reverses — an *absent or unreadable* `chartMode` GP now resolves to `queryScoped`, though a GP set to any non-`queryScoped` value (including a typo) still resolves to fullChart, so a mistyped value fails toward the whole chart. `fullChart` remains supported for many-questions-per-patient sessions where its warm-cache reuse and completeness-over-focus are preferred.
 
@@ -1938,11 +1989,11 @@ Add a second chart-assembly mode. `QueryScopeRouter` matches the question agains
 
 The gates were re-run on the current build; the fullChart baseline reproduced **exactly** (meanF1 0.733, abstention 0.89, off-topic 51), and scoped reproduced **exactly** (0.800 / 1.00 / 2), confirming the harness and the reported numbers. The four scoped cells that score below fullChart were then diagnosed from the actual cited records: three are **recall losses where scoped keeps perfect precision** (the missed records are in the slice but uncited — the model answers more conservatively, which is the same property that yields the abstention and off-topic-drift wins), and one is an over-citation of a borderline-relevant condition. They pull in **opposite directions**, so no single lever fixes them as a set. Three levers were measured and all net-regress:
 
-- **`querystore.topK` (the one no-code dial).** Curve on the 40-cell gate: topK=20 → meanF1 0.865 / abstention 0.94 / off-topic **25**; topK=25 → 0.813 / 1.00 / 16; **topK=30 (shipped) → 0.800 / 1.00 / 2**; topK=50 → 0.771 / 1.00 / 7. Lowering topK raises present-cell F1 but **reintroduces off-topic drift** — at topK=20 an *absent* cardiac cell dumped 21 irrelevant citations instead of abstaining. **topK=30 uniquely minimizes drift with perfect abstention**; it is a safety optimum, not a max-F1 point, and stays the default.
+- **`querystore.topK` (the one no-code dial).** Curve on the 40-cell gate: topK=20 → meanF1 0.865 / abstention 0.94 / off-topic **25**; topK=25 → 0.813 / 1.00 / 16; **topK=30 (shipped) → 0.800 / 1.00 / 2**; topK=50 → 0.771 / 1.00 / 7. Lowering topK raises present-cell F1 but **reintroduces off-topic drift** — at topK=20 an *absent* cardiac cell dumped 21 irrelevant citations instead of abstaining. **topK=30 uniquely minimized drift with perfect abstention** on that gate, so it shipped as a safety optimum rather than a max-F1 point. **Superseded:** a later, wider sweep (the 22-patient drift-metric gold plus 36 patients on demo data) lowered the default to **12**, which holds F1 at the plateau while *improving* abstention and roughly halving drift, and cuts CPU time-to-first-token. `ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K` is the current default and records that measurement; do not read 30 out of this section as the shipped value.
 - **Subtype-aware routing.** Routing domain-qualified conditions questions ("mental health or psychiatric *conditions*?") to TOPICAL instead of the full CONDITIONS dump fixed the *under-cited* mental cell (0.67 → 0.92) but **broke the *over-cited* one** (0.67 → 0.50) and raised off-topic 2 → 9 — net worse; reverted. Both cells are the identical question; they differ only by patient chart shape, which a text router cannot see.
 - **Deeper retrieval** (topK=50 above) adds noise without net benefit.
 
-Conclusion: the four cell-level regressions are a genuine Pareto cost of the precision/abstention rebalance that drives the aggregate win; no tested change improves the net. Ship at `chartMode=queryScoped`, `querystore.topK=30`.
+Conclusion: the four cell-level regressions are a genuine Pareto cost of the precision/abstention rebalance that drives the aggregate win; no change tested *at that time* improved the net. Shipped at `chartMode=queryScoped`. The `querystore.topK` half of that conclusion was later overturned — see the note above.
 
 ## Decision 29: Module-extensible query-scope routing (QueryScopeContributor SPI)
 
@@ -1964,15 +2015,82 @@ Add a Spring SPI, `QueryScopeContributor` (in `chartsearchai-api`): a module reg
 - **−** A contributor is a slice-composition change, which this project gates on BOTH the scope eval and the temporal probe (they pull in opposite directions — see Decision 28). The SPI cannot enforce that a contributor was gated; the interface javadoc states the expectation, and an unvalidated contributor can silently regress its own domain's answer quality. Union also means a careless, over-broad contributor enlarges the slice for its questions (the same over-cite risk Decision 28 measured) — hence the contract's "match conservatively; prefer to under-claim."
 - **−** The answer cache key (Decision 28) folds in `chartMode` and the question but not the registered contributor set. Contributors are resolved live per query, so a *newly started* contributor module immediately affects fresh answers; but answers already cached for its domain's questions are served until the cache TTL expires. Adding or removing a contributor module at runtime should therefore be followed by a cache flush (or accepted as bounded by the TTL) — keying the cache on the contributor set would add a `getRegisteredComponents` call to every cache-key computation for a rare, lifecycle-only change.
 
+## Decision 30: One chip per substance — the contraindication ledger and its collapse key
+
+**Status: Accepted** (August 2026) — implemented. Extends [Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets) ([#145](https://github.com/openmrs/openmrs-module-chartsearchai/issues/145) / [#160](https://github.com/openmrs/openmrs-module-chartsearchai/pull/160)).
+
+### Context
+
+Both contraindication arms were keyed on a reference **entry**, and DDInter files one substance as several route/formulation rows. One clinician-facing name resolves all of them, so one clinical fact produced one chip per row. The duplication was the visible symptom; the real defect was that only the row the allergen resolved to by *identity* said the true thing. Its siblings fell through to the class comparison and reported the substance as cross-reactive with the patient's allergy **to itself**. And since [#110](https://github.com/openmrs/openmrs-module-chartsearchai/issues/110) every chip is also injected as a citable record, so each duplicate spent prompt budget too.
+
+### Decision
+
+`DrugSafetyValidator` keeps a validate-scoped ledger that both contraindication arms and both of their call sites feed. It keys on `(subject substance, recorded finding)`, keeps the most specific relationship, and writes the survivor back into the position the group's first candidate held, so no client sees the chip order reshuffle.
+
+### Why a ledger and not a filter over the finished list
+
+Decisively: the sibling's chip is **wrong**, not merely duplicated, so the collapse must *choose which relationship survives* — and by the time only rendered text is left, the reasons that justify that choice are gone. The chips also differ in text, each naming its own route, so no text-level dedup would have caught them.
+
+### Why the collapse key is substance name **plus** display-name stem
+
+`rxnorm_name` equality alone was rejected: it is not populated for every row, and where it is, route variants of one substance do not reliably share it — so the key would silently fail to collapse exactly the rows that motivated the work, while also risking collapsing two genuinely different substances that share an ingredient name. Requiring agreement on both the substance name and the display-name stem makes the key hold on the rows that exist rather than on the rows the schema promises.
+
+## Decision 31: Name the class that explains the relationship, not the first one shared
+
+**Status: Accepted** (August 2026) — implemented. Refines [Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets)'s level-4 class matching ([#161](https://github.com/openmrs/openmrs-module-chartsearchai/issues/161) / [#166](https://github.com/openmrs/openmrs-module-chartsearchai/pull/166)).
+
+### Context
+
+`sharedClass` returned the first shared ATC level-4 subgroup in the allergen's own code array. A corticosteroid carries one code per route it is marketed in, so a systemic cross-reactivity concern was justified by a topical class — methylprednisolone against a dexamethasone allergy read as anti-acne preparations. The finding was right and the reason it gave was not, which is precisely what a clinician checks before deciding whether to trust the feature.
+
+This was a systematic bias, not an arbitrary list position: every ATC array in the shipped KB is in ascending code order, and ATC's alphabet front-loads the locally applied groups, so "first" reliably meant "most topical".
+
+### Decision
+
+Prefer the shared subgroup that classifies the **substance** over one that classifies a **locally applied formulation**, falling back to the locally applied one when that is all the pair shares. Candidates are examined in code order rather than array order, so the answer is a function of the two code sets rather than of where a dataset happened to write a code.
+
+The route/site knowledge is two prefix lists on `DrugReference`: the locally applied groups, each justified by the route or site in the ATC group's own published name, minus the groups nested inside those that ATC itself names *"for systemic use"*. That exception is not hypothetical — without it, a pair sharing both a topical and a systemic subgroup is reported under the topical one.
+
+### Why not the two alternatives
+
+- **Match the route of the active order.** The route is not available at this seam and could only ever be available at one of the two call sites: the arm also runs for a drug the *question* names, which has no route at all. Nothing carries the route that far.
+- **Fall back to ATC level 3.** Widening the class breadth to make the label read better trades a wrong reason for a vaguer one and reopens the false-positive cost [Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets) settled. The grain stays level 4; only the *choice among* shared level-4 codes changed.
+
+## Decision 32: Observable drug-reference load status
+
+**Status: Accepted** (August 2026) — implemented ([#149](https://github.com/openmrs/openmrs-module-chartsearchai/issues/149) / [#154](https://github.com/openmrs/openmrs-module-chartsearchai/pull/154)).
+
+### Context
+
+A `sourceFormat` / `dataFilePath` mismatch loads **zero** entries and was reported at INFO exactly like a successful load: a count of 0 printed as cheerfully as 2283. The module starts clean — no startup error, no WARN — and the whole drug-safety layer is inert, every safety question answering as though there were nothing to find. Neither existing loud path covers it: they fire when the bundled dataset is missing or unparseable, not when a file is present, readable and simply the wrong shape for the configured parser.
+
+This is not a hypothetical operator error. It silently produced a wrong result inside this project: a verification pass flipped `sourceFormat` while leaving `dataFilePath` on the other dataset, saw every probe return zero chips, and could not distinguish that from "the fix does not work".
+
+### Decision
+
+Two parts, and the second is why the first can be trusted.
+
+1. **Loud on empty.** The service warns when a load it just performed produced no entries, naming both global properties, the parser in use and the file actually read. The rule lives in the service rather than in a source adapter, so one rule covers all three formats and cannot drift per source.
+2. **Observable after the load.** `DrugReferenceLoad` retains the outcome — effective format, configured format, configured path, the origin actually read, entry count, and the inert verdict — captured at the instant the load populates the cache, so it can never describe a different dataset than the one the safety layer is using. Exposed by `GET /chartsearchai/drugreferencestatus` under core's `Get Global Properties`; no new privilege.
+
+### Why the status must be observable *after* a lazy load
+
+The load is lazy and cached for the life of the module, so "which dataset is in force?" cannot be answered from the log at all: the most recent `Loaded N …` line may pre-date the global properties as they now read, or belong to a process a failed restart left running. That is exactly how the pass above was fooled. Reading the endpoint therefore **performs** the load if it has not happened yet, so the answer is current by construction rather than a historical line that may be stale — the property that makes any source-flip verification, including that PR's own, trustworthy.
+
+`origin` is reported separately from `configuredDataFilePath` because a configured path that cannot be read falls back to the bundled dataset and yields a perfectly plausible non-zero count. In that state "the count is non-zero, so my file loaded" is false, and the count alone cannot distinguish it. One `isInert()` verdict drives both the WARN and the reported status, so the two cannot disagree.
+
+Reading the status when the feature is disabled deliberately does **not** trigger a load: polling a status endpoint must not be what starts a large parse, or manufactures the warning, on an install that does not use the feature.
+
+> **A fourth decision in this area is pending, not yet merged.** [#173](https://github.com/openmrs/openmrs-module-chartsearchai/pull/173) carries the "one substance, one row" follow-through — the interaction subject, the injected reference record, and the self-pair parse guard. It is deliberately not written up here while it is open; add it when it lands.
+
 ## Known limitations
 
 - **Counting questions**: LLMs are unreliable at precise counting tasks (e.g., "how many weight records in the last 10 years?"). The model may undercount or overcount even when all relevant records are provided. Larger, more capable models perform better at counting but are still not perfectly reliable. This is a fundamental limitation of LLM inference, not a retrieval issue. Questions that require exact counts are better suited to structured queries.
 
 ## Planned future work
 
-- **Incremental embedding indexing**: The `EncounterService` AOP hook already uses an incremental strategy (indexes only new/changed encounters), but other data types (`ObsService`, `ConditionService`, etc.) still use `indexPatient()` which deletes all embeddings for a patient and recomputes from scratch. A fully incremental approach would track which record maps to which embedding row across all data types and only add, update, or delete the specific embeddings affected. This matters for patients with large charts where AOP hooks fire frequently.
 - **Concept graph traversal**: Complement embedding search with OpenMRS concept relationship traversal to improve retrieval for queries involving related concepts (e.g., finding NSAID allergies when asking about ibuprofen).
 - **Pre-computed summaries**: Cache LLM-generated summaries for common query patterns (e.g., "current medications", "active problems") to reduce inference latency for frequently asked questions.
 - **Agent/tool-use pattern**: Enable multi-step reasoning where the LLM can request additional data or perform follow-up queries. Deferred until local models with reliable tool-use capabilities are available.
-- **Multimodal medical image interpretation**: Extend the pipeline to pass complex observations (X-rays, dermatology photos, ultrasounds, pathology slides, scanned documents) alongside text to multimodal LLMs like MedGemma 1.5 4B. The main changes are: extend `ObsTextSerializer` to handle `ValueComplex` obs, add an optional image field to `SerializedRecord`, and update `LlmProvider`/`LlmEngine` implementations to construct multimodal content arrays (text + base64 image blocks) for the OpenAI-compatible `/chat/completions` API. Both engines already speak this protocol — the embedded llama-server supports multimodal via libmtmd, and remote backends (vLLM, OpenAI, Anthropic) accept the same content-array format. No new serializers are needed — complex obs are still observations.
+- **Multimodal medical image interpretation**: Extend the pipeline to pass complex observations (X-rays, dermatology photos, ultrasounds, pathology slides, scanned documents) alongside text to multimodal LLMs like MedGemma 1.5 4B. The main changes are: have querystore's obs serializer carry complex-value obs, add an optional image field to `SerializedRecord`, and update `LlmProvider`/`LlmEngine` implementations to construct multimodal content arrays (text + base64 image blocks) for the OpenAI-compatible `/chat/completions` API. Both engines already speak this protocol — the embedded llama-server supports multimodal via libmtmd, and remote backends (vLLM, OpenAI, Anthropic) accept the same content-array format. No new serializers are needed — complex obs are still observations.
 - **Unstructured data / image OCR**: Extract text from photos of paper forms at write time so the content flows through the existing serializer and embedding pipeline.

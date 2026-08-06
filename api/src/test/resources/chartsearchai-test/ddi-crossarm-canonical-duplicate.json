@@ -1,0 +1,253 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for the CROSS-ARM half of issue #162 — the drug-in-play arm and the interaction-screening arm reporting one (substance, active order) pair TWICE. Rows and interaction rows are field-for-field their KB rows, in KB order, and the interaction rows are every KB pair among these drugs. The shape needs three things at once, which is why no earlier fixture could show it: (1) a multi-row family whose route-unspecified row is NOT the family's first row — Chloroprocaine, 1 of the 7 shipped families like that, the same family ddi-canonical-subject-label.json uses; (2) the partner's rule sitting on the family's QUALIFIED FIRST row and NOWHERE ELSE, so the two arms choose different subject rows — the KB carries Chloroprocaine (ophthalmic) x Lidocaine and no Chloroprocaine x Lidocaine row at any severity; and (3) both sides being ACTIVE ORDERS, so the screening arm reaches the pair while an answer naming the substance puts it in play for the drug-in-play arm. Lidocaine is the only partner row taken (the KB files two more route variants of it, which this slice does not need). The Chloroprocaine (ophthalmic) x Chloroprocaine row is the KB's own self-pair for this family and is expected to be dropped at load (issue #152)."
+ },
+ "mechanisms": {
+  "6466": {
+   "text": "Some topical anesthetics can be systemically absorbed and cause methemoglobinemia, particularly when applied to mucous membranes.  Coadministration with other oxidizing agents that can also induce methemoglobinemia such as injectable local anesthetics, antimalarials (e.g., chloroquine, primaquine, quinine, tafenoquine), nitrates and nitrites, sulfonamides, aminosalicylic acid, dapsone, dimethyl sulfoxide, flutamide, metoclopramide, nitrofurantoin, phenazopyridine, phenobarbital, phenytoin, and rasburicase may increase the risk.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1066",
+   "name": "Lidocaine",
+   "rxcui": "6387",
+   "rxnorm_name": "lidocaine",
+   "drugbank_id": "DB00281",
+   "atc": [
+    "C01BB01",
+    "C05AD01",
+    "D04AB01",
+    "N01BB02",
+    "R02AD02",
+    "S01HA07",
+    "S02DA01"
+   ],
+   "ciel": [
+    {
+     "code": "103769",
+     "uuid": "103769AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / neomycin"
+    },
+    {
+     "code": "103770",
+     "uuid": "103770AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / neomycin / polymyxin B"
+    },
+    {
+     "code": "103771",
+     "uuid": "103771AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / polymyxin B"
+    },
+    {
+     "code": "103822",
+     "uuid": "103822AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / lidocaine"
+    },
+    {
+     "code": "103829",
+     "uuid": "103829AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzethonium / lidocaine"
+    },
+    {
+     "code": "103960",
+     "uuid": "103960AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bupivacaine / lidocaine"
+    },
+    {
+     "code": "104100",
+     "uuid": "104100AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Capsaicin / lidocaine"
+    },
+    {
+     "code": "104165",
+     "uuid": "104165AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cetylpyridinium / lidocaine"
+    },
+    {
+     "code": "104176",
+     "uuid": "104176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorhexidine / lidocaine"
+    },
+    {
+     "code": "104203",
+     "uuid": "104203AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroxylenol / lidocaine"
+    },
+    {
+     "code": "104423",
+     "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / lidocaine"
+    },
+    {
+     "code": "104545",
+     "uuid": "104545AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Domiphen / lidocaine"
+    },
+    {
+     "code": "104584",
+     "uuid": "104584AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Epinephrine / lidocaine"
+    },
+    {
+     "code": "104735",
+     "uuid": "104735AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Glucose / lidocaine"
+    },
+    {
+     "code": "104859",
+     "uuid": "104859AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / lidocaine"
+    },
+    {
+     "code": "104976",
+     "uuid": "104976AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / menthol"
+    },
+    {
+     "code": "104977",
+     "uuid": "104977AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / methylprednisolone"
+    },
+    {
+     "code": "104978",
+     "uuid": "104978AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / neomycin / polymyxin B"
+    },
+    {
+     "code": "104979",
+     "uuid": "104979AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / oxytetracycline"
+    },
+    {
+     "code": "104980",
+     "uuid": "104980AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / phenol"
+    },
+    {
+     "code": "104981",
+     "uuid": "104981AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / phenylephrine"
+    },
+    {
+     "code": "104982",
+     "uuid": "104982AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / povidone-iodine"
+    },
+    {
+     "code": "104983",
+     "uuid": "104983AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / prilocaine"
+    },
+    {
+     "code": "104984",
+     "uuid": "104984AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / tetracaine"
+    },
+    {
+     "code": "162167",
+     "uuid": "162167AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Betamethasone / lidocaine / phenylephrine"
+    },
+    {
+     "code": "165454",
+     "uuid": "165454AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminium subacetate / hydrocortisone acetate / lidocaine / zinc oxide"
+    },
+    {
+     "code": "170030",
+     "uuid": "0b9b9edc-1add-4cd2-ac95-69870f1c8ab2",
+     "name": "Clotrimazole / lidocaine"
+    },
+    {
+     "code": "170559",
+     "uuid": "939843c3-daca-4efd-a945-79f35532197c",
+     "name": "Hyaluronic acid / lidocaine"
+    },
+    {
+     "code": "170568",
+     "uuid": "c92eeb46-c9f8-4578-83fd-2d6911088901",
+     "name": "Cetrimide / lidocaine"
+    },
+    {
+     "code": "170698",
+     "uuid": "20207304-5dc0-4368-af80-aae03041affe",
+     "name": "Lidocaine / phenazone"
+    },
+    {
+     "code": "78849",
+     "uuid": "78849AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine"
+    },
+    {
+     "code": "78850",
+     "uuid": "78850AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2061",
+   "name": "Chloroprocaine (ophthalmic)",
+   "rxcui": "20859",
+   "rxnorm_name": "chloroprocaine",
+   "drugbank_id": "DB01161",
+   "atc": [
+    "N01BA04",
+    "S01HA08"
+   ],
+   "ciel": [
+    {
+     "code": "73294",
+     "uuid": "73294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroprocaine"
+    },
+    {
+     "code": "73295",
+     "uuid": "73295AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroprocaine hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter358",
+   "name": "Chloroprocaine",
+   "rxcui": "20859",
+   "rxnorm_name": "chloroprocaine",
+   "drugbank_id": "DB01161",
+   "atc": [
+    "N01BA04",
+    "S01HA08"
+   ],
+   "ciel": [
+    {
+     "code": "73294",
+     "uuid": "73294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroprocaine"
+    },
+    {
+     "code": "73295",
+     "uuid": "73295AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroprocaine hydrochloride"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1066",
+   "DDInter2061",
+   "Moderate",
+   "6466"
+  ],
+  [
+   "DDInter2061",
+   "DDInter358",
+   "Moderate",
+   "6466"
+  ]
+ ]
+}

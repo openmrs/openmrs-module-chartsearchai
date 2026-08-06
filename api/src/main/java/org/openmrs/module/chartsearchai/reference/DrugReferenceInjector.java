@@ -254,8 +254,15 @@ public class DrugReferenceInjector {
 			index++;
 		}
 
-		log.debug("Injected {} active-order, {} drug-reference and {} safety-finding record(s) into chart "
-				+ "for question '{}'", unrepresented.size(), matched.size(), findings.size(), question);
+		// The drug-reference character total is here because that slice's SIZE is the thing issue #163 is
+		// about and the REST response cannot show it: the response returns only CITED references, so a
+		// question injecting one near-duplicate record per route variant looked identical from outside
+		// while spending several times the prompt budget. A count alone did not settle it either — what
+		// crowds out chart records is characters — so an operator (or a verification pass) can now read
+		// both off one line.
+		log.debug("Injected {} active-order, {} drug-reference ({} chars) and {} safety-finding record(s) "
+				+ "into chart for question '{}'", unrepresented.size(), matched.size(),
+				referenceCharacters(mappings), findings.size(), question);
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
@@ -446,7 +453,8 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Deduplicated union of question-driven and patient-driven matches, query matches first.
+	 * Deduplicated union of question-driven and patient-driven matches, query matches first — <b>one
+	 * entry per SUBSTANCE</b>, not one per reference row (issue #163, see {@code collect}).
 	 *
 	 * <p>Order-driven injection is <em>relevance-scoped</em>: an active-order reference is injected only
 	 * when the question is about a specific drug clinically related to that order (sharing an ATC
@@ -458,7 +466,10 @@ public class DrugReferenceInjector {
 	 * drug-order records, and from {@link #unrepresentedActiveOrders} for any the chart is missing.
 	 */
 	List<DrugReference> matchingEntries(PatientClinicalContext context, String question) {
-		Map<String, DrugReference> byId = new LinkedHashMap<String, DrugReference>();
+		// One record per SUBSTANCE, not per reference row (issue #163). A per-call local, never a field:
+		// a memoised DrugReference outliving a getAll() hot-reload breaks the reference comparisons the
+		// safety arms make against the same objects (issue #172).
+		Map<Object, DrugReference> bySubstance = new LinkedHashMap<Object, DrugReference>();
 
 		// The reference drugs the question itself names — drives question-driven injection AND scopes
 		// the order-driven injection below, so it is computed regardless of the injectFromQuery toggle.
@@ -469,7 +480,7 @@ public class DrugReferenceInjector {
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_INJECT_FROM_QUERY);
 		if (fromQuery) {
 			for (DrugReference ref : questionDrugs) {
-				byId.put(ref.getId(), ref);
+				collect(bySubstance, ref);
 			}
 		}
 
@@ -483,12 +494,63 @@ public class DrugReferenceInjector {
 				// question naming no drug has no relevance anchor, so nothing is injected here
 				// (relatedToAny returns false for an empty questionDrugs).
 				if (relatedToAny(ref, questionDrugs, groups)) {
-					byId.put(ref.getId(), ref);
+					collect(bySubstance, ref);
 				}
 			}
 		}
 
-		return new ArrayList<DrugReference>(byId.values());
+		return new ArrayList<DrugReference>(bySubstance.values());
+	}
+
+	/**
+	 * Record {@code ref} as the entry to inject for its substance, keeping the row that best represents
+	 * it ({@link DrugReference#canonicalRow}) when the substance is filed as several.
+	 *
+	 * <p><b>Why the key is the substance (issue #163).</b> This map was keyed on {@code ref.getId()}, and
+	 * route/formulation variants of one substance deliberately carry DISTINCT ids — the {@code ddinter}
+	 * parser falls back to the DDInter id when the RxCUI is shared, precisely so citations stay
+	 * unambiguous — so one question word injected one near-duplicate record per variant, each rendering
+	 * up to {@link #MAX_INTERACTION_RENDER_CHARS} of interaction prose. That is prompt budget spent
+	 * several times over on one drug (issues #95, #99), and several differently-worded copies of one fact
+	 * handed to a model that miscopies them (#142). Invisible from the REST response, which returns only
+	 * CITED references, which is why it survived several live verification passes.
+	 *
+	 * <p><b>The id remains the fallback</b>, rather than {@link DrugReference#substanceGroupKey()}'s
+	 * object identity, because THIS map's job includes what the id was originally chosen for: the
+	 * surviving entry's id becomes the injected {@link RecordMapping}'s resourceId, so two records
+	 * sharing an id would make a citation ambiguous. A source publishing no substance name (the curated
+	 * {@code json} file, the {@code atc} adapter) therefore keeps exactly the de-duplication it had.
+	 *
+	 * <p><b>What the collapse gives up</b>, measured rather than assumed. The surviving row's rules are
+	 * the ones the record renders, and a sibling can carry a partner the survivor does not: over the
+	 * shipped KB, 80 of the 121 multi-row substances have at least one such partner, 2627 in total, a few
+	 * of them lopsided ({@code Olopatadine} 112 partners against its family's 397) — measured 2026-08-06,
+	 * re-measure before relying on the figures.
+	 *
+	 * <p><b>What that costs, per leg, because the two legs differ.</b> For the QUESTION-driven leg it
+	 * costs breadth only: the substance is then also a drug in play, so a partner the patient is on whose
+	 * rule clears the severity floor raises a chip whatever row carries it (the chips read every row off
+	 * {@code getAll()}, and since issue #162 they read the substance's rows as one subject), and since
+	 * issue #110 that chip is injected as its own citable safety-finding record carrying the rule's
+	 * mechanism note verbatim. What the sibling rows lose there is the {@code Interactions:} tail — the
+	 * section {@code render} already truncates to one compact representative whenever a relevant partner
+	 * is promoted.
+	 *
+	 * <p>For the ORDER-driven leg no chip stands behind it, and that is worth stating rather than being
+	 * covered by the sentence above. That leg needs {@link #relatedToAny}, hence a question that named a
+	 * drug, and the substance it injects is an ACTIVE ORDER rather than a drug in play — so
+	 * {@link DrugSafetyValidator}'s drug-in-play arm does not see it, and the one arm that does cover
+	 * (active order, active order) pairs is gated on the question naming NO drug, which excludes this
+	 * leg by construction. A rule between two of the patient's own medications that sits only on a
+	 * sibling row is therefore prose this record no longer carries and no chip replaces. Narrower than
+	 * it sounds — it needs the question's drug to be ATC-related to one order and that order's substance
+	 * to be multi-row — but it is a real reduction in what the prompt carries, not a re-presentation of
+	 * it, and it is the same gap issue #174's {@code orderedInteractionNotes} sweep has to decide about.
+	 */
+	private static void collect(Map<Object, DrugReference> bySubstance, DrugReference ref) {
+		Object substance = ref.substanceKey();
+		Object key = substance != null ? substance : ref.getId();
+		bySubstance.put(key, DrugReference.canonicalRow(bySubstance.get(key), ref));
 	}
 
 	/** @return true when {@code order} shares an ATC level-4 subgroup — or, failing that, a curated
@@ -565,6 +627,16 @@ public class DrugReferenceInjector {
 	 * data-side half of #115. Until then the two paths agree on WHICH partners concern the patient,
 	 * which is what the ordering above exists to guarantee, but not on how many rows or which
 	 * severity.
+	 *
+	 * <p>Since issue #163 there is one more way they can differ, in the opposite direction, and it is
+	 * stated here rather than left to be discovered: {@link #matchingEntries} now injects ONE record per
+	 * substance, so this method sees only that substance's canonical row, while
+	 * {@link DrugSafetyValidator#bestRulePerPartner} reads every row of it (issue #162). A partner whose
+	 * rule sits only on a sibling row therefore raises a chip that this text does not name. What covers
+	 * it is issue #110 rather than this method: that chip is itself injected as a citable
+	 * safety-finding record carrying the rule's mechanism note verbatim ({@link #renderFinding}), which
+	 * is the same mechanism a pair chip's grounding already relies on. See {@code collect} for the
+	 * measured size of the residue.
 	 *
 	 * <p>Ordering alone is not sufficient, which is why {@code render} also overrides the budget for
 	 * this segment: two above-floor partners can exceed {@link #MAX_INTERACTION_RENDER_CHARS}
@@ -715,7 +787,16 @@ public class DrugReferenceInjector {
 		final String source;
 
 		/** Interaction partners the text does not name — dropped by the budget or, more often, by
-		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all. */
+		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all.
+		 *
+		 *  <p>Counted over the rendered ENTRY's own partners, which since issue #163 is one row of a
+		 *  substance rather than every row of it: a partner carried only by a sibling row is ABSENT from
+		 *  this record, not withheld from it, and so is not in this count. So {@code 0} means "names
+		 *  every partner of the row this record was rendered from", not "of the substance it is named
+		 *  after" — see {@code collect} for the size of that difference. Left as the row's own count
+		 *  rather than widened, because what the field exists to describe is honest truncation OF THIS
+		 *  TEXT, and a number counting rows the text never had a chance to name would describe something
+		 *  else. */
 		final int withheldInteractions;
 
 		RenderedReference(String text, String source, int withheldInteractions) {
@@ -862,6 +943,19 @@ public class DrugReferenceInjector {
 		// sections above are — the dataset is operator-editable.
 		String source = ChartSearchAiUtils.firstNonBlank(ref.getSource());
 		return new RenderedReference(sb.toString(), source != null ? source.trim() : null, withheld);
+	}
+
+	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the
+	 *          prompt budget the reference slice spends, for the DEBUG line in {@code injectRecords}. */
+	private static int referenceCharacters(List<RecordMapping> mappings) {
+		int chars = 0;
+		for (RecordMapping mapping : mappings) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
+					&& mapping.getText() != null) {
+				chars += mapping.getText().length();
+			}
+		}
+		return chars;
 	}
 
 	/** Adds {@code value} to {@code out} only when it is non-null and non-blank. */

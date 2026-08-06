@@ -169,10 +169,10 @@ public class ContraindicationRouteVariantTest {
 
 		assertEquals(2, warnings.size(),
 				"three route variants collapse and the ester stays its own chip, was: " + warnings);
-		assertEquals("Hydrocortisone is in the same ATC class (A01AC) as the patient's allergy to"
+		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
 				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail(),
 				"the surviving variant chip is the dataset's first row, named by displayLabel()");
-		assertEquals("Hydrocortisone butyrate is in the same ATC class (A01AC) as the patient's allergy"
+		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy"
 				+ " to Dexamethasone — possible cross-reactivity", warnings.get(1).getDetail());
 	}
 
@@ -332,15 +332,15 @@ public class ContraindicationRouteVariantTest {
 						DrugReferenceTestSupport.set("Dexamethasone", "Hydrocortisone"), null));
 
 		assertEquals(4, warnings.size(), "two substances x two findings, was: " + warnings);
-		assertEquals("Hydrocortisone is in the same ATC class (A01AC) as the patient's allergy to"
+		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
 				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail());
 		assertEquals("The patient has a recorded allergy to Hydrocortisone.",
 				warnings.get(1).getDetail(),
 				"the identity finding about the SAME substance keeps its own chip beside the "
 						+ "cross-reactivity one");
-		assertEquals("Hydrocortisone butyrate is in the same ATC class (A01AC) as the patient's allergy"
+		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy"
 				+ " to Dexamethasone — possible cross-reactivity", warnings.get(2).getDetail());
-		assertEquals("Hydrocortisone butyrate is in the same ATC class (A01AC) as the patient's allergy"
+		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy"
 				+ " to Hydrocortisone — possible cross-reactivity", warnings.get(3).getDetail());
 	}
 

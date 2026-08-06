@@ -57,10 +57,10 @@ public final class LogCapture implements AutoCloseable {
 
 	private final Level restoreLevel;
 
-	private LogCapture(String loggerName) {
+	private LogCapture(String loggerName, Level level) {
 		this.loggerName = loggerName;
 		this.restoreLevel = ((Logger) LogManager.getLogger(loggerName)).getLevel();
-		Configurator.setLevel(loggerName, Level.INFO);
+		Configurator.setLevel(loggerName, level);
 		this.logger = (Logger) LogManager.getLogger(loggerName);
 		this.appender = new CollectingAppender(events);
 		this.appender.start();
@@ -72,7 +72,25 @@ public final class LogCapture implements AutoCloseable {
 	 *            captured
 	 */
 	public static LogCapture on(String loggerName) {
-		return new LogCapture(loggerName);
+		return new LogCapture(loggerName, Level.INFO);
+	}
+
+	/**
+	 * {@link #on(String)} at a level of the caller's choosing, for the outputs whose only surface is a
+	 * line logged BELOW info — issue #163's injected-character total, which exists precisely because the
+	 * REST response cannot show the size of the reference slice, so a test has no other way to observe
+	 * it.
+	 *
+	 * <p>{@code INFO} stays the default rather than becoming a parameter everywhere, because the reason
+	 * for it is specific to the assertions this class was built for: see the class javadoc — capturing
+	 * INFO alongside WARN is what stops "no WARN was logged" passing vacuously. A caller lowering the
+	 * level gets strictly more events, so that protection is not weakened, only widened.
+	 *
+	 * @param loggerName as {@link #on(String)}
+	 * @param level the level to raise the logger CONFIG to for the duration; restored on {@link #close()}
+	 */
+	public static LogCapture on(String loggerName, Level level) {
+		return new LogCapture(loggerName, level);
 	}
 
 	/** @return true when at least one captured event was logged at {@code level} or more severe. */

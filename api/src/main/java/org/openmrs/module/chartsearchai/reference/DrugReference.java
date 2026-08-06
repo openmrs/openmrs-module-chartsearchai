@@ -191,17 +191,92 @@ public class DrugReference {
 	 * @return an opaque key, equal exactly for two entries this module treats as one substance
 	 */
 	Object substanceKey() {
+		return substanceKey(name, substanceName);
+	}
+
+	/**
+	 * {@link #substanceKey()} over the two fields it reads, for a caller holding those fields but no
+	 * {@link DrugReference} yet: {@link DdiDrugReferenceSource}'s parse-time rows, which have to answer
+	 * "are these two rows one substance?" before any entry exists (issue #152's self-pair guard). One
+	 * definition, so a load-time guard and the chip grouping cannot come to disagree about what one
+	 * substance is — the failure that would leave a self-pair loaded for exactly the rows the chips then
+	 * merge.
+	 *
+	 * @return the key described at {@link #substanceKey()}, or null when {@code substanceName} is blank
+	 */
+	static Object substanceKey(String name, String substanceName) {
 		String substance = normalizeName(substanceName);
 		if (substance == null) {
 			return null;
 		}
-		return Arrays.asList(substance, displayStem());
+		return Arrays.asList(substance, displayStem(name));
 	}
 
-	/** @return {@link #getName()} with any trailing parenthesized qualifier(s) removed, normalized by
+	/**
+	 * @return the substance this entry stands for ({@link #substanceKey()}), else the entry itself. The
+	 *         two are different types — a {@link List} and a {@link DrugReference} — so the two key
+	 *         spaces cannot collide, and an entry from a source publishing no substance name keys on
+	 *         its own identity and therefore groups with nothing.
+	 *
+	 *         <p>The key for grouping the ROWS OF ONE SUBSTANCE inside one request, shared by the
+	 *         contraindication chip ledger ({@code DrugSafetyValidator.ContraindicationChips}, issue
+	 *         #145) and the interaction arms' subject side (#162) so the two arms cannot merge
+	 *         different sets of rows. Identity is the right fallback for both because every set they
+	 *         group is resolved against {@link DrugReferenceService}'s shared {@code getAll()} cache,
+	 *         so one row is one object. {@link DrugReferenceInjector#matchingEntries} deliberately
+	 *         falls back to {@link #getId()} instead, not to this — see there.
+	 */
+	Object substanceGroupKey() {
+		Object substance = substanceKey();
+		return substance != null ? substance : this;
+	}
+
+	/**
+	 * @return whether this entry's display name names the substance with NO trailing route/formulation
+	 *         qualifier — {@code Dexamethasone} rather than {@code Dexamethasone (nasal)}. At most one
+	 *         row of a substance normally answers true, and it is the row a question naming the bare
+	 *         substance is about: nothing on a {@code DrugOrder} or in a question tells this module
+	 *         which route is in play (every variant publishes the same aliases and the same ATC list —
+	 *         the data-side gap issue #115 records), so the only route it can honestly assert is none.
+	 *
+	 *         <p>Consumed by {@link #canonicalRow}, which is where the two collapses that need it agree
+	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-06; re-measure before relying
+	 *         on the figures): of the 121 substances filed as more than one row, 110 have such a row and
+	 *         11 do not — {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
+	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in 7 of the 110 it is NOT the family's
+	 *         first row, which is why the choice cannot be left to dataset order.
+	 */
+	boolean namesNoRoute() {
+		String normalized = normalizeName(name);
+		return normalized != null && normalized.equals(displayStem(name));
+	}
+
+	/**
+	 * Which of two rows of ONE substance should represent it — the row a collapsed chip is named after
+	 * ({@code DrugSafetyValidator.addInteractionWarnings}, issue #162) and the row a collapsed
+	 * reference record is rendered from ({@link DrugReferenceInjector#matchingEntries}, issue #163).
+	 * Shared rather than decided twice, because the two surfaces describe the same substance to the same
+	 * clinician and to the same model: a chip naming the substance beside a record naming one of its
+	 * routes is the chip-versus-prose divergence this module keeps having to remove.
+	 *
+	 * @return {@code candidate} when it {@link #namesNoRoute()} and {@code incumbent} does not, else
+	 *         {@code incumbent} — so the route-unspecified row wins wherever the family has one, and
+	 *         otherwise the first row seen keeps the role. For the 11 shipped families that name no
+	 *         unqualified row the survivor therefore still carries a qualifier: the KB publishes no
+	 *         unqualified name for those substances, and manufacturing one by stripping a display name
+	 *         is the pattern-match-a-label mistake issue #148 had to undo.
+	 */
+	static DrugReference canonicalRow(DrugReference incumbent, DrugReference candidate) {
+		if (incumbent == null) {
+			return candidate;
+		}
+		return candidate.namesNoRoute() && !incumbent.namesNoRoute() ? candidate : incumbent;
+	}
+
+	/** @return {@code name} with any trailing parenthesized qualifier(s) removed, normalized by
 	 *          {@link #normalizeName} — the empty string when the name is blank or is nothing but a
 	 *          qualifier, which keeps the key total. */
-	private String displayStem() {
+	private static String displayStem(String name) {
 		String stem = name == null ? "" : name;
 		String previous;
 		do {
@@ -291,6 +366,110 @@ public class DrugReference {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * ATC groups that classify a LOCALLY APPLIED formulation rather than the substance itself, each
+	 * identified by the route or site of application in the group's own published name — bar the one
+	 * exception noted at {@code C05B}: {@code D}
+	 * "Dermatologicals" and {@code S} "Sensory organs" (whole anatomical main groups), {@code A01}
+	 * "Stomatological preparations", {@code A07A} "Intestinal antiinfectives" and {@code A07E}
+	 * "Intestinal antiinflammatory agents" (its {@code A07EA} is "Corticosteroids acting locally"),
+	 * {@code B02BC} "Local hemostatics" (its {@code B02BX} sibling is "Other systemic hemostatics"),
+	 * {@code B05C} "Irrigating solutions", {@code C05A} "Antihemorrhoidals for topical use",
+	 * {@code C05B} "Antivaricose therapy" — the exception: that name is an indication, not a route, and
+	 * this entry rests on its subgroups' names instead ({@code C05BA} "Heparins or heparinoids for
+	 * topical use", {@code C05BB} "Sclerosing agents for local injection"); it changes no pair in the
+	 * shipped KB, whose only {@code C05B} subgroup is {@code C05BA} —
+	 * {@code G01} "Gynecological antiinfectives and antiseptics", {@code G02CC} "Antiinflammatory
+	 * products for vaginal administration" (its {@code G02CB} sibling, prolactine inhibitors, is
+	 * systemic), {@code M02} "Topical products for joint and muscular pain", {@code P03A}
+	 * "Ectoparasiticides, incl. scabicides", {@code R01} "Nasal preparations", {@code R02} "Throat
+	 * preparations", and {@code R03A} / {@code R03B}, the two <em>inhalant</em> subgroups of R03 —
+	 * their {@code R03C} / {@code R03D} siblings are for systemic use and are deliberately absent,
+	 * which is why this list cannot be written at main-group granularity throughout.
+	 *
+	 * <p>Deliberately NOT here: {@code N01B} "Anesthetics, local". Its name is the drug class, not the
+	 * site of application — the codes classify the substance, and two local anaesthetics sharing
+	 * {@code N01BB} is exactly the cross-reactivity statement a clinician wants.
+	 *
+	 * <p>Prefixes, and not an exhaustive partition of ATC: anything unlisted counts as classifying the
+	 * substance. Neither direction of error is free, which is why the criterion is ATC's own wording
+	 * about a GROUP rather than pharmacological judgement about a substance. A group wrongly listed
+	 * here demotes a class that does explain a cross-reactivity concern. A group missing from it does
+	 * NOT merely leave the pre-existing answer in place: it becomes the answer as soon as it sorts
+	 * ahead of the systemic subgroup the pair also shares, since {@link DrugSafetyValidator}'s scan
+	 * takes the first shared subgroup this method does not veto.
+	 *
+	 * <p>That is how {@code A07A}, {@code B02BC}, {@code B05C} and {@code G02CC} came to be here.
+	 * Without them, 46 of the shipped KB's 1090 multi-subgroup pairs named one of the four — among them
+	 * ibuprofen/naproxen reading {@code G02CC} instead of {@code M01AE} — and 21 of the 46 had been
+	 * moved onto one by this rule itself rather than merely left there (measured 2026-08-06).
+	 * {@code CrossReactivityClassChoiceTest} pins one case per group, save {@code B02BC}: its only
+	 * shipped-KB pairs are epinephrine route variants, which issue #160 collapses to an identity chip
+	 * before this arm can name a class at all.
+	 */
+	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections
+			.unmodifiableList(Arrays.asList("A01", "A07A", "A07E", "B02BC", "B05C", "C05A", "C05B",
+					"D", "G01", "G02CC", "M02", "P03A", "R01", "R02", "R03A", "R03B", "S"));
+
+	/**
+	 * The groups nested INSIDE {@link #LOCALLY_APPLIED_ATC_GROUPS} that ATC itself names "for systemic
+	 * use" — {@code D01B} antifungals, {@code D02BB} UV-radiation protectives, {@code D05B}
+	 * antipsoriatics, {@code D10B} anti-acne preparations, {@code R01B} nasal decongestants. Same
+	 * criterion as the list above, applied to the same words: a group is read as locally applied when
+	 * its own name says where it is applied, and these five say the opposite. Without them a main-group
+	 * prefix would be wrong in exactly the way this whole rule exists to fix.
+	 *
+	 * <p>Enumerated rather than asserted, which is what makes "these five" a claim and not a hope: the
+	 * shipped KB uses 117 level-4 subgroups under one of the prefixes above, and exactly six of them are
+	 * named for systemic use — {@code D01BA}, {@code D02BB}, {@code D05BA}, {@code D05BB},
+	 * {@code D10BA}, {@code R01BA}, either in their own name or their level-3 parent's — all six covered
+	 * by the five prefixes here (measured 2026-08-06). Only {@code D05B} changes any pair in that KB:
+	 * three, all psoralens, since methoxsalen and trioxsalen share {@code D05AD} (topical) and
+	 * {@code D05BA} (systemic) and would be reported as sharing the topical one. The other four change
+	 * none and are here on the criterion rather than on measured impact; removing them breaks no test,
+	 * which is exactly why the criterion and not the test suite has to decide membership.
+	 *
+	 * <p>An exception list here, while R03's systemic halves are handled by leaving {@code R03C} and
+	 * {@code R03D} out of the list above, because the shapes differ: under D and R01 the locally
+	 * applied part is nearly all of the group, so naming the exceptions is the shorter thing to write,
+	 * while R03 splits evenly and its two inhalant halves are shorter to name than the group plus two
+	 * exceptions.
+	 */
+	private static final List<String> SYSTEMIC_USE_EXCEPTIONS = Collections
+			.unmodifiableList(Arrays.asList("D01B", "D02BB", "D05B", "D10B", "R01B"));
+
+	/**
+	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized here the same
+	 *         way {@link #normalizedAtcCodes()} normalizes an entry's — sits in one of the
+	 *         {@link #LOCALLY_APPLIED_ATC_GROUPS} and not in one of the
+	 *         {@link #SYSTEMIC_USE_EXCEPTIONS} nested inside them. A substance marketed by several
+	 *         routes carries one code per route, so this is what separates the code that classifies
+	 *         the SUBSTANCE from the codes that classify a locally applied presentation of it. Null and
+	 *         blank are not locally applied, like every other ATC comparison here treats them: nothing
+	 *         is known about them at all.
+	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.sharedClass}) on purpose:
+	 *         it is a rule about ATC's own group names, not a fact about a substance, so nothing
+	 *         outside this package should be asking it.
+	 */
+	static boolean isLocallyAppliedAtcCode(String code) {
+		String normalized = normalizeAtcToken(code);
+		return normalized != null && !fallsUnderAnyGroup(normalized, SYSTEMIC_USE_EXCEPTIONS)
+				&& fallsUnderAnyGroup(normalized, LOCALLY_APPLIED_ATC_GROUPS);
+	}
+
+	/** @return whether the already-normalized {@code code} sits under any of {@code groups} — the one
+	 *  definition of "an ATC code falls under a group prefix" on this side, matching what
+	 *  {@link CrossReactivityGroup#containsCode} is for curated group prefixes, so that a future
+	 *  refinement (level-boundary guarding, say) has one place to happen rather than two. */
+	private static boolean fallsUnderAnyGroup(String code, List<String> groups) {
+		for (String group : groups) {
+			if (code.startsWith(group)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public List<AgeBand> getAgeBands() {

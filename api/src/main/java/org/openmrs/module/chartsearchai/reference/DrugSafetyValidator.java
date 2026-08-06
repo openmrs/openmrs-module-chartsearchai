@@ -1025,8 +1025,11 @@ public class DrugSafetyValidator {
 	 *       no longer depends on.</li>
 	 *   <li>A pair stated in the OTHER DIRECTION was never recognised at all — "B interacts with active
 	 *       order A" is not the string "A interacts with active order B" — so whether the repeat was
-	 *       suppressed came down to which of the two orders the dataset happened to list first. This
-	 *       ledger is unordered, so it does not.</li>
+	 *       suppressed came down to which side this arm reached the pair from, which is the order
+	 *       {@link DrugReferenceService#findForActiveOrders} walks the chart's own order names in. This
+	 *       ledger is unordered, so it does not. Pinned by that test's sibling,
+	 *       {@code ...ReportedInTheOtherDirection}, over the same fixture with the two order names
+	 *       transposed.</li>
 	 *   <li>Issue #88's fold appends a class sentence to the very chip this arm would raise, so equality
 	 *       alone let the pair back in under two wordings, one folded and one not. That needed a
 	 *       second, prefix-matching test on top of the equality one — anchored on the folded sentence's

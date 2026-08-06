@@ -43,7 +43,7 @@ import org.junit.jupiter.api.Test;
  * "ANTIHISTAMINES FOR SYSTEMIC USE", so loratadine and desloratadine really are both antihistamines
  * and one really is duplicate therapy for the other. The last case here pins that chip, and it
  * passes before this issue's change as well as after — deliberately, because the risk in fixing
- * #167 is over-vetoing, not under-vetoing. See {@code DrugReference.isResidualAtcCode} for the
+ * #167 is over-vetoing, not under-vetoing. See {@code DrugReference.isUnclassifyingAtcCode} for the
  * criterion and its measured KB impact, and {@code CrossReactivityClassChoiceTest}, whose
  * {@code J01GB} case ("Other aminoglycosides") is the same boundary in the allergy arm.
  *
@@ -107,7 +107,7 @@ public class ResidualAtcClassClaimTest {
 		// two drugs are both H1 antihistamines because R06A says so, and prescribing one alongside the
 		// other IS duplicate therapy. An exclusion that dropped this would remove 1488 of the shipped
 		// KB's pairs that name a residual subgroup under a therapeutic group (measured — see
-		// DrugReference.isResidualAtcCode), among them every antihistamine, antidepressant and
+		// DrugReference.isUnclassifyingAtcCode), among them every antihistamine, antidepressant and
 		// aminoglycoside pair.
 		List<SafetyWarning> warnings = fixtureValidator().validate("",
 				"Is it safe to give desloratadine?",

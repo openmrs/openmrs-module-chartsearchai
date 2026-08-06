@@ -898,10 +898,17 @@ public class DrugSafetyValidator {
 			} else if (!folded.containsKey(rule)) {
 				folded.put(rule, hit.getValue());
 			}
-			// else: a second co-medication that the same rule is about — the shape ruleAbout's javadoc
-			// records for enalapril/enalaprilat, two entries one order can resolve. The relationship is
-			// already stated on that chip; emitting it again, standalone or appended, would put one
-			// pair's duplicate-therapy reasoning in front of a clinician twice.
+			// else: a SECOND co-medication that the same rule is about. The relationship is already
+			// stated on that chip; emitting it again, standalone or appended, would put one pair's
+			// duplicate-therapy reasoning in front of a clinician twice.
+			//
+			// This is a narrower branch than it looks, and narrower than it was: keyed by ATC CODE it
+			// fired for every extra code of one order, which is the duplication issue #171 removed by
+			// keying on the co-medication instead. What is left needs two DISTINCT partners that
+			// ruleAbout answers with one rule — two orders of a substance the dataset does not carry,
+			// or one order whose codes resolve to two entries the same rule identifies. No fixture here
+			// reaches it (verified by making the branch throw), so treat it as a guard, not a path with
+			// worked examples.
 		}
 		// Rule chips first, then the class-only chips, which is the order the two arms produced them in
 		// before they were coordinated — a folded chip therefore keeps the rule chip's position and no

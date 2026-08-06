@@ -46,6 +46,14 @@ public class InteractionRouteVariantTest {
 	/** Verbatim KB rows and interaction rows — see the fixture's own {@code metadata.note}. */
 	private static final String FIXTURE = "chartsearchai-test/ddi-interaction-route-variants.json";
 
+	/**
+	 * The one slice in which DATASET ORDER and the canonical row DISAGREE — Chloroprocaine, whose
+	 * route-qualified row the KB lists first. Every other fixture happens to list the unqualified row
+	 * first, which makes them unable to tell {@code interactionSubject}'s choice apart from "the first
+	 * row in play"; see {@link #theChipIsNamedAfterTheCanonicalRowNotTheFirstRowInPlay}.
+	 */
+	private static final String NOT_FIRST_FIXTURE = "chartsearchai-test/ddi-canonical-subject-label.json";
+
 	private static DrugSafetyValidator validator() throws IOException {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE));
 	}
@@ -195,6 +203,42 @@ public class InteractionRouteVariantTest {
 				warnings.get(1).getDetail().replace("Esomeprazole", "X"),
 				"and their notes really are the same string, so nothing but the subject key can tell the "
 						+ "two chips apart");
+	}
+
+	@Test
+	public void theChipIsNamedAfterTheCanonicalRowNotTheFirstRowInPlay() throws IOException {
+		// The subject-LABEL half of issue #162 — the half the issue calls a correctness fix rather than a
+		// de-duplication — asserted where it can actually fail. Every other fixture lists a family's
+		// unqualified row first, so in all of them "the canonical row" and "the first row in play" are the
+		// same row and no assertion can tell the two apart: reducing interactionSubject to
+		// subjects.get(0) passed the whole api suite (measured 2026-08-06). 7 of the shipped KB's 121
+		// multi-row families list a qualified row first, and Chloroprocaine is one, so this slice is where
+		// dataset order gives the WRONG answer.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(NOT_FIRST_FIXTURE);
+		List<DrugReference> rows = service.findByQuery("Is it safe to give chloroprocaine?");
+		assertEquals(2, rows.size(), "precondition: one question word must resolve both chloroprocaine "
+				+ "rows, was: " + DrugReferenceTestSupport.names(rows));
+		assertEquals("Chloroprocaine (ophthalmic)", rows.get(0).getName(),
+				"precondition: and the ROUTE-QUALIFIED row must come first, or this case cannot "
+						+ "distinguish the canonical row from the dataset's first — was: "
+						+ DrugReferenceTestSupport.names(rows));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Is it safe to give chloroprocaine?", DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Lorazepam 1mg"), null, null, null));
+
+		assertEquals(1, interactionChips(warnings).size(),
+				"the two rows are one subject and one chip, was: " + warnings);
+		assertEquals("Chloroprocaine", interactionChips(warnings).get(0).getDrug(),
+				"named by the route-unspecified row even though the dataset lists the ophthalmic one "
+						+ "first — a systemic order must not be told about an eye drop");
+		// The note comes from the unqualified row, which is where lorazepam's rule sits; under a
+		// first-wins label that same note would have been printed under "Chloroprocaine (ophthalmic)",
+		// i.e. the chip-versus-prose divergence with the label rather than the prose wrong.
+		assertEquals("Chloroprocaine interacts with active order lorazepam — Moderate. The concomitant use"
+				+ " of local anesthetics and benzodiazepines may have additive CNS-depressant effects."
+				+ " Both types of drugs are CNS depressants.",
+				interactionChips(warnings).get(0).getDetail(), "was: " + warnings);
 	}
 
 	@Test

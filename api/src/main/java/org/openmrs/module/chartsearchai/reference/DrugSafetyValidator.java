@@ -335,6 +335,12 @@ public class DrugSafetyValidator {
 		Map<Object, List<DrugReference>> interactionSubjects = warnInteractions
 				? substanceRows(inPlay) : Collections.<Object, List<DrugReference>> emptyMap();
 
+		// One ledger of the (substance, partner) pairs an interaction chip has been raised for, spanning
+		// the drug-in-play arm below and the screening arm at the end — see InteractionPairs. Like the
+		// contraindication ledger above it is a per-validate local, and for the same reason: it holds
+		// DrugReference-derived keys, which must not outlive a getAll() hot-reload.
+		InteractionPairs interactionPairs = new InteractionPairs();
+
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
 				addContraindications(contraindications, ref, context);
@@ -348,7 +354,8 @@ public class DrugSafetyValidator {
 					// One call, not one per arm: the rule arm and the class arm can both raise a chip about
 					// the same active order, so the decision of how many chips that pair gets belongs to a
 					// method that sees both (issue #88).
-					addInteractionWarnings(warnings, substance, context, severityFloor, orderEntries);
+					addInteractionWarnings(warnings, substance, context, severityFloor, orderEntries,
+							interactionPairs);
 				}
 			}
 			if (warnDose) {
@@ -392,7 +399,8 @@ public class DrugSafetyValidator {
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
-			addActiveOrderPairInteractions(warnings, context, severityFloor, orderEntries);
+			addActiveOrderPairInteractions(warnings, context, severityFloor, orderEntries,
+					interactionPairs);
 		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
@@ -622,7 +630,7 @@ public class DrugSafetyValidator {
 	 * first is the decisive one. (1) The sibling's chip is not merely a duplicate, it is WRONG — the
 	 * true statement about that substance is the identity one — so the collapse has to choose which
 	 * relationship survives, and by the time only rendered text is left the reasons are gone. (2) Those
-	 * chips differ in text (each names its own route), so {@link #chipIdentity}'s exact-repeat key
+	 * chips differ in text (each names its own route), so an exact-repeat key over the rendered chip
 	 * cannot see them; recognising "differs only in a route qualifier" from the strings alone means
 	 * pattern-matching a display label, which is the mistake issue #148 had to undo. (3) The two arms
 	 * run at two call sites — the drug-in-play loop and {@link #addActiveOrderContraindications} — and
@@ -858,7 +866,8 @@ public class DrugSafetyValidator {
 	 * against those rather than against the union — not a cleverer test over the union.
 	 */
 	private void addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> subjects,
-			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries) {
+			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries,
+			InteractionPairs pairs) {
 		if (context == null) {
 			return;
 		}
@@ -896,6 +905,9 @@ public class DrugSafetyValidator {
 		// client sees the chip sequence reshuffle.
 		for (SubjectRule rule : rules) {
 			warnings.add(interactionWarning(ref, rule.rule, folded.get(rule)));
+			// Recorded as the pair it is, not as the string it renders, so the screening arm can recognise
+			// it whatever either arm calls the substance — see InteractionPairs.
+			pairs.add(ref, rule.partnerKey());
 		}
 		for (String detail : classOnly) {
 			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
@@ -952,12 +964,19 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * One matched interaction rule together with the reference row that carries it — the unit
-	 * {@link #bestRulePerPartner} chooses between now that its candidates come from several rows of one
-	 * substance rather than from one entry. The row is needed for the choice itself (a route-unspecified
-	 * row's mechanism prose is the one that fits a subject named by the substance) and nowhere else: the
-	 * chip is rendered from the group's canonical row, so which row supplied the winning RULE never
-	 * changes what the chip calls the drug.
+	 * One matched interaction rule together with the reference row that carries it and the partner it
+	 * points at — the unit {@link #bestRulePerPartner} chooses between now that its candidates come from
+	 * several rows of one substance rather than from one entry. The row is needed for the choice itself (a
+	 * route-unspecified row's mechanism prose is the one that fits a subject named by the substance) and
+	 * nowhere else: the chip is rendered from the group's canonical row, so which row supplied the winning
+	 * RULE never changes what the chip calls the drug.
+	 *
+	 * <p>The partner is carried rather than re-resolved by each consumer, because
+	 * {@link #activeOrderEntryFor} is a scan whose answer two arms and one ledger all have to agree on —
+	 * {@link #bestRulePerPartner} groups on it, {@link #addActiveOrderPairInteractions} names and logs a
+	 * pair by it, and {@link InteractionPairs} keys the cross-arm suppression on it. Three copies of the
+	 * same scan is three chances to answer that question differently, which is the shape of every
+	 * duplicate chip this class has had to fix.
 	 */
 	private static final class SubjectRule {
 
@@ -965,9 +984,94 @@ public class DrugSafetyValidator {
 
 		private final DrugReference.Interaction rule;
 
-		SubjectRule(DrugReference subject, DrugReference.Interaction rule) {
+		/** The active-order reference entry this rule names, or null when the dataset carries none for
+		 *  that order — see {@link #activeOrderEntryFor}. */
+		private final DrugReference partner;
+
+		SubjectRule(DrugReference subject, DrugReference.Interaction rule, DrugReference partner) {
 			this.subject = subject;
 			this.rule = rule;
+			this.partner = partner;
+		}
+
+		/** @return what identifies this rule's partner for grouping: the partner ENTRY where the dataset
+		 *          resolves one, else the label the chip renders ({@link #partnerLabel}, case-folded).
+		 *          The two key spaces cannot collide — a {@link DrugReference} defines no
+		 *          {@code equals} and can never equal a {@link String}. */
+		Object partnerKey() {
+			return partner != null ? partner : partnerLabel(rule).toLowerCase(Locale.ROOT);
+		}
+	}
+
+	/**
+	 * The (substance, partner) pairs an interaction chip has already been raised for in this pass, so the
+	 * screening arm ({@link #addActiveOrderPairInteractions}) can stand down from a pair the drug-in-play
+	 * arm ({@link #addInteractionWarnings}) already reported. The interaction counterpart of
+	 * {@link ContraindicationChips}, and keyed the same way: on IDENTITY, never on rendered text.
+	 *
+	 * <p><b>Why not the chip's text.</b> It was, until this ledger: the screen seeded a set with every
+	 * already-raised chip's {@code (type, drug, detail)} triple and dropped any candidate that repeated
+	 * one. That recognises a repeat only while the two arms word one finding identically, and they do not:
+	 * <ul>
+	 *   <li>Since issue #162 the drug-in-play arm names its chip after the substance's CANONICAL row
+	 *       while this arm names its own after whichever row {@link DrugReferenceService#findForActiveOrders}
+	 *       returned first. For a family whose route-unspecified row is not its first row the two
+	 *       therefore disagree, and one pair was chipped twice — {@code Chloroprocaine interacts with
+	 *       active order lidocaine} beside {@code Chloroprocaine (ophthalmic) interacts with active order
+	 *       lidocaine}, identical mechanism prose under two subject labels. Reproduced through the real
+	 *       parser and the real {@code validate} by
+	 *       {@code DrugSafetyInteractionScreeningTest.theScreenStandsDownFromAPairTheSubstanceArmReportedUnderItsCanonicalName};
+	 *       the surviving per-row subject LABEL is issue #174's site 3, which this ledger does not fix and
+	 *       no longer depends on.</li>
+	 *   <li>A pair stated in the OTHER DIRECTION was never recognised at all — "B interacts with active
+	 *       order A" is not the string "A interacts with active order B" — so whether the repeat was
+	 *       suppressed came down to which of the two orders the dataset happened to list first. This
+	 *       ledger is unordered, so it does not.</li>
+	 *   <li>Issue #88's fold appends a class sentence to the very chip this arm would raise, so equality
+	 *       alone let the pair back in under two wordings, one folded and one not. That needed a
+	 *       second, prefix-matching test on top of the equality one — anchored on the folded sentence's
+	 *       opening because {@code iron} and {@code iron dextran} are both real KB partner labels, so a
+	 *       plain {@code startsWith} would suppress a chip about a different drug. Pair identity needs
+	 *       neither test: the fold decorates a chip this same pair was recorded for.</li>
+	 * </ul>
+	 *
+	 * <p><b>The key.</b> {@code {subject substance, partner}}, unordered. The subject side is
+	 * {@link DrugReference#substanceGroupKey()} — the substance a row stands for, else the row itself —
+	 * so the arms agree about a pair however many rows either of them saw it through, and an entry from a
+	 * source publishing no substance name still keys on its own identity. The partner side is
+	 * {@link SubjectRule#partnerKey()}, i.e. the very key {@link #bestRulePerPartner} groups on, mapped
+	 * through the same {@code substanceGroupKey} where it is an entry; so "which partner is this rule
+	 * about" is answered once for the grouping and the suppression alike.
+	 *
+	 * <p>Only the RULE chips are recorded. A class-only chip ({@link #classRelationships}) states a
+	 * different fact in different words and identifies its partner by an ATC code rather than an entry,
+	 * and the screening arm raises no such chip, so there is nothing for it to repeat. The arm's own
+	 * doubling — one pair reached from each of its two orders — is a different question with its own key,
+	 * inside the arm.
+	 */
+	private static final class InteractionPairs {
+
+		/** Insertion-ordered only so a debug dump reads in the order the chips were raised. */
+		private final Set<List<Object>> reported = new LinkedHashSet<List<Object>>();
+
+		/** Record that a chip has been raised for {@code subject} against {@code partner}. */
+		void add(DrugReference subject, Object partner) {
+			reported.add(Arrays.asList(substance(subject), substance(partner)));
+		}
+
+		/** @return true when a chip has already been raised for this pair, in EITHER direction. */
+		boolean alreadyReported(DrugReference subject, Object partner) {
+			Object one = substance(subject);
+			Object other = substance(partner);
+			// Both orderings rather than a canonical one: the two sides are heterogeneous — a substance
+			// key, a DrugReference or a partner label — so there is no ordering to canonicalize them by.
+			return reported.contains(Arrays.asList(one, other))
+					|| reported.contains(Arrays.asList(other, one));
+		}
+
+		/** @return the substance a reference row stands for; anything else (a partner label) unchanged. */
+		private static Object substance(Object side) {
+			return side instanceof DrugReference ? ((DrugReference) side).substanceGroupKey() : side;
 		}
 	}
 
@@ -1152,16 +1256,15 @@ public class DrugSafetyValidator {
 				if (!context.hasActiveDrug(i.getToken(), i.getAtc())) {
 					continue;
 				}
-				// The partner DRUG when the dataset identifies one, else the label — through the same
-				// resolution the screening arm uses to name a pair, so the two cannot disagree about which
-				// entry a rule points at. Two rows of ONE subject substance resolve the same partner entry
-				// here: they carry the same match token (their shared rxnorm_name), and this returns the
-				// first order entry that token names, so the group is one key rather than one per row.
-				Object key = activeOrderEntryFor(orderEntries, ref, i);
-				if (key == null) {
-					key = partnerLabel(i).toLowerCase(Locale.ROOT);
-				}
-				SubjectRule candidate = new SubjectRule(ref, i);
+				// The partner DRUG when the dataset identifies one, else the label — resolved ONCE, onto
+				// the candidate, so the screening arm and the cross-arm ledger read the same answer rather
+				// than each scanning for it (see SubjectRule). Two rows of ONE subject substance resolve the
+				// same partner entry here: they carry the same match token (their shared rxnorm_name), and
+				// activeOrderEntryFor returns the first order entry that token names, so the group is one
+				// key rather than one per row.
+				SubjectRule candidate = new SubjectRule(ref, i,
+						activeOrderEntryFor(orderEntries, ref, i));
+				Object key = candidate.partnerKey();
 				SubjectRule incumbent = best.get(key);
 				if (incumbent == null || outranks(candidate, incumbent)) {
 					// LinkedHashMap keeps a re-put key in its original position, so replacing a group's
@@ -1685,40 +1788,22 @@ public class DrugSafetyValidator {
 	 *       route-variant duplication of #115 (collapsed per partner label by
 	 *       {@link #bestRulePerPartner}). Both are fixed now, in their own arms, and neither fix
 	 *       reaches this doubling — two entries sharing one {@code rxnorm_name} are two ids and so two
-	 *       keys, and one pair reached from both sides is one {@code ref} each time. A second, weaker
-	 *       key backs the pair key up: nothing is reported that words a chip already raised
-	 *       identically, whichever arm raised it — see {@link #chipIdentity}.</li>
+	 *       keys, and one pair reached from both sides is one {@code ref} each time. Separately from this
+	 *       arm's own key, nothing is reported for a pair a drug-in-play chip already covers, whichever
+	 *       row either arm named the substance after — see {@link InteractionPairs}.</li>
 	 *   <li><b>Blast radius.</b> Candidates grow quadratically with the medication list, so they are
 	 *       ordered most-severe-first and cut at {@link #maxPairChips()}, with every withheld pair
 	 *       logged.</li>
 	 * </ul>
 	 */
 	private void addActiveOrderPairInteractions(List<SafetyWarning> warnings,
-			PatientClinicalContext context, int severityFloor, List<DrugReference> orderDrugs) {
+			PatientClinicalContext context, int severityFloor, List<DrugReference> orderDrugs,
+			InteractionPairs reportedPairs) {
 		if (context == null) {
 			return;
 		}
 		List<ScreenedPair> pairs = new ArrayList<ScreenedPair>();
 		Set<List<String>> seenPairs = new LinkedHashSet<List<String>>();
-		// Seeded with every chip the arms above already raised, so the screen can add nothing that
-		// merely repeats one of them. Every chip it could repeat comes from a drug-in-play interaction
-		// arm: the contraindication arms — including the active-order one added by #143, which is why
-		// this says "the arms above" rather than naming them — raise TYPE_CONTRAINDICATION, and
-		// chipIdentity leads with the type, so one of those can never match a candidate here.
-		// The screen's gate reads the QUESTION alone (see the call
-		// site — the pre-answer findings pass and the post-answer chips pass must gate identically),
-		// so a drug the ANSWER named can be in play beside it, and then addInteractionWarnings has already
-		// run this very rule over these very orders: measured, an answer naming a subject the screen
-		// also reaches put the identical "X interacts with active order Y — Major" line in
-		// safetyWarnings TWICE. Suppression is on the chip's own identity, not on the gate, and the
-		// pair is marked seen either way, so the reverse direction cannot re-report it. It also makes
-		// two of this arm's own candidates that would word one statement identically collapse.
-		// "Identically" has to allow for issue #88's fold, which appends a sentence to the very chip
-		// this arm would raise for such a pair — see alreadySaid.
-		Set<String> seenChips = new LinkedHashSet<String>();
-		for (SafetyWarning existing : warnings) {
-			seenChips.add(chipIdentity(existing));
-		}
 		// Keyed by the reference data's own name for each drug, not by entry, and resolved once per
 		// drug — issue #115's shape reaches the subjects here exactly as it reaches the question drugs
 		// in the pair arm, because one order name resolves every route variant sharing an
@@ -1735,23 +1820,30 @@ public class DrugSafetyValidator {
 			// severity a clinician would actually be shown.
 			for (SubjectRule matched : bestRulePerPartner(ref, others, severityFloor, orderDrugs)) {
 				DrugReference.Interaction i = matched.rule;
-				// The partner is an active order too, so it is looked up among the order entries
-				// rather than across the whole dataset. Null when that order carries no reference
-				// entry of its own (a substance the dataset does not cover, matched by name): the
-				// finding still stands — the join above is what decides that — and the pair simply
-				// keys on the rule's own label, which no reverse direction can produce.
-				DrugReference partner = activeOrderEntryFor(orderDrugs, ref, i);
+				// The partner is an active order too, so it was looked up among the order entries rather
+				// than across the whole dataset, and it is carried on the matched rule rather than
+				// re-resolved here (see SubjectRule). Null when that order carries no reference entry of
+				// its own (a substance the dataset does not cover, matched by name): the finding still
+				// stands — the join above is what decides that — and the pair simply keys on the rule's
+				// own label, which no reverse direction can produce.
+				DrugReference partner = matched.partner;
 				String partnerName = partner != null ? keyNames.get(partner)
 						: partnerLabel(i).toLowerCase(Locale.ROOT);
 				if (!seenPairs.add(unorderedPairKey(keyNames.get(ref), partnerName))) {
 					continue;
 				}
-				SafetyWarning chip = interactionWarning(ref, i);
-				if (alreadySaid(chip, seenChips)) {
+				// The screen's gate reads the QUESTION alone (see the call site — the pre-answer findings
+				// pass and the post-answer chips pass must gate identically), so a drug the ANSWER named
+				// can be in play beside it, and then addInteractionWarnings has already run this very rule
+				// over these very orders: measured, an answer naming a subject the screen also reaches put
+				// the identical "X interacts with active order Y — Major" line in safetyWarnings TWICE.
+				// Asked of the pair rather than of the rendered chip, so the two arms cannot disagree by
+				// wording — see InteractionPairs. After the pair key above, so the pair is marked seen
+				// either way and the reverse direction cannot re-report it.
+				if (reportedPairs.alreadyReported(ref, matched.partnerKey())) {
 					continue;
 				}
-				seenChips.add(chipIdentity(chip));
-				pairs.add(new ScreenedPair(chip, severityPriority(i.getSeverity()),
+				pairs.add(new ScreenedPair(interactionWarning(ref, i), severityPriority(i.getSeverity()),
 						ref.displayLabel() + " x "
 								+ (partner != null ? partner.displayLabel() : partnerLabel(i)) + " ("
 								+ ChartSearchAiUtils.firstNonBlank(i.getSeverity(), "unrated") + ")"));
@@ -1973,71 +2065,19 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return a chip's full identity — every field a client renders — so a warning that states
-	 *         exactly what an already-raised one states can be recognised as a repeat. Only an EXACT
-	 *         repeat: two chips that state the same clinical fact in opposite directions ("A
-	 *         interacts with active order B" / "B interacts with active order A") differ here, and
-	 *         collapsing those needs the pair key above, not this one. The cross-arm duplication of
-	 *         issue #88 is likewise not this key's to catch: {@link #addInteractionWarnings} correlates
-	 *         a rule against the class arm's own finding about the same order, which is a comparison of
-	 *         REASONS rather than of rendered text, and approximating it here on a text key would
-	 *         collapse two chips whose wording happens to agree. Nor is the route-variant duplication of
-	 *         issue #145 this key's to catch, for the opposite reason: those chips each name their own
-	 *         route, so they are not exact repeats at all, and recognising them from the strings would
-	 *         mean pattern-matching a display label — {@link ContraindicationChips} groups them on
-	 *         substance identity instead. NUL-separated because the fields are
-	 *         clinical prose carrying spaces, colons and dashes of their own, so any printable
-	 *         delimiter would let two distinct triples key alike.
-	 */
-	private static String chipIdentity(SafetyWarning warning) {
-		return warning.getType() + '\u0000' + warning.getDrug() + '\u0000' + warning.getDetail();
-	}
-
-	/**
-	 * @return true when one of the already-raised chips in {@code said} (as {@link #chipIdentity}
-	 *         strings) states everything {@code candidate} states: its exact identity, or that identity
-	 *         carrying issue #88's folded class sentence after it.
-	 *
-	 *         <p>The second case is why equality alone is no longer enough. The screen stands down from
-	 *         a pair the drug-in-play arm already reported by recognising a chip worded identically —
-	 *         and for a CLASS-RELATED pair that arm's chip is precisely this candidate's chip plus one
-	 *         sentence, so on equality alone the screen re-reports the pair and #88's duplicate comes
-	 *         back in two wordings, one folded and one not. Reproduced through the real validator: an
-	 *         uncited answer naming one of the patient's own class-related orders, under a screening
-	 *         question, put both wordings in {@code safetyWarnings}.
-	 *
-	 *         <p>Matched against how {@link #addInteractionWarnings} composes the fold rather than by
-	 *         hunting for a sentence boundary — a mechanism note is prose full of full stops — and
-	 *         anchored on the folded sentence's own opening ({@code "<drug> is in "}), which is what
-	 *         keeps this from firing on a longer chip that merely BEGINS with the candidate's text:
-	 *         {@code iron} and {@code iron dextran} are both real KB partner labels, and
-	 *         "… active order iron" is a prefix of "… active order iron dextran".
-	 */
-	private static boolean alreadySaid(SafetyWarning candidate, Set<String> said) {
-		String identity = chipIdentity(candidate);
-		if (said.contains(identity)) {
-			return true;
-		}
-		String foldedPrefix = endSentence(identity) + " " + candidate.getDrug() + " is in ";
-		for (String existing : said) {
-			if (existing.startsWith(foldedPrefix)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	/**
 	 * @return the active-order reference entry {@code i} NAMES — through {@link #identifies}, the same
 	 *         name-identity test the question-pair arm uses, so both arms agree about which entry a
 	 *         rule points at — or null when that order carries no entry in the loaded dataset.
 	 *         {@code subject} is never returned: the partner is the OTHER side of the pair, and a rule
 	 *         of {@code subject} that {@link #identifies} {@code subject} itself is a self-pair.
 	 *
-	 *         <p>Two consumers since issue #136: this arm, which names a screened pair, and
-	 *         {@link #bestRulePerPartner}, which GROUPS chips on the entry rather than on the rule's
-	 *         label. One resolution for both, so a pair cannot be named after one entry and grouped
-	 *         under another.
+	 *         <p>ONE call site, {@link #bestRulePerPartner}, which stores the answer on the
+	 *         {@link SubjectRule} it builds. Three things need it and must not disagree — that grouping,
+	 *         the name and log label {@link #addActiveOrderPairInteractions} gives a screened pair, and
+	 *         the cross-arm key in {@link InteractionPairs} — so it is resolved once and carried rather
+	 *         than asked again by each of them. Issue #136 made it two consumers; keeping them in step by
+	 *         re-running the same scan was the arrangement, and carrying the result removes the chance of
+	 *         a pair being named after one entry and grouped under another.
 	 *
 	 *         <p>Name IDENTITY, deliberately not {@link DrugReference#matchesText}. A rule's token is
 	 *         exactly its partner's own alias (the {@code ddinter} parser writes it from the partner's

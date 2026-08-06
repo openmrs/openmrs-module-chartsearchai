@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -39,13 +40,27 @@ import org.junit.jupiter.api.Test;
  * reference record and the pre-answer finding derived from a chip — and one invariant at the parse
  * boundary covers all of them, and a future KB revision too.
  *
- * <p>Slices taken verbatim from the shipped KB, through the real {@link DdiDrugReferenceSource} parser
- * and the real {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)}.
+ * <p>A third shape is latent rather than shipped, and it is the only one the guard's ID leg can catch:
+ * a row publishing no {@code rxnorm_name} paired with itself. 28 rows publish none and 0 of them carry
+ * such a pair, so the leg cannot be exercised by any verbatim slice — the last three cases below use the
+ * one fixture that authors that row, and say so.
+ *
+ * <p>Slices taken verbatim from the shipped KB — apart from that one authored row, which its fixture's
+ * {@code metadata.note} identifies — through the real {@link DdiDrugReferenceSource} parser and the real
+ * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)}.
  */
 public class SelfInteractionTest {
 
 	/** Verbatim KB rows and interaction rows — see the fixture's own {@code metadata.note}. */
 	private static final String FIXTURE = "chartsearchai-test/ddi-self-interaction.json";
+
+	/**
+	 * The shape only the guard's ID leg can catch: verbatim KB rows publishing NO {@code rxnorm_name},
+	 * one of them paired with itself. That last row is the fixture's one authored row — see its own
+	 * {@code metadata.note} for why no verbatim slice can carry it.
+	 */
+	private static final String UNNAMED_SUBSTANCE_FIXTURE =
+			"chartsearchai-test/ddi-self-pair-unnamed-substance.json";
 
 	private static DrugReference entry(List<DrugReference> entries, String name) {
 		for (DrugReference entry : entries) {
@@ -166,6 +181,62 @@ public class SelfInteractionTest {
 		assertTrue(warnings.get(0).getDetail()
 				.startsWith("Lidocaine interacts with active order metoclopramide — Major. "),
 				"at the pair's most severe rating, was: " + warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void theFixtureForTheIdLegReallyPublishesNoSubstanceNameOnEitherRow() throws IOException {
+		// The premise of the two cases below, read off the FILE and off the parsed model, because both
+		// halves have to hold: the rows must publish no rxnorm_name (so substanceKey is null and the
+		// substance leg is inert), and the self-pair row must actually be in the file (the guard drops it,
+		// so it is invisible in the parser's output).
+		String json = DrugReferenceTestSupport.fixtureText(UNNAMED_SUBSTANCE_FIXTURE);
+		assertTrue(json.contains("\"DDInter1075\",\n   \"DDInter1075\""),
+				"the slice must pair the rxnorm-less row with itself, was: " + json);
+
+		for (DrugReference row : DrugReferenceTestSupport.ddiFixtureEntries(UNNAMED_SUBSTANCE_FIXTURE)) {
+			assertNull(row.getSubstanceName(), row.getName()
+					+ " must publish no substance name, or the substance leg would catch the self-pair and "
+					+ "this file would assert nothing about the id leg");
+		}
+	}
+
+	@Test
+	public void aSelfPairSurvivesOnTheIdLegWhenTheRowPublishesNoSubstanceName() throws IOException {
+		// The guard's id leg, which the shipped KB cannot exercise: 28 of its 2283 rows publish no
+		// rxnorm_name, and 0 of those carry a self-pair today, so the leg is latent — deleting it leaves
+		// every other case passing. It is not redundant. With no substance name there is no substanceKey to
+		// compare, so for such a row the id equality is the ONLY test between the KB and a rule whose token
+		// is the entry's own name; the chip a refresh would then produce reads "Liotrix interacts with
+		// active order liotrix", which is the nonsense issue #152 exists to stop. Asserted through the real
+		// validator on the real production path, not on the parsed rule list alone, so it pins the
+		// clinician-visible outcome.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.ddiFixtureService(UNNAMED_SUBSTANCE_FIXTURE))
+				.validate("", "Is it safe to give liotrix?", DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Liotrix 60mcg"), null, null, null));
+
+		assertEquals(0, warnings.size(),
+				"a row paired with itself must not be loaded even when it names no substance, was: "
+						+ warnings);
+	}
+
+	@Test
+	public void twoRowsThatBothPublishNoSubstanceNameAreStillTwoDrugs() throws IOException {
+		// The other half of the id leg, and the negative control without which the case above passes on a
+		// guard that drops every pair among rxnorm-less rows. substanceKey is null for BOTH of these rows,
+		// so a substance comparison that treated two nulls as equal — dropping the {@code substance != null}
+		// half of the guard — would silently discard all 13 shipped KB rows joining two of the 28. This is a
+		// genuine, verbatim KB pair and it must still chip.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.ddiFixtureService(UNNAMED_SUBSTANCE_FIXTURE))
+				.validate("", "Is it safe to give liotrix?", DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Multivitamin with iron"), null, null, null));
+
+		assertEquals(1, warnings.size(), "the genuine pair must still chip, was: " + warnings);
+		assertEquals("Liotrix", warnings.get(0).getDrug());
+		assertTrue(warnings.get(0).getDetail().startsWith(
+				"Liotrix interacts with active order multivitamin with iron — Moderate. "),
+				"was: " + warnings.get(0).getDetail());
 	}
 
 	@Test

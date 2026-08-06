@@ -1,0 +1,47 @@
+{
+ "metadata": {
+  "note": "The self-pair guard's ID leg, on the one row shape where it is the ONLY thing standing between the KB and a chip reading \"Liotrix interacts with active order liotrix\". Both drug rows are field-for-field their shipped KB rows, in KB order, and both publish NO rxnorm_name — 28 of the KB's 2283 rows do — so DrugReference.substanceKey is null for each of them and the substance leg of DdiDrugReferenceSource.isSelfPair cannot fire in either direction. NOT verbatim: the [DDInter1075, DDInter1075] row. The shipped KB pairs none of those 28 rows with itself, so the id leg is latent there and no verbatim slice can exercise it; this row is the shape a KB refresh would introduce, authored with the severity and the mechanism group the KB itself files on Liotrix's real iron partners so that it would chip if it were loaded. The [DDInter1075, DDInter2193] row IS verbatim, and it is the negative control the id leg needs: two rxnorm-less rows are two DIFFERENT drugs, so a guard that compared their null substance keys as equal would silently drop every one of the 13 KB rows joining two of the 28."
+ },
+ "mechanisms": {
+  "7940": {
+   "text": "Concurrent administration of iron-containing products may decrease the oral bioavailability and pharmacologic effects of levothyroxine.  The exact mechanism of interaction is unknown, but in vitro data suggest it may involve nonspecific adsorption of levothyroxine to iron at acidic pH levels, resulting in an insoluble complex that is poorly absorbed from the gastrointestinal tract.",
+   "categories": [
+    "absorption"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1075",
+   "name": "Liotrix",
+   "rxcui": null,
+   "rxnorm_name": null,
+   "drugbank_id": "DB01583",
+   "atc": [],
+   "ciel": []
+  },
+  {
+   "id": "DDInter2193",
+   "name": "Multivitamin with iron",
+   "rxcui": null,
+   "rxnorm_name": null,
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": []
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1075",
+   "DDInter1075",
+   "Moderate",
+   "7940"
+  ],
+  [
+   "DDInter1075",
+   "DDInter2193",
+   "Moderate",
+   "7940"
+  ]
+ ]
+}

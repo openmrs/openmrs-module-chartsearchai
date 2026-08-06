@@ -275,6 +275,14 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 * name keys null and is then only caught by the id test — the conservative direction: with no
 	 * substance identity to compare, two different ids are two different drugs.
 	 *
+	 * <p>So the id test is NOT subsumed by the substance one, though nothing in the shipped KB shows it:
+	 * every row it catches there also publishes a substance name. For a row publishing none the id
+	 * equality is the only test there is, and the {@code substance != null} half is what keeps two such
+	 * rows apart rather than collapsing every pair among them. Both are pinned on an authored row —
+	 * {@code SelfInteractionTest.aSelfPairSurvivesOnTheIdLegWhenTheRowPublishesNoSubstanceName} and
+	 * {@code twoRowsThatBothPublishNoSubstanceNameAreStillTwoDrugs} — because a refresh could introduce
+	 * that pairing and no verbatim slice can express it.
+	 *
 	 * <p>At load rather than in the arms that read the rules: those rows feed five consumers (the
 	 * drug-in-play chips, the screening arm, the question-pair arm, the promoted notes inside the
 	 * injected reference record, and the pre-answer finding derived from a chip), and one invariant at

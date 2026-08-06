@@ -359,8 +359,20 @@ public class DrugReference {
 	 *         and the class-based safety checks ({@code DrugSafetyValidator}).
 	 */
 	public Set<String> atcSubgroups() {
+		return atcSubgroups(normalizedAtcCodes());
+	}
+
+	/**
+	 * @return the level-4 subgroups of already-normalized {@code codes} — the same reduction
+	 *         {@link #atcSubgroups()} applies to an entry's own codes, for the codes an ACTIVE ORDER's
+	 *         concept maps to, which belong to no entry ({@code DrugSafetyValidator.classRelationships}
+	 *         compares those directly, because the loaded dataset need not carry the substance they
+	 *         identify). One definition, so an order and an entry cannot come to be in "the same ATC
+	 *         class" by two different reductions.
+	 */
+	static Set<String> atcSubgroups(Set<String> codes) {
 		Set<String> out = new LinkedHashSet<String>();
-		for (String code : normalizedAtcCodes()) {
+		for (String code : codes) {
 			if (code.length() >= ATC_SUBGROUP_PREFIX_LENGTH) {
 				out.add(code.substring(0, ATC_SUBGROUP_PREFIX_LENGTH));
 			}
@@ -457,6 +469,83 @@ public class DrugReference {
 		String normalized = normalizeAtcToken(code);
 		return normalized != null && !fallsUnderAnyGroup(normalized, SYSTEMIC_USE_EXCEPTIONS)
 				&& fallsUnderAnyGroup(normalized, LOCALLY_APPLIED_ATC_GROUPS);
+	}
+
+	/**
+	 * The ATC subgroups that assert NOTHING about the substances filed under them, so that two drugs
+	 * sharing one are not thereby related at all (issue #167).
+	 *
+	 * <p><b>Why a residual bucket is not automatically one of these.</b> ATC files a residue in most of
+	 * its groups — a level-4 subgroup whose published name begins "Other" or "Various", meaning
+	 * "everything in the group above that is not classified so far". The shipped 19 MB KB uses 97 of
+	 * them. But a residue INHERITS whatever the group containing it asserts: {@code R06AX} is "Other
+	 * antihistamines for systemic use", and its parent {@code R06A} is "ANTIHISTAMINES FOR SYSTEMIC
+	 * USE", so two drugs sharing {@code R06AX} really are both antihistamines and one really is
+	 * duplicate therapy for the other. Same for {@code J01GB} "Other aminoglycosides" (already pinned
+	 * by {@code CrossReactivityClassChoiceTest}), {@code N06AX} antidepressants, {@code N03AX}
+	 * antiepileptics, {@code N02AX} opioids. Vetoing every residue would have dropped a class claim
+	 * from 1974 of the KB's 7783 pairs that share a subgroup; 1488 of those keep it here.
+	 *
+	 * <p><b>The two families that assert nothing</b>, both because nothing in the residue's ancestry
+	 * states a property of the substance:
+	 * <ul>
+	 *   <li>a residue inside a group ATC defines by SITE OF APPLICATION — the groups
+	 *       {@link #isLocallyAppliedAtcCode} already recognises. {@code A01AD} "Other agents for local
+	 *       oral treatment" under {@code A01} "Stomatological preparations" is the whole of what
+	 *       acetylsalicylic acid ({@code A01AD05}, a mouth rinse) and epinephrine ({@code A01AD01}, a
+	 *       dental haemostatic) have in common, and the chip built on it told a clinician that
+	 *       adrenaline duplicates aspirin. Its siblings {@code A01AA}/{@code AB}/{@code AC} name what
+	 *       their members ARE (caries prophylactics, antiinfectives, corticosteroids) and are
+	 *       deliberately absent — being applied in one place is not a shared property, being a
+	 *       corticosteroid is;</li>
+	 *   <li>everything under {@code V03A}, whose own ATC name is "ALL OTHER THERAPEUTIC PRODUCTS" —
+	 *       ATC's residue for the whole classification. Its children partition that residue by the
+	 *       accident each product is used for rather than by what it is: {@code V03AB} "Antidotes"
+	 *       holds potassium iodide beside acetylcysteine, naloxone and dimercaprol, and reporting two
+	 *       of them as cross-reacting states a chemical relationship that does not exist. Written at
+	 *       the group rather than per child so a KB refresh cannot add a child that quietly escapes
+	 *       the rule.</li>
+	 * </ul>
+	 *
+	 * <p><b>Enumerated, not sampled.</b> These are every level-4 subgroup in the WHO ATC index whose
+	 * own published name begins "Other"/"Various" AND that falls under
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS} — 27 of the 933 level-4 subgroups in the 2024 ATC/DDD index,
+	 * spot-checked against the WHOCC index itself for the groups that decide a shipped pair; the KB
+	 * uses 20 of the 27, plus 8 of {@code V03A}'s children. Derived from the index rather than from
+	 * the defect, which is what makes the list complete rather than a patch of the two reported cases
+	 * — the failure mode issue #161's own list hit, where four missing groups reproduced the defect it
+	 * had just fixed. It is complete only WITH RESPECT TO {@link #LOCALLY_APPLIED_ATC_GROUPS}: extend
+	 * that list and this one has to be re-derived against the same index.
+	 *
+	 * <p>Measured over the shipped KB (2026-08-06; re-measure before relying on a figure): of the 7783
+	 * pairs sharing at least one level-4 subgroup, 486 lose their class claim entirely, 54 keep one and
+	 * name a subgroup that does classify the substances instead, and 7243 are untouched. The largest
+	 * contributors are {@code V03AB} (135 pairs), {@code D11AX} "Other dermatologicals" (130),
+	 * {@code S01XA} "Other ophthalmologicals" (99) and {@code D06AX} "Other antibiotics for topical
+	 * use" (68). Two of {@code V03A}'s children cost something real — {@code V03AC} iron chelators (3
+	 * pairs) and {@code V03AE} potassium/phosphate binders (6) do share a mechanism, and they lose the
+	 * claim with the rest of the group. That is the price of a rule stated over ATC's own words rather
+	 * than over a per-substance judgement this module has no data for.
+	 */
+	private static final List<String> UNCLASSIFYING_ATC_SUBGROUPS = Collections
+			.unmodifiableList(Arrays.asList("A01AD", "A07AX", "B05CX", "C05AX", "C05BX", "D01AE",
+					"D02AX", "D03AX", "D04AX", "D05AX", "D06AX", "D06BX", "D08AX", "D10AX", "D11AX",
+					"G01AX", "M02AX", "P03AX", "R01AX", "R02AX", "R03BX", "S01AX", "S01EX", "S01GX",
+					"S01JX", "S01KX", "S01XA", "V03A"));
+
+	/**
+	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized as
+	 *         {@link #isLocallyAppliedAtcCode} normalizes its argument — sits in one of the
+	 *         {@link #UNCLASSIFYING_ATC_SUBGROUPS}, i.e. whether it is a residual bucket that tells a
+	 *         reader nothing about the substances in it. Null and blank are not: nothing is known about
+	 *         them at all, which is a different answer from "known to mean nothing".
+	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.sharedClass}) for the
+	 *         same reason as its sibling: it is a rule about ATC's own group names, not a fact about a
+	 *         substance.
+	 */
+	static boolean isUnclassifyingAtcCode(String code) {
+		String normalized = normalizeAtcToken(code);
+		return normalized != null && fallsUnderAnyGroup(normalized, UNCLASSIFYING_ATC_SUBGROUPS);
 	}
 
 	/** @return whether the already-normalized {@code code} sits under any of {@code groups} — the one

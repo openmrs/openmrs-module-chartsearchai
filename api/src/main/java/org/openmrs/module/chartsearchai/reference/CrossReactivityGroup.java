@@ -118,27 +118,27 @@ public class CrossReactivityGroup {
 	 *         {@code null} when the two drugs share no curated group.
 	 */
 	public static CrossReactivityGroup sharedGroup(List<CrossReactivityGroup> refGroups, DrugReference other) {
-		Set<String> otherCodes = other.normalizedAtcCodes();
-		if (otherCodes.isEmpty()) {
-			return null;
-		}
-		for (CrossReactivityGroup group : refGroups) {
-			if (group.containsAnyCode(otherCodes)) {
-				return group;
-			}
-		}
-		return null;
+		return sharedGroupForCodes(refGroups, other.normalizedAtcCodes());
 	}
 
 	/**
-	 * @return the first of {@code refGroups} that the (normalized) ATC code {@code atcCode}
-	 *         also falls under, or {@code null}. The order-code variant of
+	 * @return the first of {@code refGroups} that any of the (normalized) ATC codes
+	 *         {@code atcCodes} falls under, or {@code null}. The order-code variant of
 	 *         {@link #sharedGroup(List, DrugReference)} for active orders whose substance
-	 *         may not be present in the loaded dataset.
+	 *         may not be present in the loaded dataset — a SET, because one order's concept can map
+	 *         to several codes and they are one co-medication, not several (issue #171).
+	 *
+	 *         <p>Scanning the groups rather than the codes is what makes the answer independent of the
+	 *         order the codes arrive in: the groups are curated data in dataset order, the codes are
+	 *         whatever a concept dictionary happened to publish.
 	 */
-	public static CrossReactivityGroup sharedGroupForCode(List<CrossReactivityGroup> refGroups, String atcCode) {
+	public static CrossReactivityGroup sharedGroupForCodes(List<CrossReactivityGroup> refGroups,
+			Set<String> atcCodes) {
+		if (atcCodes.isEmpty()) {
+			return null;
+		}
 		for (CrossReactivityGroup group : refGroups) {
-			if (group.containsCode(atcCode)) {
+			if (group.containsAnyCode(atcCodes)) {
 				return group;
 			}
 		}

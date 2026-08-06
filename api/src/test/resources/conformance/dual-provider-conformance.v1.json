@@ -98,6 +98,13 @@
       "expected": "accept_without_extra_records"
     },
     {
+      "id": "context.explicit-signals-are-retained",
+      "mode": "query_scoped",
+      "question": "Compare \"Sprained ankle\", 2023-01-01, 11111111-1111-4111-8111-111111111111, and CIEL:12345.",
+      "exact_match_ids": ["cond-old", "noise-1", "11111111-1111-4111-8111-111111111111", "coded-1"],
+      "expected_tier": "exact"
+    },
+    {
       "id": "context.mandatory-overflow-abstains",
       "mode": "query_scoped",
       "budget_tokens": 100,
@@ -109,7 +116,7 @@
       "similarity_matched_ids": ["panel-1"],
       "panel_members": {"panel-1": ["member-1", "member-2"]},
       "expected_included": ["panel-1", "member-1", "member-2"],
-      "expected_tier": {"panel-1": "similarity", "member-1": "panel", "member-2": "panel"}
+      "expected_tier": {"panel-1": "panel", "member-1": "panel", "member-2": "panel"}
     },
     {
       "id": "context.stable-ordering-preserves-chart-order-and-highest-tier-wins",

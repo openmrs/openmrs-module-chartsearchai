@@ -39,8 +39,8 @@ import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
 
 /**
  * Pins the med-agent-hub request envelope and SSE framing used by
- * {@link HttpHubStreamTransport}. Network I/O is not exercised here — only the pure request and
- * parse seams the production transport shares with the old relay.
+ * {@link HttpHubStreamTransport}. Most cases exercise pure request and parse seams; cancellation
+ * uses a loopback HTTP server so the production response-body close behavior is tested directly.
  */
 public class HttpHubStreamTransportTest {
 
@@ -105,7 +105,7 @@ public class HttpHubStreamTransportTest {
 	}
 
 	@Test
-	public void sseParserEmitsEventsAndIgnoresHeartbeats() throws Exception {
+	public void sseParserRelaysHeartbeatsSoTheBrowserConnectionIsProbed() throws Exception {
 		String sse = ""
 				+ ": hb\n\n"
 				+ "event: answer_done\n"
@@ -118,10 +118,11 @@ public class HttpHubStreamTransportTest {
 		try (InputStream in = new ByteArrayInputStream(sse.getBytes(StandardCharsets.UTF_8))) {
 			HttpHubStreamTransport.parseSse(in, events::add);
 		}
-		assertEquals(2, events.size());
-		assertEquals("answer_done", events.get(0).getEvent());
-		assertEquals("Aspirin", events.get(0).getPayload().get("answer"));
-		assertEquals("done", events.get(1).getEvent());
+		assertEquals(3, events.size());
+		assertEquals("heartbeat", events.get(0).getEvent());
+		assertEquals("answer_done", events.get(1).getEvent());
+		assertEquals("Aspirin", events.get(1).getPayload().get("answer"));
+		assertEquals("done", events.get(2).getEvent());
 	}
 
 	@Test

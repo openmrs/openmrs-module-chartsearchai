@@ -47,6 +47,7 @@ import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -205,24 +206,9 @@ public class LocalLlmEngine implements LlmEngine {
 	 */
 	synchronized int countTokens(String text) {
 		ensureServerRunning();
-		ObjectNode body = MAPPER.createObjectNode();
-		body.put("content", text == null ? "" : text);
-		body.put("add_special", false);
+		URI tokenizeUri = URI.create("http://127.0.0.1:" + serverPort + "/tokenize");
 		try {
-			HttpRequest request = HttpRequest.newBuilder()
-					.uri(URI.create("http://127.0.0.1:" + serverPort + "/tokenize"))
-					.timeout(Duration.ofSeconds(30))
-					.header("Content-Type", "application/json")
-					.POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body),
-							StandardCharsets.UTF_8))
-					.build();
-			HttpResponse<String> response = getHttpClient().send(request,
-					HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				throw new APIException(
-						"Local llama-server /tokenize returned HTTP " + response.statusCode());
-			}
-			return LlmResponseParser.parseTokenizeResponse(response.body());
+			return requestTokenCount(getHttpClient(), tokenizeUri, text);
 		}
 		catch (IOException e) {
 			throw new APIException("Failed to call local llama-server /tokenize: " + e.getMessage(), e);
@@ -231,6 +217,71 @@ public class LocalLlmEngine implements LlmEngine {
 			Thread.currentThread().interrupt();
 			throw new APIException("Local llama-server /tokenize call was interrupted", e);
 		}
+	}
+
+	/** Exact prompt count after llama-server applies this model's chat template. */
+	synchronized int countChatInputTokens(String systemPrompt, String userMessage) {
+		ensureServerRunning();
+		URI uri = URI.create("http://127.0.0.1:" + serverPort
+				+ "/v1/chat/completions/input_tokens");
+		try {
+			return requestChatInputTokenCount(getHttpClient(), uri, systemPrompt, userMessage);
+		}
+		catch (IOException e) {
+			throw new APIException("Failed to count local chat input tokens: " + e.getMessage(), e);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new APIException("Local chat input token count was interrupted", e);
+		}
+	}
+
+	/** Package-visible transport seam for llama.cpp's chat-template-aware count endpoint. */
+	static int requestChatInputTokenCount(HttpClient client, URI uri, String systemPrompt,
+			String userMessage) throws IOException, InterruptedException {
+		ObjectNode body = MAPPER.createObjectNode();
+		body.set("messages", ChatMessages.systemAndUser(MAPPER, systemPrompt, userMessage));
+		HttpRequest request = HttpRequest.newBuilder()
+				.uri(uri)
+				.timeout(Duration.ofSeconds(30))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body),
+						StandardCharsets.UTF_8))
+				.build();
+		HttpResponse<String> response = client.send(request,
+				HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		if (response.statusCode() < 200 || response.statusCode() >= 300) {
+			throw new APIException("Local chat input token count returned HTTP "
+					+ response.statusCode());
+		}
+		JsonNode root = MAPPER.readTree(response.body());
+		JsonNode count = root.get("input_tokens");
+		if (count == null || !count.canConvertToInt() || count.asInt() < 0) {
+			throw new APIException("Local chat input token count returned malformed JSON");
+		}
+		return count.asInt();
+	}
+
+	/** Package-visible transport seam used to pin the llama.cpp tokenize contract in tests. */
+	static int requestTokenCount(HttpClient client, URI tokenizeUri, String text)
+			throws IOException, InterruptedException {
+		ObjectNode body = MAPPER.createObjectNode();
+		body.put("content", text == null ? "" : text);
+		body.put("add_special", false);
+		HttpRequest request = HttpRequest.newBuilder()
+				.uri(tokenizeUri)
+				.timeout(Duration.ofSeconds(30))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body),
+						StandardCharsets.UTF_8))
+				.build();
+		HttpResponse<String> response = client.send(request,
+				HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		if (response.statusCode() < 200 || response.statusCode() >= 300) {
+			throw new APIException(
+					"Local llama-server /tokenize returned HTTP " + response.statusCode());
+		}
+		return LlmResponseParser.parseTokenizeResponse(response.body());
 	}
 
 	@Override
@@ -242,6 +293,14 @@ public class LocalLlmEngine implements LlmEngine {
 	@Override
 	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed) {
+		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer,
+				cacheScope, cacheSeed, CancellationSignal.NONE);
+	}
+
+	@Override
+	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
+			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+			CancellationSignal cancellation) {
 		ensureServerRunning();
 
 		// Disk-persisted KV cache on the QUERY path (mirrors what warmup already does, see
@@ -293,8 +352,15 @@ public class LocalLlmEngine implements LlmEngine {
 				throw new APIException("Local llama-server returned HTTP " + response.statusCode());
 			}
 
-			InferenceResult result = LlmResponseParser.parseStreamingResponse(
-					response.body(), tokenConsumer, log);
+			InputStream responseBody = response.body();
+			cancellation.bindCloseable(responseBody);
+			InferenceResult result;
+			try {
+				result = LlmResponseParser.parseStreamingResponse(responseBody, tokenConsumer, log);
+			}
+			finally {
+				cancellation.unbindCloseable(responseBody);
+			}
 
 			// The chart prefix is now resident in the RAM pool. If this was a genuinely cold prefill
 			// (not resident, not restored), persist it so the next visit — even after a restart —

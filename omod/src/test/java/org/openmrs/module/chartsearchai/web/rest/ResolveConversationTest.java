@@ -32,11 +32,9 @@ import org.openmrs.module.chartsearchai.model.ClinicalConversationTurn;
  * providerId creates a new conversation" (the service-layer half,
  * {@code ConversationServiceImpl.openOrCreate}, is covered by
  * {@code ConversationServicePersistenceTest#reusesOnlyAnActiveConversationWithTheSameProviderAndMode}).
- * Live-observed gap this closes: a client that submits a turn with a provider different from the
- * one bound to its client-supplied session must never have that turn silently written into the
- * old conversation — the caller (openOrCreate, delegated to on any mismatch) closes the old one
- * and opens a new one, and the caller must see a DIFFERENT conversation uuid back so it can stop
- * displaying the old conversation's turns as part of the same thread.
+ * A turn submitted with a provider different from its client-supplied session must open a new
+ * conversation. The returned UUID lets the client keep turns from different providers in
+ * separate threads.
  */
 public class ResolveConversationTest {
 
@@ -77,9 +75,7 @@ public class ResolveConversationTest {
 
 	@Test
 	public void aProviderMismatchNeverReusesTheClientSuppliedSession() {
-		// The exact live-observed scenario: a stale client session bound to "bundled" (e.g. from a
-		// picker that didn't sync to a restored conversation's real provider) is submitted
-		// alongside provider=hub. The old conversation must never receive a hub-answered turn.
+		// A session bound to the bundled provider must not receive a hub-answered turn.
 		ChartSearchAiRestController controller = new ChartSearchAiRestController();
 		StubConversationService conversations = new StubConversationService();
 		Patient patient = patient();

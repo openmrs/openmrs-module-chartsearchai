@@ -75,6 +75,8 @@ public class HubClinicalAnswerProviderTest {
 
 		RuntimeException failure;
 
+		boolean cancelOnFailure = true;
+
 		int httpStatus = 200;
 
 		String errorBody;
@@ -97,12 +99,33 @@ public class HubClinicalAnswerProviderTest {
 			// because cancel() itself closed the resource; mirror that causality instead of the test
 			// pre-cancelling (which would trip execute()'s own "not started yet" guard).
 			if (failure != null) {
-				if (cancellation instanceof TurnCancellation) {
+				if (cancelOnFailure && cancellation instanceof TurnCancellation) {
 					((TurnCancellation) cancellation).cancel();
 				}
 				throw failure;
 			}
 		}
+	}
+
+	@Test
+	public void aTransportFailureAfterAnswerDonePreservesTheAnswerForReload() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Collections.singletonList(wire("answer_done", answerPayload("Aspirin 81mg.")));
+		transport.failure = new RuntimeException("upstream read timed out");
+		transport.cancelOnFailure = false;
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink,
+				CancellationSignal.NONE).toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		assertEquals("Aspirin 81mg.", result.getAnswer().getText());
+		assertEquals("unavailable",
+				((Map<?, ?>) result.getAnswer().getPayload().get("answerValidation")).get("status"));
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
+				TurnEventType.ANSWER_VALIDATION, TurnEventType.TURN_DONE), sink.types());
 	}
 
 	private static HubClinicalAnswerProvider provider(ScriptedHubTransport transport, String endpoint) {
@@ -139,6 +162,7 @@ public class HubClinicalAnswerProviderTest {
 		assertFalse(descriptor.isReady());
 		assertNotNull(descriptor.getUnavailableReason());
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.ANSWER));
+		assertFalse(descriptor.getCapabilities().contains(ProviderCapability.TOKEN_STREAMING));
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.INDEPTH));
 		assertTrue(descriptor.getCapabilities().contains(ProviderCapability.ANSWER_REVIEW));
 	}
@@ -193,6 +217,8 @@ public class HubClinicalAnswerProviderTest {
 		Map<?, ?> finalInDepthValidation = (Map<?, ?>) finalInDepth.get("validation");
 		assertEquals("One claim is not supported by its cited source.",
 				finalInDepthValidation.get("summary"));
+		assertEquals(done, sink.events.get(sink.events.size() - 1).getAnswer().getPayload(),
+				"turn_done must relay the final post-review, post-grounding envelope");
 		assertNull(result.getProblemCode());
 	}
 
@@ -248,6 +274,23 @@ public class HubClinicalAnswerProviderTest {
 	}
 
 	@Test
+	public void aDoneEventWithoutAnAnswerIsOneTurnErrorNotAFalseSuccess() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Collections.singletonList(wire("done", Collections.emptyMap()));
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink,
+				CancellationSignal.NONE).toCompletableFuture().get();
+
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_ERROR),
+				sink.types());
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+		assertEquals("hub_stream_incomplete", result.getProblemCode());
+	}
+
+	@Test
 	public void theCallersCancellationSignalIsHandedToTheTransport() throws Exception {
 		// So a preempting turn can force-close the hub's open response body (via
 		// TurnCancellation.bindCloseable) rather than the hub connection running to its own
@@ -286,6 +329,14 @@ public class HubClinicalAnswerProviderTest {
 
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
 		assertEquals("Aspirin 81mg.", result.getAnswer().getText());
+		assertEquals("unavailable",
+				((Map<?, ?>) result.getAnswer().getPayload().get("answerValidation")).get("status"));
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
+				TurnEventType.ANSWER_VALIDATION, TurnEventType.TURN_DONE), sink.types());
+		assertEquals("unavailable", ((Map<?, ?>) sink.events.get(sink.events.size() - 1)
+				.getAnswer().getPayload().get("answerValidation")).get("status"));
+		assertTrue(TurnLifecycleValidator
+				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
 		assertNull(result.getProblemCode());
 	}
 
@@ -299,8 +350,12 @@ public class HubClinicalAnswerProviderTest {
 		// forever that In-Depth is still running.
 		ScriptedHubTransport transport = new ScriptedHubTransport();
 		Map<String, Object> answer = answerPayload("Aspirin 81mg.");
-		answer.put("inDepth", new LinkedHashMap<>(Collections.singletonMap("status", "pending")));
-		transport.events = Collections.singletonList(wire("indepth_pending", answer));
+		Map<String, Object> checked = answerPayload("Aspirin 81mg.");
+		checked.put("answerValidation", Collections.singletonMap("status", "checked"));
+		Map<String, Object> pending = new LinkedHashMap<>(checked);
+		pending.put("inDepth", new LinkedHashMap<>(Collections.singletonMap("status", "pending")));
+		transport.events = Arrays.asList(wire("answer_done", answer),
+				wire("answer_validation", checked), wire("indepth_pending", pending));
 		transport.failure = new RuntimeException("connection reset");
 		HubClinicalAnswerProvider provider = provider(transport,
 				"http://hub.example/v1/chat/completions");
@@ -312,6 +367,49 @@ public class HubClinicalAnswerProviderTest {
 
 		Map<String, Object> inDepth = (Map<String, Object>) result.getAnswer().getPayload().get("inDepth");
 		assertEquals("failed", inDepth.get("status"));
+		Map<String, Object> validation = (Map<String, Object>) result.getAnswer().getPayload()
+				.get("answerValidation");
+		assertEquals("checked", validation.get("status"));
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
+				TurnEventType.ANSWER_VALIDATION, TurnEventType.INDEPTH_PENDING,
+				TurnEventType.INDEPTH_ERROR, TurnEventType.TURN_DONE), sink.types());
+		assertTrue(TurnLifecycleValidator
+				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
+		Map<?, ?> terminalInDepth = (Map<?, ?>) sink.events.get(sink.events.size() - 1)
+				.getAnswer().getPayload().get("inDepth");
+		assertEquals("failed", terminalInDepth.get("status"));
+	}
+
+	@Test
+	public void finalDoneAfterInDepthDoesNotEmitABackwardsEvidenceEvent() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		Map<String, Object> answer = answerPayload("Initial answer.");
+		Map<String, Object> checked = new LinkedHashMap<>(answer);
+		checked.put("answerValidation", Collections.singletonMap("status", "checked"));
+		Map<String, Object> pending = new LinkedHashMap<>(checked);
+		pending.put("inDepth", Collections.singletonMap("status", "pending"));
+		Map<String, Object> complete = new LinkedHashMap<>(checked);
+		complete.put("inDepth", Collections.singletonMap("status", "complete"));
+		Map<String, Object> finalEnvelope = new LinkedHashMap<>(complete);
+		finalEnvelope.put("trace", Collections.singletonMap("total_ms", Integer.valueOf(10)));
+		transport.events = Arrays.asList(wire("answer_done", answer),
+				wire("answer_validation", checked), wire("indepth_pending", pending),
+				wire("indepth_done", complete), wire("done", finalEnvelope));
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink,
+				CancellationSignal.NONE).toCompletableFuture().get();
+
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
+				TurnEventType.ANSWER_VALIDATION, TurnEventType.INDEPTH_PENDING,
+				TurnEventType.INDEPTH_DONE, TurnEventType.TURN_DONE), sink.types());
+		assertTrue(TurnLifecycleValidator
+				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
+		assertEquals(finalEnvelope.get("trace"), result.getAnswer().getPayload().get("trace"));
+		assertEquals(finalEnvelope.get("trace"), sink.events.get(sink.events.size() - 1)
+				.getAnswer().getPayload().get("trace"));
 	}
 
 	@Test
@@ -347,9 +445,31 @@ public class HubClinicalAnswerProviderTest {
 		TurnResult result = provider.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
-		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_DONE), sink.types());
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
+				TurnEventType.TURN_DONE), sink.types());
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
 		assertEquals("Aspirin 81mg.", result.getAnswer().getText());
+	}
+
+	@Test
+	public void aChangedFinalDoneEnvelopeIsEmittedBeforeTheTerminalMarker() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		Map<String, Object> checking = answerPayload("Initial answer.");
+		Map<String, Object> finalAnswer = new LinkedHashMap<>(checking);
+		finalAnswer.put("answer", "Checked answer.");
+		finalAnswer.put("answerValidation", Collections.singletonMap("status", "edited"));
+		transport.events = Arrays.asList(wire("answer_done", checking), wire("done", finalAnswer));
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink, CancellationSignal.NONE)
+				.toCompletableFuture().get();
+
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
+				TurnEventType.EVIDENCE_UPDATED, TurnEventType.TURN_DONE), sink.types());
+		assertEquals("Checked answer.", sink.events.get(2).getAnswer().getText());
+		assertEquals("Checked answer.", result.getAnswer().getText());
 	}
 
 	@Test

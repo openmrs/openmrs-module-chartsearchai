@@ -15,6 +15,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -238,6 +240,26 @@ public class LlmProvider {
 	 */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, String cacheScope) {
+		return searchStreamingInternal(numberedRecords, focusIndices, question, tokenConsumer,
+				reasoningConsumer, cacheScope, CancellationSignal.NONE);
+	}
+
+	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, String cacheScope,
+			CancellationSignal cancellation) {
+		if (cancellation == null || cancellation == CancellationSignal.NONE) {
+			// Preserve the long-standing six-argument extension point used by alternate
+			// providers and tests. Real product turns pass a TurnCancellation below.
+			return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer,
+					reasoningConsumer, cacheScope);
+		}
+		return searchStreamingInternal(numberedRecords, focusIndices, question, tokenConsumer,
+				reasoningConsumer, cacheScope, cancellation);
+	}
+
+	private LlmResponse searchStreamingInternal(String numberedRecords, List<Integer> focusIndices,
+			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			String cacheScope, CancellationSignal cancellation) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question);
 		// The KV seed must be the question-independent prefix so it matches the warmup key exactly.
@@ -254,7 +276,7 @@ public class LlmProvider {
 		};
 
 		LlmEngine.InferenceResult result = getActiveEngine().inferStreaming(
-				systemPrompt, userMessage, timeoutSeconds, tee, cacheScope, cacheSeed);
+				systemPrompt, userMessage, timeoutSeconds, tee, cacheScope, cacheSeed, cancellation);
 
 		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
 				result.getCachedTokens());

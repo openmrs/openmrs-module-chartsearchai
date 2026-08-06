@@ -40,6 +40,8 @@ import org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope;
 import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProviderRegistry;
+import org.openmrs.module.chartsearchai.api.provider.HubClinicalAnswerProvider;
+import org.openmrs.module.chartsearchai.api.provider.HubWireEvent;
 import org.openmrs.module.chartsearchai.api.provider.ProviderCapability;
 import org.openmrs.module.chartsearchai.api.provider.ProviderDescriptor;
 import org.openmrs.module.chartsearchai.api.provider.ProviderMode;
@@ -99,14 +101,19 @@ public class ProviderRestContractTest {
 		ChartSearchAiRestController controller = new ChartSearchAiRestController();
 		RecordingConversationService conversations = new RecordingConversationService();
 		ScriptedProvider provider = new ScriptedProvider("bundled", true);
+		Map<String, Object> finalPayload = answerPayload("Aspirin 81mg (checked).");
+		finalPayload.put("answerValidation", Collections.singletonMap("status", "checked"));
+		finalPayload.put("safetyStatus", "checked");
+		finalPayload.put("inDepth", Collections.singletonMap("status", "complete"));
 		provider.events = Arrays.asList(
 				TurnEvent.of(TurnEventType.TURN_STARTED, 0, "bundled"),
 				TurnEvent.delta(TurnEventType.ANSWER_DELTA, 1, "bundled", "Aspirin "),
 				TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, 2, "bundled",
 						AnswerEnvelope.fromPayload(answerPayload("Aspirin 81mg."))),
-				TurnEvent.of(TurnEventType.TURN_DONE, 3, "bundled"));
+				TurnEvent.withAnswer(TurnEventType.TURN_DONE, 3, "bundled",
+						AnswerEnvelope.fromPayload(finalPayload)));
 		provider.result = TurnResult.done("bundled", ProviderMode.QUERY_SCOPED,
-				AnswerEnvelope.fromPayload(answerPayload("Aspirin 81mg.")));
+				AnswerEnvelope.fromPayload(finalPayload));
 		controller.setConversationService(conversations);
 		controller.setProviderRegistry(stubRegistry(provider));
 
@@ -119,12 +126,17 @@ public class ProviderRestContractTest {
 				types);
 		assertEquals(1, conversations.started);
 		assertEquals(1, conversations.finished);
-		assertEquals("Aspirin 81mg.", conversations.lastFinishedAnswer);
+		assertEquals("Aspirin 81mg (checked).", conversations.lastFinishedAnswer);
 		assertEquals("conversation-uuid-1", conversations.openConversation.getUuid());
 		JsonNode answerDone = ssePayload(out, "answer_done");
 		assertEquals("Aspirin 81mg.", answerDone.get("answer").asText());
 		assertEquals("turn-uuid-1", answerDone.get("messageId").asText());
 		assertEquals("conversation-uuid-1", answerDone.get("session").asText());
+		JsonNode turnDone = ssePayload(out, "turn_done");
+		assertEquals("Aspirin 81mg (checked).", turnDone.get("answer").asText());
+		assertEquals("checked", turnDone.path("answerValidation").path("status").asText());
+		assertEquals("checked", turnDone.get("safetyStatus").asText());
+		assertEquals("complete", turnDone.path("inDepth").path("status").asText());
 	}
 
 	@Test
@@ -243,6 +255,38 @@ public class ProviderRestContractTest {
 						+ "because its browser connection was already gone when it completed");
 	}
 
+	@Test
+	@SuppressWarnings("unchecked")
+	public void aClientDisconnectCancelsTheHubTailAndPersistsAnHonestTerminalEnvelope() {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		Map<String, Object> answer = answerPayload("Answer before disconnect.");
+		answer.put("answerValidation", Collections.singletonMap("status", "checking"));
+		answer.put("inDepth", Collections.singletonMap("status", "pending"));
+		HubClinicalAnswerProvider provider = new HubClinicalAnswerProvider(
+				(request, sink, cancellation) -> sink.accept(new HubWireEvent("answer_done", answer))) {
+
+			@Override
+			protected String gp(String property, String defaultValue) {
+				return "http://hub.example/v1/chat/completions";
+			}
+		};
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(provider));
+
+		controller.streamProviderTurn(new FailAfterWritesOutputStream(1), patient(), "What meds?",
+				"hub", ProviderMode.QUERY_SCOPED, "single-e4b-checked", null);
+
+		assertEquals(1, conversations.finished,
+				"the final answer must persist after the browser disconnects during its staged tail");
+		assertEquals("Answer before disconnect.", conversations.lastFinishedAnswer);
+		Map<String, Object> validation = (Map<String, Object>) conversations.lastFinishedPayload
+				.get("answerValidation");
+		assertEquals("unavailable", validation.get("status"));
+		Map<String, Object> inDepth = (Map<String, Object>) conversations.lastFinishedPayload.get("inDepth");
+		assertEquals("failed", inDepth.get("status"));
+	}
+
 	private static final class ThrowingOutputStream extends java.io.OutputStream {
 
 		int writeAttempts;
@@ -251,6 +295,27 @@ public class ProviderRestContractTest {
 		public void write(int b) throws IOException {
 			writeAttempts++;
 			throw new IOException("connection reset by peer");
+		}
+	}
+
+	private static final class FailAfterWritesOutputStream extends java.io.OutputStream {
+
+		private int successfulWritesRemaining;
+
+		FailAfterWritesOutputStream(int successfulWrites) {
+			this.successfulWritesRemaining = successfulWrites;
+		}
+
+		@Override
+		public void write(int b) throws IOException {
+			write(new byte[] { (byte) b }, 0, 1);
+		}
+
+		@Override
+		public void write(byte[] b, int off, int len) throws IOException {
+			if (successfulWritesRemaining-- <= 0) {
+				throw new IOException("connection reset by peer");
+			}
 		}
 	}
 
@@ -334,12 +399,8 @@ public class ProviderRestContractTest {
 
 	@Test
 	public void chatStreamWithNoExplicitModeUsesTheProvidersLiveConfiguredMode() throws Exception {
-		// Regression: chartsearchai.chartMode=fullChart previously failed EVERY turn with
-		// unsupported_mode, because resolveMode's hardcoded query_scoped default never matched
-		// the provider's actual configured mode (full_chart_stable) — a mismatch the provider's
-		// own no-silent-fallback guard correctly rejects. With mode UNSPECIFIED (the normal,
-		// only-ever-used-in-practice case — no caller sends "mode"), the turn must succeed using
-		// whatever mode the provider is actually configured for.
+		// An unspecified request mode must use the provider's configured mode. It must not inject a
+		// request-layer default that the provider would correctly reject as unsupported.
 		ChartSearchAiRestController controller = new ChartSearchAiRestController();
 		RecordingConversationService conversations = new RecordingConversationService();
 		ScriptedProvider bundled = new ScriptedProvider("bundled", true);
@@ -507,6 +568,8 @@ public class ProviderRestContractTest {
 
 		String lastRecordedCheckedAnswer;
 
+		Map<String, Object> lastFinishedPayload;
+
 		RecordingConversationService() {
 			openConversation = new ClinicalConversation();
 			openConversation.setUuid("conversation-uuid-1");
@@ -563,6 +626,7 @@ public class ProviderRestContractTest {
 				TurnResult result, long responseTimeMs) {
 			finished++;
 			lastFinishedAnswer = result.getAnswer() == null ? null : result.getAnswer().getText();
+			lastFinishedPayload = result.getAnswer() == null ? null : result.getAnswer().getPayload();
 			return turn;
 		}
 

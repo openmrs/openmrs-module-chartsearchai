@@ -14,8 +14,10 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 
 /**
  * Answers natural language questions about a patient's chart using a local LLM.
@@ -145,6 +147,15 @@ public interface ChartSearchService {
 			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer) {
 		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
 				ungroundedAnswerConsumer);
+	}
+
+	/** Cancellation-aware form used by the provider-neutral turn lifecycle. */
+	default ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer,
+			Consumer<String> reasoningConsumer, Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer,
+			CancellationSignal cancellation) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+				ungroundedAnswerConsumer, preliminaryReasoningConsumer);
 	}
 
 	/**
@@ -345,6 +356,8 @@ public interface ChartSearchService {
 
 		private final int withheldInteractions;
 
+		private final String group;
+
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date) {
 			this(index, resourceType, resourceUuid, date, null);
 		}
@@ -367,6 +380,7 @@ public interface ChartSearchService {
 			this.grounded = grounded;
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
+			this.group = ChartSearchAiUtils.referenceGroup(resourceType);
 		}
 
 		public int getIndex() {
@@ -417,6 +431,11 @@ public interface ChartSearchService {
 		 */
 		public int getWithheldInteractions() {
 			return withheldInteractions;
+		}
+
+		/** Server-authoritative provenance group: patient chart or module reference material. */
+		public String getGroup() {
+			return group;
 		}
 
 		/**

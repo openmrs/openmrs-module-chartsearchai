@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.provider;
 
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -19,6 +20,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -224,7 +226,11 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 		}
 
 		boolean[] answerDoneEmitted = { false };
+		AtomicReference<AnswerEnvelope> latestAnswer = new AtomicReference<>();
 		ChartAnswer finalAnswer;
+		Thread executionThread = Thread.currentThread();
+		Closeable threadInterrupt = executionThread::interrupt;
+		cancellation.bindCloseable(threadInterrupt);
 		try {
 			finalAnswer = chartSearchService.searchStreaming(request.getPatient(), request.getQuestion(),
 					token -> events.accept(TurnEvent.delta(TurnEventType.ANSWER_DELTA,
@@ -236,10 +242,12 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 					citations -> {
 					}, ungrounded -> {
 						answerDoneEmitted[0] = true;
+						AnswerEnvelope envelope = toAnswerEnvelope(ungrounded);
+						latestAnswer.set(envelope);
 						events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE,
-								sequence.getAndIncrement(), PROVIDER_ID, toAnswerEnvelope(ungrounded)));
+								sequence.getAndIncrement(), PROVIDER_ID, envelope));
 					}, preliminary -> events.accept(TurnEvent.delta(TurnEventType.REASONING_DELTA,
-							sequence.getAndIncrement(), PROVIDER_ID, preliminary)));
+							sequence.getAndIncrement(), PROVIDER_ID, preliminary)), cancellation);
 		}
 		catch (InsufficientContextException e) {
 			return failed(events, sequence, configuredMode, PROBLEM_INSUFFICIENT_CONTEXT);
@@ -248,8 +256,24 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 			return failed(events, sequence, configuredMode, PROBLEM_CHART_TOO_LARGE);
 		}
 		catch (RuntimeException e) {
+			if (cancellation.isCancelled()) {
+				if (latestAnswer.get() != null) {
+					AnswerEnvelope partialAnswer = latestAnswer.get();
+					events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
+							sequence.getAndIncrement(), PROVIDER_ID, partialAnswer));
+					return CompletableFuture.completedFuture(
+							TurnResult.done(PROVIDER_ID, configuredMode, partialAnswer));
+				}
+				return failed(events, sequence, configuredMode, PROBLEM_CANCELLED);
+			}
 			log.warn("Bundled provider turn failed for request {}", request.getRequestId(), e);
 			return failed(events, sequence, configuredMode, PROBLEM_PROVIDER_FAILURE);
+		}
+		finally {
+			cancellation.unbindCloseable(threadInterrupt);
+			if (cancellation.isCancelled()) {
+				Thread.interrupted();
+			}
 		}
 
 		AnswerEnvelope finalEnvelope = toAnswerEnvelope(finalAnswer);
@@ -264,7 +288,8 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 			events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, sequence.getAndIncrement(),
 					PROVIDER_ID, finalEnvelope));
 		}
-		events.accept(TurnEvent.of(TurnEventType.TURN_DONE, sequence.getAndIncrement(), PROVIDER_ID));
+		events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
+				sequence.getAndIncrement(), PROVIDER_ID, finalEnvelope));
 		return CompletableFuture.completedFuture(TurnResult.done(PROVIDER_ID, configuredMode, finalEnvelope));
 	}
 
@@ -292,6 +317,9 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 			value.put("date", reference.getDate() == null ? null
 					: DateFormatUtil.formatDate(reference.getDate()));
 			value.put("grounded", reference.getGrounded());
+			value.put("group", reference.getGroup());
+			value.put("source", reference.getSource());
+			value.put("withheldInteractions", reference.getWithheldInteractions());
 			references.add(value);
 		}
 		payload.put("references", references);

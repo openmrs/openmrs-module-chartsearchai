@@ -14,6 +14,7 @@ import java.util.List;
 
 import org.openmrs.module.querystore.api.QueryStoreService;
 import org.openmrs.module.querystore.backend.WriteResult;
+import org.openmrs.module.querystore.backend.PatientChartRead;
 import org.openmrs.module.querystore.model.QueryDocument;
 
 /**
@@ -39,6 +40,8 @@ final class CountingQueryStoreStub implements QueryStoreService {
 
 	boolean throwOnSearch = false;
 
+	boolean chartTruncated = false;
+
 	/** Aggregate counter — pre-focus-hint tests assert on total querystore calls
 	 *  without caring which method. */
 	int getCallCount() {
@@ -62,6 +65,12 @@ final class CountingQueryStoreStub implements QueryStoreService {
 		return stubChart;
 	}
 
+	@Override
+	public PatientChartRead getPatientChartRead(String patientUuid) {
+		getPatientChartCalls++;
+		return new PatientChartRead(stubChart, chartTruncated);
+	}
+
 	int getContextSliceCalls = 0;
 
 	org.openmrs.module.querystore.model.ContextSliceRequest lastSliceRequest;
@@ -83,7 +92,14 @@ final class CountingQueryStoreStub implements QueryStoreService {
 		org.openmrs.module.querystore.api.impl.QueryStoreServiceImpl real =
 				new org.openmrs.module.querystore.api.impl.QueryStoreServiceImpl();
 		real.setBackend(new BridgeBackend());
-		return real.getContextSlice(patientUuid, question, request);
+		org.openmrs.module.querystore.model.ContextSlice slice =
+				real.getContextSlice(patientUuid, question, request);
+		if (!chartTruncated) {
+			return slice;
+		}
+		return new org.openmrs.module.querystore.model.ContextSlice(slice.getRecords(),
+				slice.getChartSize(), true, slice.getEffectiveTypes(), slice.isTemporalApplied(),
+				slice.getChartSnapshotId());
 	}
 
 	/** Serves {@code stubChart}/{@code stubHits} to the real slice impl, keeping the outer

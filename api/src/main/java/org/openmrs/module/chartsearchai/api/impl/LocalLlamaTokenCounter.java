@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 /**
  * {@link TokenCounter} for {@link LocalLlmEngine}, available exactly when
  * {@code chartsearchai.llm.engine} resolves to local (the same default {@link LlmProvider} uses).
- * A remote engine has no assumed {@code /tokenize} route — an arbitrary OpenAI-compatible
+ * A remote engine has no assumed input-token route — an arbitrary OpenAI-compatible
  * endpoint (vLLM, Ollama, a cloud provider) is not guaranteed to expose one — so
  * {@link #isAvailable()} is false in that case and callers must skip proactive budget
  * enforcement rather than approximate.
@@ -37,6 +37,10 @@ public class LocalLlamaTokenCounter implements TokenCounter {
 	public boolean isAvailable() {
 		String engineType = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_LLM_ENGINE);
+		return supportsExactCount(engineType);
+	}
+
+	static boolean supportsExactCount(String engineType) {
 		return engineType == null
 				|| !ChartSearchAiConstants.LLM_ENGINE_REMOTE.equalsIgnoreCase(engineType.trim());
 	}
@@ -44,6 +48,20 @@ public class LocalLlamaTokenCounter implements TokenCounter {
 	@Override
 	public int count(String text) {
 		return localLlmEngine.countTokens(text);
+	}
+
+	@Override
+	public int countPrompt(String numberedRecords, String question) {
+		return localLlmEngine.countChatInputTokens(systemPrompt(),
+				LlmProvider.buildUserMessage(numberedRecords, question));
+	}
+
+	/** Package-visible configuration seam for a context-free contract test. */
+	String systemPrompt() {
+		String configured = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_SYSTEM_PROMPT);
+		return configured == null || configured.trim().isEmpty()
+				? LlmProvider.DEFAULT_SYSTEM_PROMPT : configured.trim();
 	}
 
 	@Override

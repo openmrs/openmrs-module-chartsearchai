@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.querystore.api.QueryStoreService;
@@ -164,6 +166,24 @@ public class QueryStoreChartBuilderTest {
 		// scope (and with it warmup/restore) for the mode whose whole design depends on it.
 		assertFalse(builder.build(patient(1), "any allergies?").isQueryScoped(),
 				"fullChart builds must never carry the query-scoped stamp");
+	}
+
+	@Test
+	public void build_withholdsAnIncompleteFullChart() {
+		queryStore.stubChart.add(new QueryDocument());
+		queryStore.chartTruncated = true;
+
+		assertThrows(ChartTooLargeException.class,
+				() -> builder.build(patient(1), "any allergies?"));
+	}
+
+	@Test
+	public void build_failsExplicitlyWhenQueryStoreIsUnavailable() {
+		TestableQueryStoreChartBuilder unavailable = new TestableQueryStoreChartBuilder(null);
+		unavailable.setChartSerializer(new PatientChartSerializer());
+
+		assertThrows(IllegalStateException.class,
+				() -> unavailable.build(patient(1), "any allergies?"));
 	}
 
 	@Test

@@ -11,8 +11,9 @@ package org.openmrs.module.chartsearchai.api.provider;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +34,7 @@ public final class TurnCancellation implements CancellationSignal {
 
 	private final AtomicBoolean cancelled = new AtomicBoolean(false);
 
-	private final AtomicReference<Closeable> resource = new AtomicReference<>();
+	private final Set<Closeable> resources = ConcurrentHashMap.newKeySet();
 
 	@Override
 	public boolean isCancelled() {
@@ -45,17 +46,30 @@ public final class TurnCancellation implements CancellationSignal {
 	 * cancelled before anything was bound (a fast preempt racing the provider's own setup), the
 	 * resource is closed immediately instead of being held.
 	 */
+	@Override
 	public void bindCloseable(Closeable closeable) {
-		resource.set(closeable);
-		if (cancelled.get()) {
-			closeQuietly(resource.getAndSet(null));
+		if (closeable == null) {
+			return;
 		}
+		resources.add(closeable);
+		if (cancelled.get() && resources.remove(closeable)) {
+			closeQuietly(closeable);
+		}
+	}
+
+	@Override
+	public void unbindCloseable(Closeable closeable) {
+		resources.remove(closeable);
 	}
 
 	/** Cancels this turn and force-closes whatever resource is currently bound, if any. Idempotent. */
 	public void cancel() {
 		if (cancelled.compareAndSet(false, true)) {
-			closeQuietly(resource.getAndSet(null));
+			for (Closeable resource : resources) {
+				if (resources.remove(resource)) {
+					closeQuietly(resource);
+				}
+			}
 		}
 	}
 

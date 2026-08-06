@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -34,6 +36,100 @@ public class LlmInferenceServiceTest {
 
 	private static String uuid(int i) {
 		return TestDatasetHelper.uuidForIndex(i);
+	}
+
+	@Test
+	public void finalPromptBudgetIncludesInjectedReferenceMaterialAndQuestion() {
+		LlmInferenceService service = new LlmInferenceService();
+		List<String> measured = new ArrayList<>();
+		service.setTokenCounter(new TokenCounter() {
+
+			@Override
+			public boolean isAvailable() {
+				return true;
+			}
+
+			@Override
+			public int count(String text) {
+				return 0;
+			}
+
+			@Override
+			public int countPrompt(String numberedRecords, String question) {
+				measured.add(numberedRecords);
+				measured.add(question);
+				return 101;
+			}
+
+			@Override
+			public int inputBudget() {
+				return 100;
+			}
+		});
+		PatientChart chart = new PatientChart("[1] Drug reference: WHO-ATC",
+				Collections.singletonList(new RecordMapping(1, "drug-reference", uuid(1), null)));
+
+		assertThrows(ChartTooLargeException.class,
+				() -> service.ensurePromptFits(chart, "Can these medicines interact?"));
+		assertEquals("[1] Drug reference: WHO-ATC", measured.get(0));
+		assertEquals("Can these medicines interact?", measured.get(1));
+	}
+
+	@Test
+	public void blockingSearchRejectsAnInjectedPromptBeforeCallingTheLlm() {
+		LlmInferenceService service = serviceWhoseInjectedPromptCounts(101, 100);
+
+		assertThrows(ChartTooLargeException.class,
+				() -> service.search(new Patient(), "Can these medicines interact?"));
+	}
+
+	@Test
+	public void streamingSearchRejectsAnInjectedPromptBeforeCallingTheLlm() {
+		LlmInferenceService service = serviceWhoseInjectedPromptCounts(101, 100);
+
+		assertThrows(ChartTooLargeException.class,
+				() -> service.searchStreaming(new Patient(), "Can these medicines interact?", token -> { }));
+	}
+
+	private static LlmInferenceService serviceWhoseInjectedPromptCounts(int promptTokens, int budget) {
+		PatientChart base = new PatientChart("[1] Medication order",
+				Collections.singletonList(new RecordMapping(1, "drug_order", uuid(1), null)));
+		PatientChart injected = new PatientChart("[1] Medication order\n[2] Drug reference: WHO-ATC",
+				Arrays.asList(new RecordMapping(1, "drug_order", uuid(1), null),
+						new RecordMapping(2, "drug_reference", uuid(2), null)));
+		LlmInferenceService service = new LlmInferenceService();
+		service.setChartBuildingStrategy(new ChartBuildingStrategy() {
+			@Override
+			PatientChart buildChart(Patient patient, String question) {
+				return base;
+			}
+		});
+		service.setDrugReferenceInjector(new org.openmrs.module.chartsearchai.reference.DrugReferenceInjector() {
+			@Override
+			public PatientChart inject(PatientChart chart, Patient patient, String question) {
+				return injected;
+			}
+		});
+		service.setTokenCounter(new TokenCounter() {
+			@Override public boolean isAvailable() { return true; }
+			@Override public int count(String text) { return 0; }
+			@Override public int countPrompt(String numberedRecords, String question) { return promptTokens; }
+			@Override public int inputBudget() { return budget; }
+		});
+		service.setLlmProvider(new LlmProvider() {
+			@Override
+			public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
+				throw new AssertionError("LLM must not run after prompt-budget failure");
+			}
+
+			@Override
+			public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
+					String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+					String cacheScope, org.openmrs.module.chartsearchai.api.provider.CancellationSignal cancellation) {
+				throw new AssertionError("LLM must not run after prompt-budget failure");
+			}
+		});
+		return service;
 	}
 
 	@Test

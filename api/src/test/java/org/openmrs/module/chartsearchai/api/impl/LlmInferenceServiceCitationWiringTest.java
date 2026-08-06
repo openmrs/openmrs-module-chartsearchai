@@ -35,10 +35,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p>The reconciliation logic itself is unit-tested in
  * {@code LlmInferenceServiceTest}; this test guards the two call sites. The
- * streaming endpoint ({@code /search/stream}) is the primary production path,
+ * bundled compatibility endpoint ({@code /search/stream}) still consumes these callbacks,
  * so a refactor that passed {@code null} for the answer there would silently
- * drop the fix on the path users actually hit, and the logic-only unit test
- * would still pass. The stub LLM reproduces the
+ * drop the fix on that supported path while the logic-only unit test still passed.
+ * The stub LLM reproduces the
  * exact demo failure: it cites {@code [8]} inline but lists only {@code [9]}
  * in its structured array.</p>
  *

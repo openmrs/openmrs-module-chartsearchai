@@ -160,6 +160,15 @@ public class TurnLifecycleConformanceTest {
 	}
 
 	@Test
+	public void heartbeatsMayRepeatBetweenClinicalStagesWithoutChangingTheirOrder() {
+		assertTrue(TurnLifecycleValidator
+				.violations(FULL_CAPABILITIES,
+						events("turn_started", "heartbeat", "heartbeat", "answer_done",
+								"heartbeat", "turn_done"))
+				.isEmpty(), "transport liveness events must not change the clinical lifecycle");
+	}
+
+	@Test
 	public void optionalEventsRequireTheirAdvertisedCapability() {
 		Set<ProviderCapability> answerOnly = EnumSet.of(ProviderCapability.ANSWER);
 		assertFalse(TurnLifecycleValidator

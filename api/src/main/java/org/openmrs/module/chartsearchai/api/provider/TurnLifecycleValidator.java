@@ -84,6 +84,9 @@ public final class TurnLifecycleValidator {
 		for (int i = 0; i < events.size(); i++) {
 			TurnEventType event = events.get(i);
 			counts.merge(event, 1, Integer::sum);
+			if (event == TurnEventType.HEARTBEAT) {
+				continue;
+			}
 			int stage = STAGES.get(event);
 			if (stage < previousStage) {
 				orderViolated = true;

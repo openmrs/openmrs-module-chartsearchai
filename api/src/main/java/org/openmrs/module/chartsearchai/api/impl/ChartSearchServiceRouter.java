@@ -19,6 +19,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -108,6 +109,16 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 			Consumer<List<RecordReference>> citationsConsumer,
 			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+				ungroundedAnswerConsumer, preliminaryReasoningConsumer, CancellationSignal.NONE);
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer,
+			CancellationSignal cancellation) {
 		int ttlMinutes = getCacheTtlMinutes();
 
 		if (ttlMinutes > 0) {
@@ -129,13 +140,13 @@ public class ChartSearchServiceRouter implements ChartSearchService {
 
 			ChartAnswer answer = llmService.searchStreaming(patient, question, tokenConsumer,
 					reasoningConsumer, citationsConsumer, ungroundedAnswerConsumer,
-					preliminaryReasoningConsumer);
+					preliminaryReasoningConsumer, cancellation);
 			putCache(cacheKey, answer);
 			return answer;
 		}
 
 		return llmService.searchStreaming(patient, question, tokenConsumer, reasoningConsumer,
-				citationsConsumer, ungroundedAnswerConsumer, preliminaryReasoningConsumer);
+				citationsConsumer, ungroundedAnswerConsumer, preliminaryReasoningConsumer, cancellation);
 	}
 
 	/** Test seam: production wires the inference service via {@link Autowired}. */

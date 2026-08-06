@@ -15,13 +15,22 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.sun.net.httpserver.HttpServer;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.openmrs.api.APIException;
 
 /**
  * Unit tests for {@link LocalLlmEngine} request building.
@@ -31,6 +40,89 @@ public class LocalLlmEngineTest {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private final LocalLlmEngine engine = new LocalLlmEngine();
+
+	private HttpServer tokenizeServer;
+
+	@AfterEach
+	public void stopTokenizeServer() {
+		if (tokenizeServer != null) {
+			tokenizeServer.stop(0);
+		}
+	}
+
+	@Test
+	public void requestTokenCount_postsTheLlamaCppContractAndReturnsExactCount() throws Exception {
+		AtomicReference<String> requestPath = new AtomicReference<>();
+		AtomicReference<String> requestBody = new AtomicReference<>();
+		tokenizeServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		tokenizeServer.createContext("/tokenize", exchange -> {
+			requestPath.set(exchange.getRequestURI().getPath());
+			requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+			byte[] response = "{\"tokens\":[11,22,33]}".getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().set("Content-Type", "application/json");
+			exchange.sendResponseHeaders(200, response.length);
+			try (OutputStream output = exchange.getResponseBody()) {
+				output.write(response);
+			}
+		});
+		tokenizeServer.start();
+
+		URI endpoint = URI.create("http://127.0.0.1:"
+				+ tokenizeServer.getAddress().getPort() + "/tokenize");
+		int count = LocalLlmEngine.requestTokenCount(HttpClient.newHttpClient(), endpoint, "chart text");
+
+		assertEquals(3, count);
+		assertEquals("/tokenize", requestPath.get());
+		JsonNode body = MAPPER.readTree(requestBody.get());
+		assertEquals("chart text", body.get("content").asText());
+		assertFalse(body.get("add_special").asBoolean());
+	}
+
+	@Test
+	public void requestTokenCount_rejectsNonSuccessfulResponse() throws Exception {
+		tokenizeServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		tokenizeServer.createContext("/tokenize", exchange -> {
+			exchange.sendResponseHeaders(404, -1);
+			exchange.close();
+		});
+		tokenizeServer.start();
+		URI endpoint = URI.create("http://127.0.0.1:"
+				+ tokenizeServer.getAddress().getPort() + "/tokenize");
+
+		APIException error = assertThrows(APIException.class,
+				() -> LocalLlmEngine.requestTokenCount(HttpClient.newHttpClient(), endpoint, "chart"));
+
+		assertTrue(error.getMessage().contains("returned HTTP 404"));
+	}
+
+	@Test
+	public void requestChatInputTokenCount_usesTheChatTemplateAwareEndpoint() throws Exception {
+		AtomicReference<String> requestBody = new AtomicReference<>();
+		tokenizeServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		tokenizeServer.createContext("/v1/chat/completions/input_tokens", exchange -> {
+			requestBody.set(new String(exchange.getRequestBody().readAllBytes(),
+					StandardCharsets.UTF_8));
+			byte[] response = "{\"input_tokens\":41}".getBytes(StandardCharsets.UTF_8);
+			exchange.getResponseHeaders().set("Content-Type", "application/json");
+			exchange.sendResponseHeaders(200, response.length);
+			try (OutputStream output = exchange.getResponseBody()) {
+				output.write(response);
+			}
+		});
+		tokenizeServer.start();
+		URI endpoint = URI.create("http://127.0.0.1:"
+				+ tokenizeServer.getAddress().getPort() + "/v1/chat/completions/input_tokens");
+
+		int count = LocalLlmEngine.requestChatInputTokenCount(HttpClient.newHttpClient(),
+				endpoint, "system instructions", "patient chart and question");
+
+		assertEquals(41, count);
+		JsonNode messages = MAPPER.readTree(requestBody.get()).get("messages");
+		assertEquals("system", messages.get(0).get("role").asText());
+		assertEquals("system instructions", messages.get(0).get("content").asText());
+		assertEquals("user", messages.get(1).get("role").asText());
+		assertEquals("patient chart and question", messages.get(1).get("content").asText());
+	}
 
 	@Test
 	public void buildRequestBody_appliesReasoningCapFromConfiguration() throws IOException {

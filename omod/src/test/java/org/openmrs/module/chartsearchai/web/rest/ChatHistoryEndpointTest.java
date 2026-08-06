@@ -150,6 +150,34 @@ public class ChatHistoryEndpointTest {
 	}
 
 	@Test
+	@SuppressWarnings("unchecked")
+	public void restoresFailedTurnsWithStableIdsAndTerminalMetadata() {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		StubConversationService conversations = new StubConversationService();
+		ClinicalConversation active = conversation("conversation-uuid-1", patient());
+		conversations.activeConversation = active;
+		ClinicalConversationTurn turn = new ClinicalConversationTurn();
+		turn.setUuid("turn-uuid-1");
+		turn.setQuestion("What medications is this patient on?");
+		turn.setRequestId("request-1");
+		turn.setTerminalState("turn_error");
+		turn.setProblemCode("provider_failure");
+		conversations.turns.put("conversation-uuid-1", Collections.singletonList(turn));
+		controller.setConversationService(conversations);
+
+		ResponseEntity<Object> response = controller.buildChatHistoryResponse(patient(), null);
+		Map<String, Object> body = (Map<String, Object>) response.getBody();
+		List<Map<String, Object>> messages = (List<Map<String, Object>>) body.get("messages");
+
+		assertEquals(2, messages.size());
+		assertEquals("request-1", messages.get(0).get("messageId"));
+		assertEquals("turn-uuid-1", messages.get(1).get("messageId"));
+		assertEquals("", messages.get(1).get("content"));
+		assertEquals("turn_error", messages.get(1).get("terminalState"));
+		assertEquals("provider_failure", messages.get(1).get("problemCode"));
+	}
+
+	@Test
 	public void anExplicitSessionIsPreferredOverTheCallersActiveConversation() {
 		ChartSearchAiRestController controller = new ChartSearchAiRestController();
 		StubConversationService conversations = new StubConversationService();

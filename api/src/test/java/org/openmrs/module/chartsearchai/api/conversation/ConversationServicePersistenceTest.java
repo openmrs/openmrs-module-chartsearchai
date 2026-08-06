@@ -178,9 +178,8 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 
 		List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(
 				reloaded.getConversation());
-		assertEquals(1, prior.size());
-		assertEquals("Can ibuprofen be used?", prior.get(0).getQuestion());
-		assertEquals("Use caution [1].", prior.get(0).getAnswer());
+		assertEquals(0, prior.size(),
+				"a needs-review terminal answer remains auditable but cannot become clinical context");
 	}
 
 	@Test
@@ -228,6 +227,40 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 	}
 
 	@Test
+	public void editedCheckedAnswerReplacesTheDraftInFollowUpContext() throws Exception {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "request-edited",
+				"What was the most recent visit date?");
+
+		Map<String, Object> draft = new LinkedHashMap<>();
+		draft.put("answer", "2026-01-27");
+		draft.put("answerValidation", Collections.singletonMap("status", "checked"));
+		assertTrue(conversationService.recordCheckedAnswer(turn, AnswerEnvelope.fromPayload(draft)));
+
+		Map<String, Object> validation = new LinkedHashMap<>();
+		validation.put("status", "edited");
+		validation.put("originalAnswer", "2026-01-27");
+		Map<String, Object> edited = new LinkedHashMap<>();
+		edited.put("answer", "2026-01-26");
+		edited.put("answerValidation", validation);
+		assertTrue(conversationService.recordCheckedAnswer(turn, AnswerEnvelope.fromPayload(edited)));
+
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversationTurn reloaded = conversationDAO.getTurnByUuid(turn.getUuid());
+		List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(
+				reloaded.getConversation());
+		assertEquals(1, prior.size());
+		assertEquals("2026-01-26", prior.get(0).getAnswer(),
+				"follow-up context must use the post-review answer, never the superseded draft");
+		assertEquals("2026-01-27",
+				MAPPER.readTree(reloaded.getProviderPayload()).get("answerValidation")
+						.get("originalAnswer").asText(),
+				"the original remains inspectable in the persisted provider payload");
+	}
+
+	@Test
 	public void needsReviewAnswerNeverBecomesFollowUpContext() {
 		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
 				ProviderMode.QUERY_SCOPED);
@@ -271,6 +304,8 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		assertNull(survivor.getAuditLog(),
 				"the audit link is nulled when its independently retained row is purged");
 		assertEquals("Lisinopril 10mg.", survivor.getAnswerText());
+		assertEquals(1, conversationService.priorClinicalTurns(survivor.getConversation()).size(),
+				"providers without an answer-review lifecycle remain valid clinical history");
 	}
 
 	@Test

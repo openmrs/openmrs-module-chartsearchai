@@ -21,6 +21,9 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -130,6 +133,12 @@ public class BundledClinicalAnswerProviderTest {
 		return new ChartSearchService.RecordReference(index, "obs", "obs-uuid-" + index, new Date(), grounded);
 	}
 
+	private static ChartSearchService.RecordReference referenceWithProvenance(int index, Boolean grounded) {
+		return new ChartSearchService.RecordReference(index,
+				ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE, "drug-uuid-" + index,
+				new Date(), grounded, "who-atc", 3);
+	}
+
 	private static ChartSearchService.ChartAnswer answer(String text,
 			List<ChartSearchService.RecordReference> references) {
 		return new ChartSearchService.ChartAnswer(text, references, 100, 20, 5);
@@ -191,6 +200,9 @@ public class BundledClinicalAnswerProviderTest {
 				"answer_done fires before grounding, so verdicts are still null");
 		TurnEvent evidence = sink.single(TurnEventType.EVIDENCE_UPDATED);
 		assertEquals(Boolean.TRUE, references(evidence.getAnswer()).get(0).get("grounded"));
+		TurnEvent terminal = sink.single(TurnEventType.TURN_DONE);
+		assertEquals(Boolean.TRUE, references(terminal.getAnswer()).get(0).get("grounded"),
+				"turn_done must carry the final grounded envelope");
 
 		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
 		assertEquals(BundledClinicalAnswerProvider.PROVIDER_ID, result.getProviderId());
@@ -200,6 +212,21 @@ public class BundledClinicalAnswerProviderTest {
 		assertEquals(20, result.getAnswer().getPayload().get("outputTokens"));
 		assertEquals(5, result.getAnswer().getPayload().get("cachedTokens"));
 		assertNull(result.getProblemCode());
+	}
+
+	@Test
+	public void canonicalEnvelopePreservesReferenceProvenanceAndCoverage() throws Exception {
+		ScriptedChartSearchService service = new ScriptedChartSearchService();
+		service.ungrounded = answer("Naproxen [1]", Arrays.asList(referenceWithProvenance(1, null)));
+		service.groundedResult = answer("Naproxen [1]", Arrays.asList(referenceWithProvenance(1, Boolean.TRUE)));
+
+		TurnResult result = provider(service).execute(request(), new CollectingSink(), CancellationSignal.NONE)
+				.toCompletableFuture().get();
+
+		Map<String, Object> reference = references(result.getAnswer()).get(0);
+		assertEquals("reference", reference.get("group"));
+		assertEquals("who-atc", reference.get("source"));
+		assertEquals(3, reference.get("withheldInteractions"));
 	}
 
 	@Test
@@ -394,6 +421,66 @@ public class BundledClinicalAnswerProviderTest {
 		TurnResult result = provider.execute(request(), sink, () -> true).toCompletableFuture().get();
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_ERROR), sink.types());
+		assertEquals("cancelled", result.getProblemCode());
+	}
+
+	@Test
+	public void disconnectAfterAnswerDoneStillReturnsTheVisibleAnswerForPersistence() throws Exception {
+		ScriptedChartSearchService service = new ScriptedChartSearchService();
+		service.ungrounded = answer("Aspirin 81mg [1]", Arrays.asList(reference(1, null)));
+		service.groundedResult = answer("Aspirin 81mg [1]", Arrays.asList(reference(1, Boolean.TRUE)));
+		BundledClinicalAnswerProvider provider = provider(service);
+		TurnCancellation cancellation = new TurnCancellation();
+		List<TurnEventType> observed = new ArrayList<>();
+		TurnEventSink disconnectingSink = event -> {
+			observed.add(event.getType());
+			if (event.getType() == TurnEventType.ANSWER_DONE) {
+				cancellation.cancel();
+				throw new IllegalStateException("browser disconnected");
+			}
+		};
+
+		TurnResult result = provider.execute(request(), disconnectingSink, cancellation)
+				.toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		assertEquals("Aspirin 81mg [1]", result.getAnswer().getText());
+		assertNull(result.getProblemCode());
+		assertEquals(TurnEventType.TURN_DONE, observed.get(observed.size() - 1));
+	}
+
+	@Test
+	public void cancellationInterruptsAnActiveBundledInferenceCall() throws Exception {
+		CountDownLatch entered = new CountDownLatch(1);
+		ChartSearchService blocking = new ScriptedChartSearchService() {
+			@Override
+			public ChartAnswer searchStreaming(Patient patient, String question,
+					Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+					Consumer<List<RecordReference>> citationsConsumer,
+					Consumer<ChartAnswer> ungroundedAnswerConsumer,
+					Consumer<String> preliminaryReasoningConsumer,
+					CancellationSignal cancellation) {
+				entered.countDown();
+				try {
+					Thread.sleep(TimeUnit.MINUTES.toMillis(1));
+					throw new AssertionError("cancellation did not interrupt inference");
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					throw new IllegalStateException("interrupted", e);
+				}
+			}
+		};
+		BundledClinicalAnswerProvider provider = provider(blocking);
+		TurnCancellation cancellation = new TurnCancellation();
+
+		CompletableFuture<TurnResult> running = CompletableFuture.supplyAsync(() -> provider
+				.execute(request(), event -> { }, cancellation).toCompletableFuture().join());
+		assertTrue(entered.await(2, TimeUnit.SECONDS));
+		cancellation.cancel();
+
+		TurnResult result = running.get(2, TimeUnit.SECONDS);
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
 		assertEquals("cancelled", result.getProblemCode());
 	}
 

@@ -31,6 +31,11 @@ public interface TokenCounter {
 	/** Exact token count for {@code text} from the real, currently-configured engine. */
 	int count(String text);
 
+	/** Exact count for the assembled answer request, including chat-template and prompt overhead. */
+	default int countPrompt(String numberedRecords, String question) {
+		return count(numberedRecords);
+	}
+
 	/** The current input budget: the engine's configured context window minus its output
 	 *  reservation — mirrors med-agent-hub's {@code ContextBudget.input_limit}. */
 	int inputBudget();

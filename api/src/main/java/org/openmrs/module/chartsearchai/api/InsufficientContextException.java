@@ -13,8 +13,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Thrown when a patient's mandatory clinical evidence (demographics, allergies, active
- * conditions) alone exceeds the LLM's available input budget, before any optional context is
+ * Thrown when a patient's required clinical evidence (mandatory safety records plus exact,
+ * typed-complete, and panel records) exceeds the LLM's available input budget before optional context is
  * even considered. Distinct from {@link ChartTooLargeException}: that one is llama-server's own
  * after-the-fact rejection of a prompt that turned out too big; this one is a proactive,
  * specifically-diagnosed abstention — the same {@code insufficient_context} outcome the
@@ -27,16 +27,16 @@ public class InsufficientContextException extends RuntimeException {
 
 	private static final long serialVersionUID = 1L;
 
-	private final List<String> mandatoryRecordIds;
+	private final List<String> requiredRecordIds;
 
-	public InsufficientContextException(String message, List<String> mandatoryRecordIds) {
+	public InsufficientContextException(String message, List<String> requiredRecordIds) {
 		super(message);
-		this.mandatoryRecordIds = mandatoryRecordIds == null ? Collections.<String> emptyList()
-				: Collections.unmodifiableList(mandatoryRecordIds);
+		this.requiredRecordIds = requiredRecordIds == null ? Collections.<String> emptyList()
+				: Collections.unmodifiableList(requiredRecordIds);
 	}
 
-	/** Stable resource uuids of the mandatory records that alone exceeded the budget. */
-	public List<String> getMandatoryRecordIds() {
-		return mandatoryRecordIds;
+	/** Stable resource uuids of the required records that together exceeded the budget. */
+	public List<String> getRequiredRecordIds() {
+		return requiredRecordIds;
 	}
 }

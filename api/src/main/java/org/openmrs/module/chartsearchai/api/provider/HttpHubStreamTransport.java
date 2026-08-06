@@ -20,6 +20,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -159,9 +160,9 @@ public class HttpHubStreamTransport implements HubStreamTransport {
 					}
 					String raw = line.substring("data:".length());
 					data.append(raw.startsWith(" ") ? raw.substring(1) : raw);
+				} else if (line.startsWith(":")) {
+					sink.accept(new HubWireEvent("heartbeat", Collections.emptyMap()));
 				}
-				// Comment/heartbeat lines (": ...") are ignored; the REST layer may still write them
-				// downstream to detect client disconnect.
 			}
 			if (data.length() > 0) {
 				emit(event, data.toString(), sink);

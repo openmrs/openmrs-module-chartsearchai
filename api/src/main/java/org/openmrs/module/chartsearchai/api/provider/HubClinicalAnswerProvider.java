@@ -79,8 +79,7 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		String endpoint = configuredEndpoint();
 		boolean ready = endpoint != null;
 		Set<ProviderCapability> capabilities = EnumSet.of(ProviderCapability.ANSWER,
-				ProviderCapability.TOKEN_STREAMING, ProviderCapability.ANSWER_CHECK,
-				ProviderCapability.ANSWER_REVIEW, ProviderCapability.INDEPTH,
+				ProviderCapability.ANSWER_CHECK, ProviderCapability.ANSWER_REVIEW, ProviderCapability.INDEPTH,
 				ProviderCapability.GROUNDING, ProviderCapability.DRUG_SAFETY,
 				ProviderCapability.STRUCTURED_BLOCKS, ProviderCapability.MULTI_TURN_CONTEXT);
 		return new ProviderDescriptor(PROVIDER_ID, "Med-Agent Hub", true, ready, false,
@@ -112,23 +111,26 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 		AtomicReference<AnswerEnvelope> latestAnswer = new AtomicReference<>();
 		AtomicReference<String> streamError = new AtomicReference<>();
+		Set<TurnEventType> emitted = EnumSet.of(TurnEventType.TURN_STARTED);
 		boolean[] doneSeen = { false };
 		try {
 			transport.stream(call,
-					wire -> handleWire(wire, events, sequence, latestAnswer, streamError, doneSeen), cancellation);
+					wire -> handleWire(wire, events, sequence, latestAnswer, streamError, emitted,
+							doneSeen), cancellation);
 		}
 		catch (HubTransportException e) {
+			if (latestAnswer.get() != null) {
+				return completedWithPartialAnswer(events, sequence, request.getMode(),
+						latestAnswer.get(), emitted);
+			}
 			return failed(events, sequence, request.getMode(), problemCodeFromHubBody(e.getBody()));
 		}
 		catch (RuntimeException e) {
+			AnswerEnvelope current = latestAnswer.get();
+			if (current != null) {
+				return completedWithPartialAnswer(events, sequence, request.getMode(), current, emitted);
+			}
 			if (cancellation.isCancelled()) {
-				AnswerEnvelope current = latestAnswer.get();
-				if (current != null) {
-					AnswerEnvelope answer = withInDepthInterrupted(current);
-					events.accept(TurnEvent.of(TurnEventType.TURN_DONE, sequence.getAndIncrement(), PROVIDER_ID));
-					return CompletableFuture.completedFuture(
-							TurnResult.done(PROVIDER_ID, request.getMode(), answer));
-				}
 				return failed(events, sequence, request.getMode(), PROBLEM_CANCELLED);
 			}
 			log.warn("Hub provider turn failed for request {}", request.getRequestId(), e);
@@ -150,9 +152,19 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 				TurnResult.done(PROVIDER_ID, request.getMode(), answer));
 	}
 
+	private CompletionStage<TurnResult> completedWithPartialAnswer(TurnEventSink events,
+			AtomicInteger sequence, ProviderMode mode, AnswerEnvelope current,
+			Set<TurnEventType> emitted) {
+		AnswerEnvelope answer = withInterruptedStages(current);
+		emitInterruptedStageOutcomes(events, sequence, current, answer, emitted);
+		events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
+				sequence.getAndIncrement(), PROVIDER_ID, answer));
+		return CompletableFuture.completedFuture(TurnResult.done(PROVIDER_ID, mode, answer));
+	}
+
 	private void handleWire(HubWireEvent wire, TurnEventSink events, AtomicInteger sequence,
 			AtomicReference<AnswerEnvelope> latestAnswer, AtomicReference<String> streamError,
-			boolean[] doneSeen) {
+			Set<TurnEventType> emitted, boolean[] doneSeen) {
 		if (doneSeen[0]) {
 			return;
 		}
@@ -169,10 +181,27 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		}
 		if ("done".equals(event)) {
 			AnswerEnvelope answer = envelopeOrNull(wire.getPayload());
-			if (answer != null) {
-				latestAnswer.set(answer);
+			if (answer == null) {
+				events.accept(TurnEvent.error(sequence.getAndIncrement(), PROVIDER_ID,
+						PROBLEM_HUB_STREAM_INCOMPLETE));
+				streamError.set(PROBLEM_HUB_STREAM_INCOMPLETE);
+				doneSeen[0] = true;
+				return;
 			}
-			events.accept(TurnEvent.of(TurnEventType.TURN_DONE, sequence.getAndIncrement(), PROVIDER_ID));
+			AnswerEnvelope previous = latestAnswer.getAndSet(answer);
+			if (previous == null) {
+				events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE,
+						sequence.getAndIncrement(), PROVIDER_ID, answer));
+				emitted.add(TurnEventType.ANSWER_DONE);
+			} else if (!previous.getPayload().equals(answer.getPayload())
+					&& !emitted.contains(TurnEventType.EVIDENCE_UPDATED)
+					&& !emitted.contains(TurnEventType.INDEPTH_PENDING)) {
+				events.accept(TurnEvent.withAnswer(TurnEventType.EVIDENCE_UPDATED,
+						sequence.getAndIncrement(), PROVIDER_ID, answer));
+				emitted.add(TurnEventType.EVIDENCE_UPDATED);
+			}
+			events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
+					sequence.getAndIncrement(), PROVIDER_ID, answer));
 			doneSeen[0] = true;
 			return;
 		}
@@ -184,25 +213,45 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		if (answer != null) {
 			latestAnswer.set(answer);
 			events.accept(TurnEvent.withAnswer(type, sequence.getAndIncrement(), PROVIDER_ID, answer));
-		} else if (type == TurnEventType.REASONING_DELTA || type == TurnEventType.ANSWER_DELTA) {
-			Object delta = wire.getPayload().get("delta");
-			events.accept(TurnEvent.delta(type, sequence.getAndIncrement(), PROVIDER_ID,
-					delta == null ? "" : String.valueOf(delta)));
 		} else {
 			events.accept(TurnEvent.of(type, sequence.getAndIncrement(), PROVIDER_ID));
+		}
+		emitted.add(type);
+	}
+
+	@SuppressWarnings("unchecked")
+	private static void emitInterruptedStageOutcomes(TurnEventSink events, AtomicInteger sequence,
+			AnswerEnvelope before, AnswerEnvelope settled, Set<TurnEventType> emitted) {
+		Object validation = before.getPayload().get("answerValidation");
+		boolean validationInterrupted = validation instanceof Map
+				&& "checking".equals(((Map<String, Object>) validation).get("status"));
+		boolean laterStageStarted = emitted.contains(TurnEventType.EVIDENCE_UPDATED)
+				|| emitted.contains(TurnEventType.INDEPTH_PENDING);
+		if (validationInterrupted && !emitted.contains(TurnEventType.ANSWER_VALIDATION)
+				&& !laterStageStarted) {
+			events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_VALIDATION,
+					sequence.getAndIncrement(), PROVIDER_ID, settled));
+			emitted.add(TurnEventType.ANSWER_VALIDATION);
+		}
+
+		Object inDepth = before.getPayload().get("inDepth");
+		boolean inDepthInterrupted = inDepth instanceof Map
+				&& "pending".equals(((Map<String, Object>) inDepth).get("status"));
+		if (inDepthInterrupted && emitted.contains(TurnEventType.INDEPTH_PENDING)
+				&& !emitted.contains(TurnEventType.INDEPTH_DONE)
+				&& !emitted.contains(TurnEventType.INDEPTH_ERROR)) {
+			events.accept(TurnEvent.withAnswer(TurnEventType.INDEPTH_ERROR,
+					sequence.getAndIncrement(), PROVIDER_ID, settled));
+			emitted.add(TurnEventType.INDEPTH_ERROR);
 		}
 	}
 
 	private static TurnEventType mapEvent(String hubEvent) {
 		switch (hubEvent) {
-			case "reasoning_delta":
-			case "thinking":
-				return TurnEventType.REASONING_DELTA;
-			case "answer_delta":
-			case "token":
-				return TurnEventType.ANSWER_DELTA;
 			case "answer_done":
 				return TurnEventType.ANSWER_DONE;
+			case "heartbeat":
+				return TurnEventType.HEARTBEAT;
 			case "answer_validation":
 				return TurnEventType.ANSWER_VALIDATION;
 			case "evidence_updated":
@@ -220,23 +269,33 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 	}
 
 	/**
-	 * Rewrites a dangling {@code inDepth.status == "pending"} to {@code "failed"} before this
-	 * answer is persisted. The persisted record is the source of truth for every future reader
-	 * (audit review, a reload's hydration, another UI) — leaving it saying "pending" forever would
-	 * be a lie, since a cancelled turn's In-Depth will never actually finish generating.
+	 * Settles any validation or In-Depth stage interrupted after the fast answer arrived. The
+	 * persisted record is the source of truth for every future reader (audit review, reload
+	 * hydration, or another UI), so it cannot retain a status that will never complete.
 	 */
 	@SuppressWarnings("unchecked")
-	private static AnswerEnvelope withInDepthInterrupted(AnswerEnvelope answer) {
-		Object inDepth = answer.getPayload().get("inDepth");
-		if (!(inDepth instanceof Map) || !"pending".equals(((Map<String, Object>) inDepth).get("status"))) {
-			return answer;
-		}
-		Map<String, Object> updatedInDepth = new LinkedHashMap<>((Map<String, Object>) inDepth);
-		updatedInDepth.put("status", "failed");
-		updatedInDepth.put("error", "In-Depth was interrupted.");
+	private static AnswerEnvelope withInterruptedStages(AnswerEnvelope answer) {
 		Map<String, Object> updatedPayload = new LinkedHashMap<>(answer.getPayload());
-		updatedPayload.put("inDepth", updatedInDepth);
-		return AnswerEnvelope.fromPayload(updatedPayload);
+		boolean changed = false;
+		Object validation = answer.getPayload().get("answerValidation");
+		if (validation instanceof Map
+				&& "checking".equals(((Map<String, Object>) validation).get("status"))) {
+			Map<String, Object> updatedValidation = new LinkedHashMap<>((Map<String, Object>) validation);
+			updatedValidation.put("status", "unavailable");
+			updatedValidation.put("label", "Check unavailable");
+			updatedValidation.put("summary", "Answer checking was interrupted.");
+			updatedPayload.put("answerValidation", updatedValidation);
+			changed = true;
+		}
+		Object inDepth = answer.getPayload().get("inDepth");
+		if (inDepth instanceof Map && "pending".equals(((Map<String, Object>) inDepth).get("status"))) {
+			Map<String, Object> updatedInDepth = new LinkedHashMap<>((Map<String, Object>) inDepth);
+			updatedInDepth.put("status", "failed");
+			updatedInDepth.put("error", "In-Depth was interrupted.");
+			updatedPayload.put("inDepth", updatedInDepth);
+			changed = true;
+		}
+		return changed ? AnswerEnvelope.fromPayload(updatedPayload) : answer;
 	}
 
 	private static AnswerEnvelope envelopeOrNull(Map<String, Object> payload) {

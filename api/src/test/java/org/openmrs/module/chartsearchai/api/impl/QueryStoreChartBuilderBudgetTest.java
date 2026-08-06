@@ -35,14 +35,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * {@code context.mandatory-overflow-abstains}: mandatory clinical evidence (demographics,
- * allergies, active conditions) is never droppable (ADR Decision 17), so when it alone exceeds
- * the model's input budget the turn must abstain with {@link InsufficientContextException}
- * rather than silently sending a truncated or oversized prompt. When mandatory content fits but
- * the full slice does not, non-mandatory records are trimmed (a ceiling, not a target) while
- * mandatory records and chart order are always preserved — mirrors med-agent-hub's
- * {@code select_context}. Uses a fake {@link TokenCounter} (word count as token count, matching
- * the fixture-driven hub test's own {@code ExactWordCounter}) — no live llama-server needed.
+ * Required clinical evidence is never droppable, so when mandatory, exact-match, typed-complete,
+ * or panel evidence exceeds the model's input budget the turn must abstain with
+ * {@link InsufficientContextException} rather than silently sending a truncated or oversized
+ * prompt. Optional records are packed up to the budget ceiling and chart order is restored before
+ * rendering, matching med-agent-hub's {@code select_context}. Uses a fake {@link TokenCounter}
+ * (word count as token count, matching the fixture-driven hub test's own
+ * {@code ExactWordCounter}) — no live llama-server needed.
  */
 public class QueryStoreChartBuilderBudgetTest {
 
@@ -78,6 +77,10 @@ public class QueryStoreChartBuilderBudgetTest {
 
 		int budget = 100;
 
+		int promptOverhead;
+
+		int promptCountCalls;
+
 		@Override
 		public boolean isAvailable() {
 			return available;
@@ -91,6 +94,12 @@ public class QueryStoreChartBuilderBudgetTest {
 		@Override
 		public int inputBudget() {
 			return budget;
+		}
+
+		@Override
+		public int countPrompt(String numberedRecords, String question) {
+			promptCountCalls++;
+			return count(numberedRecords) + promptOverhead;
 		}
 	}
 
@@ -130,8 +139,8 @@ public class QueryStoreChartBuilderBudgetTest {
 		InsufficientContextException thrown = assertThrows(InsufficientContextException.class,
 				() -> builder.buildScoped(patient(), "anything?"));
 
-		assertTrue(thrown.getMandatoryRecordIds().contains("cond-active"),
-				"exceeding mandatory record must be named; got " + thrown.getMandatoryRecordIds());
+		assertTrue(thrown.getRequiredRecordIds().contains("cond-active"),
+				"exceeding required record must be named; got " + thrown.getRequiredRecordIds());
 	}
 
 	@Test
@@ -143,6 +152,44 @@ public class QueryStoreChartBuilderBudgetTest {
 		PatientChart chart = builder.buildScoped(patient(), "anything?");
 
 		assertTrue(mappedUuids(chart).contains("cond-active"));
+	}
+
+	@Test
+	public void typedCompleteEvidenceOverflowAbstainsInsteadOfDroppingMedications() {
+		tokenCounter.budget = 45;
+		queryStore.stubChart = new ArrayList<QueryDocument>();
+		queryStore.stubChart.add(doc("patient", "patient-1", "Patient Jane Doe",
+				LocalDate.of(2026, 7, 1)));
+		queryStore.stubChart.add(doc("drug_order", "med-1", words(40),
+				LocalDate.of(2026, 6, 1)));
+		queryStore.stubChart.add(doc("drug_order", "med-2", words(40),
+				LocalDate.of(2026, 5, 1)));
+
+		InsufficientContextException thrown = assertThrows(InsufficientContextException.class,
+				() -> builder.buildScoped(patient(), "What medications is the patient taking?"));
+
+		assertTrue(thrown.getRequiredRecordIds().contains("med-1"));
+		assertTrue(thrown.getRequiredRecordIds().contains("med-2"));
+	}
+
+	@Test
+	public void exactEvidenceSurvivesBeforeNewerSimilarityEvidence() {
+		tokenCounter.budget = 30;
+		QueryDocument exact = doc("obs", "exact-old",
+				"Lab code ABC123 historical result " + words(8), LocalDate.of(2020, 1, 1));
+		QueryDocument similarity = doc("obs", "similar-new",
+				"Recent unrelated semantic result " + words(20), LocalDate.of(2026, 6, 1));
+		queryStore.stubChart = new ArrayList<QueryDocument>();
+		queryStore.stubChart.add(similarity);
+		queryStore.stubChart.add(exact);
+		queryStore.stubHits = new ArrayList<QueryDocument>(Collections.singletonList(similarity));
+
+		PatientChart result = builder.buildScoped(patient(), "code: ABC123");
+
+		List<String> uuids = mappedUuids(result);
+		assertTrue(uuids.contains("exact-old"), "exact evidence must be protected; got " + uuids);
+		assertFalse(uuids.contains("similar-new"),
+				"optional similarity evidence may be trimmed after exact evidence; got " + uuids);
 	}
 
 	@Test
@@ -164,6 +211,43 @@ public class QueryStoreChartBuilderBudgetTest {
 		assertTrue(uuids.contains("cond-active"), "mandatory record must always survive trimming");
 		assertFalse(uuids.containsAll(similarityIds(10)),
 				"excess optional content must be trimmed, not all included; got " + uuids);
+		assertTrue(tokenCounter.promptCountCalls <= 6,
+				"budgeting should use bounded prefix checks, not retokenize every cumulative record");
+	}
+
+	@Test
+	public void completePromptOverheadParticipatesInTheBudget() {
+		tokenCounter.budget = 100;
+		tokenCounter.promptOverhead = 100;
+		queryStore.stubChart = new ArrayList<QueryDocument>(Collections.singletonList(
+				condition("cond-active", "short", LocalDate.of(2026, 1, 1), "ACTIVE")));
+
+		assertThrows(InsufficientContextException.class,
+				() -> builder.buildScoped(patient(), "Does this fit?"));
+	}
+
+	@Test
+	public void panelTriggerAndMembersAreProtectedTogether() {
+		tokenCounter.budget = 35;
+		QueryDocument parent = doc("obs", "panel-parent", "Basic metabolic panel",
+				LocalDate.of(2026, 6, 1));
+		QueryDocument member = doc("obs", "panel-member", "Serum sodium 140 mmol/L",
+				LocalDate.of(2026, 6, 1));
+		member.putMetadata(QueryStoreConstants.FIELD_OBS_GROUP_UUID, "panel-parent");
+		QueryDocument optional = doc("obs", "optional", words(30), LocalDate.of(2026, 5, 1));
+		queryStore.stubChart = new ArrayList<QueryDocument>();
+		queryStore.stubChart.add(parent);
+		queryStore.stubChart.add(member);
+		queryStore.stubChart.add(optional);
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+		queryStore.stubHits.add(parent);
+		queryStore.stubHits.add(optional);
+
+		PatientChart chart = builder.buildScoped(patient(), "What were the BMP results?");
+
+		assertTrue(mappedUuids(chart).contains("panel-parent"));
+		assertTrue(mappedUuids(chart).contains("panel-member"));
+		assertFalse(mappedUuids(chart).contains("optional"));
 	}
 
 	@Test

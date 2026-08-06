@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: pmanko/openmrs-module-querystore
-          ref: 56b49cf30fb26d45e7a97cfc31bde309e327c3fc
+          ref: 8dc6ef9b411ee02dedce54a8f40250493d4f36d8
           path: .paired/querystore
 
       - name: Set up Java ${{ matrix.java }}

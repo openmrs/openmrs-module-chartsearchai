@@ -28,6 +28,9 @@ public enum TurnEventType {
 
 	TURN_STARTED("turn_started"),
 
+	/** Transport liveness signal. It carries no clinical content and may repeat between stages. */
+	HEARTBEAT("heartbeat"),
+
 	REASONING_DELTA("reasoning_delta"),
 
 	ANSWER_DELTA("answer_delta"),

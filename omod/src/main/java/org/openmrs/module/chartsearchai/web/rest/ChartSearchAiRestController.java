@@ -904,17 +904,25 @@ public class ChartSearchAiRestController {
 			Map<String, Object> user = new LinkedHashMap<String, Object>();
 			user.put("role", "user");
 			user.put("content", turn.getQuestion());
-			user.put("requestId", turn.getRequestId());
+			user.put("messageId", turn.getRequestId());
+			if (turn.getStartedAt() != null) {
+				user.put("createdAt", turn.getStartedAt().getTime());
+			}
 			messages.add(user);
-			if (turn.getAnswerText() != null) {
+			if (turn.getAnswerText() != null || turn.getTerminalState() != null) {
 				Map<String, Object> assistant = new LinkedHashMap<String, Object>();
 				Map<String, Object> payload = parseProviderPayload(turn.getProviderPayload());
 				if (payload != null) {
 					assistant.putAll(payload);
 				}
 				assistant.put("role", "assistant");
-				assistant.put("content", turn.getAnswerText());
+				assistant.put("content", turn.getAnswerText() == null ? "" : turn.getAnswerText());
 				assistant.put("messageId", turn.getUuid());
+				assistant.put("terminalState", turn.getTerminalState());
+				assistant.put("problemCode", turn.getProblemCode());
+				if (turn.getCompletedAt() != null) {
+					assistant.put("createdAt", turn.getCompletedAt().getTime());
+				}
 				if (turn.getAuditLog() != null) {
 					assistant.put("auditLogId", turn.getAuditLog().getAuditLogId());
 				}
@@ -1080,7 +1088,13 @@ public class ChartSearchAiRestController {
 								if (activeCancellation.isCancelled()) {
 									return;
 								}
-								writeTurnEventOrThrow(out, event, activeConversation, turn);
+								try {
+									writeTurnEventOrThrow(out, event, activeConversation, turn);
+								}
+								catch (RuntimeException e) {
+									activeCancellation.cancel();
+									throw e;
+								}
 							},
 							cancellation)
 					.toCompletableFuture().get();
@@ -1168,7 +1182,7 @@ public class ChartSearchAiRestController {
 			writeSseEvent(out, wire, problemCodeJson(event.getProblemCode()));
 			return;
 		}
-		if (type == TurnEventType.TURN_STARTED || type == TurnEventType.TURN_DONE) {
+		if (type == TurnEventType.TURN_STARTED) {
 			Map<String, Object> payload = new LinkedHashMap<String, Object>();
 			payload.put("session", conversation.getUuid());
 			payload.put("messageId", turn.getUuid());
@@ -1208,13 +1222,9 @@ public class ChartSearchAiRestController {
 	/**
 	 * The caller's EXPLICIT mode override, or {@code null} when unspecified. Mode is a deployment
 	 * setting ({@code chartsearchai.chartMode}), not something callers normally send — {@code null}
-	 * here lets {@link #streamProviderTurn}'s {@code resolvedMode} fallback
-	 * ({@code provider.modes().get(0)}, sourced from the provider's live-configured mode) take
-	 * over. Hardcoding a literal default here previously pinned every conversation to
-	 * {@code query_scoped} regardless of the configured mode, and made
-	 * {@code chartsearchai.chartMode=fullChart} fail every turn with {@code unsupported_mode} (the
-	 * request's forced default never matched the provider's actual mode). Package-private for
-	 * {@code ProviderRestContractTest}.
+	 * here lets {@link #streamProviderTurn}'s {@code resolvedMode} use the provider's configured
+	 * mode. A request-layer default would conflict with providers configured for another supported
+	 * mode. Package-private for {@code ProviderRestContractTest}.
 	 */
 	ProviderMode resolveMode(Map<String, String> body) {
 		String mode = body == null ? null : body.get("mode");

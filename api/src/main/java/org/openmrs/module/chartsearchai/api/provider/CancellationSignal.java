@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.api.provider;
 
+import java.io.Closeable;
+
 /**
  * Cooperative cancellation for a provider turn. Providers poll this at their natural
  * checkpoints (before starting expensive work, between stages) and end the turn with a
@@ -21,4 +23,12 @@ public interface CancellationSignal {
 	CancellationSignal NONE = () -> false;
 
 	boolean isCancelled();
+
+	/** Register blocking work that should be closed when this turn is cancelled. */
+	default void bindCloseable(Closeable closeable) {
+	}
+
+	/** Remove a completed resource from cancellation tracking. */
+	default void unbindCloseable(Closeable closeable) {
+	}
 }

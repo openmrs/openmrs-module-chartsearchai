@@ -207,7 +207,8 @@ public class ConversationServiceImpl implements ConversationService {
 	public List<PriorClinicalTurn> priorClinicalTurns(ClinicalConversation conversation) {
 		List<PriorClinicalTurn> prior = new ArrayList<>();
 		for (ClinicalConversationTurn turn : conversationDAO.getTurns(conversation)) {
-			boolean completedAnswer = TurnEventType.TURN_DONE.getWireName().equals(turn.getTerminalState());
+			boolean completedAnswer = TurnEventType.TURN_DONE.getWireName().equals(turn.getTerminalState())
+					&& isStoredAnswerReplayable(turn);
 			boolean checkedAnswerStillRunning = turn.getTerminalState() == null && isStoredChecked(turn);
 			if ((completedAnswer || checkedAnswerStillRunning) && turn.getAnswerText() != null) {
 				prior.add(new PriorClinicalTurn(turn.getQuestion(), turn.getAnswerText()));
@@ -271,6 +272,23 @@ public class ConversationServiceImpl implements ConversationService {
 			JsonNode status = MAPPER.readTree(turn.getProviderPayload()).path("answerValidation")
 					.path("status");
 			return "checked".equals(status.asText()) || "edited".equals(status.asText());
+		}
+		catch (IOException ignored) {
+			return false;
+		}
+	}
+
+	private static boolean isStoredAnswerReplayable(ClinicalConversationTurn turn) {
+		if (turn.getProviderPayload() == null) {
+			return true;
+		}
+		try {
+			JsonNode validation = MAPPER.readTree(turn.getProviderPayload()).path("answerValidation");
+			if (validation.isMissingNode() || validation.isNull()) {
+				return true;
+			}
+			String status = validation.path("status").asText();
+			return "checked".equals(status) || "edited".equals(status);
 		}
 		catch (IOException ignored) {
 			return false;

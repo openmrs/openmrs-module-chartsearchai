@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,6 +95,14 @@ public class RemoteLlmEngine implements LlmEngine {
 	@Override
 	public InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer) {
+		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer,
+				null, null, CancellationSignal.NONE);
+	}
+
+	@Override
+	public InferenceResult inferStreaming(String systemPrompt, String userMessage,
+			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+			CancellationSignal cancellation) {
 		String endpointUrl = getRequiredGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL);
 		String apiKey = getOptionalRuntimeProperty(ChartSearchAiConstants.RP_LLM_REMOTE_API_KEY);
 		String modelName = getRequiredGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME);
@@ -121,7 +130,14 @@ public class RemoteLlmEngine implements LlmEngine {
 				throwForErrorResponse(response.statusCode(), body);
 			}
 
-			return parseStreamingResponse(response.body(), tokenConsumer);
+			InputStream responseBody = response.body();
+			cancellation.bindCloseable(responseBody);
+			try {
+				return parseStreamingResponse(responseBody, tokenConsumer);
+			}
+			finally {
+				cancellation.unbindCloseable(responseBody);
+			}
 		}
 		catch (IOException e) {
 			throw new APIException("Failed to call remote LLM API: " + e.getMessage(), e);

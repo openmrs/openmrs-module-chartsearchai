@@ -14,13 +14,16 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.api.InsufficientContextException;
+import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -28,6 +31,7 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.openmrs.module.querystore.QueryStoreConstants;
 import org.openmrs.module.querystore.api.QueryStoreService;
+import org.openmrs.module.querystore.backend.PatientChartRead;
 import org.openmrs.module.querystore.model.ContextSlice;
 import org.openmrs.module.querystore.model.ContextSliceRecord;
 import org.openmrs.module.querystore.model.ContextSliceRequest;
@@ -40,12 +44,12 @@ import org.springframework.stereotype.Component;
 
 /**
  * Bridge to the querystore module's read API. querystore is a required module, so it is present at
- * runtime; the service is still resolved lazily via {@link Context#getService(Class)} (rather than
- * injected) as defense-in-depth — a resolution failure degrades to an empty chart, the same outcome
- * as a search returning no hits, instead of breaking chart assembly.
+ * runtime; the service is still resolved lazily via {@link Context#getService(Class)} rather than
+ * injected. A resolution or completeness failure is explicit because an unavailable chart cannot
+ * safely be represented as a clinically meaningful empty chart.
  *
  * <p>{@link #build} (the fullChart mode) always fetches the full patient chart via
- * {@link QueryStoreService#getPatientChart(String)} so the chart bytes sent to
+ * {@link QueryStoreService#getPatientChartRead(String)} so the chart bytes sent to
  * the LLM are a function of the patient only — that's the property
  * llama-server's KV-cache reuse needs in order to skip ~99% of the prefill on
  * subsequent queries for the same patient. {@link #buildScoped}
@@ -94,7 +98,7 @@ class QueryStoreChartBuilder {
 	private static final String QUERYSTORE_UNAVAILABLE_MSG =
 			"QueryStoreService is unavailable — querystore is a required module, so this "
 					+ "indicates a querystore startup failure; check the querystore module. "
-					+ "Returning empty chart.";
+					+ "The turn cannot establish a complete patient chart.";
 
 	@Autowired
 	private PatientChartSerializer chartSerializer;
@@ -143,25 +147,31 @@ class QueryStoreChartBuilder {
 			log.warn(QUERYSTORE_UNAVAILABLE_MSG);
 			log.info("[timing] querystoreBuild patient={} mode={} hits=0 focusHits=0 rpcMs=0 serializeMs=0 totalMs={} outcome=unavailable",
 					patient.getPatientId(), mode, System.currentTimeMillis() - buildStart);
-			return emptyChart(patient);
+			throw new IllegalStateException(QUERYSTORE_UNAVAILABLE_MSG);
 		}
 
 		// Full chart first — this is what the LLM sees and what determines the KV-cache
 		// prefix. Always called regardless of mode so the chart bytes are a function of
 		// the patient only.
 		long rpcStart = System.currentTimeMillis();
-		List<QueryDocument> chartDocs;
+		PatientChartRead chartRead;
 		try {
-			chartDocs = queryStore.getPatientChart(patient.getUuid());
+			chartRead = queryStore.getPatientChartRead(patient.getUuid());
 		}
 		catch (RuntimeException e) {
-			log.error(GET_PATIENT_CHART_FAILED_MSG, patient.getUuid(), e);
+			String failure = getPatientChartFailedMessage(patient.getUuid());
+			log.error(failure, e);
 			long failMs = System.currentTimeMillis() - rpcStart;
 			log.info("[timing] querystoreBuild patient={} mode={} hits=0 focusHits=0 rpcMs={} serializeMs=0 totalMs={} outcome=error errorClass={}",
 					patient.getPatientId(), mode, failMs, System.currentTimeMillis() - buildStart,
 					e.getClass().getSimpleName());
-			return emptyChart(patient);
+			throw new IllegalStateException(failure, e);
 		}
+		if (chartRead.isTruncated()) {
+			throw new ChartTooLargeException("QueryStore returned an incomplete chart for patient "
+					+ patient.getUuid() + "; the answer was withheld rather than treating it as complete.");
+		}
+		List<QueryDocument> chartDocs = chartRead.getDocuments();
 
 		// Focus hint: only in preFilter mode, only with a non-blank question (searchByPatient
 		// with a blank query is spurious — no ranking signal). The hint is a tiny payload
@@ -190,23 +200,20 @@ class QueryStoreChartBuilder {
 	/**
 	 * Builds the query-scoped slice chart for {@code chartsearchai.chartMode=queryScoped} as a
 	 * THIN ADAPTER over querystore's shared context-selection contract (querystore ADR
-	 * Decision 17): this builder interprets the question — intent-typed scope (see
-	 * {@link QueryScopeRouter}), module-contributed types, temporal phrasing, stopword/lab-panel
-	 * preprocessing — and {@code QueryStoreService.getContextSlice} performs the selection
+	 * Decision 17): this builder contributes module-owned resource scopes and QueryStore derives
+	 * question intent, temporal phrasing, and retrieval preprocessing before performing selection
 	 * (mandatory clinical core, temporal recency anchor, typed-complete types, similarity union,
 	 * obs-group panel completion) exactly once for every consumer. Records come back in the
 	 * CHART's most-recent-first order, which the system prompt asserts. The slice renders no
-	 * focus hint: the slice IS the scope. A selection failure degrades to an empty chart; a null
-	 * patient degrades to an empty chart, exactly like {@link #build}.
+	 * focus hint: the slice IS the scope. A selection or completeness failure is explicit; only a
+	 * null patient degrades to an empty chart, exactly like {@link #build}.
 	 *
 	 * <p>The slice is question-dependent, so callers must not attach a KV-cache scope to it (see
 	 * {@code LlmInferenceService.kvCacheScopeFor}); its latency contract is the opposite of
 	 * {@link #build}'s — a small fresh prefill every query instead of a big amortized one.
 	 *
-	 * <p>Completeness caveat: querystore's Elasticsearch tier caps the underlying chart at its
-	 * 10&nbsp;000 most recent documents. fullChart mode fails loud on such patients
-	 * ({@code ChartTooLargeException}); a scoped slice keeps working, so the slice contract
-	 * surfaces the cap explicitly ({@code ContextSlice.isChartTruncated}) and it is WARNed below.
+	 * <p>Querystore surfaces any backend cap through {@link ContextSlice#isChartTruncated()}.
+	 * Scoped and full-chart paths both withhold the answer when that signal is true.
 	 */
 	PatientChart buildScoped(Patient patient, String question) {
 		long buildStart = System.currentTimeMillis();
@@ -221,7 +228,7 @@ class QueryStoreChartBuilder {
 			log.warn(QUERYSTORE_UNAVAILABLE_MSG);
 			log.info("[timing] querystoreScopedBuild patient={} types=unresolved chartDocs=0 simHits=0 slice=0 rpcMs=0 serializeMs=0 totalMs={} outcome=unavailable",
 					patient.getPatientId(), System.currentTimeMillis() - buildStart);
-			return markScoped(emptyChart(patient));
+			throw new IllegalStateException(QUERYSTORE_UNAVAILABLE_MSG);
 		}
 
 		// Question interpretation and retrieval preprocessing are querystore's now (its ADR
@@ -244,17 +251,18 @@ class QueryStoreChartBuilder {
 			log.info("[timing] querystoreScopedBuild patient={} types=unresolved chartDocs=0 simHits=0 slice=0 rpcMs={} serializeMs=0 totalMs={} outcome=error errorClass={}",
 					patient.getPatientId(), System.currentTimeMillis() - rpcStart,
 					System.currentTimeMillis() - buildStart, e.getClass().getSimpleName());
-			return markScoped(emptyChart(patient));
+			throw new IllegalStateException("QueryStore.getContextSlice failed for patient "
+					+ patient.getUuid(), e);
 		}
 		long rpcMs = System.currentTimeMillis() - rpcStart;
 
 		if (slice.isChartTruncated()) {
-			log.warn("Context slice for patient [uuid={}] was built on a chart at querystore's ES "
-					+ "tier cap ({} docs) — typed slices may silently omit records older than the cutoff.",
-					patient.getUuid(), slice.getChartSize());
+			throw new ChartTooLargeException("QueryStore built the context slice from an incomplete chart for patient "
+					+ patient.getUuid() + " (reported chart size " + slice.getChartSize()
+					+ "); the answer was withheld rather than treating typed evidence as complete.");
 		}
 
-		List<ContextSliceRecord> budgeted = applyContextBudget(patient, slice.getRecords());
+		List<ContextSliceRecord> budgeted = applyContextBudget(patient, question, slice.getRecords());
 
 		List<QueryDocument> sliceDocs = new ArrayList<QueryDocument>(budgeted.size());
 		int simHits = 0;
@@ -284,15 +292,6 @@ class QueryStoreChartBuilder {
 		// above carry no records at all, so declaring completeness for them would assert a
 		// guarantee no filter enforced.
 		//
-		// Deliberately stamped at the ES chart cap too, where the fetch itself dropped the older
-		// tail (WARNed above) so the slice can be missing pre-cutoff docs of a scoped type. Do NOT
-		// "fix" that by suppressing the stamp: what a consumer reads from absence is whether the
-		// chart THE ANSWER IS GROUNDED IN lacks the record, and at the cap it genuinely does — so
-		// the active-order reconciliation (issue #118) still needs to repair it, or the largest
-		// charts get back exactly the contradiction that issue is about, on the patients least
-		// likely to be checked by hand. Only the cause differs (a retrieval cap, not an indexing
-		// gap), which is why the reconciliation's WARN says the index is *normally* behind rather
-		// than asserting it, and why the cap gets its own WARN on the same request.
 		chart.markCompleteFor(slice.getEffectiveTypes());
 		return markScoped(chart);
 	}
@@ -306,54 +305,106 @@ class QueryStoreChartBuilder {
 	}
 
 	/**
-	 * {@code context.mandatory-overflow-abstains}: mandatory clinical evidence (demographics,
-	 * allergies, active conditions) is never droppable (ADR Decision 17), so it either fits the
-	 * model's input budget or the turn abstains — it is never silently trimmed. Mirrors
+	 * Mandatory, exact-match, typed-complete, and panel-family evidence is never droppable, so it
+	 * either fits the model's input budget or the turn abstains. Optional recency and similarity
+	 * records are packed in policy order, then restored to chart order for rendering. Mirrors
 	 * med-agent-hub's {@code select_context}: a fast accept when everything fits, otherwise a
-	 * greedy fill of non-mandatory records (kept in chart order, a ceiling never a target) up to
-	 * the budget. Returns {@code records} unchanged when no {@link TokenCounter} is configured or
+	 * greedy priority prefix of optional records (a ceiling, never a target) up to
+	 * the budget. Prompt counts include the system prompt, question, and model chat template.
+	 * Returns {@code records} unchanged when no {@link TokenCounter} is configured or
 	 * available (e.g. a remote engine with no assumed tokenizer route) — this feature can only
 	 * ever tighten behavior, never introduce a new failure mode where none existed.
 	 */
-	private List<ContextSliceRecord> applyContextBudget(Patient patient, List<ContextSliceRecord> records) {
+	private List<ContextSliceRecord> applyContextBudget(Patient patient, String question,
+			List<ContextSliceRecord> records) {
 		TokenCounter counter = tokenCounter;
 		if (counter == null || !counter.isAvailable()) {
 			return records;
 		}
 		int budget = counter.inputBudget();
 
-		List<ContextSliceRecord> mandatory = new ArrayList<ContextSliceRecord>();
+		List<ContextSliceRecord> protectedRecords = new ArrayList<ContextSliceRecord>();
 		for (ContextSliceRecord record : records) {
-			if (QueryStoreConstants.TIER_MANDATORY.equals(record.getTier())) {
-				mandatory.add(record);
+			if (isProtectedTier(record.getTier())) {
+				protectedRecords.add(record);
 			}
 		}
-		int mandatoryTokens = counter.count(renderedTextOf(patient, mandatory));
-		if (mandatoryTokens > budget) {
-			List<String> mandatoryIds = new ArrayList<String>();
-			for (ContextSliceRecord record : mandatory) {
-				mandatoryIds.add(record.getDocument().getResourceUuid());
+		int protectedTokens = counter.countPrompt(renderedTextOf(patient, protectedRecords), question);
+		if (protectedTokens > budget) {
+			List<String> protectedIds = new ArrayList<String>();
+			for (ContextSliceRecord record : protectedRecords) {
+				protectedIds.add(record.getDocument().getResourceUuid());
 			}
 			throw new InsufficientContextException(
-					"Mandatory clinical evidence (" + mandatoryTokens + " tokens) exceeds the "
+					"Required mandatory, exact, typed-complete, or panel evidence (" + protectedTokens
+							+ " tokens) exceeds the "
 							+ budget + "-token model input budget for patient " + patient.getUuid() + ".",
-					mandatoryIds);
+					protectedIds);
 		}
 
-		if (counter.count(renderedTextOf(patient, records)) <= budget) {
+		if (counter.countPrompt(renderedTextOf(patient, records), question) <= budget) {
 			return records;
 		}
+		Map<ContextSliceRecord, Integer> positions = new IdentityHashMap<ContextSliceRecord, Integer>();
+		for (int index = 0; index < records.size(); index++) {
+			positions.put(records.get(index), Integer.valueOf(index));
+		}
 
-		List<ContextSliceRecord> selected = new ArrayList<ContextSliceRecord>();
+		List<ContextSliceRecord> optional = new ArrayList<ContextSliceRecord>();
 		for (ContextSliceRecord record : records) {
-			List<ContextSliceRecord> candidate = new ArrayList<ContextSliceRecord>(selected);
-			candidate.add(record);
-			if (QueryStoreConstants.TIER_MANDATORY.equals(record.getTier())
-					|| counter.count(renderedTextOf(patient, candidate)) <= budget) {
-				selected = candidate;
+			if (!isProtectedTier(record.getTier())) {
+				optional.add(record);
 			}
 		}
+		Collections.sort(optional, (left, right) -> {
+			int tier = Integer.compare(optionalTierPriority(left), optionalTierPriority(right));
+			if (tier != 0) {
+				return tier;
+			}
+			int rank = Integer.compare(optionalRank(left), optionalRank(right));
+			return rank != 0 ? rank : Integer.compare(positions.get(left), positions.get(right));
+		});
+
+		int low = 0;
+		int high = optional.size();
+		while (low < high) {
+			int size = low + (high - low + 1) / 2;
+			List<ContextSliceRecord> candidate = new ArrayList<ContextSliceRecord>(protectedRecords);
+			candidate.addAll(optional.subList(0, size));
+			Collections.sort(candidate,
+					(left, right) -> Integer.compare(positions.get(left), positions.get(right)));
+			if (counter.countPrompt(renderedTextOf(patient, candidate), question) <= budget) {
+				low = size;
+			} else {
+				high = size - 1;
+			}
+		}
+		List<ContextSliceRecord> selected = new ArrayList<ContextSliceRecord>(protectedRecords);
+		selected.addAll(optional.subList(0, low));
+		Collections.sort(selected,
+				(left, right) -> Integer.compare(positions.get(left), positions.get(right)));
 		return selected;
+	}
+
+	private static boolean isProtectedTier(String tier) {
+		return QueryStoreConstants.TIER_MANDATORY.equals(tier)
+				|| QueryStoreConstants.TIER_EXACT.equals(tier)
+				|| QueryStoreConstants.TIER_TYPED.equals(tier)
+				|| QueryStoreConstants.TIER_PANEL.equals(tier);
+	}
+
+	private static int optionalTierPriority(ContextSliceRecord record) {
+		if (QueryStoreConstants.TIER_RECENCY_ANCHOR.equals(record.getTier())) {
+			return 0;
+		}
+		if (QueryStoreConstants.TIER_SIMILARITY.equals(record.getTier())) {
+			return 1;
+		}
+		return 2;
+	}
+
+	private static int optionalRank(ContextSliceRecord record) {
+		return record.getRank() == null ? Integer.MAX_VALUE : record.getRank().intValue();
 	}
 
 	private String renderedTextOf(Patient patient, List<ContextSliceRecord> records) {
@@ -457,20 +508,9 @@ class QueryStoreChartBuilder {
 		}
 	}
 
-	/** The {@code log.error} format both modes emit when {@code getPatientChart} fails — a shared
-	 *  constant (the try/catch stays inline per mode so each [timing] line keeps the REAL
-	 *  {@code errorClass=}, which a shared catch-and-null helper would erase). */
-	private static final String GET_PATIENT_CHART_FAILED_MSG =
-			"QueryStore.getPatientChart failed for patient [uuid={}]";
-
-	/** querystore's Elasticsearch tier caps {@code getPatientChart} at its most-recent N documents
-	 *  (older tail silently dropped) — mirrors {@code ElasticsearchBackendStore.FULL_CHART_MAX_HITS}
-	 *  in the querystore module. Kept in sync manually: querystore-api exposes no constant for it.
-	 *  A returned size at this value means a scoped typed slice may be missing pre-cutoff records
-	 *  (see {@link #buildScoped}). Package-private so the test asserting what {@link #buildScoped}
-	 *  does AT the cap reads the real threshold — a test hardcoding 10 000 would silently stop
-	 *  exercising the cap the moment this value changed, and still pass. */
-	static final int QUERYSTORE_ES_CHART_CAP = 10_000;
+	private static String getPatientChartFailedMessage(String patientUuid) {
+		return "QueryStore.getPatientChart failed for patient [uuid=" + patientUuid + "]";
+	}
 
 	/**
 	 * Runs the similarity search and collects hit uuids, degrading to an empty set on failure with

@@ -450,6 +450,8 @@ public class ChartSearchAiRestController {
 		Map<String, Object> body = new LinkedHashMap<String, Object>();
 		body.put("enabled", ChartSearchAiUtils.isDrugReferenceEnabled());
 		body.putAll(drugReferenceService.getLoadStatus().toMap());
+		body.put("crossReactivityPackage",
+				drugReferenceService.getCrossReactivityPackageStatus().toMap());
 		return new ResponseEntity<Object>(body, HttpStatus.OK);
 	}
 

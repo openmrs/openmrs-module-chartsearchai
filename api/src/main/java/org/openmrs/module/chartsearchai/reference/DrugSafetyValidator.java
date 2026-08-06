@@ -351,43 +351,43 @@ public class DrugSafetyValidator {
 		DrugReferencePackage crossReactivityPackage = effectiveCrossReactivityPackage();
 		Map<String, Object> packageMetadata = packageMetadata(sourcePackage,
 				crossReactivityPackage);
-		if (!sourceAvailable()) {
-			return new SafetyCheckResult(STATUS_UNAVAILABLE,
-					Collections.<SafetyWarning> emptyList(), packageMetadata,
-					coverage(resolved, false), "unavailable",
-					Collections.singletonList("source_unavailable"));
-		}
 		List<String> issues = new ArrayList<String>();
 		addIssues(issues, sourcePackage.getIssues());
 		addIssues(issues, crossReactivityPackage.getIssues());
+		if (!sourceAvailable()) {
+			addIssue(issues, "source_unavailable");
+			return new SafetyCheckResult(STATUS_UNAVAILABLE,
+					Collections.<SafetyWarning> emptyList(), packageMetadata,
+					coverage(resolved, false), "unavailable", issues);
+		}
 		if (!resolved.isMappingComplete()) {
-			issues.add("mapping_incomplete");
+			addIssue(issues, "mapping_incomplete");
 		}
 		if (!resolved.isExposureComplete()) {
-			issues.add("exposure_incomplete");
+			addIssue(issues, "exposure_incomplete");
 		}
 		if (sourcePackage.isRetired()) {
-			issues.add("source_retired");
+			addIssue(issues, "source_retired");
 		}
 		else if (!sourcePackage.isClinicallyApproved()) {
-			issues.add("source_not_clinically_approved");
+			addIssue(issues, "source_not_clinically_approved");
 		}
 		if (crossReactivityPackage.isRetired()) {
-			issues.add("cross_reactivity_source_retired");
+			addIssue(issues, "cross_reactivity_source_retired");
 		}
 		else if (!crossReactivityPackage.isClinicallyApproved()
 				&& !issues.contains("cross_reactivity_source_unavailable")
 				&& !issues.contains("cross_reactivity_data_invalid")) {
-			issues.add("cross_reactivity_not_clinically_approved");
+			addIssue(issues, "cross_reactivity_not_clinically_approved");
 		}
 		if (!(warnDose && warnInteractions && warnContra)) {
-			issues.add("check_scope_limited");
+			addIssue(issues, "check_scope_limited");
 		}
 
 		Map<String, Object> coverage = coverage(resolved, true);
 		String identity = resolved.isMappingComplete() && resolved.isExposureComplete()
 				? "high" : "limited";
-		if (!sourcePackage.isClinicallyApproved()) {
+		if (!sourcePackage.isUsableForWarnings()) {
 			return new SafetyCheckResult(sourcePackage.isRetired() ? STATUS_UNAVAILABLE : STATUS_LIMITED,
 					Collections.<SafetyWarning> emptyList(), packageMetadata, coverage,
 					identity, issues);
@@ -445,8 +445,14 @@ public class DrugSafetyValidator {
 		}
 	}
 
+	private static void addIssue(List<String> target, String issue) {
+		if (!target.contains(issue)) {
+			target.add(issue);
+		}
+	}
+
 	private boolean relationshipRulesClinicallyApproved() {
-		return effectiveCrossReactivityPackage().isClinicallyApproved();
+		return effectiveCrossReactivityPackage().isUsableForWarnings();
 	}
 
 	private boolean sourceAvailable() {
@@ -463,10 +469,14 @@ public class DrugSafetyValidator {
 	}
 
 	private SafetyCheckResult unavailable(PatientClinicalContext context, String issue) {
+		DrugReferencePackage sourcePackage = effectiveSourcePackage();
+		DrugReferencePackage crossReactivityPackage = effectiveCrossReactivityPackage();
 		List<String> issues = new ArrayList<String>();
-		issues.add(issue);
+		addIssues(issues, sourcePackage.getIssues());
+		addIssues(issues, crossReactivityPackage.getIssues());
+		addIssue(issues, issue);
 		return new SafetyCheckResult(STATUS_UNAVAILABLE, Collections.<SafetyWarning> emptyList(),
-				packageMetadata(effectiveSourcePackage(), effectiveCrossReactivityPackage()),
+				packageMetadata(sourcePackage, crossReactivityPackage),
 				coverage(context, false), "unavailable", issues);
 	}
 

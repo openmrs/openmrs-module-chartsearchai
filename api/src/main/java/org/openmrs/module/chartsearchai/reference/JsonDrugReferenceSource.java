@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * {@link DrugReferenceSource} for the chartsearchai-native JSON format
@@ -97,6 +99,10 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 		return parseDataset(in).entries;
 	}
 
+	static DrugReferencePackage parsePackage(InputStream in, String origin) throws IOException {
+		return parseDataset(in).toPackage(origin);
+	}
+
 	private List<DrugReference> parseAndCapture(InputStream in) throws IOException {
 		ParsedDataset parsed = parseDataset(in);
 		parsedDuringLoad = parsed;
@@ -109,31 +115,33 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 			return ParsedDataset.invalid();
 		}
 		List<String> issues = new ArrayList<String>();
+		String packageId = text(root, "packageId");
+		String version = text(root, "version");
+		String source = text(root, "source");
+		if (packageId == null || version == null || source == null) {
+			issues.add("source_package_identity_incomplete");
+		}
 		JsonNode rawEntries = root.get("entries");
 		if (rawEntries == null || !rawEntries.isArray()) {
 			issues.add("source_data_invalid");
 			return new ParsedDataset(Collections.<DrugReference> emptyList(),
-					text(root, "packageId"), text(root, "version"), text(root, "source"),
+					packageId, version, source,
 					text(root, "reviewState"), issues);
 		}
 		List<DrugReference> usable = new ArrayList<DrugReference>();
 		int dropped = 0;
 		boolean partial = false;
 		for (JsonNode rawEntry : rawEntries) {
-			DrugReference entry;
-			try {
-				entry = rawEntry != null && rawEntry.isObject()
-						? MAPPER.treeToValue(rawEntry, DrugReference.class) : null;
-			}
-			catch (IOException | RuntimeException e) {
-				entry = null;
-			}
+			DrugReference entry = parseEntry(rawEntry);
 			if (entry == null || ChartSearchAiUtils.isBlank(entry.getId())
 					|| ChartSearchAiUtils.isBlank(entry.getName())) {
 				dropped++;
 				continue;
 			}
-			partial |= hasRejectedContent(rawEntry, entry);
+			if (hasRejectedContent(rawEntry)) {
+				partial = true;
+			}
+			sanitizeEntry(entry);
 			usable.add(entry);
 		}
 		if (dropped > 0) {
@@ -147,18 +155,144 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 		if (partial) {
 			issues.add("source_data_partially_invalid");
 		}
-		return new ParsedDataset(usable, text(root, "packageId"), text(root, "version"),
-				text(root, "source"), reviewState, issues);
+		return new ParsedDataset(usable, packageId, version, source, reviewState, issues);
 	}
 
-	private static boolean hasRejectedContent(JsonNode raw, DrugReference parsed) {
+	private static DrugReference parseEntry(JsonNode raw) {
+		if (raw == null || !raw.isObject() || text(raw, "id") == null || text(raw, "name") == null) {
+			return null;
+		}
+		ObjectNode safe = ((ObjectNode) raw).deepCopy();
+		for (String field : new String[] { "id", "name", "genericName", "drugClass", "source" }) {
+			sanitizeTextField(safe, field);
+		}
+		sanitizeTextArray(safe, "aliases", false);
+		sanitizeTextArray(safe, "atcCodes", true);
+		sanitizeTextArray(safe, "warnings", false);
+		sanitizeAgeBands(safe);
+		sanitizeInteractions(safe);
+		sanitizeContraindications(safe);
+		try {
+			return MAPPER.treeToValue(safe, DrugReference.class);
+		}
+		catch (IOException | RuntimeException e) {
+			return null;
+		}
+	}
+
+	private static void sanitizeTextField(ObjectNode object, String field) {
+		JsonNode value = object.get(field);
+		if (value != null && (!value.isTextual() || ChartSearchAiUtils.isBlank(value.asText()))) {
+			object.remove(field);
+		}
+	}
+
+	private static void sanitizeTextArray(ObjectNode object, String field, boolean atcCodes) {
+		JsonNode values = object.get(field);
+		if (values == null) {
+			return;
+		}
+		ArrayNode safe = MAPPER.createArrayNode();
+		if (values.isArray()) {
+			for (JsonNode value : values) {
+				if (value != null && value.isTextual() && !ChartSearchAiUtils.isBlank(value.asText())
+						&& (!atcCodes || validAtcCode(value.asText()))) {
+					safe.add(value.asText());
+				}
+			}
+		}
+		object.set(field, safe);
+	}
+
+	private static void sanitizeAgeBands(ObjectNode object) {
+		JsonNode values = object.get("ageBands");
+		if (values == null) {
+			return;
+		}
+		ArrayNode safe = MAPPER.createArrayNode();
+		if (values.isArray()) {
+			for (JsonNode value : values) {
+				if (validAgeBand(value)) {
+					ObjectNode band = MAPPER.createObjectNode();
+					band.put("minYears", value.get("minYears").asInt());
+					band.put("maxYears", value.get("maxYears").asInt());
+					copyNumber(value, band, "mgPerKgMin");
+					copyNumber(value, band, "mgPerKgMax");
+					copyNumber(value, band, "maxDailyDoseMg");
+					safe.add(band);
+				}
+			}
+		}
+		object.set("ageBands", safe);
+	}
+
+	private static void copyNumber(JsonNode source, ObjectNode target, String field) {
+		JsonNode value = source.get(field);
+		if (value != null && !value.isNull()) {
+			target.put(field, value.asDouble());
+		}
+	}
+
+	private static void sanitizeInteractions(ObjectNode object) {
+		JsonNode values = object.get("interactions");
+		if (values == null) {
+			return;
+		}
+		ArrayNode safe = MAPPER.createArrayNode();
+		if (values.isArray()) {
+			for (JsonNode value : values) {
+				if (value != null && value.isObject() && !invalidInteractions(MAPPER.createArrayNode().add(value))) {
+					ObjectNode interaction = MAPPER.createObjectNode();
+					copyText(value, interaction, "token");
+					copyText(value, interaction, "atc");
+					copyText(value, interaction, "note");
+					copyText(value, interaction, "severity");
+					safe.add(interaction);
+				}
+			}
+		}
+		object.set("interactions", safe);
+	}
+
+	private static void sanitizeContraindications(ObjectNode object) {
+		JsonNode values = object.get("contraindications");
+		if (values == null) {
+			return;
+		}
+		ArrayNode safe = MAPPER.createArrayNode();
+		if (values.isArray()) {
+			for (JsonNode value : values) {
+				if (value != null && value.isObject()
+						&& !invalidContraindications(MAPPER.createArrayNode().add(value))) {
+					ObjectNode contraindication = MAPPER.createObjectNode();
+					copyText(value, contraindication, "type");
+					copyText(value, contraindication, "token");
+					copyText(value, contraindication, "note");
+					safe.add(contraindication);
+				}
+			}
+		}
+		object.set("contraindications", safe);
+	}
+
+	private static void copyText(JsonNode source, ObjectNode target, String field) {
+		String value = text(source, field);
+		if (value != null) {
+			target.put(field, value);
+		}
+	}
+
+	private static boolean hasRejectedContent(JsonNode raw) {
 		if (invalidTextArray(raw, "aliases") || invalidTextArray(raw, "atcCodes")
 				|| invalidTextArray(raw, "warnings")) {
 			return true;
 		}
-		for (String code : parsed.getAtcCodes()) {
-			if (code == null || !ATC_LEVEL_5.matcher(code.trim().toUpperCase(java.util.Locale.ROOT)).matches()) {
-				return true;
+		JsonNode atcCodes = raw.get("atcCodes");
+		if (atcCodes != null && atcCodes.isArray()) {
+			for (JsonNode code : atcCodes) {
+				if (code == null || !code.isTextual() || !validAtcCode(code.asText())) {
+					return true;
+				}
 			}
 		}
 		JsonNode ageBands = raw.get("ageBands");
@@ -172,6 +306,73 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 		JsonNode contraindications = raw.get("contraindications");
 		return contraindications != null
 				&& (!contraindications.isArray() || invalidContraindications(contraindications));
+	}
+
+	private static void sanitizeEntry(DrugReference entry) {
+		entry.setAliases(validText(entry.getAliases()));
+		entry.setWarnings(validText(entry.getWarnings()));
+		List<String> atcCodes = new ArrayList<String>();
+		for (String code : validText(entry.getAtcCodes())) {
+			if (ATC_LEVEL_5.matcher(code.trim().toUpperCase(java.util.Locale.ROOT)).matches()) {
+				atcCodes.add(code);
+			}
+		}
+		entry.setAtcCodes(atcCodes);
+
+		List<DrugReference.AgeBand> ageBands = new ArrayList<DrugReference.AgeBand>();
+		for (DrugReference.AgeBand band : entry.getAgeBands()) {
+			if (band != null && band.getMinYears() >= 0 && band.getMaxYears() >= band.getMinYears()
+					&& finiteNonNegative(band.getMgPerKgMin())
+					&& finiteNonNegative(band.getMgPerKgMax())
+					&& finiteNonNegative(band.getMaxDailyDoseMg())) {
+				ageBands.add(band);
+			}
+		}
+		entry.setAgeBands(ageBands);
+
+		List<DrugReference.Interaction> interactions = new ArrayList<DrugReference.Interaction>();
+		for (DrugReference.Interaction interaction : entry.getInteractions()) {
+			String token = interaction == null ? null : interaction.getToken();
+			String atc = interaction == null ? null : interaction.getAtc();
+			if (interaction != null && (!ChartSearchAiUtils.isBlank(token)
+					|| validAtcCode(atc))) {
+				if (ChartSearchAiUtils.isBlank(atc) || validAtcCode(atc)) {
+					interactions.add(interaction);
+				}
+			}
+		}
+		entry.setInteractions(interactions);
+
+		List<DrugReference.Contraindication> contraindications =
+				new ArrayList<DrugReference.Contraindication>();
+		for (DrugReference.Contraindication contraindication : entry.getContraindications()) {
+			String type = contraindication == null ? null : contraindication.getType();
+			if (contraindication != null
+					&& ("allergy".equalsIgnoreCase(type) || "condition".equalsIgnoreCase(type))
+					&& !ChartSearchAiUtils.isBlank(contraindication.getToken())) {
+				contraindications.add(contraindication);
+			}
+		}
+		entry.setContraindications(contraindications);
+	}
+
+	private static List<String> validText(List<String> values) {
+		List<String> out = new ArrayList<String>();
+		for (String value : values) {
+			if (!ChartSearchAiUtils.isBlank(value)) {
+				out.add(value);
+			}
+		}
+		return out;
+	}
+
+	private static boolean validAtcCode(String value) {
+		return !ChartSearchAiUtils.isBlank(value)
+				&& ATC_LEVEL_5.matcher(value.trim().toUpperCase(java.util.Locale.ROOT)).matches();
+	}
+
+	private static boolean finiteNonNegative(double value) {
+		return !Double.isNaN(value) && !Double.isInfinite(value) && value >= 0;
 	}
 
 	private static boolean invalidTextArray(JsonNode object, String field) {
@@ -192,21 +393,42 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 
 	private static boolean invalidAgeBand(JsonNode values) {
 		for (JsonNode value : values) {
-			if (value == null || !value.isObject() || !value.path("minYears").isIntegralNumber()
-					|| !value.path("maxYears").isIntegralNumber()
-					|| value.path("minYears").asInt() < 0
-					|| value.path("maxYears").asInt() < value.path("minYears").asInt()) {
+			if (!validAgeBand(value)) {
 				return true;
 			}
 		}
 		return false;
 	}
 
+	private static boolean validAgeBand(JsonNode value) {
+		return value != null && value.isObject() && value.path("minYears").isIntegralNumber()
+				&& value.path("maxYears").isIntegralNumber()
+				&& value.path("minYears").asInt() >= 0
+				&& value.path("maxYears").asInt() >= value.path("minYears").asInt()
+				&& validOptionalDose(value, "mgPerKgMin")
+				&& validOptionalDose(value, "mgPerKgMax")
+				&& validOptionalDose(value, "maxDailyDoseMg");
+	}
+
+	private static boolean validOptionalDose(JsonNode object, String field) {
+		JsonNode value = object.get(field);
+		if (value == null || value.isNull()) {
+			return true;
+		}
+		if (!value.isNumber()) {
+			return false;
+		}
+		double number = value.asDouble();
+		return finiteNonNegative(number);
+	}
+
 	private static boolean invalidInteractions(JsonNode values) {
 		for (JsonNode value : values) {
+			String atc = text(value, "atc");
 			if (value == null || !value.isObject()
 					|| (ChartSearchAiUtils.isBlank(text(value, "token"))
-							&& ChartSearchAiUtils.isBlank(text(value, "atc")))) {
+							&& ChartSearchAiUtils.isBlank(atc))
+					|| (!ChartSearchAiUtils.isBlank(atc) && !validAtcCode(atc))) {
 				return true;
 			}
 		}

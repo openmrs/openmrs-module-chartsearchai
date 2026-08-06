@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
@@ -47,6 +48,9 @@ public class CrossReactivityGroupsLoader {
 	static final String CLASSPATH_DEFAULT = "/chartsearchai/cross-reactivity-groups.json";
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
+
+	private static final Pattern ATC_GROUP_PREFIX =
+			Pattern.compile("[A-Z]\\d{2}(?:[A-Z](?:[A-Z](?:\\d{2})?)?)?");
 
 	private volatile ParsedDataset parsedDuringLoad;
 
@@ -85,6 +89,10 @@ public class CrossReactivityGroupsLoader {
 		return parseDataset(in).groups;
 	}
 
+	static DrugReferencePackage parsePackage(InputStream in, String origin) throws IOException {
+		return parseDataset(in).toPackage(origin);
+	}
+
 	private List<CrossReactivityGroup> parseAndCapture(InputStream in) throws IOException {
 		ParsedDataset parsed = parseDataset(in);
 		parsedDuringLoad = parsed;
@@ -97,11 +105,17 @@ public class CrossReactivityGroupsLoader {
 			return ParsedDataset.invalid();
 		}
 		List<String> issues = new ArrayList<String>();
+		String packageId = text(root, "packageId");
+		String version = text(root, "version");
+		String source = text(root, "source");
+		if (packageId == null || version == null || source == null) {
+			issues.add("cross_reactivity_package_identity_incomplete");
+		}
 		JsonNode rawGroups = root.get("groups");
 		if (rawGroups == null || !rawGroups.isArray()) {
 			issues.add("cross_reactivity_data_invalid");
 			return new ParsedDataset(Collections.<CrossReactivityGroup> emptyList(),
-					text(root, "packageId"), text(root, "version"), text(root, "source"),
+					packageId, version, source,
 					text(root, "reviewState"), issues);
 		}
 		List<CrossReactivityGroup> usable = new ArrayList<CrossReactivityGroup>();
@@ -121,11 +135,15 @@ public class CrossReactivityGroupsLoader {
 				dropped++;
 				continue;
 			}
-			partial |= invalidPrefixes(rawGroup);
+			if (invalidPrefixes(rawGroup)) {
+				dropped++;
+				partial = true;
+				continue;
+			}
 			usable.add(group);
 		}
 		if (dropped > 0) {
-			log.warn("Dropped {} unusable cross-reactivity groups (blank name or no usable atcPrefixes)", dropped);
+			log.warn("Dropped {} unusable cross-reactivity groups (invalid name or atcPrefixes)", dropped);
 			partial = true;
 		}
 		String reviewState = text(root, "reviewState");
@@ -135,8 +153,7 @@ public class CrossReactivityGroupsLoader {
 		if (partial) {
 			issues.add("cross_reactivity_data_partially_invalid");
 		}
-		return new ParsedDataset(usable, text(root, "packageId"), text(root, "version"),
-				text(root, "source"), reviewState, issues);
+		return new ParsedDataset(usable, packageId, version, source, reviewState, issues);
 	}
 
 	private static boolean invalidPrefixes(JsonNode group) {
@@ -145,7 +162,9 @@ public class CrossReactivityGroupsLoader {
 			return true;
 		}
 		for (JsonNode prefix : prefixes) {
-			if (prefix == null || !prefix.isTextual() || ChartSearchAiUtils.isBlank(prefix.asText())) {
+			if (prefix == null || !prefix.isTextual() || ChartSearchAiUtils.isBlank(prefix.asText())
+					|| !ATC_GROUP_PREFIX.matcher(prefix.asText().trim()
+							.toUpperCase(java.util.Locale.ROOT)).matches()) {
 				return true;
 			}
 		}

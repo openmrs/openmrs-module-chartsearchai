@@ -282,7 +282,7 @@ public class DrugReferenceInjector {
 
 	private boolean clinicallyApprovedPackage() {
 		try {
-			return drugReferenceService.getLoadStatus().getSourcePackage().isClinicallyApproved();
+			return drugReferenceService.getLoadStatus().getSourcePackage().isUsableForWarnings();
 		}
 		catch (RuntimeException e) {
 			return false;

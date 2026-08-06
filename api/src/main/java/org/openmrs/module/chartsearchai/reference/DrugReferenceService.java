@@ -330,6 +330,21 @@ public class DrugReferenceService {
 				: crossReactivityPackage;
 	}
 
+	/**
+	 * Status-safe counterpart used by the operator endpoint: do not trigger a relationship-file
+	 * load when the medication-safety feature is disabled.
+	 */
+	public DrugReferencePackage getCrossReactivityPackageStatus() {
+		DrugReferencePackage current = crossReactivityPackage;
+		if (current != null) {
+			return current;
+		}
+		if (!ChartSearchAiUtils.isDrugReferenceEnabled()) {
+			return DrugReferencePackage.notLoaded();
+		}
+		return getCrossReactivityPackage();
+	}
+
 	private void ensureLoaded() {
 		if (entries != null) {
 			return;

@@ -259,11 +259,46 @@ public class DrugSafetyStatusTest {
 		validator.setReviewStateForTest(DrugReferencePackage.REVIEW_CLINICALLY_APPROVED);
 
 		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Ibuprofen 600 mg every 6 hours can be given for pain.", null,
+				DrugReferenceTestSupport.ctx(5, null, null, null, null, null));
+
+		assertEquals(DrugSafetyValidator.STATUS_LIMITED, result.getStatus());
+		assertTrue(DrugReferenceTestSupport.has(result.getWarnings(),
+				SafetyWarning.TYPE_OVERDOSE, "ibuprofen"));
+		assertTrue(((java.util.List<?>) result.toMap().get("issues"))
+				.contains("cross_reactivity_data_partially_invalid"));
+	}
+
+	@Test
+	public void malformedPrimaryPackageDiagnosticSurvivesTheUnavailableResult() {
+		DrugReferencePackage malformed = new DrugReferencePackage(
+				"invalid-primary", "json", "1",
+				Collections.<String, Object> singletonMap("source", "test formulary"),
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED,
+				Collections.singletonList("source_data_invalid"));
+		DrugReferenceService service = new DrugReferenceService();
+		service.setSource(new DrugReferenceSource() {
+			@Override
+			public List<DrugReference> load() {
+				return Collections.emptyList();
+			}
+
+			@Override
+			public DrugReferencePackage lastLoadPackage() {
+				return malformed;
+			}
+		});
+		service.getAll();
+		DrugSafetyValidator validator = new DrugSafetyValidator();
+		validator.setDrugReferenceService(service);
+
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
 				"No medication recommendation.", null,
 				DrugReferenceTestSupport.ctx(30, null, null, null, null, null));
 
-		assertEquals(DrugSafetyValidator.STATUS_LIMITED, result.getStatus());
-		assertTrue(((java.util.List<?>) result.toMap().get("issues"))
-				.contains("cross_reactivity_data_partially_invalid"));
+		assertEquals(DrugSafetyValidator.STATUS_UNAVAILABLE, result.getStatus());
+		java.util.List<?> issues = (java.util.List<?>) result.toMap().get("issues");
+		assertTrue(issues.contains("source_data_invalid"));
+		assertTrue(issues.contains("source_unavailable"));
 	}
 }

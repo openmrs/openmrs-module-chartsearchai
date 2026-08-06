@@ -30,6 +30,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ServiceContext;
 import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.reference.DrugReferencePackage;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -50,7 +51,8 @@ public class ChartSearchAiDrugReferenceStatusTest {
 
 	/** Every key the endpoint documents, in the order it serializes them. */
 	private static final List<String> DOCUMENTED_FIELDS = Arrays.asList("enabled", "loaded", "inert",
-				"entryCount", "sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin", "package");
+				"entryCount", "sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin", "package",
+				"crossReactivityPackage");
 
 	private AdministrationService priorAdministrationService;
 
@@ -89,6 +91,7 @@ public class ChartSearchAiDrugReferenceStatusTest {
 		assertEquals(Integer.valueOf(0), body.get("entryCount"));
 		assertEquals("proposed", ((Map<?, ?>) body.get("package")).get("review_state"),
 				"the status must disclose that the built-in research seed is not approved clinical CDS");
+		assertEquals("proposed", ((Map<?, ?>) body.get("crossReactivityPackage")).get("review_state"));
 	}
 
 	/**
@@ -119,6 +122,9 @@ public class ChartSearchAiDrugReferenceStatusTest {
 				"origin must name the BUNDLED dataset when no operator file was read, since a "
 						+ "non-zero count alone cannot distinguish the two. Origin was: "
 						+ enabledBody.get("origin"));
+		Map<?, ?> relationshipPackage = (Map<?, ?>) enabledBody.get("crossReactivityPackage");
+		assertEquals("chartsearchai-cross-reactivity-research-seed-v1", relationshipPackage.get("id"));
+		assertEquals("proposed", relationshipPackage.get("review_state"));
 
 		globalProperties.put(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "false");
 		Map<?, ?> switchedOffBody = statusBody(controller);
@@ -129,6 +135,31 @@ public class ChartSearchAiDrugReferenceStatusTest {
 						+ "entries are still in memory");
 		assertEquals(enabledBody.get("entryCount"), switchedOffBody.get("entryCount"),
 				"and the retained outcome does not change, so repeated calls do no further work");
+	}
+
+	@Test
+	public void drugReferenceStatusReportsRelationshipPackageDiagnostics() {
+		grantPrivileges(true);
+		installAdministrationService(new HashMap<String, String>());
+		DrugReferencePackage malformed = new DrugReferencePackage(
+				"operator-relationships", "json", "4",
+				java.util.Collections.<String, Object> singletonMap("source", "test formulary"),
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED,
+				java.util.Collections.singletonList("cross_reactivity_data_partially_invalid"));
+		DrugReferenceService service = new DrugReferenceService() {
+			@Override
+			public DrugReferencePackage getCrossReactivityPackageStatus() {
+				return malformed;
+			}
+		};
+
+		Map<?, ?> body = statusBody(controllerWith(service));
+		Map<?, ?> relationshipPackage = (Map<?, ?>) body.get("crossReactivityPackage");
+
+		assertEquals("operator-relationships", relationshipPackage.get("id"));
+		assertEquals("clinically_approved", relationshipPackage.get("review_state"));
+		assertTrue(((List<?>) relationshipPackage.get("issues"))
+				.contains("cross_reactivity_data_partially_invalid"));
 	}
 
 	/**

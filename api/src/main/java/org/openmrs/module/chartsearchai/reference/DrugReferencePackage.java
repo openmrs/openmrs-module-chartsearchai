@@ -89,6 +89,11 @@ public final class DrugReferencePackage {
 		return REVIEW_CLINICALLY_APPROVED.equals(reviewState);
 	}
 
+	/** @return whether this package is approved and has no load/parser integrity findings. */
+	public boolean isUsableForWarnings() {
+		return isClinicallyApproved() && issues.isEmpty();
+	}
+
 	public boolean isRetired() {
 		return REVIEW_RETIRED.equals(reviewState);
 	}

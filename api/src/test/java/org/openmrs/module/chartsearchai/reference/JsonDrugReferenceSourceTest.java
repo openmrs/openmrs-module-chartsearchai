@@ -13,6 +13,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -45,5 +50,104 @@ public class JsonDrugReferenceSourceTest {
 				.filter(r -> "ibuprofen".equals(r.getId())).findFirst().orElse(null);
 		assertTrue(ibuprofen != null && !ibuprofen.getContraindications().isEmpty(),
 				"the curated ibuprofen entry should carry contraindication rules");
+	}
+
+	@Test
+	public void malformedNestedRulesAreRemovedBeforeValidation() throws IOException {
+		String json = "{\"packageId\":\"reviewed-v1\",\"version\":\"1\","
+				+ "\"source\":\"test formulary\",\"reviewState\":\"clinically_approved\","
+				+ "\"entries\":["
+				+ "{\"id\":\"unsafe\",\"name\":\"Unsafe Drug\",\"aliases\":[\"unsafe\"],"
+				+ "\"atcCodes\":[\"NOT-ATC\"],\"interactions\":[{\"token\":\"\"},"
+				+ "{\"token\":\"warfarin\",\"atc\":\"NOT-ATC\"}]},"
+				+ "{\"id\":\"safe\",\"name\":\"Safe Drug\",\"aliases\":[\"safe\"],"
+				+ "\"atcCodes\":[\"M01AE01\"]}]}";
+
+		List<DrugReference> entries = JsonDrugReferenceSource.parse(stream(json));
+		DrugReferencePackage sourcePackage = JsonDrugReferenceSource.parsePackage(stream(json), "test:memory");
+
+		assertEquals(2, entries.size(), "safe record identity should survive rejected nested content");
+		assertEquals("unsafe", entries.get(0).getId());
+		assertTrue(entries.get(0).getAtcCodes().isEmpty());
+		assertTrue(entries.get(0).getInteractions().isEmpty());
+		assertFalse(sourcePackage.isUsableForWarnings());
+		assertTrue(sourcePackage.getIssues().contains("source_data_partially_invalid"));
+	}
+
+	@Test
+	public void invalidDoseBandIsDiagnosedAndRemoved() throws IOException {
+		String json = "{\"packageId\":\"reviewed-v1\",\"version\":\"1\","
+				+ "\"source\":\"test formulary\",\"reviewState\":\"clinically_approved\","
+				+ "\"entries\":[{\"id\":\"ibuprofen\",\"name\":\"Ibuprofen\","
+				+ "\"ageBands\":[{\"minYears\":2,\"maxYears\":11,\"maxDailyDoseMg\":-1}]}]}";
+
+		List<DrugReference> entries = JsonDrugReferenceSource.parse(stream(json));
+		DrugReferencePackage sourcePackage = JsonDrugReferenceSource.parsePackage(stream(json), "test:memory");
+
+		assertEquals(1, entries.size(), "the drug identity should survive an invalid dose band");
+		assertTrue(entries.get(0).getAgeBands().isEmpty());
+		assertFalse(sourcePackage.isUsableForWarnings());
+		assertTrue(sourcePackage.getIssues().contains("source_data_partially_invalid"));
+	}
+
+	@Test
+	public void malformedArrayFieldDoesNotDropTheWholeDrugRecord() throws IOException {
+		String json = "{\"packageId\":\"reviewed-v1\",\"version\":\"1\","
+				+ "\"source\":\"test formulary\",\"reviewState\":\"clinically_approved\","
+				+ "\"entries\":[{\"id\":\"ibuprofen\",\"name\":\"Ibuprofen\","
+				+ "\"aliases\":\"ibuprofen\",\"atcCodes\":[\"M01AE01\"]}]}";
+
+		List<DrugReference> entries = JsonDrugReferenceSource.parse(stream(json));
+		DrugReferencePackage sourcePackage = JsonDrugReferenceSource.parsePackage(stream(json), "test:memory");
+
+		assertEquals(1, entries.size(), "one malformed child field must not erase record identity");
+		assertEquals("ibuprofen", entries.get(0).getId());
+		assertTrue(entries.get(0).getAliases().isEmpty());
+		assertEquals(Collections.singletonList("M01AE01"), entries.get(0).getAtcCodes());
+		assertFalse(sourcePackage.isUsableForWarnings());
+		assertTrue(sourcePackage.getIssues().contains("source_data_partially_invalid"));
+	}
+
+	@Test
+	public void approvedPackageWithoutIdentityCannotEmitWarnings() throws IOException {
+		String json = "{\"reviewState\":\"clinically_approved\",\"entries\":["
+				+ "{\"id\":\"ibuprofen\",\"name\":\"Ibuprofen\",\"aliases\":[\"ibuprofen\"],"
+				+ "\"atcCodes\":[\"M01AE01\"],\"ageBands\":["
+				+ "{\"minYears\":2,\"maxYears\":11,\"maxDailyDoseMg\":1200}]}]}";
+		List<DrugReference> entries = JsonDrugReferenceSource.parse(stream(json));
+		DrugReferencePackage sourcePackage = JsonDrugReferenceSource.parsePackage(stream(json), "test:memory");
+		DrugReferenceService service = new DrugReferenceService();
+		service.setSource(new DrugReferenceSource() {
+			@Override
+			public List<DrugReference> load() {
+				return entries;
+			}
+
+			@Override
+			public DrugReferencePackage lastLoadPackage() {
+				return sourcePackage;
+			}
+		});
+		service.getAll();
+		service.setCrossReactivityGroups(Collections.<CrossReactivityGroup> emptyList());
+		service.setCrossReactivityPackage(new DrugReferencePackage(
+				"reviewed-relationships", "json", "1",
+				Collections.<String, Object> singletonMap("source", "test formulary"),
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED));
+		DrugSafetyValidator validator = new DrugSafetyValidator();
+		validator.setDrugReferenceService(service);
+
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Ibuprofen 600 mg every 6 hours can be given for pain.", null,
+				DrugReferenceTestSupport.ctx(5, null, null, null, null, null));
+
+		assertEquals(DrugSafetyValidator.STATUS_LIMITED, result.getStatus());
+		assertTrue(result.getWarnings().isEmpty());
+		assertTrue(((List<?>) result.toMap().get("issues"))
+				.contains("source_package_identity_incomplete"));
+	}
+
+	private static InputStream stream(String json) {
+		return new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
 	}
 }

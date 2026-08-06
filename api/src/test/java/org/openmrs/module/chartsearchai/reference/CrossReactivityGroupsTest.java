@@ -121,6 +121,37 @@ public class CrossReactivityGroupsTest {
 		assertEquals("Good", groups.get(0).getName());
 	}
 
+	@Test
+	public void overlyBroadAtcPrefixesAreRejected() throws IOException {
+		String json = "{\"packageId\":\"relationships-v1\",\"version\":\"1\","
+				+ "\"source\":\"test formulary\",\"reviewState\":\"clinically_approved\","
+				+ "\"groups\":[{\"name\":\"Unsafe broad match\",\"atcPrefixes\":[\"M\"]},"
+				+ "{\"name\":\"NSAID\",\"atcPrefixes\":[\"M01AE\"]}]}";
+
+		List<CrossReactivityGroup> groups = CrossReactivityGroupsLoader.parse(stream(json));
+		DrugReferencePackage sourcePackage = CrossReactivityGroupsLoader.parsePackage(
+				stream(json), "test:memory");
+
+		assertEquals(1, groups.size());
+		assertEquals("NSAID", groups.get(0).getName());
+		assertFalse(sourcePackage.isUsableForWarnings());
+		assertTrue(sourcePackage.getIssues().contains(
+				"cross_reactivity_data_partially_invalid"));
+	}
+
+	@Test
+	public void approvedRelationshipPackageWithoutIdentityIsNotExecutable() throws IOException {
+		String json = "{\"reviewState\":\"clinically_approved\",\"groups\":["
+				+ "{\"name\":\"NSAID\",\"atcPrefixes\":[\"M01AE\",\"N02BA\"]}]}";
+
+		DrugReferencePackage sourcePackage = CrossReactivityGroupsLoader.parsePackage(
+				stream(json), "test:memory");
+
+		assertFalse(sourcePackage.isUsableForWarnings());
+		assertTrue(sourcePackage.getIssues().contains(
+				"cross_reactivity_package_identity_incomplete"));
+	}
+
 	private InputStream stream(String json) {
 		return new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
 	}

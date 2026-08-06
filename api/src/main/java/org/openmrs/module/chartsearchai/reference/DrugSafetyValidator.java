@@ -592,8 +592,7 @@ public class DrugSafetyValidator {
 	 * the 3.7.1 standalone: a recorded dexamethasone allergy asked about dexamethasone gave FOUR chips,
 	 * and only the row {@link DrugReferenceService#lookupByToken} resolved the allergy to matched by
 	 * identity, so the other three fell through to the class comparison and reported the substance as
-	 * cross-reactive with the patient's allergy to <em>itself</em> ("Dexamethasone (nasal) is in the
-	 * same ATC class (A01AC) as the patient's allergy to Dexamethasone"). Since issue #110 every chip
+	 * cross-reactive with the patient's allergy to <em>itself</em>. Since issue #110 every chip
 	 * is also injected as a citable pre-answer record, so each duplicate reached the prompt as well.
 	 *
 	 * <p><b>Why a ledger rather than a filter over the finished chip list.</b> Three reasons, and the

@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -82,6 +83,12 @@ public class CrossReactivityClassChoiceTest {
 		assertTrue(ketoconazole.atcSubgroups().contains("J02AB"),
 				"though the ALLERGEN carries a systemic subgroup of its own — which tioconazole does "
 						+ "not share, so no rule may reach for it: " + ketoconazole.atcSubgroups());
+
+		DrugReference methoxsalen = service.lookupByToken("Methoxsalen");
+		assertNotNull(methoxsalen, "the third allergy must resolve too");
+		assertEquals("[D05AD, D05BA]", shared(service, "trioxsalen", methoxsalen).toString(),
+				"and the psoralens share a topical and a systemic subgroup of ONE dermatological "
+						+ "main group, so main-group granularity alone cannot tell them apart");
 	}
 
 	@Test
@@ -142,6 +149,22 @@ public class CrossReactivityClassChoiceTest {
 				+ " Ketoconazole — possible cross-reactivity", warnings.get(0).getDetail());
 	}
 
+	@Test
+	public void aSystemicSubgroupInsideATopicalMainGroupIsStillTheSystemicOne() throws IOException {
+		// The exception ATC writes into its own naming, and the case a route-group prefix list gets
+		// wrong if it stops at the main group: D is Dermatologicals, but D05B is "Antipsoriatics for
+		// SYSTEMIC use" and D05A is the topical half of the same therapeutic group. Methoxsalen and
+		// trioxsalen share both (D05AD topical, D05BA systemic), so the systemic one has to win from
+		// inside a main group the rule otherwise treats as locally applied.
+		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is trioxsalen safe for her?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Methoxsalen"), null));
+
+		assertEquals(1, warnings.size(), "was: " + warnings);
+		assertEquals("Trioxsalen is in the same ATC class (D05BA) as the patient's allergy to"
+				+ " Methoxsalen — possible cross-reactivity", warnings.get(0).getDetail());
+	}
+
 	/** The subgroups {@code question}'s entry shares with {@code allergen}, sorted, through the
 	 *  production resolver and the production accessor the arm compares with. */
 	private static List<String> shared(DrugReferenceService service, String question,
@@ -156,7 +179,7 @@ public class CrossReactivityClassChoiceTest {
 				out.add(subgroup);
 			}
 		}
-		java.util.Collections.sort(out);
+		Collections.sort(out);
 		return out;
 	}
 

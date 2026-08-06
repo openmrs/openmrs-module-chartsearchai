@@ -321,18 +321,37 @@ public class DrugReference {
 					"R03A", "R03B", "S"));
 
 	/**
+	 * The groups nested INSIDE {@link #LOCALLY_APPLIED_ATC_GROUPS} that ATC itself names "for systemic
+	 * use" — {@code D01B} antifungals, {@code D05B} antipsoriatics, {@code D10B} anti-acne
+	 * preparations, {@code R01B} nasal decongestants. Same criterion as the list above, applied to the
+	 * same words: a group is read as locally applied when its own name says where it is applied, and
+	 * these four say the opposite. Without them a main-group prefix would be wrong in exactly the way
+	 * this whole rule exists to fix — measured over the shipped KB (2026-08-06), three pairs, all
+	 * psoralens: methoxsalen and trioxsalen share {@code D05AD} (topical) and {@code D05BA} (systemic)
+	 * and would be reported as sharing the topical one.
+	 */
+	private static final List<String> SYSTEMIC_USE_ATC_GROUPS = Collections
+			.unmodifiableList(Arrays.asList("D01B", "D05B", "D10B", "R01B"));
+
+	/**
 	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized here the same
 	 *         way {@link #normalizedAtcCodes()} normalizes an entry's — sits in one of the
-	 *         {@link #LOCALLY_APPLIED_ATC_GROUPS}. A substance marketed by several routes carries one
-	 *         code per route, so this is what separates the code that classifies the SUBSTANCE from
-	 *         the codes that classify its topical, nasal, inhaled, ophthalmic or local-oral
-	 *         presentations. Null and blank are not locally applied, like every other ATC comparison
-	 *         here treats them: nothing is known about them at all.
+	 *         {@link #LOCALLY_APPLIED_ATC_GROUPS} and not in one of the
+	 *         {@link #SYSTEMIC_USE_ATC_GROUPS} nested inside them. A substance marketed by several
+	 *         routes carries one code per route, so this is what separates the code that classifies
+	 *         the SUBSTANCE from the codes that classify its topical, nasal, inhaled, ophthalmic or
+	 *         local-oral presentations. Null and blank are not locally applied, like every other ATC
+	 *         comparison here treats them: nothing is known about them at all.
 	 */
 	public static boolean isLocallyAppliedAtcCode(String code) {
 		String normalized = normalizeAtcToken(code);
 		if (normalized == null) {
 			return false;
+		}
+		for (String group : SYSTEMIC_USE_ATC_GROUPS) {
+			if (normalized.startsWith(group)) {
+				return false;
+			}
 		}
 		for (String group : LOCALLY_APPLIED_ATC_GROUPS) {
 			if (normalized.startsWith(group)) {

@@ -2243,10 +2243,10 @@ public class DrugSafetyValidator {
 	 * the collapse removes the chemical subgroup — the part that carries the cross-reactivity claim —
 	 * without removing the choice it was supposed to settle.
 	 *
-	 * <p><b>A preference, never a filter.</b> Of those 1090 pairs, 560 share no systemic subgroup at
+	 * <p><b>A preference, never a filter.</b> Of those 1090 pairs, 557 share no systemic subgroup at
 	 * all: two topical azoles, two ophthalmic preparations, two local anaesthetic formulations. For
-	 * them the locally-applied class IS the honest answer and is kept. 265 pairs change; in the rest a
-	 * systemic subgroup was already being named. In 77 the systemic tier itself holds more than one
+	 * them the locally-applied class IS the honest answer and is kept. 268 pairs change; in the rest a
+	 * systemic subgroup was already being named. In 87 the systemic tier itself holds more than one
 	 * candidate and the tie-break between them is still alphabetical — both are true statements about
 	 * the substance, so this is a choice between honest answers rather than the defect above.
 	 *

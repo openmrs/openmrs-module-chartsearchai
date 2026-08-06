@@ -2,7 +2,7 @@
     "metadata": {
         "schema_version": "1.0",
         "title": "Test fixture: an allergen sharing SEVERAL ATC level-4 subgroups with the drug in play",
-        "note": "Rows copied field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, in KB order, for issue #161. Each corticosteroid shares the systemic subgroup H02AB with Dexamethasone AND at least one locally-applied subgroup that sorts ahead of it; Budesonide shares only R01AD; Ketoconazole/Tioconazole share only locally-applied subgroups. Interactions are empty deliberately: this file asserts contraindication chip TEXT, and an interaction chip would have to be filtered out of every assertion."
+        "note": "Rows copied field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, in KB order, for issue #161. Each corticosteroid shares the systemic subgroup H02AB with Dexamethasone AND at least one locally-applied subgroup that sorts ahead of it; Budesonide shares only R01AD; Ketoconazole/Tioconazole share only locally-applied subgroups; Methoxsalen/Trioxsalen share a topical and a systemic subgroup of the SAME dermatological main group (D05AD vs D05BA). Interactions are empty deliberately: this file asserts contraindication chip TEXT, and an interaction chip would have to be filtered out of every assertion."
     },
     "mechanisms": {},
     "drugs": [
@@ -23,6 +23,24 @@
                     "code": "78476",
                     "uuid": "78476AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "name": "Ketoconazole"
+                }
+            ]
+        },
+        {
+            "id": "DDInter1177",
+            "name": "Methoxsalen",
+            "rxcui": "6854",
+            "rxnorm_name": "methoxsalen",
+            "drugbank_id": "DB00553",
+            "atc": [
+                "D05AD02",
+                "D05BA02"
+            ],
+            "ciel": [
+                {
+                    "code": "79706",
+                    "uuid": "79706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Methoxsalen"
                 }
             ]
         },
@@ -90,6 +108,24 @@
                     "code": "85156",
                     "uuid": "85156AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "name": "Tioconazole"
+                }
+            ]
+        },
+        {
+            "id": "DDInter1877",
+            "name": "Trioxsalen",
+            "rxcui": "10844",
+            "rxnorm_name": "trioxsalen",
+            "drugbank_id": "DB04571",
+            "atc": [
+                "D05AD01",
+                "D05BA01"
+            ],
+            "ciel": [
+                {
+                    "code": "85524",
+                    "uuid": "85524AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Trioxsalen"
                 }
             ]
         },

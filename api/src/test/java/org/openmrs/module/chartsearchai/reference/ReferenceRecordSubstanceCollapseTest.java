@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -162,25 +163,29 @@ public class ReferenceRecordSubstanceCollapseTest {
 		// a verification pass can read it — and this PR's own live evidence is quoted off it. A count
 		// alone did not settle #163 either, since what crowds out chart records is characters. Asserted
 		// on the real formatted line, not through a helper that recomputes the number: that would test
-		// the helper, not the production formatting (the trap PairChipCapContextTest records).
+		// the helper, not the production formatting (the trap PairChipCapContextTest records). Through the
+		// shared LogCapture, which needed a level parameter to see below INFO — this is the first output
+		// in the module whose only surface is a DEBUG line.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(INTERACTION_FIXTURE);
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
 		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
-		PatientChart[] injected = new PatientChart[1];
 
-		List<String> logged = DrugReferenceTestSupport.capturedMessages(DrugReferenceInjector.class,
-				Level.DEBUG, () -> injected[0] = injector.injectRecords(
-						DrugReferenceTestSupport.oneRecordChart(),
-						DrugReferenceTestSupport.ctx(60, null,
-								DrugReferenceTestSupport.set("Diclofenac 50mg"), null, null, null),
-						"Is it safe to give hydrocortisone?"));
+		PatientChart chart;
+		List<String> logged;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
+			chart = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+					DrugReferenceTestSupport.ctx(60, null,
+							DrugReferenceTestSupport.set("Diclofenac 50mg"), null, null, null),
+					"Is it safe to give hydrocortisone?");
+			logged = capture.messagesAt(Level.DEBUG);
+		}
 
-		PatientChart chart = injected[0];
 		// Preconditions: the chart must carry records of the OTHER two kinds with text of their own, or
 		// the "only those" half of this assertion is vacuous — a total that counted everything would pass.
+		int references = characters(referenceTexts(chart));
 		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
 				"precondition: a safety-finding record must be injected beside the reference records");
-		assertTrue(characters(referenceTexts(chart)) > 0, "precondition: and reference records with text");
+		assertTrue(references > 0, "precondition: and reference records with text");
 		int everything = 0;
 		for (RecordMapping mapping : chart.getMappings()) {
 			everything += mapping.getText() == null ? 0 : mapping.getText().length();
@@ -189,12 +194,13 @@ public class ReferenceRecordSubstanceCollapseTest {
 		Matcher line = Pattern.compile("drug-reference \\((\\d+) chars\\)").matcher(String.join("\n", logged));
 		assertTrue(line.find(), "the DEBUG line must report the reference slice's character total, was: "
 				+ logged);
-		assertEquals(characters(referenceTexts(chart)), Integer.parseInt(line.group(1)),
+		int reported = Integer.parseInt(line.group(1));
+		assertEquals(references, reported,
 				"and it must be the injected drug_reference records' own characters");
-		assertTrue(Integer.parseInt(line.group(1)) < everything,
+		assertTrue(reported < everything,
 				"counting ONLY those — a total that also counted the chart's obs record and the safety "
 						+ "findings would say the reference slice costs more budget than it does, was "
-						+ line.group(1) + " against " + everything + " for every record in the chart");
+						+ reported + " against " + everything + " for every record in the chart");
 	}
 
 	@Test

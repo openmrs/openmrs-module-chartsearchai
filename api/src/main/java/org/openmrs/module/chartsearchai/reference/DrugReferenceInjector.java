@@ -787,7 +787,16 @@ public class DrugReferenceInjector {
 		final String source;
 
 		/** Interaction partners the text does not name — dropped by the budget or, more often, by
-		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all. */
+		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all.
+		 *
+		 *  <p>Counted over the rendered ENTRY's own partners, which since issue #163 is one row of a
+		 *  substance rather than every row of it: a partner carried only by a sibling row is ABSENT from
+		 *  this record, not withheld from it, and so is not in this count. So {@code 0} means "names
+		 *  every partner of the row this record was rendered from", not "of the substance it is named
+		 *  after" — see {@code collect} for the size of that difference. Left as the row's own count
+		 *  rather than widened, because what the field exists to describe is honest truncation OF THIS
+		 *  TEXT, and a number counting rows the text never had a chance to name would describe something
+		 *  else. */
 		final int withheldInteractions;
 
 		RenderedReference(String text, String source, int withheldInteractions) {

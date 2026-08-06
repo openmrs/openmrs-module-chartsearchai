@@ -228,9 +228,9 @@ public class InteractionRouteVariantTest {
 				.validate("", "Is it safe to give chloroprocaine?", DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Lorazepam 1mg"), null, null, null));
 
-		assertEquals(1, interactionChips(warnings).size(),
-				"the two rows are one subject and one chip, was: " + warnings);
-		assertEquals("Chloroprocaine", interactionChips(warnings).get(0).getDrug(),
+		List<SafetyWarning> chips = interactionChips(warnings);
+		assertEquals(1, chips.size(), "the two rows are one subject and one chip, was: " + warnings);
+		assertEquals("Chloroprocaine", chips.get(0).getDrug(),
 				"named by the route-unspecified row even though the dataset lists the ophthalmic one "
 						+ "first — a systemic order must not be told about an eye drop");
 		// The note comes from the unqualified row, which is where lorazepam's rule sits; under a
@@ -239,7 +239,7 @@ public class InteractionRouteVariantTest {
 		assertEquals("Chloroprocaine interacts with active order lorazepam — Moderate. The concomitant use"
 				+ " of local anesthetics and benzodiazepines may have additive CNS-depressant effects."
 				+ " Both types of drugs are CNS depressants.",
-				interactionChips(warnings).get(0).getDetail(), "was: " + warnings);
+				chips.get(0).getDetail(), "was: " + warnings);
 	}
 
 	@Test

@@ -11,8 +11,10 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -62,10 +64,40 @@ public final class DrugReferenceTestSupport {
 	 * question once more than one entry is injected.
 	 */
 	static RecordMapping injectedReference(PatientChart chart) {
+		return injectedReferences(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
+				"no drug-reference record was injected into the chart: " + chart.getText()));
+	}
+
+	/**
+	 * Every injected {@code drug_reference} mapping in {@code chart}, in injection order — the
+	 * reference-shaped counterpart of {@link #injectedFindings}, and the one matcher for it, so the
+	 * filter cannot drift between the test files that assert HOW MANY records one question injects
+	 * (issue #163: the prompt-budget cost is a count and a character total, and neither is visible
+	 * from {@link #injectedReference}'s first-only view).
+	 */
+	static List<RecordMapping> injectedReferences(PatientChart chart) {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType()))
-				.findFirst().orElseThrow(() -> new IllegalStateException(
-						"no drug-reference record was injected into the chart: " + chart.getText()));
+				.collect(Collectors.toList());
+	}
+
+	/**
+	 * The raw text of a test-classpath dataset, for the assertions that have to read the FILE rather
+	 * than the parsed model — a row the parser is expected to drop is invisible in its output, so the
+	 * only way to show the fixture really carries it is to read the resource the parser reads.
+	 */
+	static String fixtureText(String classpathResource) throws IOException {
+		try (InputStream in = DrugReferenceTestSupport.class.getClassLoader()
+				.getResourceAsStream(classpathResource)) {
+			assertNotNull(in, classpathResource + " should be on the test classpath");
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			byte[] buffer = new byte[8192];
+			int read;
+			while ((read = in.read(buffer)) >= 0) {
+				out.write(buffer, 0, read);
+			}
+			return new String(out.toByteArray(), StandardCharsets.UTF_8);
+		}
 	}
 
 	/**

@@ -58,10 +58,13 @@ import org.springframework.stereotype.Service;
  *       {@code chartsearchai.drugSafety.minInteractionSeverity} is not raised — unrated rules
  *       are never floor-filtered), by sharing an ATC chemical subgroup with an active order
  *       (duplicate-therapy reasoning), or — failing that — by sharing a curated
- *       {@link CrossReactivityGroup} (cross-branch family overlap). One warning per (drug, active
+ *       {@link CrossReactivityGroup} (cross-branch family overlap). One warning per (SUBSTANCE, active
  *       order), whichever of those reasons applies and however many apply at once: several rules can
  *       name one partner — DDInter's route variants of a drug all publish the same match token — and
- *       they collapse to the most severe row ({@link #bestRulePerPartner}), while a partner that is
+ *       they collapse to the most severe row ({@link #bestRulePerPartner}); the several rows one
+ *       substance is FILED as collapse the same way on the subject side, so a question naming a
+ *       substance no longer chips once per route ({@link #addInteractionWarnings}, issue #162); and a
+ *       partner that is
  *       BOTH an explicit rule partner and class-related yields one chip carrying both relationships
  *       rather than one chip per arm ({@link #addInteractionWarnings}, issue #88). Separately, and
  *       needing no patient data at all, one question-named drug interacts with ANOTHER DRUG THE
@@ -317,16 +320,36 @@ public class DrugSafetyValidator {
 		// collapse living inside one arm would still let the other emit the siblings.
 		ContraindicationChips contraindications = new ContraindicationChips(warnings);
 
+		// The interaction arms' subject is a SUBSTANCE, not a reference row (issue #162): one clinician
+		// word resolves every route/formulation row of a substance, and the arm ran once per row, so one
+		// pair became one chip per row. Grouped here rather than inside the arm because the arm is what
+		// has to see the whole group at once — its survivor rule compares rows against each other.
+		//
+		// A per-validate local, never a field: a memoised DrugReference outliving a getAll() hot-reload
+		// fails the reference comparisons the contraindication arms make against the same objects
+		// (issue #172), which would silently re-open #145 with no test failing.
+		//
+		// Consumed inside the row loop below, keyed by the group's first row, so the substance's chips
+		// land where its first row's chips have always landed and no client sees the chip sequence
+		// reshuffle — the same positional promise ContraindicationChips makes.
+		Map<Object, List<DrugReference>> interactionSubjects = warnInteractions
+				? substanceRows(inPlay) : Collections.<Object, List<DrugReference>> emptyMap();
+
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
 				addContraindications(contraindications, ref, context);
 				addAllergyContraindications(contraindications, ref, context);
 			}
 			if (warnInteractions) {
-				// One call, not one per arm: the rule arm and the class arm can both raise a chip about
-				// the same active order, so the decision of how many chips that pair gets belongs to a
-				// method that sees both (issue #88).
-				addInteractionWarnings(warnings, ref, context, severityFloor, orderEntries);
+				// remove(), so a substance's rows are handed to the arm ONCE — at the first of them — and
+				// the map itself is the already-done ledger.
+				List<DrugReference> substance = interactionSubjects.remove(ref.substanceGroupKey());
+				if (substance != null) {
+					// One call, not one per arm: the rule arm and the class arm can both raise a chip about
+					// the same active order, so the decision of how many chips that pair gets belongs to a
+					// method that sees both (issue #88).
+					addInteractionWarnings(warnings, substance, context, severityFloor, orderEntries);
+				}
 			}
 			if (warnDose) {
 				addOverdose(warnings, ref, context, lower, all);
@@ -697,7 +720,10 @@ public class DrugSafetyValidator {
 		 * already raised — in which case the more specific {@code relationship} wins, in place.
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip) {
-			List<Object> key = Arrays.asList(subjectKey(subject), finding);
+			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
+			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
+			// merge different sets of rows. Its javadoc is where the two key spaces are justified.
+			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
 			if (already == null) {
 				raised.put(key, new RaisedChip(warnings.size(), relationship));
@@ -708,14 +734,6 @@ public class DrugSafetyValidator {
 				warnings.set(already.position, chip);
 				already.relationship = relationship;
 			}
-		}
-
-		/** @return the substance {@code subject} stands for, else {@code subject} itself. The two are
-		 *          different types — a {@link List} and a {@link DrugReference} — so the two key spaces
-		 *          cannot collide, the same argument {@link #bestRulePerPartner} makes about its own. */
-		private static Object subjectKey(DrugReference subject) {
-			Object substance = subject.substanceKey();
-			return substance != null ? substance : subject;
 		}
 	}
 
@@ -748,10 +766,24 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Every interaction chip {@code ref} raises about the patient's own medications: <b>one chip per
-	 * (this drug, active order) pair</b>, with the two arms that can each raise one — the rule arm
+	 * Every interaction chip one SUBSTANCE raises about the patient's own medications: <b>one chip per
+	 * (substance, active order) pair</b>, with the two arms that can each raise one — the rule arm
 	 * ({@link #bestRulePerPartner}) and the class arm ({@link #classRelationships}) — coordinated
 	 * instead of run independently (issue #88).
+	 *
+	 * <p><b>The subject is a substance, not a reference row (issue #162).</b> This ran once per entry in
+	 * the drugs-in-play set, and {@link #bestRulePerPartner} groups per PARTNER within one subject, so the
+	 * subject side was never grouped at all: one clinician word resolves every route/formulation row a KB
+	 * files a substance as ({@link DrugReferenceService#findByQuery} returns every entry whose aliases
+	 * match), and each row that carried a rule about the same order raised its own chip. Measured live on
+	 * the 3.7.1 standalone — Sarah Taylor, one diclofenac order, "Is it safe to give hydrocortisone?" —
+	 * as {@code Hydrocortisone interacts with active order diclofenac} AND
+	 * {@code Hydrocortisone (ophthalmic) interacts with active order diclofenac}, each carrying its own
+	 * row's mechanism prose. So it was not a duplicate to drop but a choice to make, and both halves of
+	 * the choice are decided elsewhere and deliberately: which rule row survives by
+	 * {@link #outranks}, and what the chip calls the subject by {@link #interactionSubject}. The caller
+	 * groups the rows ({@code substanceRows}) and hands them here at the group's first row, so a
+	 * substance's chips keep the position they have always had.
 	 *
 	 * <p><b>The defect.</b> A co-medication that is BOTH an explicit interaction partner AND
 	 * class-related raised TWO {@code TYPE_INTERACTION} chips for one clinical fact, because neither
@@ -818,20 +850,28 @@ public class DrugSafetyValidator {
 	 * {@link #activeOrdersOtherThan} now attributes them), so the narrowing available is to correlate
 	 * against those rather than against the union — not a cleverer test over the union.
 	 */
-	private void addInteractionWarnings(List<SafetyWarning> warnings, DrugReference ref,
+	private void addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> subjects,
 			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries) {
 		if (context == null) {
 			return;
 		}
-		List<DrugReference.Interaction> rules = new ArrayList<DrugReference.Interaction>(
-				bestRulePerPartner(ref, context, severityFloor, orderEntries));
+		DrugReference ref = interactionSubject(subjects);
+		List<SubjectRule> rules = new ArrayList<SubjectRule>(
+				bestRulePerPartner(subjects, context, severityFloor, orderEntries));
 		// Which rule row carries which class sentence, decided before anything is emitted: the class
 		// arm is walked per active-order CODE while the chips are one per rule ROW, and a substance
 		// filed under several codes reaches this loop once per code.
-		Map<DrugReference.Interaction, String> folded = new LinkedHashMap<DrugReference.Interaction, String>();
+		//
+		// The class arm reads the CANONICAL row alone, not the whole group, and that is lossless rather
+		// than a shortcut: it compares ATC codes, and the rows of one substance publish identical ATC
+		// lists in the shipped KB (measured 2026-08-06 over all 121 multi-row families — 0 diverge; this
+		// is the same premise ContraindicationChips' positional tie-break rests on, and the thing to
+		// re-measure before widening substanceKey). Reading the group instead would produce one sentence
+		// per row, each naming its own label, which is the duplication being removed.
+		Map<SubjectRule, String> folded = new LinkedHashMap<SubjectRule, String>();
 		List<String> classOnly = new ArrayList<String>();
 		for (Map.Entry<String, String> hit : classRelationships(ref, context).entrySet()) {
-			DrugReference.Interaction rule = ruleAbout(hit.getKey(), rules);
+			SubjectRule rule = ruleAbout(hit.getKey(), rules);
 			if (rule == null) {
 				classOnly.add(hit.getValue());
 			} else if (!folded.containsKey(rule)) {
@@ -845,11 +885,74 @@ public class DrugSafetyValidator {
 		// Rule chips first, then the class-only chips, which is the order the two arms produced them in
 		// before they were coordinated — a folded chip therefore keeps the rule chip's position and no
 		// client sees the chip sequence reshuffle.
-		for (DrugReference.Interaction rule : rules) {
-			warnings.add(interactionWarning(ref, rule, folded.get(rule)));
+		for (SubjectRule rule : rules) {
+			warnings.add(interactionWarning(ref, rule.rule, folded.get(rule)));
 		}
 		for (String detail : classOnly) {
 			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
+		}
+	}
+
+	/**
+	 * The reference rows of {@code entries}, grouped by the substance each stands for
+	 * ({@link DrugReference#substanceGroupKey()}), in first-appearance order both between groups and
+	 * within them.
+	 *
+	 * <p>Order matters twice. Between groups, because the caller walks {@code entries} and hands each
+	 * group to the arm at its first row, so a substance's chips keep the position that row's chips had.
+	 * Within a group, because {@link #bestRulePerPartner}'s survivor rule falls back to "keep the
+	 * incumbent", which is only "the dataset's first such row" while the group is in dataset order.
+	 */
+	private static Map<Object, List<DrugReference>> substanceRows(Collection<DrugReference> entries) {
+		Map<Object, List<DrugReference>> out = new LinkedHashMap<Object, List<DrugReference>>();
+		for (DrugReference entry : entries) {
+			Object key = entry.substanceGroupKey();
+			List<DrugReference> rows = out.get(key);
+			if (rows == null) {
+				rows = new ArrayList<DrugReference>();
+				out.put(key, rows);
+			}
+			rows.add(entry);
+		}
+		return out;
+	}
+
+	/**
+	 * @return the row of one substance that its chips name — {@link DrugReference#canonicalRow}'s choice
+	 *         over the group, i.e. the row carrying no route qualifier wherever the loaded data has one.
+	 *
+	 *         <p>This is the second half of issue #162, and the half that is a correctness fix rather
+	 *         than a de-duplication. The chips named the subject by whichever ROW produced them, so a
+	 *         question about "hydrocortisone" reported {@code Hydrocortisone (ophthalmic) interacts with
+	 *         active order diclofenac} — asserting an ophthalmic preparation the clinician never named
+	 *         and the chart does not record. Nothing here can know the route (see
+	 *         {@link DrugReference#namesNoRoute()}), so the honest subject is the substance.
+	 */
+	private static DrugReference interactionSubject(List<DrugReference> subjects) {
+		DrugReference canonical = null;
+		for (DrugReference subject : subjects) {
+			canonical = DrugReference.canonicalRow(canonical, subject);
+		}
+		return canonical;
+	}
+
+	/**
+	 * One matched interaction rule together with the reference row that carries it — the unit
+	 * {@link #bestRulePerPartner} chooses between now that its candidates come from several rows of one
+	 * substance rather than from one entry. The row is needed for the choice itself (a route-unspecified
+	 * row's mechanism prose is the one that fits a subject named by the substance) and nowhere else: the
+	 * chip is rendered from the group's canonical row, so which row supplied the winning RULE never
+	 * changes what the chip calls the drug.
+	 */
+	private static final class SubjectRule {
+
+		private final DrugReference subject;
+
+		private final DrugReference.Interaction rule;
+
+		SubjectRule(DrugReference subject, DrugReference.Interaction rule) {
+			this.subject = subject;
+			this.rule = rule;
 		}
 	}
 
@@ -876,13 +979,13 @@ public class DrugSafetyValidator {
 	 *         unfolded, which is the conservative direction, since the alternative is stating one
 	 *         duplicate-therapy relationship twice.
 	 */
-	private DrugReference.Interaction ruleAbout(String orderCode, List<DrugReference.Interaction> rules) {
+	private SubjectRule ruleAbout(String orderCode, List<SubjectRule> rules) {
 		DrugReference orderEntry = entryForAtcCode(orderCode);
-		for (DrugReference.Interaction rule : rules) {
-			if (orderCode.equals(DrugReference.normalizeAtcToken(rule.getAtc()))) {
+		for (SubjectRule rule : rules) {
+			if (orderCode.equals(DrugReference.normalizeAtcToken(rule.rule.getAtc()))) {
 				return rule;
 			}
-			if (orderEntry != null && identifies(rule, orderEntry)) {
+			if (orderEntry != null && identifies(rule.rule, orderEntry)) {
 				return rule;
 			}
 		}
@@ -924,8 +1027,9 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The matched interaction rules of {@code ref} worth chipping, at most one per partner, in
-	 * dataset order of first appearance.
+	 * The matched interaction rules of {@code subjects} — all the reference rows of ONE substance
+	 * (issue #162), or a single row for the screening arm's overload — worth chipping: at most one per
+	 * partner, in dataset order of first appearance, each paired with the row that carries it.
 	 *
 	 * <p><b>Why grouping is needed (issue #115).</b> DDInter carries one entry per <em>route
 	 * variant</em> and every variant of a drug publishes the same {@code rxnorm_name}, so the
@@ -945,13 +1049,19 @@ public class DrugSafetyValidator {
 	 * active-order entry the rule {@link #identifies} — else the label the chip renders
 	 * ({@link #partnerLabel}, case-folded). Either way rules that would produce the same
 	 * "interacts with active order X" subject collapse while rules naming different partners each
-	 * keep their chip — even when their notes are identical strings. Grouping is per {@code ref}
-	 * and per arm: two different drugs in play still chip separately about the same order, and this
+	 * keep their chip — even when their notes are identical strings. Grouping is per SUBSTANCE
+	 * and per arm: two different substances in play still chip separately about the same order, and this
 	 * decides only WHICH RULE ROW survives for a partner, never how many arms describe that partner.
 	 * The rule-plus-class double chip of issue #88 is the separate, cross-arm question, answered
 	 * downstream of this method by {@link #addInteractionWarnings} — which folds the class arm's
 	 * finding into the row chosen here, so the two collapses compose in one direction instead of
 	 * competing.
+	 *
+	 * <p>Since issue #162 the candidates for one partner come from several rows, not one — the subject's
+	 * whole substance — and the two rows of a substance resolve the SAME partner key: they carry the same
+	 * match token (their shared {@code rxnorm_name}), and {@link #activeOrderEntryFor} returns the first
+	 * order entry that token names. So no extra key work is needed on the subject side; what needed
+	 * deciding is which row wins, below.
 	 *
 	 * <p>The label alone was the key until issue #136, and it was a sound proxy for "one partner" only
 	 * while a rule could reach an order by ONE spelling. The reference-name arm of
@@ -967,8 +1077,10 @@ public class DrugSafetyValidator {
 	 * dataset carries no entry for the order's substance the label is still the key, and there #121's
 	 * invariant holds unchanged: the key IS what the chip says.
 	 *
-	 * <p><b>Which row wins.</b> The most severe rating, then the longer note — longer in prose, not in
-	 * whitespace, see {@link #noteLength}. Route variants genuinely differ — topical dexamethasone does
+	 * <p><b>Which row wins.</b> The most severe rating, then — since issue #162 — the row naming no
+	 * route, then the longer note; longer in prose, not in whitespace, see {@link #noteLength}. The full
+	 * ordering and the measurement behind the middle step live on {@link #outranks}. Route variants
+	 * genuinely differ — topical dexamethasone does
 	 * not have systemic dexamethasone's interaction profile, which is why DDInter rates voxelotor Major
 	 * against systemic dexamethasone, Moderate against two others and carries no row at all against the
 	 * topical variant — but nothing on a {@code DrugOrder} tells this layer which variant the order is
@@ -1003,55 +1115,90 @@ public class DrugSafetyValidator {
 	 *        {@link #activeOrderEntryFor} identifies the partner drug a rule points at; an empty list
 	 *        falls the grouping back to the label alone
 	 */
-	private static Collection<DrugReference.Interaction> bestRulePerPartner(DrugReference ref,
+	private static Collection<SubjectRule> bestRulePerPartner(List<DrugReference> subjects,
 			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries) {
 		// Keys are either the partner DrugReference (object identity — the class defines no equals, and
 		// a DrugReference can never equal a String) or the lowercased partner label, so the two key
 		// spaces cannot collide.
-		Map<Object, DrugReference.Interaction> best = new LinkedHashMap<Object, DrugReference.Interaction>();
-		for (DrugReference.Interaction i : ref.getInteractions()) {
-			// The severity floor (issue #84): a rule the SOURCE rated below the floor is not
-			// raised — DDInter's Unknown-severity rows carry no mechanism text and would bury
-			// the chips that matter (measured: an uncharacterized aspirin x simvastatin row
-			// sharing equal billing with a severe-allergy contraindication). A rule with no
-			// severity (every curated hand-authored rule) is exempt: unrated is not low-rated.
-			// Filtered BEFORE grouping, so a sub-floor row can never become a group's winner and
-			// the floor keeps deciding exactly which rules exist for this arm.
-			if (!clearsSeverityFloor(i, severityFloor)) {
-				continue;
-			}
-			if (!context.hasActiveDrug(i.getToken(), i.getAtc())) {
-				continue;
-			}
-			// The partner DRUG when the dataset identifies one, else the label — through the same
-			// resolution the screening arm uses to name a pair, so the two cannot disagree about which
-			// entry a rule points at.
-			Object key = activeOrderEntryFor(orderEntries, ref, i);
-			if (key == null) {
-				key = partnerLabel(i).toLowerCase(Locale.ROOT);
-			}
-			DrugReference.Interaction incumbent = best.get(key);
-			if (incumbent == null || outranks(i, incumbent)) {
-				// LinkedHashMap keeps a re-put key in its original position, so replacing a group's
-				// winner does not reorder the chips.
-				best.put(key, i);
+		Map<Object, SubjectRule> best = new LinkedHashMap<Object, SubjectRule>();
+		for (DrugReference ref : subjects) {
+			for (DrugReference.Interaction i : ref.getInteractions()) {
+				// The severity floor (issue #84): a rule the SOURCE rated below the floor is not
+				// raised — DDInter's Unknown-severity rows carry no mechanism text and would bury
+				// the chips that matter (measured: an uncharacterized aspirin x simvastatin row
+				// sharing equal billing with a severe-allergy contraindication). A rule with no
+				// severity (every curated hand-authored rule) is exempt: unrated is not low-rated.
+				// Filtered BEFORE grouping, so a sub-floor row can never become a group's winner and
+				// the floor keeps deciding exactly which rules exist for this arm.
+				if (!clearsSeverityFloor(i, severityFloor)) {
+					continue;
+				}
+				if (!context.hasActiveDrug(i.getToken(), i.getAtc())) {
+					continue;
+				}
+				// The partner DRUG when the dataset identifies one, else the label — through the same
+				// resolution the screening arm uses to name a pair, so the two cannot disagree about which
+				// entry a rule points at. Two rows of ONE subject substance resolve the same partner entry
+				// here: they carry the same match token (their shared rxnorm_name), and this returns the
+				// first order entry that token names, so the group is one key rather than one per row.
+				Object key = activeOrderEntryFor(orderEntries, ref, i);
+				if (key == null) {
+					key = partnerLabel(i).toLowerCase(Locale.ROOT);
+				}
+				SubjectRule candidate = new SubjectRule(ref, i);
+				SubjectRule incumbent = best.get(key);
+				if (incumbent == null || outranks(candidate, incumbent)) {
+					// LinkedHashMap keeps a re-put key in its original position, so replacing a group's
+					// winner does not reorder the chips.
+					best.put(key, candidate);
+				}
 			}
 		}
 		return best.values();
 	}
 
+	/** {@link #bestRulePerPartner} over a single subject row — the shape the screening arm needs, which
+	 *  asks the question per active-order entry (see {@link #addActiveOrderPairInteractions}). */
+	private static Collection<SubjectRule> bestRulePerPartner(DrugReference ref,
+			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries) {
+		return bestRulePerPartner(Collections.singletonList(ref), context, severityFloor, orderEntries);
+	}
+
 	/**
 	 * @return true when {@code candidate} is the row worth chipping for a partner {@code incumbent}
-	 *         already covers — a more severe rating, or an equal rating with a longer note. See
-	 *         {@link #bestRulePerPartner} for the rationale.
+	 *         already covers — a more severe rating; failing that, the row that names no route; failing
+	 *         that, a longer note. See {@link #bestRulePerPartner} for the first and third, which predate
+	 *         issue #162 and are unchanged.
+	 *
+	 *         <p><b>The route step, and why it sits BETWEEN the other two (issue #162).</b> Once the
+	 *         candidates come from several rows of one substance, the winning row decides which MECHANISM
+	 *         PROSE a clinician reads under a chip that names the substance — and a route-qualified row's
+	 *         prose describes a presentation nobody named ("Concomitant use of ophthalmic nonsteroidal
+	 *         anti-inflammatory drugs and ophthalmic steroids …" for a systemic order). The note length
+	 *         cannot be what decides that: measured over the shipped KB (2026-08-06; re-measure before
+	 *         relying on the figures), in 1395 of 25,847 (substance, partner) groups the equally-rated
+	 *         route-qualified row carries the LONGER note while a route-unspecified row also has a rule,
+	 *         so length alone hands 1395 groups the wrong prose — {@code Ketorolac (ophthalmic)} against
+	 *         lepirudin at 495 characters beating plain {@code Ketorolac} at 265.
+	 *
+	 *         <p>It sits below severity, not above it, and that is the deliberate residue: in 71 of those
+	 *         groups the route-qualified row is STRICTLY more severe ({@code Sirolimus (protein-bound)}
+	 *         Major against plain {@code Sirolimus} Moderate), and preferring the route there would report
+	 *         the milder rating for a pair the source rates worse. Under-warning is the one direction a
+	 *         non-blocking advisory the clinician adjudicates must not take — the same call
+	 *         {@link #bestRulePerPartner} already records for the partner side — so severity leads and
+	 *         those 71 keep a chip whose prose describes the qualified presentation.
 	 */
-	private static boolean outranks(DrugReference.Interaction candidate, DrugReference.Interaction incumbent) {
-		int candidateSeverity = severityPriority(candidate.getSeverity());
-		int incumbentSeverity = severityPriority(incumbent.getSeverity());
+	private static boolean outranks(SubjectRule candidate, SubjectRule incumbent) {
+		int candidateSeverity = severityPriority(candidate.rule.getSeverity());
+		int incumbentSeverity = severityPriority(incumbent.rule.getSeverity());
 		if (candidateSeverity != incumbentSeverity) {
 			return candidateSeverity > incumbentSeverity;
 		}
-		return noteLength(candidate) > noteLength(incumbent);
+		if (candidate.subject.namesNoRoute() != incumbent.subject.namesNoRoute()) {
+			return candidate.subject.namesNoRoute();
+		}
+		return noteLength(candidate.rule) > noteLength(incumbent.rule);
 	}
 
 	/**
@@ -1564,7 +1711,8 @@ public class DrugSafetyValidator {
 			// them. Reusing it is what stops this arm keeping a route variant's Moderate row for a
 			// pair whose Major row the other arm reports, and what keeps the cap below sorting on the
 			// severity a clinician would actually be shown.
-			for (DrugReference.Interaction i : bestRulePerPartner(ref, others, severityFloor, orderDrugs)) {
+			for (SubjectRule matched : bestRulePerPartner(ref, others, severityFloor, orderDrugs)) {
+				DrugReference.Interaction i = matched.rule;
 				// The partner is an active order too, so it is looked up among the order entries
 				// rather than across the whole dataset. Null when that order carries no reference
 				// entry of its own (a substance the dataset does not cover, matched by name): the

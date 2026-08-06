@@ -862,12 +862,14 @@ public class DrugSafetyValidator {
 		// arm is walked per active-order CODE while the chips are one per rule ROW, and a substance
 		// filed under several codes reaches this loop once per code.
 		//
-		// The class arm reads the CANONICAL row alone, not the whole group, and that is lossless rather
-		// than a shortcut: it compares ATC codes, and the rows of one substance publish identical ATC
-		// lists in the shipped KB (measured 2026-08-06 over all 121 multi-row families — 0 diverge; this
-		// is the same premise ContraindicationChips' positional tie-break rests on, and the thing to
-		// re-measure before widening substanceKey). Reading the group instead would produce one sentence
-		// per row, each naming its own label, which is the duplication being removed.
+		// The class arm reads the CANONICAL row alone, not the whole group, and that is lossless only
+		// while every row of a substance publishes the same ATC list — which the shipped KB does, across
+		// all 121 of its multi-row families, and which is the same premise ContraindicationChips'
+		// positional tie-break rests on. It is a DATA invariant, not a code-gated one: a KB refresh that
+		// gave one route variant a code its siblings lack would silently drop a duplicate-therapy chip
+		// this arm used to raise, so re-measure it on a refresh as well as before widening substanceKey.
+		// Reading the group instead would produce one sentence per row, each naming its own label, which
+		// is the duplication being removed.
 		Map<SubjectRule, String> folded = new LinkedHashMap<SubjectRule, String>();
 		List<String> classOnly = new ArrayList<String>();
 		for (Map.Entry<String, String> hit : classRelationships(ref, context).entrySet()) {
@@ -1175,19 +1177,24 @@ public class DrugSafetyValidator {
 	 *         PROSE a clinician reads under a chip that names the substance — and a route-qualified row's
 	 *         prose describes a presentation nobody named ("Concomitant use of ophthalmic nonsteroidal
 	 *         anti-inflammatory drugs and ophthalmic steroids …" for a systemic order). The note length
-	 *         cannot be what decides that: measured over the shipped KB (2026-08-06; re-measure before
-	 *         relying on the figures), in 1395 of 25,847 (substance, partner) groups the equally-rated
-	 *         route-qualified row carries the LONGER note while a route-unspecified row also has a rule,
-	 *         so length alone hands 1395 groups the wrong prose — {@code Ketorolac (ophthalmic)} against
-	 *         lepirudin at 495 characters beating plain {@code Ketorolac} at 265.
+	 *         cannot be what decides that, and the shipped KB carries hundreds of (substance, partner)
+	 *         pairs where it would decide it wrongly: {@code Ketorolac (ophthalmic)} against lepirudin
+	 *         carries a 495-character note against plain {@code Ketorolac}'s 265, so
+	 *         severity-then-longest-note alone hands that chip the eye-drop prose. Pinned by
+	 *         {@code InteractionRouteVariantTest.theSurvivingChipIsNotDecidedByWhichNoteIsLonger} over
+	 *         those very rows, rather than by an exact count of the pairs sharing the shape — two
+	 *         independent measurements over the KB disagreed about that count while agreeing about these
+	 *         rows and about the order of magnitude, so the rows are what this records.
 	 *
-	 *         <p>It sits below severity, not above it, and that is the deliberate residue: in 71 of those
-	 *         groups the route-qualified row is STRICTLY more severe ({@code Sirolimus (protein-bound)}
-	 *         Major against plain {@code Sirolimus} Moderate), and preferring the route there would report
-	 *         the milder rating for a pair the source rates worse. Under-warning is the one direction a
-	 *         non-blocking advisory the clinician adjudicates must not take — the same call
-	 *         {@link #bestRulePerPartner} already records for the partner side — so severity leads and
-	 *         those 71 keep a chip whose prose describes the qualified presentation.
+	 *         <p>It sits below severity, not above it, and that is the deliberate residue: some
+	 *         route-qualified rows are STRICTLY more severe than their substance's unqualified row
+	 *         ({@code Sirolimus (protein-bound)} Major against plain {@code Sirolimus} Moderate, against
+	 *         lapatinib), and preferring the route there would report the milder rating for a pair the
+	 *         source rates worse. Under-warning is the one direction a non-blocking advisory the
+	 *         clinician adjudicates must not take — the same call {@link #bestRulePerPartner} already
+	 *         records for the partner side — so severity leads, and those pairs keep a chip whose prose
+	 *         describes the qualified presentation. Pinned by
+	 *         {@code InteractionRouteVariantTest.severityStillOutranksTheRoutePreference}.
 	 */
 	private static boolean outranks(SubjectRule candidate, SubjectRule incumbent) {
 		int candidateSeverity = severityPriority(candidate.rule.getSeverity());

@@ -116,11 +116,12 @@ public class InteractionRouteVariantTest {
 	@Test
 	public void theSurvivingChipIsNotDecidedByWhichNoteIsLonger() throws IOException {
 		// The tie-break that grouping alone gets WRONG. Ketorolac's two rows rate lepirudin Moderate
-		// apiece, and the OPHTHALMIC row's note is the longer one (495 characters against 265), so the
-		// pre-existing severity-then-longer-note rule would hand the chip to a row whose prose is about
-		// eye drops. Measured over the shipped KB: 1395 of 25,847 (substance, partner) groups have that
-		// shape, against 71 in which the route-qualified row is strictly more severe (2026-08-06;
-		// re-measure before relying on the figures). So the note length cannot be what decides a route.
+		// apiece, and the OPHTHALMIC row's note is the longer one (495 characters against 265, verbatim
+		// from the shipped KB and reproduced independently), so the pre-existing severity-then-longer-note
+		// rule would hand the chip to a row whose prose is about eye drops. This case is the pin: the
+		// note length cannot be what decides a route. How many (substance, partner) groups share the
+		// shape is deliberately NOT stated — two measurement passes disagreed about the count while
+		// agreeing about these two rows, so the rows are the evidence and the count was removed.
 		List<SafetyWarning> warnings = validator().validate("", "Is it safe to give ketorolac?",
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Lepirudin 15mg"), null, null, null));

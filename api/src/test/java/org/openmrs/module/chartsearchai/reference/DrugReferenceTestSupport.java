@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +24,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Filter;
+import org.apache.logging.log4j.core.Layout;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.Property;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -79,6 +88,60 @@ public final class DrugReferenceTestSupport {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType()))
 				.collect(Collectors.toList());
+	}
+
+	/**
+	 * Runs {@code work} with {@code source}'s own logger captured at {@code level}, and returns the
+	 * messages it emitted, formatted.
+	 *
+	 * <p>For the outputs whose ONLY surface is a log line — issue #163's injected-character total, whose
+	 * whole reason for existing is that the REST response cannot show it. Asserting such a line through
+	 * a helper that recomputes the number would test the helper rather than the production formatting,
+	 * which is the trap {@code PairChipCapContextTest} records for the WARN it asserts; this is the same
+	 * arrangement, hoisted here so the third caller does not hand-roll a third appender.
+	 *
+	 * <p>The EFFECTIVE level is what gets restored: {@code setLevel} gives this logger name a
+	 * configuration of its own, so afterwards it would no longer inherit later level changes from its
+	 * parents. Test-JVM only — nothing here retunes a deployed module's log levels.
+	 */
+	static List<String> capturedMessages(Class<?> source, Level level, Runnable work) {
+		org.apache.logging.log4j.core.Logger logger =
+				(org.apache.logging.log4j.core.Logger) LogManager.getLogger(source);
+		Level previous = logger.getLevel();
+		// Level first, so the appender attaches to a config of this logger's own rather than to root's.
+		Configurator.setLevel(logger.getName(), level);
+		CapturingAppender appender = new CapturingAppender();
+		appender.start();
+		logger.addAppender(appender);
+		try {
+			work.run();
+			// Copied under the list's own monitor: log4j may deliver from another thread, and
+			// synchronizedList guards its mutators, not an iteration over it.
+			synchronized (appender.messages) {
+				return new ArrayList<String>(appender.messages);
+			}
+		}
+		finally {
+			logger.removeAppender(appender);
+			appender.stop();
+			Configurator.setLevel(logger.getName(), previous);
+		}
+	}
+
+	/** Collects formatted log messages; the minimum an appender can be. */
+	private static final class CapturingAppender extends AbstractAppender {
+
+		final List<String> messages = Collections.synchronizedList(new ArrayList<String>());
+
+		CapturingAppender() {
+			super("chartsearchai-reference-support-capture", (Filter) null,
+					(Layout<? extends Serializable>) null, true, Property.EMPTY_ARRAY);
+		}
+
+		@Override
+		public void append(LogEvent event) {
+			messages.add(event.getMessage().getFormattedMessage());
+		}
 	}
 
 	/**

@@ -10,12 +10,16 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -149,6 +153,48 @@ public class ReferenceRecordSubstanceCollapseTest {
 		assertEquals(2, texts.size(), "two substances keep two records, was: " + texts);
 		assertTrue(texts.get(0).startsWith("Drug reference — Omeprazole"), "was: " + texts.get(0));
 		assertTrue(texts.get(1).startsWith("Drug reference — Esomeprazole"), "was: " + texts.get(1));
+	}
+
+	@Test
+	public void theDebugLineReportsTheReferenceSliceCharacterTotalAndOnlyThat() throws IOException {
+		// The instrument, tested rather than trusted. Issue #163's cost is INVISIBLE from the REST
+		// response (only cited references come back), so this DEBUG line is the only place an operator or
+		// a verification pass can read it — and this PR's own live evidence is quoted off it. A count
+		// alone did not settle #163 either, since what crowds out chart records is characters. Asserted
+		// on the real formatted line, not through a helper that recomputes the number: that would test
+		// the helper, not the production formatting (the trap PairChipCapContextTest records).
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(INTERACTION_FIXTURE);
+		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
+		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
+		PatientChart[] injected = new PatientChart[1];
+
+		List<String> logged = DrugReferenceTestSupport.capturedMessages(DrugReferenceInjector.class,
+				Level.DEBUG, () -> injected[0] = injector.injectRecords(
+						DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null,
+								DrugReferenceTestSupport.set("Diclofenac 50mg"), null, null, null),
+						"Is it safe to give hydrocortisone?"));
+
+		PatientChart chart = injected[0];
+		// Preconditions: the chart must carry records of the OTHER two kinds with text of their own, or
+		// the "only those" half of this assertion is vacuous — a total that counted everything would pass.
+		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
+				"precondition: a safety-finding record must be injected beside the reference records");
+		assertTrue(characters(referenceTexts(chart)) > 0, "precondition: and reference records with text");
+		int everything = 0;
+		for (RecordMapping mapping : chart.getMappings()) {
+			everything += mapping.getText() == null ? 0 : mapping.getText().length();
+		}
+
+		Matcher line = Pattern.compile("drug-reference \\((\\d+) chars\\)").matcher(String.join("\n", logged));
+		assertTrue(line.find(), "the DEBUG line must report the reference slice's character total, was: "
+				+ logged);
+		assertEquals(characters(referenceTexts(chart)), Integer.parseInt(line.group(1)),
+				"and it must be the injected drug_reference records' own characters");
+		assertTrue(Integer.parseInt(line.group(1)) < everything,
+				"counting ONLY those — a total that also counted the chart's obs record and the safety "
+						+ "findings would say the reference slice costs more budget than it does, was "
+						+ line.group(1) + " against " + everything + " for every record in the chart");
 	}
 
 	@Test

@@ -73,9 +73,10 @@ public class SelfInteractionTest {
 	@Test
 	public void aRowPairingADrugWithItselfIsNotLoaded() throws IOException {
 		// DDInter225 x DDInter225. The mechanism text is about administering different botulinum
-		// SEROTYPES together, which this KB has no second row for — so the pair is an artifact of its
-		// granularity, and as rendered it reads "Botulinum toxin type A interacts with active order
-		// botulinum toxin type A".
+		// SEROTYPES together — which the KB also files on genuine cross-row pairs (type A against type B,
+		// and Daxibotulinumtoxina against each), all of which the guard leaves loaded — so the self-pair
+		// is an artifact of the KB's granularity that costs no clinical content, and as rendered it reads
+		// "Botulinum toxin type A interacts with active order botulinum toxin type A".
 		DrugReference botulinum = entry(DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE),
 				"Botulinum toxin type A");
 

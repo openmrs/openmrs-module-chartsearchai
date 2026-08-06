@@ -243,16 +243,32 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 * <ul>
 	 *   <li>the same row on both sides — exactly one in the shipped 19 MB KB, {@code DDInter225}
 	 *       (botulinum toxin type A) of 295,184 rows. Its mechanism text is about administering
-	 *       different botulinum SEROTYPES together, which this KB carries no second row for, so the pair
-	 *       is an artifact of its granularity; what reaches a clinician is "Botulinum toxin type A
-	 *       interacts with active order botulinum toxin type A".</li>
+	 *       different botulinum SEROTYPES together, and the KB files that same mechanism on genuine
+	 *       cross-row pairs of its own — {@code Botulinum toxin type A} against
+	 *       {@code Botulinum Toxin Type B}, and {@code Daxibotulinumtoxina} against each of them — none
+	 *       of which this guard touches. So the self-pair is an artifact of the KB's granularity that
+	 *       carries no clinical content its siblings do not, while what it puts in front of a clinician
+	 *       is "Botulinum toxin type A interacts with active order botulinum toxin type A".</li>
 	 *   <li>two ROUTE/FORMULATION rows of one substance — 25 more, {@code Lidocaine} against
 	 *       {@code Lidocaine (topical)} and the like (measured 2026-08-06; re-measure before relying on
 	 *       the figures). Also unrenderable rather than merely redundant: every row of a substance
 	 *       publishes the same {@code rxnorm_name}, which is the match token a rule carries and the label
 	 *       a chip prints, so such a pair can ONLY read as a substance interacting with itself. The
 	 *       systemic-plus-topical exposure the KB row is about cannot be stated by anything this module
-	 *       renders, while the self-reference can.</li>
+	 *       renders, while the self-reference can. Every surface that could name such a pair names the
+	 *       partner by that shared token — the drug-in-play chip and the screening chip through
+	 *       {@code DrugSafetyValidator.partnerLabel}, the injected reference record through
+	 *       {@code DrugReferenceInjector.orderedInteractionNotes} — and the one surface that would print
+	 *       the partner's own display label, {@code addQuestionPairInteractions}, already declines a pair
+	 *       whose two entries share a name. So this guard makes a decision that arm already took, at the
+	 *       boundary where it covers every arm.
+	 *
+	 *       <p>The accepted cost, named rather than left general: two of the 25 are rated Major —
+	 *       {@code Bupivacaine} against {@code Bupivacaine (liposome)} and {@code Aminolevulinic acid}
+	 *       against {@code Aminolevulinic acid (topical)}. Those are real product-level warnings, and
+	 *       under-warning is the direction this module is otherwise careful about; they are dropped
+	 *       because a chip reading "Bupivacaine interacts with active order bupivacaine" is not that
+	 *       warning. Stating them needs the route vocabulary that is the data-side half of issue #115.</li>
 	 * </ul>
 	 * Through {@link DrugReference#substanceKey(String, String)} rather than a local comparison, so this
 	 * guard and the chip grouping mean the same thing by "one substance". A row publishing no substance

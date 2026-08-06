@@ -508,10 +508,10 @@ public class DrugReference {
 	 *       adrenaline duplicates aspirin. Its siblings {@code A01AA}/{@code AB}/{@code AC} name what
 	 *       their members ARE (caries prophylactics, antiinfectives, corticosteroids) and are
 	 *       deliberately absent — being applied in one place is not a shared property, being a
-	 *       corticosteroid is. <b>This family over-reaches, knowingly</b>: some of those groups name a
-	 *       therapy as well as a site ({@code D06A} "Antibiotics for topical use", {@code S01G}
-	 *       "Decongestants and antiallergics", {@code D01A} "Antifungals for topical use"), so their
-	 *       residue does assert something about its members. Telling those groups from the ones that
+	 *       corticosteroid is. <b>This family over-reaches, knowingly</b>: the level-3 groups nested
+	 *       inside these do not all stop at a site — {@code D06A} is "Antibiotics for topical use",
+	 *       {@code D01A} "Antifungals for topical use", {@code S01G} "Decongestants and antiallergics"
+	 *       — so their residue does assert something about its members. Telling those groups from the ones that
 	 *       assert nothing is a per-group pharmacological judgement, which is what this rule exists to
 	 *       avoid making; the cost of not making it is counted below;</li>
 	 *   <li>everything under {@code V03A} "ALL OTHER THERAPEUTIC PRODUCTS" and under {@code V07A} "ALL

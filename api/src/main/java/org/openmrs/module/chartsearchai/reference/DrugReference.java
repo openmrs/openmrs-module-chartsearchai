@@ -293,6 +293,110 @@ public class DrugReference {
 		return out;
 	}
 
+	/**
+	 * ATC groups that classify a LOCALLY APPLIED formulation rather than the substance itself, each
+	 * identified by the route or site of application in the group's own published name — bar the one
+	 * exception noted at {@code C05B}: {@code D}
+	 * "Dermatologicals" and {@code S} "Sensory organs" (whole anatomical main groups), {@code A01}
+	 * "Stomatological preparations", {@code A07A} "Intestinal antiinfectives" and {@code A07E}
+	 * "Intestinal antiinflammatory agents" (its {@code A07EA} is "Corticosteroids acting locally"),
+	 * {@code B02BC} "Local hemostatics" (its {@code B02BX} sibling is "Other systemic hemostatics"),
+	 * {@code B05C} "Irrigating solutions", {@code C05A} "Antihemorrhoidals for topical use",
+	 * {@code C05B} "Antivaricose therapy" — the exception: that name is an indication, not a route, and
+	 * this entry rests on its subgroups' names instead ({@code C05BA} "Heparins or heparinoids for
+	 * topical use", {@code C05BB} "Sclerosing agents for local injection"); it changes no pair in the
+	 * shipped KB, whose only {@code C05B} subgroup is {@code C05BA} —
+	 * {@code G01} "Gynecological antiinfectives and antiseptics", {@code G02CC} "Antiinflammatory
+	 * products for vaginal administration" (its {@code G02CB} sibling, prolactine inhibitors, is
+	 * systemic), {@code M02} "Topical products for joint and muscular pain", {@code P03A}
+	 * "Ectoparasiticides, incl. scabicides", {@code R01} "Nasal preparations", {@code R02} "Throat
+	 * preparations", and {@code R03A} / {@code R03B}, the two <em>inhalant</em> subgroups of R03 —
+	 * their {@code R03C} / {@code R03D} siblings are for systemic use and are deliberately absent,
+	 * which is why this list cannot be written at main-group granularity throughout.
+	 *
+	 * <p>Deliberately NOT here: {@code N01B} "Anesthetics, local". Its name is the drug class, not the
+	 * site of application — the codes classify the substance, and two local anaesthetics sharing
+	 * {@code N01BB} is exactly the cross-reactivity statement a clinician wants.
+	 *
+	 * <p>Prefixes, and not an exhaustive partition of ATC: anything unlisted counts as classifying the
+	 * substance. Neither direction of error is free, which is why the criterion is ATC's own wording
+	 * about a GROUP rather than pharmacological judgement about a substance. A group wrongly listed
+	 * here demotes a class that does explain a cross-reactivity concern. A group missing from it does
+	 * NOT merely leave the pre-existing answer in place: it becomes the answer as soon as it sorts
+	 * ahead of the systemic subgroup the pair also shares, since {@link DrugSafetyValidator}'s scan
+	 * takes the first shared subgroup this method does not veto.
+	 *
+	 * <p>That is how {@code A07A}, {@code B02BC}, {@code B05C} and {@code G02CC} came to be here.
+	 * Without them, 46 of the shipped KB's 1090 multi-subgroup pairs named one of the four — among them
+	 * ibuprofen/naproxen reading {@code G02CC} instead of {@code M01AE} — and 21 of the 46 had been
+	 * moved onto one by this rule itself rather than merely left there (measured 2026-08-06).
+	 * {@code CrossReactivityClassChoiceTest} pins one case per group, save {@code B02BC}: its only
+	 * shipped-KB pairs are epinephrine route variants, which issue #160 collapses to an identity chip
+	 * before this arm can name a class at all.
+	 */
+	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections
+			.unmodifiableList(Arrays.asList("A01", "A07A", "A07E", "B02BC", "B05C", "C05A", "C05B",
+					"D", "G01", "G02CC", "M02", "P03A", "R01", "R02", "R03A", "R03B", "S"));
+
+	/**
+	 * The groups nested INSIDE {@link #LOCALLY_APPLIED_ATC_GROUPS} that ATC itself names "for systemic
+	 * use" — {@code D01B} antifungals, {@code D02BB} UV-radiation protectives, {@code D05B}
+	 * antipsoriatics, {@code D10B} anti-acne preparations, {@code R01B} nasal decongestants. Same
+	 * criterion as the list above, applied to the same words: a group is read as locally applied when
+	 * its own name says where it is applied, and these five say the opposite. Without them a main-group
+	 * prefix would be wrong in exactly the way this whole rule exists to fix.
+	 *
+	 * <p>Enumerated rather than asserted, which is what makes "these five" a claim and not a hope: the
+	 * shipped KB uses 117 level-4 subgroups under one of the prefixes above, and exactly six of them are
+	 * named for systemic use — {@code D01BA}, {@code D02BB}, {@code D05BA}, {@code D05BB},
+	 * {@code D10BA}, {@code R01BA}, either in their own name or their level-3 parent's — all six covered
+	 * by the five prefixes here (measured 2026-08-06). Only {@code D05B} changes any pair in that KB:
+	 * three, all psoralens, since methoxsalen and trioxsalen share {@code D05AD} (topical) and
+	 * {@code D05BA} (systemic) and would be reported as sharing the topical one. The other four change
+	 * none and are here on the criterion rather than on measured impact; removing them breaks no test,
+	 * which is exactly why the criterion and not the test suite has to decide membership.
+	 *
+	 * <p>An exception list here, while R03's systemic halves are handled by leaving {@code R03C} and
+	 * {@code R03D} out of the list above, because the shapes differ: under D and R01 the locally
+	 * applied part is nearly all of the group, so naming the exceptions is the shorter thing to write,
+	 * while R03 splits evenly and its two inhalant halves are shorter to name than the group plus two
+	 * exceptions.
+	 */
+	private static final List<String> SYSTEMIC_USE_EXCEPTIONS = Collections
+			.unmodifiableList(Arrays.asList("D01B", "D02BB", "D05B", "D10B", "R01B"));
+
+	/**
+	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized here the same
+	 *         way {@link #normalizedAtcCodes()} normalizes an entry's — sits in one of the
+	 *         {@link #LOCALLY_APPLIED_ATC_GROUPS} and not in one of the
+	 *         {@link #SYSTEMIC_USE_EXCEPTIONS} nested inside them. A substance marketed by several
+	 *         routes carries one code per route, so this is what separates the code that classifies
+	 *         the SUBSTANCE from the codes that classify a locally applied presentation of it. Null and
+	 *         blank are not locally applied, like every other ATC comparison here treats them: nothing
+	 *         is known about them at all.
+	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.sharedClass}) on purpose:
+	 *         it is a rule about ATC's own group names, not a fact about a substance, so nothing
+	 *         outside this package should be asking it.
+	 */
+	static boolean isLocallyAppliedAtcCode(String code) {
+		String normalized = normalizeAtcToken(code);
+		return normalized != null && !fallsUnderAnyGroup(normalized, SYSTEMIC_USE_EXCEPTIONS)
+				&& fallsUnderAnyGroup(normalized, LOCALLY_APPLIED_ATC_GROUPS);
+	}
+
+	/** @return whether the already-normalized {@code code} sits under any of {@code groups} — the one
+	 *  definition of "an ATC code falls under a group prefix" on this side, matching what
+	 *  {@link CrossReactivityGroup#containsCode} is for curated group prefixes, so that a future
+	 *  refinement (level-boundary guarding, say) has one place to happen rather than two. */
+	private static boolean fallsUnderAnyGroup(String code, List<String> groups) {
+		for (String group : groups) {
+			if (code.startsWith(group)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public List<AgeBand> getAgeBands() {
 		return ageBands;
 	}

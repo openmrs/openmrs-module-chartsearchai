@@ -4,42 +4,32 @@ An OpenMRS module that lets clinicians ask natural-language questions about a pa
 
 ## Get oriented fast
 
-- **Read first:** `CLAUDE.md` (project rules — TDD, root-cause-over-patch, and the **API-surface rules** below), `README.md` (setup + platform notes), `docs/adr.md` (decision log).
+- **Read first:** `CLAUDE.md` (project rules — TDD, root-cause-over-patch, and the authoritative API-surface rules), `README.md` (setup + platform notes), `docs/adr.md` (decision log).
 - **Retrieval lives in querystore, not here.** chartsearchai has no in-process embedding/Lucene/scoring pipeline. Retrieval and citation grounding both use querystore's e5-base-v2 model. Retrieval changes and retrieval-quality eval belong in `openmrs-module-querystore`.
-- **Two engines:** `chartsearchai.llm.engine` = `local` (bundled `llama-server` subprocess, default — data stays on the host) or `remote` (OpenAI-compatible API). A **local** LLM is a hard requirement for production.
+- **Two engines:** `chartsearchai.llm.engine` = `local` (bundled `llama-server` subprocess, default — data stays on the host) or `remote` (OpenAI-compatible API; see [ADR Decision 17](docs/adr.md#decision-17-remote-llm-backend-support)).
+- **The prompt carries a slice, not the whole chart.** `chartsearchai.chartMode` defaults to `queryScoped`: the question's typed scope complete, plus the querystore similarity top-K, plus demographics. `fullChart` is the other mode and it changes which machinery is live — see [ADR Decision 28](docs/adr.md#decision-28-query-scoped-slice-charts-chartmodequeryscoped).
 
 ## Build & test
 
 ```bash
 mvn install                       # full build (api + omod), produces omod/target/chartsearchai-*.omod
 mvn -pl api test                  # api unit tests
-mvn test                          # api + omod
 mvn -pl api test -Dtest=ClassName # one test class
 ```
+
+Use `mvn install` when you need the omod tests too. A root `mvn test` **cannot** run them: omod's `unpack-dependencies` execution binds to `generate-resources` and unpacks the api *jar*, which a `test`-phase reactor never produces, so the build fails there with "Artifact has not been packaged yet" (MDEP-98) after the api tests pass. Always build from the repo root with a full reactor — never `mvn -pl omod`, which resolves the api artifact from `~/.m2` and can silently test a stale one.
 
 Tests must call the **real production pipeline** with real datasets — no mocks/reimplementations of pipeline logic (see `CLAUDE.md`). Follow TDD: write the failing test first.
 
 ## Run it locally
 
-A configured standalone lives at `test/referenceapplication-standalone-3.7.0-SNAPSHOT` (RefApp 3.7, port **8081**, login `admin` / `Admin123`):
+The repo ships no standalone — download the [O3 Standalone with Chart Search AI](https://nightly.link/openmrs/openmrs-module-chartsearchai/workflows/build-standalone/main/openmrs-standalone-chartsearchai.zip) built by `build-standalone.yml`, or use `docker compose up --build`. See README's [Standalone platform notes](README.md#standalone-platform-notes) for the per-platform requirements (Java 21+, and *which* JDK on Windows).
 
-```bash
-cd test/referenceapplication-standalone-3.7.0-SNAPSHOT
-nohup java -jar openmrs-standalone.jar &     # nohup so it survives the shell
-# REST base once up: http://localhost:8081/openmrs/ws/rest/v1
-```
-
-To redeploy after a build: stop it (`pkill -9 -f openmrs-standalone.jar; pkill -9 -f mariadbd; pkill -9 -f llama-server` — the embedded MariaDB must be killed too or the next boot can't lock the DB), copy `omod/target/chartsearchai-*.omod` into `appdata/modules/`, restart. Local GGUF models live under `MODELS/`; the standalone bundles Gemma E2B/E4B.
+Extract it, then `java -jar openmrs-standalone.jar` (login `admin` / `Admin123`; the port is in the launcher's output). To redeploy your own build, drop `omod/target/chartsearchai-*.omod` into the standalone's `appdata/modules/` and restart. Stopping it needs all three processes — `pkill -9 -f openmrs-standalone.jar; pkill -9 -f mariadbd; pkill -9 -f llama-server` — because the embedded MariaDB otherwise keeps the DB locked against the next boot.
 
 ## API-surface rules (do not bypass)
 
-These are the only correct entry points — never reimplement their logic inline:
-
-- **Prefixed text:** `ChartSearchAiUtils.buildPrefixedText(resourceType, text)`
-- **Cosine similarity:** `ChartSearchAiUtils.cosineSimilarity()`
-- **Chart assembly:** `ChartBuildingStrategy.buildChart()` → `QueryStoreChartBuilder.build()` (querystore owns retrieval)
-- **Global-property reads:** `ChartSearchAiUtils.getBooleanGlobalProperty` / `getStringGlobalProperty` (fail-safe on a missing context)
-- **Test datasets / category hints:** `TestDatasetHelper.*`
+`CLAUDE.md` holds the authoritative list of methods that are the only correct entry point for their operation — prefixed text, cosine similarity, diacritic folding, the three drug-name matching shapes, chart assembly, the test datasets and category hints, and the inline-citation pattern. Read it there rather than from a copy here; a second list is a second thing to fall out of date.
 
 ## REST endpoints
 
@@ -48,7 +38,7 @@ Base path: `/ws/rest/v1/chartsearchai`. Every endpoint gates on a privilege up f
 | Method | Path | Privilege | Purpose |
 |---|---|---|---|
 | POST | `/search` | AI Query Patient Data | Blocking answer `{patient, question}` → answer + citations |
-| POST | `/search/stream` | AI Query Patient Data | Same, as Server-Sent Events. Event types: `preliminary`, `thinking`, `token`, `references`, `grounded`, `done`, `error` |
+| POST | `/search/stream` | AI Query Patient Data | Same, as Server-Sent Events. Event types, in emission order: `preliminary`, `thinking`, `token`, `references`, `done`, `grounded`, `error`. `grounded` is a *trailing* event after `done` (async grounding only), so a client must keep consuming the stream past `done` |
 | POST | `/warmup` | AI Query Patient Data | Fire-and-forget per-patient KV prewarm on chart open (202) |
 | **POST** | **`/prewarm`** | **Manage AI Prewarm** | **Bulk KV-prewarm bootstrap (202 + status)** |
 | **GET** | **`/prewarmstatus`** | **Manage AI Prewarm** | **Bulk-prewarm progress/status** |
@@ -58,7 +48,9 @@ Base path: `/ws/rest/v1/chartsearchai`. Every endpoint gates on a privilege up f
 
 ### KV warmup & the prewarm bootstrap
 
-Cold full-chart prefill is the dominant first-query latency cost (~10–20s even on GPU). The local engine persists each patient's prefilled KV to disk (`<appdata>/chartsearchai/kvcache`, one `.bin` per chart hash) so subsequent queries restore it (~ms) instead of re-prefilling.
+> **All of this is dormant on a default install.** Warmup, the prewarm sweep, per-patient KV persistence and the progressive-reasoning preview all disengage unless `chartsearchai.chartMode` is set to `fullChart`; the default, `queryScoped`, builds a per-question slice with no reusable chart prefix to prime. The gate is `LlmInferenceService.shouldRunWarmup`. Read this section as the `fullChart` contract.
+
+In `fullChart` mode the cold whole-chart prefill dominates first-query latency, badly so on a GPU-less host. The local engine persists each patient's prefilled KV to disk (`<appdata>/chartsearchai/kvcache`, one `.bin` per chart hash) so subsequent queries restore it instead of re-prefilling.
 
 - **`/warmup`** (reactive) — the frontend fires this on chart open so the clinician's first query is warm. LRU-capped by `chartsearchai.llm.kvCacheMaxEntries` (default 16).
 - **`/prewarm`** (bulk bootstrap, **opt-in, default off**) — a resumable background sweep that pre-fills and **pins** every patient's KV so a first query on a *never-opened* patient is also warm. Pinned entries (`<name>.bin.pin` sidecar) are **exempt from the LRU cap** — durable for hosts with disk for the whole population.

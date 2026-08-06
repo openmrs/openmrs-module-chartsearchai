@@ -353,15 +353,22 @@ public class DrugReference {
 
 	/** An ATC level-4 (chemical subgroup) code is the {@value #ATC_SUBGROUP_PREFIX_LENGTH}-character
 	 *  prefix of a level-5 substance code ({@code M01AE01} -> {@code M01AE}). Two drugs sharing a
-	 *  subgroup are structurally related (ibuprofen/naproxen, both {@code M01AE}). */
+	 *  subgroup are USUALLY structurally related (ibuprofen/naproxen, both {@code M01AE}) — but not
+	 *  always: see {@link #isUnclassifyingAtcCode} for the subgroups where sharing means nothing. */
 	public static final int ATC_SUBGROUP_PREFIX_LENGTH = 5;
 
 	/**
 	 * @return this entry's ATC level-4 chemical subgroups — the {@link #ATC_SUBGROUP_PREFIX_LENGTH}-char
 	 *         prefixes of its {@link #normalizedAtcCodes()} (codes shorter than that contribute none).
-	 *         Two entries are in the same ATC class iff their subgroup sets intersect. This is the one
-	 *         shared definition used by both the order-relevance scoping ({@code DrugReferenceInjector})
-	 *         and the class-based safety checks ({@code DrugSafetyValidator}).
+	 *         This is the one shared REDUCTION, used by both the order-relevance scoping
+	 *         ({@code DrugReferenceInjector}) and the class-based safety checks
+	 *         ({@code DrugSafetyValidator}), so neither can reach a different set of subgroups from the
+	 *         same codes.
+	 *         <p>An intersection of two entries' subgroups is where "same ATC class" starts, not where
+	 *         it ends: since issue #167 the safety checks additionally discard a shared subgroup that
+	 *         {@link #isUnclassifyingAtcCode} recognises, and the injector's relevance scoping
+	 *         deliberately does not — it is deciding what to put in front of the model, where an extra
+	 *         record is noise, not what to assert to a clinician.
 	 */
 	public Set<String> atcSubgroups() {
 		return atcSubgroups(normalizedAtcCodes());

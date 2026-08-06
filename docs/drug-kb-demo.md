@@ -323,7 +323,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | `name` | string | injection, validator | **Required** — an entry with a blank `name` is dropped at load (it would render a null display name). Shown in the injected reference and in `safetyWarnings[].drug`. |
 | `drugClass` | string | injection | Human-readable class label rendered in the reference text (e.g. "NSAID"). Informational only — class **logic** uses `atcCodes`, not this. |
 | `aliases` | string[] | injection, validator | Lowercase names matched **whole-word, case-insensitive** against the question and the answer ("advil" matches "is advil safe?"; "amox" won't spuriously match). Drives question-driven injection and which drug a warning is attributed to. |
-| `atcCodes` | string[] | injection, validator | WHO-ATC codes. Used two ways: **exact code** → order-driven injection / interaction match against an active order's ATC; **level-4 prefix** (`M01AE01` → `M01AE`) → the class-based cross-reactivity & duplicate-therapy checks. Two drugs are "same class" iff their level-4 subgroups intersect. |
+| `atcCodes` | string[] | injection, validator | WHO-ATC codes. Used two ways: **exact code** → order-driven injection / interaction match against an active order's ATC; **level-4 prefix** (`M01AE01` → `M01AE`) → the class-based cross-reactivity & duplicate-therapy checks. Two drugs are "same class" when their level-4 subgroups intersect in a subgroup that classifies the substances — a residual bucket ATC fills by exclusion inside a group it defines by site of application, and everything under `V03A`/`V07A`, are skipped (issue #167; see `DrugReference.isUnclassifyingAtcCode`). |
 | `ageBands` | object[] | injection, overdose | Age-banded dosing (below). The band whose range contains the patient's age is selected; **no matching band → no numeric dosing rendered and no overdose check** (this is the age-gating that stops a pediatric max being shown for an adult). |
 | `warnings` | string[] | injection | Optional free-text prose warnings (e.g. a Reye-syndrome caution) rendered verbatim into the injected, citable record so the LLM can ground and cite them. **Display-only** — no matchable token, so the validator never fires on them; enforceable facts belong in the rule fields. |
 | `interactions` | object[] | interaction warning | Drug–drug interaction rules (below). |
@@ -397,8 +397,12 @@ entry dataset).
 > :8081 instance **already carries** an `N02BA01` mapping on Aspirin — live-verified 2026-07-10:
 > the ibuprofen query there shows an extra *"Ibuprofen is in the same cross-reactivity group
 > (NSAID) as active order N02BA01 — possible additive or duplicate-class therapy"* chip (the
-> bare code appears because no KB entry carries `N02BA01`; wording as of the sentence-detail
-> refactor — the 2026-07-10 capture predates the leading subject). Both Decision-27 paths were live-verified end-to-end that day
+> bare code appeared because no KB entry carries `N02BA01`; wording as of the sentence-detail
+> refactor — the 2026-07-10 capture predates the leading subject). **Issue #155 has since removed
+> the bare code from that chip**: the partner is named by the dataset's entry, else by the ORDER's
+> own display name, and only then by the code — so the same probe now reads "as active order
+> Aspirin 81mg". The capture is left as recorded rather than rewritten, because it is what was
+> measured that day. Both Decision-27 paths were live-verified end-to-end that day
 > (weight arm: `~1000 mg exceeds the 15 mg/kg per-dose maximum (~750 mg) … weight 50 kg`,
 > driven by the bundled CIEL default with no GP row).
 

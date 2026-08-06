@@ -95,7 +95,10 @@ import org.springframework.stereotype.Service;
  * pharmacological cross-reactivity (aspirin {@code N02BA01} vs ibuprofen {@code M01AE01}); that
  * linkage is carried as curated data — {@link CrossReactivityGroup}s loaded alongside either
  * source — and both class checks fall back to it when no ATC subgroup is shared, so the family
- * reasoning stays data-driven end to end. See ADR Decision 24.
+ * reasoning stays data-driven end to end. A shared subgroup is necessary but not sufficient since
+ * issue #167: one that classifies neither the substances nor a therapy is skipped, and the pair falls
+ * through to the curated groups as though nothing were shared — see
+ * {@link DrugReference#isUnclassifyingAtcCode}. See ADR Decision 24.
  *
  * <p>One contraindication check is neither rule-based nor class-based: a recorded allergy to the very
  * drug in play is IDENTITY, and needs no rule, no ATC code and no curated group. It is therefore not
@@ -878,8 +881,9 @@ public class DrugSafetyValidator {
 		List<SubjectRule> rules = new ArrayList<SubjectRule>(
 				bestRulePerPartner(subjects, context, severityFloor, orderEntries));
 		// Which rule row carries which class sentence, decided before anything is emitted: the class
-		// arm is walked per active-order CODE while the chips are one per rule ROW, and a substance
-		// filed under several codes reaches this loop once per code.
+		// arm is walked per active-order CO-MEDICATION (issue #171 — it used to walk per CODE, so a
+		// substance filed under several codes reached this loop once per code) while the chips are one
+		// per rule ROW, and the two groupings are not the same partition.
 		//
 		// The class arm reads the CANONICAL row alone, not the whole group, and that is lossless only
 		// while every row of a substance publishes the same ATC list — which the shipped KB does, across
@@ -905,10 +909,9 @@ public class DrugSafetyValidator {
 			// This is a narrower branch than it looks, and narrower than it was: keyed by ATC CODE it
 			// fired for every extra code of one order, which is the duplication issue #171 removed by
 			// keying on the co-medication instead. What is left needs two DISTINCT partners that
-			// ruleAbout answers with one rule — two orders of a substance the dataset does not carry,
-			// or one order whose codes resolve to two entries the same rule identifies. No fixture here
-			// reaches it (verified by making the branch throw), so treat it as a guard, not a path with
-			// worked examples.
+			// ruleAbout answers with one and the same rule. No fixture here reaches it — verified by
+			// making the branch throw and running the suite — so it is a guard, and this comment
+			// deliberately names no worked example rather than name one that turns out not to reach it.
 		}
 		// Rule chips first, then the class-only chips, which is the order the two arms produced them in
 		// before they were coordinated — a folded chip therefore keeps the rule chip's position and no
@@ -1057,8 +1060,10 @@ public class DrugSafetyValidator {
 	 * about" is answered once for the grouping and the suppression alike.
 	 *
 	 * <p>Only the RULE chips are recorded. A class-only chip ({@link #classRelationships}) states a
-	 * different fact in different words and identifies its partner by an ATC code rather than an entry,
-	 * and the screening arm raises no such chip, so there is nothing for it to repeat. The arm's own
+	 * different fact in different words, and the screening arm raises no such chip, so there is nothing
+	 * for it to repeat. (Until issue #171 there was a second reason — the class arm identified its
+	 * partner by an ATC code rather than an entry, so it could not have keyed this ledger. It now
+	 * identifies it by the very same {@code substanceGroupKey}, so only the first reason is left.) The arm's own
 	 * doubling — one pair reached from each of its two orders — is a different question with its own key,
 	 * inside the arm.
 	 */
@@ -2374,8 +2379,11 @@ public class DrugSafetyValidator {
 	 * overlap, e.g. ibuprofen recommended over an active aspirin order). An order that is the
 	 * <em>same</em> drug as {@code ref} (a shared exact ATC code) is skipped — restating existing
 	 * therapy is not a duplicate. Active orders carry ATC codes (the builder maps them), so this
-	 * matches on codes directly and names the order from the dataset; the most specific match wins,
-	 * so a subgroup + group double-match warns once.
+	 * matches on codes directly and names the order by the ladder {@link #orderPartners} documents —
+	 * the dataset's name for the substance, else the order's own display name, else the code (issue
+	 * #155). The most specific match wins, so a subgroup + group double-match warns once — except
+	 * where the shared subgroup is one {@link DrugReference#isUnclassifyingAtcCode} vetoes, which is
+	 * not a match at all and lets the group answer (issue #167).
 	 *
 	 * <p>Returns the sentences rather than adding the chips, because whether a relationship gets a chip
 	 * of its own is no longer decidable from this arm alone: a pair the rule arm also raises folds into
@@ -2406,8 +2414,14 @@ public class DrugSafetyValidator {
 	 * mappings in.
 	 *
 	 * @return the class relationship sentence for each active-order partner that has one, keyed by that
-	 *         partner, in the context's own code order (so chip order is unchanged); empty when the
-	 *         drug is in no class or group at all
+	 *         partner, in partner FIRST-APPEARANCE order over the context's codes; empty when the drug
+	 *         is in no class or group at all.
+	 *         <p>Not the same as the per-code order this returned before issue #171, and the difference
+	 *         is observable: a partner whose first code shares nothing now sorts by that first code
+	 *         rather than by the code that produced its sentence, so it can precede a partner that the
+	 *         per-code walk put ahead of it. Chip CONTENT is unchanged; two class-only chips can swap
+	 *         places. Stated rather than smoothed over, because "chip order is unchanged" was the
+	 *         previous promise here and is no longer one that can be kept.
 	 */
 	private Map<OrderPartner, String> classRelationships(DrugReference ref, PatientClinicalContext context) {
 		Map<OrderPartner, String> out = new LinkedHashMap<OrderPartner, String>();
@@ -2467,11 +2481,23 @@ public class DrugSafetyValidator {
 	 * The patient's co-medications as the class arm sees them: every active-order ATC code, grouped by
 	 * the co-medication it identifies, in first-appearance order.
 	 *
-	 * <p><b>The identity ladder</b>, best evidence first. The dataset's own entry for the code where it
-	 * has one, keyed by {@link DrugReference#substanceGroupKey()} so a substance filed as several rows
-	 * is one partner; else the ACTIVE ORDER that contributed the code, so an order the dataset does not
-	 * cover is still one partner rather than one per code; else the code itself, which is all a context
-	 * carrying only the flattened set (issue #118's fallback) offers.
+	 * <p><b>The identity ladder</b>, best evidence first, applied PER CODE. The dataset's own entry for
+	 * the code where it has one, keyed by {@link DrugReference#substanceGroupKey()} so a substance filed
+	 * as several rows is one partner — and so two orders of one substance are one partner too; else the
+	 * ACTIVE ORDER that contributed the code, so an order the dataset does not cover at all is one
+	 * partner rather than one per code; else the code itself, which is all a context carrying only the
+	 * flattened set (issue #118's fallback) offers.
+	 *
+	 * <p><b>Where the ladder does not hold its promise</b>, stated rather than left to be rediscovered:
+	 * an order the dataset covers only PARTLY climbs two different rungs — its covered codes key on the
+	 * entry, its uncovered ones on the order — and becomes two partners, which is one chip too many.
+	 * The shipped 19 MB KB cannot produce it (every row of a substance publishes the same ATC list, so
+	 * an order's codes resolve all-or-nothing), and the bundled four-entry seed can, though no subject
+	 * it carries shares a subgroup with the second partner. Closing it means grouping by ORDER first and
+	 * resolving the entry from the group, which is a behaviour change with its own measurement, not a
+	 * comment. Same root for the builder's KNOWN GAP: a nameless order reaches
+	 * {@link PatientClinicalContext#getActiveDrugAtcCodes()} without reaching
+	 * {@code getActiveDrugOrders()}, so every rung fails and each of its codes is its own partner.
 	 *
 	 * <p><b>The label follows the same ladder</b> (issue #155). It used to be the entry's label or,
 	 * failing that, the bare CODE — so on the default {@code sourceFormat=json}, whose four-entry
@@ -2480,9 +2506,16 @@ public class DrugSafetyValidator {
 	 * needs no reference dataset at all. The code survives only as the last resort, where nothing in
 	 * the context names the order either.
 	 *
-	 * <p>Resolved once per pass and carried, rather than re-derived where each is needed: the entry
-	 * scan, the sentence and the rule correlation must agree about which order they are discussing, and
-	 * three scans is three chances to disagree.
+	 * <p>Grouped once per SUBJECT and carried through that subject's sentence and its fold, so the
+	 * partner a chip names and the partner {@link #addInteractionWarnings} decides about cannot be
+	 * different ones. Not once per {@code validate}: {@link #classRelationships} runs per in-play
+	 * substance and calls this each time, and {@link #ruleAbout} re-runs {@link #entryForAtcCode}
+	 * itself rather than reading the resolution carried here. They agree because that scan is a
+	 * function of {@code getAll()} alone, which is loaded once — a property of the service, not
+	 * something this method enforces. A per-{@code validate} memo would make it enforced and would cut
+	 * the repeated full scans, but it must then be a local threaded through the pass and NEVER a field:
+	 * a memoised {@link DrugReference} outliving a {@code getAll()} reload fails the reference
+	 * comparisons the contraindication arms make (issue #172), which silently re-opens issue #145.
 	 */
 	private List<OrderPartner> orderPartners(PatientClinicalContext context) {
 		Map<Object, OrderPartner> byIdentity = new LinkedHashMap<Object, OrderPartner>();

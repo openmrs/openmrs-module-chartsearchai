@@ -47,10 +47,11 @@ public class InteractionRouteVariantTest {
 	private static final String FIXTURE = "chartsearchai-test/ddi-interaction-route-variants.json";
 
 	/**
-	 * The one slice in which DATASET ORDER and the canonical row DISAGREE — Chloroprocaine, whose
-	 * route-qualified row the KB lists first. Every other fixture happens to list the unqualified row
-	 * first, which makes them unable to tell {@code interactionSubject}'s choice apart from "the first
-	 * row in play"; see {@link #theChipIsNamedAfterTheCanonicalRowNotTheFirstRowInPlay}.
+	 * The one slice in which DATASET ORDER and the canonical row disagree ON A FAMILY THAT CAN RAISE AN
+	 * INTERACTION CHIP — Chloroprocaine, whose route-qualified row the KB lists first, given a partner
+	 * whose rule sits on the unqualified row. Two other fixtures carry a not-first family and still
+	 * cannot tell {@code interactionSubject}'s choice apart from "the first row in play": see the
+	 * fixture's own {@code metadata.note} for which, and why neither raises a chip from it.
 	 */
 	private static final String NOT_FIRST_FIXTURE = "chartsearchai-test/ddi-canonical-subject-label.json";
 
@@ -208,12 +209,12 @@ public class InteractionRouteVariantTest {
 	@Test
 	public void theChipIsNamedAfterTheCanonicalRowNotTheFirstRowInPlay() throws IOException {
 		// The subject-LABEL half of issue #162 — the half the issue calls a correctness fix rather than a
-		// de-duplication — asserted where it can actually fail. Every other fixture lists a family's
-		// unqualified row first, so in all of them "the canonical row" and "the first row in play" are the
-		// same row and no assertion can tell the two apart: reducing interactionSubject to
+		// de-duplication — asserted where it can actually fail. No fixture could tell the canonical row
+		// apart from "the first row in play" before this one: reducing interactionSubject to
 		// subjects.get(0) passed the whole api suite (measured 2026-08-06). 7 of the shipped KB's 121
 		// multi-row families list a qualified row first, and Chloroprocaine is one, so this slice is where
-		// dataset order gives the WRONG answer.
+		// dataset order gives the WRONG answer — see NOT_FIRST_FIXTURE for why the two fixtures that also
+		// carry a not-first family cannot make that answer visible.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(NOT_FIRST_FIXTURE);
 		List<DrugReference> rows = service.findByQuery("Is it safe to give chloroprocaine?");
 		assertEquals(2, rows.size(), "precondition: one question word must resolve both chloroprocaine "

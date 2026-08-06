@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -415,6 +416,91 @@ public class DrugSafetyInteractionScreeningTest {
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
 				"Simvastatin", "clarithromycin", "Major"),
 				"and the pair must still be reported, was: " + warnings);
+	}
+
+	/**
+	 * Verbatim KB slice in which the two arms name one substance DIFFERENTLY — see the fixture's own
+	 * {@code metadata.note} for the three properties the shape needs at once.
+	 */
+	private static final String CROSS_ARM_FIXTURE = "chartsearchai-test/ddi-crossarm-canonical-duplicate.json";
+
+	@Test
+	public void theScreenStandsDownFromAPairTheSubstanceArmReportedUnderItsCanonicalName() throws Exception {
+		// The same invariant as the test above, on the one shape a TEXT-keyed suppression cannot see. Since
+		// issue #162 the drug-in-play arm names its chip after the substance's CANONICAL row while this arm
+		// names its own after whichever row findForActiveOrders returned first, so for a family whose
+		// route-unspecified row is not its first row the two arms word one finding differently and the
+		// text key stops recognising the repeat. Chloroprocaine is such a family and lidocaine's rule sits
+		// on its OPHTHALMIC row alone, so:
+		//
+		//   drug-in-play arm:  "Chloroprocaine interacts with active order lidocaine — Moderate. …"
+		//   screening arm:     "Chloroprocaine (ophthalmic) interacts with active order lidocaine — …"
+		//
+		// One clinical fact, two chips, and — since issue #110 — two citable safety-finding records. The
+		// suppression is therefore keyed on the PAIR's identity rather than on the rendered strings.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(CROSS_ARM_FIXTURE);
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Chloroprocaine 20mg/mL", "Lidocaine 2%"), null, null, null);
+
+		// Preconditions through the production resolvers, without which every count below could pass while
+		// the arms never met.
+		assertTrue(service.findByQuery(SCREENING_QUESTION).isEmpty(),
+				"precondition: the screening question must name no drug, or the screen never runs");
+		List<DrugReference> orderEntries = service.findForActiveOrders(context);
+		assertEquals(Arrays.asList("Chloroprocaine (ophthalmic)", "Chloroprocaine", "Lidocaine"),
+				DrugReferenceTestSupport.names(orderEntries),
+				"precondition: both orders must resolve, and the ROUTE-QUALIFIED chloroprocaine row must "
+						+ "come first — that is what makes the two arms disagree");
+
+		// The answer names chloroprocaine and cites nothing, which is what puts the substance in play
+		// beside the screen (echo scoping exempts an answer-named drug only when a CITED record already
+		// names it). It must not name lidocaine: that would put the reverse direction in play too, which
+		// is a different subject and a legitimately separate chip.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate(
+				"Yes — she is on chloroprocaine, and the reference data flags a methemoglobinemia risk.",
+				SCREENING_QUESTION, context);
+
+		assertEquals(1, warnings.size(),
+				"one (substance, active order) pair is one chip however many arms reach it, was: "
+						+ warnings);
+		assertEquals("Chloroprocaine", warnings.get(0).getDrug(),
+				"and the surviving chip names the SUBSTANCE, was: " + warnings);
+		for (SafetyWarning warning : warnings) {
+			assertFalse(warning.getDetail().contains("(ophthalmic)")
+					|| warning.getDrug().contains("(ophthalmic)"),
+					"no chip may assert an ophthalmic preparation the chart does not record, was: "
+							+ warning.getDetail());
+		}
+	}
+
+	@Test
+	public void theScreenStandsDownFromAPairTheSubstanceArmReportedInTheOtherDirection() throws Exception {
+		// The same suppression asked of the OTHER direction, which a text key could never answer: "B
+		// interacts with active order A" is not the string "A interacts with active order B". Nothing but
+		// the order the patient's own order names happen to be listed in decides which direction this arm
+		// reaches a pair from — findForActiveOrders walks the order names and resolves each — so with the
+		// two names transposed the screen reaches the pair as Lidocaine x chloroprocaine while the
+		// drug-in-play arm reported it as Chloroprocaine x lidocaine. The pair is one clinical fact either
+		// way, so the ledger's key is unordered; a directional key leaves the repeat in for exactly half
+		// the possible chart orderings.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(CROSS_ARM_FIXTURE);
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Lidocaine 2%", "Chloroprocaine 20mg/mL"), null, null, null);
+
+		assertEquals(Arrays.asList("Lidocaine", "Chloroprocaine (ophthalmic)", "Chloroprocaine"),
+				DrugReferenceTestSupport.names(service.findForActiveOrders(context)),
+				"precondition: the PARTNER's entry must come first, so the screen reaches the pair from the "
+						+ "opposite side to the arm that reported it");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate(
+				"Yes — she is on chloroprocaine, and the reference data flags a methemoglobinemia risk.",
+				SCREENING_QUESTION, context);
+
+		assertEquals(1, warnings.size(),
+				"one pair is one chip whichever direction the screen reaches it from, was: " + warnings);
+		assertEquals("Chloroprocaine", warnings.get(0).getDrug(),
+				"and the chip that survives is the drug-in-play arm's, which named the substance, was: "
+						+ warnings);
 	}
 
 	@Test

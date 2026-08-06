@@ -191,17 +191,92 @@ public class DrugReference {
 	 * @return an opaque key, equal exactly for two entries this module treats as one substance
 	 */
 	Object substanceKey() {
+		return substanceKey(name, substanceName);
+	}
+
+	/**
+	 * {@link #substanceKey()} over the two fields it reads, for a caller holding those fields but no
+	 * {@link DrugReference} yet: {@link DdiDrugReferenceSource}'s parse-time rows, which have to answer
+	 * "are these two rows one substance?" before any entry exists (issue #152's self-pair guard). One
+	 * definition, so a load-time guard and the chip grouping cannot come to disagree about what one
+	 * substance is — the failure that would leave a self-pair loaded for exactly the rows the chips then
+	 * merge.
+	 *
+	 * @return the key described at {@link #substanceKey()}, or null when {@code substanceName} is blank
+	 */
+	static Object substanceKey(String name, String substanceName) {
 		String substance = normalizeName(substanceName);
 		if (substance == null) {
 			return null;
 		}
-		return Arrays.asList(substance, displayStem());
+		return Arrays.asList(substance, displayStem(name));
 	}
 
-	/** @return {@link #getName()} with any trailing parenthesized qualifier(s) removed, normalized by
+	/**
+	 * @return the substance this entry stands for ({@link #substanceKey()}), else the entry itself. The
+	 *         two are different types — a {@link List} and a {@link DrugReference} — so the two key
+	 *         spaces cannot collide, and an entry from a source publishing no substance name keys on
+	 *         its own identity and therefore groups with nothing.
+	 *
+	 *         <p>The key for grouping the ROWS OF ONE SUBSTANCE inside one request, shared by the
+	 *         contraindication chip ledger ({@code DrugSafetyValidator.ContraindicationChips}, issue
+	 *         #145) and the interaction arms' subject side (#162) so the two arms cannot merge
+	 *         different sets of rows. Identity is the right fallback for both because every set they
+	 *         group is resolved against {@link DrugReferenceService}'s shared {@code getAll()} cache,
+	 *         so one row is one object. {@link DrugReferenceInjector#matchingEntries} deliberately
+	 *         falls back to {@link #getId()} instead, not to this — see there.
+	 */
+	Object substanceGroupKey() {
+		Object substance = substanceKey();
+		return substance != null ? substance : this;
+	}
+
+	/**
+	 * @return whether this entry's display name names the substance with NO trailing route/formulation
+	 *         qualifier — {@code Dexamethasone} rather than {@code Dexamethasone (nasal)}. At most one
+	 *         row of a substance normally answers true, and it is the row a question naming the bare
+	 *         substance is about: nothing on a {@code DrugOrder} or in a question tells this module
+	 *         which route is in play (every variant publishes the same aliases and the same ATC list —
+	 *         the data-side gap issue #115 records), so the only route it can honestly assert is none.
+	 *
+	 *         <p>Consumed by {@link #canonicalRow}, which is where the two collapses that need it agree
+	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-06; re-measure before relying
+	 *         on the figures): of the 121 substances filed as more than one row, 110 have such a row and
+	 *         11 do not — {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
+	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in 7 of the 110 it is NOT the family's
+	 *         first row, which is why the choice cannot be left to dataset order.
+	 */
+	boolean namesNoRoute() {
+		String normalized = normalizeName(name);
+		return normalized != null && normalized.equals(displayStem(name));
+	}
+
+	/**
+	 * Which of two rows of ONE substance should represent it — the row a collapsed chip is named after
+	 * ({@code DrugSafetyValidator.addInteractionWarnings}, issue #162) and the row a collapsed
+	 * reference record is rendered from ({@link DrugReferenceInjector#matchingEntries}, issue #163).
+	 * Shared rather than decided twice, because the two surfaces describe the same substance to the same
+	 * clinician and to the same model: a chip naming the substance beside a record naming one of its
+	 * routes is the chip-versus-prose divergence this module keeps having to remove.
+	 *
+	 * @return {@code candidate} when it {@link #namesNoRoute()} and {@code incumbent} does not, else
+	 *         {@code incumbent} — so the route-unspecified row wins wherever the family has one, and
+	 *         otherwise the first row seen keeps the role. For the 11 shipped families that name no
+	 *         unqualified row the survivor therefore still carries a qualifier: the KB publishes no
+	 *         unqualified name for those substances, and manufacturing one by stripping a display name
+	 *         is the pattern-match-a-label mistake issue #148 had to undo.
+	 */
+	static DrugReference canonicalRow(DrugReference incumbent, DrugReference candidate) {
+		if (incumbent == null) {
+			return candidate;
+		}
+		return candidate.namesNoRoute() && !incumbent.namesNoRoute() ? candidate : incumbent;
+	}
+
+	/** @return {@code name} with any trailing parenthesized qualifier(s) removed, normalized by
 	 *          {@link #normalizeName} — the empty string when the name is blank or is nothing but a
 	 *          qualifier, which keeps the key total. */
-	private String displayStem() {
+	private static String displayStem(String name) {
 		String stem = name == null ? "" : name;
 		String previous;
 		do {

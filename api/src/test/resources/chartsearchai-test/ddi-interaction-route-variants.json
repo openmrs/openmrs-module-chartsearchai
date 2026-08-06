@@ -1,0 +1,1394 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #162 — the SUBJECT side of the route-variant collapse. Rows and interaction rows are field-for-field their KB rows, in KB order; the interaction rows are every KB pair among these drugs. Five shapes: hydrocortisone x diclofenac (the live case, equal severity, the systemic note the longer), ketorolac x lepirudin (equal severity, the OPHTHALMIC note the longer), oxymetazoline x phenelzine (three rows, no route-unspecified row among them, one shared mechanism), omeprazole/esomeprazole x kanamycin (two distinct substances sharing one rxnorm_name and one mechanism group - the #121 must-not-collapse case on the subject side), and the two Chloroprocaine rows, which the KB lists OPHTHALMIC-first - what a first-wins collapse gets wrong. Their only pair among these drugs is with each other, which is a substance-level self-pair (issue #152) and so is dropped at load."
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "1671": {
+   "text": "The use of ketorolac in combination with other nonsteroidal anti-inflammatory drugs (NSAIDs) may increase the risk of serious adverse effects such as renal failure and gastrointestinal toxicity including inflammation, bleeding, ulceration, and perforation of the esophagus, stomach, or intestines.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "2157": {
+   "text": "Theoretically, the coadministration of nonsteroidal anti-inflammatory drugs (NSAIDs) and thrombin inhibitors may potentiate the risk of bleeding. NSAIDs interfere with platelet adhesion and aggregation and may prolong bleeding time in healthy individuals.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "2865": {
+   "text": "By inhibiting the breakdown of catecholamines, monoamine oxidase inhibitors (MAOIs) may theoretically potentiate the cardiovascular effects of systemically absorbed sympathomimetic agents following topical administration (e.g., nasal decongestants, ophthalmic vasoconstrictors).",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3159": {
+   "text": "Systemically and topically administered nonsteroidal anti-inflammatory drugs (NSAIDs) may potentiate the risk of bleeding in patients treated with anticoagulants and other drugs that affect hemostasis such as platelet inhibitors, thrombin inhibitors, thrombolytic agents, or agents that commonly cause thrombocytopenia. The pharmacologic effects of NSAIDs that contribute to this interaction include prolongation of prothrombin time and inhibition of platelet adhesion and aggregation.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3212": {
+   "text": "The combined use of corticosteroids and nonsteroidal anti-inflammatory drugs (NSAIDs) may increase the potential for serious gastrointestinal (GI) toxicity, including inflammation, bleeding, ulceration, and perforation.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "4614": {
+   "text": "Chronic use of proton pump inhibitors (PPIs) may induce hypomagnesemia, and the risk may be increased during concomitant use of diuretics or other agents that can cause magnesium loss. Serious adverse events include tetany, seizures, tremor, carpopedal spasm, atrial fibrillation, supraventricular tachycardia, and abnormal QT interval; however, patients do not always exhibit these symptoms. Hypomagnesemia can also cause impaired parathyroid hormone secretion, which may lead to hypocalcemia. In approximately 25% of the cases of PPI-associated hypomagnesemia reviewed by the FDA, the condition did not resolve with magnesium supplementation alone but also required discontinuation of the PPI.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "5113": {
+   "text": "The nephrotoxic effect of aminoglycosides may be potentiated by nonsteroidal anti-inflammatory drugs (NSAIDs), particularly if the latter had been given in high dosages for prolonged periods. Animal models suggest that renal prostaglandins may play a role in maintaining normal renal blood flow and glomerular filtration rate during the development of aminoglycoside nephrotoxicity, thus inhibition of their production by NSAIDs may worsen the renal damage. In premature infants, NSAIDs may increase the plasma concentrations of aminoglycosides. The proposed mechanism is decreased aminoglycoside clearance due to NSAID reduction of glomerular filtration rate.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "6466": {
+   "text": "Some topical anesthetics can be systemically absorbed and cause methemoglobinemia, particularly when applied to mucous membranes.  Coadministration with other oxidizing agents that can also induce methemoglobinemia such as injectable local anesthetics, antimalarials (e.g., chloroquine, primaquine, quinine, tafenoquine), nitrates and nitrites, sulfonamides, aminosalicylic acid, dapsone, dimethyl sulfoxide, flutamide, metoclopramide, nitrofurantoin, phenazopyridine, phenobarbital, phenytoin, and rasburicase may increase the risk.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "966": {
+   "text": "Concomitant use of ophthalmic nonsteroidal anti-inflammatory drugs (NSAIDs) and ophthalmic steroids may increase the potential for healing problems, as both can slow or delay healing.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1004",
+   "name": "Kanamycin",
+   "rxcui": "6099",
+   "rxnorm_name": "kanamycin",
+   "drugbank_id": "DB01172",
+   "atc": [
+    "A07AA08",
+    "J01GB04",
+    "S01AA24"
+   ],
+   "ciel": [
+    {
+     "code": "78385",
+     "uuid": "78385AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Kanamycin"
+    },
+    {
+     "code": "78386",
+     "uuid": "78386AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Kanamycin sulfate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1010",
+   "name": "Ketorolac",
+   "rxcui": "35827",
+   "rxnorm_name": "ketorolac",
+   "drugbank_id": "DB00465",
+   "atc": [
+    "M01AB15",
+    "S01BC05"
+   ],
+   "ciel": [
+    {
+     "code": "78481",
+     "uuid": "78481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac"
+    },
+    {
+     "code": "78482",
+     "uuid": "78482AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac tromethamine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1011",
+   "name": "Ketorolac (ophthalmic)",
+   "rxcui": "35827",
+   "rxnorm_name": "ketorolac",
+   "drugbank_id": "DB00465",
+   "atc": [
+    "M01AB15",
+    "S01BC05"
+   ],
+   "ciel": [
+    {
+     "code": "78481",
+     "uuid": "78481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac"
+    },
+    {
+     "code": "78482",
+     "uuid": "78482AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac tromethamine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1037",
+   "name": "Lepirudin",
+   "rxcui": "237057",
+   "rxnorm_name": "lepirudin",
+   "drugbank_id": "DB00001",
+   "atc": [
+    "B01AE02"
+   ],
+   "ciel": [
+    {
+     "code": "78730",
+     "uuid": "78730AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lepirudin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1340",
+   "name": "Omeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00338",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1368",
+   "name": "Oxymetazoline (nasal)",
+   "rxcui": "7812",
+   "rxnorm_name": "oxymetazoline",
+   "drugbank_id": null,
+   "atc": [
+    "D11AX27",
+    "R01AA05",
+    "R01AB07",
+    "S01GA04"
+   ],
+   "ciel": [
+    {
+     "code": "81345",
+     "uuid": "81345AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Oxymetazoline"
+    },
+    {
+     "code": "81346",
+     "uuid": "81346AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Oxymetazoline hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1369",
+   "name": "Oxymetazoline (ophthalmic)",
+   "rxcui": "7812",
+   "rxnorm_name": "oxymetazoline",
+   "drugbank_id": null,
+   "atc": [
+    "D11AX27",
+    "R01AA05",
+    "R01AB07",
+    "S01GA04"
+   ],
+   "ciel": [
+    {
+     "code": "81345",
+     "uuid": "81345AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Oxymetazoline"
+    },
+    {
+     "code": "81346",
+     "uuid": "81346AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Oxymetazoline hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1370",
+   "name": "Oxymetazoline (topical)",
+   "rxcui": "7812",
+   "rxnorm_name": "oxymetazoline",
+   "drugbank_id": null,
+   "atc": [
+    "D11AX27",
+    "R01AA05",
+    "R01AB07",
+    "S01GA04"
+   ],
+   "ciel": [
+    {
+     "code": "81345",
+     "uuid": "81345AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Oxymetazoline"
+    },
+    {
+     "code": "81346",
+     "uuid": "81346AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Oxymetazoline hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1440",
+   "name": "Phenelzine",
+   "rxcui": "8123",
+   "rxnorm_name": "phenelzine",
+   "drugbank_id": "DB00780",
+   "atc": [
+    "N06AF03"
+   ],
+   "ciel": [
+    {
+     "code": "81923",
+     "uuid": "81923AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenelzine"
+    },
+    {
+     "code": "81924",
+     "uuid": "81924AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenelzine sulfate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2061",
+   "name": "Chloroprocaine (ophthalmic)",
+   "rxcui": "20859",
+   "rxnorm_name": "chloroprocaine",
+   "drugbank_id": "DB01161",
+   "atc": [
+    "N01BA04",
+    "S01HA08"
+   ],
+   "ciel": [
+    {
+     "code": "73294",
+     "uuid": "73294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroprocaine"
+    },
+    {
+     "code": "73295",
+     "uuid": "73295AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroprocaine hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter358",
+   "name": "Chloroprocaine",
+   "rxcui": "20859",
+   "rxnorm_name": "chloroprocaine",
+   "drugbank_id": "DB01161",
+   "atc": [
+    "N01BA04",
+    "S01HA08"
+   ],
+   "ciel": [
+    {
+     "code": "73294",
+     "uuid": "73294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroprocaine"
+    },
+    {
+     "code": "73295",
+     "uuid": "73295AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroprocaine hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter537",
+   "name": "Diclofenac",
+   "rxcui": "3355",
+   "rxnorm_name": "diclofenac",
+   "drugbank_id": "DB00586",
+   "atc": [
+    "D11AX18",
+    "M01AB05",
+    "M02AA15",
+    "S01BC03"
+   ],
+   "ciel": [
+    {
+     "code": "104486",
+     "uuid": "104486AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac / misoprostol"
+    },
+    {
+     "code": "170036",
+     "uuid": "a9240a1f-1f8c-44be-b292-a2959509c554",
+     "name": "Acetaminophen / diclofenac / methocarbamol"
+    },
+    {
+     "code": "74778",
+     "uuid": "74778AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac"
+    },
+    {
+     "code": "74779",
+     "uuid": "74779AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac diethylammonium"
+    },
+    {
+     "code": "74780",
+     "uuid": "74780AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac hydroxyethylpyrrolidine"
+    },
+    {
+     "code": "74781",
+     "uuid": "74781AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac potassium"
+    },
+    {
+     "code": "74782",
+     "uuid": "74782AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac sodium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter538",
+   "name": "Diclofenac (ophthalmic)",
+   "rxcui": "3355",
+   "rxnorm_name": "diclofenac",
+   "drugbank_id": "DB00586",
+   "atc": [
+    "D11AX18",
+    "M01AB05",
+    "M02AA15",
+    "S01BC03"
+   ],
+   "ciel": [
+    {
+     "code": "104486",
+     "uuid": "104486AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac / misoprostol"
+    },
+    {
+     "code": "170036",
+     "uuid": "a9240a1f-1f8c-44be-b292-a2959509c554",
+     "name": "Acetaminophen / diclofenac / methocarbamol"
+    },
+    {
+     "code": "74778",
+     "uuid": "74778AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac"
+    },
+    {
+     "code": "74779",
+     "uuid": "74779AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac diethylammonium"
+    },
+    {
+     "code": "74780",
+     "uuid": "74780AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac hydroxyethylpyrrolidine"
+    },
+    {
+     "code": "74781",
+     "uuid": "74781AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac potassium"
+    },
+    {
+     "code": "74782",
+     "uuid": "74782AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diclofenac sodium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter676",
+   "name": "Esomeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00736",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter885",
+   "name": "Hydrocortisone",
+   "rxcui": "5492",
+   "rxnorm_name": "hydrocortisone",
+   "drugbank_id": "DB00741",
+   "atc": [
+    "A01AC03",
+    "A07EA02",
+    "C05AA01",
+    "D07AA02",
+    "D07XA01",
+    "H02AB09",
+    "S01BA02",
+    "S01CB03",
+    "S02BA01"
+   ],
+   "ciel": [
+    {
+     "code": "103309",
+     "uuid": "103309AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetic acid / hydrocortisone"
+    },
+    {
+     "code": "103596",
+     "uuid": "103596AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Antipyrine / hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "103767",
+     "uuid": "103767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / hydrocortisone / neomycin"
+    },
+    {
+     "code": "103768",
+     "uuid": "103768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "103818",
+     "uuid": "103818AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / chloroxylenol / hydrocortisone"
+    },
+    {
+     "code": "103886",
+     "uuid": "103886AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzoyl peroxide / hydrocortisone"
+    },
+    {
+     "code": "104168",
+     "uuid": "104168AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloramphenicol / hydrocortisone"
+    },
+    {
+     "code": "104169",
+     "uuid": "104169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloramphenicol / hydrocortisone / polymyxin B"
+    },
+    {
+     "code": "104170",
+     "uuid": "104170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorcyclizine / hydrocortisone"
+    },
+    {
+     "code": "104201",
+     "uuid": "104201AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroxylenol / hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104244",
+     "uuid": "104244AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / hydrocortisone / pheniramine / pyrilamine"
+    },
+    {
+     "code": "104245",
+     "uuid": "104245AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / hydrocortisone / pyrilamine"
+    },
+    {
+     "code": "104270",
+     "uuid": "104270AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorquinaldol / hydrocortisone"
+    },
+    {
+     "code": "104318",
+     "uuid": "104318AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / hydrocortisone"
+    },
+    {
+     "code": "104334",
+     "uuid": "104334AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / coal tar / hydrocortisone"
+    },
+    {
+     "code": "104337",
+     "uuid": "104337AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / hydrocortisone"
+    },
+    {
+     "code": "104338",
+     "uuid": "104338AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104340",
+     "uuid": "104340AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clotrimazole / hydrocortisone"
+    },
+    {
+     "code": "104388",
+     "uuid": "104388AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Colistin / hydrocortisone / neomycin / thonzonium"
+    },
+    {
+     "code": "104396",
+     "uuid": "104396AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Crotamiton / hydrocortisone"
+    },
+    {
+     "code": "104481",
+     "uuid": "104481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dibucaine / hydrocortisone"
+    },
+    {
+     "code": "104509",
+     "uuid": "104509AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diperodon / hydrocortisone / zinc oxide"
+    },
+    {
+     "code": "104512",
+     "uuid": "104512AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diphenhydramine / hydrocortisone"
+    },
+    {
+     "code": "104563",
+     "uuid": "104563AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Econazole / hydrocortisone"
+    },
+    {
+     "code": "104696",
+     "uuid": "104696AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fusidate / hydrocortisone"
+    },
+    {
+     "code": "104706",
+     "uuid": "104706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gentamicin sulfate (usp) / hydrocortisone"
+    },
+    {
+     "code": "104819",
+     "uuid": "104819AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hexachlorophene / hydrocortisone / menthol"
+    },
+    {
+     "code": "104857",
+     "uuid": "104857AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / iodoquinol"
+    },
+    {
+     "code": "104859",
+     "uuid": "104859AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / lidocaine"
+    },
+    {
+     "code": "104860",
+     "uuid": "104860AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / miconazole"
+    },
+    {
+     "code": "104861",
+     "uuid": "104861AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / neomycin"
+    },
+    {
+     "code": "104862",
+     "uuid": "104862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104863",
+     "uuid": "104863AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / oxytetracycline"
+    },
+    {
+     "code": "104864",
+     "uuid": "104864AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / polymyxin B"
+    },
+    {
+     "code": "104865",
+     "uuid": "104865AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104866",
+     "uuid": "104866AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sodium thiosulfate"
+    },
+    {
+     "code": "104867",
+     "uuid": "104867AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sulfur"
+    },
+    {
+     "code": "104868",
+     "uuid": "104868AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / sulfur / zinc oxide"
+    },
+    {
+     "code": "165454",
+     "uuid": "165454AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminium subacetate / hydrocortisone acetate / lidocaine / zinc oxide"
+    },
+    {
+     "code": "73950",
+     "uuid": "73950AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cortisol succinate"
+    },
+    {
+     "code": "77714",
+     "uuid": "77714AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone"
+    },
+    {
+     "code": "77716",
+     "uuid": "77716AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone 17-butyrate 21-propionate"
+    },
+    {
+     "code": "77718",
+     "uuid": "77718AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone aceponate"
+    },
+    {
+     "code": "77719",
+     "uuid": "77719AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone acetate"
+    },
+    {
+     "code": "77720",
+     "uuid": "77720AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone butyrate"
+    },
+    {
+     "code": "77721",
+     "uuid": "77721AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone cypionate"
+    },
+    {
+     "code": "77724",
+     "uuid": "77724AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone sodium phosphate"
+    },
+    {
+     "code": "77725",
+     "uuid": "77725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone sodium succinate"
+    },
+    {
+     "code": "77726",
+     "uuid": "77726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone valerate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter886",
+   "name": "Hydrocortisone (ophthalmic)",
+   "rxcui": "5492",
+   "rxnorm_name": "hydrocortisone",
+   "drugbank_id": "DB00741",
+   "atc": [
+    "A01AC03",
+    "A07EA02",
+    "C05AA01",
+    "D07AA02",
+    "D07XA01",
+    "H02AB09",
+    "S01BA02",
+    "S01CB03",
+    "S02BA01"
+   ],
+   "ciel": [
+    {
+     "code": "103309",
+     "uuid": "103309AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetic acid / hydrocortisone"
+    },
+    {
+     "code": "103596",
+     "uuid": "103596AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Antipyrine / hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "103767",
+     "uuid": "103767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / hydrocortisone / neomycin"
+    },
+    {
+     "code": "103768",
+     "uuid": "103768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "103818",
+     "uuid": "103818AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / chloroxylenol / hydrocortisone"
+    },
+    {
+     "code": "103886",
+     "uuid": "103886AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzoyl peroxide / hydrocortisone"
+    },
+    {
+     "code": "104168",
+     "uuid": "104168AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloramphenicol / hydrocortisone"
+    },
+    {
+     "code": "104169",
+     "uuid": "104169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloramphenicol / hydrocortisone / polymyxin B"
+    },
+    {
+     "code": "104170",
+     "uuid": "104170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorcyclizine / hydrocortisone"
+    },
+    {
+     "code": "104201",
+     "uuid": "104201AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroxylenol / hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104244",
+     "uuid": "104244AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / hydrocortisone / pheniramine / pyrilamine"
+    },
+    {
+     "code": "104245",
+     "uuid": "104245AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / hydrocortisone / pyrilamine"
+    },
+    {
+     "code": "104270",
+     "uuid": "104270AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorquinaldol / hydrocortisone"
+    },
+    {
+     "code": "104318",
+     "uuid": "104318AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / hydrocortisone"
+    },
+    {
+     "code": "104334",
+     "uuid": "104334AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / coal tar / hydrocortisone"
+    },
+    {
+     "code": "104337",
+     "uuid": "104337AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / hydrocortisone"
+    },
+    {
+     "code": "104338",
+     "uuid": "104338AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104340",
+     "uuid": "104340AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clotrimazole / hydrocortisone"
+    },
+    {
+     "code": "104388",
+     "uuid": "104388AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Colistin / hydrocortisone / neomycin / thonzonium"
+    },
+    {
+     "code": "104396",
+     "uuid": "104396AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Crotamiton / hydrocortisone"
+    },
+    {
+     "code": "104481",
+     "uuid": "104481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dibucaine / hydrocortisone"
+    },
+    {
+     "code": "104509",
+     "uuid": "104509AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diperodon / hydrocortisone / zinc oxide"
+    },
+    {
+     "code": "104512",
+     "uuid": "104512AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diphenhydramine / hydrocortisone"
+    },
+    {
+     "code": "104563",
+     "uuid": "104563AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Econazole / hydrocortisone"
+    },
+    {
+     "code": "104696",
+     "uuid": "104696AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fusidate / hydrocortisone"
+    },
+    {
+     "code": "104706",
+     "uuid": "104706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gentamicin sulfate (usp) / hydrocortisone"
+    },
+    {
+     "code": "104819",
+     "uuid": "104819AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hexachlorophene / hydrocortisone / menthol"
+    },
+    {
+     "code": "104857",
+     "uuid": "104857AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / iodoquinol"
+    },
+    {
+     "code": "104859",
+     "uuid": "104859AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / lidocaine"
+    },
+    {
+     "code": "104860",
+     "uuid": "104860AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / miconazole"
+    },
+    {
+     "code": "104861",
+     "uuid": "104861AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / neomycin"
+    },
+    {
+     "code": "104862",
+     "uuid": "104862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104863",
+     "uuid": "104863AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / oxytetracycline"
+    },
+    {
+     "code": "104864",
+     "uuid": "104864AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / polymyxin B"
+    },
+    {
+     "code": "104865",
+     "uuid": "104865AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104866",
+     "uuid": "104866AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sodium thiosulfate"
+    },
+    {
+     "code": "104867",
+     "uuid": "104867AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sulfur"
+    },
+    {
+     "code": "104868",
+     "uuid": "104868AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / sulfur / zinc oxide"
+    },
+    {
+     "code": "165454",
+     "uuid": "165454AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminium subacetate / hydrocortisone acetate / lidocaine / zinc oxide"
+    },
+    {
+     "code": "73950",
+     "uuid": "73950AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cortisol succinate"
+    },
+    {
+     "code": "77714",
+     "uuid": "77714AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone"
+    },
+    {
+     "code": "77716",
+     "uuid": "77716AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone 17-butyrate 21-propionate"
+    },
+    {
+     "code": "77718",
+     "uuid": "77718AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone aceponate"
+    },
+    {
+     "code": "77719",
+     "uuid": "77719AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone acetate"
+    },
+    {
+     "code": "77720",
+     "uuid": "77720AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone butyrate"
+    },
+    {
+     "code": "77721",
+     "uuid": "77721AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone cypionate"
+    },
+    {
+     "code": "77724",
+     "uuid": "77724AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone sodium phosphate"
+    },
+    {
+     "code": "77725",
+     "uuid": "77725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone sodium succinate"
+    },
+    {
+     "code": "77726",
+     "uuid": "77726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone valerate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter887",
+   "name": "Hydrocortisone (topical)",
+   "rxcui": "5492",
+   "rxnorm_name": "hydrocortisone",
+   "drugbank_id": "DB00741",
+   "atc": [
+    "A01AC03",
+    "A07EA02",
+    "C05AA01",
+    "D07AA02",
+    "D07XA01",
+    "H02AB09",
+    "S01BA02",
+    "S01CB03",
+    "S02BA01"
+   ],
+   "ciel": [
+    {
+     "code": "103309",
+     "uuid": "103309AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetic acid / hydrocortisone"
+    },
+    {
+     "code": "103596",
+     "uuid": "103596AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Antipyrine / hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "103767",
+     "uuid": "103767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / hydrocortisone / neomycin"
+    },
+    {
+     "code": "103768",
+     "uuid": "103768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "103818",
+     "uuid": "103818AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / chloroxylenol / hydrocortisone"
+    },
+    {
+     "code": "103886",
+     "uuid": "103886AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzoyl peroxide / hydrocortisone"
+    },
+    {
+     "code": "104168",
+     "uuid": "104168AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloramphenicol / hydrocortisone"
+    },
+    {
+     "code": "104169",
+     "uuid": "104169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloramphenicol / hydrocortisone / polymyxin B"
+    },
+    {
+     "code": "104170",
+     "uuid": "104170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorcyclizine / hydrocortisone"
+    },
+    {
+     "code": "104201",
+     "uuid": "104201AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroxylenol / hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104244",
+     "uuid": "104244AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / hydrocortisone / pheniramine / pyrilamine"
+    },
+    {
+     "code": "104245",
+     "uuid": "104245AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / hydrocortisone / pyrilamine"
+    },
+    {
+     "code": "104270",
+     "uuid": "104270AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorquinaldol / hydrocortisone"
+    },
+    {
+     "code": "104318",
+     "uuid": "104318AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / hydrocortisone"
+    },
+    {
+     "code": "104334",
+     "uuid": "104334AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / coal tar / hydrocortisone"
+    },
+    {
+     "code": "104337",
+     "uuid": "104337AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / hydrocortisone"
+    },
+    {
+     "code": "104338",
+     "uuid": "104338AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104340",
+     "uuid": "104340AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clotrimazole / hydrocortisone"
+    },
+    {
+     "code": "104388",
+     "uuid": "104388AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Colistin / hydrocortisone / neomycin / thonzonium"
+    },
+    {
+     "code": "104396",
+     "uuid": "104396AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Crotamiton / hydrocortisone"
+    },
+    {
+     "code": "104481",
+     "uuid": "104481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dibucaine / hydrocortisone"
+    },
+    {
+     "code": "104509",
+     "uuid": "104509AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diperodon / hydrocortisone / zinc oxide"
+    },
+    {
+     "code": "104512",
+     "uuid": "104512AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diphenhydramine / hydrocortisone"
+    },
+    {
+     "code": "104563",
+     "uuid": "104563AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Econazole / hydrocortisone"
+    },
+    {
+     "code": "104696",
+     "uuid": "104696AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fusidate / hydrocortisone"
+    },
+    {
+     "code": "104706",
+     "uuid": "104706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gentamicin sulfate (usp) / hydrocortisone"
+    },
+    {
+     "code": "104819",
+     "uuid": "104819AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hexachlorophene / hydrocortisone / menthol"
+    },
+    {
+     "code": "104857",
+     "uuid": "104857AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / iodoquinol"
+    },
+    {
+     "code": "104859",
+     "uuid": "104859AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / lidocaine"
+    },
+    {
+     "code": "104860",
+     "uuid": "104860AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / miconazole"
+    },
+    {
+     "code": "104861",
+     "uuid": "104861AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / neomycin"
+    },
+    {
+     "code": "104862",
+     "uuid": "104862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104863",
+     "uuid": "104863AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / oxytetracycline"
+    },
+    {
+     "code": "104864",
+     "uuid": "104864AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / polymyxin B"
+    },
+    {
+     "code": "104865",
+     "uuid": "104865AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104866",
+     "uuid": "104866AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sodium thiosulfate"
+    },
+    {
+     "code": "104867",
+     "uuid": "104867AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sulfur"
+    },
+    {
+     "code": "104868",
+     "uuid": "104868AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / sulfur / zinc oxide"
+    },
+    {
+     "code": "165454",
+     "uuid": "165454AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminium subacetate / hydrocortisone acetate / lidocaine / zinc oxide"
+    },
+    {
+     "code": "73950",
+     "uuid": "73950AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cortisol succinate"
+    },
+    {
+     "code": "77714",
+     "uuid": "77714AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone"
+    },
+    {
+     "code": "77716",
+     "uuid": "77716AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone 17-butyrate 21-propionate"
+    },
+    {
+     "code": "77718",
+     "uuid": "77718AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone aceponate"
+    },
+    {
+     "code": "77719",
+     "uuid": "77719AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone acetate"
+    },
+    {
+     "code": "77720",
+     "uuid": "77720AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone butyrate"
+    },
+    {
+     "code": "77721",
+     "uuid": "77721AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone cypionate"
+    },
+    {
+     "code": "77724",
+     "uuid": "77724AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone sodium phosphate"
+    },
+    {
+     "code": "77725",
+     "uuid": "77725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone sodium succinate"
+    },
+    {
+     "code": "77726",
+     "uuid": "77726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone valerate"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1004",
+   "DDInter1010",
+   "Moderate",
+   "5113"
+  ],
+  [
+   "DDInter1004",
+   "DDInter1340",
+   "Moderate",
+   "4614"
+  ],
+  [
+   "DDInter1004",
+   "DDInter537",
+   "Moderate",
+   "5113"
+  ],
+  [
+   "DDInter1004",
+   "DDInter676",
+   "Moderate",
+   "4614"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1037",
+   "Moderate",
+   "2157"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1340",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1010",
+   "DDInter537",
+   "Major",
+   "1671"
+  ],
+  [
+   "DDInter1010",
+   "DDInter885",
+   "Moderate",
+   "3212"
+  ],
+  [
+   "DDInter1011",
+   "DDInter1037",
+   "Moderate",
+   "3159"
+  ],
+  [
+   "DDInter1011",
+   "DDInter886",
+   "Moderate",
+   "966"
+  ],
+  [
+   "DDInter1037",
+   "DDInter537",
+   "Moderate",
+   "2157"
+  ],
+  [
+   "DDInter1037",
+   "DDInter538",
+   "Moderate",
+   "3159"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1440",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter537",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter885",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1368",
+   "DDInter1440",
+   "Moderate",
+   "2865"
+  ],
+  [
+   "DDInter1369",
+   "DDInter1440",
+   "Moderate",
+   "2865"
+  ],
+  [
+   "DDInter1370",
+   "DDInter1440",
+   "Moderate",
+   "2865"
+  ],
+  [
+   "DDInter2061",
+   "DDInter358",
+   "Moderate",
+   "6466"
+  ],
+  [
+   "DDInter537",
+   "DDInter885",
+   "Moderate",
+   "3212"
+  ],
+  [
+   "DDInter538",
+   "DDInter886",
+   "Moderate",
+   "966"
+  ]
+ ]
+}

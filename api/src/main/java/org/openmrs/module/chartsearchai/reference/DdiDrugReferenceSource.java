@@ -45,6 +45,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * note. Because the interaction rows are symmetric, each pair contributes to both drugs'
  * entries, which is what the validator's from-either-side matching expects.
  *
+ * <p>One class of row is deliberately NOT expanded: a row pairing a drug with itself, or with another
+ * route/formulation row of the same substance — see {@link #isSelfPair} (issue #152).
+ *
  * <p>Memory: there are far fewer distinct mechanism descriptions than pairs, so the
  * per-partner notes are interned (one shared {@link String} per {@code severity + group}),
  * bounding note cost to the unique set rather than the pair count.
@@ -155,6 +158,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 
 		// group interaction rows by drug id -> partner links
 		Map<String, List<Link>> partners = new HashMap<String, List<Link>>();
+		int selfPairs = 0;
 		for (JsonNode row : root.get("interactions")) {
 			if (row == null || !row.isArray() || row.size() < 4) {
 				continue;
@@ -166,9 +170,22 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			if (!byId.containsKey(a) || !byId.containsKey(b)) {
 				continue;
 			}
+			if (isSelfPair(byId.get(a), byId.get(b))) {
+				selfPairs++;
+				continue;
+			}
 			String note = noteFor(severity, gid, mech, noteCache);
 			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, severity, note));
 			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, severity, note));
+		}
+		if (selfPairs > 0) {
+			// WARN, not DEBUG: a knowledge base pairing a drug with itself is a data-validity problem in
+			// the operator's or the upstream project's file, and the count is how they see a refresh has
+			// introduced more of them. Once per load, with the count, rather than per row — the shipped KB
+			// has 26 of them among 295,184 rows and a per-row line would say nothing extra.
+			log.warn("Skipped {} DDInter interaction row(s) pairing a drug with itself or with another "
+					+ "route/formulation row of the same substance — a drug cannot interact with itself",
+					selfPairs);
 		}
 
 		// RxCUI frequency: some route variants share a RxCUI (e.g. the Lidocaine variants all
@@ -218,6 +235,67 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 		}
 		log.info("Parsed {} DDInter drug-reference entries", out.size());
 		return out;
+	}
+
+	/**
+	 * Whether an interaction row joins a drug to ITSELF and so must not be loaded (issue #152). Two
+	 * tests, because the KB produces the shape two ways:
+	 * <ul>
+	 *   <li>the same row on both sides — exactly one in the shipped 19 MB KB, {@code DDInter225}
+	 *       (botulinum toxin type A) of 295,184 rows. Its mechanism text is about administering
+	 *       different botulinum SEROTYPES together, and the KB files that same mechanism on genuine
+	 *       cross-row pairs of its own — {@code Botulinum toxin type A} against
+	 *       {@code Botulinum Toxin Type B}, and {@code Daxibotulinumtoxina} against each of them — none
+	 *       of which this guard touches. So the self-pair is an artifact of the KB's granularity that
+	 *       carries no clinical content its siblings do not, while what it puts in front of a clinician
+	 *       is "Botulinum toxin type A interacts with active order botulinum toxin type A".</li>
+	 *   <li>two ROUTE/FORMULATION rows of one substance — 25 more, {@code Lidocaine} against
+	 *       {@code Lidocaine (topical)} and the like (measured 2026-08-06; re-measure before relying on
+	 *       the figures). Also unrenderable rather than merely redundant: every row of a substance
+	 *       publishes the same {@code rxnorm_name}, which is the match token a rule carries and the label
+	 *       a chip prints, so such a pair can ONLY read as a substance interacting with itself. The
+	 *       systemic-plus-topical exposure the KB row is about cannot be stated by anything this module
+	 *       renders, while the self-reference can. Every surface that could name such a pair names the
+	 *       partner by that shared token — the drug-in-play chip and the screening chip through
+	 *       {@code DrugSafetyValidator.partnerLabel}, the injected reference record through
+	 *       {@code DrugReferenceInjector.orderedInteractionNotes} — and the one surface that would print
+	 *       the partner's own display label, {@code addQuestionPairInteractions}, already declines a pair
+	 *       whose two entries share a name. So this guard makes a decision that arm already took, at the
+	 *       boundary where it covers every arm.
+	 *
+	 *       <p>The accepted cost, named rather than left general: two of the 25 are rated Major —
+	 *       {@code Bupivacaine} against {@code Bupivacaine (liposome)} and {@code Aminolevulinic acid}
+	 *       against {@code Aminolevulinic acid (topical)}. Those are real product-level warnings, and
+	 *       under-warning is the direction this module is otherwise careful about; they are dropped
+	 *       because a chip reading "Bupivacaine interacts with active order bupivacaine" is not that
+	 *       warning. Stating them needs the route vocabulary that is the data-side half of issue #115.</li>
+	 * </ul>
+	 * Through {@link DrugReference#substanceKey(String, String)} rather than a local comparison, so this
+	 * guard and the chip grouping mean the same thing by "one substance". A row publishing no substance
+	 * name keys null and is then only caught by the id test — the conservative direction: with no
+	 * substance identity to compare, two different ids are two different drugs.
+	 *
+	 * <p>So the id test is NOT subsumed by the substance one, though nothing in the shipped KB shows it:
+	 * every row it catches there also publishes a substance name. For a row publishing none the id
+	 * equality is the only test there is, and the {@code substance != null} half is what keeps two such
+	 * rows apart rather than collapsing every pair among them. Both are pinned on an authored row —
+	 * {@code SelfInteractionTest.aSelfPairSurvivesOnTheIdLegWhenTheRowPublishesNoSubstanceName} and
+	 * {@code twoRowsThatBothPublishNoSubstanceNameAreStillTwoDrugs} — because a refresh could introduce
+	 * that pairing and no verbatim slice can express it.
+	 *
+	 * <p>At load rather than in the arms that read the rules: those rows feed five consumers (the
+	 * drug-in-play chips, the screening arm, the question-pair arm, the promoted notes inside the
+	 * injected reference record, and the pre-answer finding derived from a chip), and one invariant at
+	 * the parse boundary covers all of them and any future KB revision. Only this source is guarded — a
+	 * hand-authored curated file is the operator's own data, and the {@code atc} adapter carries no
+	 * rules at all.
+	 */
+	private static boolean isSelfPair(DrugRow a, DrugRow b) {
+		if (a.id.equals(b.id)) {
+			return true;
+		}
+		Object substance = DrugReference.substanceKey(a.name, a.rxnormName);
+		return substance != null && substance.equals(DrugReference.substanceKey(b.name, b.rxnormName));
 	}
 
 	private static List<DrugReference.Interaction> interactionsFor(List<Link> links, Map<String, DrugRow> byId) {

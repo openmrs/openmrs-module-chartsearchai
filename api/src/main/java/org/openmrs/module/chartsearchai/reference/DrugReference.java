@@ -295,13 +295,17 @@ public class DrugReference {
 
 	/**
 	 * ATC groups that classify a LOCALLY APPLIED formulation rather than the substance itself, each
-	 * identified by the route or site of application in the group's own published name: {@code D}
+	 * identified by the route or site of application in the group's own published name — bar the one
+	 * exception noted at {@code C05B}: {@code D}
 	 * "Dermatologicals" and {@code S} "Sensory organs" (whole anatomical main groups), {@code A01}
 	 * "Stomatological preparations", {@code A07A} "Intestinal antiinfectives" and {@code A07E}
 	 * "Intestinal antiinflammatory agents" (its {@code A07EA} is "Corticosteroids acting locally"),
 	 * {@code B02BC} "Local hemostatics" (its {@code B02BX} sibling is "Other systemic hemostatics"),
 	 * {@code B05C} "Irrigating solutions", {@code C05A} "Antihemorrhoidals for topical use",
-	 * {@code C05B} "Antivaricose therapy" (topical heparinoids, sclerosants for local injection),
+	 * {@code C05B} "Antivaricose therapy" — the exception: that name is an indication, not a route, and
+	 * this entry rests on its subgroups' names instead ({@code C05BA} "Heparins or heparinoids for
+	 * topical use", {@code C05BB} "Sclerosing agents for local injection"); it changes no pair in the
+	 * shipped KB, whose only {@code C05B} subgroup is {@code C05BA} —
 	 * {@code G01} "Gynecological antiinfectives and antiseptics", {@code G02CC} "Antiinflammatory
 	 * products for vaginal administration" (its {@code G02CB} sibling, prolactine inhibitors, is
 	 * systemic), {@code M02} "Topical products for joint and muscular pain", {@code P03A}
@@ -358,14 +362,14 @@ public class DrugReference {
 	 * while R03 splits evenly and its two inhalant halves are shorter to name than the group plus two
 	 * exceptions.
 	 */
-	private static final List<String> SYSTEMIC_USE_ATC_GROUPS = Collections
+	private static final List<String> SYSTEMIC_USE_EXCEPTIONS = Collections
 			.unmodifiableList(Arrays.asList("D01B", "D02BB", "D05B", "D10B", "R01B"));
 
 	/**
 	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized here the same
 	 *         way {@link #normalizedAtcCodes()} normalizes an entry's — sits in one of the
 	 *         {@link #LOCALLY_APPLIED_ATC_GROUPS} and not in one of the
-	 *         {@link #SYSTEMIC_USE_ATC_GROUPS} nested inside them. A substance marketed by several
+	 *         {@link #SYSTEMIC_USE_EXCEPTIONS} nested inside them. A substance marketed by several
 	 *         routes carries one code per route, so this is what separates the code that classifies
 	 *         the SUBSTANCE from the codes that classify a locally applied presentation of it. Null and
 	 *         blank are not locally applied, like every other ATC comparison here treats them: nothing
@@ -376,16 +380,17 @@ public class DrugReference {
 	 */
 	static boolean isLocallyAppliedAtcCode(String code) {
 		String normalized = normalizeAtcToken(code);
-		if (normalized == null) {
-			return false;
-		}
-		for (String group : SYSTEMIC_USE_ATC_GROUPS) {
-			if (normalized.startsWith(group)) {
-				return false;
-			}
-		}
-		for (String group : LOCALLY_APPLIED_ATC_GROUPS) {
-			if (normalized.startsWith(group)) {
+		return normalized != null && !fallsUnderAnyGroup(normalized, SYSTEMIC_USE_EXCEPTIONS)
+				&& fallsUnderAnyGroup(normalized, LOCALLY_APPLIED_ATC_GROUPS);
+	}
+
+	/** @return whether the already-normalized {@code code} sits under any of {@code groups} — the one
+	 *  definition of "an ATC code falls under a group prefix" on this side, matching what
+	 *  {@link CrossReactivityGroup#containsCode} is for curated group prefixes, so that a future
+	 *  refinement (level-boundary guarding, say) has one place to happen rather than two. */
+	private static boolean fallsUnderAnyGroup(String code, List<String> groups) {
+		for (String group : groups) {
+			if (code.startsWith(group)) {
 				return true;
 			}
 		}

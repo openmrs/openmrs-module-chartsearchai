@@ -14,10 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.junit.jupiter.api.Test;
 
@@ -130,7 +129,7 @@ public class CrossReactivityClassChoiceTest {
 	public void aSystemicSteroidNamesTheSystemicClassNotTheAntiAcneOne() throws IOException {
 		// Issue #161's first measured row: Solu-Medrol against a dexamethasone allergy, reported live as
 		// "(D10AA)" — anti-acne preparations.
-		List<SafetyWarning> warnings = fixtureValidator().validate("",
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
 				"Is it safe to give methylprednisolone?", DrugReferenceTestSupport.ctx(60, null, null,
 						null, DrugReferenceTestSupport.set("Dexamethasone"), null));
 
@@ -144,7 +143,7 @@ public class CrossReactivityClassChoiceTest {
 		// Issue #161's third row, and on the OTHER call site: the drug is one the patient is already on,
 		// not one the question names, so the chip comes from the order-driven arm. Reported live as
 		// "(A01AC)" — corticosteroids for local oral treatment, of an injected steroid.
-		List<SafetyWarning> warnings = fixtureValidator().validate("", NO_DRUG_QUESTION,
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", NO_DRUG_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Hydrocortisone Injection vial 100mg"), null,
 						DrugReferenceTestSupport.set("Dexamethasone"), null));
@@ -160,7 +159,7 @@ public class CrossReactivityClassChoiceTest {
 		// and dexamethasone are both corticosteroids, but the KB gives budesonide no systemic code, so
 		// R01AD is the ONLY class they share. Naming it is true; naming H02AB would be a fabrication, and
 		// the issue's expectation that all three rows implicate H02AB does not survive the data.
-		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is budesonide safe for her?",
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", "Is budesonide safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Dexamethasone"), null));
 
@@ -175,7 +174,7 @@ public class CrossReactivityClassChoiceTest {
 		// preference, or if it looks at either drug's codes rather than at the SHARED ones: ketoconazole
 		// carries J02AB (systemic antimycotics) and H02CA, tioconazole carries neither, and the honest
 		// statement about two topical azoles is the topical class.
-		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is tioconazole safe for her?",
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", "Is tioconazole safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Ketoconazole"), null));
 
@@ -191,7 +190,7 @@ public class CrossReactivityClassChoiceTest {
 		// SYSTEMIC use" and D05A is the topical half of the same therapeutic group. Methoxsalen and
 		// trioxsalen share both (D05AD topical, D05BA systemic), so the systemic one has to win from
 		// inside a main group the rule otherwise treats as locally applied.
-		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is trioxsalen safe for her?",
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", "Is trioxsalen safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Methoxsalen"), null));
 
@@ -208,7 +207,7 @@ public class CrossReactivityClassChoiceTest {
 		// aminoglycosides (J01GB); A07AA is their oral, non-absorbed, gut-lumen formulation class, and
 		// it sorts first. Reachable between DIFFERENT substances and not only between route variants of
 		// one, so issue #160's collapse does not hide it.
-		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is neomycin safe for her?",
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", "Is neomycin safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Kanamycin"), null));
 
@@ -224,7 +223,7 @@ public class CrossReactivityClassChoiceTest {
 		// but locally-applied subgroups. So the answer must be the FIRST of those, not the one that
 		// merely happens to sit outside the anatomical main groups — a rule that reads B05CA as
 		// classifying the substance names it here and says something false about both drugs.
-		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is chlorhexidine safe for her?",
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", "Is chlorhexidine safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Neomycin"), null));
 
@@ -240,7 +239,7 @@ public class CrossReactivityClassChoiceTest {
 		// whole reason an ibuprofen allergy says anything about naproxen. The duplicate-therapy arm,
 		// which names the ORDER's own code instead of choosing among shared subgroups, reports M01AE
 		// for a naproxen order (DuplicateInteractionChipTest).
-		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is naproxen safe for her?",
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", "Is naproxen safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Ibuprofen"), null));
 
@@ -259,10 +258,9 @@ public class CrossReactivityClassChoiceTest {
 		// 1839 KB entries that carry codes are ascending — which is why this is the one fixture that
 		// deviates. Verified by mutation on a throwaway tree: dropping the sort makes this read
 		// "(G01AF)" while every other case here stays green.
-		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.ddiFixtureService(DESCENDING_FIXTURE))
-				.validate("", "Is tioconazole safe for her?", DrugReferenceTestSupport.ctx(60, null,
-						null, null, DrugReferenceTestSupport.set("Ketoconazole"), null));
+		List<SafetyWarning> warnings = fixtureValidator(DESCENDING_FIXTURE).validate("",
+				"Is tioconazole safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Ketoconazole"), null));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
 		assertEquals("Tioconazole is in the same ATC class (D01AC) as the patient's allergy to"
@@ -271,24 +269,20 @@ public class CrossReactivityClassChoiceTest {
 	}
 
 	/** The subgroups {@code question}'s entry shares with {@code allergen}, sorted, through the
-	 *  production resolver and the production accessor the arm compares with. */
-	private static List<String> shared(DrugReferenceService service, String question,
+	 *  production resolver and the production accessor the arm compares with. A set intersection
+	 *  rather than a scan, deliberately: the scan is what {@code sharedClass} does, and a hand copy of
+	 *  it here would drift with the production one instead of characterising the data it is given. */
+	private static Set<String> shared(DrugReferenceService service, String question,
 			DrugReference allergen) {
 		List<DrugReference> inPlay = service.findByQuery("Is it safe to give " + question + "?");
 		assertEquals(1, inPlay.size(), question + " must resolve exactly one row, was: "
 				+ DrugReferenceTestSupport.names(inPlay));
-		Set<String> refClasses = inPlay.get(0).atcSubgroups();
-		List<String> out = new ArrayList<String>();
-		for (String subgroup : allergen.atcSubgroups()) {
-			if (refClasses.contains(subgroup)) {
-				out.add(subgroup);
-			}
-		}
-		Collections.sort(out);
+		Set<String> out = new TreeSet<String>(allergen.atcSubgroups());
+		out.retainAll(inPlay.get(0).atcSubgroups());
 		return out;
 	}
 
-	private static DrugSafetyValidator fixtureValidator() throws IOException {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE));
+	private static DrugSafetyValidator fixtureValidator(String fixture) throws IOException {
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(fixture));
 	}
 }

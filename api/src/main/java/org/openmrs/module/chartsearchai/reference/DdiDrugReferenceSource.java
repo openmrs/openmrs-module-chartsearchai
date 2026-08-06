@@ -161,7 +161,11 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			}
 			String a = row.get(0).asText();
 			String b = row.get(1).asText();
-			String severity = severityCache.computeIfAbsent(row.get(2).asText(), s -> s);
+			String normalizedSeverity = normalizeSeverity(row.get(2));
+			if (normalizedSeverity == null) {
+				continue;
+			}
+			String severity = severityCache.computeIfAbsent(normalizedSeverity, s -> s);
 			String gid = row.get(3).asText();
 			if (!byId.containsKey(a) || !byId.containsKey(b)) {
 				continue;
@@ -209,6 +213,25 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 		}
 		log.info("Parsed {} DDInter drug-reference entries", out.size());
 		return out;
+	}
+
+	/** Canonicalizes the closed DDInter severity vocabulary; malformed rows fail closed. */
+	private static String normalizeSeverity(JsonNode value) {
+		if (value == null || !value.isTextual()) {
+			return null;
+		}
+		switch (value.asText().trim().toLowerCase(Locale.ROOT)) {
+			case "unknown":
+				return "Unknown";
+			case "minor":
+				return "Minor";
+			case "moderate":
+				return "Moderate";
+			case "major":
+				return "Major";
+			default:
+				return null;
+		}
 	}
 
 	private static List<DrugReference.Interaction> interactionsFor(List<Link> links, Map<String, DrugRow> byId) {

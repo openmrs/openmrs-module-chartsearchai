@@ -91,6 +91,46 @@ public class JsonDrugReferenceSourceTest {
 	}
 
 	@Test
+	public void oversizedIntegralAgeBoundsAreDiagnosedInsteadOfNarrowed() throws IOException {
+		String json = "{\"packageId\":\"reviewed-v1\",\"version\":\"1\","
+				+ "\"source\":\"test formulary\",\"reviewState\":\"clinically_approved\","
+				+ "\"entries\":[{\"id\":\"ibuprofen\",\"name\":\"Ibuprofen\","
+				+ "\"ageBands\":[{\"minYears\":4294967298,\"maxYears\":4294967307}]}]}";
+
+		List<DrugReference> entries = JsonDrugReferenceSource.parse(stream(json));
+		DrugReferencePackage sourcePackage = JsonDrugReferenceSource.parsePackage(stream(json), "test:memory");
+
+		assertEquals(1, entries.size(), "the drug identity should survive an invalid dose band");
+		assertTrue(entries.get(0).getAgeBands().isEmpty());
+		assertFalse(sourcePackage.isUsableForWarnings());
+		assertTrue(sourcePackage.getIssues().contains("source_data_partially_invalid"));
+	}
+
+	@Test
+	public void malformedInteractionSeverityIsRejectedButAbsentSeverityIsUnrated() throws IOException {
+		String json = "{\"packageId\":\"reviewed-v1\",\"version\":\"1\","
+				+ "\"source\":\"test formulary\",\"reviewState\":\"clinically_approved\","
+				+ "\"entries\":[{\"id\":\"test-drug\",\"name\":\"Test Drug\","
+				+ "\"interactions\":["
+				+ "{\"token\":\"misspelled\",\"severity\":\"Majro\"},"
+				+ "{\"token\":\"numeric\",\"severity\":3},"
+				+ "{\"token\":\"blank\",\"severity\":\"\"},"
+				+ "{\"token\":\"unrated\"},"
+				+ "{\"token\":\"rated\",\"severity\":\"Major\"}]}]}";
+
+		List<DrugReference> entries = JsonDrugReferenceSource.parse(stream(json));
+		DrugReferencePackage sourcePackage = JsonDrugReferenceSource.parsePackage(stream(json), "test:memory");
+
+		assertEquals(1, entries.size());
+		assertEquals(2, entries.get(0).getInteractions().size());
+		assertEquals("unrated", entries.get(0).getInteractions().get(0).getToken());
+		assertEquals("rated", entries.get(0).getInteractions().get(1).getToken());
+		assertEquals("Major", entries.get(0).getInteractions().get(1).getSeverity());
+		assertFalse(sourcePackage.isUsableForWarnings());
+		assertTrue(sourcePackage.getIssues().contains("source_data_partially_invalid"));
+	}
+
+	@Test
 	public void malformedArrayFieldDoesNotDropTheWholeDrugRecord() throws IOException {
 		String json = "{\"packageId\":\"reviewed-v1\",\"version\":\"1\","
 				+ "\"source\":\"test formulary\",\"reviewState\":\"clinically_approved\","

@@ -113,7 +113,9 @@ public class ChatHistoryEndpointTest {
 				+ "\"detail\":\"Review interacting medicines.\"}],"
 				+ "\"safetyCheck\":{\"status\":\"limited\","
 				+ "\"issues\":[\"exposure_incomplete\"]},"
-				+ "\"inDepth\":{\"status\":\"needs_review\"}}");
+					+ "\"inDepth\":{\"status\":\"needs_review\","
+					+ "\"validation\":{\"status\":\"needs_review\","
+					+ "\"summary\":\"One claim is not supported by its cited source.\"}}}");
 		ChartSearchAuditLog audit = new ChartSearchAuditLog();
 		audit.setAuditLogId(42);
 		turn.setAuditLog(audit);
@@ -142,6 +144,9 @@ public class ChatHistoryEndpointTest {
 		assertEquals("exposure_incomplete", ((List<?>) safetyCheck.get("issues")).get(0));
 		Map<String, Object> inDepth = (Map<String, Object>) assistant.get("inDepth");
 		assertEquals("needs_review", inDepth.get("status"));
+		Map<String, Object> inDepthValidation = (Map<String, Object>) inDepth.get("validation");
+		assertEquals("One claim is not supported by its cited source.",
+				inDepthValidation.get("summary"));
 	}
 
 	@Test

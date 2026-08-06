@@ -130,6 +130,25 @@ public class DrugSafetyInteractionSeverityFloorTest {
 	}
 
 	@Test
+	public void presentInvalidSeverityNeverBypassesTheFloorOrReachesPromptContext() {
+		DrugReference ref = new DrugReference();
+		ref.setId("test-drug");
+		ref.setName("Test Drug");
+		DrugReference.Interaction invalid = new DrugReference.Interaction();
+		invalid.setToken("misspelled");
+		invalid.setSeverity("Majro");
+		DrugReference.Interaction unrated = new DrugReference.Interaction();
+		unrated.setToken("curated-unrated");
+		ref.setInteractions(java.util.Arrays.asList(invalid, unrated));
+
+		assertFalse(DrugSafetyValidator.clearsSeverityFloor(invalid, 1));
+		assertTrue(DrugSafetyValidator.clearsSeverityFloor(unrated, 1));
+		String rendered = DrugReferenceInjector.render(ref, null, null).text;
+		assertFalse(rendered.contains("misspelled"));
+		assertTrue(rendered.contains("curated-unrated"));
+	}
+
+	@Test
 	public void classBasedChipsAreUnaffectedByTheFloor() {
 		// The floor governs rule-based chips only: the class arm (duplicate therapy) carries no
 		// severity and keeps firing. Enalapril is not a bundled-sample drug, so no rated rule

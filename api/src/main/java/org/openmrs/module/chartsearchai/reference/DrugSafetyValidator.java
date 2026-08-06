@@ -649,8 +649,8 @@ public class DrugSafetyValidator {
 	/**
 	 * @return the rank of a source-assigned interaction severity in the floor's ordering
 	 *         ({@code unknown}=0 &lt; {@code minor}=1 &lt; {@code moderate}=2 &lt; {@code major}=3),
-	 *         or {@code -1} for null/unrecognized — which the rule filter treats as exempt
-	 *         (unrated is not low-rated).
+	 *         or {@code -1} for null/unrecognized. The caller distinguishes intentionally absent
+	 *         severity from a present invalid value; only the former is exempt from the floor.
 	 */
 	private static int severityRank(String severity) {
 		if (severity == null) {
@@ -679,7 +679,9 @@ public class DrugSafetyValidator {
 	 * {@link DrugReferenceInjector.InteractionNote}; two copies could drift into ranking the same
 	 * pair of rules oppositely, which is how the chip and the prompt text come to disagree.
 	 *
-	 * @return the rank, with null/unrecognized mapped to {@link Integer#MAX_VALUE}
+	 * @return the rank, with null/unrecognized mapped to {@link Integer#MAX_VALUE}. Invalid present
+	 *         severities are rejected by adapters and {@link #clearsSeverityFloor}; this ordering
+	 *         fallback is retained for deliberately unrated rules.
 	 */
 	static int severityPriority(String severity) {
 		int rank = severityRank(severity);
@@ -782,8 +784,8 @@ public class DrugSafetyValidator {
 	 * all is exempt — every curated hand-authored rule is unrated, and unrated is not low-rated.
 	 */
 	static boolean clearsSeverityFloor(DrugReference.Interaction interaction, int floor) {
-		int rank = severityRank(interaction.getSeverity());
-		return rank < 0 || rank >= floor;
+		String severity = interaction.getSeverity();
+		return severity == null || severityRank(severity) >= floor;
 	}
 
 	/**

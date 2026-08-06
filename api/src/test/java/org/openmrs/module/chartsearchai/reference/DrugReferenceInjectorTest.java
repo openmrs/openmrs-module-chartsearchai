@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -669,6 +670,39 @@ public class DrugReferenceInjectorTest {
 				"the question's own drug should be injected");
 		assertTrue(result.getText().contains("Drug reference — Ibuprofen"),
 				"an active order in the same ATC subgroup as the question's drug should be injected");
+	}
+
+	@Test
+	public void unusableRelationshipPackageCannotSelectAnActiveOrderReference() {
+		DrugReference ibuprofen = new DrugReference();
+		ibuprofen.setId("ibuprofen");
+		ibuprofen.setName("Ibuprofen");
+		ibuprofen.setAliases(Collections.singletonList("ibuprofen"));
+		ibuprofen.setAtcCodes(Collections.singletonList("M01AE01"));
+		DrugReference aspirin = new DrugReference();
+		aspirin.setId("aspirin");
+		aspirin.setName("Aspirin");
+		aspirin.setAliases(Collections.singletonList("aspirin"));
+		aspirin.setAtcCodes(Collections.singletonList("N02BA01"));
+
+		CrossReactivityGroup nsaid = new CrossReactivityGroup();
+		nsaid.setName("NSAID");
+		nsaid.setAtcPrefixes(Arrays.asList("M01AE", "N02BA"));
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(Arrays.asList(ibuprofen, aspirin));
+		service.setCrossReactivityGroups(Collections.singletonList(nsaid));
+		service.setCrossReactivityPackage(new DrugReferencePackage(
+				"incomplete-relationships", "json", "1",
+				Collections.<String, Object> emptyMap(),
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED,
+				Collections.singletonList("cross_reactivity_package_identity_incomplete")));
+
+		PatientChart result = DrugReferenceTestSupport.injector(service).injectRecords(
+				oneRecordChart(), context(40, set("N02BA01")), "is ibuprofen safe to prescribe?");
+
+		assertTrue(result.getText().contains("Drug reference — Ibuprofen"),
+				"the question's own drug remains useful classification context");
+		assertFalse(result.getText().contains("Drug reference — Aspirin"),
+				"an unusable relationship package must not steer answer-context selection");
 	}
 
 	@Test

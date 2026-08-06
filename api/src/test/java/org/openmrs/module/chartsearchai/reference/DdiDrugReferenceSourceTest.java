@@ -14,6 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -109,6 +112,24 @@ public class DdiDrugReferenceSourceTest {
 		String severityWord = nsaid.getNote().split("[ .]", 2)[0];
 		assertTrue(SEVERITY.contains(severityWord),
 				"the note should begin with the DDInter severity, was: " + nsaid.getNote());
+	}
+
+	@Test
+	public void malformedSeverityRowsAreDroppedAtTheDdiAdapterBoundary() throws IOException {
+		String json = "{\"drugs\":["
+				+ "{\"id\":\"a\",\"name\":\"Drug A\",\"rxnorm_name\":\"drug a\"},"
+				+ "{\"id\":\"b\",\"name\":\"Drug B\",\"rxnorm_name\":\"drug b\"}],"
+				+ "\"mechanisms\":{\"1\":{\"text\":\"mechanism\"}},"
+				+ "\"interactions\":[[\"a\",\"b\",\"Majro\",\"1\"],"
+				+ "[\"a\",\"b\",\"Major\",\"1\"]]}";
+
+		List<DrugReference> entries = DdiDrugReferenceSource.parse(new ByteArrayInputStream(
+				json.getBytes(StandardCharsets.UTF_8)));
+		DrugReference a = entries.stream().filter(entry -> "Drug A".equals(entry.getName()))
+				.findFirst().orElseThrow();
+
+		assertEquals(1, a.getInteractions().size());
+		assertEquals("Major", a.getInteractions().get(0).getSeverity());
 	}
 
 	@Test

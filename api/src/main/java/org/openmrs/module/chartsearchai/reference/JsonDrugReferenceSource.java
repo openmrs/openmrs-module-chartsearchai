@@ -403,6 +403,8 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 	private static boolean validAgeBand(JsonNode value) {
 		return value != null && value.isObject() && value.path("minYears").isIntegralNumber()
 				&& value.path("maxYears").isIntegralNumber()
+				&& value.path("minYears").canConvertToInt()
+				&& value.path("maxYears").canConvertToInt()
 				&& value.path("minYears").asInt() >= 0
 				&& value.path("maxYears").asInt() >= value.path("minYears").asInt()
 				&& validOptionalDose(value, "mgPerKgMin")
@@ -428,11 +430,25 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 			if (value == null || !value.isObject()
 					|| (ChartSearchAiUtils.isBlank(text(value, "token"))
 							&& ChartSearchAiUtils.isBlank(atc))
-					|| (!ChartSearchAiUtils.isBlank(atc) && !validAtcCode(atc))) {
+					|| (!ChartSearchAiUtils.isBlank(atc) && !validAtcCode(atc))
+					|| !validInteractionSeverity(value)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	private static boolean validInteractionSeverity(JsonNode interaction) {
+		JsonNode severity = interaction == null ? null : interaction.get("severity");
+		if (severity == null || severity.isNull()) {
+			return true;
+		}
+		if (!severity.isTextual() || ChartSearchAiUtils.isBlank(severity.asText())) {
+			return false;
+		}
+		String value = severity.asText().trim();
+		return "unknown".equalsIgnoreCase(value) || "minor".equalsIgnoreCase(value)
+				|| "moderate".equalsIgnoreCase(value) || "major".equalsIgnoreCase(value);
 	}
 
 	private static boolean invalidContraindications(JsonNode values) {

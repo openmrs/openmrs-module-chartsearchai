@@ -512,6 +512,9 @@ public class DrugReferenceInjector {
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_INJECT_FROM_ORDERS);
 		if (fromOrders && context != null) {
 			List<CrossReactivityGroup> groups = drugReferenceService.getCrossReactivityGroups();
+			if (!drugReferenceService.getCrossReactivityPackage().isUsableForWarnings()) {
+				groups = Collections.emptyList();
+			}
 			for (DrugReference ref : drugReferenceService.findByActiveOrders(context)) {
 				// Only when the question names a drug this active order is clinically related to. A
 				// question naming no drug has no relevance anchor, so nothing is injected here
@@ -619,10 +622,15 @@ public class DrugReferenceInjector {
 		// chips — into the front of the prompt, and the model then answered from them. Two probe
 		// cells that correctly abstained on the baseline started reporting "an Unknown severity
 		// interaction between Erythromycin and Lisinopril", i.e. the render path was bypassing a
-		// safety decision the chip path enforces. A sub-floor rule is not promoted; it keeps its
-		// dataset position, exactly as before promotion existed.
+		// safety decision the chip path enforces. A sub-floor or malformed rated rule is omitted
+		// from prompt context just as it is omitted from deterministic warning output.
 		int floor = DrugSafetyValidator.configuredSeverityFloor();
 		for (DrugReference.Interaction i : ref.getInteractions()) {
+			// The prompt and deterministic warning surfaces share one rule set. Sub-floor or
+			// malformed rated rows are absent from both; intentionally unrated curated rows remain.
+			if (!DrugSafetyValidator.clearsSeverityFloor(i, floor)) {
+				continue;
+			}
 			String label = ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
 			String note = ChartSearchAiUtils.firstNonBlank(i.getNote());
 			// Kept identical to the previous rendering: a labelless rule still contributes its bare
@@ -657,8 +665,7 @@ public class DrugReferenceInjector {
 			if (compact.length() >= rendered.length()) {
 				compact = rendered;
 			}
-			boolean promote = context != null && context.hasActiveDrug(i.getToken(), i.getAtc())
-					&& DrugSafetyValidator.clearsSeverityFloor(i, floor);
+			boolean promote = context != null && context.hasActiveDrug(i.getToken(), i.getAtc());
 			(promote ? promoted : rest).add(new InteractionNote(rendered, compact, i.getSeverity()));
 		}
 		// Within the promoted segment, severity — not dataset position — decides who keeps their
@@ -748,8 +755,8 @@ public class DrugReferenceInjector {
 		/** Dataset attribution, or null when the entry declares none. */
 		final String source;
 
-		/** Interaction partners the text does not name — dropped by the budget or, more often, by
-		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all. */
+		/** Interaction rows the text does not name — filtered by policy, dropped by the budget, or,
+		 *  more often, represented by segment 2's single dataset-tail partner; 0 when it names them all. */
 		final int withheldInteractions;
 
 		RenderedReference(String text, String source, int withheldInteractions) {
@@ -887,7 +894,7 @@ public class DrugReferenceInjector {
 			}
 
 			sb.append(" Interactions: ").append(String.join("; ", shown)).append(".");
-			withheld = ordered.size() - shown.size();
+			withheld = ref.getInteractions().size() - shown.size();
 		}
 
 		// The dataset attribution and the withheld count leave with the RenderedReference instead of

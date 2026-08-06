@@ -246,6 +246,10 @@ public final class DrugReferenceTestSupport {
 		}
 		if (withGroups) {
 			svc.setCrossReactivityGroups(bundledGroups());
+			svc.setCrossReactivityPackage(new DrugReferencePackage(
+					"approved-test-relationships", "memory", "1",
+					Collections.<String, Object> emptyMap(),
+					DrugReferencePackage.REVIEW_CLINICALLY_APPROVED));
 		}
 		return svc;
 	}

@@ -152,7 +152,13 @@ public class HubClinicalAnswerProviderTest {
 		Map<String, Object> pending = new LinkedHashMap<>(validated);
 		pending.put("inDepth", Collections.singletonMap("status", "pending"));
 		Map<String, Object> indepthDone = new LinkedHashMap<>(validated);
-		indepthDone.put("inDepth", Collections.singletonMap("status", "done"));
+		Map<String, Object> inDepth = new LinkedHashMap<>();
+		inDepth.put("status", "needs_review");
+		Map<String, Object> inDepthValidation = new LinkedHashMap<>();
+		inDepthValidation.put("status", "needs_review");
+		inDepthValidation.put("summary", "One claim is not supported by its cited source.");
+		inDepth.put("validation", inDepthValidation);
+		indepthDone.put("inDepth", inDepth);
 		Map<String, Object> done = new LinkedHashMap<>(indepthDone);
 		transport.events = Arrays.asList(
 				wire("answer_done", answer),
@@ -183,6 +189,10 @@ public class HubClinicalAnswerProviderTest {
 		assertEquals("Aspirin 81mg.", result.getAnswer().getText());
 		assertEquals("checked",
 				((Map<?, ?>) result.getAnswer().getPayload().get("answerValidation")).get("status"));
+		Map<?, ?> finalInDepth = (Map<?, ?>) result.getAnswer().getPayload().get("inDepth");
+		Map<?, ?> finalInDepthValidation = (Map<?, ?>) finalInDepth.get("validation");
+		assertEquals("One claim is not supported by its cited source.",
+				finalInDepthValidation.get("summary"));
 		assertNull(result.getProblemCode());
 	}
 

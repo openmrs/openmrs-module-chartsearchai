@@ -254,8 +254,15 @@ public class DrugReferenceInjector {
 			index++;
 		}
 
-		log.debug("Injected {} active-order, {} drug-reference and {} safety-finding record(s) into chart "
-				+ "for question '{}'", unrepresented.size(), matched.size(), findings.size(), question);
+		// The drug-reference character total is here because that slice's SIZE is the thing issue #163 is
+		// about and the REST response cannot show it: the response returns only CITED references, so a
+		// question injecting one near-duplicate record per route variant looked identical from outside
+		// while spending several times the prompt budget. A count alone did not settle it either — what
+		// crowds out chart records is characters — so an operator (or a verification pass) can now read
+		// both off one line.
+		log.debug("Injected {} active-order, {} drug-reference ({} chars) and {} safety-finding record(s) "
+				+ "into chart for question '{}'", unrepresented.size(), matched.size(),
+				referenceCharacters(mappings), findings.size(), question);
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
@@ -913,6 +920,19 @@ public class DrugReferenceInjector {
 		// sections above are — the dataset is operator-editable.
 		String source = ChartSearchAiUtils.firstNonBlank(ref.getSource());
 		return new RenderedReference(sb.toString(), source != null ? source.trim() : null, withheld);
+	}
+
+	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the
+	 *          prompt budget the reference slice spends, for the DEBUG line in {@code injectRecords}. */
+	private static int referenceCharacters(List<RecordMapping> mappings) {
+		int chars = 0;
+		for (RecordMapping mapping : mappings) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
+					&& mapping.getText() != null) {
+				chars += mapping.getText().length();
+			}
+		}
+		return chars;
 	}
 
 	/** Adds {@code value} to {@code out} only when it is non-null and non-blank. */

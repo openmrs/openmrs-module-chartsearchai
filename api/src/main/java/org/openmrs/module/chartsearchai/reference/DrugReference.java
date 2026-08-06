@@ -293,6 +293,55 @@ public class DrugReference {
 		return out;
 	}
 
+	/**
+	 * ATC groups that classify a LOCALLY APPLIED formulation rather than the substance itself, each
+	 * identified by the route or site of application in the group's own published name: {@code D}
+	 * "Dermatologicals" and {@code S} "Sensory organs" (whole anatomical main groups), {@code A01}
+	 * "Stomatological preparations", {@code A07E} "Intestinal antiinflammatory agents" (its
+	 * {@code A07EA} is "Corticosteroids acting locally"), {@code C05A} "Antihemorrhoidals for topical
+	 * use", {@code C05B} "Antivaricose therapy" (topical heparinoids, sclerosants for local
+	 * injection), {@code G01} "Gynecological antiinfectives and antiseptics", {@code M02} "Topical
+	 * products for joint and muscular pain", {@code P03A} "Ectoparasiticides, incl. scabicides",
+	 * {@code R01} "Nasal preparations", {@code R02} "Throat preparations", and {@code R03A} /
+	 * {@code R03B}, the two <em>inhalant</em> subgroups of R03 — their {@code R03C} / {@code R03D}
+	 * siblings are for systemic use and are deliberately absent, which is why this list cannot be
+	 * written at main-group granularity throughout.
+	 *
+	 * <p>Deliberately NOT here: {@code N01B} "Anesthetics, local". Its name is the drug class, not the
+	 * site of application — the codes classify the substance, and two local anaesthetics sharing
+	 * {@code N01BB} is exactly the cross-reactivity statement a clinician wants.
+	 *
+	 * <p>Prefixes, and not an exhaustive partition of ATC: anything unlisted counts as classifying the
+	 * substance. That is the safe direction of error for {@link DrugSafetyValidator}'s use of it — a
+	 * group wrongly listed here would demote a class that does explain a cross-reactivity concern,
+	 * while one missing from it merely leaves the pre-existing behaviour in place.
+	 */
+	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections.unmodifiableList(
+			Arrays.asList("A01", "A07E", "C05A", "C05B", "D", "G01", "M02", "P03A", "R01", "R02",
+					"R03A", "R03B", "S"));
+
+	/**
+	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized here the same
+	 *         way {@link #normalizedAtcCodes()} normalizes an entry's — sits in one of the
+	 *         {@link #LOCALLY_APPLIED_ATC_GROUPS}. A substance marketed by several routes carries one
+	 *         code per route, so this is what separates the code that classifies the SUBSTANCE from
+	 *         the codes that classify its topical, nasal, inhaled, ophthalmic or local-oral
+	 *         presentations. Null and blank are not locally applied, like every other ATC comparison
+	 *         here treats them: nothing is known about them at all.
+	 */
+	public static boolean isLocallyAppliedAtcCode(String code) {
+		String normalized = normalizeAtcToken(code);
+		if (normalized == null) {
+			return false;
+		}
+		for (String group : LOCALLY_APPLIED_ATC_GROUPS) {
+			if (normalized.startsWith(group)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public List<AgeBand> getAgeBands() {
 		return ageBands;
 	}

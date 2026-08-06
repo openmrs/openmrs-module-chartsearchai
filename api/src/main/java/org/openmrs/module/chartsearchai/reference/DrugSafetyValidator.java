@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -2204,14 +2205,70 @@ public class DrugSafetyValidator {
 		return out;
 	}
 
-	/** @return the ATC level-4 subgroup {@code other} shares with {@code refClasses}, or null when none. */
+	/**
+	 * @return the ATC level-4 subgroup {@code other} shares with {@code refClasses} that best explains
+	 *         a cross-reactivity concern between them — the one classifying the SUBSTANCE where they
+	 *         share one, else the locally-applied one they do share — or null when they share none.
+	 *
+	 * <p><b>The defect this exists to fix (issue #161).</b> This returned the first shared subgroup in
+	 * the allergen's own ATC array. Every array in the shipped 19 MB KB is in ascending code order
+	 * (measured 2026-08-06: 1839 of the 1839 entries carrying codes), so "first" meant "alphabetically
+	 * smallest" — and ATC's alphabet front-loads the locally-applied groups: A01 stomatological, C05A
+	 * topical, D dermatological all sort ahead of H, J, L, M and N. A substance marketed by several
+	 * routes carries a code for each, so the chip systematically justified a systemic concern with a
+	 * topical class. Reported live against a dexamethasone allergy (issue #161): methylprednisolone as
+	 * {@code D10AA} (anti-acne preparations), an injected hydrocortisone as {@code A01AC}
+	 * (corticosteroids for local ORAL treatment) — both reproduced in-process from the same KB rows by
+	 * {@code CrossReactivityClassChoiceTest}, while prednisone, whose only shared subgroup IS
+	 * {@code H02AB}, was right in the same answer. The finding was right and its stated reason was
+	 * not, which is the failure a clinician checks and then stops trusting.
+	 *
+	 * <p><b>Why prefer the systemic class rather than match the order's route.</b> The route is not
+	 * available here, and could only ever be available on one of the two call sites. This arm runs
+	 * both for a drug the QUESTION names, which has no route at all, and for one the patient is on
+	 * ({@link #addActiveOrderContraindications}) — and even there it receives a resolved
+	 * {@link DrugReference}, not the order. Nothing carries the route that far:
+	 * {@link PatientClinicalContextBuilder} reads a {@code DrugOrder}'s name concepts and its ATC
+	 * mappings, never {@code getRoute()}, and {@link PatientClinicalContext.ActiveDrugOrder}'s display
+	 * is the order's first NAME rather than a dosing line. Route-matching is therefore not a smaller
+	 * change than this one but a larger one — a new field on the context, a route-concept-to-ATC
+	 * mapping the module does not have — and it would still leave the question-driven half of this
+	 * arm choosing by some other rule.
+	 *
+	 * <p><b>And why not report the shared level-3 group instead</b>, which the issue offers as the
+	 * answer that is coarser but never false. Measured over the shipped KB (2026-08-06; re-measure
+	 * before relying on any figure here): of the 1090 drug pairs that share more than one level-4
+	 * subgroup, <b>1041 still share more than one level-3 group</b>.
+	 * Dexamethasone and hydrocortisone share six subgroups spanning six different level-3 groups, so
+	 * the collapse removes the chemical subgroup — the part that carries the cross-reactivity claim —
+	 * without removing the choice it was supposed to settle.
+	 *
+	 * <p><b>A preference, never a filter.</b> Of those 1090 pairs, 560 share no systemic subgroup at
+	 * all: two topical azoles, two ophthalmic preparations, two local anaesthetic formulations. For
+	 * them the locally-applied class IS the honest answer and is kept. 265 pairs change; in the rest a
+	 * systemic subgroup was already being named. In 77 the systemic tier itself holds more than one
+	 * candidate and the tie-break between them is still alphabetical — both are true statements about
+	 * the substance, so this is a choice between honest answers rather than the defect above.
+	 *
+	 * <p>Sorted rather than in the allergen's array order so the result is a function of the two code
+	 * SETS and not of the position a dataset happened to write a code in. That is a no-op on the
+	 * shipped KB, whose arrays are already ascending, and is therefore not separately pinned by a
+	 * test; it is what keeps a KB refresh that reorders an array from silently rewording a chip.
+	 */
 	private static String sharedClass(Set<String> refClasses, DrugReference other) {
-		for (String cls : other.atcSubgroups()) {
-			if (refClasses.contains(cls)) {
-				return cls;
+		String locallyApplied = null;
+		for (String subgroup : new TreeSet<String>(other.atcSubgroups())) {
+			if (!refClasses.contains(subgroup)) {
+				continue;
+			}
+			if (!DrugReference.isLocallyAppliedAtcCode(subgroup)) {
+				return subgroup;
+			}
+			if (locallyApplied == null) {
+				locallyApplied = subgroup;
 			}
 		}
-		return null;
+		return locallyApplied;
 	}
 
 	/**

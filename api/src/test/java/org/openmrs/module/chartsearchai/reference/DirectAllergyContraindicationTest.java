@@ -52,11 +52,12 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p>That pair shares <em>two</em> level-4 subgroups, not one — {@code J01MA} (J01MA02/J01MA12,
  * fluoroquinolone antibacterials) and {@code S01AE} (S01AE03/S01AE05, ophthalmic
- * fluoroquinolones) — because DDInter files both substances under several ATC codes. {@code
- * sharedClass} returns the first of the allergen's subgroups that the drug in play also carries, so
- * the case below asserting {@code (J01MA)} is pinning the dataset's own code order as well as the
- * match; a KB refresh that reordered Ciprofloxacin's {@code atc} array would report {@code S01AE}
- * with the behaviour unchanged.
+ * fluoroquinolones) — because DDInter files both substances under several ATC codes. Since issue
+ * #161 {@code sharedClass} prefers the subgroup that classifies the substance over one that
+ * classifies a locally applied formulation, so {@code J01MA} is chosen over the ophthalmic
+ * {@code S01AE} whichever order the arrays are in, and the case below asserting {@code (J01MA)} no
+ * longer pins the dataset's code order. Both halves of what this paragraph used to say were
+ * falsified by that change and have been removed rather than renumbered.
  *
  * <p>The curated cross-reactivity groups are loaded in every case here, deliberately: the identity
  * chip has to appear for an entry the real curated data genuinely cannot classify, not merely for

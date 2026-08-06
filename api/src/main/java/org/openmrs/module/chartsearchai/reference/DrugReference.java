@@ -484,8 +484,11 @@ public class DrugReference {
 	}
 
 	/**
-	 * The ATC subgroups that assert NOTHING about the substances filed under them, so that two drugs
-	 * sharing one are not thereby related at all (issue #167).
+	 * The ATC groups that assert NOTHING about the substances filed under them, so that two drugs
+	 * sharing one are not thereby related at all (issue #167). Prefixes at whatever level ATC states
+	 * the property at — mostly level-4 subgroups, but {@code V03A} and {@code V07A} are level-3, which
+	 * is why this is named for GROUPS the way {@link #LOCALLY_APPLIED_ATC_GROUPS} is and not for the
+	 * {@value #ATC_SUBGROUP_PREFIX_LENGTH}-character subgroups the matching itself compares.
 	 *
 	 * <p><b>Why a residual bucket is not automatically one of these.</b> ATC files a residue in most of
 	 * its groups — a level-4 subgroup whose published name begins "Other" or "Various", meaning
@@ -576,7 +579,7 @@ public class DrugReference {
 	 * the per-group or per-child judgement named above, and what this module does have instead is the
 	 * curated cross-reactivity groups, which every vetoed pair still falls through to.
 	 */
-	private static final List<String> UNCLASSIFYING_ATC_SUBGROUPS = Collections
+	private static final List<String> UNCLASSIFYING_ATC_GROUPS = Collections
 			.unmodifiableList(Arrays.asList("A01AD", "A07AX", "B05CX", "C05AX", "C05BX", "D01AE",
 					"D02AX", "D03AX", "D04AX", "D05AX", "D06AX", "D06BX", "D08AX", "D10AX", "D11AX",
 					"G01AX", "M02AX", "P03AX", "R01AX", "R02AX", "R03BX", "S01AX", "S01EX", "S01GX",
@@ -585,7 +588,7 @@ public class DrugReference {
 	/**
 	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized as
 	 *         {@link #isLocallyAppliedAtcCode} normalizes its argument — sits in one of the
-	 *         {@link #UNCLASSIFYING_ATC_SUBGROUPS}, i.e. whether it is a residual bucket that tells a
+	 *         {@link #UNCLASSIFYING_ATC_GROUPS}, i.e. whether it is a residual bucket that tells a
 	 *         reader nothing about the substances in it. Null and blank are not: nothing is known about
 	 *         them at all, which is a different answer from "known to mean nothing".
 	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.sharedClass}) for the
@@ -594,7 +597,7 @@ public class DrugReference {
 	 */
 	static boolean isUnclassifyingAtcCode(String code) {
 		String normalized = normalizeAtcToken(code);
-		return normalized != null && fallsUnderAnyGroup(normalized, UNCLASSIFYING_ATC_SUBGROUPS);
+		return normalized != null && fallsUnderAnyGroup(normalized, UNCLASSIFYING_ATC_GROUPS);
 	}
 
 	/** @return whether the already-normalized {@code code} sits under any of {@code groups} — the one

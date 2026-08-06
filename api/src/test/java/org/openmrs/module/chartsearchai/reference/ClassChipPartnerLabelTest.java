@@ -10,10 +10,13 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.junit.jupiter.api.Test;
 
@@ -46,8 +49,12 @@ public class ClassChipPartnerLabelTest {
 	private static final String FIXTURE = "chartsearchai-test/ddi-class-partner-canonical-row.json";
 
 	/** The three {@code WHOATC} codes the 3.7.1 demo dictionary maps an aspirin order's concept to. */
-	private static final java.util.Set<String> ASPIRIN_ORDER_CODES = DrugReferenceTestSupport
+	private static final Set<String> ASPIRIN_ORDER_CODES = DrugReferenceTestSupport
 			.set("A01AD05", "B01AC06", "N02BA01");
+
+	/** The code a systemic cyclosporine order's concept maps to, and the one BOTH cyclosporine rows of
+	 *  the fixture publish — which is what makes "the entry carrying this code" ambiguous at all. */
+	private static final String CYCLOSPORINE_ORDER_CODE = "L04AD01";
 
 	/** The curated seed's own aspirin rule, unrated and so exempt from the severity floor, which is
 	 *  why both these cases carry it. Its ATC is {@code B01AC06} — one of the aspirin order's three
@@ -102,6 +109,27 @@ public class ClassChipPartnerLabelTest {
 	}
 
 	@Test
+	public void theFixtureReallyListsTheRouteQualifiedRowFirst() throws IOException {
+		// The precondition the issue #174 case rests on and could not otherwise state: first-wins and
+		// canonicalRow only DISAGREE while the route-qualified row is listed ahead of the plain one and
+		// both publish the same code. Regenerate this slice in a different row order and the case below
+		// goes green whichever resolution is in force, and the regression walks back in unnoticed —
+		// which is exactly the warning DrugReferenceTestSupport.DDI_ROUTE_VARIANTS carries for its own
+		// slice. Through the real parser, so it characterises what the validator will actually load.
+		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
+
+		assertEquals(Arrays.asList("Tacrolimus", "Cyclosporine (ophthalmic)", "Cyclosporine"),
+				DrugReferenceTestSupport.names(entries),
+				"the route-qualified cyclosporine row must be listed FIRST");
+		assertEquals(new TreeSet<String>(entries.get(2).normalizedAtcCodes()),
+				new TreeSet<String>(entries.get(1).normalizedAtcCodes()),
+				"and both rows must publish the same codes, or the code the order maps to picks a row "
+						+ "on its own and there is nothing for canonicalRow to decide");
+		assertTrue(entries.get(1).normalizedAtcCodes().contains(CYCLOSPORINE_ORDER_CODE),
+				"including the one the order maps to");
+	}
+
+	@Test
 	public void anOrderTheDatasetFilesAsSeveralRowsIsNamedBySubstance() throws IOException {
 		// Issue #174 site 1. The class sentence rides inside the folded chip here, which is what a
 		// systemic cyclosporine order actually produces: the KB rates the tacrolimus pair Major, so the
@@ -115,7 +143,7 @@ public class ClassChipPartnerLabelTest {
 		List<SafetyWarning> warnings = validator.validate("", "Is it safe to give tacrolimus?",
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Cyclosporine 100mg"),
-						DrugReferenceTestSupport.set("L04AD01"), null, null));
+						DrugReferenceTestSupport.set(CYCLOSPORINE_ORDER_CODE), null, null));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
 		assertEquals("Tacrolimus interacts with active order cyclosporine — Major. Coadministration of"

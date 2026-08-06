@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.IOException;
@@ -69,6 +70,15 @@ public class MultiCodeClassChipTest {
 		shared.retainAll(metronidazole.atcSubgroups());
 		assertEquals("[G01AF, J01XD, P01AB]", shared.toString(),
 				"the pair must share three level-4 subgroups");
+
+		// …and the second half of this test's name, which it used to promise without checking. A rated
+		// row correlating the pair would fold the sentences into one chip whatever classRelationships
+		// did, so "three sentences before, one after" would stop being what the cases below measure.
+		for (DrugReference.Interaction rule : tinidazole.get(0).getInteractions()) {
+			assertNotEquals("metronidazole", DrugReference.normalizeName(rule.getToken()),
+					"no rule may correlate the pair, or there is nothing to observe: "
+							+ rule.getToken() + "/" + rule.getAtc());
+		}
 	}
 
 	@Test

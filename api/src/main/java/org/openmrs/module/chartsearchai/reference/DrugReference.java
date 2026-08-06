@@ -320,12 +320,15 @@ public class DrugReference {
 	 * here demotes a class that does explain a cross-reactivity concern. A group missing from it does
 	 * NOT merely leave the pre-existing answer in place: it becomes the answer as soon as it sorts
 	 * ahead of the systemic subgroup the pair also shares, since {@link DrugSafetyValidator}'s scan
-	 * takes the first shared subgroup this method does not veto. That is how {@code A07A},
-	 * {@code B02BC}, {@code B05C} and {@code G02CC} came to be here — written at main-group
-	 * granularity the list moved 21 shipped-KB pairs onto one of them, ibuprofen/naproxen among them
-	 * (measured 2026-08-06; {@code CrossReactivityClassChoiceTest} pins one case per group, save
-	 * {@code B02BC}, whose only shipped-KB pairs are epinephrine route variants that issue #160
-	 * collapses to an identity chip before this arm can name a class).
+	 * takes the first shared subgroup this method does not veto.
+	 *
+	 * <p>That is how {@code A07A}, {@code B02BC}, {@code B05C} and {@code G02CC} came to be here.
+	 * Without them, 45 of the shipped KB's 1090 multi-subgroup pairs named one of the four — among them
+	 * ibuprofen/naproxen reading {@code G02CC} instead of {@code M01AE} — and 21 of the 45 had been
+	 * moved onto one by this rule itself rather than merely left there (measured 2026-08-06).
+	 * {@code CrossReactivityClassChoiceTest} pins one case per group, save {@code B02BC}: its only
+	 * shipped-KB pairs are epinephrine route variants, which issue #160 collapses to an identity chip
+	 * before this arm can name a class at all.
 	 */
 	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections
 			.unmodifiableList(Arrays.asList("A01", "A07A", "A07E", "B02BC", "B05C", "C05A", "C05B",
@@ -340,13 +343,14 @@ public class DrugReference {
 	 * this whole rule exists to fix. Measured over the shipped KB (2026-08-06), only {@code D05B} is
 	 * reachable there, in three pairs, all psoralens: methoxsalen and trioxsalen share {@code D05AD}
 	 * (topical) and {@code D05BA} (systemic) and would be reported as sharing the topical one. The
-	 * other three change no pair in that KB and are here on ATC's wording alone, like every entry in
-	 * both lists — removing them breaks no test.
+	 * other three change no pair in that KB — they are here on the criterion rather than on measured
+	 * impact, and removing them breaks no test.
 	 *
 	 * <p>An exception list here, while R03's systemic halves are handled by leaving {@code R03C} and
-	 * {@code R03D} out of the list above, because the two groups are shaped differently: under R03 the
-	 * locally applied part is the minority and is cheaper to name, under D and R01 it is nearly all of
-	 * the group and the exception is.
+	 * {@code R03D} out of the list above, because the shapes differ: under D and R01 the locally
+	 * applied part is nearly all of the group, so naming the exceptions is the shorter thing to write,
+	 * while R03 splits evenly and its two inhalant halves are shorter to name than the group plus two
+	 * exceptions.
 	 */
 	private static final List<String> SYSTEMIC_USE_ATC_GROUPS = Collections
 			.unmodifiableList(Arrays.asList("D01B", "D05B", "D10B", "R01B"));
@@ -357,11 +361,14 @@ public class DrugReference {
 	 *         {@link #LOCALLY_APPLIED_ATC_GROUPS} and not in one of the
 	 *         {@link #SYSTEMIC_USE_ATC_GROUPS} nested inside them. A substance marketed by several
 	 *         routes carries one code per route, so this is what separates the code that classifies
-	 *         the SUBSTANCE from the codes that classify its topical, nasal, inhaled, ophthalmic or
-	 *         local-oral presentations. Null and blank are not locally applied, like every other ATC
-	 *         comparison here treats them: nothing is known about them at all.
+	 *         the SUBSTANCE from the codes that classify a locally applied presentation of it. Null and
+	 *         blank are not locally applied, like every other ATC comparison here treats them: nothing
+	 *         is known about them at all.
+	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.sharedClass}) on purpose:
+	 *         it is a rule about ATC's own group names, not a fact about a substance, so nothing
+	 *         outside this package should be asking it.
 	 */
-	public static boolean isLocallyAppliedAtcCode(String code) {
+	static boolean isLocallyAppliedAtcCode(String code) {
 		String normalized = normalizeAtcToken(code);
 		if (normalized == null) {
 			return false;

@@ -49,12 +49,12 @@ import org.junit.jupiter.api.Test;
  * subgroup share no systemic one at all, so the fallback is the common case and not a corner; the
  * figure is recorded once, in {@code DrugSafetyValidator.sharedClass}'s javadoc.
  *
- * <p><b>And the group whose route is named below the main group.</b> Three of the cases here exist
- * because a prefix list written at anatomical-main-group granularity misses those: {@code A07A}
- * "Intestinal antiinfectives", {@code B05C} "Irrigating solutions" and {@code G02CC}
- * "Antiinflammatory products for vaginal administration" all sort ahead of the systemic class their
- * pair also shares, so leaving one out does not leave the old answer in place — it makes that group
- * the new answer.
+ * <p><b>And the groups whose route is named below the anatomical main group.</b> Three cases here are
+ * the ones a prefix list written at main-group granularity gets wrong: {@code A07A} "Intestinal
+ * antiinfectives", {@code B05C} "Irrigating solutions" and {@code G02CC} "Antiinflammatory products
+ * for vaginal administration" each sort ahead of the class their pair shares that does explain the
+ * concern, so leaving one out of the list does not leave the old answer in place — it makes that
+ * group the new answer.
  */
 public class CrossReactivityClassChoiceTest {
 
@@ -109,21 +109,21 @@ public class CrossReactivityClassChoiceTest {
 		assertNotNull(kanamycin, "the fourth allergy must resolve too");
 		assertEquals("[A07AA, J01GB, S01AA]", shared(service, "neomycin", kanamycin).toString(),
 				"the aminoglycosides share an INTESTINAL-antiinfective subgroup that sorts ahead of "
-						+ "their systemic one, and A07 is not an anatomical main group in the list");
+						+ "their systemic one");
 
 		DrugReference neomycin = service.lookupByToken("Neomycin");
 		assertNotNull(neomycin, "the fifth allergy must resolve too");
 		assertEquals("[A01AB, B05CA, S02AA, S03AA]",
 				shared(service, "chlorhexidine", neomycin).toString(),
 				"while neomycin and chlorhexidine share four subgroups and NO systemic one — an "
-						+ "irrigating-solution subgroup among them, which sorts ahead of three of the "
-						+ "four but classifies a formulation like they do");
+						+ "irrigating-solution subgroup among them, which classifies a formulation "
+						+ "exactly as the other three do");
 
 		DrugReference ibuprofen = service.lookupByToken("Ibuprofen");
 		assertNotNull(ibuprofen, "the sixth allergy must resolve too");
 		assertEquals("[G02CC, M01AE, M02AA]", shared(service, "naproxen", ibuprofen).toString(),
-				"and the two commonest NSAIDs share a VAGINAL-administration subgroup that sorts "
-						+ "ahead of the propionic-acid one that actually relates them");
+				"and ibuprofen and naproxen share a VAGINAL-administration subgroup that sorts ahead "
+						+ "of the propionic-acid one that actually relates them");
 	}
 
 	@Test
@@ -206,8 +206,8 @@ public class CrossReactivityClassChoiceTest {
 		// "Intestinal antiinfectives" names its site one level down — exactly as A07E "Intestinal
 		// antiinflammatory agents" does, which the list already carries. Neomycin and kanamycin are
 		// aminoglycosides (J01GB); A07AA is their oral, non-absorbed, gut-lumen formulation class, and
-		// it sorts first. Reachable on 30 shipped-KB pairs of DIFFERENT substances, so no route-variant
-		// collapse hides it.
+		// it sorts first. Reachable between DIFFERENT substances and not only between route variants of
+		// one, so issue #160's collapse does not hide it.
 		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is neomycin safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Kanamycin"), null));
@@ -235,10 +235,11 @@ public class CrossReactivityClassChoiceTest {
 
 	@Test
 	public void twoNsaidsAreNotRelatedByAVaginalPreparationClass() throws IOException {
-		// The clinically loudest instance of the same gap, and one the alphabet reaches on the two
-		// commonest NSAIDs in the dataset: G02CC is "Antiinflammatory products for vaginal
-		// administration" and sorts ahead of M01AE, the propionic-acid subgroup that is the whole
-		// reason an ibuprofen allergy says anything about naproxen.
+		// The clinically loudest instance of the same gap: G02CC is "Antiinflammatory products for
+		// vaginal administration" and sorts ahead of M01AE, the propionic-acid subgroup that is the
+		// whole reason an ibuprofen allergy says anything about naproxen. The duplicate-therapy arm,
+		// which names the ORDER's own code instead of choosing among shared subgroups, reports M01AE
+		// for a naproxen order (DuplicateInteractionChipTest).
 		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is naproxen safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Ibuprofen"), null));
@@ -250,11 +251,12 @@ public class CrossReactivityClassChoiceTest {
 
 	@Test
 	public void theAnswerDoesNotDependOnTheAllergenArraysCodeOrder() throws IOException {
-		// The invariant the sort exists for, on the only tier where array order can decide anything: a
-		// pair sharing two locally-applied subgroups and no systemic one. Ketoconazole's atc array is
-		// written descending in this fixture, so a scan in array order reaches G01AF first and reports
-		// it; the sorted scan reports D01AC either way. Not observable on a verbatim slice — all 1839
-		// KB entries that carry codes are ascending — which is why this is the one fixture that
+		// The invariant the sort exists for, on a pair that shares two subgroups of ONE tier — two
+		// locally-applied ones and no systemic one — which is where array order decides. (The systemic
+		// tier has the same property; that is issue #168's alphabetical tie-break.) Ketoconazole's atc
+		// array is written descending in this fixture, so a scan in array order reaches G01AF first and
+		// reports it; the sorted scan reports D01AC either way. Not observable on a verbatim slice — all
+		// 1839 KB entries that carry codes are ascending — which is why this is the one fixture that
 		// deviates. Verified by mutation on a throwaway tree: dropping the sort makes this read
 		// "(G01AF)" while every other case here stays green.
 		List<SafetyWarning> warnings = DrugReferenceTestSupport

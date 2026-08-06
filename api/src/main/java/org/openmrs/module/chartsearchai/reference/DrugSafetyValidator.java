@@ -1061,9 +1061,10 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>Only the RULE chips are recorded. A class-only chip ({@link #classRelationships}) states a
 	 * different fact in different words, and the screening arm raises no such chip, so there is nothing
-	 * for it to repeat. (Until issue #171 there was a second reason — the class arm identified its
-	 * partner by an ATC code rather than an entry, so it could not have keyed this ledger. It now
-	 * identifies it by the very same {@code substanceGroupKey}, so only the first reason is left.) The arm's own
+	 * for it to repeat. (There used to be a second reason — the class arm could not key this ledger,
+	 * having only an ATC code where this wants an entry. Issue #171 gave it
+	 * {@link DrugReference#substanceGroupKey()}, so that reason is gone and only the first is
+	 * load-bearing.) The arm's own
 	 * doubling — one pair reached from each of its two orders — is a different question with its own key,
 	 * inside the arm.
 	 */
@@ -2489,14 +2490,13 @@ public class DrugSafetyValidator {
 	 * flattened set (issue #118's fallback) offers.
 	 *
 	 * <p><b>Where the ladder does not hold its promise</b>, stated rather than left to be rediscovered:
-	 * an order the dataset covers only PARTLY climbs two different rungs — its covered codes key on the
-	 * entry, its uncovered ones on the order — and becomes two partners, which is one chip too many.
-	 * The shipped 19 MB KB cannot produce it (every row of a substance publishes the same ATC list, so
-	 * an order's codes resolve all-or-nothing), and the bundled four-entry seed can, though no subject
-	 * it carries shares a subgroup with the second partner. Closing it means grouping by ORDER first and
-	 * resolving the entry from the group, which is a behaviour change with its own measurement, not a
-	 * comment. Same root for the builder's KNOWN GAP: a nameless order reaches
-	 * {@link PatientClinicalContext#getActiveDrugAtcCodes()} without reaching
+	 * "one partner rather than one per code" holds for an order the dataset covers wholly or not at all.
+	 * An order it covers only PARTLY climbs two different rungs — the covered codes key on the entry,
+	 * the uncovered ones on the order — and becomes two partners, which is one chip too many. Whether
+	 * any deployment's concept dictionary and loaded dataset actually disagree that way is not measured;
+	 * closing it means grouping by ORDER first and resolving the entry from the group, which is a
+	 * behaviour change with its own measurement, not a comment. Same root for the builder's KNOWN GAP: a
+	 * nameless order reaches {@link PatientClinicalContext#getActiveDrugAtcCodes()} without reaching
 	 * {@code getActiveDrugOrders()}, so every rung fails and each of its codes is its own partner.
 	 *
 	 * <p><b>The label follows the same ladder</b> (issue #155). It used to be the entry's label or,

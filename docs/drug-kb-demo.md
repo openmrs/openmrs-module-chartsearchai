@@ -400,9 +400,11 @@ entry dataset).
 > bare code appeared because no KB entry carries `N02BA01`; wording as of the sentence-detail
 > refactor — the 2026-07-10 capture predates the leading subject). **Issue #155 has since removed
 > the bare code from that chip**: the partner is named by the dataset's entry, else by the ORDER's
-> own display name, and only then by the code — so the same probe now reads "as active order
-> Aspirin 81mg". The capture is left as recorded rather than rewritten, because it is what was
-> measured that day. Both Decision-27 paths were live-verified end-to-end that day
+> own display name, and only then by the code. What that produces for this exact configuration is
+> pinned by `ClassChipPartnerLabelTest.anOrderTheDatasetDoesNotCoverIsNamedByItsOwnDisplayName`,
+> which drives the real bundled seed through the real validator — read the assertion there rather
+> than trusting this paragraph. The 2026-07-10 capture is left as recorded rather than rewritten,
+> because it is what was measured that day. Both Decision-27 paths were live-verified end-to-end that day
 > (weight arm: `~1000 mg exceeds the 15 mg/kg per-dose maximum (~750 mg) … weight 50 kg`,
 > driven by the bundled CIEL default with no GP row).
 

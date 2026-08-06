@@ -329,6 +329,11 @@ public class DrugReference {
 	 * this whole rule exists to fix — measured over the shipped KB (2026-08-06), three pairs, all
 	 * psoralens: methoxsalen and trioxsalen share {@code D05AD} (topical) and {@code D05BA} (systemic)
 	 * and would be reported as sharing the topical one.
+	 *
+	 * <p>An exception list here, while R03's systemic halves are handled by leaving {@code R03C} and
+	 * {@code R03D} out of the list above, because the two groups are shaped differently: under R03 the
+	 * locally applied part is the minority and is cheaper to name, under D and R01 it is nearly all of
+	 * the group and the exception is.
 	 */
 	private static final List<String> SYSTEMIC_USE_ATC_GROUPS = Collections
 			.unmodifiableList(Arrays.asList("D01B", "D05B", "D10B", "R01B"));

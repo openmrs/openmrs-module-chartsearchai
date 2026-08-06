@@ -211,12 +211,12 @@ chartsearchai delegates all retrieval to the [openmrs-module-querystore](https:/
 3. Global properties set per the table below.
 4. Indexing is lazy on first chart access — no backfill task needed.
 
-| Property | Value | Description |
-|----------|-------|-------------|
-| `chartsearchai.querystore.topK` | `30` | Number of records querystore returns per query; the LLM then filters them. querystore is a required module and is always the retrieval path — there is no toggle to disable it |
+| Property | Value                   | Description |
+|----------|-------------------------|-------------|
+| `chartsearchai.querystore.topK` | `12`                    | Number of similarity records requested from querystore.searchByPatient. In queryScoped mode (the default chartMode) this sizes the query-scoped slice the LLM actually sees, alongside the question's complete typed scope; in fullChart mode it only sizes the optional focus hint when chartsearchai.embedding.preFilter is true (and is unused when preFilter is false, so it has no effect on the default fullChart path). |
 | `querystore.embedding.modelFilePath` | `querystore/model.onnx` | Path to the ONNX embedder, relative to `<openmrs-application-data-directory>`. Querystore ships this with an empty default (the module is model-agnostic), so a fresh install must set it |
-| `querystore.embedding.vocabFilePath` | `querystore/vocab.txt` | Path to the WordPiece vocab, same convention |
-| `querystore.embedding.queryModelFilePath` | *(empty)* | Leave empty for `e5-base-v2`; set only for dual-encoder models like MedCPT |
+| `querystore.embedding.vocabFilePath` | `querystore/vocab.txt`  | Path to the WordPiece vocab, same convention |
+| `querystore.embedding.queryModelFilePath` | *(empty)*               | Leave empty for `e5-base-v2`; set only for dual-encoder models like MedCPT |
 
 **Migration caveat — the legacy embedding pipelines are no longer self-maintaining.** chartsearchai no longer refreshes its own Lucene/Elasticsearch/MySQL embedding indices when charts change: chartsearchai now reacts to a chart write only by invalidating the answer cache (and, when `chartsearchai.prewarm.refreshOnEdit` is on, re-pinning that patient's prewarm KV) — detected via core #6084 service events, not AOP advice — and the bulk backfill task has been removed (querystore owns retrieval-index freshness via the same core events). If you run the legacy preFilter pipelines (`chartsearchai.querystore.enabled=false` + `chartsearchai.embedding.preFilter=true`), embeddings are still built lazily on first chart access but then go progressively stale on every subsequent edit, and patient merges leak the merged patient's data through retrieval. There is no longer a rebuild task, so treat the querystore-backed path (`chartsearchai.querystore.enabled=true`) as the supported configuration for retrieval that stays current with edits.
 

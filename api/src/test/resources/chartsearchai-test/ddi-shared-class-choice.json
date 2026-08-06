@@ -2,10 +2,34 @@
     "metadata": {
         "schema_version": "1.0",
         "title": "Test fixture: an allergen sharing SEVERAL ATC level-4 subgroups with the drug in play",
-        "note": "Rows copied field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, in KB order, for issue #161. Each corticosteroid shares the systemic subgroup H02AB with Dexamethasone AND at least one locally-applied subgroup that sorts ahead of it; Budesonide shares only R01AD; Ketoconazole/Tioconazole share only locally-applied subgroups; Methoxsalen/Trioxsalen share a topical and a systemic subgroup of the SAME dermatological main group (D05AD vs D05BA). Interactions are empty deliberately: this file asserts contraindication chip TEXT, and an interaction chip would have to be filtered out of every assertion."
+        "note": "Rows copied field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, in KB order, for issue #161. Each corticosteroid shares the systemic subgroup H02AB with Dexamethasone AND at least one locally-applied subgroup that sorts ahead of it; Budesonide shares only R01AD; Ketoconazole/Tioconazole share only locally-applied subgroups; Methoxsalen/Trioxsalen share a topical and a systemic subgroup of the SAME dermatological main group (D05AD vs D05BA). The last five rows carry the locally-applied groups that are NOT an anatomical main group and whose route is named one or two levels down: Kanamycin/Neomycin share A07AA (intestinal antiinfectives) and J01GB, Neomycin/Chlorhexidine share B05CA (irrigating solutions) and nothing systemic, Ibuprofen/Naproxen share G02CC (vaginal administration) and M01AE. Interactions are empty deliberately: this file asserts contraindication chip TEXT, and an interaction chip would have to be filtered out of every assertion."
     },
     "mechanisms": {},
     "drugs": [
+        {
+            "id": "DDInter1004",
+            "name": "Kanamycin",
+            "rxcui": "6099",
+            "rxnorm_name": "kanamycin",
+            "drugbank_id": "DB01172",
+            "atc": [
+                "A07AA08",
+                "J01GB04",
+                "S01AA24"
+            ],
+            "ciel": [
+                {
+                    "code": "78385",
+                    "uuid": "78385AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Kanamycin"
+                },
+                {
+                    "code": "78386",
+                    "uuid": "78386AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Kanamycin sulfate"
+                }
+            ]
+        },
         {
             "id": "DDInter1008",
             "name": "Ketoconazole",
@@ -94,6 +118,210 @@
             ]
         },
         {
+            "id": "DDInter1266",
+            "name": "Naproxen",
+            "rxcui": "7258",
+            "rxnorm_name": "naproxen",
+            "drugbank_id": "DB00788",
+            "atc": [
+                "G02CC02",
+                "M01AE02",
+                "M02AA12"
+            ],
+            "ciel": [
+                {
+                    "code": "105089",
+                    "uuid": "105089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Naproxen / pseudoephedrine"
+                },
+                {
+                    "code": "80395",
+                    "uuid": "80395AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Naproxen"
+                },
+                {
+                    "code": "80396",
+                    "uuid": "80396AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Naproxen sodium"
+                }
+            ]
+        },
+        {
+            "id": "DDInter1277",
+            "name": "Neomycin",
+            "rxcui": "7299",
+            "rxnorm_name": "neomycin",
+            "drugbank_id": "DB00994",
+            "atc": [
+                "A01AB08",
+                "A07AA01",
+                "B05CA09",
+                "D06AX04",
+                "J01GB05",
+                "R02AB01",
+                "S01AA03",
+                "S02AA07",
+                "S03AA01"
+            ],
+            "ciel": [
+                {
+                    "code": "103596",
+                    "uuid": "103596AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Antipyrine / hydrocortisone / neomycin / polymyxin B"
+                },
+                {
+                    "code": "103765",
+                    "uuid": "103765AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Bacitracin / diperodon / neomycin"
+                },
+                {
+                    "code": "103766",
+                    "uuid": "103766AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Bacitracin / diperodon / neomycin / polymyxin B"
+                },
+                {
+                    "code": "103767",
+                    "uuid": "103767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Bacitracin / hydrocortisone / neomycin"
+                },
+                {
+                    "code": "103768",
+                    "uuid": "103768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Bacitracin / hydrocortisone / neomycin / polymyxin B"
+                },
+                {
+                    "code": "103769",
+                    "uuid": "103769AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Bacitracin / lidocaine / neomycin"
+                },
+                {
+                    "code": "103770",
+                    "uuid": "103770AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Bacitracin / lidocaine / neomycin / polymyxin B"
+                },
+                {
+                    "code": "103772",
+                    "uuid": "103772AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Bacitracin / neomycin / polymyxin B"
+                },
+                {
+                    "code": "103773",
+                    "uuid": "103773AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Bacitracin / neomycin / polymyxin B / pramoxine"
+                },
+                {
+                    "code": "103906",
+                    "uuid": "103906AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Betamethasone / neomycin"
+                },
+                {
+                    "code": "104177",
+                    "uuid": "104177AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine / neomycin"
+                },
+                {
+                    "code": "104388",
+                    "uuid": "104388AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Colistin / hydrocortisone / neomycin / thonzonium"
+                },
+                {
+                    "code": "104424",
+                    "uuid": "104424AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone / neomycin"
+                },
+                {
+                    "code": "104425",
+                    "uuid": "104425AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone / neomycin / polymyxin B"
+                },
+                {
+                    "code": "104666",
+                    "uuid": "104666AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Fluocinolone / neomycin"
+                },
+                {
+                    "code": "104675",
+                    "uuid": "104675AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Flurandrenolone / neomycin"
+                },
+                {
+                    "code": "104767",
+                    "uuid": "104767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Gramicidin / neomycin / polymyxin B"
+                },
+                {
+                    "code": "104861",
+                    "uuid": "104861AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Hydrocortisone / neomycin"
+                },
+                {
+                    "code": "104862",
+                    "uuid": "104862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Hydrocortisone / neomycin / polymyxin B"
+                },
+                {
+                    "code": "104978",
+                    "uuid": "104978AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Lidocaine / neomycin / polymyxin B"
+                },
+                {
+                    "code": "105069",
+                    "uuid": "105069AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Methylprednisolone / neomycin"
+                },
+                {
+                    "code": "105091",
+                    "uuid": "105091AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Neomycin / polymyxin B"
+                },
+                {
+                    "code": "105092",
+                    "uuid": "105092AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Neomycin / polymyxin B / pramoxine"
+                },
+                {
+                    "code": "105093",
+                    "uuid": "105093AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Neomycin / polymyxin B / prednisolone"
+                },
+                {
+                    "code": "105094",
+                    "uuid": "105094AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Neomycin / prednisolone"
+                },
+                {
+                    "code": "105095",
+                    "uuid": "105095AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Neomycin / triamcinolone"
+                },
+                {
+                    "code": "162168",
+                    "uuid": "162168AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Bacitracin / neomycin"
+                },
+                {
+                    "code": "170695",
+                    "uuid": "1452ac5f-104f-417f-b3da-5ddb2eef4f5d",
+                    "name": "Neomycin / nystatin / polymyxin B"
+                },
+                {
+                    "code": "170696",
+                    "uuid": "6adb14a6-7dbe-43ef-93e0-5b808277dd19",
+                    "name": "Metronidazole / neomycin / nystatin"
+                },
+                {
+                    "code": "80514",
+                    "uuid": "80514AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Neomycin"
+                },
+                {
+                    "code": "80516",
+                    "uuid": "80516AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Neomycin sulfate"
+                }
+            ]
+        },
+        {
             "id": "DDInter1813",
             "name": "Tioconazole",
             "rxcui": "38298",
@@ -151,6 +379,85 @@
                     "code": "72484",
                     "uuid": "72484AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "name": "Budesonide"
+                }
+            ]
+        },
+        {
+            "id": "DDInter356",
+            "name": "Chlorhexidine",
+            "rxcui": "2358",
+            "rxnorm_name": "chlorhexidine",
+            "drugbank_id": "DB00878",
+            "atc": [
+                "A01AB03",
+                "B05CA02",
+                "D08AC02",
+                "D09AA12",
+                "R02AA05",
+                "S01AX09",
+                "S02AA09",
+                "S03AA04"
+            ],
+            "ciel": [
+                {
+                    "code": "104160",
+                    "uuid": "104160AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Cetrimide / chlorhexidine"
+                },
+                {
+                    "code": "104174",
+                    "uuid": "104174AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine / chlorobutanol"
+                },
+                {
+                    "code": "104176",
+                    "uuid": "104176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine / lidocaine"
+                },
+                {
+                    "code": "104177",
+                    "uuid": "104177AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine / neomycin"
+                },
+                {
+                    "code": "104179",
+                    "uuid": "104179AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine / sodium nitrite"
+                },
+                {
+                    "code": "104180",
+                    "uuid": "104180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine / tetracaine"
+                },
+                {
+                    "code": "104181",
+                    "uuid": "104181AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine / tolnaftate"
+                },
+                {
+                    "code": "170034",
+                    "uuid": "9fc9ce1a-003b-4694-ad84-ac8f0bc62e21",
+                    "name": "Chlorhexidine / chlorobutanol / docusate"
+                },
+                {
+                    "code": "73263",
+                    "uuid": "73263AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine"
+                },
+                {
+                    "code": "73264",
+                    "uuid": "73264AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine acetate"
+                },
+                {
+                    "code": "73265",
+                    "uuid": "73265AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine gluconate"
+                },
+                {
+                    "code": "73266",
+                    "uuid": "73266AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorhexidine hydrochloride"
                 }
             ]
         },
@@ -513,6 +820,77 @@
                     "code": "77726",
                     "uuid": "77726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "name": "Hydrocortisone valerate"
+                }
+            ]
+        },
+        {
+            "id": "DDInter900",
+            "name": "Ibuprofen",
+            "rxcui": "5640",
+            "rxnorm_name": "ibuprofen",
+            "drugbank_id": "DB01050",
+            "atc": [
+                "C01EB16",
+                "G02CC01",
+                "M01AE01",
+                "M02AA13",
+                "R02AX02"
+            ],
+            "ciel": [
+                {
+                    "code": "104246",
+                    "uuid": "104246AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chlorpheniramine / ibuprofen / pseudoephedrine"
+                },
+                {
+                    "code": "104370",
+                    "uuid": "104370AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Codeine / ibuprofen"
+                },
+                {
+                    "code": "104513",
+                    "uuid": "104513AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Diphenhydramine / ibuprofen"
+                },
+                {
+                    "code": "104847",
+                    "uuid": "104847AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Hydrocodone / ibuprofen"
+                },
+                {
+                    "code": "104893",
+                    "uuid": "104893AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ibuprofen / levomenthol"
+                },
+                {
+                    "code": "104894",
+                    "uuid": "104894AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ibuprofen / oxycodone"
+                },
+                {
+                    "code": "104895",
+                    "uuid": "104895AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ibuprofen / pseudoephedrine"
+                },
+                {
+                    "code": "104896",
+                    "uuid": "104896AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ibuprofen / pseudoisocytidine"
+                },
+                {
+                    "code": "170013",
+                    "uuid": "58b26824-eb90-4585-abd3-e9ce096e2010",
+                    "name": "Acetaminophen / ibuprofen"
+                },
+                {
+                    "code": "77897",
+                    "uuid": "77897AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ibuprofen"
+                },
+                {
+                    "code": "84137",
+                    "uuid": "84137AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Solufenum"
                 }
             ]
         }

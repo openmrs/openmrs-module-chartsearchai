@@ -45,14 +45,29 @@ import org.junit.jupiter.api.Test;
  * pair that shares only a locally-applied subgroup keeps it (budesonide/dexamethasone share
  * {@code R01AD} and nothing else), and a pair of topical preparations keeps theirs even when the
  * ALLERGEN carries systemic codes of its own that the other drug does not share
- * (ketoconazole/tioconazole). Over the shipped KB, 560 of the 1090 pairs that share more than one
- * subgroup share no systemic one at all, so the fallback is the majority case, not a corner.
+ * (ketoconazole/tioconazole). Over the shipped KB the majority of the pairs that share more than one
+ * subgroup share no systemic one at all, so the fallback is the common case and not a corner; the
+ * figure is recorded once, in {@code DrugSafetyValidator.sharedClass}'s javadoc.
+ *
+ * <p><b>And the group whose route is named below the main group.</b> Three of the cases here exist
+ * because a prefix list written at anatomical-main-group granularity misses those: {@code A07A}
+ * "Intestinal antiinfectives", {@code B05C} "Irrigating solutions" and {@code G02CC}
+ * "Antiinflammatory products for vaginal administration" all sort ahead of the systemic class their
+ * pair also shares, so leaving one out does not leave the old answer in place — it makes that group
+ * the new answer.
  */
 public class CrossReactivityClassChoiceTest {
 
-	/** Six rows copied field-for-field from the shipped 19 MB KB, in KB order — the corticosteroid
-	 *  family whose route codes outnumber its systemic one, plus a topical-only azole pair. */
+	/** Rows copied field-for-field from the shipped 19 MB KB, in KB order — the corticosteroid family
+	 *  whose route codes outnumber its systemic one, a topical-only azole pair, the psoralens, and the
+	 *  three pairs whose locally-applied class is not one of the anatomical main groups. */
 	private static final String FIXTURE = "chartsearchai-test/ddi-shared-class-choice.json";
+
+	/** The same azole pair, with the ALLERGEN's {@code atc} array written descending — the one
+	 *  deviation from verbatim, because every KB array is ascending and the scan order is otherwise
+	 *  unobservable. */
+	private static final String DESCENDING_FIXTURE =
+			"chartsearchai-test/ddi-shared-class-descending-atc.json";
 
 	/** A question that resolves no reference drug and is not an interaction screen, so the only arm
 	 *  that can chip is the order-driven one ({@code addActiveOrderContraindications}). */
@@ -89,6 +104,26 @@ public class CrossReactivityClassChoiceTest {
 		assertEquals("[D05AD, D05BA]", shared(service, "trioxsalen", methoxsalen).toString(),
 				"and the psoralens share a topical and a systemic subgroup of ONE dermatological "
 						+ "main group, so main-group granularity alone cannot tell them apart");
+
+		DrugReference kanamycin = service.lookupByToken("Kanamycin");
+		assertNotNull(kanamycin, "the fourth allergy must resolve too");
+		assertEquals("[A07AA, J01GB, S01AA]", shared(service, "neomycin", kanamycin).toString(),
+				"the aminoglycosides share an INTESTINAL-antiinfective subgroup that sorts ahead of "
+						+ "their systemic one, and A07 is not an anatomical main group in the list");
+
+		DrugReference neomycin = service.lookupByToken("Neomycin");
+		assertNotNull(neomycin, "the fifth allergy must resolve too");
+		assertEquals("[A01AB, B05CA, S02AA, S03AA]",
+				shared(service, "chlorhexidine", neomycin).toString(),
+				"while neomycin and chlorhexidine share four subgroups and NO systemic one — an "
+						+ "irrigating-solution subgroup among them, which sorts ahead of three of the "
+						+ "four but classifies a formulation like they do");
+
+		DrugReference ibuprofen = service.lookupByToken("Ibuprofen");
+		assertNotNull(ibuprofen, "the sixth allergy must resolve too");
+		assertEquals("[G02CC, M01AE, M02AA]", shared(service, "naproxen", ibuprofen).toString(),
+				"and the two commonest NSAIDs share a VAGINAL-administration subgroup that sorts "
+						+ "ahead of the propionic-acid one that actually relates them");
 	}
 
 	@Test
@@ -163,6 +198,74 @@ public class CrossReactivityClassChoiceTest {
 		assertEquals(1, warnings.size(), "was: " + warnings);
 		assertEquals("Trioxsalen is in the same ATC class (D05BA) as the patient's allergy to"
 				+ " Methoxsalen — possible cross-reactivity", warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void anIntestinalAntiinfectiveSubgroupLosesToTheSystemicOne() throws IOException {
+		// A07 is not one of the anatomical main groups the rule reads as locally applied, and A07A
+		// "Intestinal antiinfectives" names its site one level down — exactly as A07E "Intestinal
+		// antiinflammatory agents" does, which the list already carries. Neomycin and kanamycin are
+		// aminoglycosides (J01GB); A07AA is their oral, non-absorbed, gut-lumen formulation class, and
+		// it sorts first. Reachable on 30 shipped-KB pairs of DIFFERENT substances, so no route-variant
+		// collapse hides it.
+		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is neomycin safe for her?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Kanamycin"), null));
+
+		assertEquals(1, warnings.size(), "was: " + warnings);
+		assertEquals("Neomycin is in the same ATC class (J01GB) as the patient's allergy to"
+				+ " Kanamycin — possible cross-reactivity", warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void anIrrigatingSolutionSubgroupDoesNotBecomeTheSystemicAnswer() throws IOException {
+		// The same gap in the direction where there is no systemic class to fall forward to: B05C
+		// "Irrigating solutions" names how it is given, and neomycin and chlorhexidine share nothing
+		// but locally-applied subgroups. So the answer must be the FIRST of those, not the one that
+		// merely happens to sit outside the anatomical main groups — a rule that reads B05CA as
+		// classifying the substance names it here and says something false about both drugs.
+		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is chlorhexidine safe for her?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Neomycin"), null));
+
+		assertEquals(1, warnings.size(), "was: " + warnings);
+		assertEquals("Chlorhexidine is in the same ATC class (A01AB) as the patient's allergy to"
+				+ " Neomycin — possible cross-reactivity", warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void twoNsaidsAreNotRelatedByAVaginalPreparationClass() throws IOException {
+		// The clinically loudest instance of the same gap, and one the alphabet reaches on the two
+		// commonest NSAIDs in the dataset: G02CC is "Antiinflammatory products for vaginal
+		// administration" and sorts ahead of M01AE, the propionic-acid subgroup that is the whole
+		// reason an ibuprofen allergy says anything about naproxen.
+		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is naproxen safe for her?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Ibuprofen"), null));
+
+		assertEquals(1, warnings.size(), "was: " + warnings);
+		assertEquals("Naproxen is in the same ATC class (M01AE) as the patient's allergy to"
+				+ " Ibuprofen — possible cross-reactivity", warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void theAnswerDoesNotDependOnTheAllergenArraysCodeOrder() throws IOException {
+		// The invariant the sort exists for, on the only tier where array order can decide anything: a
+		// pair sharing two locally-applied subgroups and no systemic one. Ketoconazole's atc array is
+		// written descending in this fixture, so a scan in array order reaches G01AF first and reports
+		// it; the sorted scan reports D01AC either way. Not observable on a verbatim slice — all 1839
+		// KB entries that carry codes are ascending — which is why this is the one fixture that
+		// deviates. Verified by mutation on a throwaway tree: dropping the sort makes this read
+		// "(G01AF)" while every other case here stays green.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.ddiFixtureService(DESCENDING_FIXTURE))
+				.validate("", "Is tioconazole safe for her?", DrugReferenceTestSupport.ctx(60, null,
+						null, null, DrugReferenceTestSupport.set("Ketoconazole"), null));
+
+		assertEquals(1, warnings.size(), "was: " + warnings);
+		assertEquals("Tioconazole is in the same ATC class (D01AC) as the patient's allergy to"
+				+ " Ketoconazole — possible cross-reactivity", warnings.get(0).getDetail(),
+				"the same chip the ascending fixture produces");
 	}
 
 	/** The subgroups {@code question}'s entry shares with {@code allergen}, sorted, through the

@@ -2243,17 +2243,20 @@ public class DrugSafetyValidator {
 	 * the collapse removes the chemical subgroup — the part that carries the cross-reactivity claim —
 	 * without removing the choice it was supposed to settle.
 	 *
-	 * <p><b>A preference, never a filter.</b> Of those 1090 pairs, 557 share no systemic subgroup at
+	 * <p><b>A preference, never a filter.</b> Of those 1090 pairs, 587 share no systemic subgroup at
 	 * all: two topical azoles, two ophthalmic preparations, two local anaesthetic formulations. For
-	 * them the locally-applied class IS the honest answer and is kept. 268 pairs change; in the rest a
-	 * systemic subgroup was already being named. In 87 the systemic tier itself holds more than one
-	 * candidate and the tie-break between them is still alphabetical — both are true statements about
-	 * the substance, so this is a choice between honest answers rather than the defect above.
+	 * them the locally-applied class IS the honest answer and is kept. 263 pairs change; in the rest a
+	 * systemic subgroup was already being named. In 70 the systemic tier itself holds more than one
+	 * candidate and the tie-break between them is still alphabetical (issue #168, filed against the
+	 * pre-correction count of 87) — both are true statements about the substance, so this is a choice
+	 * between honest answers rather than the defect above.
 	 *
 	 * <p>Sorted rather than in the allergen's array order so the result is a function of the two code
-	 * SETS and not of the position a dataset happened to write a code in. That is a no-op on the
-	 * shipped KB, whose arrays are already ascending, and is therefore not separately pinned by a
-	 * test; it is what keeps a KB refresh that reorders an array from silently rewording a chip.
+	 * SETS and not of the position a dataset happened to write a code in — what keeps a KB refresh that
+	 * reorders an array from silently rewording a chip. A no-op on the shipped KB, whose arrays are all
+	 * ascending, so the case that pins it
+	 * ({@code CrossReactivityClassChoiceTest.theAnswerDoesNotDependOnTheAllergenArraysCodeOrder}) is
+	 * the one fixture here that deviates from verbatim, by writing one allergen's array descending.
 	 */
 	private static String sharedClass(Set<String> refClasses, DrugReference other) {
 		String locallyApplied = null;

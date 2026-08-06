@@ -297,28 +297,39 @@ public class DrugReference {
 	 * ATC groups that classify a LOCALLY APPLIED formulation rather than the substance itself, each
 	 * identified by the route or site of application in the group's own published name: {@code D}
 	 * "Dermatologicals" and {@code S} "Sensory organs" (whole anatomical main groups), {@code A01}
-	 * "Stomatological preparations", {@code A07E} "Intestinal antiinflammatory agents" (its
-	 * {@code A07EA} is "Corticosteroids acting locally"), {@code C05A} "Antihemorrhoidals for topical
-	 * use", {@code C05B} "Antivaricose therapy" (topical heparinoids, sclerosants for local
-	 * injection), {@code G01} "Gynecological antiinfectives and antiseptics", {@code M02} "Topical
-	 * products for joint and muscular pain", {@code P03A} "Ectoparasiticides, incl. scabicides",
-	 * {@code R01} "Nasal preparations", {@code R02} "Throat preparations", and {@code R03A} /
-	 * {@code R03B}, the two <em>inhalant</em> subgroups of R03 — their {@code R03C} / {@code R03D}
-	 * siblings are for systemic use and are deliberately absent, which is why this list cannot be
-	 * written at main-group granularity throughout.
+	 * "Stomatological preparations", {@code A07A} "Intestinal antiinfectives" and {@code A07E}
+	 * "Intestinal antiinflammatory agents" (its {@code A07EA} is "Corticosteroids acting locally"),
+	 * {@code B02BC} "Local hemostatics" (its {@code B02BX} sibling is "Other systemic hemostatics"),
+	 * {@code B05C} "Irrigating solutions", {@code C05A} "Antihemorrhoidals for topical use",
+	 * {@code C05B} "Antivaricose therapy" (topical heparinoids, sclerosants for local injection),
+	 * {@code G01} "Gynecological antiinfectives and antiseptics", {@code G02CC} "Antiinflammatory
+	 * products for vaginal administration" (its {@code G02CB} sibling, prolactine inhibitors, is
+	 * systemic), {@code M02} "Topical products for joint and muscular pain", {@code P03A}
+	 * "Ectoparasiticides, incl. scabicides", {@code R01} "Nasal preparations", {@code R02} "Throat
+	 * preparations", and {@code R03A} / {@code R03B}, the two <em>inhalant</em> subgroups of R03 —
+	 * their {@code R03C} / {@code R03D} siblings are for systemic use and are deliberately absent,
+	 * which is why this list cannot be written at main-group granularity throughout.
 	 *
 	 * <p>Deliberately NOT here: {@code N01B} "Anesthetics, local". Its name is the drug class, not the
 	 * site of application — the codes classify the substance, and two local anaesthetics sharing
 	 * {@code N01BB} is exactly the cross-reactivity statement a clinician wants.
 	 *
 	 * <p>Prefixes, and not an exhaustive partition of ATC: anything unlisted counts as classifying the
-	 * substance. That is the safe direction of error for {@link DrugSafetyValidator}'s use of it — a
-	 * group wrongly listed here would demote a class that does explain a cross-reactivity concern,
-	 * while one missing from it merely leaves the pre-existing behaviour in place.
+	 * substance. Neither direction of error is free, which is why the criterion is ATC's own wording
+	 * about a GROUP rather than pharmacological judgement about a substance. A group wrongly listed
+	 * here demotes a class that does explain a cross-reactivity concern. A group missing from it does
+	 * NOT merely leave the pre-existing answer in place: it becomes the answer as soon as it sorts
+	 * ahead of the systemic subgroup the pair also shares, since {@link DrugSafetyValidator}'s scan
+	 * takes the first shared subgroup this method does not veto. That is how {@code A07A},
+	 * {@code B02BC}, {@code B05C} and {@code G02CC} came to be here — written at main-group
+	 * granularity the list moved 21 shipped-KB pairs onto one of them, ibuprofen/naproxen among them
+	 * (measured 2026-08-06; {@code CrossReactivityClassChoiceTest} pins one case per group, save
+	 * {@code B02BC}, whose only shipped-KB pairs are epinephrine route variants that issue #160
+	 * collapses to an identity chip before this arm can name a class).
 	 */
-	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections.unmodifiableList(
-			Arrays.asList("A01", "A07E", "C05A", "C05B", "D", "G01", "M02", "P03A", "R01", "R02",
-					"R03A", "R03B", "S"));
+	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections
+			.unmodifiableList(Arrays.asList("A01", "A07A", "A07E", "B02BC", "B05C", "C05A", "C05B",
+					"D", "G01", "G02CC", "M02", "P03A", "R01", "R02", "R03A", "R03B", "S"));
 
 	/**
 	 * The groups nested INSIDE {@link #LOCALLY_APPLIED_ATC_GROUPS} that ATC itself names "for systemic
@@ -326,9 +337,11 @@ public class DrugReference {
 	 * preparations, {@code R01B} nasal decongestants. Same criterion as the list above, applied to the
 	 * same words: a group is read as locally applied when its own name says where it is applied, and
 	 * these four say the opposite. Without them a main-group prefix would be wrong in exactly the way
-	 * this whole rule exists to fix — measured over the shipped KB (2026-08-06), three pairs, all
-	 * psoralens: methoxsalen and trioxsalen share {@code D05AD} (topical) and {@code D05BA} (systemic)
-	 * and would be reported as sharing the topical one.
+	 * this whole rule exists to fix. Measured over the shipped KB (2026-08-06), only {@code D05B} is
+	 * reachable there, in three pairs, all psoralens: methoxsalen and trioxsalen share {@code D05AD}
+	 * (topical) and {@code D05BA} (systemic) and would be reported as sharing the topical one. The
+	 * other three change no pair in that KB and are here on ATC's wording alone, like every entry in
+	 * both lists — removing them breaks no test.
 	 *
 	 * <p>An exception list here, while R03's systemic halves are handled by leaving {@code R03C} and
 	 * {@code R03D} out of the list above, because the two groups are shaped differently: under R03 the

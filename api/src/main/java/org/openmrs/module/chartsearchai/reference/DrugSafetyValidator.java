@@ -645,8 +645,15 @@ public class DrugSafetyValidator {
 	 * of "the highest severity wins" — a contraindication chip carries no severity, and what it can
 	 * under-report is the STRENGTH of the claim: identity ("the patient has a recorded allergy to X")
 	 * over a shared ATC class over a shared curated group. Ties keep the incumbent, so a group of
-	 * equally-related rows is reported as the dataset's first row, exactly as
-	 * {@link #bestRulePerPartner} keeps its first. The surviving chip is written back into the position
+	 * equally-related rows is reported as the dataset's first row. NOT the same rule
+	 * {@link #bestRulePerPartner} applies since issue #162: that one prefers the row naming no route
+	 * before falling back to the incumbent, and this one does not — so a substance whose unqualified row
+	 * is not the dataset's first (7 of the shipped KB's multi-row families) can have an interaction chip
+	 * naming it and a contraindication chip naming one of its routes in the same response. That is the
+	 * route-qualifier residue this javadoc's last paragraph already accepts, now visible against a
+	 * canonicalized sibling arm rather than against another per-row one; widening it here would change
+	 * which variant an allergy is reported against, which is the decision issue #164 holds. The
+	 * surviving chip is written back into the position
 	 * the group's first candidate took, so no client sees the chip sequence reshuffle when a later,
 	 * stronger row replaces an earlier one.
 	 *
@@ -1103,8 +1110,9 @@ public class DrugSafetyValidator {
 	 * a strict superset in the shapes measured — in the two dolutegravir x iron rows (171 and 236
 	 * characters of note) the surplus is the sentence "The mechanism of interaction has not been
 	 * established.", so the fuller row says everything the shorter one does and states its own limit
-	 * — so a tie on severity keeps the fuller note. Equal on both keeps the incumbent, so a group's
-	 * chip is the dataset's first such row.
+	 * — so a tie on severity keeps the fuller note. Equal on all THREE keys — severity, then the route
+	 * step issue #162 inserted between them, then the note — keeps the incumbent, so a group's chip is
+	 * the dataset's first row among those the earlier keys could not separate.
 	 *
 	 * <p><b>Two corners this rule accepts.</b> A row with no note at all still wins its group on
 	 * severity alone, so an operator's token-only unrated rule beats a rated row carrying a mechanism
@@ -1527,7 +1535,8 @@ public class DrugSafetyValidator {
 	 * carries that same rule's severity and mechanism, and all that is dropped is a second spelling of
 	 * the partner; entries the data can tell apart keep their own chips, asserted over three drugs named
 	 * in one question. Which variant's row supplies the severity is #115's open half; the dataset's
-	 * first is kept, as the chart arm keeps its first.
+	 * first is kept — no longer the same rule as the chart arm's, which since issue #162 prefers the row
+	 * naming no route before falling back to its first.
 	 *
 	 * <p>Two entries that end up with the SAME name are one drug, not a pair, and raise nothing. That is
 	 * reachable from a question naming a single drug: the two-drugs guard counts ENTRIES, and one word

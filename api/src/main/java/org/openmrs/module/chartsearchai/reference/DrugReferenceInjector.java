@@ -525,13 +525,27 @@ public class DrugReferenceInjector {
 	 * the ones the record renders, and a sibling can carry a partner the survivor does not: over the
 	 * shipped KB, 80 of the 121 multi-row substances have at least one such partner, 2627 in total, a few
 	 * of them lopsided ({@code Olopatadine} 112 partners against its family's 397) — measured 2026-08-06,
-	 * re-measure before relying on the figures. What that cannot cost is the ACTIONABLE half: a partner
-	 * the patient is actually on and whose rule clears the severity floor raises a chip whatever row
-	 * carries it (the chips read every row off {@code getAll()}, and since #162 they read the substance's
-	 * rows as one subject), and since issue #110 every chip is injected as its own citable safety-finding
-	 * record carrying that rule's mechanism note verbatim. So what the sibling rows lose is breadth in
-	 * the {@code Interactions:} tail — the section {@code render} already truncates to a single compact
-	 * representative whenever a relevant partner is promoted.
+	 * re-measure before relying on the figures.
+	 *
+	 * <p><b>What that costs, per leg, because the two legs differ.</b> For the QUESTION-driven leg it
+	 * costs breadth only: the substance is then also a drug in play, so a partner the patient is on whose
+	 * rule clears the severity floor raises a chip whatever row carries it (the chips read every row off
+	 * {@code getAll()}, and since issue #162 they read the substance's rows as one subject), and since
+	 * issue #110 that chip is injected as its own citable safety-finding record carrying the rule's
+	 * mechanism note verbatim. What the sibling rows lose there is the {@code Interactions:} tail — the
+	 * section {@code render} already truncates to one compact representative whenever a relevant partner
+	 * is promoted.
+	 *
+	 * <p>For the ORDER-driven leg no chip stands behind it, and that is worth stating rather than being
+	 * covered by the sentence above. That leg needs {@link #relatedToAny}, hence a question that named a
+	 * drug, and the substance it injects is an ACTIVE ORDER rather than a drug in play — so
+	 * {@link DrugSafetyValidator}'s drug-in-play arm does not see it, and the one arm that does cover
+	 * (active order, active order) pairs is gated on the question naming NO drug, which excludes this
+	 * leg by construction. A rule between two of the patient's own medications that sits only on a
+	 * sibling row is therefore prose this record no longer carries and no chip replaces. Narrower than
+	 * it sounds — it needs the question's drug to be ATC-related to one order and that order's substance
+	 * to be multi-row — but it is a real reduction in what the prompt carries, not a re-presentation of
+	 * it, and it is the same gap issue #174's {@code orderedInteractionNotes} sweep has to decide about.
 	 */
 	private static void collect(Map<Object, DrugReference> bySubstance, DrugReference ref) {
 		Object substance = ref.substanceKey();

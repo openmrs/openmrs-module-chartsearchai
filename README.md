@@ -31,6 +31,7 @@ The standalone download above includes the backend module, frontend ESM, and the
 - [API](#api)
   - [Search](#search)
   - [Streaming search (SSE)](#streaming-search-sse)
+  - [Warmup](#warmup)
   - [Feedback](#feedback)
   - [Audit log](#audit-log)
   - [Drug-reference status](#drug-reference-status)
@@ -42,18 +43,20 @@ The standalone download above includes the backend module, frontend ESM, and the
 
 ## Try it on the demo server
 
-A live demo runs at **https://chartsearchai.openmrs.org** with the standard O3 reference patient set, so you can try Chart Search AI without installing anything.
+A live demo runs at **https://chartsearchai.openmrs.org**, so you can try Chart Search AI without installing anything.
 
 1. Open https://chartsearchai.openmrs.org and log in (default credentials: `admin` / `Admin123`).
-2. Click the magnifying-glass icon in the top header and search for **Betty Williams** — she is the reference patient with the most data on the demo (medications, vitals, conditions), so the AI has something to ground its answers in. Open her chart from the dropdown.
+2. Click the magnifying-glass icon in the top header and search for a patient by name, then open a chart from the result list.
 
-   ![Patient search overlay with "Betty" typed and Betty Williams in the result list](docs/images/ai-chart-search-patient-search.png)
+   The demo carries whatever demo data the server was last seeded with, and that population changes — so this walkthrough deliberately names no patient. Pick one whose chart actually has records (Medications, Vitals, Conditions), since the AI answers only from what the chart contains; on a chart with nothing in it the correct answer is that there are no records, which is not much of a demo. Common demo-data surnames (`Williams`, `Smith`) are a reasonable place to start.
+
+   ![Patient search overlay with a name typed and a matching patient in the result list](docs/images/ai-chart-search-patient-search.png)
 
 3. Click the floating blue AI sparkle icon in the bottom-right corner of the chart (tooltip: *Ask AI about this patient*). A chat panel slides in.
 4. Type a clinical question — e.g. *What medications is this patient on?*, *Any allergies?*, *Last 3 blood pressure readings* — and press **Send**, or click the microphone for voice input.
 5. The answer streams in token-by-token. The records the answer is grounded in appear under **References**, numbered to match the inline citations (`[1]`, `[2]`, …). Both the inline citations and the chips under **References** are clickable — they navigate to the relevant chart tab (Orders, Results, Allergies, Conditions, Programs, etc.) and highlight the source record. Every response carries the AI-generated disclaimer.
 
-   ![AI Chart Search panel showing an answer with numbered citations on Betty Williams' chart](docs/images/ai-chart-search-demo.png)
+   ![AI Chart Search panel showing an answer with numbered citations on a patient's chart](docs/images/ai-chart-search-demo.png)
 
 6. Optionally rate the answer under **Was this helpful?** with **Helpful** / **Not helpful** and an optional comment. Feedback is recorded in the audit log alongside the question.
 
@@ -61,8 +64,7 @@ Notes:
 
 - The AI button is only rendered for users with the **AI Query Patient Data** privilege.
 - The launch surface is configurable via the frontend `chatLaunchMode` setting: `floating` (the bottom-right circular button used above), `workspace` (an icon in the top-right workspace strip that opens the chat as a docked workspace), or `both` (default).
-- First-query latency on the demo reflects the remote provider's cold-start. The chart-open prompt-cache warmup (`chartsearchai.warmupEnabled`) is a no-op for remote engines — it only helps local llama-server deployments.
-- The demo currently calls a remote LLM, since the server doesn't yet have the RAM and CPU headroom to comfortably run a local model like Gemma 4 E4B; latency on the demo therefore reflects the remote provider, not local CPU inference.
+- Answers take seconds to minutes. The demo's engine and model are whatever its operators have configured (`chartsearchai.llm.engine`), so treat its latency as indicative of that deployment, not of the module.
 
 ## Standalone platform notes
 
@@ -213,14 +215,14 @@ chartsearchai delegates all retrieval to the [openmrs-module-querystore](https:/
 
 | Property | Value | Description |
 |----------|-------|-------------|
-| `chartsearchai.querystore.topK` | `30` | Number of records querystore returns per query; the LLM then filters them. querystore is a required module and is always the retrieval path — there is no toggle to disable it |
+| `chartsearchai.querystore.topK` | `12` | Number of similarity records requested from querystore. In `queryScoped` mode (the default `chartsearchai.chartMode`) this sizes the query-scoped slice the LLM actually sees, alongside the question's complete typed scope; in `fullChart` mode it only sizes the optional focus hint, and is unused when `chartsearchai.embedding.preFilter` is `false`. querystore is a required module and is always the retrieval path — there is no toggle to disable it. `ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K` carries the default and the measurements behind it |
 | `querystore.embedding.modelFilePath` | `querystore/model.onnx` | Path to the ONNX embedder, relative to `<openmrs-application-data-directory>`. Querystore ships this with an empty default (the module is model-agnostic), so a fresh install must set it |
 | `querystore.embedding.vocabFilePath` | `querystore/vocab.txt` | Path to the WordPiece vocab, same convention |
 | `querystore.embedding.queryModelFilePath` | *(empty)* | Leave empty for `e5-base-v2`; set only for dual-encoder models like MedCPT |
 
-**Migration caveat — the legacy embedding pipelines are no longer self-maintaining.** chartsearchai no longer refreshes its own Lucene/Elasticsearch/MySQL embedding indices when charts change: chartsearchai now reacts to a chart write only by invalidating the answer cache (and, when `chartsearchai.prewarm.refreshOnEdit` is on, re-pinning that patient's prewarm KV) — detected via core #6084 service events, not AOP advice — and the bulk backfill task has been removed (querystore owns retrieval-index freshness via the same core events). If you run the legacy preFilter pipelines (`chartsearchai.querystore.enabled=false` + `chartsearchai.embedding.preFilter=true`), embeddings are still built lazily on first chart access but then go progressively stale on every subsequent edit, and patient merges leak the merged patient's data through retrieval. There is no longer a rebuild task, so treat the querystore-backed path (`chartsearchai.querystore.enabled=true`) as the supported configuration for retrieval that stays current with edits.
+**Index freshness.** querystore owns retrieval-index freshness. chartsearchai reacts to a chart write only by invalidating the answer cache (and, when `chartsearchai.prewarm.refreshOnEdit` is on, re-pinning that patient's prewarm KV), detected via core #6084 service events — see [ADR Decision 26](docs/adr.md#decision-26-chart-write-detection-via-core-service-events).
 
-**Prompt-stability caveat — when full-chart mode is actually faster on small charts.** When `chartsearchai.querystore.enabled=true` and `chartsearchai.embedding.preFilter=false` (the recommended production shape), `ChartBuildingStrategy` routes to `QueryStoreService.getPatientChart` (querystore Decision 15) — the chart bytes are byte-identical across consecutive queries on the same patient, so the `<system> + <chart>` prefix stays stable and the KV cache reuses it. The payoff is contingent on the [Warmup](#warmup) endpoint priming that prefix before the user's first question — without it, the first question still pays the full cold-prefill cost. When `chartsearchai.querystore.enabled=true` and `chartsearchai.embedding.preFilter=true`, querystore selects a different top-K record set for each question, so the prompt body changes between consecutive queries — breaking the KV-cache reuse. On large charts the per-question top-K is the right trade (small top-K is cheaper to prefill from scratch than the whole chart); on *small* charts that fit comfortably in the LLM context, full-chart mode is faster overall. The legacy `chartsearchai.querystore.enabled=false` + `chartsearchai.embedding.preFilter=false` path also produces byte-identical chart prefixes (the in-process `chartSerializer.serialize(patient)` is deterministic), so the KV cache still reuses across follow-ups, but each call pays an extra 300–500 ms of serialization that the querystore path avoids. Pre-Decision-15 measured numbers (CPU-only Gemma 4 E2B, Betty's ~1.8K-token chart, warmup primed): legacy serializer path first ask ~10 s, follow-ups ~4–7 s across three different questions in sequence (the KV cache caught the byte-identical prompt prefix). The querystore + preFilter=false path is expected to match those follow-up numbers — the chart prefix is byte-identical on the same shape — minus the ~300–500 ms per-call serialize cost that querystore avoids. Not re-measured against the post-Decision-15 dispatch; the older 11s-with-flat-follow-ups number was attributable to the pre-dispatch behaviour (querystore on = question-conditioned top-K) and no longer applies.
+**Prompt-stability caveat — only relevant in `fullChart` mode.** In `fullChart` mode the chart bytes are a function of the patient alone, so the `<system> + <chart>` prompt prefix is stable across consecutive queries and llama-server's KV cache reuses it; that is what the [Warmup](#warmup) endpoint and the disk-persisted KV cache exist to exploit. In the default `queryScoped` mode each question carries its own small slice, so there is no shared prefix to amortize — and none is needed, because a slice prefills in a fraction of the time. Setting `chartsearchai.embedding.preFilter=true` in `fullChart` mode leaves the chart prefix intact (the focus hint is a small trailing payload), so it does not break the reuse.
 
 A follow-up will populate these defaults in the querystore module's `config.xml` so fresh deploys work without manual GP wiring. The GPs are already declared there with empty values, which is why they appear in **Admin > Settings** today; until the defaults land, set them yourself after first start. See [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this path uses `e5-base-v2`.
 
@@ -228,7 +230,8 @@ A follow-up will populate these defaults in the querystore module's `config.xml`
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `chartsearchai.embedding.preFilter` | `false` | When `true`, narrows the patient's records to querystore's top-K before sending them to the LLM; when `false` (default), the full chart is sent. querystore is a required module and always the retrieval path. Pre-filtering is faster on huge charts but can omit records the LLM needs for negative reasoning (e.g. correctly answering "any allergies?" requires having seen the empty allergy section, not just an absence of matches in the filtered set). Enable only when context-window size is the binding constraint |
+| `chartsearchai.chartMode` | `queryScoped` | How the prompt's chart context is assembled. `queryScoped` (default) sends only a slice: every record of the question's typed scope (complete by construction — an enumeration answer cannot omit what was never retrieved), plus the `chartsearchai.querystore.topK` similarity records, plus demographics. `fullChart` serializes the whole chart into every prompt. **The full-chart prefill machinery — warmup, the prewarm bootstrap, per-patient KV persistence, the progressive-reasoning preview — is dormant in `queryScoped` mode and re-engages only under `fullChart`.** A value that is not an exact (case-insensitive) `queryScoped` behaves as `fullChart`, so a typo fails toward the whole chart; an absent or unreadable GP takes the default. See [ADR Decision 28](docs/adr.md#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for the A/B behind the default |
+| `chartsearchai.embedding.preFilter` | `false` | *(`fullChart` mode only)* When `true`, querystore additionally ranks the patient's records by similarity to the question and passes a short **focus hint** — the top `chartsearchai.querystore.topK` record indices — to the LLM. **The full chart is still sent either way**, so the hint biases attention without removing records the LLM needs for negative reasoning (correctly answering "any allergies?" requires having seen the empty allergy section, not just an absence of matches). Has no effect in the default `queryScoped` mode |
 
 #### LLM tuning
 
@@ -240,7 +243,7 @@ A follow-up will populate these defaults in the querystore module's `config.xml`
 | `chartsearchai.llm.serverPort` | `18085` | *(Local engine only)* Port for the embedded llama-server. Change if the default conflicts with another service |
 | `chartsearchai.llm.contextSize` | `32768` | *(Local engine only)* Context window size in tokens for the embedded llama-server. The system prompt + serialized chart + question must fit within this. Larger values let bigger charts pass through full-chart mode but increase the KV cache memory footprint roughly linearly. Increase if you see "Patient chart exceeds the LLM context window" (HTTP 413) and have headroom for a larger KV cache; reduce on memory-constrained hardware |
 | `chartsearchai.llm.reasoningMaxChars` | `0` | Caps the model's reasoning scratchpad at this many characters (via a grammar-enforced `maxLength` in the chart-answer schema) when greater than `0`; the answer itself is never capped. The reasoning phase is the dominant decode cost on CPU-only servers (a measured 3–27 seconds of "thinking" before any answer text), so bounding it bounds that cost. `0` (default) leaves the schema unchanged. **Caution:** truncating the chain of thought can change answers — only enable a value that has cleared the answer-quality gold standard (`eval/drift-metric/`) with no regression in mean F1, abstention accuracy, or off-topic citations versus the uncapped baseline. Gemma 4 E2B at `400` failed that gate on all three axes (measured 2026-06-12); no certified value exists, so leave at `0` unless a fresh gate run for your model and value passes |
-| `chartsearchai.warmupEnabled` | `true` | When `true`, opening a patient chart triggers a background warmup that primes the LLM prompt cache (system prompt + serialized chart) so the first AI query on that patient skips the full prefill cost. No-op when `chartsearchai.llm.engine` is `remote` (remote providers manage their own caching) and when `chartsearchai.embedding.preFilter` is `true` (the prompt prefix varies per query, so a chart-only warmup cannot be reused) |
+| `chartsearchai.warmupEnabled` | `true` | When `true`, opening a patient chart triggers a background warmup that primes the LLM prompt cache (system prompt + serialized chart) so the first AI query on that patient skips the full prefill cost. No-op when `chartsearchai.llm.engine` is `remote` (remote providers manage their own caching), and — because there is no question-independent chart prefix to prime — whenever `chartsearchai.chartMode` is `queryScoped`, **which is the default**. The gate is `LlmInferenceService.shouldRunWarmup` |
 | `chartsearchai.llm.kvCacheDir` | *(empty → `<appdata>/chartsearchai/kvcache`)* | *(Local engine only)* Directory where each patient's prefilled chart KV cache is persisted to disk (via llama-server `--slot-save-path`). **Enabled by default** — empty resolves to `<appdata>/chartsearchai/kvcache`; set an explicit path to relocate it, or `off` (or `false`/`none`/`disabled`) to turn it off. Both the chart-open warmup and the streaming query path **restore** a patient's KV from disk (I/O-bound, ~tens of ms) instead of recomputing the full chart prefill (CPU-bound, tens of seconds to minutes on a GPU-less host) whenever the RAM prompt cache is cold for it, and **save** a fresh cold prefill so the next visit is fast even without a warmup — and, unlike the in-RAM prompt cache, this survives llama-server restarts and single-slot evictions. The restored KV is byte-for-byte what a fresh prefill produces, so answers are unchanged. The first-ever visit to a patient still pays one prefill (to create the file). Files are large (tens to a few hundred MB each) and contain the model's encoding of the chart (PHI) — prefer fast local storage with appropriate permissions; disable on hosts where that on-disk footprint is unwanted. The biggest first-query latency win for CPU-only deployments — see [Warmup](#warmup) |
 | `chartsearchai.llm.kvCacheMaxEntries` | `16` | *(Local engine only)* Maximum persisted KV-cache files to retain in `chartsearchai.llm.kvCacheDir`; the oldest (by mtime) are evicted beyond this, bounding disk use. **Pinned** entries created by the prewarm bootstrap (below) are exempt from this cap — they are neither counted nor evicted |
 | `chartsearchai.llm.kvCache.maxPinnedEntries` | `0` | *(Local engine only)* Upper bound on the number of **pinned** KV entries the prewarm bootstrap may create. `0` (default) means unbounded — pin the whole patient population. Set a positive value to bound the on-disk pinned footprint on hosts that want a partial prewarm corpus: once reached, the sweep stops pinning (it does not evict already-pinned entries). Only consulted by the prewarm sweep |
@@ -304,8 +307,11 @@ The `drugSafety.*` checks require both `chartsearchai.drugReference.enabled` and
 
 | Privilege | Purpose |
 |-----------|---------|
-| **AI Query Patient Data** | Execute chart search queries |
+| **AI Query Patient Data** | Execute chart search queries (`/search`, `/search/stream`, `/warmup`, `/feedback`) |
 | **View AI Audit Logs** | Access the audit log endpoint |
+| **Manage AI Prewarm** | Trigger and monitor the bulk KV-prewarm bootstrap (`/prewarm`, `/prewarmstatus`) |
+
+`/drugreferencestatus` gates on core's **Get Global Properties** instead, which the `Authenticated` role already holds on a default install.
 
 ### 7. Indexing
 
@@ -315,7 +321,7 @@ Retrieval indexing is owned entirely by the [openmrs-module-querystore](https://
 
 ### Absent-data detection
 
-chartsearchai does not run its own relevance gate. The LLM is given the patient's chart (the full chart by default, or querystore's top-K when `chartsearchai.embedding.preFilter` is `true`) and reasons over what is present and what is absent — when nothing in the chart addresses the question (e.g., asking "any cancer?" for a patient with no cancer-related records), the system prompt instructs it to answer that there are no records about the topic rather than inferring one. querystore-backed retrieval narrows what reaches the LLM, and the optional [citation grounding](#citation-grounding) pass verifies that each cited record actually supports the claim, catching off-topic or unsupported citations after the answer is produced.
+chartsearchai does not run its own relevance gate. The LLM is given the patient's chart — a query-scoped slice by default, or the whole chart under `chartsearchai.chartMode=fullChart` — and reasons over what is present and what is absent — when nothing in the chart addresses the question (e.g., asking "any cancer?" for a patient with no cancer-related records), the system prompt instructs it to answer that there are no records about the topic rather than inferring one. querystore-backed retrieval narrows what reaches the LLM, and the optional [citation grounding](#citation-grounding) pass verifies that each cited record actually supports the claim, catching off-topic or unsupported citations after the answer is produced.
 
 ### Recency cap
 
@@ -425,6 +431,7 @@ SSE events:
 | Event | Description |
 |-------|-------------|
 | `thinking` | A chunk of the model's reasoning, emitted before the answer; render distinctly (e.g. a collapsible panel), never as the answer |
+| `preliminary` | A chunk of the fast preview reasoning pass, ahead of the committed answer; render like `thinking`, and expect the committed reasoning to replace it. Requires **both** `chartsearchai.progressiveReasoning.enabled=true` and `chartsearchai.chartMode=fullChart`, so it never fires on a default install |
 | `token` | A chunk of the answer text as it is generated |
 | `references` | The answer's citations the moment the answer is complete — before grounding verdicts exist; render as unverified until verdicts arrive |
 | `done` | Final JSON with the complete answer, references (`chart` group first, upstream order — most recent first, undated last — within each group, with `index`, `resourceType`, `resourceUuid`, `date`, `grounded`, `group`, `source`, `withheldInteractions`), `safetyWarnings`, `questionId`, and disclaimer. With `chartsearchai.grounding.async=true`, `done` is emitted as soon as the answer is complete — its references carry no verdicts yet and `safetyWarnings` is empty (validation runs with grounding) |
@@ -444,7 +451,7 @@ Content-Type: application/json
 }
 ```
 
-No-op when `chartsearchai.llm.engine` is `remote` and when `chartsearchai.embedding.preFilter` is `true`. Disable entirely with `chartsearchai.warmupEnabled=false`. Concurrent warmups for different patients are coalesced — only the most recently submitted patient runs, since llama-server processes one request at a time.
+No-op when `chartsearchai.llm.engine` is `remote`, and whenever `chartsearchai.chartMode` is `queryScoped` (the default) — a per-question slice has no reusable chart prefix. Disable entirely with `chartsearchai.warmupEnabled=false`. Concurrent warmups for different patients are coalesced — only the most recently submitted patient runs, since llama-server processes one request at a time.
 
 **Disk-persisted KV cache (the biggest CPU-only first-query win).** The plain warmup above primes the prompt cache *in RAM* — it helps only until the model is evicted (another patient's query takes the single slot) or the llama-server process restarts, after which the next visit pays the full chart prefill again (tens of seconds to minutes on a GPU-less host). The disk-persisted KV cache fixes that and is **on by default** (`chartsearchai.llm.kvCacheDir` empty → `<appdata>/chartsearchai/kvcache`; set a path to relocate it, or `off` to disable): llama-server is launched with `--slot-save-path`, so both the warmup **and the streaming query path save and restore** each patient's prefilled chart KV (~tens of ms of disk I/O) instead of recomputing. Because the prefill is the entire pre-answer wait on a CPU-only server, this turns a slow first query into a fast one (measured on the standalone in CPU-only mode: ~19–60 s to first token → ~0.9 s after a disk restore), and it survives restarts and evictions that the RAM cache does not. The restored KV is byte-for-byte identical to a fresh prefill, so answers and citations are unchanged (verified: identical answer text and grounding verdicts for the same question on the restore vs. prefill paths). Only the first-ever visit to a patient pays a prefill (to create the file); subsequent visits restore. See `chartsearchai.llm.kvCacheDir` / `chartsearchai.llm.kvCacheMaxEntries` in the [config table](#5-configure).
 
@@ -517,7 +524,7 @@ This overrides the default permissive implementation.
 
 ## Evals
 
-The project includes an eval framework that tests citation accuracy, absent-data answering, and prompt injection resistance without requiring a running LLM or external services.
+The project includes an eval framework covering citation accuracy, absent-data answering, drug-safety warnings, and prompt-injection resistance. All of it runs offline **except** the prompt-injection suite, which drives a real LLM.
 
 ### Running evals
 
@@ -530,22 +537,26 @@ Or run a specific suite:
 ```
 mvn test -pl api -Dtest="CitationEvalTest"
 mvn test -pl api -Dtest="AbsentDataEvalTest"
+mvn test -pl api -Dtest="DrugSafetyEvalTest"
 mvn test -pl api -Dtest="PromptInjectionEvalTest" -Dchartsearchai.prompt.injection.test=true
 ```
 
+The prompt-injection suite needs **both** that system property **and** a reachable llama-server (it probes `chartsearchai.llm.serverPort`, overridable with `-Dchartsearchai.prompt.injection.endpoint`). Without one, every case is skipped by a JUnit assumption rather than failing — check the surefire report for skips before reading a green run as a pass.
+
 ### Adding cases
 
-Each suite is driven by a JSON dataset in `api/src/test/resources/eval/`. To add a case, append an entry to the relevant file:
+Each suite is driven by a JSON dataset. To add a case, append an entry to the relevant file:
 
 | File | What it tests |
 |------|---------------|
-| `citation-eval-dataset.json` | Simulated LLM JSON → expected citation indices (F1) |
-| `absent-data-eval-dataset.json` | Query → expected keywords in "no records" answer |
-| `prompt-injection-eval-dataset.json` | Adversarial payload → LLM produces safe JSON, no system prompt leakage |
+| `api/src/test/resources/eval/citation-eval-dataset.json` | Simulated LLM JSON → expected citation indices (F1) |
+| `api/src/test/resources/eval/absent-data-eval-dataset.json` | Query → expected keywords in "no records" answer |
+| `api/src/test/resources/eval/prompt-injection-eval-dataset.json` | Adversarial payload → LLM produces safe JSON, no system prompt leakage |
+| `api/src/test/resources/evals/drug-reference/drug-safety-eval.json` | Patient + question → expected drug-safety warnings |
 
 ### Metrics report
 
-Each run appends per-case and summary metrics to `api/target/eval-results.csv` for tracking regressions over time.
+The citation and prompt-injection suites append per-case rows to `api/target/eval-results.csv` (via `EvalReporter`) for tracking regressions over time; the citation suite also appends a summary row. The absent-data and drug-safety suites do not report to the CSV, so their results are only in the surefire output.
 
 ## Evaluated models
 

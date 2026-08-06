@@ -5,8 +5,10 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Immutable identity and review state for the drug-reference data in force. */
@@ -30,14 +32,24 @@ public final class DrugReferencePackage {
 
 	private final String reviewState;
 
+	private final List<String> issues;
+
 	public DrugReferencePackage(String id, String sourceFormat, String version,
 			Map<String, Object> provenance, String reviewState) {
+		this(id, sourceFormat, version, provenance, reviewState,
+				Collections.<String> emptyList());
+	}
+
+	public DrugReferencePackage(String id, String sourceFormat, String version,
+			Map<String, Object> provenance, String reviewState, List<String> issues) {
 		this.id = id;
 		this.sourceFormat = sourceFormat;
 		this.version = version;
 		this.provenance = Collections.unmodifiableMap(new LinkedHashMap<String, Object>(
 				provenance == null ? Collections.<String, Object> emptyMap() : provenance));
 		this.reviewState = normalizeReviewState(reviewState);
+		this.issues = Collections.unmodifiableList(new ArrayList<String>(
+				issues == null ? Collections.<String> emptyList() : issues));
 	}
 
 	static DrugReferencePackage proposed(String sourceFormat, String origin) {
@@ -81,6 +93,10 @@ public final class DrugReferencePackage {
 		return REVIEW_RETIRED.equals(reviewState);
 	}
 
+	public List<String> getIssues() {
+		return issues;
+	}
+
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new LinkedHashMap<String, Object>();
 		map.put("id", id);
@@ -88,6 +104,7 @@ public final class DrugReferencePackage {
 		map.put("version", version);
 		map.put("provenance", provenance);
 		map.put("review_state", reviewState);
+		map.put("issues", issues);
 		return map;
 	}
 }

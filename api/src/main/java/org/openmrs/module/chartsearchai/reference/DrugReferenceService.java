@@ -57,6 +57,8 @@ public class DrugReferenceService {
 
 	private volatile List<CrossReactivityGroup> crossReactivityGroups;
 
+	private volatile DrugReferencePackage crossReactivityPackage;
+
 	private DrugReferenceSource source;
 
 	/**
@@ -311,12 +313,21 @@ public class DrugReferenceService {
 		if (crossReactivityGroups == null) {
 			synchronized (this) {
 				if (crossReactivityGroups == null) {
-					crossReactivityGroups = Collections
-							.unmodifiableList(new CrossReactivityGroupsLoader().load());
+					CrossReactivityGroupsLoader loader = new CrossReactivityGroupsLoader();
+					List<CrossReactivityGroup> loaded = loader.load();
+					crossReactivityPackage = loader.lastLoadPackage();
+					crossReactivityGroups = Collections.unmodifiableList(loaded);
 				}
 			}
 		}
 		return crossReactivityGroups;
+	}
+
+	/** @return identity, review state, and parser diagnostics for the relationship rules in force. */
+	public DrugReferencePackage getCrossReactivityPackage() {
+		getCrossReactivityGroups();
+		return crossReactivityPackage == null ? DrugReferencePackage.notLoaded()
+				: crossReactivityPackage;
 	}
 
 	private void ensureLoaded() {
@@ -336,8 +347,12 @@ public class DrugReferenceService {
 			// One instance, so the origin read below belongs to the load performed here.
 			DrugReferenceSource active = source != null ? source : sourceFor(effectiveFormat);
 			List<DrugReference> loaded = active.load();
+			DrugReferencePackage sourcePackage = active.lastLoadPackage();
 			DrugReferenceLoad outcome = new DrugReferenceLoad(effectiveFormat, configuredFormat,
-					configuredPath, active.lastLoadOrigin(), loaded.size());
+					configuredPath, active.lastLoadOrigin(), loaded.size(),
+					sourcePackage == null
+							? DrugReferencePackage.proposed(effectiveFormat, active.lastLoadOrigin())
+							: sourcePackage);
 			// A configured source that resolved to nothing is reported LOUDLY, naming both global
 			// properties: this used to print at INFO exactly like a successful load, so the whole
 			// drug-safety feature could be off with nothing at default log levels to say so
@@ -423,11 +438,17 @@ public class DrugReferenceService {
 		this.entries = entries == null ? Collections.<DrugReference> emptyList()
 				: Collections.unmodifiableList(new ArrayList<DrugReference>(entries));
 		this.crossReactivityGroups = Collections.emptyList();
+		this.crossReactivityPackage = DrugReferencePackage.notLoaded();
 	}
 
 	/** Test seam: inject known cross-reactivity groups, bypassing the groups-file load. */
 	void setCrossReactivityGroups(List<CrossReactivityGroup> groups) {
 		this.crossReactivityGroups = groups == null ? Collections.<CrossReactivityGroup> emptyList()
 				: Collections.unmodifiableList(new ArrayList<CrossReactivityGroup>(groups));
+	}
+
+	/** Test seam for the independently reviewed relationship package. */
+	void setCrossReactivityPackage(DrugReferencePackage sourcePackage) {
+		this.crossReactivityPackage = sourcePackage;
 	}
 }

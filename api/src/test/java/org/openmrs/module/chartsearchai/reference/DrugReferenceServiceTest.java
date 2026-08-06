@@ -124,4 +124,31 @@ public class DrugReferenceServiceTest {
 		assertEquals(1, svc.getAll().size());
 		assertEquals("test-drug", svc.getAll().get(0).getId());
 	}
+
+	@Test
+	public void retainsConfiguredJsonPackageIdentityAndReviewState() {
+		DrugReference entry = new DrugReference();
+		entry.setId("reviewed-drug");
+		entry.setName("Reviewed Drug");
+		entry.setAliases(Collections.singletonList("reviewed drug"));
+		DrugReferencePackage reviewed = new DrugReferencePackage(
+				"operator-reviewed-v3", "json", "3.0",
+				Collections.<String, Object> singletonMap("source", "local formulary"),
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED);
+		DrugReferenceService svc = new DrugReferenceService();
+		svc.setSource(new DrugReferenceSource() {
+			@Override
+			public List<DrugReference> load() {
+				return Collections.singletonList(entry);
+			}
+
+			@Override
+			public DrugReferencePackage lastLoadPackage() {
+				return reviewed;
+			}
+		});
+
+		svc.getAll();
+		assertEquals(reviewed.toMap(), svc.getLoadStatus().getSourcePackage().toMap());
+	}
 }

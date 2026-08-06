@@ -55,4 +55,13 @@ public interface DrugReferenceSource {
 	default String lastLoadOrigin() {
 		return null;
 	}
+
+	/**
+	 * @return metadata parsed from the same package that produced {@link #load()}, or null when the
+	 *         source format has no package metadata. The service supplies an explicit proposed default
+	 *         for such sources; format selection alone never implies clinical approval.
+	 */
+	default DrugReferencePackage lastLoadPackage() {
+		return null;
+	}
 }

@@ -171,6 +171,10 @@ public class DrugSafetyValidator {
 
 	private String reviewStateOverride;
 
+	private String crossReactivityReviewStateOverride;
+
+	private DrugReferencePackage sourcePackageOverride;
+
 	/** Test seam: production wires {@link DrugReferenceService} via {@link Autowired}. */
 	void setDrugReferenceService(DrugReferenceService drugReferenceService) {
 		this.drugReferenceService = drugReferenceService;
@@ -180,6 +184,16 @@ public class DrugSafetyValidator {
 	 *  from the loaded package and has no global-property bypass. */
 	void setReviewStateForTest(String reviewState) {
 		this.reviewStateOverride = reviewState;
+	}
+
+	/** Test-only seam for independently reviewed relationship rules. */
+	void setCrossReactivityReviewStateForTest(String reviewState) {
+		this.crossReactivityReviewStateOverride = reviewState;
+	}
+
+	/** Test-only seam for package diagnostics that cannot be represented by a review state alone. */
+	void setSourcePackageForTest(DrugReferencePackage sourcePackage) {
+		this.sourcePackageOverride = sourcePackage;
 	}
 
 	/** checked/limited/unavailable alongside the raised warnings (dual-provider-conformance.v1
@@ -334,13 +348,18 @@ public class DrugSafetyValidator {
 		}
 		PatientClinicalContext resolved = drugReferenceService.withReferenceNames(context);
 		DrugReferencePackage sourcePackage = effectiveSourcePackage();
+		DrugReferencePackage crossReactivityPackage = effectiveCrossReactivityPackage();
+		Map<String, Object> packageMetadata = packageMetadata(sourcePackage,
+				crossReactivityPackage);
 		if (!sourceAvailable()) {
 			return new SafetyCheckResult(STATUS_UNAVAILABLE,
-					Collections.<SafetyWarning> emptyList(), sourcePackage.toMap(),
+					Collections.<SafetyWarning> emptyList(), packageMetadata,
 					coverage(resolved, false), "unavailable",
 					Collections.singletonList("source_unavailable"));
 		}
 		List<String> issues = new ArrayList<String>();
+		addIssues(issues, sourcePackage.getIssues());
+		addIssues(issues, crossReactivityPackage.getIssues());
 		if (!resolved.isMappingComplete()) {
 			issues.add("mapping_incomplete");
 		}
@@ -353,6 +372,14 @@ public class DrugSafetyValidator {
 		else if (!sourcePackage.isClinicallyApproved()) {
 			issues.add("source_not_clinically_approved");
 		}
+		if (crossReactivityPackage.isRetired()) {
+			issues.add("cross_reactivity_source_retired");
+		}
+		else if (!crossReactivityPackage.isClinicallyApproved()
+				&& !issues.contains("cross_reactivity_source_unavailable")
+				&& !issues.contains("cross_reactivity_data_invalid")) {
+			issues.add("cross_reactivity_not_clinically_approved");
+		}
 		if (!(warnDose && warnInteractions && warnContra)) {
 			issues.add("check_scope_limited");
 		}
@@ -362,16 +389,19 @@ public class DrugSafetyValidator {
 				? "high" : "limited";
 		if (!sourcePackage.isClinicallyApproved()) {
 			return new SafetyCheckResult(sourcePackage.isRetired() ? STATUS_UNAVAILABLE : STATUS_LIMITED,
-					Collections.<SafetyWarning> emptyList(), sourcePackage.toMap(), coverage,
+					Collections.<SafetyWarning> emptyList(), packageMetadata, coverage,
 					identity, issues);
 		}
 		List<SafetyWarning> warnings = validate(answer, question, resolved, mappings,
 				warnDose, warnInteractions, warnContra);
 		return new SafetyCheckResult(issues.isEmpty() ? STATUS_CHECKED : STATUS_LIMITED,
-				warnings, sourcePackage.toMap(), coverage, identity, issues);
+				warnings, packageMetadata, coverage, identity, issues);
 	}
 
 	private DrugReferencePackage effectiveSourcePackage() {
+		if (sourcePackageOverride != null) {
+			return sourcePackageOverride;
+		}
 		if (reviewStateOverride != null) {
 			return new DrugReferencePackage("approved-test-rules", "test", "1",
 					Collections.<String, Object> singletonMap("fixture", "in-memory"),
@@ -385,8 +415,42 @@ public class DrugSafetyValidator {
 		}
 	}
 
+	private DrugReferencePackage effectiveCrossReactivityPackage() {
+		if (crossReactivityReviewStateOverride != null) {
+			return new DrugReferencePackage("approved-test-relationships", "test", "1",
+					Collections.<String, Object> singletonMap("fixture", "in-memory"),
+					crossReactivityReviewStateOverride);
+		}
+		try {
+			return drugReferenceService.getCrossReactivityPackage();
+		}
+		catch (RuntimeException e) {
+			return DrugReferencePackage.notLoaded();
+		}
+	}
+
+	private static Map<String, Object> packageMetadata(DrugReferencePackage sourcePackage,
+			DrugReferencePackage crossReactivityPackage) {
+		Map<String, Object> metadata = new LinkedHashMap<String, Object>(sourcePackage.toMap());
+		metadata.put("cross_reactivity_review_state", crossReactivityPackage.getReviewState());
+		metadata.put("cross_reactivity", crossReactivityPackage.toMap());
+		return metadata;
+	}
+
+	private static void addIssues(List<String> target, List<String> additions) {
+		for (String issue : additions) {
+			if (!target.contains(issue)) {
+				target.add(issue);
+			}
+		}
+	}
+
+	private boolean relationshipRulesClinicallyApproved() {
+		return effectiveCrossReactivityPackage().isClinicallyApproved();
+	}
+
 	private boolean sourceAvailable() {
-		if (reviewStateOverride != null) {
+		if (reviewStateOverride != null || sourcePackageOverride != null) {
 			return true;
 		}
 		try {
@@ -402,7 +466,8 @@ public class DrugSafetyValidator {
 		List<String> issues = new ArrayList<String>();
 		issues.add(issue);
 		return new SafetyCheckResult(STATUS_UNAVAILABLE, Collections.<SafetyWarning> emptyList(),
-				effectiveSourcePackage().toMap(), coverage(context, false), "unavailable", issues);
+				packageMetadata(effectiveSourcePackage(), effectiveCrossReactivityPackage()),
+				coverage(context, false), "unavailable", issues);
 	}
 
 	private static Map<String, Object> coverage(PatientClinicalContext context,
@@ -2045,9 +2110,12 @@ public class DrugSafetyValidator {
 		if (context == null) {
 			return;
 		}
-		Set<String> refClasses = ref.atcSubgroups();
-		List<CrossReactivityGroup> refGroups = CrossReactivityGroup.groupsOf(ref,
-				drugReferenceService.getCrossReactivityGroups());
+		boolean relationshipRulesApproved = relationshipRulesClinicallyApproved();
+		Set<String> refClasses = relationshipRulesApproved
+				? ref.atcSubgroups() : Collections.<String> emptySet();
+		List<CrossReactivityGroup> refGroups = relationshipRulesApproved
+				? CrossReactivityGroup.groupsOf(ref, drugReferenceService.getCrossReactivityGroups())
+				: Collections.<CrossReactivityGroup> emptyList();
 		Set<DrugReference> seenAllergens = new LinkedHashSet<DrugReference>();
 		for (String allergyToken : context.getAllergyTokens()) {
 			DrugReference allergen = drugReferenceService.lookupByToken(allergyToken);
@@ -2209,7 +2277,7 @@ public class DrugSafetyValidator {
 	 */
 	private Map<String, String> classRelationships(DrugReference ref, PatientClinicalContext context) {
 		Map<String, String> out = new LinkedHashMap<String, String>();
-		if (context == null) {
+		if (context == null || !relationshipRulesClinicallyApproved()) {
 			return out;
 		}
 		Set<String> refClasses = ref.atcSubgroups();

@@ -13,14 +13,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -46,10 +48,30 @@ public class CrossReactivityGroupsLoader {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
+	private volatile ParsedDataset parsedDuringLoad;
+
+	private volatile DrugReferencePackage lastLoadPackage;
+
 	public List<CrossReactivityGroup> load() {
-		return ReferenceDataFiles.loadWithClasspathFallback(
+		parsedDuringLoad = null;
+		ReferenceDataFiles.Loaded<CrossReactivityGroup> loaded = ReferenceDataFiles.loadWithClasspathFallback(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, CLASSPATH_DEFAULT,
-				"cross-reactivity groups", CrossReactivityGroupsLoader::parse).getItems();
+				"cross-reactivity groups", this::parseAndCapture);
+		lastLoadPackage = parsedDuringLoad == null
+				? unavailablePackage(loaded.getOrigin())
+				: parsedDuringLoad.toPackage(loaded.getOrigin());
+		return loaded.getItems();
+	}
+
+	public DrugReferencePackage lastLoadPackage() {
+		return lastLoadPackage;
+	}
+
+	private static DrugReferencePackage unavailablePackage(String origin) {
+		return new DrugReferencePackage("unavailable-cross-reactivity-package", "json", null,
+				Collections.<String, Object> singletonMap("origin", origin),
+				DrugReferencePackage.REVIEW_PROPOSED,
+				Collections.singletonList("cross_reactivity_source_unavailable"));
 	}
 
 	/**
@@ -60,29 +82,123 @@ public class CrossReactivityGroupsLoader {
 	 * the real dataset.
 	 */
 	static List<CrossReactivityGroup> parse(InputStream in) throws IOException {
-		Dataset dataset = MAPPER.readValue(in, Dataset.class);
-		if (dataset == null || dataset.groups == null) {
-			return Collections.emptyList();
+		return parseDataset(in).groups;
+	}
+
+	private List<CrossReactivityGroup> parseAndCapture(InputStream in) throws IOException {
+		ParsedDataset parsed = parseDataset(in);
+		parsedDuringLoad = parsed;
+		return parsed.groups;
+	}
+
+	private static ParsedDataset parseDataset(InputStream in) throws IOException {
+		JsonNode root = MAPPER.readTree(in);
+		if (root == null || !root.isObject()) {
+			return ParsedDataset.invalid();
+		}
+		List<String> issues = new ArrayList<String>();
+		JsonNode rawGroups = root.get("groups");
+		if (rawGroups == null || !rawGroups.isArray()) {
+			issues.add("cross_reactivity_data_invalid");
+			return new ParsedDataset(Collections.<CrossReactivityGroup> emptyList(),
+					text(root, "packageId"), text(root, "version"), text(root, "source"),
+					text(root, "reviewState"), issues);
 		}
 		List<CrossReactivityGroup> usable = new ArrayList<CrossReactivityGroup>();
 		int dropped = 0;
-		for (CrossReactivityGroup group : dataset.groups) {
+		boolean partial = false;
+		for (JsonNode rawGroup : rawGroups) {
+			CrossReactivityGroup group;
+			try {
+				group = rawGroup != null && rawGroup.isObject()
+						? MAPPER.treeToValue(rawGroup, CrossReactivityGroup.class) : null;
+			}
+			catch (IOException | RuntimeException e) {
+				group = null;
+			}
 			if (group == null || ChartSearchAiUtils.isBlank(group.getName())
 					|| group.normalizedAtcPrefixes().isEmpty()) {
 				dropped++;
 				continue;
 			}
+			partial |= invalidPrefixes(rawGroup);
 			usable.add(group);
 		}
 		if (dropped > 0) {
 			log.warn("Dropped {} unusable cross-reactivity groups (blank name or no usable atcPrefixes)", dropped);
+			partial = true;
 		}
-		return usable;
+		String reviewState = text(root, "reviewState");
+		if (!validReviewState(reviewState)) {
+			partial = true;
+		}
+		if (partial) {
+			issues.add("cross_reactivity_data_partially_invalid");
+		}
+		return new ParsedDataset(usable, text(root, "packageId"), text(root, "version"),
+				text(root, "source"), reviewState, issues);
 	}
 
-	@JsonIgnoreProperties(ignoreUnknown = true)
-	private static class Dataset {
+	private static boolean invalidPrefixes(JsonNode group) {
+		JsonNode prefixes = group == null ? null : group.get("atcPrefixes");
+		if (prefixes == null || !prefixes.isArray()) {
+			return true;
+		}
+		for (JsonNode prefix : prefixes) {
+			if (prefix == null || !prefix.isTextual() || ChartSearchAiUtils.isBlank(prefix.asText())) {
+				return true;
+			}
+		}
+		return false;
+	}
 
-		public List<CrossReactivityGroup> groups;
+	private static String text(JsonNode node, String field) {
+		JsonNode value = node == null ? null : node.get(field);
+		return value != null && value.isTextual() && !ChartSearchAiUtils.isBlank(value.asText())
+				? value.asText().trim() : null;
+	}
+
+	private static boolean validReviewState(String value) {
+		return DrugReferencePackage.REVIEW_PROPOSED.equals(value)
+				|| DrugReferencePackage.REVIEW_EVIDENCE_CURATED.equals(value)
+				|| DrugReferencePackage.REVIEW_CLINICALLY_APPROVED.equals(value)
+				|| DrugReferencePackage.REVIEW_RETIRED.equals(value);
+	}
+
+	private static final class ParsedDataset {
+
+		private final List<CrossReactivityGroup> groups;
+		private final String packageId;
+		private final String version;
+		private final String source;
+		private final String reviewState;
+		private final List<String> issues;
+
+		private ParsedDataset(List<CrossReactivityGroup> groups, String packageId,
+				String version, String source, String reviewState, List<String> issues) {
+			this.groups = groups;
+			this.packageId = packageId;
+			this.version = version;
+			this.source = source;
+			this.reviewState = reviewState;
+			this.issues = issues;
+		}
+
+		private static ParsedDataset invalid() {
+			return new ParsedDataset(Collections.<CrossReactivityGroup> emptyList(), null, null,
+					null, DrugReferencePackage.REVIEW_PROPOSED,
+					Collections.singletonList("cross_reactivity_data_invalid"));
+		}
+
+		private DrugReferencePackage toPackage(String origin) {
+			Map<String, Object> provenance = new LinkedHashMap<String, Object>();
+			provenance.put("origin", origin);
+			if (source != null) {
+				provenance.put("source", source);
+			}
+			return new DrugReferencePackage(
+					packageId == null ? "unidentified-cross-reactivity-package" : packageId,
+					"json", version, provenance, reviewState, issues);
+		}
 	}
 }

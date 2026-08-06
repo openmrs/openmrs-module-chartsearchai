@@ -2,6 +2,7 @@
   "packageId": "chartsearchai-cross-reactivity-research-seed-v1",
   "version": "1.0",
   "reviewState": "proposed",
+  "source": "OpenClinAI research seed",
   "description": "Unreviewed research seed for cross-reactivity code paths. ATC classification alone does not establish cross-reactivity or duplicate therapy, and this file is not a clinically approved deterministic warning source.",
   "groups": [
     {

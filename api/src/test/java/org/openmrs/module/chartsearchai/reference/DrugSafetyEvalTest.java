@@ -75,6 +75,10 @@ public class DrugSafetyEvalTest {
 	public void drugSafety_perCase(String id, EvalCase c) {
 		DrugSafetyValidator validator = new DrugSafetyValidator();
 		validator.setDrugReferenceService(new DrugReferenceService());
+		// The eval includes class/cross-reactivity behavior, so it explicitly evaluates those
+		// candidate rules as approved. Production uses the package's own review state.
+		validator.setCrossReactivityReviewStateForTest(
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED);
 
 		PatientClinicalContext ctx = new PatientClinicalContext(c.ageYears, c.weightKg,
 				toSet(c.activeDrugs), toSet(c.activeDrugAtcCodes),

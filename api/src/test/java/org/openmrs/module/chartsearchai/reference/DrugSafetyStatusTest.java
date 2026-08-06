@@ -15,6 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -146,5 +149,121 @@ public class DrugSafetyStatusTest {
 		assertFalse((Boolean) coverage.get("mapping_complete"));
 		assertFalse((Boolean) coverage.get("exposure_complete"));
 		assertEquals("limited", wire.get("identity_confidence"));
+	}
+
+	@Test
+	public void proposedRelationshipPackageCannotActivateSameAtcClassWarnings() {
+		DrugReference ibuprofen = new DrugReference();
+		ibuprofen.setId("ibuprofen");
+		ibuprofen.setName("Ibuprofen");
+		ibuprofen.setAliases(Collections.singletonList("ibuprofen"));
+		ibuprofen.setAtcCodes(Collections.singletonList("M01AE01"));
+		DrugReference naproxen = new DrugReference();
+		naproxen.setId("naproxen");
+		naproxen.setName("Naproxen");
+		naproxen.setAliases(Collections.singletonList("naproxen"));
+		naproxen.setAtcCodes(Collections.singletonList("M01AE02"));
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+				Arrays.asList(ibuprofen, naproxen));
+		DrugSafetyValidator validator = new DrugSafetyValidator();
+		validator.setDrugReferenceService(service);
+		validator.setReviewStateForTest(DrugReferencePackage.REVIEW_CLINICALLY_APPROVED);
+		validator.setCrossReactivityReviewStateForTest(DrugReferencePackage.REVIEW_PROPOSED);
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null,
+				null, null, Collections.singleton("ibuprofen"), null);
+
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Naproxen may be used.", "Can this patient use naproxen?", context);
+
+		assertEquals(DrugSafetyValidator.STATUS_LIMITED, result.getStatus());
+		assertTrue(result.getWarnings().isEmpty());
+		assertTrue(((java.util.List<?>) result.toMap().get("issues"))
+				.contains("cross_reactivity_not_clinically_approved"));
+		java.util.Map<?, ?> primary = (java.util.Map<?, ?>) result.toMap().get("package");
+		java.util.Map<?, ?> relationship = (java.util.Map<?, ?>) primary.get("cross_reactivity");
+		assertEquals(DrugReferencePackage.REVIEW_PROPOSED, relationship.get("review_state"));
+	}
+
+	@Test
+	public void partiallyInvalidApprovedPackageCannotReportChecked() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.bundledService().getAll());
+		DrugSafetyValidator validator = new DrugSafetyValidator();
+		validator.setDrugReferenceService(service);
+		validator.setSourcePackageForTest(new DrugReferencePackage(
+				"partly-invalid", "json", "1", Collections.<String, Object> emptyMap(),
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED,
+				Collections.singletonList("source_data_partially_invalid")));
+		validator.setCrossReactivityReviewStateForTest(
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED);
+
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"No medication recommendation.", null,
+				DrugReferenceTestSupport.ctx(30, null, null, null, null, null));
+
+		assertEquals(DrugSafetyValidator.STATUS_LIMITED, result.getStatus());
+		assertTrue(((java.util.List<?>) result.toMap().get("issues"))
+				.contains("source_data_partially_invalid"));
+	}
+
+	@Test
+	public void approvedLoadedPackageActivatesWithoutATestReviewOverride() {
+		DrugReference ibuprofen = DrugReferenceTestSupport.bundledService()
+				.findByQuery("ibuprofen").get(0);
+		DrugReferencePackage reviewed = new DrugReferencePackage(
+				"operator-reviewed-v3", "json", "3.0",
+				Collections.<String, Object> singletonMap("source", "local formulary"),
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED);
+		DrugReferenceService service = new DrugReferenceService();
+		service.setSource(new DrugReferenceSource() {
+			@Override
+			public List<DrugReference> load() {
+				return Collections.singletonList(ibuprofen);
+			}
+
+			@Override
+			public DrugReferencePackage lastLoadPackage() {
+				return reviewed;
+			}
+		});
+		service.getAll();
+		service.setCrossReactivityGroups(Collections.<CrossReactivityGroup> emptyList());
+		service.setCrossReactivityPackage(new DrugReferencePackage(
+				"operator-reviewed-relationships", "json", "1",
+				Collections.<String, Object> emptyMap(),
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED));
+		DrugSafetyValidator validator = new DrugSafetyValidator();
+		validator.setDrugReferenceService(service);
+
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Ibuprofen 600 mg every 6 hours can be given for pain.", null,
+				DrugReferenceTestSupport.ctx(5, null, null, null, null, null));
+
+		assertEquals(DrugSafetyValidator.STATUS_CHECKED, result.getStatus());
+		assertTrue(DrugReferenceTestSupport.has(result.getWarnings(),
+				SafetyWarning.TYPE_OVERDOSE, "ibuprofen"));
+	}
+
+	@Test
+	public void partiallyInvalidRelationshipPackageCannotReportChecked() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.bundledService().getAll());
+		service.setCrossReactivityGroups(Collections.<CrossReactivityGroup> emptyList());
+		service.setCrossReactivityPackage(new DrugReferencePackage(
+				"partly-invalid-relationships", "json", "1",
+				Collections.<String, Object> emptyMap(),
+				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED,
+				Collections.singletonList("cross_reactivity_data_partially_invalid")));
+		DrugSafetyValidator validator = new DrugSafetyValidator();
+		validator.setDrugReferenceService(service);
+		validator.setReviewStateForTest(DrugReferencePackage.REVIEW_CLINICALLY_APPROVED);
+
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"No medication recommendation.", null,
+				DrugReferenceTestSupport.ctx(30, null, null, null, null, null));
+
+		assertEquals(DrugSafetyValidator.STATUS_LIMITED, result.getStatus());
+		assertTrue(((java.util.List<?>) result.toMap().get("issues"))
+				.contains("cross_reactivity_data_partially_invalid"));
 	}
 }

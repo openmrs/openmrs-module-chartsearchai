@@ -82,7 +82,8 @@ public class CrossReactivityGroupsTest {
 	@Test
 	public void bundledGroupsFileLoadsWithTheNsaidSeedGroup() {
 		// Production load path: no OpenMRS context -> the GP read fails safe -> classpath fallback.
-		List<CrossReactivityGroup> groups = bundledGroups();
+		CrossReactivityGroupsLoader loader = new CrossReactivityGroupsLoader();
+		List<CrossReactivityGroup> groups = loader.load();
 		assertFalse(groups.isEmpty(), "the bundled cross-reactivity groups file should load");
 		CrossReactivityGroup nsaid = null;
 		for (CrossReactivityGroup g : groups) {
@@ -95,6 +96,10 @@ public class CrossReactivityGroupsTest {
 				"the NSAID group should span the propionic-acid branch (M01AE)");
 		assertTrue(nsaid.normalizedAtcPrefixes().contains("N02BA"),
 				"the NSAID group should span the salicylate branch (N02BA)");
+		assertEquals("chartsearchai-cross-reactivity-research-seed-v1",
+				loader.lastLoadPackage().toMap().get("id"));
+		assertEquals(DrugReferencePackage.REVIEW_PROPOSED,
+				loader.lastLoadPackage().getReviewState());
 	}
 
 	@Test

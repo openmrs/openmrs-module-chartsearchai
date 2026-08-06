@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -25,10 +26,15 @@ public class JsonDrugReferenceSourceTest {
 
 	@Test
 	public void loadsBundledDatasetViaClasspathFallback() {
-		List<DrugReference> all = new JsonDrugReferenceSource().load();
+		JsonDrugReferenceSource source = new JsonDrugReferenceSource();
+		List<DrugReference> all = source.load();
 		assertFalse(all.isEmpty(), "bundled dataset should load via the classpath fallback");
 		assertTrue(all.stream().anyMatch(r -> "ibuprofen".equals(r.getId())),
 				"dataset should contain the ibuprofen entry");
+		assertEquals("chartsearchai-research-seed-v1", source.lastLoadPackage().toMap().get("id"));
+		assertEquals("1.0", source.lastLoadPackage().toMap().get("version"));
+		assertEquals(DrugReferencePackage.REVIEW_PROPOSED,
+				source.lastLoadPackage().getReviewState());
 	}
 
 	@Test

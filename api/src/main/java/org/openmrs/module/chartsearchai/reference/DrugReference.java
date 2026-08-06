@@ -220,11 +220,13 @@ public class DrugReference {
 	 *
 	 *         <p>The key for grouping the ROWS OF ONE SUBSTANCE inside one request, shared by the
 	 *         contraindication chip ledger ({@code DrugSafetyValidator.ContraindicationChips}, issue
-	 *         #145) and the interaction arms' subject side (#162) so the two arms cannot merge
-	 *         different sets of rows. Identity is the right fallback for both because every set they
-	 *         group is resolved against {@link DrugReferenceService}'s shared {@code getAll()} cache,
-	 *         so one row is one object. {@link DrugReferenceInjector#matchingEntries} deliberately
-	 *         falls back to {@link #getId()} instead, not to this — see there.
+	 *         #145), the interaction arms' subject side (#162) and the class arm's co-medication
+	 *         grouping ({@code DrugSafetyValidator.orderPartners}, issue #171), so no two of them can
+	 *         merge different sets of rows. Identity is the right fallback for all of them because
+	 *         every set they group is resolved against {@link DrugReferenceService}'s shared
+	 *         {@code getAll()} cache, so one row is one object.
+	 *         {@link DrugReferenceInjector#matchingEntries} deliberately falls back to
+	 *         {@link #getId()} instead, not to this — see there.
 	 */
 	Object substanceGroupKey() {
 		Object substance = substanceKey();
@@ -253,11 +255,14 @@ public class DrugReference {
 
 	/**
 	 * Which of two rows of ONE substance should represent it — the row a collapsed chip is named after
-	 * ({@code DrugSafetyValidator.addInteractionWarnings}, issue #162) and the row a collapsed
-	 * reference record is rendered from ({@link DrugReferenceInjector#matchingEntries}, issue #163).
-	 * Shared rather than decided twice, because the two surfaces describe the same substance to the same
-	 * clinician and to the same model: a chip naming the substance beside a record naming one of its
-	 * routes is the chip-versus-prose divergence this module keeps having to remove.
+	 * ({@code DrugSafetyValidator.addInteractionWarnings}, issue #162), the row a collapsed reference
+	 * record is rendered from ({@link DrugReferenceInjector#matchingEntries}, issue #163), and the row a
+	 * class chip names its PARTNER by ({@code DrugSafetyValidator.entryForAtcCode}, issue #174 site 1 —
+	 * where the ambiguity is not two rows a question resolved but the several rows that all publish the
+	 * one ATC code being looked up). Shared rather than decided three times, because those surfaces
+	 * describe the same substance to the same clinician and to the same model: a chip naming the
+	 * substance beside a record naming one of its routes is the chip-versus-prose divergence this module
+	 * keeps having to remove.
 	 *
 	 * @return {@code candidate} when it {@link #namesNoRoute()} and {@code incumbent} does not, else
 	 *         {@code incumbent} — so the route-unspecified row wins wherever the family has one, and
@@ -348,19 +353,38 @@ public class DrugReference {
 
 	/** An ATC level-4 (chemical subgroup) code is the {@value #ATC_SUBGROUP_PREFIX_LENGTH}-character
 	 *  prefix of a level-5 substance code ({@code M01AE01} -> {@code M01AE}). Two drugs sharing a
-	 *  subgroup are structurally related (ibuprofen/naproxen, both {@code M01AE}). */
+	 *  subgroup are USUALLY structurally related (ibuprofen/naproxen, both {@code M01AE}) — but not
+	 *  always: see {@link #isUnclassifyingAtcCode} for the subgroups where sharing means nothing. */
 	public static final int ATC_SUBGROUP_PREFIX_LENGTH = 5;
 
 	/**
 	 * @return this entry's ATC level-4 chemical subgroups — the {@link #ATC_SUBGROUP_PREFIX_LENGTH}-char
 	 *         prefixes of its {@link #normalizedAtcCodes()} (codes shorter than that contribute none).
-	 *         Two entries are in the same ATC class iff their subgroup sets intersect. This is the one
-	 *         shared definition used by both the order-relevance scoping ({@code DrugReferenceInjector})
-	 *         and the class-based safety checks ({@code DrugSafetyValidator}).
+	 *         This is the one shared REDUCTION, used by both the order-relevance scoping
+	 *         ({@code DrugReferenceInjector}) and the class-based safety checks
+	 *         ({@code DrugSafetyValidator}), so neither can reach a different set of subgroups from the
+	 *         same codes.
+	 *         <p>An intersection of two entries' subgroups is where "same ATC class" starts, not where
+	 *         it ends: since issue #167 the safety checks additionally discard a shared subgroup that
+	 *         {@link #isUnclassifyingAtcCode} recognises, and the injector's relevance scoping
+	 *         deliberately does not — it is deciding what to put in front of the model, where an extra
+	 *         record is noise, not what to assert to a clinician.
 	 */
 	public Set<String> atcSubgroups() {
+		return atcSubgroups(normalizedAtcCodes());
+	}
+
+	/**
+	 * @return the level-4 subgroups of already-normalized {@code codes} — the same reduction
+	 *         {@link #atcSubgroups()} applies to an entry's own codes, for the codes an ACTIVE ORDER's
+	 *         concept maps to, which belong to no entry ({@code DrugSafetyValidator.classRelationships}
+	 *         compares those directly, because the loaded dataset need not carry the substance they
+	 *         identify). One definition, so an order and an entry cannot come to be in "the same ATC
+	 *         class" by two different reductions.
+	 */
+	static Set<String> atcSubgroups(Set<String> codes) {
 		Set<String> out = new LinkedHashSet<String>();
-		for (String code : normalizedAtcCodes()) {
+		for (String code : codes) {
 			if (code.length() >= ATC_SUBGROUP_PREFIX_LENGTH) {
 				out.add(code.substring(0, ATC_SUBGROUP_PREFIX_LENGTH));
 			}
@@ -457,6 +481,123 @@ public class DrugReference {
 		String normalized = normalizeAtcToken(code);
 		return normalized != null && !fallsUnderAnyGroup(normalized, SYSTEMIC_USE_EXCEPTIONS)
 				&& fallsUnderAnyGroup(normalized, LOCALLY_APPLIED_ATC_GROUPS);
+	}
+
+	/**
+	 * The ATC groups that assert NOTHING about the substances filed under them, so that two drugs
+	 * sharing one are not thereby related at all (issue #167). Prefixes at whatever level ATC states
+	 * the property at — mostly level-4 subgroups, but {@code V03A} and {@code V07A} are level-3, which
+	 * is why this is named for GROUPS the way {@link #LOCALLY_APPLIED_ATC_GROUPS} is and not for the
+	 * {@value #ATC_SUBGROUP_PREFIX_LENGTH}-character subgroups the matching itself compares.
+	 *
+	 * <p><b>Why a residual bucket is not automatically one of these.</b> ATC files a residue in most of
+	 * its groups — a level-4 subgroup whose published name begins "Other" or "Various", meaning
+	 * "everything in the group above that is not classified so far". The shipped 19 MB KB uses 97 of
+	 * them. But a residue INHERITS whatever the group containing it asserts: {@code R06AX} is "Other
+	 * antihistamines for systemic use", and its parent {@code R06A} is "ANTIHISTAMINES FOR SYSTEMIC
+	 * USE", so two drugs sharing {@code R06AX} really are both antihistamines and one really is
+	 * duplicate therapy for the other. Same for {@code J01GB} "Other aminoglycosides" (already pinned
+	 * by {@code CrossReactivityClassChoiceTest}), {@code N06AX} antidepressants, {@code N03AX}
+	 * antiepileptics, {@code N02AX} opioids. Vetoing every residue would have dropped a class claim
+	 * from 1974 of the KB's 7783 pairs that share a subgroup; 1488 of those keep it here.
+	 *
+	 * <p><b>The three families, and the reading of ATC's words that puts each here:</b>
+	 * <ul>
+	 *   <li>a residue inside a group ATC defines by SITE OF APPLICATION — the groups
+	 *       {@link #isLocallyAppliedAtcCode} already recognises. {@code A01AD} "Other agents for local
+	 *       oral treatment" under {@code A01} "Stomatological preparations" is the whole of what
+	 *       acetylsalicylic acid ({@code A01AD05}, a mouth rinse) and epinephrine ({@code A01AD01}, a
+	 *       dental haemostatic) have in common, and the chip built on it told a clinician that
+	 *       adrenaline duplicates aspirin. Its siblings {@code A01AA}/{@code AB}/{@code AC} name what
+	 *       their members ARE (caries prophylactics, antiinfectives, corticosteroids) and are
+	 *       deliberately absent — being applied in one place is not a shared property, being a
+	 *       corticosteroid is. <b>This family over-reaches, knowingly</b>: the level-3 groups nested
+	 *       inside these do not all stop at a site — {@code D06A} is "Antibiotics for topical use",
+	 *       {@code D01A} "Antifungals for topical use", {@code S01G} "Decongestants and antiallergics"
+	 *       — so their residue does assert something about its members. Telling those groups from the ones that
+	 *       assert nothing is a per-group pharmacological judgement, which is what this rule exists to
+	 *       avoid making; the cost of not making it is counted below;</li>
+	 *   <li>everything under {@code V03A} "ALL OTHER THERAPEUTIC PRODUCTS" and under {@code V07A} "ALL
+	 *       OTHER NON-THERAPEUTIC PRODUCTS" — the only two groups in the index whose own published name
+	 *       begins "ALL OTHER", and both are filed directly under {@code V} "VARIOUS", so nothing above
+	 *       them names a body system or a property either. Their children partition a residue by the
+	 *       accident each product is used for rather than by what it is: {@code V03AB} "Antidotes"
+	 *       holds potassium iodide beside acetylcysteine, naloxone and dimercaprol, and reporting two
+	 *       of them as cross-reacting states a chemical relationship that does not exist. Written at
+	 *       the group rather than per child so a KB refresh cannot add a child that quietly escapes the
+	 *       rule;</li>
+	 *   <li>{@code S02DC} "Indifferent preparations", under {@code S02D} "OTHER OTOLOGICALS" — a bucket
+	 *       ATC fills by exclusion inside a locally applied group, whose published name happens to say
+	 *       nothing about its members WITHOUT beginning "Other" or "Various". The name test that
+	 *       derives the first family structurally cannot find it, so it is named here instead. WHOCC's
+	 *       own name search returns exactly this one row for "indifferent" and nothing at all for
+	 *       "miscellaneous", which is the evidence that naming one such bucket is enough. Its sibling
+	 *       {@code S02DA} "Analgesics and anesthetics" says what its members are and is deliberately
+	 *       absent, the same distinction as {@code A01AD}'s. Not the same case as {@code D09AX} "Soft
+	 *       paraffin dressings" or {@code D07XA}–{@code D07XD} "Corticosteroids, …, other combinations",
+	 *       also inside {@code D} and also not named "Other …": those name what their members are, so
+	 *       they classify and stay out.</li>
+	 * </ul>
+	 *
+	 * <p><b>Enumerated, not sampled.</b> The first family is every level-4 subgroup in the WHO ATC index
+	 * whose own published name begins "Other"/"Various" AND that falls under
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS} — 27 subgroups, each name read off the WHOCC index itself.
+	 * Derived from the index rather than from the defect, which is what makes the list complete rather
+	 * than a patch of the two reported cases — the failure mode issue #161's own list hit, where four
+	 * missing groups reproduced the defect it had just fixed. The shipped KB uses 20 of the 27, plus 8
+	 * of {@code V03A}'s children; {@code S02DC} and {@code V07A} match no shipped-KB entry at all and
+	 * are here on the criterion rather than on measured impact, exactly as four of the
+	 * {@link #SYSTEMIC_USE_EXCEPTIONS} are — removing them breaks no test, which is why the criterion
+	 * and not the test suite has to decide membership. The first family is complete only WITH RESPECT
+	 * TO {@link #LOCALLY_APPLIED_ATC_GROUPS}: extend that list and it has to be re-derived against the
+	 * same index.
+	 *
+	 * <p><b>Deliberately NOT here, though a reading of the same words reaches them:</b> {@code A16AX}
+	 * "Various alimentary tract and metabolism products" and {@code N07XX} "Other nervous system drugs"
+	 * are residues of a level-2 group that is itself ATC's residue for a whole main group — structurally
+	 * what {@code D11AX} is, and {@code D11AX} is vetoed only because dermatologicals happen to be
+	 * locally applied. They decide 91 and 55 shipped-KB pairs (eliglustat × givosiran, pitolisant ×
+	 * inotersen, neither of which is a relationship). Left out and reported separately rather than
+	 * folded in, because taking them moves every number below and the live evidence measured against it.
+	 *
+	 * <p>Measured over the shipped KB (2026-08-06, re-measured independently 2026-08-07; re-measure
+	 * before relying on a figure): of the 7783 pairs sharing at least one level-4 subgroup, 486 lose
+	 * their class claim entirely, 54 keep one and name a subgroup that does classify the substances
+	 * instead, and 7243 are untouched. The largest contributors are {@code V03AB} (135 pairs),
+	 * {@code D11AX} "Other dermatologicals" (130), {@code S01XA} "Other ophthalmologicals" (99) and
+	 * {@code D06AX} "Other antibiotics for topical use" (68).
+	 *
+	 * <p><b>What that costs, counted rather than rounded down.</b> 116 of the 486 name a subgroup whose
+	 * own published name states a therapy or an indication, so the claim they lose was defensible:
+	 * {@code D06AX} 33, {@code D05AX} 26, {@code D01AE} 25, {@code S01GX} 12, {@code V03AE} 6,
+	 * {@code D10AX} 5, {@code V03AC} 3, {@code G01AX} 3, {@code S01AX} 2, {@code M02AX} 1. Concretely:
+	 * calcipotriol and calcitriol are both topical vitamin-D analogues and share only {@code D05AX};
+	 * azelastine and cetirizine are both H1 antihistamines and share only {@code S01GX}; the iron
+	 * chelators ({@code V03AC}) and the potassium/phosphate binders ({@code V03AE}) do share a mechanism
+	 * and lose the claim with the rest of {@code V03A}. 451 of the 486 carry no DDInter rating either,
+	 * so for those the class chip was the only chip. The price is paid deliberately: the alternative is
+	 * the per-group or per-child judgement named above, and what this module does have instead is the
+	 * curated cross-reactivity groups, which every vetoed pair still falls through to.
+	 */
+	private static final List<String> UNCLASSIFYING_ATC_GROUPS = Collections
+			.unmodifiableList(Arrays.asList("A01AD", "A07AX", "B05CX", "C05AX", "C05BX", "D01AE",
+					"D02AX", "D03AX", "D04AX", "D05AX", "D06AX", "D06BX", "D08AX", "D10AX", "D11AX",
+					"G01AX", "M02AX", "P03AX", "R01AX", "R02AX", "R03BX", "S01AX", "S01EX", "S01GX",
+					"S01JX", "S01KX", "S01XA", "S02DC", "V03A", "V07A"));
+
+	/**
+	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized as
+	 *         {@link #isLocallyAppliedAtcCode} normalizes its argument — sits in one of the
+	 *         {@link #UNCLASSIFYING_ATC_GROUPS}, i.e. whether it is a residual bucket that tells a
+	 *         reader nothing about the substances in it. Null and blank are not: nothing is known about
+	 *         them at all, which is a different answer from "known to mean nothing".
+	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.sharedClass}) for the
+	 *         same reason as its sibling: it is a rule about ATC's own group names, not a fact about a
+	 *         substance.
+	 */
+	static boolean isUnclassifyingAtcCode(String code) {
+		String normalized = normalizeAtcToken(code);
+		return normalized != null && fallsUnderAnyGroup(normalized, UNCLASSIFYING_ATC_GROUPS);
 	}
 
 	/** @return whether the already-normalized {@code code} sits under any of {@code groups} — the one

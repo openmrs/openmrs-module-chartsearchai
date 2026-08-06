@@ -1,0 +1,254 @@
+{
+  "metadata": {
+    "note": "Verbatim DDInter 2.0 slice for issue #171 - a partner substance filed under SEVERAL ATC codes. Rows are field-for-field their KB rows in KB order, and the interaction rows are every KB pair among these drugs. Metronidazole carries five WHOATC codes and Tinidazole three, so the pair shares three level-4 subgroups (G01AF, J01XD, P01AB) and the KB holds NO rated row correlating them - one clinical fact with nothing to fold into, which is where one chip per shared code shows. Ketoprofen and Ibuprofen are the folded half: their Moderate row gives the fold something to attach to while the pair shares M02AA (topical) as well as M01AE (the propionic-acid subgroup that relates them), so which of the two the folded chip names is observable."
+  },
+  "mechanisms": {
+    "-1": {
+      "text": null,
+      "categories": []
+    },
+    "551": {
+      "text": "Concomitant use of more than one nonsteroidal anti-inflammatory drug (NSAID) at a time may increase the potential for serious gastrointestinal toxicity including inflammation, bleeding, ulceration, and perforation of the esophagus, stomach, or intestines. These events can occur at any time during NSAID use, with or without warning symptoms. The risk is dependent on both dosage and duration of therapy.",
+      "categories": [
+        "synergistic_effect"
+      ]
+    }
+  },
+  "drugs": [
+    {
+      "id": "DDInter1009",
+      "name": "Ketoprofen",
+      "rxcui": "6142",
+      "rxnorm_name": "ketoprofen",
+      "drugbank_id": "DB01009",
+      "atc": [
+        "M01AE03",
+        "M02AA10"
+      ],
+      "ciel": [
+        {
+          "code": "78479",
+          "uuid": "78479AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ketoprofen"
+        },
+        {
+          "code": "78480",
+          "uuid": "78480AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ketoprofen lysine"
+        }
+      ]
+    },
+    {
+      "id": "DDInter1202",
+      "name": "Metronidazole",
+      "rxcui": "6922",
+      "rxnorm_name": "metronidazole",
+      "drugbank_id": "DB00916",
+      "atc": [
+        "A01AB17",
+        "D06BX01",
+        "G01AF01",
+        "J01XD01",
+        "P01AB01"
+      ],
+      "ciel": [
+        {
+          "code": "104492",
+          "uuid": "104492AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Diloxanide / metronidazole"
+        },
+        {
+          "code": "167993",
+          "uuid": "ae475f76-b094-4a4b-8f93-29a4c911865f",
+          "name": "Metronidazole / miconazole"
+        },
+        {
+          "code": "167994",
+          "uuid": "8c253b52-9bca-4f01-908d-89e3149e8ebe",
+          "name": "Clotrimazole / metronidazole"
+        },
+        {
+          "code": "170696",
+          "uuid": "6adb14a6-7dbe-43ef-93e0-5b808277dd19",
+          "name": "Metronidazole / neomycin / nystatin"
+        },
+        {
+          "code": "79782",
+          "uuid": "79782AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metronidazole"
+        },
+        {
+          "code": "79783",
+          "uuid": "79783AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metronidazole benzoate"
+        },
+        {
+          "code": "79784",
+          "uuid": "79784AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metronidazole hydrochloride"
+        }
+      ]
+    },
+    {
+      "id": "DDInter1203",
+      "name": "Metronidazole (topical)",
+      "rxcui": "6922",
+      "rxnorm_name": "metronidazole",
+      "drugbank_id": "DB00916",
+      "atc": [
+        "A01AB17",
+        "D06BX01",
+        "G01AF01",
+        "J01XD01",
+        "P01AB01"
+      ],
+      "ciel": [
+        {
+          "code": "104492",
+          "uuid": "104492AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Diloxanide / metronidazole"
+        },
+        {
+          "code": "167993",
+          "uuid": "ae475f76-b094-4a4b-8f93-29a4c911865f",
+          "name": "Metronidazole / miconazole"
+        },
+        {
+          "code": "167994",
+          "uuid": "8c253b52-9bca-4f01-908d-89e3149e8ebe",
+          "name": "Clotrimazole / metronidazole"
+        },
+        {
+          "code": "170696",
+          "uuid": "6adb14a6-7dbe-43ef-93e0-5b808277dd19",
+          "name": "Metronidazole / neomycin / nystatin"
+        },
+        {
+          "code": "79782",
+          "uuid": "79782AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metronidazole"
+        },
+        {
+          "code": "79783",
+          "uuid": "79783AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metronidazole benzoate"
+        },
+        {
+          "code": "79784",
+          "uuid": "79784AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metronidazole hydrochloride"
+        }
+      ]
+    },
+    {
+      "id": "DDInter1811",
+      "name": "Tinidazole",
+      "rxcui": "10612",
+      "rxnorm_name": "tinidazole",
+      "drugbank_id": "DB00911",
+      "atc": [
+        "G01AF21",
+        "J01XD02",
+        "P01AB02"
+      ],
+      "ciel": [
+        {
+          "code": "85151",
+          "uuid": "85151AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Tinidazole"
+        }
+      ]
+    },
+    {
+      "id": "DDInter900",
+      "name": "Ibuprofen",
+      "rxcui": "5640",
+      "rxnorm_name": "ibuprofen",
+      "drugbank_id": "DB01050",
+      "atc": [
+        "C01EB16",
+        "G02CC01",
+        "M01AE01",
+        "M02AA13",
+        "R02AX02"
+      ],
+      "ciel": [
+        {
+          "code": "104246",
+          "uuid": "104246AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Chlorpheniramine / ibuprofen / pseudoephedrine"
+        },
+        {
+          "code": "104370",
+          "uuid": "104370AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Codeine / ibuprofen"
+        },
+        {
+          "code": "104513",
+          "uuid": "104513AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Diphenhydramine / ibuprofen"
+        },
+        {
+          "code": "104847",
+          "uuid": "104847AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Hydrocodone / ibuprofen"
+        },
+        {
+          "code": "104893",
+          "uuid": "104893AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ibuprofen / levomenthol"
+        },
+        {
+          "code": "104894",
+          "uuid": "104894AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ibuprofen / oxycodone"
+        },
+        {
+          "code": "104895",
+          "uuid": "104895AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ibuprofen / pseudoephedrine"
+        },
+        {
+          "code": "104896",
+          "uuid": "104896AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ibuprofen / pseudoisocytidine"
+        },
+        {
+          "code": "170013",
+          "uuid": "58b26824-eb90-4585-abd3-e9ce096e2010",
+          "name": "Acetaminophen / ibuprofen"
+        },
+        {
+          "code": "77897",
+          "uuid": "77897AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ibuprofen"
+        },
+        {
+          "code": "84137",
+          "uuid": "84137AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Solufenum"
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    [
+      "DDInter1009",
+      "DDInter1202",
+      "Unknown",
+      "-1"
+    ],
+    [
+      "DDInter1009",
+      "DDInter900",
+      "Moderate",
+      "551"
+    ],
+    [
+      "DDInter1202",
+      "DDInter900",
+      "Unknown",
+      "-1"
+    ]
+  ]
+}

@@ -38,6 +38,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 30: One chip per substance — the contraindication ledger and its collapse key](#decision-30-one-chip-per-substance--the-contraindication-ledger-and-its-collapse-key)
 - [Decision 31: Name the class that explains the relationship, not the first one shared](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared)
 - [Decision 32: Observable drug-reference load status](#decision-32-observable-drug-reference-load-status)
+- [Decision 33: A residual ATC subgroup is not a relationship](#decision-33-a-residual-atc-subgroup-is-not-a-relationship)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -1909,8 +1910,11 @@ Three additive, data-driven extensions:
    **independently of the entry source** — deliberately not a `DrugReferenceSource` — so the
    rule-less `atc` format gains cross-branch family reasoning from the same file. The
    validator's class-based contraindication and interaction checks fall back to a shared
-   group **only when no ATC subgroup is shared** (most-specific-match-wins; a
-   subgroup+group double-match warns once), and the injector's order-relevance scoping
+   group when no ATC subgroup **that classifies the substances** is shared
+   (most-specific-match-wins; a subgroup+group double-match warns once). Since
+   [Decision 33](#decision-33-a-residual-atc-subgroup-is-not-a-relationship) a shared
+   subgroup can be discarded, so a pair that shares one may still be reported through the
+   group. The injector's order-relevance scoping
    accepts group-related orders. The bundled seed is minimal — one NSAID group spanning
    `M01AE` + `N02BA`, exactly the branches Decision 24 named — expand per deployment.
    The Decision 24 boundary tests remain true as written: they assert ATC **alone** does
@@ -2049,12 +2053,12 @@ This was a systematic bias, not an arbitrary list position: every ATC array in t
 
 Prefer the shared subgroup that classifies the **substance** over one that classifies a **locally applied formulation**, falling back to the locally applied one when that is all the pair shares. Candidates are examined in code order rather than array order, so the answer is a function of the two code sets rather than of where a dataset happened to write a code.
 
-The route/site knowledge is two prefix lists on `DrugReference`: the locally applied groups, each justified by the route or site in the ATC group's own published name, minus the groups nested inside those that ATC itself names *"for systemic use"*. That exception is not hypothetical — without it, a pair sharing both a topical and a systemic subgroup is reported under the topical one.
+The route/site knowledge is two prefix lists on `DrugReference`: the locally applied groups, each justified by the route or site in the ATC group's own published name, minus the groups nested inside those that ATC itself names *"for systemic use"*. That exception is not hypothetical — without it, a pair sharing both a topical and a systemic subgroup is reported under the topical one. ([Decision 33](#decision-33-a-residual-atc-subgroup-is-not-a-relationship) adds a third list, derived from the first.)
 
 ### Why not the two alternatives
 
 - **Match the route of the active order.** The route is not available at this seam and could only ever be available at one of the two call sites: the arm also runs for a drug the *question* names, which has no route at all. Nothing carries the route that far.
-- **Fall back to ATC level 3.** Widening the class breadth to make the label read better trades a wrong reason for a vaguer one and reopens the false-positive cost [Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets) settled. The grain stays level 4; only the *choice among* shared level-4 codes changed.
+- **Fall back to ATC level 3.** Widening the class breadth to make the label read better trades a wrong reason for a vaguer one and reopens the false-positive cost [Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets) settled. The grain stays level 4; only the *choice among* shared level-4 codes changed. ([Decision 33](#decision-33-a-residual-atc-subgroup-is-not-a-relationship) later added the possibility of choosing **none** of them; the matching grain is still level 4.)
 
 ## Decision 32: Observable drug-reference load status
 
@@ -2082,6 +2086,31 @@ The load is lazy and cached for the life of the module, so "which dataset is in 
 Reading the status when the feature is disabled deliberately does **not** trigger a load: polling a status endpoint must not be what starts a large parse, or manufactures the warning, on an install that does not use the feature.
 
 > **A fourth decision in this area is pending, not yet merged.** [#173](https://github.com/openmrs/openmrs-module-chartsearchai/pull/173) carries the "one substance, one row" follow-through — the interaction subject, the injected reference record, and the self-pair parse guard. It is deliberately not written up here while it is open; add it when it lands.
+
+## Decision 33: A residual ATC subgroup is not a relationship
+
+**Status: Accepted** (August 2026) — implemented ([#167](https://github.com/openmrs/openmrs-module-chartsearchai/issues/167), [#171](https://github.com/openmrs/openmrs-module-chartsearchai/issues/171), [#155](https://github.com/openmrs/openmrs-module-chartsearchai/issues/155), [#174](https://github.com/openmrs/openmrs-module-chartsearchai/issues/174) site 1 / [#182](https://github.com/openmrs/openmrs-module-chartsearchai/pull/182)).
+
+### Context
+
+[Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets) reads a shared ATC level-4 subgroup as evidence of a pharmacological relationship, and [Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared) chooses among several shared subgroups. Both assume every subgroup classifies its members. Some do not: ATC files a residue in most of its groups, and a residue inside a group ATC defines by *where the product is applied* says only that — "both are put in the mouth". Live on the 3.7.1 standalone that produced *"Epinephrine is in the same ATC class (A01AD) as active order Acetylsalicylic acid (aspirin) — possible duplicate therapy"*, and *"…same ATC class (V03AB)…"* between potassium iodide and an acetylcysteine allergy.
+
+The same assumption reads a code as a reliable route back to a **name**, and as identifying **one** thing: an order's concept can map to five ATC codes, so one co-medication produced one chip per shared subgroup, and a code the loaded dataset does not cover was printed raw (`as active order N02BA01`).
+
+### Decision
+
+Four sites, two rules.
+
+1. **`DrugReference.isUnclassifyingAtcCode`** — a shared subgroup that classifies neither the substances nor a therapy is *skipped* in both of `sharedClass`'s tiers, so the method can answer "they share nothing that explains anything" and both arms fall through to the curated cross-reactivity groups. A residue **inherits** whatever its containing group asserts, so a blanket residual veto is wrong: `R06AX` sits under "ANTIHISTAMINES FOR SYSTEMIC USE" and two drugs sharing it really are both antihistamines. The list is the residues inside the [Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared) locally applied groups, plus `V03A` and `V07A`, plus `S02DC`. Its derivation, its deliberate over-reach and its measured cost are recorded on the constant.
+2. **One claim per co-medication** — `classRelationships` groups the active-order codes by the co-medication they identify and words one sentence per partner, choosing the class with the same `sharedClass` the allergy arm uses. The partner is named by a ladder: the dataset's entry for the code (through `DrugReference.canonicalRow`, so one substance is one name wherever it appears), else the ORDER's own display name, else the code.
+
+### Why skip rather than demote
+
+A demotion needs a tier left to fall to. Potassium iodide and acetylcysteine share `S01XA` *and* `V03AB` — one locally applied, one not — so every tier a demotion could reach is occupied by another bucket that means nothing either. Reverting the skip to a tier-1-only demotion fails both of `ResidualAtcClassClaimTest`'s arms, the second of them by reporting `S01XA` instead.
+
+### What it costs, and why that is accepted
+
+Of the 7783 shipped-KB pairs that share a level-4 subgroup, 486 lose the class claim and 54 keep one under a subgroup that does classify. 116 of the 486 name a subgroup whose own published name states a therapy or an indication — `D06AX` "Other antibiotics for topical use" is a residue *and* an assertion — so those claims were defensible. Separating the groups that mean something from the ones that do not is a per-group pharmacological judgement this module has no curated data to make, and per-child hand-tuning is exactly what left Decision 31's own list incomplete. The curated cross-reactivity groups remain the fall-through for every vetoed pair.
 
 ## Known limitations
 

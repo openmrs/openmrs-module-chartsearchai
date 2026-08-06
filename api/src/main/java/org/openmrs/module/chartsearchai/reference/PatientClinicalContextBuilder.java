@@ -115,9 +115,12 @@ final class PatientClinicalContextBuilder {
 				// KNOWN GAP, to follow with the reconciliation's other corpus issue: skipping is the
 				// one outcome that reproduces issue #118 rather than repairing it. addAtcCodes above
 				// needs no name, and a safety chip's drug name comes from the KB entry the ATC code
-				// resolves to (DrugSafetyValidator's displayLabelForAtcCode), not from the order — so
-				// a nameless order can still raise a chip reading "as active order simvastatin" while
-				// being invisible to the reconciliation that exists to substantiate it. Reachable, not
+				// resolves to (DrugSafetyValidator's orderPartners), not from the order — so a
+				// nameless order can still raise a chip reading "as active order simvastatin" while
+				// being invisible to the reconciliation that exists to substantiate it. Issue #155
+				// gave that resolution a fallback to the ORDER's display name, which does not reach
+				// this shape: an order skipped here never enters getActiveDrugOrders(), so there is no
+				// display name to fall back to and the chip still speaks only for the KB entry. Reachable, not
 				// theoretical: addConceptName swallows a RuntimeException from concept.getName() (a
 				// detached/lazy-init proxy) in its own try, and addAtcCodes then runs in a separate
 				// one and can still succeed; likewise a concept named only outside the current locale

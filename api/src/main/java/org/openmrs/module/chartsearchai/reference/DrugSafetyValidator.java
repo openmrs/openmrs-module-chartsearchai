@@ -897,13 +897,19 @@ public class DrugSafetyValidator {
 
 	/**
 	 * The reference rows of {@code entries}, grouped by the substance each stands for
-	 * ({@link DrugReference#substanceGroupKey()}), in first-appearance order both between groups and
-	 * within them.
+	 * ({@link DrugReference#substanceGroupKey()}), each group in first-appearance order.
 	 *
-	 * <p>Order matters twice. Between groups, because the caller walks {@code entries} and hands each
-	 * group to the arm at its first row, so a substance's chips keep the position that row's chips had.
-	 * Within a group, because {@link #bestRulePerPartner}'s survivor rule falls back to "keep the
-	 * incumbent", which is only "the dataset's first such row" while the group is in dataset order.
+	 * <p>The order WITHIN a group is the load-bearing one, because {@link #bestRulePerPartner}'s survivor
+	 * rule falls back to "keep the incumbent", which is only "the dataset's first such row" while the
+	 * group is in dataset order.
+	 *
+	 * <p>The order BETWEEN groups is not, and it is worth saying so rather than leaving a
+	 * {@link LinkedHashMap} looking like a guarantee: nothing iterates this map. The caller walks
+	 * {@code entries} itself and removes each group at its first row, so what keeps a substance's chips
+	 * in the position that row's chips had is the CALLER's iteration — replacing this with a
+	 * {@code HashMap} would change no output (measured: the whole api suite passes with one). Keyed
+	 * insertion order is kept only so a debug dump of this map reads in dataset order. Move the emit
+	 * site into an iteration of this map and that positional promise moves with it.
 	 */
 	private static Map<Object, List<DrugReference>> substanceRows(Collection<DrugReference> entries) {
 		Map<Object, List<DrugReference>> out = new LinkedHashMap<Object, List<DrugReference>>();

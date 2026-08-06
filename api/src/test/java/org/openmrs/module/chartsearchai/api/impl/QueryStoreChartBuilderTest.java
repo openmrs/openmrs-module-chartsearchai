@@ -52,7 +52,7 @@ public class QueryStoreChartBuilderTest {
 	@BeforeEach
 	public void setUp() {
 		queryStore = new CountingQueryStoreStub();
-		builder = new TestableQueryStoreChartBuilder(queryStore);
+		builder = new TestableQueryStoreChartBuilder(queryStore.asService());
 		builder.setChartSerializer(new PatientChartSerializer());
 	}
 

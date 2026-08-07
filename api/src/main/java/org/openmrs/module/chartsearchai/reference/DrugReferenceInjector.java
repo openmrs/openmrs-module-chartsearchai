@@ -790,11 +790,12 @@ public class DrugReferenceInjector {
 	 *         different spellings stay two notes beside one chip. Note that closing it by grouping on
 	 *         the entry, which that issue proposes, buys the 397-entry over-merge above.
 	 *
-	 *         <p>Applied BEFORE the severity floor rather than after, deliberately: the floor decides
-	 *         which rules are worth PROMOTING, while a sub-floor row keeps its dataset position in
-	 *         the tail (see the caller), so collapsing only the promoted half would leave a sub-floor
-	 *         row of a partner in the tail beside that partner's promoted row — the same partner
-	 *         twice, which is what this removes.
+	 *         <p>Applied over EVERY rule rather than only over the promoted ones, deliberately: the
+	 *         floor decides which rules are worth PROMOTING, while a sub-floor row keeps its dataset
+	 *         position in the tail (see the caller), so collapsing only the promoted half would leave
+	 *         a sub-floor row of a partner in the tail beside that partner's promoted row — the same
+	 *         partner twice, which is what this removes. (The survivor rule below does READ the floor,
+	 *         through {@link #promotable}; what it does not do is filter the input by it.)
 	 *
 	 *         <p><b>Which row wins, and why promotability is asked FIRST.</b> Running before the floor
 	 *         means the survivor rule decides which row's {@code (token, ATC)} pair the caller's

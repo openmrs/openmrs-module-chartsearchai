@@ -49,7 +49,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * entries, which is what the validator's from-either-side matching expects.
  *
  * <p>One class of row is deliberately NOT expanded: a row pairing a drug with itself, or with another
- * route/formulation row of the same substance — see {@link #isSelfPair} (issue #152).
+ * row of the same substance — see {@link #isSelfPair} (issues #152, #164).
  *
  * <p>Memory: there are far fewer distinct mechanism descriptions than pairs, so the
  * per-partner notes are interned (one shared {@link String} per {@code severity + group}),
@@ -255,15 +255,20 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 * <ul>
 	 *   <li>the same row on both sides — exactly one in the shipped 19 MB KB, {@code DDInter225}
 	 *       (botulinum toxin type A) of 295,184 rows. Its mechanism text is about administering
-	 *       different botulinum SEROTYPES together, and the KB files that same mechanism on genuine
-	 *       cross-row pairs of its own — {@code Botulinum toxin type A} against
-	 *       {@code Botulinum Toxin Type B}, and {@code Daxibotulinumtoxina} against each of them — none
-	 *       of which this guard touches. So the self-pair is an artifact of the KB's granularity that
-	 *       carries no clinical content its siblings do not, while what it puts in front of a clinician
-	 *       is "Botulinum toxin type A interacts with active order botulinum toxin type A".</li>
-	 *   <li>two ROUTE/FORMULATION rows of one substance — 25 more, {@code Lidocaine} against
-	 *       {@code Lidocaine (topical)} and the like (measured 2026-08-06; re-measure before relying on
-	 *       the figures). Also unrenderable rather than merely redundant: every row of a substance
+	 *       different botulinum SEROTYPES together, and the KB files that same mechanism on a genuine
+	 *       cross-SUBSTANCE pair of its own — {@code Botulinum toxin type A} against
+	 *       {@code Botulinum Toxin Type B}, a different {@code rxnorm_name}, which this guard leaves
+	 *       loaded. So the self-pair is an artifact of the KB's granularity that carries no clinical
+	 *       content its sibling does not, while what it puts in front of a clinician is
+	 *       "Botulinum toxin type A interacts with active order botulinum toxin type A".</li>
+	 *   <li>two rows of one substance — 27 more, {@code Lidocaine} against
+	 *       {@code Lidocaine (topical)} and the like (measured 2026-08-07 through this parser;
+	 *       re-measure before relying on the figures). 25 of the 27 are route/formulation variants; the
+	 *       other 2 are rows of one substance whose display names diverge, which the guard only sees
+	 *       since issue #164 widened what {@link DrugReference#substanceKey} counts as one substance —
+	 *       {@code Daxibotulinumtoxina} against {@code Botulinum toxin type A} (Moderate) and two
+	 *       influenza B strain antigens (Minor). Also unrenderable rather than merely redundant: every
+	 *       row of a substance
 	 *       publishes the same {@code rxnorm_name}, which is the match token a rule carries and the label
 	 *       a chip prints, so such a pair can ONLY read as a substance interacting with itself. The
 	 *       systemic-plus-topical exposure the KB row is about cannot be stated by anything this module
@@ -275,15 +280,18 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 *       whose two entries share a name. So this guard makes a decision that arm already took, at the
 	 *       boundary where it covers every arm.
 	 *
-	 *       <p>The accepted cost, named rather than left general: two of the 25 are rated Major —
+	 *       <p>The accepted cost, named rather than left general: two of the 27 are rated Major —
 	 *       {@code Bupivacaine} against {@code Bupivacaine (liposome)} and {@code Aminolevulinic acid}
-	 *       against {@code Aminolevulinic acid (topical)}. Those are real product-level warnings, and
+	 *       against {@code Aminolevulinic acid (topical)}, both route variants and both there before
+	 *       #164. Those are real product-level warnings, and
 	 *       under-warning is the direction this module is otherwise careful about; they are dropped
 	 *       because a chip reading "Bupivacaine interacts with active order bupivacaine" is not that
 	 *       warning. Stating them needs the route vocabulary that is the data-side half of issue #115.</li>
 	 * </ul>
-	 * Through {@link DrugReference#substanceKey(String, String)} rather than a local comparison, so this
-	 * guard and the chip grouping mean the same thing by "one substance". A row publishing no substance
+	 * Through {@link DrugReference#substanceKey(String, String, String)} rather than a local comparison,
+	 * so this guard and the chip grouping mean the same thing by "one substance" — which is why issue
+	 * #164 needed no change on the interaction arm at all: widening that key widened this guard with it.
+	 * A row publishing no substance
 	 * name keys null and is then only caught by the id test — the conservative direction: with no
 	 * substance identity to compare, two different ids are two different drugs.
 	 *

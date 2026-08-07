@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -93,6 +94,10 @@ public class SubstanceIdentityTest {
 		assertNotEquals(DrugReference.normalizeName(tozinameran.getName()),
 				DrugReference.normalizeName(pfizer.getName()),
 				"precondition: with different display names, or the stem would have merged them anyway");
+		assertNotNull(tozinameran.getSubstanceId(),
+				"the family names exactly one DrugBank substance, so the parser resolves an id for it");
+		assertEquals(tozinameran.getSubstanceId(), pfizer.getSubstanceId(),
+				"and BOTH rows take it, including the one carrying no drugbank_id of its own");
 		assertEquals(tozinameran.substanceKey(), pfizer.substanceKey(),
 				"a substance-name family naming ONE DrugBank substance is one substance");
 
@@ -102,6 +107,10 @@ public class SubstanceIdentityTest {
 		assertEquals(DrugReference.normalizeName(omeprazole.getSubstanceName()),
 				DrugReference.normalizeName(esomeprazole.getSubstanceName()),
 				"precondition: the two PPI rows must publish ONE substance name too");
+		assertNull(omeprazole.getSubstanceId(),
+				"but that family names TWO DrugBank substances, so the parser resolves no id for it and "
+						+ "the display stem stays in force");
+		assertNull(esomeprazole.getSubstanceId());
 		assertNotEquals(omeprazole.substanceKey(), esomeprazole.substanceKey(),
 				"while a family naming TWO DrugBank substances is two substances — the enalapril/"
 						+ "enalaprilat decision of issue #121, which the widening must not undo");
@@ -224,6 +233,33 @@ public class SubstanceIdentityTest {
 		assertTrue(warnings.get(0).getDetail().startsWith("Daxibotulinumtoxina (botulinum toxin type a) "
 				+ "interacts with active order botulinum toxin type b — Moderate. "),
 				"was: " + warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void aFamilyThatNamesNoRegistrySubstanceAtAllIsStillOneSubstance() throws IOException {
+		// The criterion's third branch, and the one the two cases above cannot reach: the KB files
+		// `Typhoid vaccine (live)` and `Typhoid vaccine live` under one rxnorm_name and one rxcui with NO
+		// drugbank_id on either, so the registry distinguishes nothing and the family is one substance.
+		// Neither row carries an ATC code, so the class arms are provably silent for them — before this
+		// change an allergy to one of them, asked about the other, produced NO chip at all rather than a
+		// wrong one, which is issue #135's direct-allergy gap reached through stem divergence.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
+		List<DrugReference> inPlay = service.findByQuery("Is Typhoid vaccine (live) safe for her?");
+		assertEquals(1, inPlay.size(), "precondition: the question must resolve exactly one row, was: "
+				+ DrugReferenceTestSupport.names(inPlay));
+		DrugReference allergen = service.lookupByToken("Typhoid vaccine live");
+		assertNotNull(allergen, "precondition: the allergy must resolve to a row");
+		assertNotSame(inPlay.get(0), allergen, "precondition: and to the OTHER row");
+		assertTrue(inPlay.get(0).atcSubgroups().isEmpty() && allergen.atcSubgroups().isEmpty(),
+				"precondition: neither row may carry an ATC subgroup, or a class chip could mask this");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"Is Typhoid vaccine (live) safe for her?", DrugReferenceTestSupport.ctx(60, null, null,
+						null, DrugReferenceTestSupport.set("Typhoid vaccine live"), null));
+
+		assertEquals(1, warnings.size(), "the direct allergy must be reported, was: " + warnings);
+		assertEquals("The patient has a recorded allergy to Typhoid vaccine live (salmonella typhi ty21a"
+				+ " live antigen).", warnings.get(0).getDetail());
 	}
 
 	@Test

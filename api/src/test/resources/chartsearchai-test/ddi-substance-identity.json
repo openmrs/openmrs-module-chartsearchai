@@ -1,8 +1,14 @@
 {
  "metadata": {
-  "note": "Verbatim DDInter 2.0 slice for issue #164 — a substance reported as cross-reactive, or interacting, with ITSELF. Three shapes, all taken unedited from the shipped 19 MB KB. (1) The mirror path: Tetryzoline (nasal) and Tetryzoline (ophthalmic) are one substance to the collapse key already, so an allergy resolving to one of them and a question resolving the other exercise the IDENTITY test alone. (2) Stem divergence, contraindication arm: Pfizer-BioNTech Covid-19 Vaccine and Tozinameran share rxcui 2468231 and one rxnorm_name but no display stem; only Tozinameran carries a drugbank_id. (3) Stem divergence, interaction arm: Daxibotulinumtoxina and Botulinum toxin type A share rxcui 1712 and one rxnorm_name but no display stem; only Botulinum toxin type A carries a drugbank_id. Botulinum Toxin Type B is the negative control on that arm — a different rxnorm_name, so the pair must still be reported. Enalapril and Enalaprilat with their shared Major partner Potassium chloride are the must-NOT-collapse control issue #121 decided: two rxnorm_names, two rxcuis, two drugbank_ids, and so two chips. The Omeprazole/Esomeprazole control — one rxnorm_name, one rxcui, TWO drugbank_ids — lives in ddi-contra-route-variants.json and is asserted from there."
+  "note": "Verbatim DDInter 2.0 slice for issue #164 — a substance reported as cross-reactive, or interacting, with ITSELF. Three shapes, all taken unedited from the shipped 19 MB KB. (1) The mirror path: Tetryzoline (nasal) and Tetryzoline (ophthalmic) are one substance to the collapse key already, so an allergy resolving to one of them and a question resolving the other exercise the IDENTITY test alone. (2) Stem divergence, contraindication arm: Pfizer-BioNTech Covid-19 Vaccine and Tozinameran share rxcui 2468231 and one rxnorm_name but no display stem; only Tozinameran carries a drugbank_id. (3) Stem divergence, interaction arm: Daxibotulinumtoxina and Botulinum toxin type A share rxcui 1712 and one rxnorm_name but no display stem; only Botulinum toxin type A carries a drugbank_id. Botulinum Toxin Type B is the negative control on that arm — a different rxnorm_name, so the pair must still be reported. Enalapril and Enalaprilat with their shared Major partner Potassium chloride are the must-NOT-collapse control issue #121 decided: two rxnorm_names, two rxcuis, two drugbank_ids, and so two chips. The Omeprazole/Esomeprazole control — one rxnorm_name, one rxcui, TWO drugbank_ids — lives in ddi-contra-route-variants.json and is asserted from there. The Typhoid vaccine rows are the third branch of the criterion: one rxnorm_name and NO drugbank_id anywhere in the family, so the data distinguishes nothing and the family is one substance. They carry no ATC code either, so before #164 an allergy to one of them asked about the other produced no chip at all rather than a wrong one."
  },
  "mechanisms": {
+  "1476": {
+   "text": "INTERVAL: The safety, immunogenicity, and efficacy of SARS-CoV-2 (COVID-19) vaccines when administered concurrently with other vaccines have not been assessed.",
+   "categories": [
+    "others"
+   ]
+  },
   "2264": {
    "text": "Concomitant use of angiotensin converting enzyme (ACE) inhibitors and potassium salts may increase the risk of hyperkalemia. Inhibition of ACE results in decreased aldosterone secretion, which in turn causes potassium retention.",
    "categories": [
@@ -23,6 +29,12 @@
   },
   "7257": {
    "text": "The effect of administering different botulinum neurotoxin serotypes concurrently or within several months of one another is unknown.  Excessive weakness may be exacerbated by another administration of botulinum toxin prior to the resolution of the effects of a previously administered botulinum toxin.",
+   "categories": [
+    "others"
+   ]
+  },
+  "7957": {
+   "text": "The safety, immunogenicity, and efficacy of SARS-CoV-2 (COVID-19) vaccines when administered concurrently with other vaccines have not been adequately assessed.  Extensive experience with non-COVID-19 vaccines has demonstrated that immunogenicity and adverse event profiles are generally similar when vaccines are administered simultaneously compared to when they are administered alone.",
    "categories": [
     "others"
    ]
@@ -417,9 +429,45 @@
      "name": "Potassium chloride-potassium gluconate"
     }
    ]
+  },
+  {
+   "id": "DDInter1894",
+   "name": "Typhoid vaccine (live)",
+   "rxcui": "762595",
+   "rxnorm_name": "Salmonella typhi Ty21a live antigen",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "169171",
+     "uuid": "f04559cf-0168-4dec-abc9-05a49ad633f4",
+     "name": "Salmonella typhi Ty21a live antigen"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2138",
+   "name": "Typhoid vaccine live",
+   "rxcui": "762595",
+   "rxnorm_name": "Salmonella typhi Ty21a live antigen",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "169171",
+     "uuid": "f04559cf-0168-4dec-abc9-05a49ad633f4",
+     "name": "Salmonella typhi Ty21a live antigen"
+    }
+   ]
   }
  ],
  "interactions": [
+  [
+   "DDInter1436",
+   "DDInter1894",
+   "Moderate",
+   "1476"
+  ],
   [
    "DDInter1497",
    "DDInter2026",
@@ -431,6 +479,12 @@
    "DDInter638",
    "Major",
    "2264"
+  ],
+  [
+   "DDInter2138",
+   "DDInter2164",
+   "Moderate",
+   "7957"
   ],
   [
    "DDInter2169",

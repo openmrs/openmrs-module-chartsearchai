@@ -187,9 +187,9 @@ public class DrugReference {
 	 *       values are shared by more than one entry, across 332 entries, and the {@code rxcui}
 	 *       partitions those entries identically (0 families disagreeing in either direction), so this
 	 *       is the dataset's substance identity rather than a spelling coincidence.</li>
-	 *   <li>{@link #getSubstanceId()} — the data's own IDENTITY for that substance, as a VETO on the
-	 *       claim, because the claim over-merges. Among those 142 families sit pairs of genuinely
-	 *       different substances: {@code Omeprazole}/{@code Esomeprazole} (one
+	 *   <li>{@link #getSubstanceId()} — the data's own IDENTITY for that substance, which either
+	 *       CONFIRMS the claim or withdraws it, because the claim over-merges. Among those 142 families
+	 *       sit pairs of genuinely different substances: {@code Omeprazole}/{@code Esomeprazole} (one
 	 *       {@code rxnorm_name}, one {@code rxcui}, one ATC code),
 	 *       {@code Amphetamine}/{@code Dextroamphetamine}, {@code Fenfluramine}/{@code Dexfenfluramine},
 	 *       {@code Gabapentin}/{@code Gabapentin enacarbil}, {@code Netupitant}/{@code Fosnetupitant},
@@ -197,8 +197,10 @@ public class DrugReference {
 	 *       {@code Atropine}/{@code Hyoscyamine}, {@code Hydrocortisone}/{@code Hydrocortisone butyrate},
 	 *       {@code Estrone}/{@code Estrone sulfate} — each of them the
 	 *       {@code enalapril}/{@code enalaprilat} shape issue #121 decided must stay two chips. 19 of the
-	 *       142 families name two or more DrugBank substances and are exactly these; in each, the id is
-	 *       null and the veto falls to the DISPLAY STEM below, which separates every one of them.</li>
+	 *       142 families name two or more DrugBank substances and are exactly these. There the id is
+	 *       withheld — {@link DdiDrugReferenceSource} sets none, because it cannot say which of the two
+	 *       a given row is — and the veto falls to the DISPLAY STEM, which separates every one of
+	 *       them.</li>
 	 * </ul>
 	 *
 	 * <p><b>Why the stem is the fallback and not the veto (issue #164).</b> It used to be the veto, and
@@ -287,10 +289,10 @@ public class DrugReference {
 	 *         the data-side gap issue #115 records), so the only route it can honestly assert is none.
 	 *
 	 *         <p>Consumed by {@link #canonicalRow}, which is where the two collapses that need it agree
-	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-06; re-measure before relying
-	 *         on the figures): of the 121 substances filed as more than one row, 110 have such a row and
-	 *         11 do not — {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
-	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in 7 of the 110 it is NOT the family's
+	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-07; re-measure before relying
+	 *         on the figures): of the 129 substances filed as more than one row, 119 have such a row and
+	 *         10 do not — {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
+	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in 7 of the 119 it is NOT the family's
 	 *         first row, which is why the choice cannot be left to dataset order.
 	 */
 	boolean namesNoRoute() {
@@ -311,7 +313,7 @@ public class DrugReference {
 	 *
 	 * @return {@code candidate} when it {@link #namesNoRoute()} and {@code incumbent} does not, else
 	 *         {@code incumbent} — so the route-unspecified row wins wherever the family has one, and
-	 *         otherwise the first row seen keeps the role. For the 11 shipped families that name no
+	 *         otherwise the first row seen keeps the role. For the 10 shipped families that name no
 	 *         unqualified row the survivor therefore still carries a qualifier: the KB publishes no
 	 *         unqualified name for those substances, and manufacturing one by stripping a display name
 	 *         is the pattern-match-a-label mistake issue #148 had to undo.

@@ -1,0 +1,81 @@
+{
+  "version": "1.0",
+  "source": "test fixture — issue #174 site 4: a curated file that files one substance as several rows AND publishes age bands on them, the shape no bundled source can produce",
+  "entries": [
+    {
+      "id": "amoxicillin-suspension",
+      "name": "Amoxicillin (suspension)",
+      "substanceName": "amoxicillin",
+      "aliases": [
+        "amoxicillin"
+      ],
+      "atcCodes": [
+        "J01CA04"
+      ],
+      "ageBands": [
+        {
+          "minYears": 0,
+          "maxYears": 120,
+          "mgPerKgMin": 15,
+          "mgPerKgMax": 30,
+          "maxDailyDoseMg": 3000
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "amoxicillin",
+      "name": "Amoxicillin",
+      "substanceName": "amoxicillin",
+      "aliases": [
+        "amoxicillin"
+      ],
+      "atcCodes": [
+        "J01CA04"
+      ],
+      "ageBands": [
+        {
+          "minYears": 0,
+          "maxYears": 120,
+          "mgPerKgMin": 15,
+          "mgPerKgMax": 30,
+          "maxDailyDoseMg": 3000
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "cefalexin",
+      "name": "Cefalexin",
+      "substanceName": "cefalexin",
+      "aliases": [
+        "cefalexin"
+      ],
+      "atcCodes": [
+        "J01DB01"
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "cefalexin-paediatric",
+      "name": "Cefalexin (paediatric)",
+      "substanceName": "cefalexin",
+      "aliases": [
+        "cefalexin"
+      ],
+      "atcCodes": [
+        "J01DB01"
+      ],
+      "ageBands": [
+        {
+          "minYears": 0,
+          "maxYears": 11,
+          "mgPerKgMin": 12.5,
+          "mgPerKgMax": 25,
+          "maxDailyDoseMg": 1000
+        }
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

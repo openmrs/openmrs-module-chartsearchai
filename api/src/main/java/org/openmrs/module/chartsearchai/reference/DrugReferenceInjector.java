@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -545,7 +546,14 @@ public class DrugReferenceInjector {
 	 * sibling row is therefore prose this record no longer carries and no chip replaces. Narrower than
 	 * it sounds — it needs the question's drug to be ATC-related to one order and that order's substance
 	 * to be multi-row — but it is a real reduction in what the prompt carries, not a re-presentation of
-	 * it, and it is the same gap issue #174's {@code orderedInteractionNotes} sweep has to decide about.
+	 * it.
+	 *
+	 * <p>Issue #174's {@code orderedInteractionNotes} sweep did NOT close that residue and was never
+	 * going to: it collapses several rules of ONE entry that name one PARTNER, which is the other
+	 * axis. Widening this map to read every row of a substance is the change that would close it, and
+	 * it is a different one — the surviving entry's id is this record's citation id, so a record
+	 * assembled from several rows would have to choose one and then cite prose the chosen row does not
+	 * carry.
 	 */
 	private static void collect(Map<Object, DrugReference> bySubstance, DrugReference ref) {
 		Object substance = ref.substanceKey();
@@ -608,25 +616,44 @@ public class DrugReferenceInjector {
 	 * while the prose named ivosidenib: the two disagreed by construction.
 	 *
 	 * <p>Relevance uses {@link PatientClinicalContext#hasActiveDrug} — deliberately the same
-	 * predicate {@link DrugSafetyValidator} uses to decide an interaction concerns this patient, so
-	 * a partner that raises a chip is exactly a partner promoted here, and the rendered text cannot
-	 * drift from the chip.
+	 * predicate {@link DrugSafetyValidator} uses to decide an interaction concerns this patient (see
+	 * {@link #promotable}, which is that predicate and the severity floor together, applied both here
+	 * and inside the collapse below) — so a partner that raises a DRUG-IN-PLAY chip is exactly a
+	 * partner promoted here, and the rendered text cannot drift from that chip.
 	 *
-	 * <p>That correspondence is per PARTNER, and since issue #115 it is no longer one note per chip:
-	 * {@link DrugSafetyValidator#bestRulePerPartner} collapses several rules naming one partner —
-	 * DDInter's route variants of a drug all publish the same match token — into a single
-	 * most-severe chip, while this method still promotes one entry per row. A patient on one
-	 * dexamethasone order therefore gets one Major chip beside a record reading "dexamethasone
-	 * (Major …); dexamethasone (Moderate …); dexamethasone (Moderate …)", so a model answering from
-	 * the record can still name a severity the chip deliberately discarded — and does so from the
-	 * more quotable half, because in that measured case the discarded Moderate note is 659 characters
-	 * against the surviving Major row's 326. Nothing goes missing: {@code render} emits every promoted
-	 * note, so a duplicated partner can only push another partner into its compact
-	 * {@code name (Severity)} form, never out. Collapsing here needs the same thing the chip cannot
-	 * decide either — which variant the order is — and so waits on the route vocabulary that is the
-	 * data-side half of #115. Until then the two paths agree on WHICH partners concern the patient,
-	 * which is what the ordering above exists to guarantee, but not on how many rows or which
-	 * severity.
+	 * <p>Scoped to that arm deliberately, and the scope is the correction
+	 * {@link DrugSafetyValidator#addQuestionPairInteractions} asks for: across the whole chip set the
+	 * correspondence does not hold, because a question-PAIR chip names two drugs the question named
+	 * and neither need be an active order, so its partner is promoted nowhere. That does not reopen
+	 * the chip-versus-prose split this ordering exists to close — since issue #110 every chip is also
+	 * injected verbatim as its own numbered, citable record ({@code preAnswerFindings} →
+	 * {@link #renderFinding}), so a pair finding is grounded by that record rather than by these
+	 * notes, and the promoted-note budget is untouched by it.
+	 *
+	 * <p>That correspondence is per PARTNER, and since issue #174 site 2 this method renders one note
+	 * per partner rather than one per ROW — the same collapse
+	 * {@link DrugSafetyValidator#bestRulePerPartner} has made for the chips since issue #115, keyed
+	 * on {@link DrugSafetyValidator#partnerLabel} case-folded — that method's own fallback key, for
+	 * the reasons {@link #onePerPartner} sets out — and reaching the same survivor: the row the
+	 * patient is on, then {@link DrugSafetyValidator#outranksOnRule} (most severe, then the longer
+	 * note). Before it, a patient on one dexamethasone order got one Major chip beside a record reading
+	 * "dexamethasone (Major …); dexamethasone (Moderate …); dexamethasone (Moderate …)" — a model
+	 * answering from the record could name a severity the chip deliberately discarded, and from the
+	 * more quotable half, since in that measured case the discarded Moderate note is 659 characters
+	 * against the surviving Major row's 326 (re-measured 2026-08-07 through the real parser over both
+	 * the fixture slice and the shipped KB, which agree).
+	 *
+	 * <p>Measured over the shipped 19 MB KB (2026-08-07; re-measure before relying on the figures):
+	 * 1876 of its 2283 entries carried at least one repeated partner and 19,316 of the 590,312
+	 * expanded rows were surplus, {@code Ozanimod} carrying the largest single surplus at 49. The cost
+	 * of carrying them was not only tidiness: segment 1 of {@code render} deliberately overrides
+	 * {@link #MAX_INTERACTION_RENDER_CHARS} so that a partner the patient is on is never invisible, so
+	 * a partner filed under three rows spent three notes of budget the budget could not claw back.
+	 *
+	 * <p>The route vocabulary that is the data-side half of #115 is still missing, and this collapse
+	 * does not need it: it decides which of several rows about ONE partner to SHOW, exactly as the
+	 * chip decides which to raise, and neither has to know which variant the order is. What still
+	 * waits on that vocabulary is stating a variant-specific severity at all.
 	 *
 	 * <p>Since issue #163 there is one more way they can differ, in the opposite direction, and it is
 	 * stated here rather than left to be discovered: {@link #matchingEntries} now injects ONE record per
@@ -660,8 +687,8 @@ public class DrugReferenceInjector {
 		// safety decision the chip path enforces. A sub-floor rule is not promoted; it keeps its
 		// dataset position, exactly as before promotion existed.
 		int floor = DrugSafetyValidator.configuredSeverityFloor();
-		for (DrugReference.Interaction i : ref.getInteractions()) {
-			String label = ChartSearchAiUtils.firstNonBlank(i.getToken(), i.getAtc());
+		for (DrugReference.Interaction i : onePerPartner(ref, context, floor)) {
+			String label = DrugSafetyValidator.partnerLabel(i);
 			String note = ChartSearchAiUtils.firstNonBlank(i.getNote());
 			// Kept identical to the previous rendering: a labelless rule still contributes its bare
 			// note, and a null/blank pair contributes nothing (addIfPresent drops it) — the dataset
@@ -695,9 +722,8 @@ public class DrugReferenceInjector {
 			if (compact.length() >= rendered.length()) {
 				compact = rendered;
 			}
-			boolean promote = context != null && context.hasActiveDrug(i.getToken(), i.getAtc())
-					&& DrugSafetyValidator.clearsSeverityFloor(i, floor);
-			(promote ? promoted : rest).add(new InteractionNote(rendered, compact, i.getSeverity()));
+			(promotable(i, context, floor) ? promoted : rest)
+					.add(new InteractionNote(rendered, compact, i.getSeverity()));
 		}
 		// Within the promoted segment, severity — not dataset position — decides who keeps their
 		// mechanism prose when the budget can only afford one full note (see render). Measured on the
@@ -713,6 +739,123 @@ public class DrugReferenceInjector {
 		// segments distinguishable to render().
 		promoted.addAll(rest);
 		return new OrderedInteractions(promoted, promotedCount);
+	}
+
+	/**
+	 * @return {@code ref}'s interaction rules, at most ONE per partner, in the dataset order of each
+	 *         partner's first row — the rendering counterpart of
+	 *         {@link DrugSafetyValidator#bestRulePerPartner} (issue #174 site 2).
+	 *
+	 *         <p>The key is {@link DrugSafetyValidator#partnerLabel} case-folded, which is both the
+	 *         key that method falls back to and the very string this record prints, so the grouping
+	 *         and the rendering cannot come to disagree about what one partner is. A rule carrying
+	 *         NEITHER a token nor an ATC code keys on itself: it renders as a bare note with no name
+	 *         to group on, and merging two such rows would silently drop one operator-authored
+	 *         paragraph in favour of another. The two key spaces cannot collide — an
+	 *         {@link DrugReference.Interaction} defines no {@code equals} and can never equal a
+	 *         {@link String}.
+	 *
+	 *         <p><b>The label rather than the resolved ENTRY, and why that is not the text-keying
+	 *         issue #173 ruled out.</b> Every chip-side ledger keys on identity because a key made of
+	 *         rendered text rots when the rendering changes, so this looks like the exception and is
+	 *         worth settling once rather than re-litigating. Three things settle it.
+	 *         <ul>
+	 *           <li>There is usually no identity to be had. The chip's key
+	 *               ({@code DrugSafetyValidator.SubjectRule.partnerKey()}) is two-tier — the ENTRY
+	 *               where {@code activeOrderEntryFor} resolves the rule against one of the patient's
+	 *               ACTIVE ORDERS, else this same case-folded label. Every partner in the dataset
+	 *               tail, which is where nearly all the surplus above lives, resolves to nothing, so
+	 *               for them the chip's own key IS the label. Keying the tail on an entry would mean
+	 *               resolving each partner token across the whole dataset, which is a THIRD
+	 *               resolution rather than a port of the chip's.</li>
+	 *           <li>It would not be safer, it would be less safe. {@code identifies} resolves through
+	 *               an entry's alias list and its ATC codes, and the shipped KB shares both across
+	 *               entities the dataset itself files as separate drugs. Measured 2026-08-07 over the
+	 *               19 MB KB by calling that predicate: on 397 of 2283 entries, 487 notes, two rules
+	 *               with DIFFERENT labels resolve to ONE entry — {@code trastuzumab} with
+	 *               {@code trastuzumab deruxtecan}, {@code isosorbide} with
+	 *               {@code isosorbide mononitrate}, {@code moderna covid-19 vaccine} with
+	 *               {@code sars-cov-2 (covid-19) vaccine, mrna spike protein}. In a CHIP that
+	 *               over-merge costs one duplicate and the survivor is still the most severe rule; in
+	 *               a RECORD it costs a partner its name, and this record is the only place the tail
+	 *               is named at all. Dropping a partner is the direction this module does not take.</li>
+	 *           <li>What #173 ruled out was keying on an ASSEMBLED SENTENCE — the screening arm's
+	 *               {@code (type, drug, detail)} triple, which stopped recognising a repeat the moment
+	 *               either arm reworded its chip (see {@code DrugSafetyValidator.InteractionPairs}). A
+	 *               partner's own coalesced, trimmed name is not that: it is the atomic unit of the
+	 *               grouping, and issue #121's invariant — the key IS what the chip says — is
+	 *               deliberate rather than incidental.</li>
+	 *         </ul>
+	 *         The residue is real and is issue #190 item 2: two rules naming ONE partner under two
+	 *         different spellings stay two notes beside one chip. Note that closing it by grouping on
+	 *         the entry, which that issue proposes, buys the 397-entry over-merge above.
+	 *
+	 *         <p>Applied over EVERY rule rather than only over the promoted ones, deliberately: the
+	 *         floor decides which rules are worth PROMOTING, while a sub-floor row keeps its dataset
+	 *         position in the tail (see the caller), so collapsing only the promoted half would leave
+	 *         a sub-floor row of a partner in the tail beside that partner's promoted row — the same
+	 *         partner twice, which is what this removes. (The survivor rule below does READ the floor,
+	 *         through {@link #promotable}; what it does not do is filter the input by it.)
+	 *
+	 *         <p><b>Which row wins, and why promotability is asked FIRST.</b> Running before the floor
+	 *         means the survivor rule decides which row's {@code (token, ATC)} pair the caller's
+	 *         promotion predicate is then asked about — so the survivor must be a row that predicate
+	 *         says yes to wherever the group has one, or the collapse can push a partner OUT of the
+	 *         segment that overrides {@link #MAX_INTERACTION_RENDER_CHARS} and, with another partner
+	 *         promoted and only one tail representative rendered, out of the record altogether. That
+	 *         is {@link DrugSafetyValidator#bestRulePerPartner}'s behaviour reproduced rather than a
+	 *         rule of its own: it never sees a non-matching row at all, having filtered on
+	 *         {@code hasActiveDrug} before it groups. Within each half the order is
+	 *         {@link DrugSafetyValidator#outranksOnRule}, so the promoted note is the row the chip
+	 *         quotes, and a partner with no promotable row keeps its most severe one in the tail.
+	 *         The floor half of {@link #promotable} cannot change a winner on its own — a group's
+	 *         most severe row clears the floor whenever any of its rows does, since
+	 *         {@code severityPriority} ranks unrated highest and is otherwise monotone in the rank the
+	 *         floor compares — so only the {@code hasActiveDrug} half is doing work here. No shipped
+	 *         dataset can make it: {@code ddinter} writes every rule's ATC from its partner row, and
+	 *         measured 2026-08-07 through the real parser, 0 of the 19 MB KB's label groups hold rows
+	 *         differing on either field. A hand-authored file reaches it immediately, which is the
+	 *         same latency issue #174 site 4 is guarded at.
+	 *
+	 *         <p>A {@link LinkedHashMap}, so replacing a group's winner does not move the partner's
+	 *         position — the tail's dataset order is what the caller's javadoc guarantees.
+	 */
+	private static Collection<DrugReference.Interaction> onePerPartner(DrugReference ref,
+			PatientClinicalContext context, int floor) {
+		Map<Object, DrugReference.Interaction> best =
+				new LinkedHashMap<Object, DrugReference.Interaction>();
+		for (DrugReference.Interaction i : ref.getInteractions()) {
+			String label = DrugSafetyValidator.partnerLabel(i);
+			Object key = label != null ? (Object) label.toLowerCase(Locale.ROOT) : i;
+			DrugReference.Interaction incumbent = best.get(key);
+			if (incumbent == null || outranksForRendering(i, incumbent, context, floor)) {
+				best.put(key, i);
+			}
+		}
+		return best.values();
+	}
+
+	/** @return true when {@code candidate} is the row this record should show for a partner
+	 *          {@code incumbent} already covers: the row the patient is on before one they are not,
+	 *          then {@link DrugSafetyValidator#outranksOnRule}. See {@link #onePerPartner}. */
+	private static boolean outranksForRendering(DrugReference.Interaction candidate,
+			DrugReference.Interaction incumbent, PatientClinicalContext context, int floor) {
+		boolean candidatePromotable = promotable(candidate, context, floor);
+		if (candidatePromotable != promotable(incumbent, context, floor)) {
+			return candidatePromotable;
+		}
+		return DrugSafetyValidator.outranksOnRule(candidate, incumbent);
+	}
+
+	/** @return whether {@code i} names a drug this patient is on by a rule the severity floor admits
+	 *          — the promotion predicate of {@link #orderedInteractionNotes}, shared with
+	 *          {@link #onePerPartner} so the collapse cannot discard the very row that would have been
+	 *          promoted. Both arms are the ones {@link DrugSafetyValidator#bestRulePerPartner} applies
+	 *          before it groups. */
+	private static boolean promotable(DrugReference.Interaction i, PatientClinicalContext context,
+			int floor) {
+		return context != null && context.hasActiveDrug(i.getToken(), i.getAtc())
+				&& DrugSafetyValidator.clearsSeverityFloor(i, floor);
 	}
 
 	/**
@@ -788,6 +931,12 @@ public class DrugReferenceInjector {
 
 		/** Interaction partners the text does not name — dropped by the budget or, more often, by
 		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all.
+		 *
+		 *  <p>Partners, not rows, since issue #174 site 2: the entry's rules are collapsed to one per
+		 *  partner before anything is rendered, so this counts what the field has always claimed to
+		 *  count. It used to over-report by exactly the surplus — a record naming both of an entry's
+		 *  partners through 4 of its 7 rows declared 3 withheld, a citation claiming to be a strict
+		 *  subset of itself.
 		 *
 		 *  <p>Counted over the rendered ENTRY's own partners, which since issue #163 is one row of a
 		 *  substance rather than every row of it: a partner carried only by a sibling row is ABSENT from

@@ -2675,10 +2675,11 @@ public class DrugSafetyValidator {
 	 * substance and calls this each time, and {@link #ruleAbout} re-runs {@link #entryForAtcCode}
 	 * itself rather than reading the resolution carried here. They agree because that scan is a
 	 * function of {@code getAll()} alone, which is loaded once — a property of the service, not
-	 * something this method enforces. A per-{@code validate} memo would make it enforced and would cut
-	 * the repeated full scans, but it must then be a local threaded through the pass and NEVER a field:
-	 * a memoised {@link DrugReference} outliving a {@code getAll()} reload fails the reference
-	 * comparisons the contraindication arms make (issue #172), which silently re-opens issue #145.
+	 * something this method enforces. The memo below is per CALL and does not change that; widening it
+	 * to the whole {@code validate} pass would, and would cut the repeated full scans, but it must
+	 * then be a local threaded through the pass and NEVER a field: a memoised {@link DrugReference}
+	 * outliving a {@code getAll()} reload fails the reference comparisons the contraindication arms
+	 * make (issue #172), which silently re-opens issue #145.
 	 */
 	private List<OrderPartner> orderPartners(PatientClinicalContext context) {
 		Map<Object, OrderPartner> byIdentity = new LinkedHashMap<Object, OrderPartner>();
@@ -2741,9 +2742,9 @@ public class DrugSafetyValidator {
 	 *         merge the two into one partner and drop a duplicate-therapy chip. Null for "resolves to
 	 *         none" leaves the ladder exactly where it was: the order itself is the identity.
 	 *
-	 *         <p>Memoised per {@code validate} pass through {@code cache}, because
-	 *         {@link #classRelationships} calls {@link #orderPartners} once per in-play substance and
-	 *         this walks every code of an order — see there for why the memo may not be a field.
+	 *         <p>Memoised through {@code cache} for the duration of one {@link #orderPartners} call,
+	 *         because this walks every code of an order and every code of that order asks it — see
+	 *         there for why the memo may not be a field.
 	 */
 	private DrugReference soleSubstanceOf(PatientClinicalContext.ActiveDrugOrder order,
 			Map<String, DrugReference> entryByCode,

@@ -271,9 +271,10 @@ public class ContraindicationRouteVariantTest {
 		// bare substance name, lookupByToken's earliest-match rule skips it and the allergy resolves a
 		// LATER member of the same collapsed group, so the earlier members chip first. `Tozinameran`,
 		// `Insulin aspart (aspart)` and `Iobenguane (I-131)` were each verified this way through
-		// validate() over the full 19 MB KB. A first-wins ledger answers this case with "Tozinameran
-		// (12y+) … is in the same ATC class (J07BN) as the patient's allergy to Tozinameran" — the
-		// vacuous self-cross-reactivity issue #145 exists to remove, kept instead of removed.
+		// validate() over the full 19 MB KB. This case no longer discriminates a first-wins ledger from
+		// replace-in-place: since issue #164 the identity test matches on the substance, so the allergen
+		// raises IDENTITY whichever member of the group is reached first. What it still pins is that the
+		// surviving chip is the identity one and that it names the allergen as the chart records it.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
 				"Is it safe to give the Pfizer-BioNTech COVID-19 vaccine?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,

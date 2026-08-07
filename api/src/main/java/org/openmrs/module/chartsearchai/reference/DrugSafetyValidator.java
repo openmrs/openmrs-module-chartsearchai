@@ -2245,10 +2245,15 @@ public class DrugSafetyValidator {
 			if (allergen == null || !seenAllergens.add(allergen)) {
 				continue;
 			}
-			if (allergen == ref) {
+			// Identity is decided by SUBSTANCE, and the chip names the patient's own record (issue #164).
+			// substanceGroupKey answers both halves at once: it is the row's substance where the data
+			// publishes one and the row itself where it does not, so this subsumes the entry comparison
+			// it replaces rather than sitting beside it. It is also the key the ledger below groups on,
+			// so a substance whose rows arrive from several call sites cannot raise this chip twice.
+			if (allergen.substanceGroupKey().equals(ref.substanceGroupKey())) {
 				chips.add(ref, allergen, ContraindicationChips.IDENTITY,
-						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-								"The patient has a recorded allergy to " + ref.displayLabel() + "."));
+						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, allergen.displayLabel(),
+								"The patient has a recorded allergy to " + allergen.displayLabel() + "."));
 				continue;
 			}
 			if (refClasses.isEmpty() && refGroups.isEmpty()) {

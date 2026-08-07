@@ -1,0 +1,460 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #164 — a substance reported as cross-reactive, or interacting, with ITSELF. Three shapes, all taken unedited from the shipped 19 MB KB. (1) The mirror path: Tetryzoline (nasal) and Tetryzoline (ophthalmic) are one substance to the collapse key already, so an allergy resolving to one of them and a question resolving the other exercise the IDENTITY test alone. (2) Stem divergence, contraindication arm: Pfizer-BioNTech Covid-19 Vaccine and Tozinameran share rxcui 2468231 and one rxnorm_name but no display stem; only Tozinameran carries a drugbank_id. (3) Stem divergence, interaction arm: Daxibotulinumtoxina and Botulinum toxin type A share rxcui 1712 and one rxnorm_name but no display stem; only Botulinum toxin type A carries a drugbank_id. Botulinum Toxin Type B is the negative control on that arm — a different rxnorm_name, so the pair must still be reported. Enalapril and Enalaprilat with their shared Major partner Potassium chloride are the must-NOT-collapse control issue #121 decided: two rxnorm_names, two rxcuis, two drugbank_ids, and so two chips. The Omeprazole/Esomeprazole control — one rxnorm_name, one rxcui, TWO drugbank_ids — lives in ddi-contra-route-variants.json and is asserted from there."
+ },
+ "mechanisms": {
+  "2264": {
+   "text": "Concomitant use of angiotensin converting enzyme (ACE) inhibitors and potassium salts may increase the risk of hyperkalemia. Inhibition of ACE results in decreased aldosterone secretion, which in turn causes potassium retention.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "2935": {
+   "text": "The effect of administering different botulinum neurotoxin serotypes concurrently or within several months of one another is unknown. Excessive weakness may be exacerbated by another administration of botulinum toxin prior to the resolution of the effects of a previously administered botulinum toxin.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "5973": {
+   "text": "Concomitant use of angiotensin converting enzyme (ACE) inhibitors and potassium salts may increase the risk of hyperkalemia.  Inhibition of ACE results in decreased aldosterone secretion, which in turn causes potassium retention.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "7257": {
+   "text": "The effect of administering different botulinum neurotoxin serotypes concurrently or within several months of one another is unknown.  Excessive weakness may be exacerbated by another administration of botulinum toxin prior to the resolution of the effects of a previously administered botulinum toxin.",
+   "categories": [
+    "others"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter2164",
+   "name": "Tozinameran",
+   "rxcui": "2468231",
+   "rxnorm_name": "SARS-CoV-2 (COVID-19) vaccine, mRNA spike protein",
+   "drugbank_id": "DB15696",
+   "atc": [
+    "J07BN01",
+    "J07BN04"
+   ],
+   "ciel": [
+    {
+     "code": "166154",
+     "uuid": "166154AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Moderna COVID-19 vaccine"
+    },
+    {
+     "code": "166155",
+     "uuid": "166155AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine"
+    },
+    {
+     "code": "167039",
+     "uuid": "167039AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine (adolescent)"
+    },
+    {
+     "code": "167040",
+     "uuid": "167040AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine (child)"
+    },
+    {
+     "code": "167041",
+     "uuid": "167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine (infant)"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1436",
+   "name": "Pfizer-BioNTech Covid-19 Vaccine",
+   "rxcui": "2468231",
+   "rxnorm_name": "SARS-CoV-2 (COVID-19) vaccine, mRNA spike protein",
+   "drugbank_id": null,
+   "atc": [
+    "J07BN01",
+    "J07BN04"
+   ],
+   "ciel": [
+    {
+     "code": "166154",
+     "uuid": "166154AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Moderna COVID-19 vaccine"
+    },
+    {
+     "code": "166155",
+     "uuid": "166155AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine"
+    },
+    {
+     "code": "167039",
+     "uuid": "167039AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine (adolescent)"
+    },
+    {
+     "code": "167040",
+     "uuid": "167040AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine (child)"
+    },
+    {
+     "code": "167041",
+     "uuid": "167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine (infant)"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1787",
+   "name": "Tetryzoline (nasal)",
+   "rxcui": "37935",
+   "rxnorm_name": "tetrahydrozoline",
+   "drugbank_id": null,
+   "atc": [
+    "R01AA06",
+    "R01AB03",
+    "S01GA02"
+   ],
+   "ciel": [
+    {
+     "code": "105188",
+     "uuid": "105188AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Polyethylene glycols / tetrahydrozoline"
+    },
+    {
+     "code": "105193",
+     "uuid": "105193AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Polyvinyl alcohol / povidone / tetrahydrozoline"
+    },
+    {
+     "code": "105214",
+     "uuid": "105214AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Povidone / tetrahydrozoline"
+    },
+    {
+     "code": "105291",
+     "uuid": "105291AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tetrahydrozoline / zinc sulfate"
+    },
+    {
+     "code": "84898",
+     "uuid": "84898AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tetrahydrozoline"
+    },
+    {
+     "code": "84899",
+     "uuid": "84899AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tetrahydrozoline hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1788",
+   "name": "Tetryzoline (ophthalmic)",
+   "rxcui": "37935",
+   "rxnorm_name": "tetrahydrozoline",
+   "drugbank_id": null,
+   "atc": [
+    "R01AA06",
+    "R01AB03",
+    "S01GA02"
+   ],
+   "ciel": [
+    {
+     "code": "105188",
+     "uuid": "105188AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Polyethylene glycols / tetrahydrozoline"
+    },
+    {
+     "code": "105193",
+     "uuid": "105193AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Polyvinyl alcohol / povidone / tetrahydrozoline"
+    },
+    {
+     "code": "105214",
+     "uuid": "105214AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Povidone / tetrahydrozoline"
+    },
+    {
+     "code": "105291",
+     "uuid": "105291AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tetrahydrozoline / zinc sulfate"
+    },
+    {
+     "code": "84898",
+     "uuid": "84898AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tetrahydrozoline"
+    },
+    {
+     "code": "84899",
+     "uuid": "84899AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tetrahydrozoline hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2169",
+   "name": "Daxibotulinumtoxina",
+   "rxcui": "1712",
+   "rxnorm_name": "botulinum toxin type A",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "72303",
+     "uuid": "72303AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum toxin type A"
+    },
+    {
+     "code": "72305",
+     "uuid": "72305AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum type A toxin-haemagglutinin complex"
+    }
+   ]
+  },
+  {
+   "id": "DDInter225",
+   "name": "Botulinum toxin type A",
+   "rxcui": "1712",
+   "rxnorm_name": "botulinum toxin type A",
+   "drugbank_id": "DB00083",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "72303",
+     "uuid": "72303AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum toxin type A"
+    },
+    {
+     "code": "72305",
+     "uuid": "72305AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum type A toxin-haemagglutinin complex"
+    }
+   ]
+  },
+  {
+   "id": "DDInter226",
+   "name": "Botulinum Toxin Type B",
+   "rxcui": "2167673",
+   "rxnorm_name": "botulinum toxin type B",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "72304",
+     "uuid": "72304AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum toxin type B"
+    }
+   ]
+  },
+  {
+   "id": "DDInter638",
+   "name": "Enalapril",
+   "rxcui": "3827",
+   "rxnorm_name": "enalapril",
+   "drugbank_id": "DB00584",
+   "atc": [
+    "C09AA02"
+   ],
+   "ciel": [
+    {
+     "code": "104493",
+     "uuid": "104493AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diltiazem / enalapril"
+    },
+    {
+     "code": "104568",
+     "uuid": "104568AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Enalapril / felodipine"
+    },
+    {
+     "code": "104569",
+     "uuid": "104569AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Enalapril / hydrochlorothiazide"
+    },
+    {
+     "code": "75633",
+     "uuid": "75633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Enalapril"
+    },
+    {
+     "code": "75634",
+     "uuid": "75634AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Enalapril maleate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2026",
+   "name": "Enalaprilat",
+   "rxcui": "3829",
+   "rxnorm_name": "enalaprilat",
+   "drugbank_id": "DB09477",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "75635",
+     "uuid": "75635AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Enalaprilat"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1497",
+   "name": "Potassium chloride",
+   "rxcui": "8591",
+   "rxnorm_name": "potassium chloride",
+   "drugbank_id": "DB00761",
+   "atc": [
+    "A12BA01",
+    "B05XA01"
+   ],
+   "ciel": [
+    {
+     "code": "103804",
+     "uuid": "103804AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bendroflumethiazide / potassium chloride"
+    },
+    {
+     "code": "103988",
+     "uuid": "103988AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium / chloride ion / glucose / lactate / potassium / sodium"
+    },
+    {
+     "code": "103989",
+     "uuid": "103989AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium / chloride ion / potassium / sodium"
+    },
+    {
+     "code": "104045",
+     "uuid": "104045AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium carbonate / potassium chloride / sodium chloride"
+    },
+    {
+     "code": "104057",
+     "uuid": "104057AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium chloride / magnesium chloride / potassium chloride / sodium acetate / sodium chloride"
+    },
+    {
+     "code": "104058",
+     "uuid": "104058AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium chloride / potassium chloride / sodium chloride"
+    },
+    {
+     "code": "104083",
+     "uuid": "104083AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium phosphate / magnesium carbonate / potassium chloride"
+    },
+    {
+     "code": "104664",
+     "uuid": "104664AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Flumethiazide / potassium chloride / rauwolfia preparation"
+    },
+    {
+     "code": "104730",
+     "uuid": "104730AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Glucose / lactated ringer's solution"
+    },
+    {
+     "code": "104740",
+     "uuid": "104740AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Glucose / potassium chloride"
+    },
+    {
+     "code": "104741",
+     "uuid": "104741AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Glucose / potassium chloride / sodium chloride"
+    },
+    {
+     "code": "105004",
+     "uuid": "105004AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lysine / potassium bicarbonate / potassium chloride"
+    },
+    {
+     "code": "105008",
+     "uuid": "105008AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Magnesium chloride / potassium chloride / sodium acetate / sodium chloride / sodium gluconate"
+    },
+    {
+     "code": "105017",
+     "uuid": "105017AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Magnesium sulfate / potassium chloride / potassium phosphate / sodium chloride / sodium phosphate, dibasic"
+    },
+    {
+     "code": "105183",
+     "uuid": "105183AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Polyethylene glycol 3350 / potassium chloride / sodium bicarbonate / sodium chloride / sodium sulfate"
+    },
+    {
+     "code": "105200",
+     "uuid": "105200AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium chloride / potassium gluconate"
+    },
+    {
+     "code": "105202",
+     "uuid": "105202AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium chloride / sodium chloride"
+    },
+    {
+     "code": "162855",
+     "uuid": "162855AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium chloride 20 mmol/L in normal saline"
+    },
+    {
+     "code": "162856",
+     "uuid": "162856AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Normal saline + KCL 40 mmol/L"
+    },
+    {
+     "code": "82350",
+     "uuid": "82350AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium chloride"
+    },
+    {
+     "code": "82351",
+     "uuid": "82351AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium chloride-potassium gluconate"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1497",
+   "DDInter2026",
+   "Major",
+   "5973"
+  ],
+  [
+   "DDInter1497",
+   "DDInter638",
+   "Major",
+   "2264"
+  ],
+  [
+   "DDInter2169",
+   "DDInter225",
+   "Moderate",
+   "7257"
+  ],
+  [
+   "DDInter2169",
+   "DDInter226",
+   "Moderate",
+   "7257"
+  ],
+  [
+   "DDInter225",
+   "DDInter225",
+   "Moderate",
+   "7257"
+  ],
+  [
+   "DDInter225",
+   "DDInter226",
+   "Moderate",
+   "2935"
+  ]
+ ]
+}

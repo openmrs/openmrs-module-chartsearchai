@@ -616,9 +616,19 @@ public class DrugReferenceInjector {
 	 * while the prose named ivosidenib: the two disagreed by construction.
 	 *
 	 * <p>Relevance uses {@link PatientClinicalContext#hasActiveDrug} — deliberately the same
-	 * predicate {@link DrugSafetyValidator} uses to decide an interaction concerns this patient, so
-	 * a partner that raises a chip is exactly a partner promoted here, and the rendered text cannot
-	 * drift from the chip.
+	 * predicate {@link DrugSafetyValidator} uses to decide an interaction concerns this patient (see
+	 * {@link #promotable}, which is that predicate and the severity floor together, applied both here
+	 * and inside the collapse below) — so a partner that raises a DRUG-IN-PLAY chip is exactly a
+	 * partner promoted here, and the rendered text cannot drift from that chip.
+	 *
+	 * <p>Scoped to that arm deliberately, and the scope is the correction
+	 * {@link DrugSafetyValidator#addQuestionPairInteractions} asks for: across the whole chip set the
+	 * correspondence does not hold, because a question-PAIR chip names two drugs the question named
+	 * and neither need be an active order, so its partner is promoted nowhere. That does not reopen
+	 * the chip-versus-prose split this ordering exists to close — since issue #110 every chip is also
+	 * injected verbatim as its own numbered, citable record ({@code preAnswerFindings} →
+	 * {@link #renderFinding}), so a pair finding is grounded by that record rather than by these
+	 * notes, and the promoted-note budget is untouched by it.
 	 *
 	 * <p>That correspondence is per PARTNER, and since issue #174 site 2 this method renders one note
 	 * per partner rather than one per ROW — the same collapse
@@ -629,8 +639,9 @@ public class DrugReferenceInjector {
 	 * note). Before it, a patient on one dexamethasone order got one Major chip beside a record reading
 	 * "dexamethasone (Major …); dexamethasone (Moderate …); dexamethasone (Moderate …)" — a model
 	 * answering from the record could name a severity the chip deliberately discarded, and from the
-	 * more quotable half, since in that measured case the discarded Moderate note is 649 characters
-	 * against the surviving Major row's 319.
+	 * more quotable half, since in that measured case the discarded Moderate note is 659 characters
+	 * against the surviving Major row's 326 (re-measured 2026-08-07 through the real parser over both
+	 * the fixture slice and the shipped KB, which agree).
 	 *
 	 * <p>Measured over the shipped 19 MB KB (2026-08-07; re-measure before relying on the figures):
 	 * 1876 of its 2283 entries carried at least one repeated partner and 19,316 of the 590,312

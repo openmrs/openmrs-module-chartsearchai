@@ -1441,13 +1441,13 @@ public class DrugSafetyValidator {
 	 * (the one-directional case below), and that pair is this arm's to report, because the chart arm
 	 * raises nothing for it.
 	 *
-	 * <p>{@link DrugReferenceInjector#orderedInteractionNotes} is deliberately NOT extended to match,
-	 * and its "a partner that raises a chip is exactly a partner promoted here" should be read as scoped
-	 * to the arm it describes: across the whole chip set it no longer holds, since a pair chip's partner
-	 * is promoted nowhere. That sentence lives in a file this change does not touch — rewording it is
-	 * left to whichever PR owns that method next, so two PRs do not collide on it. What is NOT affected
-	 * is the invariant the sentence exists to protect, that a chip and the prose cannot describe the
-	 * same finding differently: since issue #110 the deterministic finding is itself injected as a
+	 * <p>{@link DrugReferenceInjector#orderedInteractionNotes} is deliberately NOT extended to match.
+	 * Its "a partner that raises a chip is exactly a partner promoted here" does not hold across the
+	 * whole chip set, since a pair chip's partner is promoted nowhere; that sentence now says so
+	 * itself, scoped to the drug-in-play arm, which is the rewording this paragraph used to defer to
+	 * whichever PR owned that method next (issue #174 site 2 was it). What is NOT affected is the
+	 * invariant the sentence exists to protect, that a chip and the prose cannot describe the same
+	 * finding differently: since issue #110 the deterministic finding is itself injected as a
 	 * numbered, citable record by {@code preAnswerFindings}, carrying this chip's string verbatim, so a
 	 * pair finding's grounding comes from that record rather than from the promoted notes, and the
 	 * promoted-note budget is untouched.

@@ -183,7 +183,7 @@ public class InjectedInteractionNoteCollapseTest {
 		// The prompt-budget claim, measured on this slice rather than asserted in prose. Segment 1
 		// overrides MAX_INTERACTION_RENDER_CHARS for every promoted partner, so the two surplus
 		// dexamethasone rows were 703 characters of near-duplicate text that the budget could not
-		// claw back — a 649-character Moderate mechanism paragraph plus a compact repeat. Measured
+		// claw back — a 659-character Moderate mechanism paragraph plus a compact repeat. Measured
 		// 2026-08-07 through this test: the record was 1124 characters and is now 421.
 		//
 		// Pinned as an exact length rather than an inequality because the number IS the finding — an

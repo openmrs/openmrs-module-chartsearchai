@@ -81,8 +81,36 @@ public class PartialOrderCoveragePartnerTest {
 		assertEquals(1, chips.size(),
 				"one order is one co-medication however many of its codes the dataset covers, was: "
 						+ chips);
-		assertTrue(chips.get(0).contains("as active order Metronidazole —"),
-				"and it is named by the dataset's own name for the substance, was: " + chips);
+		assertTrue(chips.get(0).contains("as active order Metronidazole 500mg —"),
+				"and it is named by the ORDER, not by the dataset's name for the codes it happens to "
+						+ "cover — that name does not speak for the code it does not, was: " + chips);
+	}
+
+	@Test
+	public void theMergedPartnerIsNotNamedAfterHalfOfACombination() throws Exception {
+		// Why the merged partner takes the ORDER's name, on the real shape that makes it matter. The
+		// 3.7.1 demo dictionary's "Isoniazid / Rifapentine" concept maps to J04AB05 and J04AC51, and
+		// the loaded 19 MB KB carries the first and not the second — so the covered half names
+		// rifapentine while the class the chip states (J04AC) is the isoniazid half's. Naming the
+		// partner "Rifapentine" would publish "…is in the same ATC class (J04AC) as active order
+		// Rifapentine", whose stated class does not classify the drug it names.
+		//
+		// Reproduced here over the fixture's own codes rather than over J04*, so the assertion does
+		// not depend on the demo dictionary: Secnidazole is covered, J01XD01 is not, and the question
+		// drug relates through J01XD.
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Secnidazole and ornidazole"),
+				DrugReferenceTestSupport.set("P01AB07", "J01XD01"), null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-1",
+						"Secnidazole and ornidazole",
+						DrugReferenceTestSupport.set("Secnidazole and ornidazole"),
+						DrugReferenceTestSupport.set("P01AB07", "J01XD01"))));
+
+		List<String> chips = classChipDetails(validator().validate("", QUESTION, context));
+
+		assertEquals(1, chips.size(), "one order is one co-medication, was: " + chips);
+		assertTrue(chips.get(0).contains("as active order Secnidazole and ornidazole —"),
+				"the chip must name the order, was: " + chips);
 	}
 
 	@Test

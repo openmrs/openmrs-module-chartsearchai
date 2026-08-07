@@ -248,6 +248,61 @@ public class InjectedInteractionNoteCollapseTest {
 				"and the surviving row is the Major one: " + interactions);
 	}
 
+	/**
+	 * A curated entry filing ONE partner as two rows carrying the same token and DIFFERENT ATC codes
+	 * — the only shape in which two rows of one partner group answer
+	 * {@link PatientClinicalContext#hasActiveDrug} differently. See the fixture's own description.
+	 */
+	private static final String ATC_SPLIT_FIXTURE =
+			"chartsearchai-test/drug-reference-partner-atc-split-rows.json";
+
+	/** On acenocoumarol ({@code B01AA07}) by ATC alone, so the rules' TOKEN arm matches neither row
+	 *  and only the {@code B01AA07} row is the patient's. */
+	private static PatientClinicalContext onAcenocoumarolByAtc() {
+		return DrugReferenceTestSupport.ctx(60, null, null, DrugReferenceTestSupport.set("B01AA07"),
+				null, null);
+	}
+
+	@Test
+	public void thePartnerTheChipWarnsAboutSurvivesTheCollapse() throws Exception {
+		// The collapse runs BEFORE the promotion predicate, so the survivor rule decides which row's
+		// (token, ATC) pair that predicate is then asked about. Where two rows of one partner carry
+		// DIFFERENT ATC codes those answers differ, and the most severe row can be the one the
+		// patient does not match — so the partner loses its place in segment 1, which is the segment
+		// that overrides MAX_INTERACTION_RENDER_CHARS. With another partner promoted, segment 2
+		// renders exactly ONE representative, so the de-promoted partner does not merely change
+		// wording: it leaves the record while the chip still warns about it.
+		//
+		// bestRulePerPartner cannot reach this shape because it filters on hasActiveDrug BEFORE
+		// grouping, so only rows the patient matches are ever candidates. This asserts the collapse
+		// makes the same choice.
+		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(ATC_SPLIT_FIXTURE);
+		PatientClinicalContext context = onAcenocoumarolByAtc();
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(entries))
+				.validate("", "is it safe to give voriconazole?", context);
+		assertEquals(1, warnings.size(),
+				"precondition: exactly one chip, for the partner the patient IS on, was: " + warnings);
+		assertTrue(warnings.get(0).getDetail().contains("active order warfarin — Moderate."),
+				"precondition: the chip must quote the row whose ATC the patient matches, was: "
+						+ warnings.get(0).getDetail());
+
+		PatientChart chart = DrugReferenceTestSupport
+				.injector(DrugReferenceTestSupport.serviceWith(entries))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context,
+						"is it safe to give voriconazole?");
+		String interactions =
+				interactionsOf(DrugReferenceTestSupport.injectedReferences(chart).get(0));
+
+		assertEquals(1, notesHeadedBy(interactions, "warfarin"),
+				"the partner the chip warns about must be named exactly once in the record: "
+						+ interactions);
+		assertTrue(interactions.contains("warfarin (moderate."),
+				"and under the rule the chip quotes, not the more severe row the patient does not "
+						+ "match: " + interactions);
+	}
+
 	@Test
 	public void aSinglePartnerRecordIsUnchanged() throws Exception {
 		// The control. Nothing may move for an entry whose partners are each filed once: the

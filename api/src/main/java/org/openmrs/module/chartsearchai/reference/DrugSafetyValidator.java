@@ -2945,7 +2945,7 @@ public class DrugSafetyValidator {
 	 * {@link DrugReference#getSubstanceName()} explicitly permits — reaches it immediately, so it is
 	 * guarded while the pattern is being swept rather than waited for.
 	 *
-	 * <p><b>Every row is still evaluated, and that is the point of the shape.</b> A collapse that
+	 * <p><b>Every row is still tried, and that is the point of the shape.</b> A collapse that
 	 * simply read the canonical row would DROP a warning whenever the band sits on a sibling — the
 	 * one direction a non-blocking advisory must never take. So the rows are tried in
 	 * canonical-first order and the first warning found is the one raised, which also keeps the

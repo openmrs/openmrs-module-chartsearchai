@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "source": "test fixture — issue #186: the class arm's co-medication grouping, over a dataset that covers one of an order's ATC codes and not the other",
+  "entries": [
+    {
+      "id": "metronidazole",
+      "name": "Metronidazole",
+      "aliases": [
+        "metronidazole"
+      ],
+      "atcCodes": [
+        "P01AB01",
+        "P01AB09"
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "secnidazole",
+      "name": "Secnidazole",
+      "aliases": [
+        "secnidazole"
+      ],
+      "atcCodes": [
+        "P01AB07"
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "tinidazole",
+      "name": "Tinidazole",
+      "aliases": [
+        "tinidazole"
+      ],
+      "atcCodes": [
+        "P01AB02",
+        "J01XD02"
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

@@ -325,6 +325,26 @@ public class DrugReference {
 		return candidate.namesNoRoute() && !incumbent.namesNoRoute() ? candidate : incumbent;
 	}
 
+	/**
+	 * @return {@link #canonicalRow(DrugReference, DrugReference)} folded over {@code rows} in
+	 *         iteration order — the row that represents the substance for a caller that already holds
+	 *         the whole group rather than accumulating it as it scans. {@code null} for an empty
+	 *         {@code rows}, which is the only way this can answer nothing.
+	 *
+	 *         <p>Shared rather than written out at each site for the reason the pairwise form exists
+	 *         at all: four surfaces now choose a substance's representative row — the interaction
+	 *         chip's subject (issue #162), the injected record (#163), the class chip's partner
+	 *         (#174 site 1) and the dose warning's subject (#174 site 4) — and a fold written four
+	 *         times is four chances for one of them to iterate in an order the others do not.
+	 */
+	static DrugReference canonicalRow(Iterable<DrugReference> rows) {
+		DrugReference canonical = null;
+		for (DrugReference row : rows) {
+			canonical = canonicalRow(canonical, row);
+		}
+		return canonical;
+	}
+
 	/** @return {@code name} with any trailing parenthesized qualifier(s) removed, normalized by
 	 *          {@link #normalizeName} — the empty string when the name is blank or is nothing but a
 	 *          qualifier, which keeps the key total. */

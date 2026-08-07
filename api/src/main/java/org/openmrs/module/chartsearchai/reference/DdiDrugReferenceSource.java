@@ -14,9 +14,12 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,7 +49,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * entries, which is what the validator's from-either-side matching expects.
  *
  * <p>One class of row is deliberately NOT expanded: a row pairing a drug with itself, or with another
- * route/formulation row of the same substance — see {@link #isSelfPair} (issue #152).
+ * row of the same substance — see {@link #isSelfPair} (issues #152, #164).
  *
  * <p>Memory: there are far fewer distinct mechanism descriptions than pairs, so the
  * per-partner notes are interned (one shared {@link String} per {@code severity + group}),
@@ -147,6 +150,10 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			}
 		}
 
+		// Which rows are one substance is a property of the DATASET, not of a row, so it is settled here
+		// once, before anything reads it — see substanceIds.
+		Map<String, String> substanceIds = substanceIds(order);
+
 		// mechanisms table (text stored once); note strings interned per severity+group.
 		// Severity strings are interned too: the vocabulary is four values across ~300k
 		// full-KB rows, and Jackson allocates a fresh String per row — without this cache the
@@ -170,7 +177,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			if (!byId.containsKey(a) || !byId.containsKey(b)) {
 				continue;
 			}
-			if (isSelfPair(byId.get(a), byId.get(b))) {
+			if (isSelfPair(byId.get(a), byId.get(b), substanceIds)) {
 				selfPairs++;
 				continue;
 			}
@@ -216,6 +223,11 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			// identically: setId above already spends the RxCUI on entry identity, where a shared one is
 			// precisely what it must NOT be.
 			ref.setSubstanceName(row.rxnormName);
+			// And WHICH substance of that name, where the dataset's substance registry can say — the
+			// veto that keeps Omeprazole and Esomeprazole two substances while letting Tozinameran and
+			// its brand row be one (issue #164). Resolved over the whole drugs table above, because no
+			// row can answer it alone.
+			ref.setSubstanceId(substanceIds.get(DrugReference.normalizeName(row.rxnormName)));
 			// Chip-label synonym (never renaming): when the DDInter display name diverges from
 			// the RxNorm generic the question and chart use ("Acetylsalicylic acid" vs
 			// "aspirin"), carry the generic so safety chips can show both vocabularies. A name
@@ -243,15 +255,20 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 * <ul>
 	 *   <li>the same row on both sides — exactly one in the shipped 19 MB KB, {@code DDInter225}
 	 *       (botulinum toxin type A) of 295,184 rows. Its mechanism text is about administering
-	 *       different botulinum SEROTYPES together, and the KB files that same mechanism on genuine
-	 *       cross-row pairs of its own — {@code Botulinum toxin type A} against
-	 *       {@code Botulinum Toxin Type B}, and {@code Daxibotulinumtoxina} against each of them — none
-	 *       of which this guard touches. So the self-pair is an artifact of the KB's granularity that
-	 *       carries no clinical content its siblings do not, while what it puts in front of a clinician
-	 *       is "Botulinum toxin type A interacts with active order botulinum toxin type A".</li>
-	 *   <li>two ROUTE/FORMULATION rows of one substance — 25 more, {@code Lidocaine} against
-	 *       {@code Lidocaine (topical)} and the like (measured 2026-08-06; re-measure before relying on
-	 *       the figures). Also unrenderable rather than merely redundant: every row of a substance
+	 *       different botulinum SEROTYPES together, and the KB files that same mechanism on a genuine
+	 *       cross-SUBSTANCE pair of its own — {@code Botulinum toxin type A} against
+	 *       {@code Botulinum Toxin Type B}, a different {@code rxnorm_name}, which this guard leaves
+	 *       loaded. So the self-pair is an artifact of the KB's granularity that carries no clinical
+	 *       content its sibling does not, while what it puts in front of a clinician is
+	 *       "Botulinum toxin type A interacts with active order botulinum toxin type A".</li>
+	 *   <li>two rows of one substance — 27 more, {@code Lidocaine} against
+	 *       {@code Lidocaine (topical)} and the like (measured 2026-08-07 through this parser;
+	 *       re-measure before relying on the figures). 25 of the 27 are route/formulation variants; the
+	 *       other 2 are rows of one substance whose display names diverge, which the guard only sees
+	 *       since issue #164 widened what {@link DrugReference#substanceKey} counts as one substance —
+	 *       {@code Daxibotulinumtoxina} against {@code Botulinum toxin type A} (Moderate) and two
+	 *       influenza B strain antigens (Minor). Also unrenderable rather than merely redundant: every
+	 *       row of a substance
 	 *       publishes the same {@code rxnorm_name}, which is the match token a rule carries and the label
 	 *       a chip prints, so such a pair can ONLY read as a substance interacting with itself. The
 	 *       systemic-plus-topical exposure the KB row is about cannot be stated by anything this module
@@ -263,15 +280,18 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 *       whose two entries share a name. So this guard makes a decision that arm already took, at the
 	 *       boundary where it covers every arm.
 	 *
-	 *       <p>The accepted cost, named rather than left general: two of the 25 are rated Major —
+	 *       <p>The accepted cost, named rather than left general: two of the 27 are rated Major —
 	 *       {@code Bupivacaine} against {@code Bupivacaine (liposome)} and {@code Aminolevulinic acid}
-	 *       against {@code Aminolevulinic acid (topical)}. Those are real product-level warnings, and
+	 *       against {@code Aminolevulinic acid (topical)}, both route variants and both there before
+	 *       #164. Those are real product-level warnings, and
 	 *       under-warning is the direction this module is otherwise careful about; they are dropped
 	 *       because a chip reading "Bupivacaine interacts with active order bupivacaine" is not that
 	 *       warning. Stating them needs the route vocabulary that is the data-side half of issue #115.</li>
 	 * </ul>
-	 * Through {@link DrugReference#substanceKey(String, String)} rather than a local comparison, so this
-	 * guard and the chip grouping mean the same thing by "one substance". A row publishing no substance
+	 * Through {@link DrugReference#substanceKey(String, String, String)} rather than a local comparison,
+	 * so this guard and the chip grouping mean the same thing by "one substance" — which is why issue
+	 * #164 needed no change on the interaction arm at all: widening that key widened this guard with it.
+	 * A row publishing no substance
 	 * name keys null and is then only caught by the id test — the conservative direction: with no
 	 * substance identity to compare, two different ids are two different drugs.
 	 *
@@ -290,12 +310,78 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 * hand-authored curated file is the operator's own data, and the {@code atc} adapter carries no
 	 * rules at all.
 	 */
-	private static boolean isSelfPair(DrugRow a, DrugRow b) {
+	private static boolean isSelfPair(DrugRow a, DrugRow b, Map<String, String> substanceIds) {
 		if (a.id.equals(b.id)) {
 			return true;
 		}
-		Object substance = DrugReference.substanceKey(a.name, a.rxnormName);
-		return substance != null && substance.equals(DrugReference.substanceKey(b.name, b.rxnormName));
+		Object substance = DrugReference.substanceKey(a.name, a.rxnormName, substanceIdOf(a, substanceIds));
+		return substance != null && substance.equals(
+				DrugReference.substanceKey(b.name, b.rxnormName, substanceIdOf(b, substanceIds)));
+	}
+
+	private static String substanceIdOf(DrugRow row, Map<String, String> substanceIds) {
+		return substanceIds.get(DrugReference.normalizeName(row.rxnormName));
+	}
+
+	/**
+	 * Which substance each {@code rxnorm_name} in this dataset stands for, where the dataset can say —
+	 * the value {@link DrugReference#getSubstanceId()} carries, keyed by the normalized substance name
+	 * the rows publishing it share.
+	 *
+	 * <p><b>Why the DrugBank id, and why resolved per family rather than per row.</b> A
+	 * {@code rxnorm_name} over-merges: the KB files {@code Omeprazole} and {@code Esomeprazole} under
+	 * one, with one {@code rxcui} and one ATC code, and they are two substances (issue #121's
+	 * {@code enalapril}/{@code enalaprilat} decision). Something has to veto that claim, and the
+	 * {@code drugbank_id} is the dataset's own substance-level registry — an identifier of a SUBSTANCE
+	 * rather than of a presentation, which is exactly the distinction a display name cannot make. So:
+	 * <ul>
+	 *   <li>the rows of a substance name that carry <b>at most one</b> DrugBank id between them are one
+	 *       substance, and every one of them takes that id — including the rows carrying none, which is
+	 *       what lets {@code Pfizer-BioNTech Covid-19 Vaccine} (no id) be the same substance as
+	 *       {@code Tozinameran} ({@code DB15696}) and {@code Daxibotulinumtoxina} (no id) the same as
+	 *       {@code Botulinum toxin type A} ({@code DB00083}), the two shapes issue #164 measured;</li>
+	 *   <li>the rows of a substance name that carry <b>two or more</b> get no id at all, and
+	 *       {@link DrugReference#substanceKey()} falls back to the display stem exactly as before. The
+	 *       whole family falls back together, not just the rows carrying an id: {@code Atropine}
+	 *       ({@code DB00572}), {@code Atropine (ophthalmic)} (none) and {@code Hyoscyamine}
+	 *       ({@code DB00424}) are one family, and a row-by-row rule would key the first two differently
+	 *       and split a route variant off its own substance.</li>
+	 * </ul>
+	 * A name shared by rows that name no DrugBank substance at all is in the first case, keyed on the
+	 * substance name itself: the data offers nothing finer, so it is not distinguishing anything, and
+	 * that is what merges {@code Thallous Chloride}/{@code Thallous chloride tl-201} and
+	 * {@code Typhoid vaccine (live)}/{@code Typhoid vaccine live}.
+	 *
+	 * <p>Measured over the shipped 19 MB KB (2283 rows; re-measure before relying on the figures): 142
+	 * substance names are shared by more than one row, 19 of them naming two or more DrugBank
+	 * substances and 123 naming at most one. No group the resulting key produces holds two DrugBank
+	 * substances.
+	 */
+	private static Map<String, String> substanceIds(List<DrugRow> rows) {
+		Map<String, Set<String>> byName = new LinkedHashMap<String, Set<String>>();
+		for (DrugRow row : rows) {
+			String substance = DrugReference.normalizeName(row.rxnormName);
+			if (substance == null) {
+				continue;
+			}
+			Set<String> ids = byName.get(substance);
+			if (ids == null) {
+				ids = new LinkedHashSet<String>();
+				byName.put(substance, ids);
+			}
+			String id = DrugReference.normalizeName(row.drugbankId);
+			if (id != null) {
+				ids.add(id);
+			}
+		}
+		Map<String, String> out = new HashMap<String, String>();
+		for (Map.Entry<String, Set<String>> family : byName.entrySet()) {
+			Set<String> ids = family.getValue();
+			if (ids.size() <= 1) {
+				out.put(family.getKey(), ids.isEmpty() ? family.getKey() : ids.iterator().next());
+			}
+		}
+		return out;
 	}
 
 	private static List<DrugReference.Interaction> interactionsFor(List<Link> links, Map<String, DrugRow> byId) {
@@ -365,15 +451,21 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 
 		final String rxnormName;
 
+		/** The dataset's substance-registry id for this row, or null — read only by
+		 *  {@link DdiDrugReferenceSource#substanceIds}, which is where its meaning is recorded. */
+		final String drugbankId;
+
 		final List<String> atc;
 
 		final List<String> aliases;
 
-		private DrugRow(String id, String name, String rxcui, String rxnormName, List<String> atc, List<String> aliases) {
+		private DrugRow(String id, String name, String rxcui, String rxnormName, String drugbankId,
+				List<String> atc, List<String> aliases) {
 			this.id = id;
 			this.name = name;
 			this.rxcui = rxcui;
 			this.rxnormName = rxnormName;
+			this.drugbankId = drugbankId;
 			this.atc = atc;
 			this.aliases = aliases;
 		}
@@ -389,6 +481,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			// synonym all see the same clean value — a padded name would defeat the guard and
 			// leak padding into the label.
 			String rxnormName = d.path("rxnorm_name").isTextual() ? d.get("rxnorm_name").asText().trim() : null;
+			String drugbankId = d.path("drugbank_id").isTextual() ? d.get("drugbank_id").asText().trim() : null;
 			List<String> atc = new ArrayList<String>();
 			for (JsonNode a : d.path("atc")) {
 				atc.add(a.asText());
@@ -404,7 +497,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 					addAlias(aliases, c.get("name").asText());
 				}
 			}
-			return new DrugRow(id, name, rxcui, rxnormName, atc, aliases);
+			return new DrugRow(id, name, rxcui, rxnormName, drugbankId, atc, aliases);
 		}
 
 		private static void addAlias(List<String> aliases, String value) {

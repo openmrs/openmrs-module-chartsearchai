@@ -662,11 +662,11 @@ public class DrugSafetyValidator {
 	 * is not the dataset's first (7 of the shipped KB's multi-row families) can have an interaction chip
 	 * naming it and a contraindication chip naming one of its routes in the same response. That is the
 	 * route-qualifier residue this javadoc's last paragraph already accepts, now visible against a
-	 * canonicalized sibling arm rather than against another per-row one; widening it here would change
-	 * which variant an allergy is reported against, which is the decision issue #164 holds. The
-	 * surviving chip is written back into the position
-	 * the group's first candidate took, so no client sees the chip sequence reshuffle when a later,
-	 * stronger row replaces an earlier one.
+	 * canonicalized sibling arm rather than against another per-row one. It no longer reaches the
+	 * IDENTITY chip, which since issue #164 is named after the patient's own recorded allergen rather
+	 * than after whichever row of the substance raised it. The surviving chip is written back into the
+	 * position the group's first candidate took, so no client sees the chip sequence reshuffle when a
+	 * later, stronger row replaces an earlier one.
 	 *
 	 * <p>Resolving a tie by position is lossless rather than merely tidier, and that rests on the rows
 	 * of one substance publishing the SAME ATC codes — which the shipped KB does for every group this
@@ -676,25 +676,30 @@ public class DrugSafetyValidator {
 	 * so equal codes are equal membership. What is left for a tie to choose between is then only the
 	 * route qualifier in the subject's own label.
 	 *
-	 * <p><b>Why replacing an incumbent is not dead code.</b> It is tempting to read this ledger as
-	 * first-wins, and on the dexamethasone family the two would agree: {@code lookupByToken} resolves an
-	 * allergy to the EARLIEST matching entry, every dexamethasone row carries the bare substance name
-	 * among its aliases, and both subject sets are iterated in dataset order — so there the identity
-	 * match IS the group's first candidate. That premise does not hold generally. Where no alias of a
-	 * row is the bare substance name, the allergy skips that row and resolves a LATER member of its own
-	 * group, and the earlier members raise their class chips first: {@code Tozinameran} behind the
-	 * {@code Pfizer-BioNTech} presentations, {@code Insulin aspart (aspart)},
-	 * {@code Iobenguane (I-131)}. First-wins answers those with the vacuous "in the same ATC class as
-	 * your allergy to &lt;this same substance&gt;" chip this ledger exists to remove, which is what
-	 * {@code ContraindicationRouteVariantTest.theIdentityChipSurvivesWhenTheAllergenRowIsNotItsGroupsFirst}
-	 * pins. How many groups the shipped KB reaches it through is a property of that dataset — measure it
-	 * rather than trusting a number here.
+	 * <p><b>Replacing an incumbent, and what still reaches it.</b> This ledger used to be reachably
+	 * order-dependent: {@code lookupByToken} resolves an allergy to the EARLIEST matching entry, so
+	 * where no alias of a row is the bare substance name the allergy skipped that row and resolved a
+	 * LATER member of its own group, and the earlier members — matching by class rather than by
+	 * identity — raised the weaker chip first ({@code Tozinameran} behind the {@code Pfizer-BioNTech}
+	 * presentations, {@code Insulin aspart (aspart)}, {@code Iobenguane (I-131)}). Issue #164 removed
+	 * that route: identity is now decided by SUBSTANCE, so every row of one group answers the identity
+	 * question the same way and an identity chip can no longer arrive after a class one for the same
+	 * key. What is left to replace is a class chip by a more specific class chip — a group whose rows
+	 * publish DIFFERENT ATC codes, so that one shares only a curated group with the allergen while
+	 * another shares a level-4 subgroup. The shipped KB has no such group (0 of the 129 it files as
+	 * more than one row; measured 2026-08-07 and the same 0 before this key widened), so the branch is
+	 * currently unexercised rather than wrong, and it is kept because "the most specific relationship
+	 * survives" is this arm's contract and first-wins is not: a refresh that diverges one row's codes
+	 * would otherwise silently report the weaker relationship. Re-measure that 0 rather than trusting
+	 * it — it is a property of the dataset, not of this code.
 	 */
 	private static final class ContraindicationChips {
 
 		/** A recorded allergy to this very substance — needs no ATC code and outranks both class
 		 *  comparisons (the precedence {@link #addAllergyContraindications} already applies per
-		 *  allergen, extended across the rows of one substance). */
+		 *  allergen, extended across the rows of one substance). Since issue #164 the comparison behind
+		 *  it is the substance rather than the reference row, so it is uniform across the rows this
+		 *  ledger groups: every row of one substance answers it alike. */
 		static final int IDENTITY = 3;
 
 		/** A shared ATC level-4 chemical subgroup with the allergen. */
@@ -887,10 +892,11 @@ public class DrugSafetyValidator {
 		//
 		// The class arm reads the CANONICAL row alone, not the whole group, and that is lossless only
 		// while every row of a substance publishes the same ATC list — which the shipped KB does, across
-		// all 121 of its multi-row families, and which is the same premise ContraindicationChips'
+		// all 129 of its multi-row families, and which is the same premise ContraindicationChips'
 		// positional tie-break rests on. It is a DATA invariant, not a code-gated one: a KB refresh that
 		// gave one route variant a code its siblings lack would silently drop a duplicate-therapy chip
 		// this arm used to raise, so re-measure it on a refresh as well as before widening substanceKey.
+		// (Re-measured for issue #164's widening: still 0 divergent, at 129 families rather than 121.)
 		// Reading the group instead would produce one sentence per row, each naming its own label, which
 		// is the duplication being removed.
 		Map<SubjectRule, String> folded = new LinkedHashMap<SubjectRule, String>();
@@ -2149,9 +2155,10 @@ public class DrugSafetyValidator {
 
 	/**
 	 * Allergy-driven contraindication reasoning: for the drug {@code ref} being checked, each recorded
-	 * allergy token is resolved to a reference drug and a warning fires when that allergen <em>is</em>
-	 * {@code ref} (a recorded allergy to the very drug being checked), shares {@code ref}'s ATC level-4
-	 * subgroup (cross-reactivity), or — failing both — shares a curated {@link CrossReactivityGroup}
+	 * allergy token is resolved to a reference drug and a warning fires when that allergen is the same
+	 * SUBSTANCE as {@code ref} (a recorded allergy to the very drug being checked), shares {@code ref}'s
+	 * ATC level-4 subgroup (cross-reactivity), or — failing both — shares a curated
+	 * {@link CrossReactivityGroup}
 	 * (cross-<em>branch</em> cross-reactivity, e.g. aspirin vs an ibuprofen allergy, which ATC's tree
 	 * cannot express). At most one warning per (SUBSTANCE, resolved allergen): the most specific match
 	 * wins, several aliases of one allergy warn once ({@code seenAllergens} below), and the several
@@ -2164,7 +2171,7 @@ public class DrugSafetyValidator {
 	 * <p><b>Identity is not classification (issue #135).</b> The three comparisons were all gated on
 	 * one early return taken when {@code ref} had neither an ATC subgroup nor a curated group. That
 	 * guard is right for the two class comparisons — without a subgroup or a group there is nothing to
-	 * compare against — but {@code allergen == ref} is a comparison of two object references: it needs
+	 * compare against — but the identity comparison is between the two drugs themselves: it needs
 	 * no ATC code, no group, and no dataset support of any kind, and gating it on classification data
 	 * silently skipped the most basic check the module makes. Measured over the full
 	 * openmrs-ddi-knowledge-base DDInter 2.0 dataset (2283 drugs) on 2026-08-05: <b>444 entries
@@ -2245,10 +2252,15 @@ public class DrugSafetyValidator {
 			if (allergen == null || !seenAllergens.add(allergen)) {
 				continue;
 			}
-			if (allergen == ref) {
+			// Identity is decided by SUBSTANCE, and the chip names the patient's own record (issue #164).
+			// substanceGroupKey answers both halves at once: it is the row's substance where the data
+			// publishes one and the row itself where it does not, so this subsumes the entry comparison
+			// it replaces rather than sitting beside it. It is also the key the ledger below groups on,
+			// so a substance whose rows arrive from several call sites cannot raise this chip twice.
+			if (allergen.substanceGroupKey().equals(ref.substanceGroupKey())) {
 				chips.add(ref, allergen, ContraindicationChips.IDENTITY,
-						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-								"The patient has a recorded allergy to " + ref.displayLabel() + "."));
+						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, allergen.displayLabel(),
+								"The patient has a recorded allergy to " + allergen.displayLabel() + "."));
 				continue;
 			}
 			if (refClasses.isEmpty() && refGroups.isEmpty()) {

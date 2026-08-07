@@ -23,8 +23,11 @@ import org.junit.jupiter.api.Test;
  * No drug is reported as interacting with itself (issue #152).
  *
  * <p>The shipped DDInter 2.0 knowledge base carries one row pairing a drug with ITSELF —
- * {@code DDInter225}, botulinum toxin type A, 1 of 295,184 — and 25 more pairing two ROUTE VARIANTS of
- * one substance with each other (measured 2026-08-06; re-measure before relying on the figures). The
+ * {@code DDInter225}, botulinum toxin type A, 1 of 295,184 — plus further rows pairing two ROUTE
+ * VARIANTS of one substance with each other. The total the guard drops is not restated here because
+ * it moves whenever substance identity widens: it was 26 when issue #152 shipped and 28 after issue
+ * #164 resolved two more pairs to one substance by registry id. The parser logs the live count in a
+ * WARN at load, which is the figure to read. The
  * parser loaded both kinds, so a substance could be raised as interacting with itself: a chip reading
  * "Lidocaine interacts with active order lidocaine", and the same partner listed inside the drug's own
  * injected reference record.
@@ -88,9 +91,10 @@ public class SelfInteractionTest {
 	@Test
 	public void aRowPairingADrugWithItselfIsNotLoaded() throws IOException {
 		// DDInter225 x DDInter225. The mechanism text is about administering different botulinum
-		// SEROTYPES together — which the KB also files on genuine cross-row pairs (type A against type B,
-		// and Daxibotulinumtoxina against each), all of which the guard leaves loaded — so the self-pair
-		// is an artifact of the KB's granularity that costs no clinical content, and as rendered it reads
+		// SEROTYPES together — which the KB also files on genuine cross-row pairs. Type A against type B
+		// is one substance against another and stays loaded; Daxibotulinumtoxina against type A is NOT,
+		// since issue #164 resolved them to one substance by registry id. So the self-pair is an artifact
+		// of the KB's granularity that costs no clinical content, and as rendered it reads
 		// "Botulinum toxin type A interacts with active order botulinum toxin type A".
 		DrugReference botulinum = entry(DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE),
 				"Botulinum toxin type A");

@@ -49,6 +49,9 @@ public class DrugReference {
 	 *  {@link #getSubstanceName()}. */
 	private String substanceName;
 
+	/** The reference data's own IDENTITY for that substance, or null — see {@link #getSubstanceId()}. */
+	private String substanceId;
+
 	private String drugClass;
 
 	private List<String> aliases = Collections.emptyList();
@@ -137,6 +140,29 @@ public class DrugReference {
 		this.substanceName = substanceName;
 	}
 
+	/**
+	 * @return the identity the reference data gives the SUBSTANCE this row is a row of, at a
+	 *         granularity {@link #getSubstanceName()} does not have — or {@code null} where the data
+	 *         cannot supply one. Written by the loading source, not by the dataset: it is a
+	 *         determination over all the rows sharing a substance name, so no row can carry it on its
+	 *         own. {@link DdiDrugReferenceSource} resolves it from the DDInter {@code drugbank_id};
+	 *         {@link AtcDrugReferenceSource} and the curated {@code json} dataset publish no substance
+	 *         registry and leave it null, which is why the fallback below has to be the one that was
+	 *         there before.
+	 *
+	 *         <p>Deliberately package-private, unlike {@link #getSubstanceName()}: that field is part
+	 *         of the curated schema and a hand-authored file may set it, while this one is a
+	 *         source-side derivation and binding it from a file would let a dataset assert a
+	 *         resolution nothing had made.
+	 */
+	String getSubstanceId() {
+		return substanceId;
+	}
+
+	void setSubstanceId(String substanceId) {
+		this.substanceId = substanceId;
+	}
+
 	/** A trailing parenthesized qualifier on a display name — the route or formulation a DDInter row
 	 *  is distinguished from its siblings by ({@code Dexamethasone (nasal)},
 	 *  {@code Amphotericin B (lipid complex)}, {@code Tozinameran (5y-11y)}). Anchored at the END, so a
@@ -159,57 +185,78 @@ public class DrugReference {
 	 * <ul>
 	 *   <li>{@link #getSubstanceName()} — the data's own claim that two rows are one substance. 142
 	 *       values are shared by more than one entry, across 332 entries, and the {@code rxcui}
-	 *       partitions those entries identically, so this is the dataset's substance identity rather
-	 *       than a spelling coincidence.</li>
-	 *   <li>The <b>display stem</b> — the name with trailing qualifiers removed — as a VETO on that
-	 *       claim, because the claim over-merges. Among those 142 families sit pairs of genuinely
-	 *       different substances: {@code Omeprazole}/{@code Esomeprazole} (one
+	 *       partitions those entries identically (0 families disagreeing in either direction), so this
+	 *       is the dataset's substance identity rather than a spelling coincidence.</li>
+	 *   <li>{@link #getSubstanceId()} — the data's own IDENTITY for that substance, which either
+	 *       CONFIRMS the claim or withdraws it, because the claim over-merges. Among those 142 families
+	 *       sit pairs of genuinely different substances: {@code Omeprazole}/{@code Esomeprazole} (one
 	 *       {@code rxnorm_name}, one {@code rxcui}, one ATC code),
 	 *       {@code Amphetamine}/{@code Dextroamphetamine}, {@code Fenfluramine}/{@code Dexfenfluramine},
 	 *       {@code Gabapentin}/{@code Gabapentin enacarbil}, {@code Netupitant}/{@code Fosnetupitant},
 	 *       {@code Ketoconazole}/{@code Levoketoconazole}, {@code Fenofibrate}/{@code Fenofibric acid},
-	 *       {@code Atropine}/{@code Hyoscyamine} — each of them the {@code enalapril}/{@code enalaprilat}
-	 *       shape issue #121 decided must stay two chips. The stem separates every one of them.</li>
+	 *       {@code Atropine}/{@code Hyoscyamine}, {@code Hydrocortisone}/{@code Hydrocortisone butyrate},
+	 *       {@code Estrone}/{@code Estrone sulfate} — each of them the
+	 *       {@code enalapril}/{@code enalaprilat} shape issue #121 decided must stay two chips. 19 of the
+	 *       142 families name two or more DrugBank substances and are exactly these. There the id is
+	 *       withheld — {@link DdiDrugReferenceSource} sets none, because it cannot say which of the two
+	 *       a given row is — and the veto falls to the DISPLAY STEM, which separates every one of
+	 *       them.</li>
 	 * </ul>
-	 * Neither half works alone. Where one stem covers two substances the stem alone merges them and the
-	 * substance name is what refuses: {@code Varicella Zoster Vaccine (Recombinant)} against
+	 *
+	 * <p><b>Why the stem is the fallback and not the veto (issue #164).</b> It used to be the veto, and
+	 * it cannot tell a second SUBSTANCE from a second NAME: it separates the two PPIs correctly and
+	 * separates {@code Tozinameran} from {@code Pfizer-BioNTech Covid-19 Vaccine} — one {@code rxcui},
+	 * one {@code rxnorm_name}, one DrugBank substance — incorrectly, and likewise
+	 * {@code Botulinum toxin type A} from {@code Daxibotulinumtoxina}. Both were reported live as a
+	 * substance cross-reactive, or interacting, with itself. A substance registry can tell them apart
+	 * and a display name cannot, so where the reference data supplies one it decides, and the stem is
+	 * left to the families it cannot speak for. Widening the substance NAME alone was never the
+	 * alternative: it merges the two PPIs.
+	 *
+	 * <p>Neither half works alone. Where one stem covers two substances the stem alone merges them and
+	 * the substance name is what refuses: {@code Varicella Zoster Vaccine (Recombinant)} against
 	 * {@code (live/attenuated)} — a distinction that decides whether an immunocompromised patient may
 	 * have it at all — and likewise {@code Manganese (chloride)}/{@code (sulfate)},
 	 * {@code Dextran (-1)}/{@code (low molecular weight)}, {@code Insulin human}/{@code (isophane)},
 	 * {@code Insulin lispro}/{@code (protamine)}, {@code Iron}/{@code (polysaccharide)}. A few more
 	 * one-stem groups are kept apart because a row publishes NO substance name rather than a differing
 	 * one ({@code Typhoid vaccine (live)}/{@code (inactivated)}) — that is the null-key fallback below,
-	 * not this comparison. Together the two reduce those 332 entries to 177 substances.
+	 * not this comparison. Together the three reduce those 332 entries to 163 substances (177 while the
+	 * stem was the veto), and no resulting group holds two DrugBank substances.
 	 *
-	 * <p>Conservative where it cannot tell, in BOTH directions. A name that extends the family's stem
-	 * by a WORD rather than a qualifier ({@code Hydrocortisone butyrate}, {@code Estrone sulfate},
-	 * {@code Procaine benzylpenicillin}) keeps its own key and so its own chip — including where the KB
-	 * is in fact naming one substance two ways ({@code Thallous Chloride}/{@code Thallous chloride
-	 * tl-201}, {@code Typhoid vaccine (live)}/{@code Typhoid vaccine live}). Over-reporting one chip is
-	 * the safe direction for a non-blocking advisory; dropping a real one is not.
+	 * <p>Conservative where it cannot tell, and now in ONE direction rather than both. A name that
+	 * extends the family's stem by a WORD rather than a qualifier keeps its own key, and so its own
+	 * chip, only where the registry agrees it is another substance ({@code Hydrocortisone butyrate},
+	 * {@code Estrone sulfate}, {@code Procaine benzylpenicillin}); where the KB is naming one substance
+	 * two ways it no longer does ({@code Thallous Chloride}/{@code Thallous chloride tl-201},
+	 * {@code Typhoid vaccine (live)}/{@code Typhoid vaccine live}). Over-reporting one chip is still the
+	 * safe direction for a non-blocking advisory, and dropping a real one is not — but a chip reporting
+	 * a substance against ITSELF is not a real one, which is what makes those merges a gain rather than
+	 * a relaxation.
 	 *
 	 * @return an opaque key, equal exactly for two entries this module treats as one substance
 	 */
 	Object substanceKey() {
-		return substanceKey(name, substanceName);
+		return substanceKey(name, substanceName, substanceId);
 	}
 
 	/**
-	 * {@link #substanceKey()} over the two fields it reads, for a caller holding those fields but no
+	 * {@link #substanceKey()} over the three fields it reads, for a caller holding those fields but no
 	 * {@link DrugReference} yet: {@link DdiDrugReferenceSource}'s parse-time rows, which have to answer
 	 * "are these two rows one substance?" before any entry exists (issue #152's self-pair guard). One
 	 * definition, so a load-time guard and the chip grouping cannot come to disagree about what one
 	 * substance is — the failure that would leave a self-pair loaded for exactly the rows the chips then
-	 * merge.
+	 * merge, and the reason issue #164's interaction arm needed no change of its own.
 	 *
 	 * @return the key described at {@link #substanceKey()}, or null when {@code substanceName} is blank
 	 */
-	static Object substanceKey(String name, String substanceName) {
+	static Object substanceKey(String name, String substanceName, String substanceId) {
 		String substance = normalizeName(substanceName);
 		if (substance == null) {
 			return null;
 		}
-		return Arrays.asList(substance, displayStem(name));
+		String identity = normalizeName(substanceId);
+		return Arrays.asList(substance, identity != null ? identity : displayStem(name));
 	}
 
 	/**
@@ -242,10 +289,10 @@ public class DrugReference {
 	 *         the data-side gap issue #115 records), so the only route it can honestly assert is none.
 	 *
 	 *         <p>Consumed by {@link #canonicalRow}, which is where the two collapses that need it agree
-	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-06; re-measure before relying
-	 *         on the figures): of the 121 substances filed as more than one row, 110 have such a row and
-	 *         11 do not — {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
-	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in 7 of the 110 it is NOT the family's
+	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-07; re-measure before relying
+	 *         on the figures): of the 129 substances filed as more than one row, 119 have such a row and
+	 *         10 do not — {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
+	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in 7 of the 119 it is NOT the family's
 	 *         first row, which is why the choice cannot be left to dataset order.
 	 */
 	boolean namesNoRoute() {
@@ -266,7 +313,7 @@ public class DrugReference {
 	 *
 	 * @return {@code candidate} when it {@link #namesNoRoute()} and {@code incumbent} does not, else
 	 *         {@code incumbent} — so the route-unspecified row wins wherever the family has one, and
-	 *         otherwise the first row seen keeps the role. For the 11 shipped families that name no
+	 *         otherwise the first row seen keeps the role. For the 10 shipped families that name no
 	 *         unqualified row the survivor therefore still carries a qualifier: the KB publishes no
 	 *         unqualified name for those substances, and manufacturing one by stripping a display name
 	 *         is the pattern-match-a-label mistake issue #148 had to undo.

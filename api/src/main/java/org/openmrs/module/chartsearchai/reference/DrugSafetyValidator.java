@@ -1459,6 +1459,9 @@ public class DrugSafetyValidator {
 		}
 		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);
 		Map<DrugReference, String> names = pairKeyNames(drugs, severityFloor);
+		// And what the sentence CALLS each side: the substance's canonical row, never the row this
+		// walk reached (issue #174, the fifth site of the same shape — see canonicalSubjects).
+		Map<DrugReference, DrugReference> subjects = canonicalSubjects(drugs);
 		// Group first, decide second. Both the grouping and the chart-precedence verdict belong to the
 		// CLINICAL pair, and route variants make one clinical pair arrive as several entry pairs
 		// carrying different rule sets — the sub-floor sibling of an above-floor row loses that row, so
@@ -1476,7 +1479,7 @@ public class DrugSafetyValidator {
 		for (int i = 0; i < drugs.size() - 1; i++) {
 			for (int j = i + 1; j < drugs.size(); j++) {
 				collectQuestionPairInteraction(candidates, chartOwned, drugs.get(i), drugs.get(j), names,
-						context, severityFloor);
+						subjects, context, severityFloor);
 			}
 		}
 		List<PairFinding> found = new ArrayList<PairFinding>();
@@ -1539,7 +1542,8 @@ public class DrugSafetyValidator {
 	/** One question-named pair: at most one candidate chip, from whichever side carries the rule. */
 	private void collectQuestionPairInteraction(Map<List<String>, PairFinding> candidates,
 			Set<List<String>> chartOwned, DrugReference first, DrugReference second,
-			Map<DrugReference, String> names, PatientClinicalContext context, int severityFloor) {
+			Map<DrugReference, String> names, Map<DrugReference, DrugReference> subjects,
+			PatientClinicalContext context, int severityFloor) {
 		List<DrugReference.Interaction> forward = aboveFloorRulesAgainst(first, second, severityFloor);
 		List<DrugReference.Interaction> reverse = aboveFloorRulesAgainst(second, first, severityFloor);
 		if (forward.isEmpty() && reverse.isEmpty()) {
@@ -1570,8 +1574,14 @@ public class DrugSafetyValidator {
 		// the chip needs; a rule that followed the question's word order would need the drug's offset
 		// in the question, which findByQuery does not report.
 		boolean fromFirst = !forward.isEmpty();
-		DrugReference subject = fromFirst ? first : second;
-		DrugReference partner = fromFirst ? second : first;
+		// The ROW decides which side owns the sentence and which rule it carries; the SUBSTANCE
+		// decides what the sentence calls the two drugs (issue #174). Naming the row asserted a
+		// preparation the question never mentioned — "Lidocaine interacts with Chloroprocaine
+		// (ophthalmic), also named in the question" for a question that said "chloroprocaine" — the
+		// same defect issue #162 fixed on the drug-in-play arm, reached here through the dataset
+		// order the tie-break above deliberately settles on.
+		DrugReference subject = subjects.get(fromFirst ? first : second);
+		DrugReference partner = subjects.get(fromFirst ? second : first);
 		DrugReference.Interaction rule = fromFirst ? forward.get(0) : reverse.get(0);
 		// "named in the question" is what keeps this distinguishable from the active-order chip, and
 		// it is a claim about the QUESTION, so it stays true whatever the chart holds. Wording it as
@@ -1879,8 +1889,8 @@ public class DrugSafetyValidator {
 		// {@code rxnorm_name} and each variant would otherwise be its own subject keying its own pair.
 		Map<DrugReference, String> keyNames = pairKeyNames(orderDrugs, severityFloor);
 		// What each row's chip CALLS its subject: the substance's canonical row, never the row the
-		// loop happens to be on (issue #174 site 3). See screeningSubjects.
-		Map<DrugReference, DrugReference> subjects = screeningSubjects(orderDrugs);
+		// loop happens to be on (issue #174 site 3). See canonicalSubjects.
+		Map<DrugReference, DrugReference> subjects = canonicalSubjects(orderDrugs);
 		for (DrugReference ref : orderDrugs) {
 			// Resolved once per subject, not per rule: the reduction depends only on ref.
 			PatientClinicalContext others = activeOrdersOtherThan(ref, orderDrugs, context);
@@ -1956,33 +1966,41 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return for each of {@code orderDrugs}, the row that names the SUBSTANCE it is a row of —
-	 *         {@link #interactionSubject}'s choice over the whole group, so the screening arm calls a
+	 * @return for each of {@code rows}, the row that names the SUBSTANCE it is a row of —
+	 *         {@link #interactionSubject}'s choice over the whole group, so every arm calls a
 	 *         substance what the drug-in-play arm calls it.
 	 *
-	 *         <p><b>Issue #174 site 3.</b> This arm named its subject {@code ref.displayLabel()},
-	 *         i.e. whichever row {@link DrugReferenceService#findForActiveOrders} returned first,
-	 *         while the drug-in-play arm has named the canonical row since issue #162. For a family
-	 *         whose route-unspecified row is not its FIRST row — 7 of the shipped KB's multi-row
-	 *         families — the two arms therefore called one substance two things in one build, which
-	 *         was confirmed live: the same patient's chip read {@code Salicylic acid} for a question
-	 *         naming the drug and {@code Salicylic acid (sodium)} for a screening question.
+	 *         <p><b>Issue #174.</b> Two arms still named a drug by whichever ROW they reached, while
+	 *         the drug-in-play arm has named the canonical row since issue #162:
+	 *         <ul>
+	 *           <li><b>site 3</b>, the screening arm ({@link #addActiveOrderPairInteractions}), whose
+	 *               subject was whichever row {@link DrugReferenceService#findForActiveOrders}
+	 *               returned first. Confirmed live: one patient's chip read {@code Salicylic acid} for
+	 *               a question naming the drug and {@code Salicylic acid (sodium)} for a screening
+	 *               question — two names for one substance in one build;</li>
+	 *           <li>and the question-PAIR arm ({@link #addQuestionPairInteractions}), a FIFTH site the
+	 *               issue does not enumerate, whose two sides were both named by the row the walk
+	 *               reached — settled, as its own javadoc records, by "whichever entry the DATASET
+	 *               lists first".</li>
+	 *         </ul>
+	 *         Both are observable only for the 7 shipped families whose route-unspecified row is not
+	 *         their first, which is why they survived several passes.
 	 *
-	 *         <p>Label-only, and deliberately so. The arm's own unordered pair key already collapses
-	 *         the rows into one chip, and issue #173's {@link InteractionPairs} already suppresses a
-	 *         pair the other arm reported — that ledger is keyed on identity precisely so it did NOT
-	 *         depend on this label being fixed. What is left, and is not fixed here, is which ROW's
-	 *         rule survives for a partner both rows carry: this arm still takes the first row to
-	 *         reach the pair rather than the most severe rule, which is the analogue of issue #115 on
-	 *         this arm and a change to chip CONTENT rather than to a name.
+	 *         <p>Label-only, and deliberately so. Both arms already collapse the rows into one chip on
+	 *         their own unordered pair keys, and issue #173's {@link InteractionPairs} already
+	 *         suppresses a pair another arm reported — that ledger is keyed on identity precisely so
+	 *         it did NOT depend on these labels being fixed. What is left, and is not fixed here, is
+	 *         which ROW's rule survives for a partner several rows carry: both arms take the first row
+	 *         to reach the pair rather than the most severe rule, which is the analogue of issue #115
+	 *         on these arms and a change to chip CONTENT rather than to a name.
 	 *
 	 *         <p>A per-{@code validate} local map, never a field, for the reason issue #172 records:
 	 *         a memoised {@link DrugReference} outliving a {@code getAll()} hot-reload fails the
 	 *         reference comparisons the contraindication arms make against the same objects.
 	 */
-	private static Map<DrugReference, DrugReference> screeningSubjects(List<DrugReference> orderDrugs) {
+	private static Map<DrugReference, DrugReference> canonicalSubjects(List<DrugReference> rows) {
 		Map<DrugReference, DrugReference> out = new LinkedHashMap<DrugReference, DrugReference>();
-		for (Map.Entry<Object, List<DrugReference>> group : substanceRows(orderDrugs).entrySet()) {
+		for (Map.Entry<Object, List<DrugReference>> group : substanceRows(rows).entrySet()) {
 			DrugReference canonical = interactionSubject(group.getValue());
 			for (DrugReference row : group.getValue()) {
 				out.put(row, canonical);
@@ -2567,12 +2585,40 @@ public class DrugSafetyValidator {
 	 */
 	private static final class OrderPartner {
 
-		private final String label;
+		private String label;
+
+		/** Whether {@link #label} came from an ORDER rather than from the dataset — see
+		 *  {@link #nameByOrder}. */
+		private boolean namedByOrder;
 
 		private final Set<String> codes = new LinkedHashSet<String>();
 
-		private OrderPartner(String label) {
+		private OrderPartner(String label, boolean namedByOrder) {
 			this.label = label;
+			this.namedByOrder = namedByOrder;
+		}
+
+		/**
+		 * Re-name this partner after the ORDER, because one of the codes it holds is a code the
+		 * dataset cannot name (issue #186). Monotone — an entry name yields to an order name, never
+		 * the reverse, so the answer does not depend on which of the order's codes the context listed
+		 * first.
+		 *
+		 * <p>Why the order wins there. The dataset names the substance the COVERED codes identify;
+		 * it says nothing about the uncovered one, and the two need not be the same substance. The
+		 * 3.7.1 demo dictionary's {@code Isoniazid / Rifapentine} concept is exactly that: the loaded
+		 * KB covers {@code J04AB05} (rifapentine) and not {@code J04AC51}, and naming the merged
+		 * partner "Rifapentine" produces "…is in the same ATC class (J04AC) as active order
+		 * Rifapentine", a chip whose stated class does not classify the drug it names — the
+		 * right-finding-wrong-reason failure issue #161 fixed on the allergy arm. The order's own
+		 * display name is true of everything the order contains, which is what a partner holding an
+		 * unnameable code needs.
+		 */
+		private void nameByOrder(String orderLabel) {
+			if (!namedByOrder && !ChartSearchAiUtils.isBlank(orderLabel)) {
+				label = orderLabel;
+				namedByOrder = true;
+			}
 		}
 	}
 
@@ -2594,7 +2640,8 @@ public class DrugSafetyValidator {
 	 * different labels ("… as active order Metronidazole" beside "… as active order Metronidazole
 	 * 500mg"). An uncovered code now first asks whether the order carrying it resolves, as a whole,
 	 * to exactly ONE substance, and joins that substance's partner when it does
-	 * ({@link #soleSubstanceOf}).
+	 * ({@link #soleSubstanceOf}) — carrying the ORDER's name onto that partner as it goes, because
+	 * the dataset's name speaks only for the codes it covers (see {@link OrderPartner#nameByOrder}).
 	 *
 	 * <p>Grouping by the order OUTRIGHT would have been wrong in both directions, which is why the
 	 * order is consulted only for the codes the dataset cannot speak for. It would split a substance
@@ -2646,7 +2693,8 @@ public class DrugSafetyValidator {
 		for (String orderCode : context.getActiveDrugAtcCodes()) {
 			DrugReference entry = entryForAtcCode(orderCode, entryByCode);
 			PatientClinicalContext.ActiveDrugOrder order = null;
-			if (entry == null) {
+			boolean unnameableCode = entry == null;
+			if (unnameableCode) {
 				// The dataset cannot name this code. Before falling to the order itself, ask whether
 				// the ORDER carrying it names one substance between all its codes — issue #186.
 				order = orderCarrying(orderCode, context);
@@ -2656,18 +2704,26 @@ public class DrugSafetyValidator {
 			}
 			Object identity;
 			String label;
+			boolean namedByOrder;
 			if (entry != null) {
 				identity = entry.substanceGroupKey();
 				label = entry.displayLabel();
+				namedByOrder = false;
 			} else {
 				identity = order != null ? order : (Object) orderCode;
 				label = order != null
 						? ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode) : orderCode;
+				namedByOrder = order != null;
 			}
 			OrderPartner partner = byIdentity.get(identity);
 			if (partner == null) {
-				partner = new OrderPartner(label);
+				partner = new OrderPartner(label, namedByOrder);
 				byIdentity.put(identity, partner);
+			}
+			if (unnameableCode && order != null) {
+				// This partner holds a code the dataset cannot name, so the dataset's name for its
+				// other codes does not speak for the whole of it — see OrderPartner.nameByOrder.
+				partner.nameByOrder(ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode));
 			}
 			partner.codes.add(orderCode);
 		}

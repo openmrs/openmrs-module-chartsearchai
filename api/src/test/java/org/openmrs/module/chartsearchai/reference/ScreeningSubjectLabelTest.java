@@ -90,6 +90,33 @@ public class ScreeningSubjectLabelTest {
 	}
 
 	@Test
+	public void theQuestionPairArmNamesTheSubstanceToo() throws Exception {
+		// A FIFTH site of the same shape, found while sweeping the four issue #174 enumerates and not
+		// listed there: the question-PAIR arm (issue #114) names both sides of its sentence by
+		// whichever entry row it reached, and its own javadoc records that the tie "goes to whichever
+		// entry the DATASET lists first". For Chloroprocaine that is the ophthalmic row, so a question
+		// naming two drugs asserted a preparation the clinician never named — the same defect issue
+		// #162 fixed on the drug-in-play arm and #174 site 3 on the screening arm.
+		//
+		// No active orders, so this arm is the only one that can chip: the drug-in-play arm needs
+		// hasActiveDrug and the screening arm needs a question naming no drug.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null, null, null);
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Does chloroprocaine interact with lidocaine?", context);
+
+		assertEquals(1, warnings.size(),
+				"precondition: the question pair must chip exactly once, was: " + warnings);
+		assertTrue(warnings.get(0).getDetail().contains("interacts with Chloroprocaine,"),
+				"the pair sentence must name the SUBSTANCE, not the row the dataset listed first, "
+						+ "was: " + warnings.get(0).getDetail());
+		assertFalse(warnings.get(0).getDetail().contains("(ophthalmic)")
+				|| warnings.get(0).getDrug().contains("(ophthalmic)"),
+				"and must assert no preparation the question did not name, was: " + warnings);
+	}
+
+	@Test
 	public void bothArmsCallOneSubstanceTheSameThingInOneBuild() throws Exception {
 		// The live-confirmed shape, in process: one patient, one substance, two questions. A question
 		// NAMING the drug reaches the drug-in-play arm, which has named the substance's canonical row

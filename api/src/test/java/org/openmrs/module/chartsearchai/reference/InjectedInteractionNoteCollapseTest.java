@@ -197,6 +197,57 @@ public class InjectedInteractionNoteCollapseTest {
 						+ record.getText());
 	}
 
+	/**
+	 * The operator-editable curated source, which is the only one that can pose the label questions:
+	 * plain Jackson over a hand-authored file, so a rule token keeps whatever case and padding it was
+	 * written with. Shared with {@code InteractionPartnerGroupingTest}, which asks the same questions
+	 * of the CHIPS.
+	 */
+	private static final String CURATED_FIXTURE =
+			"chartsearchai-test/drug-reference-partner-label-variants.json";
+
+	private static RecordMapping curatedRecord(String question, PatientClinicalContext context)
+			throws Exception {
+		PatientChart chart = DrugReferenceTestSupport
+				.injector(DrugReferenceTestSupport
+						.serviceWith(DrugReferenceTestSupport.fixtureEntries(CURATED_FIXTURE)))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
+		return DrugReferenceTestSupport.injectedReferences(chart).get(0);
+	}
+
+	@Test
+	public void twoCuratedRowsForOnePartnerRenderOnce() throws Exception {
+		// The chip side of this has been one chip since issue #115 — hasActiveDrug folds case and
+		// padding, so "Warfarin" and "  warfarin  " are one partner to the only predicate that decides
+		// an interaction concerns this patient. The record listed both, at two severities, and printed
+		// the padding: "warfarin   (Major. …)" beside a chip reading "active order warfarin".
+		RecordMapping record = curatedRecord("is it safe to give fluconazole?",
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Warfarin 5mg"), null, null, null));
+		String interactions = interactionsOf(record);
+
+		assertEquals(1, notesHeadedBy(interactions, "warfarin"),
+				"one partner is one note however the operator spelled the token: " + interactions);
+		assertTrue(interactions.contains("warfarin (major."),
+				"the label must be trimmed and the surviving row the Major one — the same row the chip "
+						+ "reports: " + interactions);
+	}
+
+	@Test
+	public void twoCuratedRowsIdentifyingOnePartnerByAtcAlsoRenderOnce() throws Exception {
+		// The other half of the label, which no shipped dataset exercises: a rule carrying an ATC code
+		// and no token at all. The fixture writes the same code as " b01aa03 " and "B01AA03".
+		RecordMapping record = curatedRecord("is it safe to give rivaroxaban?",
+				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
+		String interactions = interactionsOf(record);
+
+		assertEquals(1, notesHeadedBy(interactions, "b01aa03"),
+				"one ATC-identified partner is one note whatever case and padding it carries: "
+						+ interactions);
+		assertTrue(interactions.contains("b01aa03 (major."),
+				"and the surviving row is the Major one: " + interactions);
+	}
+
 	@Test
 	public void aSinglePartnerRecordIsUnchanged() throws Exception {
 		// The control. Nothing may move for an entry whose partners are each filed once: the

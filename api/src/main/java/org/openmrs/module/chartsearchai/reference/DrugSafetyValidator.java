@@ -2339,9 +2339,12 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>What resolving correctly costs, and the one shape where it costs a chip.</b> Driven through
 	 * this method by {@code validate} for each of the 471 KB name strings whose resolution the ranking
-	 * moves, asking about the row the old rule landed on and about the row the new one does (2026-08-08;
-	 * re-measure before relying on the figures): 40 findings arrive where the arm was silent, and 120 go
-	 * quiet. Nearly all of those 120 were the mislabel itself — {@code ciprofloxacin lactate} reported as
+	 * moves — ONE recorded allergy per probe, asking about the row the old rule landed on and about the row
+	 * the new one does (2026-08-08; re-measure before relying on the figures): 40 findings arrive where the
+	 * arm was silent, and 120 go quiet. That count is per single record and is not a chip-count budget for
+	 * a whole patient: two records the dataset files as two SUBSTANCES both report now where one used to
+	 * swallow the other, which is the collapse issue #121 decided must not happen.
+	 * Nearly all of those 120 were the mislabel itself — {@code ciprofloxacin lactate} reported as
 	 * an allergy to {@code Lactic acid}, {@code digoxin antibodies fab fragments} as an allergy to
 	 * {@code Digoxin}, which would withhold digoxin from a patient allergic only to its antidote — so the
 	 * silence is the false claim being withdrawn. Not all of them: where the dataset files a presentation

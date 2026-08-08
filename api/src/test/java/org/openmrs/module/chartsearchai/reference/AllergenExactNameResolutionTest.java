@@ -39,10 +39,13 @@ import org.junit.jupiter.api.Test;
  * the wrong one. What separates them is that one row's own DISPLAY NAME is the recorded name and the
  * other's is not.
  *
- * <p>Every case runs the real pipeline — verbatim shipped-KB slices through the real
- * {@link DdiDrugReferenceSource} parser and the real
- * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)} — and asserts the chip
- * text, so a case cannot pass by raising some other chip about the right substance.
+ * <p>Every case runs over verbatim shipped-KB slices through the real {@link DdiDrugReferenceSource}
+ * parser, and the cases that assert an OUTCOME go through the real
+ * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)} and assert the chip text,
+ * so none can pass by raising some other chip about the right substance. The
+ * {@code theFixtureReallyCarries…} cases are their premises: each states, through the production
+ * predicates, what makes the outcome case next to it discriminating, so that case cannot rot into a test
+ * of nothing.
  */
 public class AllergenExactNameResolutionTest {
 

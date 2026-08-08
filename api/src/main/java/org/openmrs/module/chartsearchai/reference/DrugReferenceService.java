@@ -141,7 +141,8 @@ public class DrugReferenceService {
 
 	/**
 	 * Resolve a clinician-entered drug NAME — an allergen as recorded on the chart — to a reference
-	 * entry, or null when the dataset carries no entry that names it.
+	 * entry, or null when no entry MATCHES it. Matching is the gate and naming is only the ranking
+	 * below, so a name no entry is named still resolves — by containment, as it always did.
 	 *
 	 * <p>Through {@link DrugReference#matchesDrugName}, not {@link DrugReference#matchesText}: the
 	 * input is one localized, inflected display name rather than prose, and resolving it with the
@@ -186,8 +187,11 @@ public class DrugReferenceService {
 				best = ref;
 				strongest = strength;
 				if (strongest == DrugReference.NAME_IS_THE_DISPLAY_NAME) {
-					// Nothing outranks it and a later equal claim would lose the tie anyway, so the scan
-					// is over — which also keeps the common case as cheap as the first-match scan was.
+					// Nothing outranks it and a later equal claim would lose the tie anyway, so the scan is
+					// over. It is an exit, not a cost guarantee: a name reaching only the alias or the
+					// containment rank has no such stopping point and now scans every entry where the
+					// first-match rule could stop at the first one. That is the shape to time if this ever
+					// looks expensive — one full scan per (drug in play, allergy token) pair.
 					return best;
 				}
 			}

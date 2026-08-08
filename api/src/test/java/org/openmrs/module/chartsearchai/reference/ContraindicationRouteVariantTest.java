@@ -70,7 +70,7 @@ public class ContraindicationRouteVariantTest {
 	 * {@code interactions} array is empty, deliberately: this file asserts contraindication chip COUNTS,
 	 * and an interaction chip in the same list would have to be filtered out of every assertion here.
 	 */
-	private static final String FIXTURE = "chartsearchai-test/ddi-contra-route-variants.json";
+	private static final String FIXTURE = DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS;
 
 	/** One curated entry carrying the same contraindication rule twice, differing only in the CASE of
 	 *  its type and token — the ledger's other key space, on the source that publishes no substance

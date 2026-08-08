@@ -82,9 +82,12 @@ public class AllergenExactNameResolutionTest {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(fixture));
 	}
 
-	/** The premise two of the cases below share: no row in {@code entries} is NAMED {@code recorded}, so
-	 *  the display-name rank cannot be what decides them. */
-	private static void assertNoRowIsNamed(List<DrugReference> entries, String recorded, String because) {
+	/** The premise two of the cases below share: no row's own DISPLAY NAME is {@code recorded}, so the
+	 *  display-name rank cannot be what decides them. Deliberately NOT {@link DrugReference#isNamed},
+	 *  which asks about the whole alias list — both cases below assert that a row IS named the recorded
+	 *  string in that wider sense, and the point is that no row is CALLED it. */
+	private static void assertNoRowsDisplayNameIs(List<DrugReference> entries, String recorded,
+			String because) {
 		for (DrugReference entry : entries) {
 			assertNotEquals(DrugReference.normalizeName(recorded),
 					DrugReference.normalizeName(entry.getName()), because + " — " + entry.getName());
@@ -230,8 +233,8 @@ public class AllergenExactNameResolutionTest {
 		DrugReference cipro = row(entries, "Ciprofloxacin");
 		assertTrue(indexOfRow(entries, "Lactic acid") < indexOfRow(entries, "Ciprofloxacin"),
 				"precondition: the slice must keep KB order, with the fragment row FIRST");
-		assertNoRowIsNamed(entries, "Ciprofloxacin lactate",
-				"precondition: no row may be NAMED the recorded string");
+		assertNoRowsDisplayNameIs(entries, "Ciprofloxacin lactate",
+				"precondition: no row's own DISPLAY NAME may be the recorded string");
 		assertTrue(cipro.isNamed("Ciprofloxacin lactate"),
 				"precondition: the later row must claim it as one of its own names");
 		assertTrue(lactic.matchesDrugName("Ciprofloxacin lactate") && !lactic.isNamed("Ciprofloxacin lactate"),
@@ -276,8 +279,8 @@ public class AllergenExactNameResolutionTest {
 				"precondition: the slice must keep KB order");
 		assertTrue(daxi.isNamed(shared) && botox.isNamed(shared),
 				"precondition: BOTH rows must claim the recorded name as one of their own names");
-		assertNoRowIsNamed(entries, shared,
-				"precondition: and no row may be NAMED it, or one would outrank the tie");
+		assertNoRowsDisplayNameIs(entries, shared,
+				"precondition: and no row's own DISPLAY NAME may be it, or that row would outrank the tie");
 
 		// serviceWith over the very list above, so the identity assertion is about WHICH row and not about
 		// which parse produced it — ddiFixtureService would parse a second time and every row would then

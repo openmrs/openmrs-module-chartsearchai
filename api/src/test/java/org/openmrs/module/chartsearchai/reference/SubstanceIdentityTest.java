@@ -62,12 +62,12 @@ import org.junit.jupiter.api.Test;
 public class SubstanceIdentityTest {
 
 	/** Verbatim KB rows and interaction rows — see the fixture's own {@code metadata.note}. */
-	private static final String FIXTURE = "chartsearchai-test/ddi-substance-identity.json";
+	private static final String FIXTURE = DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY;
 
 	/** The must-NOT-collapse pair, in the slice that already carries it: {@code Omeprazole} and
 	 *  {@code Esomeprazole} under one {@code rxnorm_name}. Read from there rather than copied here, so
 	 *  the two files cannot come to disagree about what the KB says. */
-	private static final String PPI_FIXTURE = "chartsearchai-test/ddi-contra-route-variants.json";
+	private static final String PPI_FIXTURE = DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS;
 
 	private static DrugReference row(List<DrugReference> entries, String name) {
 		for (DrugReference entry : entries) {

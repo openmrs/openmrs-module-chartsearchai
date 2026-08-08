@@ -201,6 +201,14 @@ public final class DrugReferenceTestSupport {
 	/** Several route variants of one drug sharing a RxCUI — the id/label collision slice. */
 	static final String DDI_RXCUI_COLLISION = "chartsearchai-test/ddi-rxcui-collision.json";
 
+	/** The botulinum pair, the enalapril/enalaprilat pair and the typhoid pair — the slices where two rows
+	 *  are or are not one substance (issues #164/#176/#187). */
+	static final String DDI_SUBSTANCE_IDENTITY = "chartsearchai-test/ddi-substance-identity.json";
+
+	/** The two PPIs filed under one substance name plus the four hydrocortisone rows — the
+	 *  contraindication arm's route-variant and must-not-collapse slice. */
+	static final String DDI_CONTRA_ROUTE_VARIANTS = "chartsearchai-test/ddi-contra-route-variants.json";
+
 	private DrugReferenceTestSupport() {
 	}
 

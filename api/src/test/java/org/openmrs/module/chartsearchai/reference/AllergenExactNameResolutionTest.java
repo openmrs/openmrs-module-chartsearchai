@@ -50,12 +50,12 @@ import org.junit.jupiter.api.Test;
 public class AllergenExactNameResolutionTest {
 
 	/** Verbatim KB rows carrying the botulinum pair and the enalapril/enalaprilat pair — see the
-	 *  fixture's own {@code metadata.note}. */
-	private static final String IDENTITY_FIXTURE = "chartsearchai-test/ddi-substance-identity.json";
+	 *  fixture's own {@code metadata.note}. Shared, so a rename breaks in one place. */
+	private static final String IDENTITY_FIXTURE = DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY;
 
 	/** Verbatim KB rows carrying the two PPIs filed under one substance name, and the four
 	 *  hydrocortisone rows. */
-	private static final String PPI_FIXTURE = "chartsearchai-test/ddi-contra-route-variants.json";
+	private static final String PPI_FIXTURE = DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS;
 
 	/** Verbatim KB rows for the middle rank — a name that IS a later row's own CIEL name and only
 	 *  OCCURS INSIDE an earlier row's. See the fixture's own {@code metadata.note}. */
@@ -73,6 +73,22 @@ public class AllergenExactNameResolutionTest {
 
 	private static int indexOfRow(List<DrugReference> entries, String name) {
 		return entries.indexOf(row(entries, name));
+	}
+
+	/** The file-shaped delegate the sibling tests in this package keep, so each case below reads as its
+	 *  question rather than as its arrangement. {@code ddiFixtureService} rather than
+	 *  {@code serviceWith}, so the real curated cross-reactivity groups are loaded. */
+	private static DrugSafetyValidator fixtureValidator(String fixture) throws IOException {
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(fixture));
+	}
+
+	/** The premise two of the cases below share: no row in {@code entries} is NAMED {@code recorded}, so
+	 *  the display-name rank cannot be what decides them. */
+	private static void assertNoRowIsNamed(List<DrugReference> entries, String recorded, String because) {
+		for (DrugReference entry : entries) {
+			assertNotEquals(DrugReference.normalizeName(recorded),
+					DrugReference.normalizeName(entry.getName()), because + " — " + entry.getName());
+		}
 	}
 
 	@Test
@@ -100,8 +116,7 @@ public class AllergenExactNameResolutionTest {
 			throws IOException {
 		// Issue #176's live observation, on the arm that prints the resolved row: a Botulinum toxin type A
 		// allergy was reported as an allergy to Daxibotulinumtoxina, a different product.
-		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.ddiFixtureService(IDENTITY_FIXTURE))
+		List<SafetyWarning> warnings = fixtureValidator(IDENTITY_FIXTURE)
 				.validate("", "Is it safe to give botulinum toxin type A?",
 						DrugReferenceTestSupport.ctx(60, null, null, null,
 								DrugReferenceTestSupport.set("Botulinum toxin type A"), null));
@@ -154,8 +169,7 @@ public class AllergenExactNameResolutionTest {
 		// is a different substance from the row in play, and the row in play carries no ATC code and no
 		// curated group — so the class comparisons had nothing to compare and the arm returned no chip at
 		// all. Issue #135's direct-allergy gap, reached through misresolution.
-		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.ddiFixtureService(IDENTITY_FIXTURE))
+		List<SafetyWarning> warnings = fixtureValidator(IDENTITY_FIXTURE)
 				.validate("", "Is it safe to give enalaprilat?", DrugReferenceTestSupport.ctx(60, null,
 						null, null, DrugReferenceTestSupport.set("Enalaprilat"), null));
 
@@ -171,8 +185,7 @@ public class AllergenExactNameResolutionTest {
 		// #121). Both chips were then wrong in the same pass: the direct allergy was attributed to
 		// omeprazole, and esomeprazole — the drug the chart actually names — was reported as merely
 		// cross-reactive with it.
-		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.ddiFixtureService(PPI_FIXTURE))
+		List<SafetyWarning> warnings = fixtureValidator(PPI_FIXTURE)
 				.validate("", "Is it safe to give esomeprazole?", DrugReferenceTestSupport.ctx(60, null,
 						null, null, DrugReferenceTestSupport.set("Esomeprazole"), null));
 
@@ -191,8 +204,7 @@ public class AllergenExactNameResolutionTest {
 		// because BOTH misresolved onto the same earlier row. Keyed on the resolved row, a correct
 		// resolution would split every such patient's chip in two — which is what makes the ledger's
 		// finding side a substance rather than a row (issues #145, #160, #187 in that direction).
-		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.ddiFixtureService(PPI_FIXTURE))
+		List<SafetyWarning> warnings = fixtureValidator(PPI_FIXTURE)
 				.validate("", "Is hydrocortisone safe for her?",
 						DrugReferenceTestSupport.ctx(60, null, null, null, DrugReferenceTestSupport
 								.set("Hydrocortisone (ophthalmic)", "Hydrocortisone (topical)"), null));
@@ -218,11 +230,8 @@ public class AllergenExactNameResolutionTest {
 		DrugReference cipro = row(entries, "Ciprofloxacin");
 		assertTrue(indexOfRow(entries, "Lactic acid") < indexOfRow(entries, "Ciprofloxacin"),
 				"precondition: the slice must keep KB order, with the fragment row FIRST");
-		for (DrugReference entry : entries) {
-			assertNotEquals(DrugReference.normalizeName("Ciprofloxacin lactate"),
-					DrugReference.normalizeName(entry.getName()),
-					"precondition: no row may be NAMED the recorded string — " + entry.getName());
-		}
+		assertNoRowIsNamed(entries, "Ciprofloxacin lactate",
+				"precondition: no row may be NAMED the recorded string");
 		assertTrue(cipro.isNamed("Ciprofloxacin lactate"),
 				"precondition: the later row must claim it as one of its own names");
 		assertTrue(lactic.matchesDrugName("Ciprofloxacin lactate") && !lactic.isNamed("Ciprofloxacin lactate"),
@@ -238,8 +247,7 @@ public class AllergenExactNameResolutionTest {
 	@Test
 	public void anAllergyResolvesToTheRowWhoseOwnNameItIsRatherThanAnEarlierRowItOccursInside()
 			throws IOException {
-		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.ddiFixtureService(NAME_CLAIM_FIXTURE))
+		List<SafetyWarning> warnings = fixtureValidator(NAME_CLAIM_FIXTURE)
 				.validate("", "Is it safe to give ciprofloxacin?", DrugReferenceTestSupport.ctx(60, null,
 						null, null, DrugReferenceTestSupport.set("Ciprofloxacin lactate"), null));
 
@@ -268,12 +276,8 @@ public class AllergenExactNameResolutionTest {
 				"precondition: the slice must keep KB order");
 		assertTrue(daxi.isNamed(shared) && botox.isNamed(shared),
 				"precondition: BOTH rows must claim the recorded name as one of their own names");
-		for (DrugReference entry : entries) {
-			assertNotEquals(DrugReference.normalizeName(shared),
-					DrugReference.normalizeName(entry.getName()),
-					"precondition: and no row may be NAMED it, or one would outrank the tie — "
-							+ entry.getName());
-		}
+		assertNoRowIsNamed(entries, shared,
+				"precondition: and no row may be NAMED it, or one would outrank the tie");
 
 		// serviceWith over the very list above, so the identity assertion is about WHICH row and not about
 		// which parse produced it — ddiFixtureService would parse a second time and every row would then
@@ -282,8 +286,7 @@ public class AllergenExactNameResolutionTest {
 		assertSame(daxi, DrugReferenceTestSupport.serviceWith(entries).lookupByToken(shared),
 				"the earliest of two equal claimants wins");
 
-		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.ddiFixtureService(IDENTITY_FIXTURE))
+		List<SafetyWarning> warnings = fixtureValidator(IDENTITY_FIXTURE)
 				.validate("", "Is it safe to give botulinum toxin type A?",
 						DrugReferenceTestSupport.ctx(60, null, null, null,
 								DrugReferenceTestSupport.set(shared), null));
@@ -313,8 +316,7 @@ public class AllergenExactNameResolutionTest {
 		assertNotNull(resolved, "a localized display name must still resolve");
 		assertEquals("Pantoprazole", resolved.getName());
 
-		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.ddiFixtureService(PPI_FIXTURE))
+		List<SafetyWarning> warnings = fixtureValidator(PPI_FIXTURE)
 				.validate("", "Is it safe to give esomeprazole?", DrugReferenceTestSupport.ctx(60, null,
 						null, null, DrugReferenceTestSupport.set("Pantoprazole Co 40mg"), null));
 

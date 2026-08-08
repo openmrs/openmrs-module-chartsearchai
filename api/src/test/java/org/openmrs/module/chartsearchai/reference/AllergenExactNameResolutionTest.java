@@ -53,6 +53,10 @@ public class AllergenExactNameResolutionTest {
 	 *  hydrocortisone rows. */
 	private static final String PPI_FIXTURE = "chartsearchai-test/ddi-contra-route-variants.json";
 
+	/** Verbatim KB rows for the middle rank — a name that IS a later row's own CIEL name and only
+	 *  OCCURS INSIDE an earlier row's. See the fixture's own {@code metadata.note}. */
+	private static final String NAME_CLAIM_FIXTURE = "chartsearchai-test/ddi-allergen-name-claim.json";
+
 	private static DrugReference row(List<DrugReference> entries, String name) {
 		for (DrugReference entry : entries) {
 			if (name.equals(entry.getName())) {
@@ -188,6 +192,48 @@ public class AllergenExactNameResolutionTest {
 		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy"
 				+ " to Hydrocortisone (ophthalmic) — possible cross-reactivity",
 				warnings.get(1).getDetail());
+	}
+
+	@Test
+	public void theFixtureReallyCarriesANameOneRowIsAndAnotherOnlyContains() throws IOException {
+		// The premise of the middle rank, which neither case above reaches: they contrast a row's own
+		// DISPLAY NAME against an alias (botulinum, esomeprazole) or against a fragment (enalaprilat).
+		// Here NO row is named the recorded string at all — one row claims it as an alias and an earlier
+		// row merely contains it, so only the alias-over-fragment half of the ranking can decide it.
+		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(NAME_CLAIM_FIXTURE);
+		DrugReference lactic = row(entries, "Lactic acid");
+		DrugReference cipro = row(entries, "Ciprofloxacin");
+		assertTrue(indexOfRow(entries, "Lactic acid") < indexOfRow(entries, "Ciprofloxacin"),
+				"precondition: the slice must keep KB order, with the fragment row FIRST");
+		for (DrugReference entry : entries) {
+			assertNotEquals(DrugReference.normalizeName("Ciprofloxacin lactate"),
+					DrugReference.normalizeName(entry.getName()),
+					"precondition: no row may be NAMED the recorded string — " + entry.getName());
+		}
+		assertTrue(cipro.isNamed("Ciprofloxacin lactate"),
+				"precondition: the later row must claim it as one of its own names");
+		assertTrue(lactic.matchesDrugName("Ciprofloxacin lactate") && !lactic.isNamed("Ciprofloxacin lactate"),
+				"precondition: while the earlier row only CONTAINS it, through its CIEL name 'Lactate'");
+		assertNotEquals(lactic.substanceKey(), cipro.substanceKey(),
+				"precondition: and the two are different substances");
+		assertTrue(lactic.normalizedAtcCodes().isEmpty(),
+				"precondition: the earlier row must carry no ATC code, so resolving to it leaves the class "
+						+ "comparisons nothing to compare and the finding disappears rather than being "
+						+ "merely mislabelled");
+	}
+
+	@Test
+	public void anAllergyResolvesToTheRowWhoseOwnNameItIsRatherThanAnEarlierRowItOccursInside()
+			throws IOException {
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.ddiFixtureService(NAME_CLAIM_FIXTURE))
+				.validate("", "Is it safe to give ciprofloxacin?", DrugReferenceTestSupport.ctx(60, null,
+						null, null, DrugReferenceTestSupport.set("Ciprofloxacin lactate"), null));
+
+		assertEquals(1, warnings.size(), "the recorded allergy must be reported, was: " + warnings);
+		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, warnings.get(0).getType());
+		assertEquals("The patient has a recorded allergy to Ciprofloxacin.", warnings.get(0).getDetail(),
+				"the salt is one of ciprofloxacin's own names, not a lactate the patient reacts to");
 	}
 
 	@Test

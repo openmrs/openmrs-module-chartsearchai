@@ -1,0 +1,94 @@
+{
+  "metadata": {
+    "note": "Verbatim DDInter 2.0 slice for issue #176 — the ALIAS rank. Two rows taken unedited from the shipped 19 MB KB, in KB order: Lactic acid (DDInter1015, index 19) and Ciprofloxacin (DDInter384, index 1600). An allergy recorded as 'Ciprofloxacin lactate' is one of Ciprofloxacin's own CIEL names, while Lactic acid merely carries the CIEL name 'Lactate', which occurs inside it as a bounded token — so earliest-match resolved the allergy to Lactic acid, 1581 rows earlier and a different substance. Lactic acid publishes no ATC code, so nothing could then rescue the finding by classification and the arm raised NO chip at all. 59 of the KB's name strings are decided by this rank (measured 2026-08-08 through DrugReferenceService.lookupByToken); re-measure before relying on the figure. interactions is deliberately empty: this slice is about resolution, not about pair rules."
+  },
+  "mechanisms": {},
+  "drugs": [
+    {
+      "id": "DDInter1015",
+      "name": "Lactic acid",
+      "rxcui": "114202",
+      "rxnorm_name": "lactate",
+      "drugbank_id": "DB04398",
+      "atc": [],
+      "ciel": [
+        {
+          "code": "103987",
+          "uuid": "103987AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Calcium / chloride ion / glucose / lactate / magnesium / sodium"
+        },
+        {
+          "code": "103988",
+          "uuid": "103988AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Calcium / chloride ion / glucose / lactate / potassium / sodium"
+        },
+        {
+          "code": "104730",
+          "uuid": "104730AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Glucose / lactated ringer's solution"
+        },
+        {
+          "code": "71143",
+          "uuid": "71143AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ammonium lactate"
+        },
+        {
+          "code": "78616",
+          "uuid": "78616AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Lactate"
+        },
+        {
+          "code": "78618",
+          "uuid": "78618AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Lactic acid"
+        },
+        {
+          "code": "84071",
+          "uuid": "84071AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Sodium lactate"
+        }
+      ]
+    },
+    {
+      "id": "DDInter384",
+      "name": "Ciprofloxacin",
+      "rxcui": "2551",
+      "rxnorm_name": "ciprofloxacin",
+      "drugbank_id": "DB00537",
+      "atc": [
+        "J01MA02",
+        "S01AE03",
+        "S02AA15",
+        "S03AA07"
+      ],
+      "ciel": [
+        {
+          "code": "104317",
+          "uuid": "104317AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ciprofloxacin / dexamethasone"
+        },
+        {
+          "code": "104318",
+          "uuid": "104318AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ciprofloxacin / hydrocortisone"
+        },
+        {
+          "code": "73449",
+          "uuid": "73449AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ciprofloxacin"
+        },
+        {
+          "code": "73450",
+          "uuid": "73450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ciprofloxacin hydrochloride"
+        },
+        {
+          "code": "73451",
+          "uuid": "73451AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ciprofloxacin lactate"
+        }
+      ]
+    }
+  ],
+  "interactions": []
+}

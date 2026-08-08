@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -86,7 +87,7 @@ public class AllergenExactNameResolutionTest {
 		assertEquals(daxi.substanceGroupKey(), botox.substanceGroupKey(),
 				"precondition: since issue #187 the two are one substance, so the identity VERDICT was "
 						+ "already right and only the name the chip prints was wrong");
-		assertSame(daxi, DrugReference.canonicalRow(java.util.Arrays.asList(daxi, botox)),
+		assertSame(daxi, DrugReference.canonicalRow(Arrays.asList(daxi, botox)),
 				"precondition: and the canonical row is the trap row — both name no route, so that fold "
 						+ "keeps the earliest and cannot be the remedy here");
 	}
@@ -117,6 +118,15 @@ public class AllergenExactNameResolutionTest {
 		// The other half of the population, and the one that is not a labelling defect: here the earlier
 		// row is a DIFFERENT substance, and it does not claim the recorded name at all — it matches only
 		// through the inflectional tail #128 measured and allowed.
+		//
+		// Verbatim in CONTENT, but this slice REORDERS the pair relative to the KB, which is what makes
+		// the case reachable: in the shipped 19 MB KB Enalaprilat (index 1142) precedes Enalapril (1882),
+		// so an allergy recorded there resolves to itself even under earliest-match, and it was measured
+		// doing so live. The shape is not hypothetical — Mecasermin rinfabate, Melphalan flufenamide,
+		// Trastuzumab emtansine and Selenium Sulfide are the same shape in shipped-KB order, and
+		// Ciprofloxacin lactate below is the alias-rank version of it — but the fixture supplies it here
+		// because these two rows are also the pair issue #121 decided must stay two substances. Do NOT
+		// "correct" the slice to KB order: that would leave this case asserting nothing.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(IDENTITY_FIXTURE);
 		DrugReference enalapril = row(entries, "Enalapril");
 		DrugReference enalaprilat = row(entries, "Enalaprilat");

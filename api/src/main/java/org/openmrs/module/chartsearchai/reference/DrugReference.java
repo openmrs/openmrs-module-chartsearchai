@@ -810,9 +810,12 @@ public class DrugReference {
 	/** {@link #nameMatchStrength}: this entry does not name {@code drugName} at all. */
 	static final int NAME_NO_MATCH = -1;
 
-	/** {@link #nameMatchStrength}: {@code drugName} occurs INSIDE one of this entry's names — as a
-	 *  bounded token, give or take an inflectional tail. The weakest claim, and the only one the
-	 *  resolution used to make. */
+	/** {@link #nameMatchStrength}: one of this entry's names occurs INSIDE {@code drugName} — as a
+	 *  bounded token, give or take an inflectional tail. That direction and not the reverse:
+	 *  {@link #matchesDrugName} hands the recorded name to {@link #containsBoundedToken} as the text and
+	 *  the entry's alias as the token, which is how an allergy recorded as {@code Ciprofloxacin lactate}
+	 *  reaches a {@code Lactic acid} row whose CIEL name is {@code Lactate}. The weakest claim, and the
+	 *  only one the resolution used to make. */
 	static final int NAME_TOKEN_INSIDE_A_NAME = 0;
 
 	/** {@link #nameMatchStrength}: {@code drugName} IS one of this entry's names, but not its display

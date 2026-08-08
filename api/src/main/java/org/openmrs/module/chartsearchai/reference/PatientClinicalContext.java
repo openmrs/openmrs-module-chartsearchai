@@ -283,8 +283,8 @@ public class PatientClinicalContext {
 	 * allergy contraindication arm ({@code DrugSafetyValidator.addAllergyContraindications}) resolves
 	 * allergens through {@link DrugReferenceService#lookupByToken}, which is boundary-aware.
 	 * Boundary-aware is not the same as correct, though, and this is not a clean contrast: since issue
-	 * #176 that resolver prefers an entry the allergen NAMES over one whose alias it merely occurs
-	 * inside, which settles the fragment case for every name the KB itself publishes, but an allergen
+	 * #176 that resolver prefers an entry the allergen NAMES over one whose alias merely occurs inside the
+	 * allergen, which settles the fragment case for every name the KB itself publishes, but an allergen
 	 * recorded as free text that names no entry at all still resolves by containment or not at all.
 	 * What it does rule out is this method's failure mode — a token matching mid-word.
 	 *

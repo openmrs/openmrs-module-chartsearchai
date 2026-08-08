@@ -57,8 +57,8 @@ public class AllergenExactNameResolutionTest {
 	 *  hydrocortisone rows. */
 	private static final String PPI_FIXTURE = DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS;
 
-	/** Verbatim KB rows for the middle rank — a name that IS a later row's own CIEL name and only
-	 *  OCCURS INSIDE an earlier row's. See the fixture's own {@code metadata.note}. */
+	/** Verbatim KB rows for the middle rank — a name that IS a later row's own CIEL name and that an
+	 *  earlier row's CIEL name merely OCCURS INSIDE. See the fixture's own {@code metadata.note}. */
 	private static final String NAME_CLAIM_FIXTURE = "chartsearchai-test/ddi-allergen-name-claim.json";
 
 	private static DrugReference row(List<DrugReference> entries, String name) {
@@ -223,11 +223,12 @@ public class AllergenExactNameResolutionTest {
 	}
 
 	@Test
-	public void theFixtureReallyCarriesANameOneRowIsAndAnotherOnlyContains() throws IOException {
+	public void theFixtureReallyCarriesANameOneRowIsAndAnotherOnlyOccursInside() throws IOException {
 		// The premise of the middle rank, which neither case above reaches: they contrast a row's own
 		// DISPLAY NAME against an alias (botulinum, esomeprazole) or against a fragment (enalaprilat).
 		// Here NO row is named the recorded string at all — one row claims it as an alias and an earlier
-		// row merely contains it, so only the alias-over-fragment half of the ranking can decide it.
+		// row's own name merely occurs inside it, so only the alias-over-fragment half of the ranking can
+		// decide it.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(NAME_CLAIM_FIXTURE);
 		DrugReference lactic = row(entries, "Lactic acid");
 		DrugReference cipro = row(entries, "Ciprofloxacin");
@@ -238,7 +239,8 @@ public class AllergenExactNameResolutionTest {
 		assertTrue(cipro.isNamed("Ciprofloxacin lactate"),
 				"precondition: the later row must claim it as one of its own names");
 		assertTrue(lactic.matchesDrugName("Ciprofloxacin lactate") && !lactic.isNamed("Ciprofloxacin lactate"),
-				"precondition: while the earlier row only CONTAINS it, through its CIEL name 'Lactate'");
+				"precondition: while the earlier row only matches it the other way round — its CIEL name "
+						+ "'Lactate' occurs INSIDE the recorded string");
 		assertNotEquals(lactic.substanceKey(), cipro.substanceKey(),
 				"precondition: and the two are different substances");
 		assertTrue(lactic.normalizedAtcCodes().isEmpty(),
@@ -248,7 +250,7 @@ public class AllergenExactNameResolutionTest {
 	}
 
 	@Test
-	public void anAllergyResolvesToTheRowWhoseOwnNameItIsRatherThanAnEarlierRowItOccursInside()
+	public void anAllergyResolvesToTheRowWhoseOwnNameItIsRatherThanAnEarlierRowWhoseNameOccursInsideIt()
 			throws IOException {
 		List<SafetyWarning> warnings = fixtureValidator(NAME_CLAIM_FIXTURE)
 				.validate("", "Is it safe to give ciprofloxacin?", DrugReferenceTestSupport.ctx(60, null,

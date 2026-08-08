@@ -830,9 +830,10 @@ public class DrugReference {
 	 * rather than each caller re-deciding what "the same drug" means.
 	 *
 	 * <p><b>Why a rank and not first-past-the-post (issue #176).</b> Resolution took the earliest
-	 * matching entry, and reference names nest: 206 of the shipped KB's 2283 entries do not resolve to
-	 * themselves, 54 of them to a different SUBSTANCE (measured 2026-08-08 through
-	 * {@link DrugReferenceService#lookupByToken} itself; re-measure before relying on the figures).
+	 * matching entry, and reference names nest: 206 of the shipped KB's 2283 entries did not resolve to
+	 * themselves, 54 of them landing on a different SUBSTANCE (measured 2026-08-08 through
+	 * {@link DrugReferenceService#lookupByToken} itself, before and after; re-measure before relying on
+	 * the figures).
 	 * Since issue #187 that row is what the contraindication chips NAME, so a chip reported an allergy
 	 * to a drug the chart does not record — {@code Botulinum toxin type A} as
 	 * {@code Daxibotulinumtoxina}, {@code Esomeprazole} as {@code Omeprazole}. It is not the

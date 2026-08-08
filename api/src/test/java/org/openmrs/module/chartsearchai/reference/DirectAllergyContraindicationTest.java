@@ -252,14 +252,15 @@ public class DirectAllergyContraindicationTest {
 		// field-for-field identical to their KB rows and both carrying no ATC code — so no new fixture
 		// is needed. (Field-for-field, not byte-for-byte: the slice is pretty-printed, the KB is not.)
 		//
-		// Verbatim in CONTENT, but the slice REORDERS them, and order is what the label below turns on.
-		// lookupByToken takes the earliest matching entry, and in the full KB DDInter2187 (index 1320)
-		// precedes DDInter975 (index 2256) — so on the shipped KB an allergy recorded as "Iron"
-		// resolves to "Iron (bisglycinate)", making this very pair one of the 53 mis-labelled entries
-		// addAllergyContraindications' javadoc counts. The slice lists DDInter975 first, so here it
-		// resolves to itself. That is deliberate: this case is about the CHIP COUNT with a sibling row
-		// in play, and resolving to itself is what isolates that from the labelling defect. Regenerate
-		// the slice in KB order and the count assertion still holds while the detail assertion flips.
+		// Verbatim in CONTENT, but the slice REORDERS them: DDInter975, whose display name IS "Iron",
+		// is listed first, while in the full KB DDInter2187 "Iron (bisglycinate)" (index 1320) precedes
+		// it (index 2256). Under the earliest-match resolution this test was written against, that
+		// ordering was what made an allergy recorded as "Iron" resolve to DDInter975 here and to
+		// "Iron (bisglycinate)" on the shipped KB — this very pair being one of the mis-labelled entries
+		// addAllergyContraindications' javadoc counted. Since issue #176 the resolution prefers the row
+		// the recorded name NAMES, so both orderings answer "Iron" with DDInter975 and the slice's order
+		// no longer decides the label. It is left as it is: this case is about the CHIP COUNT with a
+		// sibling row in play, and regenerating the slice would change nothing it asserts.
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
 				DrugReferenceTestSupport.ddiFixtureEntries(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS));
 		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());

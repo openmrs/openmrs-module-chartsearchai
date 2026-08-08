@@ -807,12 +807,80 @@ public class DrugReference {
 		return false;
 	}
 
+	/** {@link #nameMatchStrength}: this entry does not name {@code drugName} at all. */
+	static final int NAME_NO_MATCH = -1;
+
+	/** {@link #nameMatchStrength}: one of this entry's names occurs INSIDE {@code drugName} — as a
+	 *  bounded token, give or take an inflectional tail. That direction and not the reverse:
+	 *  {@link #matchesDrugName} hands the recorded name to {@link #containsBoundedToken} as the text and
+	 *  the entry's alias as the token, which is how an allergy recorded as {@code Ciprofloxacin lactate}
+	 *  reaches a {@code Lactic acid} row whose CIEL name is {@code Lactate}. The weakest claim, and the
+	 *  only one the resolution used to make. */
+	static final int NAME_TOKEN_INSIDE_A_NAME = 0;
+
+	/** {@link #nameMatchStrength}: {@code drugName} IS one of this entry's names, but not its display
+	 *  name — its {@code rxnorm_name} or one of its CIEL names. */
+	static final int NAME_IS_ANOTHER_NAME = 1;
+
+	/** {@link #nameMatchStrength}: {@code drugName} IS this entry's own display name. The strongest
+	 *  claim an entry can make on a name, and the one nothing can outrank. */
+	static final int NAME_IS_THE_DISPLAY_NAME = 2;
+
+	/**
+	 * How strongly this entry claims a clinician-entered drug NAME — an allergen as the chart records
+	 * it, an order's display name. {@link DrugReferenceService#lookupByToken} resolves such a name to
+	 * the entry with the strongest claim on it, so that ONE definition orders the three kinds of claim
+	 * rather than each caller re-deciding what "the same drug" means.
+	 *
+	 * <p><b>Why a rank and not first-past-the-post (issue #176).</b> Resolution took the earliest
+	 * matching entry, and reference names nest: 206 of the shipped KB's 2283 entries did not resolve to
+	 * themselves, 54 of them landing on a different SUBSTANCE (measured 2026-08-08 through
+	 * {@link DrugReferenceService#lookupByToken} itself, before and after; re-measure before relying on
+	 * the figures).
+	 * Since issue #187 that row is what the contraindication chips NAME, so a chip reported an allergy
+	 * to a drug the chart does not record — {@code Botulinum toxin type A} as
+	 * {@code Daxibotulinumtoxina}, {@code Esomeprazole} as {@code Omeprazole}. It is not the
+	 * unanchored-substring hazard of issues #86/#128: those names match as whole strings, so no
+	 * boundary rule separates them, and it is not {@link #canonicalRow}'s question either — that fold
+	 * picks a substance's representative row for DISPLAY, while this picks which row the chart's own
+	 * string is about, and applying it here would rename a charted {@code Ketorolac (ophthalmic)}
+	 * allergy to {@code Ketorolac}.
+	 *
+	 * <p><b>Gated on {@link #matchesDrugName} first</b>, so the entries a name can resolve to are
+	 * exactly the ones it resolved to before and only the CHOICE among them changes: this can never
+	 * resolve a name that resolved to nothing, and never fail to resolve one that resolved to
+	 * something. The one shape that gate excludes is a hand-authored {@code json} entry whose
+	 * {@code aliases} omit its own {@code name} — for it the display name is not a match at all, which
+	 * is the pre-existing answer and not this method's to widen.
+	 *
+	 * @return one of {@link #NAME_NO_MATCH}, {@link #NAME_TOKEN_INSIDE_A_NAME},
+	 *         {@link #NAME_IS_ANOTHER_NAME}, {@link #NAME_IS_THE_DISPLAY_NAME} — higher is a stronger
+	 *         claim on {@code drugName}
+	 */
+	int nameMatchStrength(String drugName) {
+		if (!matchesDrugName(drugName)) {
+			return NAME_NO_MATCH;
+		}
+		String recorded = normalizeName(drugName);
+		if (recorded != null && recorded.equals(normalizeName(name))) {
+			return NAME_IS_THE_DISPLAY_NAME;
+		}
+		return isNamed(drugName) ? NAME_IS_ANOTHER_NAME : NAME_TOKEN_INSIDE_A_NAME;
+	}
+
 	/**
 	 * @return true when {@code token} IS one of this entry's own names — exact identity after
 	 *         {@link #normalizeName}, deliberately not a scan. Both operands are canonical reference
 	 *         strings (a rule's match token against an entry's own alias list), so the question is name
 	 *         identity; {@code DrugSafetyValidator.identifies} records what scanning them instead
 	 *         produced (a multi-word token naming every drug called after one of its words).
+	 *
+	 *         <p>Also the middle rank of {@link #nameMatchStrength}, where the second operand is a
+	 *         clinician-entered name rather than a reference one. It stays unfolded there for the reason
+	 *         {@link #normalizeName} records: an accented chart string therefore reaches no exact rank
+	 *         and falls through to the folded matcher, which is exactly what it did before — the fold's
+	 *         own measurement says the reference side carries no combining mark, so the gap is on the
+	 *         chart side and widening it needs its own measurement.
 	 */
 	boolean isNamed(String token) {
 		String name = normalizeName(token);

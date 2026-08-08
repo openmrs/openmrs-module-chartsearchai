@@ -658,11 +658,16 @@ public class DrugSafetyValidator {
 	 * {@link DrugReference#substanceKey()}, which is where the measurement behind it lives and why it
 	 * is not simply the dataset's substance name; an entry from a source publishing none keys on its
 	 * own identity, so nothing collapses for the {@code atc} adapter or the shipped curated
-	 * {@code json} dataset. The finding side is what the arm actually compared — the resolved allergen
-	 * ENTRY for the allergy arm, and the curated rule's own {@code (type, token)} for the rule arm.
+	 * {@code json} dataset. The finding side is what the arm actually compared — the resolved allergen's
+	 * SUBSTANCE for the allergy arm, by the same {@link DrugReference#substanceGroupKey()} as the
+	 * subject side, and the curated rule's own {@code (type, token)} for the rule arm.
 	 * Those are two key spaces on purpose: the rule arm's token is free text that may name a class
 	 * ({@code nsaid}, {@code aminoglycoside}) rather than a drug, so resolving it to an entry to make
-	 * the two arms comparable would collapse a class-level rule into an identity chip. A curated rule
+	 * the two arms comparable would collapse a class-level rule into an identity chip. What keeps the two
+	 * spaces from colliding is no longer their TYPE — the allergy finding used to be a
+	 * {@link DrugReference}, which defines no {@code equals}, and is now usually a {@link List} like the
+	 * rule's — but their LENGTH, two against three, plus the rule's leading {@code "rule"} tag. Both are
+	 * needed: a substance key that grew a third component would collide on length alone. A curated rule
 	 * and an identity match about ONE allergy therefore still raise two chips — that is issue #146,
 	 * filed separately, which {@code ActiveOrderContraindicationTest} currently pins at two.
 	 *
@@ -688,13 +693,16 @@ public class DrugSafetyValidator {
 	 * names a code and a divergent row's code would be dropped unheard. Curated-group membership needs
 	 * no separate check: {@link CrossReactivityGroup#groupsOf} is a pure function of those same codes,
 	 * so equal codes are equal membership. What is left for a tie to choose between is then only the
-	 * route qualifier in the subject's own label.
+	 * route qualifier in the subject's own label. Issue #176 widened the key's FINDING side onto the same
+	 * substance, so that instruction was carried out: re-measured 2026-08-08 through
+	 * {@link DrugReference#atcSubgroups()}, 0 of the 129 multi-row families publish differing level-4
+	 * subgroups, and 0 differ in curated-group membership.
 	 *
 	 * <p><b>Replacing an incumbent, and what still reaches it.</b> This ledger used to be reachably
-	 * order-dependent: {@code lookupByToken} resolves an allergy to the EARLIEST matching entry, so
-	 * where no alias of a row is the bare substance name the allergy skipped that row and resolved a
-	 * LATER member of its own group, and the earlier members — matching by class rather than by
-	 * identity — raised the weaker chip first ({@code Tozinameran} behind the {@code Pfizer-BioNTech}
+	 * order-dependent: an allergy resolves to ONE row of its substance and not necessarily the group's
+	 * first — where no alias of a row is the bare substance name the allergy skips that row and resolves
+	 * a LATER member of its own group — and the earlier members, matching by class rather than by
+	 * identity, raised the weaker chip first ({@code Tozinameran} behind the {@code Pfizer-BioNTech}
 	 * presentations, {@code Insulin aspart (aspart)}, {@code Iobenguane (I-131)}). Issue #164 removed
 	 * that route: identity is now decided by SUBSTANCE, so every row of one group answers the identity
 	 * question the same way and an identity chip can no longer arrive after a class one for the same
@@ -2264,9 +2272,10 @@ public class DrugSafetyValidator {
 	 * ATC level-4 subgroup (cross-reactivity), or — failing both — shares a curated
 	 * {@link CrossReactivityGroup}
 	 * (cross-<em>branch</em> cross-reactivity, e.g. aspirin vs an ibuprofen allergy, which ATC's tree
-	 * cannot express). At most one warning per (SUBSTANCE, resolved allergen): the most specific match
-	 * wins, several aliases of one allergy warn once ({@code seenAllergens} below), and the several
-	 * reference rows one substance is filed as warn once between them
+	 * cannot express). At most one warning per (SUBSTANCE, ALLERGEN'S SUBSTANCE): the most specific match
+	 * wins, several aliases of one allergy warn once ({@code seenAllergens} below), the several
+	 * reference rows one substance is filed as warn once between them, and so do two allergy RECORDS for
+	 * two presentations of one substance
 	 * ({@link ContraindicationChips}, issue #145 — the ledger this arm adds to rather than appending to
 	 * the chip list, and the reason it takes one). The two class comparisons need only ATC codes, which
 	 * is how an authoritative classification source carrying no rules ({@link AtcDrugReferenceSource})
@@ -2295,7 +2304,9 @@ public class DrugSafetyValidator {
 	 * all three comparisons at once: <em>most-specific-match wins</em> (an allergen that IS this drug
 	 * also shares every one of its subgroups, so identity must pre-empt the class arms rather than
 	 * stack on them) and <em>one warning per resolved allergen</em> ({@code seenAllergens} below, so
-	 * several aliases of one allergy warn once). Split across two methods, each would need its own copy
+	 * several aliases of one allergy warn once — the wider collapse, across two allergy RECORDS that
+	 * resolve to two rows of one substance, is the ledger's key and not this set's). Split across two
+	 * methods, each would need its own copy
 	 * of the other's state — which is precisely the two-arms-cannot-see-each-other shape that produced
 	 * issue #88's duplicate interaction chip. {@link #addContraindications} also walks a different
 	 * collection ({@code ref.getContraindications()}, matched by token against allergy AND condition
@@ -2304,43 +2315,47 @@ public class DrugSafetyValidator {
 	 * home; the method name said "class" because two of its three comparisons are class-based.
 	 *
 	 * <p><b>Coverage bound, measured.</b> Identity is only as sound as the resolution behind it, and
-	 * {@link DrugReferenceService#lookupByToken} returns the EARLIEST entry any of whose aliases matches
-	 * the allergy token — by the drug-NAME rule since issue #147, not the whole-word one, which is a
-	 * strict relaxation and so can only move the first match earlier. Re-measured through the shipped
-	 * matcher after that swap and unchanged in every figure below. Measured over the full KB, asking about each
-	 * of the 444 ATC-less entries with an allergy recorded under that entry's own name: every one now
-	 * raises a contraindication, but <b>53 of them name a DIFFERENT entry</b> — always one earlier in
-	 * dataset order (0 of the 53 resolve later), though not a shorter-NAMED one: 17 of the 53 resolve
-	 * to a name at least as long as the queried one. What splits the 53 is whether the entry they land
-	 * on carries the queried name among its OWN aliases, because that is what decides whether any
-	 * matcher could have told them apart:
-	 * <ul>
-	 *   <li><b>43</b> where it does not, so every alias that matched is a strict FRAGMENT of the
-	 *       queried name — {@code Loteprednol etabonate} resolves to {@code Loteprednol (ophthalmic)}
-	 *       on that entry's alias {@code loteprednol}, {@code Magnesium salicylate} to {@code Salicylic
-	 *       acid (sodium)} on its CIEL alias {@code Salicylate}. This is the nesting hazard
-	 *       {@link #activeOrderEntryFor} already documents and defeats on the rule side ("insulin"
-	 *       inside "insulin glargine") — but not by the same means: a rule's token IS its partner's own
-	 *       alias, so that arm can demand name identity, while an allergy token is a concept name or
-	 *       free text. Preferring the LONGEST matching alias over the first resolves exactly these 43
-	 *       to themselves, and none of the 10 below (measured).</li>
-	 *   <li><b>10</b> where the resolved entry carries the queried drug's full name among its own
-	 *       aliases — as a CIEL name for 7 of them, as the {@code rxnorm_name} for the other 3.
-	 *       {@code Moderna covid-19 vaccine} resolves to {@code Pfizer-BioNTech Covid-19 Vaccine}
-	 *       because that entry's CIEL list contains "Moderna COVID-19 vaccine" verbatim;
-	 *       {@code Dotatate} resolves to {@code Lutetium Lu 177 dotatate}. No alias matcher can
-	 *       separate these — two entries genuinely claim one name — so it is a defect in the dataset's
-	 *       alias data, not in the lookup. (In 4 of the 10 a shorter alias matches as well, so these
-	 *       two buckets are a partition on what the target entry CLAIMS, not on which alias happened
-	 *       to win the scan.)</li>
-	 * </ul>
-	 * The refusal is still the right one — the same misresolution is what put that entry in play, so
-	 * the question and the chip agree — but the substance named is not the charted allergen. Neither
-	 * shape is a defect in this arm: both reach the class comparisons below identically, and 206 of all
-	 * 2283 entries do not resolve to themselves. Reported separately; do not read the 444 above as 444
-	 * correctly-labelled chips. Separately again, an ANSWER-named drug can still be echo-scoped out of
-	 * play before this arm sees it (issue #105, {@link #isEchoOfCitedRecord}) — the 444 measurement is
-	 * of the question-driven path, which is never echo-scoped.
+	 * {@link DrugReferenceService#lookupByToken} resolves the allergy token to the entry with the
+	 * strongest claim on that name — by the drug-NAME rule since issue #147, not the whole-word one, and
+	 * ranked rather than first-past-the-post since issue #176. Measured over the full KB, asking about
+	 * each of the 444 ATC-less entries with an allergy recorded under that entry's own name: every one
+	 * raises a contraindication, and every one now names ITSELF. Before #176, <b>53 of them named a
+	 * DIFFERENT entry</b> — 43 where every alias that matched was a strict FRAGMENT of the queried name
+	 * ({@code Loteprednol etabonate} resolving to {@code Loteprednol (ophthalmic)}), 10 where the earlier
+	 * entry carried the queried name in FULL among its own aliases ({@code Moderna covid-19 vaccine}
+	 * resolving to {@code Pfizer-BioNTech Covid-19 Vaccine}, whose CIEL list contains it verbatim). Both
+	 * shapes are separated by the claim ranking, which is why it is a rank and not the longest-alias
+	 * preference this javadoc used to record as resolving only the first 43.
+	 *
+	 * <p>What is left is the tie: where two entries make the same strongest claim on one name the
+	 * earliest still wins, so a dataset that files one DISPLAY NAME twice resolves to whichever row it
+	 * lists first (issue #164's shape, and no shipped-KB entry is affected — asking for each of the
+	 * 2283 by its own name now answers with that entry every time, measured 2026-08-08 through
+	 * {@code lookupByToken}). A multi-drug allergy name still resolves to one constituent, and an
+	 * allergy recorded as free text rather than as a drug name still resolves by the containment rule
+	 * or not at all. Separately, an ANSWER-named drug can still be echo-scoped out of play before this
+	 * arm sees it (issue #105, {@link #isEchoOfCitedRecord}) — the 444 measurement is of the
+	 * question-driven path, which is never echo-scoped.
+	 *
+	 * <p><b>What resolving correctly costs, and the one shape where it costs a chip.</b> Driven through
+	 * this method by {@code validate} for each of the 471 KB name strings whose resolution the ranking
+	 * moves — ONE recorded allergy per probe, asking about the row the old rule landed on and about the row
+	 * the new one does (2026-08-08; re-measure before relying on the figures): 40 findings arrive where the
+	 * arm was silent, and 120 go quiet. That count is per single record and is not a chip-count budget for
+	 * a whole patient: two records the dataset files as two SUBSTANCES both report now where one used to
+	 * swallow the other, which is the collapse issue #121 decided must not happen.
+	 * Nearly all of those 120 were the mislabel itself — {@code ciprofloxacin lactate} reported as
+	 * an allergy to {@code Lactic acid}, {@code digoxin antibodies fab fragments} as an allergy to
+	 * {@code Digoxin}, which would withhold digoxin from a patient allergic only to its antidote — so the
+	 * silence is the false claim being withdrawn. Not all of them: where the dataset files a presentation
+	 * as a SEPARATE substance from its parent moiety <em>and</em> gives that row no ATC code, a correct
+	 * resolution leaves the class comparisons nothing to compare and the chip goes silent rather than
+	 * mislabelled — {@code Insulin lispro (protamine)} asked about {@code Insulin lispro},
+	 * {@code Insulin human (isophane)} about {@code Insulin human}, {@code Dextran (low molecular
+	 * weight)} about {@code (high molecular weight)}, {@code Peanut oil} about {@code Peanut}. That is
+	 * issue #135's ATC-less gap reached through a correct resolution instead of a wrong one, and closing
+	 * it means widening {@link DrugReference#substanceKey()}, which issues #164/#187/#188 measured and
+	 * settled the other way — so it is a bound to carry, not a regression to patch here.
 	 */
 	private void addAllergyContraindications(ContraindicationChips chips, DrugReference ref,
 			PatientClinicalContext context) {
@@ -2356,13 +2371,21 @@ public class DrugSafetyValidator {
 			if (allergen == null || !seenAllergens.add(allergen)) {
 				continue;
 			}
+			// The allergen's SUBSTANCE, on both sides of the ledger key: two allergy records for two
+			// presentations of one substance are one clinical fact, and they used to collapse only
+			// because both misresolved onto the same earlier row (issue #176). Keyed on the resolved
+			// ROW, a correct resolution reports such a patient twice — for EVERY one of the 129
+			// substances the shipped KB files as more than one row, measured 2026-08-08 by recording two
+			// of a family's rows as two allergies and running validate over each family in turn: 2
+			// identity chips keyed on the row, 1 keyed on the substance, 129 of 129 either way.
+			Object allergenSubstance = allergen.substanceGroupKey();
 			// Identity is decided by SUBSTANCE, and the chip names the patient's own record (issue #164).
 			// substanceGroupKey answers both halves at once: it is the row's substance where the data
 			// publishes one and the row itself where it does not, so this subsumes the entry comparison
 			// it replaces rather than sitting beside it. It is also the key the ledger below groups on,
 			// so a substance whose rows arrive from several call sites cannot raise this chip twice.
-			if (allergen.substanceGroupKey().equals(ref.substanceGroupKey())) {
-				chips.add(ref, allergen, ContraindicationChips.IDENTITY,
+			if (allergenSubstance.equals(ref.substanceGroupKey())) {
+				chips.add(ref, allergenSubstance, ContraindicationChips.IDENTITY,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, allergen.displayLabel(),
 								"The patient has a recorded allergy to " + allergen.displayLabel() + "."));
 				continue;
@@ -2376,7 +2399,7 @@ public class DrugSafetyValidator {
 			}
 			String shared = sharedClass(refClasses, allergen);
 			if (shared != null) {
-				chips.add(ref, allergen, ContraindicationChips.SAME_CLASS,
+				chips.add(ref, allergenSubstance, ContraindicationChips.SAME_CLASS,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
 								ref.displayLabel() + " is in the same ATC class (" + shared
 										+ ") as the patient's allergy to " + allergen.displayLabel()
@@ -2385,7 +2408,7 @@ public class DrugSafetyValidator {
 			}
 			CrossReactivityGroup group = CrossReactivityGroup.sharedGroup(refGroups, allergen);
 			if (group != null) {
-				chips.add(ref, allergen, ContraindicationChips.SAME_GROUP,
+				chips.add(ref, allergenSubstance, ContraindicationChips.SAME_GROUP,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
 								ref.displayLabel() + " is in the same cross-reactivity group ("
 										+ group.getName() + ") as the patient's allergy to "
@@ -2439,7 +2462,7 @@ public class DrugSafetyValidator {
 	 * contraindication on the question's wording is what produced this defect. What bounds the arm
 	 * instead is the chart: it can only fire where an allergy or condition record and an active order
 	 * point at the same drug, and the two arms it delegates to bound it further — one chip per
-	 * (substance, resolved allergen) and one per (substance, matching curated rule), through the same
+	 * (substance, allergen's substance) and one per (substance, matching curated rule), through the same
 	 * {@link ContraindicationChips} ledger the drug-in-play call site uses, which is what stops one
 		 * order that resolves several reference rows raising a chip per row (issue #145). That is a bound
 	 * in the patient's own records, the same kind every other contraindication chip has and the reason
@@ -2469,9 +2492,9 @@ public class DrugSafetyValidator {
 	 * <p><b>What it still cannot find</b>, stated rather than implied: an order whose substance the
 	 * loaded dataset does not carry resolves to no entry at all, so it has nothing to compare — the same
 	 * limit {@link DrugReferenceService#findForActiveOrders} documents for the screen. And the arms it
-	 * delegates to decide the rest: an allergy token that
-	 * {@link DrugReferenceService#lookupByToken} resolves to the wrong
-	 * entry is mislabelled here exactly as it is on the question path (see
+	 * delegates to decide the rest: an allergy token {@link DrugReferenceService#lookupByToken} cannot
+	 * resolve to the drug the chart means — free text naming no entry, a combination product naming
+	 * several — is labelled here exactly as it is on the question path (see
 	 * {@link #addAllergyContraindications}'s measured coverage bound).
 	 */
 	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,

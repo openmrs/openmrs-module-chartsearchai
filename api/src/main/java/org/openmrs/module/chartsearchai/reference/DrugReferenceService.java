@@ -141,7 +141,7 @@ public class DrugReferenceService {
 
 	/**
 	 * Resolve a clinician-entered drug NAME — an allergen as recorded on the chart — to a reference
-	 * entry. Returns the first matching entry in dataset order, or null.
+	 * entry, or null when the dataset carries no entry that names it.
 	 *
 	 * <p>Through {@link DrugReference#matchesDrugName}, not {@link DrugReference#matchesText}: the
 	 * input is one localized, inflected display name rather than prose, and resolving it with the
@@ -151,22 +151,48 @@ public class DrugReferenceService {
 	 * site deliberately: it was inherited by default before, which is how the two halves of one safety
 	 * check came to have different tolerance.
 	 *
-	 * <p>Coverage bound, unchanged by that fix and measured over the full KB: this takes the EARLIEST
-	 * matching entry, so a multi-drug name resolves to whichever constituent the dataset lists first,
-	 * and an entry whose alias list claims another drug's name can capture it — see
-	 * {@code DrugSafetyValidator.addAllergyContraindications}, which reports the measurement and is
-	 * where the consequence for a chip's wording is recorded.
+	 * <p><b>Which of several matching entries (issue #176).</b> The one with the strongest claim on the
+	 * name — {@link DrugReference#nameMatchStrength}, which is where the ordering of the three kinds of
+	 * claim is defined and measured — and the earliest of those on a tie. This used to take the earliest
+	 * MATCH outright, and reference names nest, so the row a chart's own string resolved to could be a
+	 * different presentation of the substance or a different substance altogether; since issue #187 that
+	 * row is what the contraindication chips name, so it was printed. Measured over the shipped 19 MB KB
+	 * through this method (2026-08-08; re-measure before relying on the figures): asking for each of the
+	 * 2283 entries by its own display name, earliest-match answered with a DIFFERENT entry 206 times, 54
+	 * of them a different substance; ranking the claim answers with the entry itself every time.
+	 *
+	 * <p>The rank is a refinement, not a filter: {@link DrugReference#nameMatchStrength} is gated on the
+	 * same {@link DrugReference#matchesDrugName} this used to scan, so the set of entries a name can
+	 * resolve to is unchanged and only the choice within it moves. A recorded name that no entry is
+	 * NAMED — a localized display name with a strength appended, which is the ordinary shape — still
+	 * resolves to the earliest matching entry exactly as before.
+	 *
+	 * <p>Residual bound, measured the same way: where two entries make the SAME strongest claim the
+	 * earliest still wins, so a dataset that files one display name twice (issue #164's shape) resolves
+	 * to whichever row it lists first, and a multi-drug name whose constituents it names separately
+	 * resolves to the first constituent that claims it.
 	 */
 	public DrugReference lookupByToken(String drugToken) {
 		if (drugToken == null || drugToken.trim().isEmpty()) {
 			return null;
 		}
+		DrugReference best = null;
+		int strongest = DrugReference.NAME_NO_MATCH;
 		for (DrugReference ref : getAll()) {
-			if (ref.matchesDrugName(drugToken)) {
-				return ref;
+			int strength = ref.nameMatchStrength(drugToken);
+			// Strictly greater, so the earliest entry keeps the role on a tie — including the tie with
+			// NAME_NO_MATCH, which is how a non-matching entry is skipped.
+			if (strength > strongest) {
+				best = ref;
+				strongest = strength;
+				if (strongest == DrugReference.NAME_IS_THE_DISPLAY_NAME) {
+					// Nothing outranks it and a later equal claim would lose the tie anyway, so the scan
+					// is over — which also keeps the common case as cheap as the first-match scan was.
+					return best;
+				}
 			}
 		}
-		return null;
+		return best;
 	}
 
 	/**

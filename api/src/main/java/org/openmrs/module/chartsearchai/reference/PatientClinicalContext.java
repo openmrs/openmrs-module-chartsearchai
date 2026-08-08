@@ -282,10 +282,11 @@ public class PatientClinicalContext {
 	 * contraindication rules: neither the {@code ddinter} nor the {@code atc} source emits any, and the
 	 * allergy contraindication arm ({@code DrugSafetyValidator.addAllergyContraindications}) resolves
 	 * allergens through {@link DrugReferenceService#lookupByToken}, which is boundary-aware.
-	 * Boundary-aware is not the same as correct, though, and this is not a clean contrast: that
-	 * resolver takes the EARLIEST entry one of whose aliases matches, so a multi-word allergen still
-	 * mis-resolves when the matched alias is only a fragment of it (measured, and reported
-	 * separately). What it does rule out is this method's failure mode — a token matching mid-word.
+	 * Boundary-aware is not the same as correct, though, and this is not a clean contrast: since issue
+	 * #176 that resolver prefers an entry the allergen NAMES over one whose alias it merely occurs
+	 * inside, which settles the fragment case for every name the KB itself publishes, but an allergen
+	 * recorded as free text that names no entry at all still resolves by containment or not at all.
+	 * What it does rule out is this method's failure mode — a token matching mid-word.
 	 *
 	 * <p><b>Diacritics are folded on both sides (issue #141)</b>, through the one shared
 	 * {@link DrugReference#foldDiacritics}. This was the matcher #129/#138 did not reach: that work

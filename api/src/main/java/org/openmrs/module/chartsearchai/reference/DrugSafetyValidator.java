@@ -663,7 +663,11 @@ public class DrugSafetyValidator {
 	 * subject side, and the curated rule's own {@code (type, token)} for the rule arm.
 	 * Those are two key spaces on purpose: the rule arm's token is free text that may name a class
 	 * ({@code nsaid}, {@code aminoglycoside}) rather than a drug, so resolving it to an entry to make
-	 * the two arms comparable would collapse a class-level rule into an identity chip. A curated rule
+	 * the two arms comparable would collapse a class-level rule into an identity chip. What keeps the two
+	 * spaces from colliding is no longer their TYPE — the allergy finding used to be a
+	 * {@link DrugReference}, which defines no {@code equals}, and is now usually a {@link List} like the
+	 * rule's — but their LENGTH, two against three, plus the rule's leading {@code "rule"} tag. Both are
+	 * needed: a substance key that grew a third component would collide on length alone. A curated rule
 	 * and an identity match about ONE allergy therefore still raise two chips — that is issue #146,
 	 * filed separately, which {@code ActiveOrderContraindicationTest} currently pins at two.
 	 *
@@ -689,7 +693,10 @@ public class DrugSafetyValidator {
 	 * names a code and a divergent row's code would be dropped unheard. Curated-group membership needs
 	 * no separate check: {@link CrossReactivityGroup#groupsOf} is a pure function of those same codes,
 	 * so equal codes are equal membership. What is left for a tie to choose between is then only the
-	 * route qualifier in the subject's own label.
+	 * route qualifier in the subject's own label. Issue #176 widened the key's FINDING side onto the same
+	 * substance, so that instruction was carried out: re-measured 2026-08-08 through
+	 * {@link DrugReference#atcSubgroups()}, 0 of the 129 multi-row families publish differing level-4
+	 * subgroups, and 0 differ in curated-group membership.
 	 *
 	 * <p><b>Replacing an incumbent, and what still reaches it.</b> This ledger used to be reachably
 	 * order-dependent: an allergy resolves to ONE row of its substance and not necessarily the group's
@@ -2265,9 +2272,10 @@ public class DrugSafetyValidator {
 	 * ATC level-4 subgroup (cross-reactivity), or — failing both — shares a curated
 	 * {@link CrossReactivityGroup}
 	 * (cross-<em>branch</em> cross-reactivity, e.g. aspirin vs an ibuprofen allergy, which ATC's tree
-	 * cannot express). At most one warning per (SUBSTANCE, resolved allergen): the most specific match
-	 * wins, several aliases of one allergy warn once ({@code seenAllergens} below), and the several
-	 * reference rows one substance is filed as warn once between them
+	 * cannot express). At most one warning per (SUBSTANCE, ALLERGEN'S SUBSTANCE): the most specific match
+	 * wins, several aliases of one allergy warn once ({@code seenAllergens} below), the several
+	 * reference rows one substance is filed as warn once between them, and so do two allergy RECORDS for
+	 * two presentations of one substance
 	 * ({@link ContraindicationChips}, issue #145 — the ledger this arm adds to rather than appending to
 	 * the chip list, and the reason it takes one). The two class comparisons need only ATC codes, which
 	 * is how an authoritative classification source carrying no rules ({@link AtcDrugReferenceSource})
@@ -2296,7 +2304,9 @@ public class DrugSafetyValidator {
 	 * all three comparisons at once: <em>most-specific-match wins</em> (an allergen that IS this drug
 	 * also shares every one of its subgroups, so identity must pre-empt the class arms rather than
 	 * stack on them) and <em>one warning per resolved allergen</em> ({@code seenAllergens} below, so
-	 * several aliases of one allergy warn once). Split across two methods, each would need its own copy
+	 * several aliases of one allergy warn once — the wider collapse, across two allergy RECORDS that
+	 * resolve to two rows of one substance, is the ledger's key and not this set's). Split across two
+	 * methods, each would need its own copy
 	 * of the other's state — which is precisely the two-arms-cannot-see-each-other shape that produced
 	 * issue #88's duplicate interaction chip. {@link #addContraindications} also walks a different
 	 * collection ({@code ref.getContraindications()}, matched by token against allergy AND condition
@@ -2326,6 +2336,23 @@ public class DrugSafetyValidator {
 	 * or not at all. Separately, an ANSWER-named drug can still be echo-scoped out of play before this
 	 * arm sees it (issue #105, {@link #isEchoOfCitedRecord}) — the 444 measurement is of the
 	 * question-driven path, which is never echo-scoped.
+	 *
+	 * <p><b>What resolving correctly costs, and the one shape where it costs a chip.</b> Driven through
+	 * this method by {@code validate} for each of the 471 KB name strings whose resolution the ranking
+	 * moves, asking about the row the old rule landed on and about the row the new one does (2026-08-08;
+	 * re-measure before relying on the figures): 40 findings arrive where the arm was silent, and 120 go
+	 * quiet. Nearly all of those 120 were the mislabel itself — {@code ciprofloxacin lactate} reported as
+	 * an allergy to {@code Lactic acid}, {@code digoxin antibodies fab fragments} as an allergy to
+	 * {@code Digoxin}, which would withhold digoxin from a patient allergic only to its antidote — so the
+	 * silence is the false claim being withdrawn. Not all of them: where the dataset files a presentation
+	 * as a SEPARATE substance from its parent moiety <em>and</em> gives that row no ATC code, a correct
+	 * resolution leaves the class comparisons nothing to compare and the chip goes silent rather than
+	 * mislabelled — {@code Insulin lispro (protamine)} asked about {@code Insulin lispro},
+	 * {@code Insulin human (isophane)} about {@code Insulin human}, {@code Dextran (low molecular
+	 * weight)} about {@code (high molecular weight)}, {@code Peanut oil} about {@code Peanut}. That is
+	 * issue #135's ATC-less gap reached through a correct resolution instead of a wrong one, and closing
+	 * it means widening {@link DrugReference#substanceKey()}, which issues #164/#187/#188 measured and
+	 * settled the other way — so it is a bound to carry, not a regression to patch here.
 	 */
 	private void addAllergyContraindications(ContraindicationChips chips, DrugReference ref,
 			PatientClinicalContext context) {
@@ -2344,7 +2371,10 @@ public class DrugSafetyValidator {
 			// The allergen's SUBSTANCE, on both sides of the ledger key: two allergy records for two
 			// presentations of one substance are one clinical fact, and they used to collapse only
 			// because both misresolved onto the same earlier row (issue #176). Keyed on the resolved
-			// ROW, a correct resolution would report such a patient twice.
+			// ROW, a correct resolution reports such a patient twice — for EVERY one of the 129
+			// substances the shipped KB files as more than one row, measured 2026-08-08 by recording two
+			// of a family's rows as two allergies and running validate over each family in turn: 2
+			// identity chips keyed on the row, 1 keyed on the substance, 129 of 129 either way.
 			Object allergenSubstance = allergen.substanceGroupKey();
 			// Identity is decided by SUBSTANCE, and the chip names the patient's own record (issue #164).
 			// substanceGroupKey answers both halves at once: it is the row's substance where the data
@@ -2429,7 +2459,7 @@ public class DrugSafetyValidator {
 	 * contraindication on the question's wording is what produced this defect. What bounds the arm
 	 * instead is the chart: it can only fire where an allergy or condition record and an active order
 	 * point at the same drug, and the two arms it delegates to bound it further — one chip per
-	 * (substance, resolved allergen) and one per (substance, matching curated rule), through the same
+	 * (substance, allergen's substance) and one per (substance, matching curated rule), through the same
 	 * {@link ContraindicationChips} ledger the drug-in-play call site uses, which is what stops one
 		 * order that resolves several reference rows raising a chip per row (issue #145). That is a bound
 	 * in the patient's own records, the same kind every other contraindication chip has and the reason

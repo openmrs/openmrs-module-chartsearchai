@@ -267,11 +267,12 @@ public class ContraindicationRouteVariantTest {
 	public void theIdentityChipSurvivesWhenTheAllergenRowIsNotItsGroupsFirst() throws IOException {
 		// The collapse must keep the most specific relationship even when the weaker candidate is raised
 		// FIRST — an incumbent chip has to be REPLACED, not merely suppressed. Reachable on the shipped
-		// KB, not a hypothetical: where a row carries only its own qualified name as an alias and not the
-		// bare substance name, lookupByToken's earliest-match rule skips it and the allergy resolves a
-		// LATER member of the same collapsed group, so the earlier members chip first. `Tozinameran`,
-		// `Insulin aspart (aspart)` and `Iobenguane (I-131)` were each verified this way through
-		// validate() over the full 19 MB KB. This case no longer discriminates a first-wins ledger from
+		// KB, not a hypothetical: the allergy resolves a row that is not its collapsed group's first, so
+		// the earlier members chip first. `Tozinameran`, `Insulin aspart (aspart)` and
+		// `Iobenguane (I-131)` were each verified this way through validate() over the full 19 MB KB —
+		// under the earliest-match resolution that issue #176 replaced; today `Tozinameran` reaches the
+		// same row because that row's own display name IS the recorded string, and it is still not the
+		// group's first. This case no longer discriminates a first-wins ledger from
 		// replace-in-place: since issue #164 the identity test matches on the substance, so the allergen
 		// raises IDENTITY whichever member of the group is reached first. What it still pins is that the
 		// surviving chip is the identity one and that it names the allergen as the chart records it.
@@ -292,8 +293,8 @@ public class ContraindicationRouteVariantTest {
 	public void oneLedgerSpansBothCallSites() throws IOException {
 		// The decisive reason this is a ledger and not a filter: the two arms run at TWO call sites, so a
 		// collapse living inside either one leaves the other emitting the siblings. Here both call sites
-		// raise a candidate for the SAME (substance, allergen) key and neither is redundant with the
-		// other — the question resolves the (12y+) presentation and the bare row, the active order
+		// raise a candidate for the SAME (substance, allergen's substance) key and neither is redundant
+		// with the other — the question resolves the (12y+) presentation and the bare row, the active order
 		// resolves the (5y-11y) presentation, which no question word reaches. A ledger per call site
 		// answers this with two chips; the tests above cannot see the difference, because in each of them
 		// one call site supplies the whole group.
@@ -325,9 +326,12 @@ public class ContraindicationRouteVariantTest {
 	@Test
 	public void oneSubstanceStillReportsEveryRecordedFindingSeparately() throws IOException {
 		// The other half of the key: the RECORDED FINDING is in it, so the collapse is per (substance,
-		// finding) and never per substance. Two allergies about one substance are two clinical facts and
-		// must stay two chips — a collapse keyed on the subject alone would answer this with one, dropping
-		// the identity statement or the cross-reactivity one depending on which arrived first.
+		// finding) and never per substance. Two allergies about two DIFFERENT substances are two clinical
+		// facts and must stay two chips — a collapse keyed on the subject alone would answer this with
+		// one, dropping the identity statement or the cross-reactivity one depending on which arrived
+		// first. (Two allergies about ONE substance are one clinical fact and do collapse, since issue
+		// #176 keyed the finding half on the allergen's substance; that is the case
+		// AllergenExactNameResolutionTest pins.)
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
 				"Is hydrocortisone safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Dexamethasone", "Hydrocortisone"), null));

@@ -247,6 +247,51 @@ public class AllergenExactNameResolutionTest {
 	}
 
 	@Test
+	public void twoEntriesMakingTheSameStrongestClaimResolveToTheEarliestOfThem() throws IOException {
+		// The residual bound, and the reason the scan takes a STRICTLY stronger claim: where two entries
+		// claim one name equally the earliest keeps the role, which is the answer every one of those names
+		// already had. Not a corner — of the 7452 name strings the shipped KB publishes, 1367 are claimed
+		// equally by two or more entries at the strongest rank they reach, all of them at the alias rank
+		// (0 at the display-name rank, since no shipped entry's display name is filed twice; measured
+		// 2026-08-08 through nameMatchStrength). Combination products are most of them
+		// ('abacavir / lamivudine' is claimed by both constituents) and salt names the rest
+		// ('ketorolac tromethamine'). Accepting the LATER claimant instead would silently reseat all 1367.
+		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(IDENTITY_FIXTURE);
+		String shared = "botulinum type a toxin-haemagglutinin complex";
+		DrugReference daxi = row(entries, "Daxibotulinumtoxina");
+		DrugReference botox = row(entries, "Botulinum toxin type A");
+		assertTrue(indexOfRow(entries, "Daxibotulinumtoxina") < indexOfRow(entries, "Botulinum toxin type A"),
+				"precondition: the slice must keep KB order");
+		assertTrue(daxi.isNamed(shared) && botox.isNamed(shared),
+				"precondition: BOTH rows must claim the recorded name as one of their own names");
+		for (DrugReference entry : entries) {
+			assertNotEquals(DrugReference.normalizeName(shared),
+					DrugReference.normalizeName(entry.getName()),
+					"precondition: and no row may be NAMED it, or one would outrank the tie — "
+							+ entry.getName());
+		}
+
+		// serviceWith over the very list above, so the identity assertion is about WHICH row and not about
+		// which parse produced it — ddiFixtureService would parse a second time and every row would then
+		// be a different object. Its groups-empty seam is harmless here: resolution reads no curated
+		// group, and the validate leg below goes through ddiFixtureService, which carries them.
+		assertSame(daxi, DrugReferenceTestSupport.serviceWith(entries).lookupByToken(shared),
+				"the earliest of two equal claimants wins");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.ddiFixtureService(IDENTITY_FIXTURE))
+				.validate("", "Is it safe to give botulinum toxin type A?",
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set(shared), null));
+
+		assertEquals(1, warnings.size(), "one substance, one chip, was: " + warnings);
+		assertEquals("The patient has a recorded allergy to Daxibotulinumtoxina (botulinum toxin type a).",
+				warnings.get(0).getDetail(),
+				"and the tie is visible in the chip, not only in the resolver: the verdict is right either "
+						+ "way — one substance — and which presentation is named is the dataset's order");
+	}
+
+	@Test
 	public void aRecordedNameNoEntryIsNamedStillResolvesToTheEarliestMatchingEntry() throws IOException {
 		// The fallback, and why it cannot be dropped: a chart's allergen is one localized display name
 		// with a strength appended, which no reference entry is ever NAMED. #147 gave this shape the

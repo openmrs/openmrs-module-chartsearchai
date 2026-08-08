@@ -256,9 +256,10 @@ public class AllergenExactNameResolutionTest {
 		// already had. Not a corner — of the 7452 name strings the shipped KB publishes, 1367 are claimed
 		// equally by two or more entries at the strongest rank they reach, all of them at the alias rank
 		// (0 at the display-name rank, since no shipped entry's display name is filed twice; measured
-		// 2026-08-08 through nameMatchStrength). Combination products are most of them
-		// ('abacavir / lamivudine' is claimed by both constituents) and salt names the rest
-		// ('ketorolac tromethamine'). Accepting the LATER claimant instead would silently reseat all 1367.
+		// 2026-08-08 through nameMatchStrength). 1125 of the 1367 are '/'-joined combination names, each
+		// claimed by more than one constituent ('abacavir / lamivudine'); the remaining 242 are single
+		// names two entries both publish ('ketorolac tromethamine'). Accepting the LATER claimant instead
+		// would silently reseat all 1367.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(IDENTITY_FIXTURE);
 		String shared = "botulinum type a toxin-haemagglutinin complex";
 		DrugReference daxi = row(entries, "Daxibotulinumtoxina");

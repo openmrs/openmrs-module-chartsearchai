@@ -197,9 +197,13 @@ public class DrugReferenceService {
 				if (strongest == DrugReference.NAME_IS_THE_DISPLAY_NAME) {
 					// Nothing outranks it and a later equal claim would lose the tie anyway, so the scan is
 					// over. It is an exit, not a cost guarantee: a name reaching only the alias or the
-					// containment rank has no such stopping point and now scans every entry where the
+					// containment rank has no such stopping point and scans every entry where the
 					// first-match rule could stop at the first one. That is the shape to time if this ever
-					// looks expensive — one full scan per (drug in play, allergy token) pair.
+					// looks expensive, and this call is no longer the unit to count it in: since issues
+					// #193/#195 findImpliedSubstances makes several of these per recorded name — one for
+					// the name, one per constituent, one for the parent moiety, and its own full pass for
+					// the equal claimants — while DrugSafetyValidator resolves the allergy list once per
+					// validate instead of once per drug in play.
 					return best;
 				}
 			}
@@ -238,7 +242,12 @@ public class DrugReferenceService {
 	 *       through {@link DrugReference#nameMatchStrength} and
 	 *       {@link DrugReference#substanceGroupKey()}). Deliberately not extended to the containment
 	 *       rank, which is where issue #192's hazard lives: there a tie is two entries whose names
-	 *       merely occur inside the recorded one;</li>
+	 *       merely occur inside the recorded one. The equally-claimed names that are NOT {@code /}-joined
+	 *       are what makes this leg irreplaceable rather than a second route to the one below: the KB
+	 *       also spells combinations with a word or a hyphen — {@code amoxicillin and clavulanic acid},
+	 *       {@code rifampicin isoniazid pyrazinamide and ethambutol},
+	 *       {@code potassium chloride-potassium gluconate}, {@code sultamicillin tosylate} — and no
+	 *       separator rule reaches those. {@code CombinationAllergenResolutionTest} pins one;</li>
 	 *   <li>the substance each {@link DrugReference#combinationConstituents constituent} of a
 	 *       combination name resolves to, when the KB is NAMED that constituent. Any rank of NAME claim
 	 *       is enough because the recorded string ASSERTS the constituent is an ingredient, so an entry

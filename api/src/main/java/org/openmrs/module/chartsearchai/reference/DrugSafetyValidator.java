@@ -2554,10 +2554,11 @@ public class DrugSafetyValidator {
 	 * <p><b>What it still cannot find</b>, stated rather than implied: an order whose substance the
 	 * loaded dataset does not carry resolves to no entry at all, so it has nothing to compare — the same
 	 * limit {@link DrugReferenceService#findForActiveOrders} documents for the screen. And the arms it
-	 * delegates to decide the rest: an allergy token {@link DrugReferenceService#lookupByToken} cannot
-	 * resolve to the drug the chart means — free text naming no entry, a combination product naming
-	 * several — is labelled here exactly as it is on the question path (see
-	 * {@link #addAllergyContraindications}'s measured coverage bound).
+	 * delegates to decide the rest: an allergy token {@link DrugReferenceService#findImpliedSubstances}
+	 * cannot resolve to the drug the chart means — free text naming no entry — is labelled here exactly
+	 * as it is on the question path (see {@link #addAllergyContraindications}'s measured coverage
+	 * bound). A combination product naming several used to be on that list and is not since issues
+	 * #193/#195.
 	 */
 	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries,

@@ -374,6 +374,15 @@ public class DrugReference {
 	 *         <p>The whole name is deliberately NOT among them: it is the caller's starting point, not
 	 *         a constituent, and returning it here would make the empty answer above indistinguishable
 	 *         from "one constituent".
+	 *
+	 *         <p><b>And deliberately not gated on a SPACED separator</b>, which is the obvious way to
+	 *         make the safety above structural rather than data-dependent — every strain designation
+	 *         and every qualifier containing a separator lacks the spaces. It is measurably the wrong
+	 *         rule: the shipped KB publishes a combination that joins its ingredients with a bare
+	 *         separator and names both of them ({@code potassium citrate/potassium gluconate}), so such
+	 *         a rule would close a real allergy silently — the failure this whole widening exists to
+	 *         stop. Both directions are pinned by {@code CombinationAllergenResolutionTest}: the bare
+	 *         separator must still split, and a fragment the KB only CONTAINS must still be refused.
 	 */
 	static List<String> combinationConstituents(String recordedName) {
 		if (recordedName == null || recordedName.indexOf(COMBINATION_SEPARATOR) < 0) {

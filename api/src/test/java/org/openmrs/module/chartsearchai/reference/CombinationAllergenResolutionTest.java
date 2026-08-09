@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -51,6 +52,19 @@ public class CombinationAllergenResolutionTest {
 
 	/** A combination name BOTH of whose constituents claim it equally — the 1367-name population. */
 	private static final String ABACAVIR_LAMIVUDINE = "abacavir / lamivudine";
+
+	/** A combination name carrying NO separator and no qualifier, so only the equal claim reaches its
+	 *  ingredients. The KB spells many combinations this way ({@code rifampicin and isoniazid},
+	 *  {@code sultamicillin tosylate}, {@code potassium chloride-potassium gluconate}). */
+	private static final String CO_AMOXICLAV = "amoxicillin and clavulanic acid";
+
+	/** A combination joining its ingredients with a BARE separator, which is what a structural
+	 *  "only a spaced separator counts" rule would silently close. */
+	private static final String POTASSIUM_SALTS = "potassium citrate/potassium gluconate";
+
+	/** A combination one of whose constituents the KB only CONTAINS rather than NAMES — the fragment
+	 *  shape the gate on the split has to refuse. */
+	private static final String BENZOCAINE_CLOVE = "benzocaine / clove oil";
 
 	private static DrugReference row(List<DrugReference> entries, String name) {
 		for (DrugReference entry : entries) {
@@ -181,6 +195,82 @@ public class CombinationAllergenResolutionTest {
 		assertEquals("Zidovudine is in the same ATC class (J05AF) as the patient's allergy to"
 				+ " Abacavir — possible cross-reactivity", warnings.get(0).getDetail(),
 				"named after the first constituent that carries the relationship");
+	}
+
+	@Test
+	public void theFixtureReallyCarriesACombinationNoSeparatorRuleCanReach() throws IOException {
+		// The premise for the case below: this name joins its ingredients with a WORD, so neither the
+		// constituent leg (which reads a separator) nor the moiety leg (which reads a trailing
+		// qualifier) can see either ingredient. Only the equal-claimant leg reaches them.
+		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
+		DrugReference amoxicillin = row(entries, "Amoxicillin");
+		DrugReference clavulanate = row(entries, "Clavulanic acid");
+		assertTrue(DrugReference.combinationConstituents(CO_AMOXICLAV).isEmpty(),
+				"precondition: the name must carry no combination separator");
+		assertNull(DrugReference.parentMoietyName(CO_AMOXICLAV),
+				"precondition: nor a trailing qualifier");
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, amoxicillin.nameMatchStrength(CO_AMOXICLAV));
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, clavulanate.nameMatchStrength(CO_AMOXICLAV),
+				"precondition: both ingredients must claim it equally, at the alias rank");
+		assertTrue(entries.indexOf(clavulanate) < entries.indexOf(amoxicillin),
+				"precondition: the slice must keep KB order, so the tie resolves to Clavulanic acid — "
+						+ "the ingredient the patient is NOT asked about");
+		assertNotEquals(amoxicillin.substanceKey(), clavulanate.substanceKey(),
+				"precondition: and the two are different substances");
+	}
+
+	@Test
+	public void aCombinationTheKbSpellsWithoutASeparatorIsStillCheckedAgainstEveryIngredient()
+			throws IOException {
+		// The equal-claimant leg on its own. Every other case in this file joins its ingredients with a
+		// separator, so the constituent leg reaches them too and this leg can be removed without any of
+		// them noticing. Here it cannot: the name resolves to Clavulanic acid, which is a different
+		// substance from amoxicillin and carries no ATC code, so both class comparisons have nothing to
+		// compare and the arm returns NOTHING — silence on a recorded penicillin allergy, the #86 class.
+		List<SafetyWarning> warnings = warningsFor("Is it safe to give amoxicillin?", CO_AMOXICLAV);
+
+		assertEquals(1, warnings.size(), "one recorded allergy, one chip, was: " + warnings);
+		assertEquals("The patient has a recorded allergy to Amoxicillin.", warnings.get(0).getDetail(),
+				"reached by the equal claim alone — no separator and no qualifier to derive it from");
+	}
+
+	@Test
+	public void aCombinationJoiningItsIngredientsWithoutSpacesIsStillSplit() throws IOException {
+		// Why the split is on the separator itself rather than on a spaced separator. The obvious way to
+		// make the split structural — require " / ", which every strain designation and every qualifier
+		// containing a separator lacks — is measurably wrong: this is the shipped KB's one published
+		// name that joins its ingredients with a BARE separator AND names both of them, so that rule
+		// would close it silently. What makes the split safe is the gate below, not the spacing.
+		List<SafetyWarning> warnings = warningsFor("Is it safe to give potassium gluconate?",
+				POTASSIUM_SALTS);
+
+		assertEquals(1, warnings.size(), "one recorded allergy, one chip, was: " + warnings);
+		assertEquals("The patient has a recorded allergy to Potassium gluconate.",
+				warnings.get(0).getDetail(),
+				"the second ingredient, which the resolution's own answer (Potassium citrate) is not");
+	}
+
+	@Test
+	public void aConstituentTheKbOnlyCONTAINSRatherThanNAMESIsNotReached() throws IOException {
+		// The split's lower bound, and the reason it can be unconditional. Splitting a name on the
+		// separator produces fragments as readily as ingredients, and the gate — an entry must be NAMED
+		// the constituent — is what separates them. It is doing real work rather than being satisfied by
+		// accident: 'clove oil' DOES resolve, to the Clove row, but only by CONTAINMENT, which is the
+		// rank issue #192 established is a false claim on a name. This is the same shape as
+		// PresentationMoietyAllergenTest's Peanut oil / Peanut bound, arriving through the constituent
+		// leg instead of the moiety leg.
+		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
+		DrugReference clove = row(entries, "Clove");
+		assertEquals(DrugReference.NAME_TOKEN_INSIDE_A_NAME, clove.nameMatchStrength("clove oil"),
+				"precondition: the row must reach the constituent by containment and no more");
+		assertNotEquals(clove.substanceKey(), row(entries, "Benzocaine (topical)").substanceKey(),
+				"precondition: and be a different substance from the constituent that does resolve");
+
+		assertEquals(0, warningsFor("Is it safe to give clove?", BENZOCAINE_CLOVE).size(),
+				"so the fragment reaches no substance — the bound this split carries");
+		assertEquals(1, warningsFor("Is it safe to give benzocaine?", BENZOCAINE_CLOVE).size(),
+				"while the constituent the KB IS named still does, so this case cannot pass by the "
+						+ "recorded name resolving to nothing at all");
 	}
 
 	@Test

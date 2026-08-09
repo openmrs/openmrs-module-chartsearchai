@@ -199,6 +199,47 @@ public class SubstanceCandidateSetTest {
 				warnings.get(0).getDetail());
 	}
 
+	/** Verbatim KB rows: {@code Estrone} and {@code Estrone sulfate} are two substances under one
+	 *  {@code rxnorm_name}, and {@code Estrone sulfate (topical)} is a presentation of the second whose
+	 *  aliases carry the FIRST one's display name and nothing spelled {@code estrone sulfate}. */
+	private static final String PRESENTATION_GAP_FIXTURE =
+			"chartsearchai-test/ddi-presentation-alias-gap.json";
+
+	@Test
+	public void aPresentationOfASubstanceInPlayIsKeptEvenWhenItsOwnAliasesNameAnother()
+			throws IOException {
+		// Why the verdict is taken per SUBSTANCE and then applied to every matched row of it, rather than
+		// per row. This presentation's alias list carries `estrone` — the OTHER substance's display name —
+		// and nothing spelled `estrone sulfate`, so resolving ITS witnesses alone says it is not the
+		// substance the name denotes, and a per-row verdict drops a row of a substance that IS in play.
+		// Losing a row loses whatever sits only on it: the rule the interaction arm would have chosen
+		// across the family, and the age band the dose arm would have read.
+		//
+		// Asserted on the resolution rather than on a chip, and deliberately: measured over the shipped KB,
+		// no interaction rule sits on that presentation alone, so a chip-level case here would have to
+		// invent reference data. What is real, and what this pins, is the row set the arms are handed.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(PRESENTATION_GAP_FIXTURE);
+
+		assertEquals("[Estrone, Estrone sulfate, Estrone sulfate (topical)]",
+				DrugReferenceTestSupport.names(service.findImpliedByDrugName("Estrone sulfate")).toString(),
+				"the presentation must survive with its substance");
+		assertEquals("[Estrone, Estrone sulfate, Estrone sulfate (topical)]", DrugReferenceTestSupport
+				.names(service.findImpliedByQuery("is it safe to give estrone sulfate?")).toString(),
+				"and on the prose leg too");
+		// The premise, through the production predicates: without it this passes while asserting nothing.
+		DrugReference presentation = DrugReferenceTestSupport.row(service.getAll(),
+				"Estrone sulfate (topical)");
+		assertTrue(presentation.aliasesNaming("Estrone sulfate").contains("estrone"),
+				"the presentation must carry the other substance's name, was: "
+						+ presentation.aliasesNaming("Estrone sulfate"));
+		assertFalse(presentation.aliasesNaming("Estrone sulfate").contains("estrone sulfate"),
+				"and must NOT carry its own family's bare name, or the per-row verdict would keep it");
+		assertEquals(presentation.substanceGroupKey(),
+				DrugReferenceTestSupport.row(service.getAll(), "Estrone sulfate").substanceGroupKey(),
+				"while being the same substance as the row that does");
+	}
+
 	@Test
 	public void theInjectedReferenceRecordsCarryOnlyTheSubstancesTheQuestionNames() throws IOException {
 		// The other consumer of the prose leg (DrugReferenceInjector.matchingEntries): a superset put a

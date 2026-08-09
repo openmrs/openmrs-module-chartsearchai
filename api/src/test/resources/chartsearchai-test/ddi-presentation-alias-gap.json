@@ -1,0 +1,125 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: a PRESENTATION row whose alias list does not carry its own family's bare name",
+  "note": "Rows copied field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, in KB order, for issue #209. Estrone and Estrone sulfate are two substances the KB files under ONE rxnorm_name (estrone), so the display stem is what keeps them apart; and the third row, Estrone sulfate (topical), is a presentation of the SECOND of them whose aliases carry `estrone` - the FIRST one's display name - and nothing spelled `estrone sulfate`. That is the shape that makes the candidate-set verdict per SUBSTANCE rather than per row: a per-row verdict resolves `estrone` for that presentation, finds it names the other substance, and drops a row of a substance that is in play. The interactions array is empty deliberately - this fixture asserts which rows a name resolves, and no rule of the shipped KB sits on that presentation alone (measured), so a chip-level assertion would have to invent one."
+ },
+ "mechanisms": [],
+ "drugs": [
+  {
+   "id": "DDInter682",
+   "name": "Estrone",
+   "rxcui": "4103",
+   "rxnorm_name": "estrone",
+   "drugbank_id": "DB00655",
+   "atc": [
+    "G03CA07",
+    "G03CC04"
+   ],
+   "ciel": [
+    {
+     "code": "104606",
+     "uuid": "104606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrogens, conjugated (usp) / estrone"
+    },
+    {
+     "code": "104614",
+     "uuid": "104614AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrone / progesterone"
+    },
+    {
+     "code": "104615",
+     "uuid": "104615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrone / testosterone"
+    },
+    {
+     "code": "75933",
+     "uuid": "75933AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrone"
+    },
+    {
+     "code": "84056",
+     "uuid": "84056AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium estrone sulfate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter683",
+   "name": "Estrone sulfate",
+   "rxcui": "4103",
+   "rxnorm_name": "estrone",
+   "drugbank_id": "DB04574",
+   "atc": [
+    "G03CA07",
+    "G03CC04"
+   ],
+   "ciel": [
+    {
+     "code": "104606",
+     "uuid": "104606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrogens, conjugated (usp) / estrone"
+    },
+    {
+     "code": "104614",
+     "uuid": "104614AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrone / progesterone"
+    },
+    {
+     "code": "104615",
+     "uuid": "104615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrone / testosterone"
+    },
+    {
+     "code": "75933",
+     "uuid": "75933AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrone"
+    },
+    {
+     "code": "84056",
+     "uuid": "84056AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium estrone sulfate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter684",
+   "name": "Estrone sulfate (topical)",
+   "rxcui": "4103",
+   "rxnorm_name": "estrone",
+   "drugbank_id": "DB04574",
+   "atc": [
+    "G03CA07",
+    "G03CC04"
+   ],
+   "ciel": [
+    {
+     "code": "104606",
+     "uuid": "104606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrogens, conjugated (usp) / estrone"
+    },
+    {
+     "code": "104614",
+     "uuid": "104614AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrone / progesterone"
+    },
+    {
+     "code": "104615",
+     "uuid": "104615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrone / testosterone"
+    },
+    {
+     "code": "75933",
+     "uuid": "75933AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estrone"
+    },
+    {
+     "code": "84056",
+     "uuid": "84056AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium estrone sulfate"
+    }
+   ]
+  }
+ ],
+ "interactions": []
+}

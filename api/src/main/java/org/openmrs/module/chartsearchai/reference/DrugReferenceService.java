@@ -11,6 +11,8 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -115,6 +117,168 @@ public class DrugReferenceService {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * The entries a PROSE text puts in play — {@link #findByQuery}, restricted to the entries whose
+	 * SUBSTANCE that text is read to name. The answer every chip arm and the injector need, and the
+	 * ranked counterpart of the boolean scan above.
+	 *
+	 * <p><b>Why the boolean scan is not that answer (issue #209).</b> {@link #findByQuery} asks whether
+	 * an entry is MENTIONED, which is a question about prose and is answered correctly. What its callers
+	 * ask is which SUBSTANCES the text puts in play, and one alias is routinely shared by two of them:
+	 * measured through the production predicates over the shipped 19 MB KB (2026-08-09; re-derive rather
+	 * than trusting the figures), {@code matchesText("hydrocortisone")} is true for all four
+	 * hydrocortisone rows while {@link DrugReference#nameMatchStrength} scores {@code Hydrocortisone} 2
+	 * and {@code Hydrocortisone butyrate} 1 — a different substance, an ester the patient is not on. Live,
+	 * that was a chip reading "Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's
+	 * allergy to Dexamethasone" for a patient whose only order in the family is
+	 * {@code Hydrocortisone Injection vial 100mg}.
+	 *
+	 * <p><b>How much it narrows</b>, measured by driving each of the 2283 published display names through
+	 * this method and through {@link #findByQuery} (2026-08-09; re-derive rather than trusting the
+	 * figures): 33 names resolve fewer rows, 71 rows in total, and the two invariants below hold for every
+	 * one of the 2283 — nothing was emptied and no substance lost a row. The order-name leg
+	 * ({@link #findImpliedByDrugName}) narrows the same 33 names by the same 71 rows.
+	 *
+	 * <p><b>The rule: the name CARRIED, not the whole text.</b> An entry stays when one of its own names
+	 * that the text carries ({@link DrugReference#aliasesIn}) denotes its substance under
+	 * {@link #findImpliedSubstances}. The witness is what makes this rankable at all — the text is prose
+	 * and prose has no claim strength, while the alias by which an entry matched is exactly the kind of
+	 * string {@code findImpliedSubstances} takes. It also keeps the narrowing about the CLAIM rather than
+	 * about spans: a question naming {@code hydrocortisone butyrate} keeps the ester (which is named it
+	 * outright) AND the parent substance (whose own name the string also carries), because neither name's
+	 * resolution is affected by the other appearing beside it.
+	 *
+	 * <p><b>What it cannot do.</b> It cannot empty a non-empty set: an entry's carried alias resolves to
+	 * some strongest claimant, that claimant carries the same alias and so is in the matched set, and
+	 * {@code findImpliedSubstances} always answers with its substance first — so whatever the text most
+	 * strongly names always survives. And it drops whole SUBSTANCES only, never a row of one that
+	 * survives: the verdict is taken per substance and then applied to every matched row of it. That
+	 * second half is not decoration. A qualified row need not carry the alias its own family's bare row
+	 * carries — {@code Estrone sulfate (topical)} publishes {@code estrone} as its {@code rxnorm_name},
+	 * the OTHER substance's name, and nothing spelled {@code estrone sulfate} — so a per-row verdict
+	 * dropped a presentation of a substance that was in play, and with it any rule sitting only on that
+	 * presentation (measured over the shipped KB: one published name, before this was made per-substance).
+	 *
+	 * <p>Route/formulation variants are therefore kept, deliberately: they ARE the substance, and the arms
+	 * downstream need the whole family — the dose arm tries each row for a published band, and
+	 * {@code DrugSafetyValidator.resolvedSubstanceRows} chooses one rule across all of them.
+	 *
+	 * @return the matching entries, in dataset order, deduplicated — a subset of {@link #findByQuery}
+	 */
+	public List<DrugReference> findImpliedByQuery(String question) {
+		List<DrugReference> matched = findByQuery(question);
+		if (matched.size() < 2) {
+			// One match is its own strongest claimant, so the filter is provably a no-op — and this is the
+			// common case, which must not pay for the resolution.
+			return matched;
+		}
+		String lower = question.toLowerCase(Locale.ROOT);
+		Map<Object, Set<Object>> impliedByName = new HashMap<Object, Set<Object>>();
+		Set<Object> inPlay = new HashSet<Object>();
+		for (DrugReference ref : matched) {
+			if (namesSubstanceOf(ref, ref.aliasesIn(lower), impliedByName)) {
+				inPlay.add(ref.substanceGroupKey());
+			}
+		}
+		return rowsOf(matched, inPlay);
+	}
+
+	/**
+	 * The entries a clinician-entered drug NAME puts in play — {@link #findByDrugName}, restricted to the
+	 * entries whose SUBSTANCE that name is read to name. The recorded-name counterpart of
+	 * {@link #findImpliedByQuery}, and the multi-row counterpart of {@link #findImpliedSubstances}: that
+	 * one answers with one representative row per substance, which is what a LABEL needs, while the arms
+	 * screening a patient's orders need every row of each substance the name denotes.
+	 *
+	 * <p>Same rule and same reason as {@link #findImpliedByQuery} — see there — with the witness taken
+	 * under the recorded-name boundary rule ({@link DrugReference#aliasesNaming}) rather than the prose
+	 * one, so a localized display name still resolves: {@code Aspirine Co 81mg} carries {@code aspirin}
+	 * here and nothing under the prose rule, which is issue #147.
+	 *
+	 * <p>The witness matters most sharply on this leg. A recorded order name is usually nobody's name —
+	 * a display name with a strength appended — so the strongest claim on the WHOLE string is only
+	 * {@link DrugReference#NAME_TOKEN_INSIDE_A_NAME}, at which rank {@code findImpliedSubstances}
+	 * deliberately refuses to widen (see there) and answers with the earliest matching row alone.
+	 * Filtering on that would discard genuinely-named substances — a combination order name would keep one
+	 * ingredient and drop the rest, the direction issues #193/#195 exist to prevent. Resolving the name
+	 * each row actually matched BY has no such edge: {@code Hydrocortisone Injection vial 100mg} carries
+	 * {@code hydrocortisone}, which denotes one substance, while {@code Abacavir / lamivudine} carries
+	 * {@code abacavir} for one row and {@code lamivudine} for the other and both stand.
+	 *
+	 * @return the matching entries, in dataset order — a subset of {@link #findByDrugName}
+	 */
+	public List<DrugReference> findImpliedByDrugName(String drugName) {
+		return findImpliedByDrugName(drugName, new HashMap<Object, Set<Object>>());
+	}
+
+	/**
+	 * As {@link #findImpliedByDrugName(String)}, sharing one resolution cache with the other names of the
+	 * same call — which is {@link #findForActiveOrders}, where a patient's orders contribute two names
+	 * each (the drug's and its concept's) and several orders of one family carry the same aliases.
+	 *
+	 * <p>The cache is a per-call LOCAL of the outermost caller, never a field: it holds
+	 * {@link DrugReference#substanceGroupKey()} values, which can be a {@link DrugReference} itself, and a
+	 * memoised entry outliving a {@link #getAll()} hot-reload fails the identity comparisons the safety
+	 * arms make against those same objects (issue #172).
+	 */
+	private List<DrugReference> findImpliedByDrugName(String drugName,
+			Map<Object, Set<Object>> impliedByName) {
+		List<DrugReference> matched = findByDrugName(drugName);
+		if (matched.size() < 2) {
+			return matched;
+		}
+		Set<Object> inPlay = new HashSet<Object>();
+		for (DrugReference ref : matched) {
+			if (namesSubstanceOf(ref, ref.aliasesNaming(drugName), impliedByName)) {
+				inPlay.add(ref.substanceGroupKey());
+			}
+		}
+		return rowsOf(matched, inPlay);
+	}
+
+	/** @return every row of {@code matched} whose substance is in {@code inPlay}, in the order given — the
+	 *          second half of both legs above, which is what makes their verdict per SUBSTANCE rather than
+	 *          per row. See {@link #findImpliedByQuery} for the presentation this exists to keep. */
+	private static List<DrugReference> rowsOf(List<DrugReference> matched, Set<Object> inPlay) {
+		List<DrugReference> out = new ArrayList<DrugReference>();
+		for (DrugReference ref : matched) {
+			if (inPlay.contains(ref.substanceGroupKey())) {
+				out.add(ref);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * @return whether one of {@code carried} — the entry's own names the recorded string carries — denotes
+	 *         {@code ref}'s substance. Through {@link #findImpliedSubstances}, so the two legs above and
+	 *         the allergy arm read one recorded name the same way and this cannot become a fourth
+	 *         resolution rule; keyed on {@link DrugReference#normalizeName} so two entries spelling one
+	 *         shared alias differently share the cache entry.
+	 */
+	private boolean namesSubstanceOf(DrugReference ref, List<String> carried,
+			Map<Object, Set<Object>> impliedByName) {
+		Object substance = ref.substanceGroupKey();
+		for (String name : carried) {
+			Object key = DrugReference.normalizeName(name);
+			if (key == null) {
+				continue;
+			}
+			Set<Object> implied = impliedByName.get(key);
+			if (implied == null) {
+				implied = new HashSet<Object>();
+				for (DrugReference row : findImpliedSubstances(name)) {
+					implied.add(row.substanceGroupKey());
+				}
+				impliedByName.put(key, implied);
+			}
+			if (implied.contains(substance)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -404,10 +568,18 @@ public class DrugReferenceService {
 	 * fully-ATC-mapped dictionary the order-driven matcher carries the subject set, and where mapping
 	 * is absent the name resolution does. The ATC path is dormant on that instance, not dead.
 	 *
-	 * <p>The name leg is {@link #findByDrugName} rather than {@link #findByQuery} since issue #147: an
+	 * <p>The name leg is the recorded-name matcher rather than {@link #findByQuery} since issue #147: an
 	 * order's display name is a localized drug name, not prose, so resolving it with the prose rule
 	 * left {@code Aspirine Co 81mg} and {@code Clarithromycine Co 500mg} matching no entry at all —
 	 * measured, 117 (order name, entry) pairs gained and 0 lost over the 3.7.1 dictionary's 2533 names.
+	 *
+	 * <p>And it is {@link #findImpliedByDrugName} rather than the bare {@link #findByDrugName} since issue
+	 * #209: a match is the join for the ATC leg above, where the code either belongs to the order or does
+	 * not, but a NAME can be shared by two substances and this list is what three arms report ON. Sarah
+	 * Taylor's one {@code Hydrocortisone Injection vial 100mg} order resolved 4 rows and 2 substances, the
+	 * second of them {@code Hydrocortisone butyrate}, and the order-driven contraindication arm reported it
+	 * as cross-reactive with her dexamethasone allergy — a chip about a drug she is not prescribed. Her
+	 * whole order list resolved 18 entries and 9 substances from 8 orders; ranked, 17 and 8.
 	 *
 	 * <p>Identity de-duplication is sound because both matchers resolve against this bean's shared
 	 * {@link #getAll()} cache (the same reason the drugs-in-play set can dedup by identity).
@@ -417,8 +589,11 @@ public class DrugReferenceService {
 			return Collections.emptyList();
 		}
 		Set<DrugReference> entries = new LinkedHashSet<DrugReference>(findByActiveOrders(context));
+		// One resolution cache for every name in this list — see findImpliedByDrugName(String, Map) for
+		// why it is a local of THIS call and not a field.
+		Map<Object, Set<Object>> impliedByName = new HashMap<Object, Set<Object>>();
 		for (String name : context.getActiveDrugNames()) {
-			entries.addAll(findByDrugName(name));
+			entries.addAll(findImpliedByDrugName(name, impliedByName));
 		}
 		return new ArrayList<DrugReference>(entries);
 	}

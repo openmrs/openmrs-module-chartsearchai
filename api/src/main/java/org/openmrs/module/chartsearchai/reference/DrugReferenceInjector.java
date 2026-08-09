@@ -481,7 +481,13 @@ public class DrugReferenceInjector {
 
 		// The reference drugs the question itself names — drives question-driven injection AND scopes
 		// the order-driven injection below, so it is computed regardless of the injectFromQuery toggle.
-		List<DrugReference> questionDrugs = drugReferenceService.findByQuery(question);
+		//
+		// findImpliedByQuery, not the bare findByQuery, since issue #209 — and through the same accessor
+		// DrugSafetyValidator's drugs-in-play set uses, so a record can never be injected for a substance
+		// no chip arm is checking. Prose carrying one alias of two substances injected a citable reference
+		// record for each: a question about hydrocortisone injected `Hydrocortisone butyrate` as well, an
+		// ester nobody named, spending prompt budget on a drug no chip stood behind.
+		List<DrugReference> questionDrugs = drugReferenceService.findImpliedByQuery(question);
 
 		boolean fromQuery = ChartSearchAiUtils.getBooleanGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_INJECT_FROM_QUERY,

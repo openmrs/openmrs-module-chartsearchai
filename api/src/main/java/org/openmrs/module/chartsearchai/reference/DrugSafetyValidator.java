@@ -284,19 +284,25 @@ public class DrugSafetyValidator {
 		List<DrugReference> all = drugReferenceService.getAll();
 
 		// Drugs in play = those the QUESTION resolves to UNION those the ANSWER names — both via the same
-		// DrugReferenceService.findByQuery the injector uses, so question/answer/injector matching can
-		// never drift, and identity-dedup holds (findByQuery resolves against the shared getAll() cache).
+		// DrugReferenceService.findImpliedByQuery the injector uses, so question/answer/injector matching
+		// can never drift, and identity-dedup holds (it resolves against the shared getAll() cache).
 		// Answer-side drugs are echo-scoped (issue #105): a drug the answer names while a record the
 		// answer cites already names it in its own text is an echo of that record (a recited reference
 		// partner, an allergy reported off the chart), not a proposal — validating it produced chips
 		// about drugs nobody suggested giving. Question-named drugs are always validated.
+		//
+		// findImpliedByQuery, not the bare findByQuery, since issue #209: what this set is is the drugs
+		// in PLAY, and prose carrying one alias of two substances put both in play — so a question about
+		// hydrocortisone chipped about `Hydrocortisone butyrate`, an ester nobody named. The prose matcher
+		// itself is unchanged (it answers "is this entry mentioned", correctly); the ranking is applied
+		// where the answer has to be a substance.
 		Set<DrugReference> questionDrugs = new LinkedHashSet<DrugReference>(
-				drugReferenceService.findByQuery(question));
+				drugReferenceService.findImpliedByQuery(question));
 		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(questionDrugs);
 		// The echo corpus is built lazily so the common case — the answer names no drug beyond
 		// the question's — does no citation parsing and no mapping sweep at all.
 		List<String> citedTextsLower = null;
-		for (DrugReference ref : drugReferenceService.findByQuery(answer)) {
+		for (DrugReference ref : drugReferenceService.findImpliedByQuery(answer)) {
 			if (questionDrugs.contains(ref)) {
 				continue; // already in play; question-named drugs are always validated
 			}

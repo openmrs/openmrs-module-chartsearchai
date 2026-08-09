@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -210,7 +211,13 @@ public class DrugReferenceInjector {
 		// PatientClinicalContext.hasActiveDrug, so a context without the reference names here would
 		// promote a different set of partners than the chips name — the exact chip-versus-prose split
 		// that method's javadoc exists to rule out.
-		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext);
+		// Resolved once and kept, exactly as DrugSafetyValidator.validate does: orderedInteractionNotes
+		// groups a partner by the active-order ENTRY the rule names (issue #190 item 2), which is the
+		// chip's own key, so these entries have to be the same resolution the names above come from —
+		// two resolutions is how the record and the chip come to disagree about which rows are one
+		// partner, which is the very thing that grouping exists to settle.
+		List<DrugReference> orderEntries = drugReferenceService.findForActiveOrders(rawContext);
+		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext, orderEntries);
 		List<DrugReference> matched = matchingEntries(context, question);
 		List<SafetyWarning> findings = preAnswerFindings(context, question);
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
@@ -235,7 +242,7 @@ public class DrugReferenceInjector {
 		}
 
 		for (DrugReference ref : matched) {
-			RenderedReference rendered = render(ref, age, context);
+			RenderedReference rendered = render(ref, age, context, orderEntries);
 			// The rendering's own bookkeeping rides on the mapping, not in the line — see
 			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
 			// grounding verifier still compares against exactly what the model read.
@@ -674,8 +681,12 @@ public class DrugReferenceInjector {
 	 * breadth, and paid in the compact {@code name (Severity)} form rather than in full notes.
 	 *
 	 * @param context may be null (nothing to prioritise by) — the section then keeps dataset order
+	 * @param orderEntries the reference entries the patient's active orders resolve to, which
+	 *        {@link #onePerPartner} keys a promoted partner on (issue #190 item 2); an empty list falls
+	 *        the grouping back to the label alone, as it was before that issue
 	 */
-	static OrderedInteractions orderedInteractionNotes(DrugReference ref, PatientClinicalContext context) {
+	static OrderedInteractions orderedInteractionNotes(DrugReference ref, PatientClinicalContext context,
+			List<DrugReference> orderEntries) {
 		List<InteractionNote> promoted = new ArrayList<InteractionNote>();
 		List<InteractionNote> rest = new ArrayList<InteractionNote>();
 		// Promotion honours the SAME severity floor the chips do (issue #84). Measured on the 3.7.1
@@ -687,7 +698,7 @@ public class DrugReferenceInjector {
 		// safety decision the chip path enforces. A sub-floor rule is not promoted; it keeps its
 		// dataset position, exactly as before promotion existed.
 		int floor = DrugSafetyValidator.configuredSeverityFloor();
-		for (DrugReference.Interaction i : onePerPartner(ref, context, floor)) {
+		for (DrugReference.Interaction i : onePerPartner(ref, context, floor, orderEntries)) {
 			String label = DrugSafetyValidator.partnerLabel(i);
 			String note = ChartSearchAiUtils.firstNonBlank(i.getNote());
 			// Kept identical to the previous rendering: a labelless rule still contributes its bare
@@ -746,28 +757,27 @@ public class DrugReferenceInjector {
 	 *         partner's first row — the rendering counterpart of
 	 *         {@link DrugSafetyValidator#bestRulePerPartner} (issue #174 site 2).
 	 *
-	 *         <p>The key is {@link DrugSafetyValidator#partnerLabel} case-folded, which is both the
-	 *         key that method falls back to and the very string this record prints, so the grouping
-	 *         and the rendering cannot come to disagree about what one partner is. A rule carrying
-	 *         NEITHER a token nor an ATC code keys on itself: it renders as a bare note with no name
-	 *         to group on, and merging two such rows would silently drop one operator-authored
-	 *         paragraph in favour of another. The two key spaces cannot collide — an
-	 *         {@link DrugReference.Interaction} defines no {@code equals} and can never equal a
-	 *         {@link String}.
+	 *         <p><b>The key is the chip's own two-tier key</b> — the ACTIVE-ORDER ENTRY the rule names
+	 *         where {@link DrugSafetyValidator#activeOrderEntryFor} resolves one, else
+	 *         {@link DrugSafetyValidator#partnerLabel} case-folded, which is both the key
+	 *         {@code bestRulePerPartner} falls back to and the very string this record prints, so the
+	 *         grouping and the rendering cannot come to disagree about what one partner is. A rule
+	 *         carrying NEITHER a token nor an ATC code keys on itself: it renders as a bare note with no
+	 *         name to group on, and merging two such rows would silently drop one operator-authored
+	 *         paragraph in favour of another. The three key spaces cannot collide — a
+	 *         {@link DrugReference} and an {@link DrugReference.Interaction} define no {@code equals}, and
+	 *         neither can ever equal a {@link String}.
 	 *
-	 *         <p><b>The label rather than the resolved ENTRY, and why that is not the text-keying
-	 *         issue #173 ruled out.</b> Every chip-side ledger keys on identity because a key made of
-	 *         rendered text rots when the rendering changes, so this looks like the exception and is
-	 *         worth settling once rather than re-litigating. Three things settle it.
+	 *         <p><b>Why the tail stays on the LABEL, and why that is not the text-keying issue #173 ruled
+	 *         out.</b> Every chip-side ledger keys on identity because a key made of rendered text rots
+	 *         when the rendering changes, so this looks like the exception and is worth settling once
+	 *         rather than re-litigating. Three things settle it.
 	 *         <ul>
-	 *           <li>There is usually no identity to be had. The chip's key
-	 *               ({@code DrugSafetyValidator.SubjectRule.partnerKey()}) is two-tier — the ENTRY
-	 *               where {@code activeOrderEntryFor} resolves the rule against one of the patient's
-	 *               ACTIVE ORDERS, else this same case-folded label. Every partner in the dataset
-	 *               tail, which is where nearly all the surplus above lives, resolves to nothing, so
-	 *               for them the chip's own key IS the label. Keying the tail on an entry would mean
-	 *               resolving each partner token across the whole dataset, which is a THIRD
-	 *               resolution rather than a port of the chip's.</li>
+	 *           <li>There is usually no identity to be had. Every partner in the dataset tail, which is
+	 *               where nearly all the surplus above lives, resolves to no active order, so for them
+	 *               the chip's own key IS the label. Keying the tail on an entry would mean resolving
+	 *               each partner token across the whole dataset, which is a THIRD resolution rather than
+	 *               a port of the chip's.</li>
 	 *           <li>It would not be safer, it would be less safe. {@code identifies} resolves through
 	 *               an entry's alias list and its ATC codes, and the shipped KB shares both across
 	 *               entities the dataset itself files as separate drugs. Measured 2026-08-07 over the
@@ -786,9 +796,15 @@ public class DrugReferenceInjector {
 	 *               grouping, and issue #121's invariant — the key IS what the chip says — is
 	 *               deliberate rather than incidental.</li>
 	 *         </ul>
-	 *         The residue is real and is issue #190 item 2: two rules naming ONE partner under two
-	 *         different spellings stay two notes beside one chip. Note that closing it by grouping on
-	 *         the entry, which that issue proposes, buys the 397-entry over-merge above.
+	 *
+	 *         <p><b>Issue #190 item 2</b> is the residue the label key left where an identity WAS to be
+	 *         had: two rules naming ONE of the patient's own orders under two of its names — issue #136's
+	 *         {@code warfarin}/{@code coumadin}, one entry reached by two aliases — were two notes beside
+	 *         a single chip, because the chip had already keyed them on that entry. Taking the chip's own
+	 *         answer closes it without buying any of the 397-entry over-merge above: that measurement is
+	 *         a property of resolving a partner across the WHOLE dataset, and this resolution is bounded
+	 *         by the patient's active orders. Where it does merge two labels, the chip merged them first
+	 *         and the record now agrees with it — which is the invariant, not a cost.
 	 *
 	 *         <p>Applied over EVERY rule rather than only over the promoted ones, deliberately: the
 	 *         floor decides which rules are worth PROMOTING, while a sub-floor row keeps its dataset
@@ -821,12 +837,14 @@ public class DrugReferenceInjector {
 	 *         position — the tail's dataset order is what the caller's javadoc guarantees.
 	 */
 	private static Collection<DrugReference.Interaction> onePerPartner(DrugReference ref,
-			PatientClinicalContext context, int floor) {
+			PatientClinicalContext context, int floor, List<DrugReference> orderEntries) {
 		Map<Object, DrugReference.Interaction> best =
 				new LinkedHashMap<Object, DrugReference.Interaction>();
 		for (DrugReference.Interaction i : ref.getInteractions()) {
+			DrugReference partner = DrugSafetyValidator.activeOrderEntryFor(orderEntries, ref, i);
 			String label = DrugSafetyValidator.partnerLabel(i);
-			Object key = label != null ? (Object) label.toLowerCase(Locale.ROOT) : i;
+			Object key = partner != null ? (Object) partner
+					: (label != null ? (Object) label.toLowerCase(Locale.ROOT) : i);
 			DrugReference.Interaction incumbent = best.get(key);
 			if (incumbent == null || outranksForRendering(i, incumbent, context, floor)) {
 				best.put(key, i);
@@ -963,9 +981,11 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>{@code context} orders the capped {@code Interactions:} section — see
 	 * {@link #orderedInteractionNotes}. It may be null (nothing to prioritise by), in which case
-	 * the section keeps dataset order.
+	 * the section keeps dataset order. {@code orderEntries} is passed straight through to that method,
+	 * which groups a partner the patient is on by the entry it resolves to (issue #190 item 2).
 	 */
-	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context) {
+	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context,
+			List<DrugReference> orderEntries) {
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
 		StringBuilder paren = new StringBuilder();
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {
@@ -1009,15 +1029,12 @@ public class DrugReferenceInjector {
 			sb.append(" Warnings: ").append(String.join("; ", warningLines)).append(".");
 		}
 
-		List<String> contraindicationNotes = new ArrayList<String>();
-		for (DrugReference.Contraindication c : ref.getContraindications()) {
-			addIfPresent(contraindicationNotes, ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()));
-		}
+		Collection<String> contraindicationNotes = contraindicationClauses(ref);
 		if (!contraindicationNotes.isEmpty()) {
 			sb.append(" Contraindicated with: ").append(String.join("; ", contraindicationNotes)).append(".");
 		}
 
-		OrderedInteractions interactions = orderedInteractionNotes(ref, context);
+		OrderedInteractions interactions = orderedInteractionNotes(ref, context, orderEntries);
 		List<InteractionNote> ordered = interactions.ordered;
 		int withheld = 0;
 		if (!ordered.isEmpty()) {
@@ -1096,6 +1113,62 @@ public class DrugReferenceInjector {
 
 	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the
 	 *          prompt budget the reference slice spends, for the DEBUG line in {@code injectRecords}. */
+	/**
+	 * @return one clause per contraindication RULE — the {@code (type, token)} pair
+	 *         {@code DrugSafetyValidator.addContraindications} chips on, normalized the same way it
+	 *         normalizes it — each carrying the distinct notes its rows authored, in dataset order.
+	 *
+	 *         <p><b>Issue #190 item 1.</b> This rendered one clause per ROW while
+	 *         {@code DrugSafetyValidator.ContraindicationChips} raises one chip per
+	 *         {@code (substance, type, token)}, so an entry filing one rule twice put two clauses in the
+	 *         record beside one chip and the model was told the drug has two contraindications where the
+	 *         deterministic layer had found one. Keyed on the rule the CHIP compares, not on the rendered
+	 *         text, so the two counts cannot drift.
+	 *
+	 *         <p><b>Curated-source-only</b>, by construction rather than by measurement: neither
+	 *         {@code ddinter} nor {@code atc} publishes contraindications at all, so only an
+	 *         operator-authored file can file one rule twice — and the bundled seed does not (its four
+	 *         ibuprofen rows are four distinct {@code (type, token)} pairs), so no shipped rendering
+	 *         moves. {@code InjectedContraindicationClauseTest} pins both halves.
+	 *
+	 *         <p><b>Joined, not dropped</b>, and that is the deliberate difference from issue #174 site 2:
+	 *         that collapse could discard a repeated row because the repeats were near-identical, while
+	 *         two rows of one rule here carry two DIFFERENT operator-authored notes. The chip keeps only
+	 *         the incumbent's (ties keep the incumbent, which
+	 *         {@code ContraindicationRouteVariantTest.oneCuratedRuleAuthoredTwiceRaisesOneChip} pins), so
+	 *         a record that dropped the sibling would remove that clinical instruction from the
+	 *         deployment altogether — this record being the only place the prompt carries it. They are
+	 *         joined with the em dash the module already attaches a note with, rather than with the
+	 *         {@code "; "} that separates CLAUSES, so the join cannot read as a second contraindication.
+	 *
+	 *         <p>A rule whose note and token are both blank contributes nothing, exactly as before — the
+	 *         dataset is operator-editable and every section must degrade to "skip that element" rather
+	 *         than emit a literal {@code null}.
+	 */
+	private static Collection<String> contraindicationClauses(DrugReference ref) {
+		Map<List<Object>, String> byRule = new LinkedHashMap<List<Object>, String>();
+		for (DrugReference.Contraindication c : ref.getContraindications()) {
+			List<String> notes = new ArrayList<String>();
+			addIfPresent(notes, ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()));
+			if (notes.isEmpty()) {
+				continue;
+			}
+			// The very key the chip ledger uses, through the same normalisation, so "ALLERGY"/"Ibuprofen"
+			// and "allergy"/"ibuprofen" are one rule here exactly as they are one chip there.
+			List<Object> key = Arrays.<Object> asList(DrugReference.normalizeName(c.getType()),
+					DrugReference.normalizeName(c.getToken()));
+			String clause = byRule.get(key);
+			if (clause == null) {
+				byRule.put(key, notes.get(0));
+			} else if (!clause.contains(notes.get(0))) {
+				// contains(), so a row re-authored with the identical note adds nothing — the drop issue
+				// #174 site 2 could make, made only where it is provably lossless.
+				byRule.put(key, clause + " — " + notes.get(0));
+			}
+		}
+		return byRule.values();
+	}
+
 	private static int referenceCharacters(List<RecordMapping> mappings) {
 		int chars = 0;
 		for (RecordMapping mapping : mappings) {

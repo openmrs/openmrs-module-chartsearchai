@@ -1208,8 +1208,8 @@ public class DrugReference {
 	 * than in either named matcher: the same accented order name reaches both of them — as the
 	 * haystack when a rule token is matched against it ({@link #matchesOrderName}) and as the
 	 * haystack again when the order-driven arms resolve that order's own reference entry
-	 * ({@link DrugReferenceService#findForActiveOrders} → {@code findByDrugName} →
-	 * {@link #matchesDrugName}, which is this rule again since issue #147),
+	 * ({@link DrugReferenceService#findForActiveOrders} → {@code findImpliedByDrugName} →
+	 * {@code findByDrugName} → {@link #matchesDrugName}, which is this rule again since issue #147),
 	 * and as the NEEDLE when an order name is looked for in a rendered record
 	 * ({@code PatientClinicalContext.ActiveDrugOrder.namedIn}). Folding one matcher would leave the
 	 * same patient half-checked; folding one SIDE would break that third case, whose needle is the

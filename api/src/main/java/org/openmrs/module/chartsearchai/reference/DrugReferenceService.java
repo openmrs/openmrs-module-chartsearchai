@@ -102,10 +102,15 @@ public class DrugReferenceService {
 	 * Question-driven matching: entries whose aliases hit the user's query text.
 	 * Cheap and deterministic — no embedding required.
 	 *
+	 * <p>The PRIMITIVE and not the answer, since issue #209: it reports which entries prose MENTIONS,
+	 * which is a strict superset of which SUBSTANCES prose names. Its one caller is
+	 * {@link #findImpliedByQuery}, which applies the ranking on top; nothing else may build a candidate
+	 * set from it — that admission was the defect.
+	 *
 	 * @param question the clinician's query
 	 * @return matching entries, in dataset order, deduplicated
 	 */
-	public List<DrugReference> findByQuery(String question) {
+	List<DrugReference> findByQuery(String question) {
 		if (question == null || question.trim().isEmpty()) {
 			return Collections.emptyList();
 		}
@@ -528,10 +533,12 @@ public class DrugReferenceService {
 	 *
 	 * <p>Not the same question as {@link #findImpliedSubstances}, which is what a recorded name is read
 	 * to NAME: this returns every entry the name MATCHES, including the ones issue #192 established are
-	 * false claims on it ({@code Lactic acid} for {@code Ciprofloxacin lactate}). Its callers are the
-	 * order-driven ones, where a match is the join and the ranking never applied.
+	 * false claims on it ({@code Lactic acid} for {@code Ciprofloxacin lactate}). It is therefore the
+	 * PRIMITIVE and not the answer: since issue #209 its one caller is
+	 * {@code findImpliedByDrugName}, which applies the ranking on top, and nothing else may build a
+	 * candidate set from it — that admission was the defect.
 	 */
-	public List<DrugReference> findByDrugName(String drugName) {
+	List<DrugReference> findByDrugName(String drugName) {
 		if (drugName == null || drugName.trim().isEmpty()) {
 			return Collections.emptyList();
 		}
@@ -550,7 +557,7 @@ public class DrugReferenceService {
 	 * subjects {@code addActiveOrderContraindications} checks against the patient's own allergy and
 	 * condition records, and the source of the names {@link #withReferenceNames} attaches. The union of
 	 * the documented order-driven matcher ({@link #findByActiveOrders}, which keys on ATC codes) and a
-	 * name resolution of each active order's own display name ({@link #findByDrugName}). One
+	 * name resolution of each active order's own display name ({@link #findImpliedByDrugName}). One
 	 * definition, so those consumers cannot come to disagree about which of the patient's
 	 * prescriptions the reference data covers.
 	 *

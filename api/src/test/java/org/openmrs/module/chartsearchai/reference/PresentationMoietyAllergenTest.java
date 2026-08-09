@@ -66,11 +66,16 @@ public class PresentationMoietyAllergenTest {
 						DrugReferenceTestSupport.set(allergy), null));
 	}
 
-	/** @return whether any entry is CALLED {@code stem} — the gate's own premise, through the production
-	 *          predicate rather than by re-deriving it. */
+	/** @return whether any entry is CALLED {@code stem} — the gate's own premise, asked through the
+	 *          predicate the gate itself asks ({@link DrugReference#nameMatchStrength} at
+	 *          {@link DrugReference#NAME_IS_THE_DISPLAY_NAME}) rather than by comparing names here. The
+	 *          two are not the same question: that rank is gated on {@code matchesDrugName} first, so an
+	 *          entry whose alias list omits its own display name answers NAME_NO_MATCH even though the
+	 *          strings are equal — and a premise stated in different terms from the gate can hold while
+	 *          the gate disagrees. */
 	private static boolean someRowIsCalled(List<DrugReference> entries, String stem) {
 		for (DrugReference entry : entries) {
-			if (DrugReference.normalizeName(stem).equals(DrugReference.normalizeName(entry.getName()))) {
+			if (entry.nameMatchStrength(stem) == DrugReference.NAME_IS_THE_DISPLAY_NAME) {
 				return true;
 			}
 		}

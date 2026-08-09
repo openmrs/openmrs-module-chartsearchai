@@ -238,9 +238,12 @@ public class CombinationAllergenResolutionTest {
 	public void aCombinationJoiningItsIngredientsWithoutSpacesIsStillSplit() throws IOException {
 		// Why the split is on the separator itself rather than on a spaced separator. The obvious way to
 		// make the split structural — require " / ", which every strain designation and every qualifier
-		// containing a separator lacks — is measurably wrong: this is the shipped KB's one published
-		// name that joins its ingredients with a BARE separator AND names both of them, so that rule
-		// would close it silently. What makes the split safe is the gate below, not the spacing.
+		// containing a separator lacks — is measurably wrong, and this is the case that measures it: a
+		// published name that joins its ingredients with a BARE separator and names both of them, which
+		// such a rule would close silently. Rare in the shipped KB (re-derive with findImpliedSubstances
+		// before relying on how rare), and rarity is not the point — one silently-closed allergy is the
+		// failure this whole widening exists to stop. What makes the split safe is the gate the next
+		// case pins, not the spacing.
 		List<SafetyWarning> warnings = warningsFor("Is it safe to give potassium gluconate?",
 				POTASSIUM_SALTS);
 

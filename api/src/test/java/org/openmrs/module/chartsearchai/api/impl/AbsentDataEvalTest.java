@@ -17,6 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -68,6 +70,9 @@ import org.slf4j.LoggerFactory;
  *   <li>{@link #theEmptyChartPromptAsksTheModelToNameWhatIsMissing} runs unconditionally and asserts
  *       the deterministic half against real production code: the exact bytes
  *       {@link LlmProvider#buildUserMessage} sends when the chart yields no records.</li>
+ *   <li>{@link #anAnswerNamingNoTopicFailsEveryCaseThatNamesOne} runs unconditionally and holds the
+ *       oracle to the one thing it must never do: pass an answer that names nothing. It is what keeps
+ *       {@code expectedAnswerContainsAny}'s OR lists (issue #216) from drifting into a grab-bag.</li>
  * </ul>
  *
  * <p>The 10 {@code expectedAbsent: false} cases are deliberately not run here — see
@@ -94,6 +99,15 @@ public class AbsentDataEvalTest {
 	 * full chart, 14 of 19 did.
 	 */
 	private static final int MAX_TOKENS = ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS;
+
+	/**
+	 * Answers that name no topic at all, verbatim as the shipped configuration produced them — issue
+	 * #214's defect. Negative fixtures for
+	 * {@link #anAnswerNamingNoTopicFailsEveryCaseThatNamesOne}: which cases they land on varies run to
+	 * run, so they are pinned as text rather than tied to any case.
+	 */
+	private static final List<String> ANSWERS_NAMING_NO_TOPIC = Arrays.asList(
+			"No patient records were provided.", "No records are provided.");
 
 	private static EvalDataset dataset;
 
@@ -193,6 +207,16 @@ public class AbsentDataEvalTest {
 	 * {@code CBC}, {@code ray}) and which case the model writes them in is its own word choice, not a
 	 * property under test. Everything else is exact containment — a looser match (stemming, synonyms)
 	 * would be this file re-deciding what the dataset means.
+	 *
+	 * <p>Two expectation lists, because one relation cannot carry both meanings (issue #216).
+	 * {@code expectedAnswerContains} is AND: every element must appear, which is right when the topic
+	 * has one name. {@code expectedAnswerContainsAny} is OR: one element suffices, which is the only
+	 * way to say "names the topic by any of its names" when the correct names share no substring —
+	 * asked "Are there any X-ray or radiology reports?", both <i>"No x-ray reports are recorded."</i>
+	 * and <i>"No radiology reports are recorded."</i> name it, and a second AND element would only
+	 * make the case stricter. An OR element is weaker than an AND element, so the bound on how loose
+	 * the OR lists may get is asserted, not trusted — see
+	 * {@link #anAnswerNamingNoTopicFailsEveryCaseThatNamesOne}.
 	 */
 	private static void assertAnswerMatchesExpectations(String caseId, EvalCase evalCase, String answer) {
 		assertNotNull(answer, caseId + ": no answer was produced");
@@ -201,6 +225,18 @@ public class AbsentDataEvalTest {
 			assertTrue(lower.contains(expected.toLowerCase(Locale.ROOT)),
 					caseId + ": the answer must name what was asked about ('" + expected + "'), was: "
 							+ answer);
+		}
+		List<String> anyOf = expectedContainsAny(evalCase);
+		if (!anyOf.isEmpty()) {
+			boolean named = false;
+			for (String alternative : anyOf) {
+				if (lower.contains(alternative.toLowerCase(Locale.ROOT))) {
+					named = true;
+					break;
+				}
+			}
+			assertTrue(named, caseId + ": the answer must name what was asked about by one of its "
+					+ "names " + anyOf + ", was: " + answer);
 		}
 		if (evalCase.getExpectedAnswerNotContains() != null) {
 			for (String forbidden : evalCase.getExpectedAnswerNotContains()) {
@@ -214,6 +250,11 @@ public class AbsentDataEvalTest {
 	private static List<String> expectedContains(EvalCase evalCase) {
 		return evalCase.getExpectedAnswerContains() == null ? new ArrayList<String>()
 				: evalCase.getExpectedAnswerContains();
+	}
+
+	private static List<String> expectedContainsAny(EvalCase evalCase) {
+		return evalCase.getExpectedAnswerContainsAny() == null ? new ArrayList<String>()
+				: evalCase.getExpectedAnswerContainsAny();
 	}
 
 	/**
@@ -243,9 +284,11 @@ public class AbsentDataEvalTest {
 		for (EvalCase evalCase : absentCases()) {
 			String caseId = evalCase.getId();
 			List<String> contains = expectedContains(evalCase);
-			assertFalse(contains.isEmpty(),
-					caseId + ": an absent case with no expectedAnswerContains asserts nothing about the "
-							+ "answer, so running it would be the same vacuity one level down");
+			List<String> anyOf = expectedContainsAny(evalCase);
+			assertFalse(contains.isEmpty() && anyOf.isEmpty(),
+					caseId + ": an absent case with neither expectedAnswerContains nor "
+							+ "expectedAnswerContainsAny asserts nothing about the answer, so running it "
+							+ "would be the same vacuity one level down");
 			String compliant = compliantAnswerFor(evalCase);
 			assertAnswerMatchesExpectations(caseId, evalCase, compliant);
 
@@ -255,6 +298,25 @@ public class AbsentDataEvalTest {
 						() -> assertAnswerMatchesExpectations(caseId, evalCase, missingOne),
 						caseId + ": an answer that never names '" + expected + "' must fail this case, or "
 								+ "that expectation is not being asserted: " + missingOne);
+			}
+			if (!anyOf.isEmpty()) {
+				// An OR group bites as a group: only an answer carrying NONE of its alternatives may
+				// fail it. Both halves are asserted, because each catches a different way to get the
+				// group wrong — a dead alternative nothing could ever satisfy, and a group so loose
+				// that dropping all of it still passes.
+				String namingNone = compliant;
+				for (String alternative : anyOf) {
+					namingNone = removeAll(namingNone, alternative);
+				}
+				String withoutAnyAlternative = namingNone;
+				assertThrows(AssertionError.class,
+						() -> assertAnswerMatchesExpectations(caseId, evalCase, withoutAnyAlternative),
+						caseId + ": an answer naming none of " + anyOf + " must fail this case, or the "
+								+ "OR group is not being asserted: " + withoutAnyAlternative);
+				for (String alternative : anyOf) {
+					assertAnswerMatchesExpectations(caseId, evalCase,
+							compliantAnswerNaming(evalCase, alternative));
+				}
 			}
 			if (evalCase.getExpectedAnswerNotContains() != null) {
 				for (String forbidden : evalCase.getExpectedAnswerNotContains()) {
@@ -274,11 +336,56 @@ public class AbsentDataEvalTest {
 				// them. Asserted rather than assumed, so that adding an answer expectation to one of them
 				// fails here instead of joining the dataset unread, which is how issue #203 started.
 				assertTrue(evalCase.getExpectedAnswerContains() == null
+						&& evalCase.getExpectedAnswerContainsAny() == null
 						&& evalCase.getExpectedAnswerNotContains() == null,
 						evalCase.getId() + ": a present case carries answer expectations, but nothing here "
 								+ "runs them — either drive it from a suite that can retrieve records, or "
 								+ "drop the expectations");
 			}
+		}
+	}
+
+	/**
+	 * The bound on how loose an expectation may get, asserted against the answer text this suite
+	 * exists to reject.
+	 *
+	 * <p>{@link #ANSWERS_NAMING_NO_TOPIC} are answers measured coming out of the shipped
+	 * configuration (issue #214) that name <em>nothing</em> — they describe the record slice the model
+	 * received rather than the patient, which is the failure a clinician cannot act on: "no imaging is
+	 * recorded" and "the chart did not load" are different situations and this wording cannot tell
+	 * them apart. Every case whose question names a topic must reject them.
+	 *
+	 * <p>This is what stops {@code expectedAnswerContainsAny} from becoming a grab-bag. Its elements
+	 * are alternatives, so each one added is a new way to pass; an element generic enough to appear in
+	 * a topic-less answer ({@code record}, {@code provided}, {@code no}) would silently retire the
+	 * case, and {@link #everyAbsentCaseIsRunAndEveryExpectationDiscriminates} would not notice — an
+	 * OR group still discriminates against an answer carrying none of its elements even when one
+	 * element matches everything.
+	 *
+	 * <p>The exemption is asserted rather than skipped, so it cannot quietly grow.
+	 * {@code absent-all-stopwords} asks "does the patient have any?", which names no topic at all, so
+	 * there is nothing for its answer to name and its only expectation is that the answer is a
+	 * negation. Any OTHER id appearing in this set is an expectation that has stopped testing what
+	 * this file's name says.
+	 */
+	@Test
+	public void anAnswerNamingNoTopicFailsEveryCaseThatNamesOne() {
+		for (String topicLess : ANSWERS_NAMING_NO_TOPIC) {
+			List<String> accepted = new ArrayList<>();
+			for (EvalCase evalCase : absentCases()) {
+				try {
+					assertAnswerMatchesExpectations(evalCase.getId(), evalCase, topicLess);
+					accepted.add(evalCase.getId());
+				}
+				catch (AssertionError rejected) {
+					// Rejecting a topic-less answer is the property under test.
+				}
+			}
+			assertEquals(Collections.singletonList("absent-all-stopwords"), accepted,
+					"only absent-all-stopwords may accept \"" + topicLess + "\" — its question names no "
+							+ "topic, so a negation is all its answer can be held to. Any other id here "
+							+ "carries an expectation loose enough to be satisfied by an answer that names "
+							+ "nothing, which is the defect this suite exists to catch (issue #214)");
 		}
 	}
 
@@ -302,6 +409,11 @@ public class AbsentDataEvalTest {
 				+ "missing."),
 				"the system prompt must still instruct the model to name what is missing — every case in "
 						+ "this file depends on it, and they are all skipped without an endpoint");
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("noun phrase of your own when the query "
+				+ "states it as a verb"),
+				"the system prompt must still tell the model to nominalise a verb-shaped query — without "
+						+ "it, \"Does the patient smoke?\" has no phrase to lift and the answer falls back "
+						+ "to describing the record slice (issue #214)");
 
 		List<EvalCase> absent = absentCases();
 		assertFalse(absent.isEmpty(), "precondition: there must be absent cases to build prompts for");
@@ -318,9 +430,19 @@ public class AbsentDataEvalTest {
 	/** An answer that satisfies {@code evalCase} — built from its own expectations, so it names exactly
 	 *  what the dataset says the real answer must name and nothing the dataset forbids. */
 	private static String compliantAnswerFor(EvalCase evalCase) {
+		List<String> anyOf = expectedContainsAny(evalCase);
+		return compliantAnswerNaming(evalCase, anyOf.isEmpty() ? null : anyOf.get(0));
+	}
+
+	/** As {@link #compliantAnswerFor}, but naming {@code oneAlternative} as the case's single OR
+	 *  alternative, so each alternative can be shown to satisfy the case on its own. */
+	private static String compliantAnswerNaming(EvalCase evalCase, String oneAlternative) {
 		StringBuilder sb = new StringBuilder("There are no records in this chart about");
 		for (String expected : expectedContains(evalCase)) {
 			sb.append(' ').append(expected);
+		}
+		if (oneAlternative != null) {
+			sb.append(' ').append(oneAlternative);
 		}
 		return sb.append('.').toString();
 	}

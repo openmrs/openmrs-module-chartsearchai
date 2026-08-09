@@ -29,6 +29,8 @@ public class EvalCase {
 
 	private List<String> expectedAnswerContains;
 
+	private List<String> expectedAnswerContainsAny;
+
 	private List<String> expectedAnswerNotContains;
 
 	private String simulatedLlmResponse;
@@ -77,6 +79,27 @@ public class EvalCase {
 
 	public void setExpectedAnswerContains(List<String> expectedAnswerContains) {
 		this.expectedAnswerContains = expectedAnswerContains;
+	}
+
+	/**
+	 * Alternative names for the one thing the answer must name, of which <b>any one</b> suffices —
+	 * the OR counterpart to {@link #getExpectedAnswerContains()}, whose elements are all required.
+	 *
+	 * <p>Exists because a topic can have more than one correct name that share no substring, so no
+	 * single literal accepts every correct answer and a second AND element only makes it stricter
+	 * (issue #216): asked "Are there any X-ray or radiology reports?", both <i>"No x-ray reports are
+	 * recorded."</i> and <i>"No radiology reports are recorded."</i> name the topic.
+	 *
+	 * <p>An OR element is weaker than an AND element, so a case should carry the narrowest set that
+	 * covers the genuinely-correct wordings. {@code AbsentDataEvalTest} asserts that bound rather
+	 * than trusting it: an answer naming no topic at all must still fail every case.
+	 */
+	public List<String> getExpectedAnswerContainsAny() {
+		return expectedAnswerContainsAny;
+	}
+
+	public void setExpectedAnswerContainsAny(List<String> expectedAnswerContainsAny) {
+		this.expectedAnswerContainsAny = expectedAnswerContainsAny;
 	}
 
 	public List<String> getExpectedAnswerNotContains() {

@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #150 — not shipped data",
+  "description": "A curated entry carrying a WHITESPACE-ONLY alias, the shape issue #150 reports. containsBoundedToken already refuses a token that is empty after the diacritic fold, but a single space is not empty: it is found at every word gap, and the recorded-name rule's two-letter inflection allowance carries the match past the following word's last letters. So the blank alias makes matchesDrugName true for allergen text it has nothing to do with (`Vitamin A, B`), and that entry's contraindication then fires for every patient with any allergy recorded at all. Operator-authored `json` only: the ddinter and atc parsers drop blank aliases as they build them. The second entry is the control — same file, no blank alias, must be untouched.",
+  "entries": [
+    {
+      "id": "warfarin-blank-alias",
+      "name": "Warfarin",
+      "aliases": ["warfarin", " "],
+      "atcCodes": ["B01AA03"],
+      "contraindications": [
+        { "type": "allergy", "token": "warfarin", "note": "documented warfarin allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "gentamicin-control",
+      "name": "Gentamicin",
+      "aliases": ["gentamicin"],
+      "atcCodes": ["J01GB03"],
+      "contraindications": [
+        { "type": "allergy", "token": "gentamicin", "note": "documented gentamicin allergy" }
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

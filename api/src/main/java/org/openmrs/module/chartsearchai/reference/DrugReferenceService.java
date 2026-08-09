@@ -55,9 +55,37 @@ public class DrugReferenceService {
 
 	private static final Logger log = LoggerFactory.getLogger(DrugReferenceService.class);
 
-	private volatile List<DrugReference> entries;
+	/**
+	 * A completed load, published as ONE reference (issue #158).
+	 *
+	 * <p>The entries and the {@link DrugReferenceLoad} describing them used to be two volatile fields
+	 * written in a required order — the status first, so a reader taking the lock-free fast path on the
+	 * entries could not see them without the outcome. That is correct by the Java memory model, and it is
+	 * an invariant nothing enforces: reversing the two writes survives the entire test suite, because the
+	 * window is a single volatile write wide and cannot be hit reliably from a test. The invariant is
+	 * load-bearing for the whole purpose of that status — it exists so that "what is actually loaded"
+	 * cannot be read stale, and a reader seeing populated entries beside a status saying nothing was
+	 * loaded defeats it in exactly the case it was built for.
+	 *
+	 * <p>So the ordering is removed rather than restated in a comment: one final field written once, so
+	 * there is no order to get wrong and no reordering a refactor can introduce. What is left to assert is
+	 * the pairing this carries, which
+	 * {@code DrugReferenceLoadConcurrencyTest.aCompletedLoadIsNeverPublishedWithAStatusThatSaysNothingWasLoaded}
+	 * does.
+	 */
+	private static final class LoadedDataset {
 
-	private volatile DrugReferenceLoad load;
+		private final List<DrugReference> entries;
+
+		private final DrugReferenceLoad load;
+
+		LoadedDataset(List<DrugReference> entries, DrugReferenceLoad load) {
+			this.entries = Collections.unmodifiableList(entries);
+			this.load = load;
+		}
+	}
+
+	private volatile LoadedDataset dataset;
 
 	private volatile List<CrossReactivityGroup> crossReactivityGroups;
 
@@ -67,8 +95,7 @@ public class DrugReferenceService {
 	 * @return all loaded reference entries (never null; empty when nothing could be loaded).
 	 */
 	public List<DrugReference> getAll() {
-		ensureLoaded();
-		return entries;
+		return ensureLoaded().entries;
 	}
 
 	/**
@@ -86,16 +113,14 @@ public class DrugReferenceService {
 	 *         the ones the safety layer would use, and the switch can be flipped after the fact.
 	 */
 	public DrugReferenceLoad getLoadStatus() {
-		DrugReferenceLoad current = load;
+		LoadedDataset current = dataset;
 		if (current != null) {
-			return current;
+			return current.load;
 		}
 		if (!ChartSearchAiUtils.isDrugReferenceEnabled()) {
 			return DrugReferenceLoad.notLoaded();
 		}
-		ensureLoaded();
-		DrugReferenceLoad afterLoad = load;
-		return afterLoad == null ? DrugReferenceLoad.notLoaded() : afterLoad;
+		return ensureLoaded().load;
 	}
 
 	/**
@@ -725,13 +750,19 @@ public class DrugReferenceService {
 		return crossReactivityGroups;
 	}
 
-	private void ensureLoaded() {
-		if (entries != null) {
-			return;
+	/**
+	 * @return the completed load, performing it once however many callers race here — the lock-free fast
+	 *         path is the whole reason the entries and the outcome are published as one reference (see
+	 *         {@link LoadedDataset}).
+	 */
+	private LoadedDataset ensureLoaded() {
+		LoadedDataset current = dataset;
+		if (current != null) {
+			return current;
 		}
 		synchronized (this) {
-			if (entries != null) {
-				return;
+			if (dataset != null) {
+				return dataset;
 			}
 			String configuredFormat = ChartSearchAiUtils.getStringGlobalProperty(
 					ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT,
@@ -742,8 +773,17 @@ public class DrugReferenceService {
 			// One instance, so the origin read below belongs to the load performed here.
 			DrugReferenceSource active = source != null ? source : sourceFor(effectiveFormat);
 			List<DrugReference> loaded = active.load();
+			// The load-time validity check (issues #150, #156, #196, #211): the configuration rules the
+			// resolution ran, plus the content rules, which are applied HERE — once, for every format —
+			// so an operator's file gets the same checks whichever parser read it. A per-load local, never
+			// a field (issue #172).
+			DrugReferenceValidity validity = new DrugReferenceValidity();
+			validity.addAll(active.lastLoadFindings());
+			validity.configuredSourceFormatNotUsed(configuredFormat, effectiveFormat);
+			validity.checkEntries(loaded);
+			validity.logTo(log);
 			DrugReferenceLoad outcome = new DrugReferenceLoad(effectiveFormat, configuredFormat,
-					configuredPath, active.lastLoadOrigin(), loaded.size());
+					configuredPath, active.lastLoadOrigin(), loaded.size(), validity.getFindings());
 			// A configured source that resolved to nothing is reported LOUDLY, naming both global
 			// properties: this used to print at INFO exactly like a successful load, so the whole
 			// drug-safety feature could be off with nothing at default log levels to say so
@@ -762,10 +802,11 @@ public class DrugReferenceService {
 						effectiveFormat, ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
 						outcome.getConfiguredDataFilePath(), outcome.getOrigin());
 			}
-			// `load` before `entries`: the double-checked fast path above keys on `entries`, so a
-			// reader that sees it populated must already be able to see the outcome describing it.
-			load = outcome;
-			entries = Collections.unmodifiableList(loaded);
+			// One write, so the entries and the outcome describing them are published together or not at
+			// all — there is no ordering left to get wrong (issue #158; see LoadedDataset).
+			LoadedDataset completed = new LoadedDataset(loaded, outcome);
+			dataset = completed;
+			return completed;
 		}
 	}
 
@@ -826,8 +867,8 @@ public class DrugReferenceService {
 	 * use are not two views of the same event; production never seeds entries.
 	 */
 	void setEntries(List<DrugReference> entries) {
-		this.entries = entries == null ? Collections.<DrugReference> emptyList()
-				: Collections.unmodifiableList(new ArrayList<DrugReference>(entries));
+		this.dataset = new LoadedDataset(entries == null ? Collections.<DrugReference> emptyList()
+				: new ArrayList<DrugReference>(entries), DrugReferenceLoad.notLoaded());
 		this.crossReactivityGroups = Collections.emptyList();
 	}
 

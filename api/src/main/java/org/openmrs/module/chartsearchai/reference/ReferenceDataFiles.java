@@ -78,17 +78,30 @@ final class ReferenceDataFiles {
 
 		private final String origin;
 
-		private Loaded(List<T> items, String origin) {
+		private final DrugReferenceValidity validity;
+
+		private Loaded(List<T> items, String origin, DrugReferenceValidity validity) {
 			this.items = items;
 			this.origin = origin;
+			this.validity = validity;
 		}
 
-		static <T> Loaded<T> nothing() {
-			return new Loaded<T>(Collections.<T> emptyList(), ORIGIN_NONE);
+		static <T> Loaded<T> nothing(DrugReferenceValidity validity) {
+			return new Loaded<T>(Collections.<T> emptyList(), ORIGIN_NONE, validity);
 		}
 
 		List<T> getItems() {
 			return items;
+		}
+
+		/**
+		 * @return the validity check this load ran — which here means the configuration rules only (see
+		 *         {@link DrugReferenceValidity#configuredDataFileNotRead}), since the content rules need
+		 *         the loaded model rather than a stream and run once for every format in
+		 *         {@link DrugReferenceService}. Never null.
+		 */
+		DrugReferenceValidity getValidity() {
+			return validity;
 		}
 
 		/**
@@ -107,16 +120,21 @@ final class ReferenceDataFiles {
 
 	/**
 	 * @param pathGlobalProperty GP holding the operator path (relative to the app data directory)
+	 * @param declaredDefaultPath the value {@code config.xml} declares as that GP's default, which is what
+	 *        separates an untouched install from an operator naming a file — see
+	 *        {@link DrugReferenceValidity#configuredDataFileNotRead}
 	 * @param classpathDefault absolute classpath resource of the bundled dataset
 	 * @param datasetLabel human label used in log lines (e.g. "drug-reference entries")
 	 * @param parser the dataset's parser
 	 * @return the parsed items from the operator file, else from the bundled dataset, else empty,
-	 *         with the origin that produced them — never null, never an exception
+	 *         with the origin that produced them and the validity check this resolution ran — never
+	 *         null, never an exception
 	 */
-	static <T> Loaded<T> loadWithClasspathFallback(String pathGlobalProperty, String classpathDefault,
-			String datasetLabel, DatasetParser<T> parser) {
+	static <T> Loaded<T> loadWithClasspathFallback(String pathGlobalProperty, String declaredDefaultPath,
+			String classpathDefault, String datasetLabel, DatasetParser<T> parser) {
 		// Fail-safe read returns "" when unset/blank or no context is available -> classpath default.
 		String configuredPath = ChartSearchAiUtils.getStringGlobalProperty(pathGlobalProperty, "");
+		DrugReferenceValidity validity = new DrugReferenceValidity();
 
 		if (!configuredPath.isEmpty()) {
 			try {
@@ -124,7 +142,7 @@ final class ReferenceDataFiles {
 				try (InputStream in = new FileInputStream(new File(resolved))) {
 					List<T> loaded = parser.parse(in);
 					log.info("Loaded {} {} from {}", loaded.size(), datasetLabel, resolved);
-					return new Loaded<T>(loaded, APPDATA_ORIGIN_PREFIX + configuredPath);
+					return new Loaded<T>(loaded, APPDATA_ORIGIN_PREFIX + configuredPath, validity);
 				}
 			}
 			catch (IllegalStateException e) {
@@ -137,19 +155,26 @@ final class ReferenceDataFiles {
 			}
 		}
 
+		// Reaching here at all means the configured file was not what was read, whatever the reason —
+		// which is the one thing the validity rule is about, and it is deliberately asked here rather
+		// than in either catch: an unreadable file, an invalid path and a path that resolves outside the
+		// application data directory are one state to an operator comparing the count with their file.
+		validity.configuredDataFileNotRead(pathGlobalProperty, configuredPath, declaredDefaultPath,
+				CLASSPATH_ORIGIN_PREFIX + classpathDefault);
+
 		try (InputStream in = ReferenceDataFiles.class.getResourceAsStream(classpathDefault)) {
 			if (in == null) {
 				log.warn("Bundled {} dataset {} not found on classpath; running empty",
 						datasetLabel, classpathDefault);
-				return Loaded.nothing();
+				return Loaded.nothing(validity);
 			}
 			List<T> loaded = parser.parse(in);
 			log.info("Loaded {} {} from bundled default {}", loaded.size(), datasetLabel, classpathDefault);
-			return new Loaded<T>(loaded, CLASSPATH_ORIGIN_PREFIX + classpathDefault);
+			return new Loaded<T>(loaded, CLASSPATH_ORIGIN_PREFIX + classpathDefault, validity);
 		}
 		catch (IOException e) {
 			log.error("Failed to parse bundled {} dataset; running empty", datasetLabel, e);
-			return Loaded.nothing();
+			return Loaded.nothing(validity);
 		}
 	}
 }

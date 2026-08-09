@@ -9,7 +9,10 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -57,14 +60,19 @@ public final class DrugReferenceLoad {
 
 	private final int entryCount;
 
+	private final List<DrugReferenceValidity.Finding> findings;
+
 	DrugReferenceLoad(String sourceFormat, String configuredSourceFormat, String configuredDataFilePath,
-			String origin, int entryCount) {
+			String origin, int entryCount, List<DrugReferenceValidity.Finding> findings) {
 		this.loaded = true;
 		this.sourceFormat = sourceFormat;
 		this.configuredSourceFormat = configuredSourceFormat;
 		this.configuredDataFilePath = configuredDataFilePath;
 		this.origin = origin == null ? ReferenceDataFiles.ORIGIN_NONE : origin;
 		this.entryCount = entryCount;
+		this.findings = findings == null ? Collections.<DrugReferenceValidity.Finding> emptyList()
+				: Collections.unmodifiableList(
+						new ArrayList<DrugReferenceValidity.Finding>(findings));
 	}
 
 	private DrugReferenceLoad() {
@@ -74,6 +82,7 @@ public final class DrugReferenceLoad {
 		this.configuredDataFilePath = null;
 		this.origin = null;
 		this.entryCount = 0;
+		this.findings = Collections.emptyList();
 	}
 
 	/** @return the outcome for "no load has happened", which is not a failure — see the class javadoc. */
@@ -148,7 +157,35 @@ public final class DrugReferenceLoad {
 		return entryCount;
 	}
 
-	/** @return this outcome as a JSON-serializable map, for the REST status endpoint. */
+	/**
+	 * @return what the load-time validity check found wrong with this dataset and this configuration, and
+	 *         what the loader did about each — see {@link DrugReferenceValidity}. Empty for a healthy
+	 *         load and for "not loaded at all"; never null.
+	 *
+	 *         <p>Retained here rather than only logged for the reason the rest of this object is
+	 *         (issue #149): the load is lazy, so the most recent WARN may belong to a previous load or a
+	 *         previous process, and after a global-property flip that is exactly the line a verification
+	 *         pass misreads. This describes the dataset the safety layer is using.
+	 *
+	 *         <p>On the wire too, through {@link #toMap()} — the endpoint's whole purpose is to answer
+	 *         "what is actually loaded?" after a lazy load, and a load that dropped an alias, appended a
+	 *         display name or fell back to the bundled file is exactly that question. Retaining these in
+	 *         Java while withholding them from the only channel an operator can reach would make the check
+	 *         visible to tests and invisible to the person it protects. Each finding serializes its
+	 *         {@code rule}, {@code remedy} and {@code occurrences} rather than only a count, because a
+	 *         bare count would recreate at this level the defect issue #149 fixed one level down, where a
+	 *         load of 0 and a load of 2283 logged identically.
+	 */
+	public List<DrugReferenceValidity.Finding> getFindings() {
+		return findings;
+	}
+
+	/**
+	 * @return this outcome as a JSON-serializable map, for the REST status endpoint. Insertion-ordered,
+	 *         and {@code findings} is appended LAST — deliberately, so the existing keys keep the
+	 *         positions the endpoint's frozen key list already pins and that list stays an ordered
+	 *         assertion rather than becoming order-insensitive to accommodate a new field.
+	 */
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new LinkedHashMap<String, Object>();
 		map.put("loaded", loaded);
@@ -158,11 +195,17 @@ public final class DrugReferenceLoad {
 		map.put("configuredSourceFormat", configuredSourceFormat);
 		map.put("configuredDataFilePath", configuredDataFilePath);
 		map.put("origin", origin);
+		List<Map<String, Object>> serialized =
+				new ArrayList<Map<String, Object>>(findings.size());
+		for (DrugReferenceValidity.Finding found : findings) {
+			serialized.add(found.toMap());
+		}
+		map.put("findings", serialized);
 		return map;
 	}
 
 	@Override
 	public String toString() {
-		return toMap().toString();
+		return findings.isEmpty() ? toMap().toString() : toMap() + " findings=" + findings;
 	}
 }

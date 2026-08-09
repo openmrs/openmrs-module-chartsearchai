@@ -358,6 +358,17 @@ public class ChartSearchAiConstants {
 	 *  When absent, the dataset bundled on the module classpath is used. */
 	public static final String GP_DRUG_REFERENCE_DATA_FILE_PATH = "chartsearchai.drugReference.dataFilePath";
 
+	/**
+	 * The value {@code config.xml} declares as this global property's default — a path inside the
+	 * application data directory that the module never creates, so an install that has configured
+	 * nothing falls back to the bundled dataset. Held as a constant because that is the difference
+	 * between an untouched default (fine, and silent) and an operator naming a file that was then not
+	 * read (issue #156, which is loud): see {@code DrugReferenceValidity}. Pinned against
+	 * {@code config.xml} by {@code GlobalPropertyDefaultsTest} — a drift here would silently make every
+	 * install loud or every misconfiguration silent.
+	 */
+	public static final String DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH = "chartsearchai/drug-reference.json";
+
 	/** Selects the drug-reference data adapter: {@code json} (the curated default) or {@code atc}
 	 *  (consume a WHO ATC classification export by pointing dataFilePath at it). See ADR Decision 24. */
 	public static final String GP_DRUG_REFERENCE_SOURCE_FORMAT = "chartsearchai.drugReference.sourceFormat";
@@ -377,6 +388,11 @@ public class ChartSearchAiConstants {
 	 *  the module classpath are used. Closes the ADR Decision 24 cross-branch boundary as data. */
 	public static final String GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH =
 			"chartsearchai.drugReference.crossReactivityGroupsFilePath";
+
+	/** As {@link #DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH}, for the groups dataset: the module never
+	 *  creates this file either, so every untouched install serves the bundled groups. */
+	public static final String DEFAULT_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH =
+			"chartsearchai/cross-reactivity-groups.json";
 
 	/** Patient-driven injection: inject reference entries that match an active order's ATC code. */
 	public static final String GP_DRUG_REFERENCE_INJECT_FROM_ORDERS = "chartsearchai.drugReference.injectFromOrders";

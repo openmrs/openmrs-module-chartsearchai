@@ -443,7 +443,7 @@ public class DrugReference {
 	/** @return {@code name} with any trailing parenthesized qualifier(s) removed, normalized by
 	 *          {@link #normalizeName} — the empty string when the name is blank or is nothing but a
 	 *          qualifier, which keeps the key total. */
-	private static String displayStem(String name) {
+	static String displayStem(String name) {
 		String stem = name == null ? "" : name;
 		String previous;
 		do {

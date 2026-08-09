@@ -50,10 +50,12 @@ import org.openmrs.module.chartsearchai.LogCapture;
  * production code reached through {@link DrugReferenceService#getAll()} and
  * {@link DrugReferenceService#getLoadStatus()}.
  *
- * <p>The remaining unpinned property is the one the ordering comment in
- * {@code DrugReferenceService.ensureLoaded} argues: a reader taking the lock-free fast path sees
- * {@code load} published because it was written before {@code entries}. That window is a single
- * volatile write wide and cannot be hit reliably from a test.
+ * <p>The pairing itself — a populated cache is never accompanied by a status saying nothing was loaded —
+ * used to rest on the ORDER of two volatile writes, which is correct by the Java memory model and
+ * survives any test: the window is a single volatile write wide and cannot be hit reliably from one
+ * (issue #158). Since that issue the two are published through a single immutable holder, so no order
+ * exists to get wrong, and what is left to assert is the pairing the holder carries — which is
+ * {@link #aCompletedLoadIsNeverPublishedWithAStatusThatSaysNothingWasLoaded}.
  */
 public class DrugReferenceLoadConcurrencyTest {
 
@@ -115,6 +117,37 @@ public class DrugReferenceLoadConcurrencyTest {
 			assertTrue(seen.isInert(), "a configured source that yielded nothing is inert");
 			assertEquals(0, seen.getEntryCount());
 		}
+	}
+
+	/**
+	 * Issue #158. The status exists so that "what is actually loaded" cannot be read stale, so the one
+	 * state it must never be in is the one that defeats it: entries in the cache alongside a status
+	 * reporting that nothing was loaded. Asserted for every racing reader, all of which reach the cache
+	 * through the lock-free fast path — the reader the issue is about.
+	 *
+	 * <p>What this can and cannot prove. Publishing the entries and the outcome through one immutable
+	 * holder makes the torn state unreachable BY CONSTRUCTION rather than unlikely, and that is the fix;
+	 * no test can demonstrate the absence of a race whose window is one volatile write wide. What this
+	 * pins is the remaining way to reach the same torn state — pairing a populated cache with the wrong
+	 * outcome as the holder is built — which is a construction error rather than a race, and therefore
+	 * deterministic. Verified by mutation: publishing the holder with
+	 * {@link DrugReferenceLoad#notLoaded()} reddens this and nothing else in the suite.
+	 */
+	@Test
+	public void aCompletedLoadIsNeverPublishedWithAStatusThatSaysNothingWasLoaded() throws Exception {
+		final List<DrugReference> entries = new JsonDrugReferenceSource().load();
+		assertFalse(entries.isEmpty(), "the bundled curated dataset should have loaded");
+		DrugReferenceService service = countingService(new AtomicInteger(), entries);
+
+		for (DrugReferenceLoad seen : raceGetAllThenReadStatus(service)) {
+			assertTrue(seen.isLoaded(),
+					"a reader that can see the entries must see a status describing them, not one saying "
+							+ "nothing was loaded — that state is what the retained status exists to rule out");
+			assertEquals(entries.size(), seen.getEntryCount(),
+					"and it must describe THOSE entries, not a different load's");
+		}
+		assertFalse(service.getAll().isEmpty(), "the entries are in force for the safety layer");
+		assertTrue(service.getLoadStatus().isLoaded());
 	}
 
 	/** A service whose source counts how many times the lazy load actually read the dataset. */

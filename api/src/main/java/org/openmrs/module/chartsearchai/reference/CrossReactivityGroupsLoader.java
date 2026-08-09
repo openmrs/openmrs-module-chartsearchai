@@ -46,10 +46,21 @@ public class CrossReactivityGroupsLoader {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
+	/**
+	 * @return the parsed groups, from the operator file if it could be read and from the bundled default
+	 *         otherwise. Any validity finding the resolution produced is reported here rather than
+	 *         returned, because this dataset has no retained status object to be read from: issue #154's
+	 *         {@code getLoadStatus()} covers the ENTRY dataset only, so the log is the only channel these
+	 *         groups have. That is a gap rather than a design — see issue #156's second case, where the
+	 *         default path naming a file the module never creates was confirmed live.
+	 */
 	public List<CrossReactivityGroup> load() {
-		return ReferenceDataFiles.loadWithClasspathFallback(
-				ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, CLASSPATH_DEFAULT,
-				"cross-reactivity groups", CrossReactivityGroupsLoader::parse).getItems();
+		ReferenceDataFiles.Loaded<CrossReactivityGroup> loaded = ReferenceDataFiles.loadWithClasspathFallback(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH,
+				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, CLASSPATH_DEFAULT,
+				"cross-reactivity groups", CrossReactivityGroupsLoader::parse);
+		loaded.getValidity().logTo(log);
+		return loaded.getItems();
 	}
 
 	/**

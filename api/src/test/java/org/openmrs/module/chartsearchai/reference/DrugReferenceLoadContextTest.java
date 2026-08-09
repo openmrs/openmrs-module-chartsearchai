@@ -261,8 +261,14 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	 * SEPARATELY — this is the divergence {@link DrugReferenceLoad#getSourceFormat()}'s javadoc
 	 * describes, and the only thing that reads the configured value back.
 	 *
-	 * <p>Note what is NOT loud here: this typo happens to point at a dataset the curated parser can
-	 * read, so it loads entries and warns about nothing. The two fields differing is the only signal.
+	 * <p>And it IS loud, since issue #156. This assertion used to require the opposite — that a typo
+	 * still yielding entries needed no WARN, because the two format fields differing was signal enough.
+	 * That ground was the confusion issues #149 and #154 settled: <b>observable is not the same as
+	 * loud.</b> #154 built this status precisely because an operator cannot be expected to poll it, and
+	 * #149 exists because a wrong load reported at INFO is indistinguishable from a right one. The
+	 * property the old assertion protected — that the load is NOT inert, so a typo pointing at a readable
+	 * dataset is not the #149 failure — is still asserted here, on {@code isInert()} and the entry count,
+	 * which is where it belongs; the log level was never what carried it.
 	 */
 	@Test
 	public void loadStatusReportsAMistypedSourceFormatSeparatelyFromTheOneInForce() throws IOException {
@@ -280,9 +286,10 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 							+ "is where that becomes visible rather than silent");
 			assertTrue(status.getEntryCount() > 0, "the curated parser reads the curated dataset");
 			assertFalse(status.isInert(), "it loaded entries, so the safety layer is not inert");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
-					"a typo that still yields entries is NOT loud — the two format fields differing is "
-							+ "the only signal, which is why both are reported. Captured: "
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"the operator named a parser and a different one is in force, which is issue #156 "
+							+ "case 2: a format that matches no adapter must be reported, not left to be "
+							+ "noticed by comparing two fields on a status nobody polls. Captured: "
 							+ capture.describeAll());
 		}
 	}
@@ -376,6 +383,12 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	 * The map the {@code GET /chartsearchai/drugreferencestatus} endpoint serializes. Pinned here
 	 * because it is what an operator (or a source-flip check) actually reads, and because a
 	 * disappearing key would leave that check silently reading {@code null}.
+	 *
+	 * <p>{@code findings} joined the set for the load-time validity check (issues #150/#156/#196/#211):
+	 * the endpoint exists to answer "what is actually loaded?" after a lazy load, and a load that dropped
+	 * an alias, appended a display name or fell back to the bundled file is exactly that question. It is
+	 * appended LAST so every other key keeps its position, which is what lets the endpoint's own
+	 * documented field list stay an ORDERED assertion.
 	 */
 	@Test
 	public void loadStatusSerializesTheFieldsTheStatusEndpointReturns() throws IOException {
@@ -386,7 +399,8 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		Map<String, Object> map = service.getLoadStatus().toMap();
 
 		assertEquals(new LinkedHashSet<String>(Arrays.asList("loaded", "inert", "entryCount",
-				"sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin")),
+				"sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin",
+				"findings")),
 				map.keySet());
 		assertEquals(Boolean.TRUE, map.get("loaded"));
 		assertEquals(Boolean.FALSE, map.get("inert"));

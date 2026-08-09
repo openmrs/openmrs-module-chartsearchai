@@ -1,0 +1,889 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for the load-time validity check on issue #196 \u2014 real shipped rows, unedited. TWO POSITIVES, both on the issue: (1) Pfizer-BioNTech Covid-19 Vaccine carries `Moderna COVID-19 vaccine` among its CIEL names, and Moderna covid-19 vaccine is a row of its own with a different rxnorm_name \u2014 so one entry publishes a rival manufacturer's product as one of its own names (item 8). (2) Trastuzumab emtansine carries `Trastuzumab deruxtecan` among its CIEL names, because all three trastuzumab rows share one CIEL list although they are three DrugBank substances with three ATC codes (item 6) \u2014 this is the reachable half of that defect, and it is what produced the false live label \"The patient has a recorded allergy to Trastuzumab deruxtecan\" for a Kadcyla allergy. TWO CONTROLS that must NOT be reported, each excluded by a different half of the rule: Hydrocortisone butyrate carries `hydrocortisone`, a different DrugBank substance's display name, but its own display stem carries that name, which is what a presentation or an ester legitimately looks like; and Daxibotulinumtoxina carries `botulinum toxin type A`, an unrelated display name, but the substance registry resolves the two rows to ONE substance (issue #164), so nothing is being confused. Trastuzumab itself is a third control for the same reason as the first: it carries `Trastuzumab deruxtecan` too, and its stem is carried BY that name."
+ },
+ "mechanisms": {
+  "7504": {
+   "text": "The administration of inactivated, killed, or otherwise noninfectious vaccines to immunosuppressed patients is generally safe but may be associated with a diminished or suboptimal immunologic response due to antibody inhibition.  Such patients may include those who have recently received or are receiving immunosuppressive agents, antilymphocyte globulins, alkylating agents, antimetabolites, radiation, some antirheumatic agents, high dosages of corticosteroids or adrenocorticotropic agents (e.g., greater than or equal to 2 mg/kg/day or 20 mg/day of prednisone or equivalent for 14 consecutive days or more), or long-term topical or inhaled corticosteroids.",
+   "categories": [
+    "others"
+   ]
+  },
+  "7257": {
+   "text": "The effect of administering different botulinum neurotoxin serotypes concurrently or within several months of one another is unknown.  Excessive weakness may be exacerbated by another administration of botulinum toxin prior to the resolution of the effects of a previously administered botulinum toxin.",
+   "categories": [
+    "others"
+   ]
+  },
+  "1199": {
+   "text": "The administration of inactivated, killed, or otherwise noninfectious vaccines to immunosuppressed patients is generally safe but may be associated with a diminished or suboptimal immunologic response due to antibody inhibition. Such patients may include those who have recently received or are receiving immunosuppressive agents, antilymphocyte globulins, alkylating agents, antimetabolites, radiation, some antirheumatic agents, high dosages of corticosteroids or adrenocorticotropic agents, or long-term topical or inhaled corticosteroids.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1436",
+   "name": "Pfizer-BioNTech Covid-19 Vaccine",
+   "rxcui": "2468231",
+   "rxnorm_name": "SARS-CoV-2 (COVID-19) vaccine, mRNA spike protein",
+   "drugbank_id": null,
+   "atc": [
+    "J07BN01",
+    "J07BN04"
+   ],
+   "ciel": [
+    {
+     "code": "166154",
+     "uuid": "166154AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Moderna COVID-19 vaccine"
+    },
+    {
+     "code": "166155",
+     "uuid": "166155AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine"
+    },
+    {
+     "code": "167039",
+     "uuid": "167039AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine (adolescent)"
+    },
+    {
+     "code": "167040",
+     "uuid": "167040AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine (child)"
+    },
+    {
+     "code": "167041",
+     "uuid": "167041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pfizer-BioNtech COVID-19 vaccine (infant)"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1846",
+   "name": "Trastuzumab",
+   "rxcui": "224905",
+   "rxnorm_name": "trastuzumab",
+   "drugbank_id": "DB00072",
+   "atc": [
+    "L01FD01"
+   ],
+   "ciel": [
+    {
+     "code": "167465",
+     "uuid": "167465AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ado-trastuzumab emtansine"
+    },
+    {
+     "code": "167540",
+     "uuid": "25b266e7-7f18-410f-8901-9a5f70d10cf6",
+     "name": "Trastuzumab deruxtecan"
+    },
+    {
+     "code": "167594",
+     "uuid": "6ef52b19-d312-45ec-aca0-700ac6a93fb8",
+     "name": "Hyaluronidase / pertuzumab / trastuzumab"
+    },
+    {
+     "code": "167630",
+     "uuid": "c8b41df1-fa47-45d4-9c7a-17152aee0c7d",
+     "name": "Trastuzumab-anns"
+    },
+    {
+     "code": "167631",
+     "uuid": "7d2c2d7a-a8ab-4add-997c-b27c2e759bb8",
+     "name": "Trastuzumab-dkst"
+    },
+    {
+     "code": "167632",
+     "uuid": "f67aa10c-a88c-4ff0-8942-85180e0ccb25",
+     "name": "Trastuzumab-dttb"
+    },
+    {
+     "code": "167633",
+     "uuid": "72795adb-ba77-4b7f-8bc9-7dc72e1cebd5",
+     "name": "Trastuzumab-pkrb"
+    },
+    {
+     "code": "167634",
+     "uuid": "c0f15729-00d0-46af-b3d1-a65cfa553c6b",
+     "name": "Trastuzumab-qyyp"
+    },
+    {
+     "code": "167635",
+     "uuid": "adb3e4b4-38a1-4493-b917-0b43da83c912",
+     "name": "Hyaluronidase / trastuzumab"
+    },
+    {
+     "code": "168688",
+     "uuid": "b352fe53-ff84-4ad7-b8e4-c3863e6b3c30",
+     "name": "Pertuzumab / trastuzumab"
+    },
+    {
+     "code": "85300",
+     "uuid": "85300AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trastuzumab"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1847",
+   "name": "Trastuzumab deruxtecan",
+   "rxcui": "2267582",
+   "rxnorm_name": "trastuzumab deruxtecan",
+   "drugbank_id": "DB14962",
+   "atc": [
+    "L01FD04"
+   ],
+   "ciel": [
+    {
+     "code": "167465",
+     "uuid": "167465AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ado-trastuzumab emtansine"
+    },
+    {
+     "code": "167540",
+     "uuid": "25b266e7-7f18-410f-8901-9a5f70d10cf6",
+     "name": "Trastuzumab deruxtecan"
+    },
+    {
+     "code": "167594",
+     "uuid": "6ef52b19-d312-45ec-aca0-700ac6a93fb8",
+     "name": "Hyaluronidase / pertuzumab / trastuzumab"
+    },
+    {
+     "code": "167630",
+     "uuid": "c8b41df1-fa47-45d4-9c7a-17152aee0c7d",
+     "name": "Trastuzumab-anns"
+    },
+    {
+     "code": "167631",
+     "uuid": "7d2c2d7a-a8ab-4add-997c-b27c2e759bb8",
+     "name": "Trastuzumab-dkst"
+    },
+    {
+     "code": "167632",
+     "uuid": "f67aa10c-a88c-4ff0-8942-85180e0ccb25",
+     "name": "Trastuzumab-dttb"
+    },
+    {
+     "code": "167633",
+     "uuid": "72795adb-ba77-4b7f-8bc9-7dc72e1cebd5",
+     "name": "Trastuzumab-pkrb"
+    },
+    {
+     "code": "167634",
+     "uuid": "c0f15729-00d0-46af-b3d1-a65cfa553c6b",
+     "name": "Trastuzumab-qyyp"
+    },
+    {
+     "code": "167635",
+     "uuid": "adb3e4b4-38a1-4493-b917-0b43da83c912",
+     "name": "Hyaluronidase / trastuzumab"
+    },
+    {
+     "code": "168688",
+     "uuid": "b352fe53-ff84-4ad7-b8e4-c3863e6b3c30",
+     "name": "Pertuzumab / trastuzumab"
+    },
+    {
+     "code": "85300",
+     "uuid": "85300AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trastuzumab"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1848",
+   "name": "Trastuzumab emtansine",
+   "rxcui": "1371041",
+   "rxnorm_name": "ado-trastuzumab emtansine",
+   "drugbank_id": "DB05773",
+   "atc": [
+    "L01FD03"
+   ],
+   "ciel": [
+    {
+     "code": "167465",
+     "uuid": "167465AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ado-trastuzumab emtansine"
+    },
+    {
+     "code": "167540",
+     "uuid": "25b266e7-7f18-410f-8901-9a5f70d10cf6",
+     "name": "Trastuzumab deruxtecan"
+    },
+    {
+     "code": "167594",
+     "uuid": "6ef52b19-d312-45ec-aca0-700ac6a93fb8",
+     "name": "Hyaluronidase / pertuzumab / trastuzumab"
+    },
+    {
+     "code": "167630",
+     "uuid": "c8b41df1-fa47-45d4-9c7a-17152aee0c7d",
+     "name": "Trastuzumab-anns"
+    },
+    {
+     "code": "167631",
+     "uuid": "7d2c2d7a-a8ab-4add-997c-b27c2e759bb8",
+     "name": "Trastuzumab-dkst"
+    },
+    {
+     "code": "167632",
+     "uuid": "f67aa10c-a88c-4ff0-8942-85180e0ccb25",
+     "name": "Trastuzumab-dttb"
+    },
+    {
+     "code": "167633",
+     "uuid": "72795adb-ba77-4b7f-8bc9-7dc72e1cebd5",
+     "name": "Trastuzumab-pkrb"
+    },
+    {
+     "code": "167634",
+     "uuid": "c0f15729-00d0-46af-b3d1-a65cfa553c6b",
+     "name": "Trastuzumab-qyyp"
+    },
+    {
+     "code": "167635",
+     "uuid": "adb3e4b4-38a1-4493-b917-0b43da83c912",
+     "name": "Hyaluronidase / trastuzumab"
+    },
+    {
+     "code": "168688",
+     "uuid": "b352fe53-ff84-4ad7-b8e4-c3863e6b3c30",
+     "name": "Pertuzumab / trastuzumab"
+    },
+    {
+     "code": "85300",
+     "uuid": "85300AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trastuzumab"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2019",
+   "name": "Moderna covid-19 vaccine",
+   "rxcui": "2468299",
+   "rxnorm_name": "Moderna COVID-19 Vaccine",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": []
+  },
+  {
+   "id": "DDInter2169",
+   "name": "Daxibotulinumtoxina",
+   "rxcui": "1712",
+   "rxnorm_name": "botulinum toxin type A",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "72303",
+     "uuid": "72303AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum toxin type A"
+    },
+    {
+     "code": "72305",
+     "uuid": "72305AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum type A toxin-haemagglutinin complex"
+    }
+   ]
+  },
+  {
+   "id": "DDInter225",
+   "name": "Botulinum toxin type A",
+   "rxcui": "1712",
+   "rxnorm_name": "botulinum toxin type A",
+   "drugbank_id": "DB00083",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "72303",
+     "uuid": "72303AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum toxin type A"
+    },
+    {
+     "code": "72305",
+     "uuid": "72305AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum type A toxin-haemagglutinin complex"
+    }
+   ]
+  },
+  {
+   "id": "DDInter885",
+   "name": "Hydrocortisone",
+   "rxcui": "5492",
+   "rxnorm_name": "hydrocortisone",
+   "drugbank_id": "DB00741",
+   "atc": [
+    "A01AC03",
+    "A07EA02",
+    "C05AA01",
+    "D07AA02",
+    "D07XA01",
+    "H02AB09",
+    "S01BA02",
+    "S01CB03",
+    "S02BA01"
+   ],
+   "ciel": [
+    {
+     "code": "103309",
+     "uuid": "103309AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetic acid / hydrocortisone"
+    },
+    {
+     "code": "103596",
+     "uuid": "103596AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Antipyrine / hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "103767",
+     "uuid": "103767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / hydrocortisone / neomycin"
+    },
+    {
+     "code": "103768",
+     "uuid": "103768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "103818",
+     "uuid": "103818AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / chloroxylenol / hydrocortisone"
+    },
+    {
+     "code": "103886",
+     "uuid": "103886AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzoyl peroxide / hydrocortisone"
+    },
+    {
+     "code": "104168",
+     "uuid": "104168AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloramphenicol / hydrocortisone"
+    },
+    {
+     "code": "104169",
+     "uuid": "104169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloramphenicol / hydrocortisone / polymyxin B"
+    },
+    {
+     "code": "104170",
+     "uuid": "104170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorcyclizine / hydrocortisone"
+    },
+    {
+     "code": "104201",
+     "uuid": "104201AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroxylenol / hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104244",
+     "uuid": "104244AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / hydrocortisone / pheniramine / pyrilamine"
+    },
+    {
+     "code": "104245",
+     "uuid": "104245AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / hydrocortisone / pyrilamine"
+    },
+    {
+     "code": "104270",
+     "uuid": "104270AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorquinaldol / hydrocortisone"
+    },
+    {
+     "code": "104318",
+     "uuid": "104318AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / hydrocortisone"
+    },
+    {
+     "code": "104334",
+     "uuid": "104334AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / coal tar / hydrocortisone"
+    },
+    {
+     "code": "104337",
+     "uuid": "104337AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / hydrocortisone"
+    },
+    {
+     "code": "104338",
+     "uuid": "104338AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104340",
+     "uuid": "104340AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clotrimazole / hydrocortisone"
+    },
+    {
+     "code": "104388",
+     "uuid": "104388AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Colistin / hydrocortisone / neomycin / thonzonium"
+    },
+    {
+     "code": "104396",
+     "uuid": "104396AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Crotamiton / hydrocortisone"
+    },
+    {
+     "code": "104481",
+     "uuid": "104481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dibucaine / hydrocortisone"
+    },
+    {
+     "code": "104509",
+     "uuid": "104509AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diperodon / hydrocortisone / zinc oxide"
+    },
+    {
+     "code": "104512",
+     "uuid": "104512AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diphenhydramine / hydrocortisone"
+    },
+    {
+     "code": "104563",
+     "uuid": "104563AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Econazole / hydrocortisone"
+    },
+    {
+     "code": "104696",
+     "uuid": "104696AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fusidate / hydrocortisone"
+    },
+    {
+     "code": "104706",
+     "uuid": "104706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gentamicin sulfate (usp) / hydrocortisone"
+    },
+    {
+     "code": "104819",
+     "uuid": "104819AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hexachlorophene / hydrocortisone / menthol"
+    },
+    {
+     "code": "104857",
+     "uuid": "104857AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / iodoquinol"
+    },
+    {
+     "code": "104859",
+     "uuid": "104859AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / lidocaine"
+    },
+    {
+     "code": "104860",
+     "uuid": "104860AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / miconazole"
+    },
+    {
+     "code": "104861",
+     "uuid": "104861AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / neomycin"
+    },
+    {
+     "code": "104862",
+     "uuid": "104862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104863",
+     "uuid": "104863AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / oxytetracycline"
+    },
+    {
+     "code": "104864",
+     "uuid": "104864AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / polymyxin B"
+    },
+    {
+     "code": "104865",
+     "uuid": "104865AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104866",
+     "uuid": "104866AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sodium thiosulfate"
+    },
+    {
+     "code": "104867",
+     "uuid": "104867AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sulfur"
+    },
+    {
+     "code": "104868",
+     "uuid": "104868AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / sulfur / zinc oxide"
+    },
+    {
+     "code": "165454",
+     "uuid": "165454AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminium subacetate / hydrocortisone acetate / lidocaine / zinc oxide"
+    },
+    {
+     "code": "73950",
+     "uuid": "73950AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cortisol succinate"
+    },
+    {
+     "code": "77714",
+     "uuid": "77714AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone"
+    },
+    {
+     "code": "77716",
+     "uuid": "77716AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone 17-butyrate 21-propionate"
+    },
+    {
+     "code": "77718",
+     "uuid": "77718AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone aceponate"
+    },
+    {
+     "code": "77719",
+     "uuid": "77719AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone acetate"
+    },
+    {
+     "code": "77720",
+     "uuid": "77720AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone butyrate"
+    },
+    {
+     "code": "77721",
+     "uuid": "77721AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone cypionate"
+    },
+    {
+     "code": "77724",
+     "uuid": "77724AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone sodium phosphate"
+    },
+    {
+     "code": "77725",
+     "uuid": "77725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone sodium succinate"
+    },
+    {
+     "code": "77726",
+     "uuid": "77726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone valerate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter888",
+   "name": "Hydrocortisone butyrate",
+   "rxcui": "5492",
+   "rxnorm_name": "hydrocortisone",
+   "drugbank_id": "DB14540",
+   "atc": [
+    "A01AC03",
+    "A07EA02",
+    "C05AA01",
+    "D07AA02",
+    "D07XA01",
+    "H02AB09",
+    "S01BA02",
+    "S01CB03",
+    "S02BA01"
+   ],
+   "ciel": [
+    {
+     "code": "103309",
+     "uuid": "103309AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetic acid / hydrocortisone"
+    },
+    {
+     "code": "103596",
+     "uuid": "103596AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Antipyrine / hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "103767",
+     "uuid": "103767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / hydrocortisone / neomycin"
+    },
+    {
+     "code": "103768",
+     "uuid": "103768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "103818",
+     "uuid": "103818AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / chloroxylenol / hydrocortisone"
+    },
+    {
+     "code": "103886",
+     "uuid": "103886AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzoyl peroxide / hydrocortisone"
+    },
+    {
+     "code": "104168",
+     "uuid": "104168AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloramphenicol / hydrocortisone"
+    },
+    {
+     "code": "104169",
+     "uuid": "104169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloramphenicol / hydrocortisone / polymyxin B"
+    },
+    {
+     "code": "104170",
+     "uuid": "104170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorcyclizine / hydrocortisone"
+    },
+    {
+     "code": "104201",
+     "uuid": "104201AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroxylenol / hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104244",
+     "uuid": "104244AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / hydrocortisone / pheniramine / pyrilamine"
+    },
+    {
+     "code": "104245",
+     "uuid": "104245AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorpheniramine / hydrocortisone / pyrilamine"
+    },
+    {
+     "code": "104270",
+     "uuid": "104270AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorquinaldol / hydrocortisone"
+    },
+    {
+     "code": "104318",
+     "uuid": "104318AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / hydrocortisone"
+    },
+    {
+     "code": "104334",
+     "uuid": "104334AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / coal tar / hydrocortisone"
+    },
+    {
+     "code": "104337",
+     "uuid": "104337AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / hydrocortisone"
+    },
+    {
+     "code": "104338",
+     "uuid": "104338AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clioquinol / hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104340",
+     "uuid": "104340AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clotrimazole / hydrocortisone"
+    },
+    {
+     "code": "104388",
+     "uuid": "104388AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Colistin / hydrocortisone / neomycin / thonzonium"
+    },
+    {
+     "code": "104396",
+     "uuid": "104396AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Crotamiton / hydrocortisone"
+    },
+    {
+     "code": "104481",
+     "uuid": "104481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dibucaine / hydrocortisone"
+    },
+    {
+     "code": "104509",
+     "uuid": "104509AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diperodon / hydrocortisone / zinc oxide"
+    },
+    {
+     "code": "104512",
+     "uuid": "104512AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Diphenhydramine / hydrocortisone"
+    },
+    {
+     "code": "104563",
+     "uuid": "104563AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Econazole / hydrocortisone"
+    },
+    {
+     "code": "104696",
+     "uuid": "104696AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fusidate / hydrocortisone"
+    },
+    {
+     "code": "104706",
+     "uuid": "104706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gentamicin sulfate (usp) / hydrocortisone"
+    },
+    {
+     "code": "104819",
+     "uuid": "104819AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hexachlorophene / hydrocortisone / menthol"
+    },
+    {
+     "code": "104857",
+     "uuid": "104857AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / iodoquinol"
+    },
+    {
+     "code": "104859",
+     "uuid": "104859AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / lidocaine"
+    },
+    {
+     "code": "104860",
+     "uuid": "104860AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / miconazole"
+    },
+    {
+     "code": "104861",
+     "uuid": "104861AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / neomycin"
+    },
+    {
+     "code": "104862",
+     "uuid": "104862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104863",
+     "uuid": "104863AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / oxytetracycline"
+    },
+    {
+     "code": "104864",
+     "uuid": "104864AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / polymyxin B"
+    },
+    {
+     "code": "104865",
+     "uuid": "104865AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / pramoxine"
+    },
+    {
+     "code": "104866",
+     "uuid": "104866AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sodium thiosulfate"
+    },
+    {
+     "code": "104867",
+     "uuid": "104867AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / salicylic acid / sulfur"
+    },
+    {
+     "code": "104868",
+     "uuid": "104868AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / sulfur / zinc oxide"
+    },
+    {
+     "code": "165454",
+     "uuid": "165454AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminium subacetate / hydrocortisone acetate / lidocaine / zinc oxide"
+    },
+    {
+     "code": "73950",
+     "uuid": "73950AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cortisol succinate"
+    },
+    {
+     "code": "77714",
+     "uuid": "77714AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone"
+    },
+    {
+     "code": "77716",
+     "uuid": "77716AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone 17-butyrate 21-propionate"
+    },
+    {
+     "code": "77718",
+     "uuid": "77718AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone aceponate"
+    },
+    {
+     "code": "77719",
+     "uuid": "77719AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone acetate"
+    },
+    {
+     "code": "77720",
+     "uuid": "77720AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone butyrate"
+    },
+    {
+     "code": "77721",
+     "uuid": "77721AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone cypionate"
+    },
+    {
+     "code": "77724",
+     "uuid": "77724AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone sodium phosphate"
+    },
+    {
+     "code": "77725",
+     "uuid": "77725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone sodium succinate"
+    },
+    {
+     "code": "77726",
+     "uuid": "77726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone valerate"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1436",
+   "DDInter1846",
+   "Moderate",
+   "1199"
+  ],
+  [
+   "DDInter1436",
+   "DDInter1847",
+   "Moderate",
+   "1199"
+  ],
+  [
+   "DDInter1436",
+   "DDInter885",
+   "Moderate",
+   "1199"
+  ],
+  [
+   "DDInter1846",
+   "DDInter2019",
+   "Moderate",
+   "7504"
+  ],
+  [
+   "DDInter2019",
+   "DDInter885",
+   "Moderate",
+   "7504"
+  ],
+  [
+   "DDInter2169",
+   "DDInter225",
+   "Moderate",
+   "7257"
+  ],
+  [
+   "DDInter225",
+   "DDInter225",
+   "Moderate",
+   "7257"
+  ]
+ ]
+}

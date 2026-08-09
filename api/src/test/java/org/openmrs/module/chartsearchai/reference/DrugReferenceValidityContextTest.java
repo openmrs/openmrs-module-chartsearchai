@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
@@ -410,18 +411,23 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 * parser; where that parser can read it the load looks healthy and the operator believes a format is
 	 * in force that is not.
 	 *
-	 * <p>Recorded as a finding rather than logged at WARN, and that is not the remedy #156 proposes.
-	 * {@code DrugReferenceLoadContextTest.loadStatusReportsAMistypedSourceFormatSeparatelyFromTheOneInForce}
-	 * asserts this case must NOT be loud; that assertion predates #156 and #156 overturns it, so the
-	 * decision belongs to the maintainer rather than to this change, and the test is left as it stands.
-	 * The finding is what makes the case first-class in the meantime: one place lists everything wrong
-	 * with the load, whatever each rule's log level.
+	 * <p>Loud, and on the wire. Both channels, because they answer different questions: the log says it
+	 * once at the moment it happened, and the status answers it afterwards — which is the question a lazy
+	 * load makes a log line unable to answer (#149). This case is where that distinction was settled:
+	 * reporting the configured and effective formats separately made the mistake OBSERVABLE, and #156
+	 * asked for it to be LOUD, which is not the same thing.
 	 */
 	@Test
-	public void aMistypedSourceFormatIsRecordedAsAFindingEvenWhereItIsNotLoud() throws IOException {
+	public void aMistypedSourceFormatIsReportedLoudlyAndOnTheWire() throws IOException {
 		DrugReferenceService service = loading(SUBSTANCE_DECLARED_FIXTURE, "h156-typo.json", "jsonn");
 
-		DrugReferenceLoad status = service.getLoadStatus();
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"the operator named a parser and a different one is in force. Captured: "
+							+ capture.describeAll());
+		}
 
 		assertEquals(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT,
 				status.getSourceFormat(), "the curated parser is what actually ran");
@@ -429,10 +435,34 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		DrugReferenceValidity.Finding found = finding(status,
 				DrugReferenceValidity.CONFIGURED_SOURCE_FORMAT_NOT_USED);
 		assertEquals(DrugReferenceValidity.Remedy.REPORTED, found.getRemedy());
-		assertFalse(found.isLoud(),
-				"the one rule that is deliberately not loud, and the javadoc says whose decision that is");
 		assertTrue(found.getDetail().contains("jsonn"),
 				"the finding quotes the configured value, typo and all. Detail was: " + found.getDetail());
+
+		// The serialized form an operator reads. A bare count here would recreate at this level the defect
+		// issue #149 fixed one level down — a load of 0 and a load of 2283 logging identically — so each
+		// finding has to carry which rule fired and what the loader did about it.
+		Object serialized = status.toMap().get("findings");
+		assertEquals("[{rule=configured-source-format-not-used, remedy=reported, occurrences=1}]",
+				serialized == null ? "null" : keyedSummary(status),
+				"the status must carry the rule, the remedy and the count for every finding");
+		assertTrue(String.valueOf(serialized).contains("jsonn"),
+				"and the detail, which is what names the value to fix. Was: " + serialized);
+	}
+
+	/** @return the findings as {@code rule/remedy/occurrences} triples, detail omitted, so the wire
+	 *          contract can be asserted without pinning prose. */
+	private static String keyedSummary(DrugReferenceLoad status) {
+		List<String> shown = new ArrayList<String>();
+		for (Map<String, Object> found : serializedFindings(status)) {
+			shown.add("{rule=" + found.get("rule") + ", remedy=" + found.get("remedy")
+					+ ", occurrences=" + found.get("occurrences") + "}");
+		}
+		return shown.toString();
+	}
+
+	@SuppressWarnings("unchecked")
+	private static List<Map<String, Object>> serializedFindings(DrugReferenceLoad status) {
+		return (List<Map<String, Object>>) status.toMap().get("findings");
 	}
 
 	/**

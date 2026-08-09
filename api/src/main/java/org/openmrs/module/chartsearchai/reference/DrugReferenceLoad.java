@@ -167,18 +167,25 @@ public final class DrugReferenceLoad {
 	 *         previous process, and after a global-property flip that is exactly the line a verification
 	 *         pass misreads. This describes the dataset the safety layer is using.
 	 *
-	 *         <p>Deliberately NOT in {@link #toMap()}, and so not on the wire.
-	 *         {@code DrugReferenceLoadContextTest.loadStatusSerializesTheFieldsTheStatusEndpointReturns}
-	 *         and {@code ChartSearchAiDrugReferenceStatusTest}'s {@code DOCUMENTED_FIELDS} both assert
-	 *         the endpoint's key set EXACTLY, so adding a key means changing an expected value in two
-	 *         tests, which is a maintainer's call rather than this change's. Adding
-	 *         {@code map.put("findings", …)} below is the whole change when that call is made.
+	 *         <p>On the wire too, through {@link #toMap()} — the endpoint's whole purpose is to answer
+	 *         "what is actually loaded?" after a lazy load, and a load that dropped an alias, appended a
+	 *         display name or fell back to the bundled file is exactly that question. Retaining these in
+	 *         Java while withholding them from the only channel an operator can reach would make the check
+	 *         visible to tests and invisible to the person it protects. Each finding serializes its
+	 *         {@code rule}, {@code remedy} and {@code occurrences} rather than only a count, because a
+	 *         bare count would recreate at this level the defect issue #149 fixed one level down, where a
+	 *         load of 0 and a load of 2283 logged identically.
 	 */
 	public List<DrugReferenceValidity.Finding> getFindings() {
 		return findings;
 	}
 
-	/** @return this outcome as a JSON-serializable map, for the REST status endpoint. */
+	/**
+	 * @return this outcome as a JSON-serializable map, for the REST status endpoint. Insertion-ordered,
+	 *         and {@code findings} is appended LAST — deliberately, so the existing keys keep the
+	 *         positions the endpoint's frozen key list already pins and that list stays an ordered
+	 *         assertion rather than becoming order-insensitive to accommodate a new field.
+	 */
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new LinkedHashMap<String, Object>();
 		map.put("loaded", loaded);
@@ -188,6 +195,12 @@ public final class DrugReferenceLoad {
 		map.put("configuredSourceFormat", configuredSourceFormat);
 		map.put("configuredDataFilePath", configuredDataFilePath);
 		map.put("origin", origin);
+		List<Map<String, Object>> serialized =
+				new ArrayList<Map<String, Object>>(findings.size());
+		for (DrugReferenceValidity.Finding found : findings) {
+			serialized.add(found.toMap());
+		}
+		map.put("findings", serialized);
 		return map;
 	}
 

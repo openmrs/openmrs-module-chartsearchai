@@ -53,13 +53,21 @@ import org.slf4j.Logger;
  * path ({@link ReferenceDataFiles}), and refusing a dataset over a content defect would turn a
  * misconfiguration into an inert safety layer — the exact state issue #149's WARN exists to flag.
  *
- * <p><b>Loudness is per rule too</b> ({@link Finding#isLoud()}), for one reason and one exception. The
- * reason: an untouched default must stay silent. {@code dataFilePath} and
- * {@code crossReactivityGroupsFilePath} both default to paths inside the application data directory that
- * the module never creates, so every install that has configured nothing falls back — a rule that warned
- * on every fallback would fire on every install and be filtered within a week, which is worse than
- * silence because it trains people to ignore the channel. The exception is recorded on
- * {@link #CONFIGURED_SOURCE_FORMAT_NOT_USED}.
+ * <p><b>Every finding is loud, and silence is the absence of a finding rather than a muted one.</b> That
+ * distinction is what keeps the channel usable. An untouched default must stay silent: {@code dataFilePath}
+ * and {@code crossReactivityGroupsFilePath} both default to paths inside the application data directory
+ * that the module never creates, so every install that has configured nothing falls back, and a rule that
+ * warned on every fallback would fire on every install and be filtered within a week — worse than silence,
+ * because it trains people to ignore the channel. So {@link #configuredDataFileNotRead} returns without
+ * reporting anything there. What it does NOT do is report a finding and then keep it out of the log: a
+ * finding that exists is one the operator needs, and "visible on the status but not in the log" is the
+ * confusion issues #149 and #154 settled — see {@link #CONFIGURED_SOURCE_FORMAT_NOT_USED}, which used to
+ * be the exception.
+ *
+ * <p>Both channels carry every finding, for the same reason: the log says it once, at the moment it
+ * happened, and {@link DrugReferenceLoad#getFindings()} — including over
+ * {@code GET /chartsearchai/drugreferencestatus} — answers it afterwards, which is the question a lazy
+ * load makes a log line unable to answer.
  *
  * <p>An instance is a per-load collector, created where the load happens and discarded with it — never a
  * field, and never shared between loads (issue #172's rule for anything cached around this data). Not
@@ -90,15 +98,14 @@ public final class DrugReferenceValidity {
 	 * An explicitly configured {@code sourceFormat} matching no adapter, so a different parser is in
 	 * force — issue #156, case 2.
 	 *
-	 * <p><b>The one rule that is deliberately not loud, and not because it does not deserve to be.</b>
-	 * {@code DrugReferenceLoadContextTest.loadStatusReportsAMistypedSourceFormatSeparatelyFromTheOneInForce}
-	 * asserts that this case must NOT be reported at WARN, on the ground that the two format fields
-	 * differing is signal enough. Issue #156 overturns that ground — it asks for "the operator named
-	 * something specific and we did not use it" to be a first-class warning in BOTH its cases — so the
-	 * two disagree, and which of them holds is a maintainer's decision rather than this check's. The
-	 * assertion is therefore left exactly as it stands and this rule stays quiet in the log; recording it
-	 * as a finding is what makes the case first-class in the meantime. Making it loud is a one-line
-	 * change here.
+	 * <p>Loud, like every rule here, and the reason it is worth stating is that it used not to be. An
+	 * assertion in {@code DrugReferenceLoadContextTest} held that this case needed no WARN because the
+	 * status reports the configured and effective formats separately, so the difference was already
+	 * visible. That ground is the confusion issues #149 and #154 settled: <b>observable is not the same
+	 * as loud.</b> #154 built the status endpoint precisely because an operator cannot be expected to
+	 * poll it, and #149 exists because a wrong load logged at INFO is indistinguishable from a right
+	 * one. A mistyped format hands a DDInter file to the curated parser and the operator is told
+	 * nothing, which is the shape #156 was filed about.
 	 */
 	public static final String CONFIGURED_SOURCE_FORMAT_NOT_USED = "configured-source-format-not-used";
 
@@ -129,16 +136,13 @@ public final class DrugReferenceValidity {
 
 		private final Remedy remedy;
 
-		private final boolean loud;
-
 		private final int occurrences;
 
 		private final String detail;
 
-		private Finding(String rule, Remedy remedy, boolean loud, int occurrences, String detail) {
+		private Finding(String rule, Remedy remedy, int occurrences, String detail) {
 			this.rule = rule;
 			this.remedy = remedy;
-			this.loud = loud;
 			this.occurrences = occurrences;
 			this.detail = detail;
 		}
@@ -151,12 +155,6 @@ public final class DrugReferenceValidity {
 		/** @return what the loader did about it. */
 		public Remedy getRemedy() {
 			return remedy;
-		}
-
-		/** @return whether the loader reports this at WARN. See {@link #CONFIGURED_SOURCE_FORMAT_NOT_USED}
-		 *          for the only rule that is false. */
-		public boolean isLoud() {
-			return loud;
 		}
 
 		/** @return how many times the rule fired in this load. */
@@ -195,8 +193,8 @@ public final class DrugReferenceValidity {
 
 	private final List<Finding> findings = new ArrayList<Finding>();
 
-	private void report(String rule, Remedy remedy, boolean loud, int occurrences, String detail) {
-		findings.add(new Finding(rule, remedy, loud, occurrences, detail));
+	private void report(String rule, Remedy remedy, int occurrences, String detail) {
+		findings.add(new Finding(rule, remedy, occurrences, detail));
 	}
 
 	/** @return every rule that fired in this load, in the order the loader applied them; never null. */
@@ -214,16 +212,14 @@ public final class DrugReferenceValidity {
 	}
 
 	/**
-	 * Reports every loud finding at WARN, one line each. Owned here so the two loads that run these rules
+	 * Reports every finding at WARN, one line each. Owned here so the two loads that run these rules
 	 * — the entry dataset through {@link DrugReferenceService} and the cross-reactivity groups through
 	 * {@link CrossReactivityGroupsLoader}, which has no status object to be read from — cannot come to
 	 * report them differently.
 	 */
 	void logTo(Logger log) {
 		for (Finding found : findings) {
-			if (found.isLoud()) {
-				log.warn("Drug-reference data validity — {}", found);
-			}
+			log.warn("Drug-reference data validity — {}", found);
 		}
 	}
 
@@ -247,22 +243,24 @@ public final class DrugReferenceValidity {
 		if (configured == null || configured.trim().isEmpty() || configured.equals(declaredDefault)) {
 			return;
 		}
-		report(CONFIGURED_DATA_FILE_NOT_READ, Remedy.REPORTED, true, 1,
+		report(CONFIGURED_DATA_FILE_NOT_READ, Remedy.REPORTED, 1,
 				globalProperty + " names '" + configured + "', which could not be read, so '" + origin
 						+ "' is in force instead. The entry count is therefore a count of a dataset "
 						+ "nobody configured, and looks healthy.");
 	}
 
 	/**
-	 * Issue #156, case 2: the parser the operator named was not the one used. See
-	 * {@link #CONFIGURED_SOURCE_FORMAT_NOT_USED} for why this one is not loud.
+	 * Issue #156, case 2: the parser the operator named was not the one used — see
+	 * {@link #CONFIGURED_SOURCE_FORMAT_NOT_USED}. Quiet on the same terms as the file rule: an unset or
+	 * correctly-spelled format overrode nothing, and {@code atc}/{@code ddinter} are matched
+	 * case-insensitively exactly as {@code DrugReferenceService.effectiveFormat} matches them.
 	 */
 	void configuredSourceFormatNotUsed(String configured, String effective) {
 		if (configured == null || configured.trim().isEmpty()
 				|| configured.equalsIgnoreCase(effective)) {
 			return;
 		}
-		report(CONFIGURED_SOURCE_FORMAT_NOT_USED, Remedy.REPORTED, false, 1,
+		report(CONFIGURED_SOURCE_FORMAT_NOT_USED, Remedy.REPORTED, 1,
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT + " is '" + configured
 						+ "', which matches no adapter, so the '" + effective
 						+ "' parser is in force instead.");
@@ -370,14 +368,14 @@ public final class DrugReferenceValidity {
 			}
 		}
 		if (blanks > 0) {
-			report(BLANK_ALIAS, Remedy.DROPPED, true, blanks,
+			report(BLANK_ALIAS, Remedy.DROPPED, blanks,
 					blanks + " alias(es) naming nothing (blank, or nothing but combining marks) were "
 							+ "dropped: such a token matches at a word boundary in text it has nothing to "
 							+ "do with, so the entry's rules would fire for a patient with an unrelated "
 							+ "allergy. Entries: " + sample(blankIn));
 		}
 		if (unnamed > 0) {
-			report(ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES, Remedy.REPAIRED, true, unnamed,
+			report(ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES, Remedy.REPAIRED, unnamed,
 					unnamed + " entr(ies) whose aliases omitted their own name were given it, so the "
 							+ "strongest claimant on a name is always among the entries that name "
 							+ "matches. Entries: " + sample(unnamedIn));
@@ -479,7 +477,7 @@ public final class DrugReferenceValidity {
 			}
 		}
 		if (atRisk > 0) {
-			report(RULES_WITHOUT_A_SUBSTANCE_IDENTITY, Remedy.REPORTED, true, atRisk,
+			report(RULES_WITHOUT_A_SUBSTANCE_IDENTITY, Remedy.REPORTED, atRisk,
 					atRisk + " rule-bearing entr(ies) share a published name with another entry while "
 							+ "declaring no substanceName, so each is its own substance and only the "
 							+ "strongest claimant on that name is put in play — the others' rules are "
@@ -563,7 +561,7 @@ public final class DrugReferenceValidity {
 			}
 		}
 		if (collisions > 0) {
-			report(ALIAS_NAMES_ANOTHER_SUBSTANCE, Remedy.REPORTED, true, collisions,
+			report(ALIAS_NAMES_ANOTHER_SUBSTANCE, Remedy.REPORTED, collisions,
 					collisions + " published name(s) denote a DIFFERENT substance in this dataset, so a "
 							+ "question or a chart string carrying one resolves the wrong drug. The data "
 							+ "is left as loaded — the fix is in the dataset. " + sample(details));

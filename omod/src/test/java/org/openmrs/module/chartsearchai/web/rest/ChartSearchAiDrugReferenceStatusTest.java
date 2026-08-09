@@ -48,9 +48,19 @@ import org.springframework.http.ResponseEntity;
  */
 public class ChartSearchAiDrugReferenceStatusTest {
 
-	/** Every key the endpoint documents, in the order it serializes them. */
+	/**
+	 * Every key the endpoint documents, in the order it serializes them.
+	 *
+	 * <p>{@code findings} is last, and joined this list for the load-time validity check (issues
+	 * #150/#156/#196/#211). It belongs on the wire for the same reason the rest of this response does:
+	 * the endpoint answers "what is actually loaded?" after a lazy load, and "what was wrong with it, and
+	 * what did the loader do about it?" is that same question — retained in Java and withheld here, the
+	 * check would be visible to tests and invisible to the operator it protects. Appending rather than
+	 * inserting is what keeps this an ORDERED assertion instead of an order-insensitive one.
+	 */
 	private static final List<String> DOCUMENTED_FIELDS = Arrays.asList("enabled", "loaded", "inert",
-			"entryCount", "sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin");
+			"entryCount", "sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin",
+			"findings");
 
 	private AdministrationService priorAdministrationService;
 

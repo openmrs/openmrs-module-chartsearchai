@@ -1486,7 +1486,7 @@ Support MedCPT as an alternative to L6-v2 via the `chartsearchai.embedding.query
 
 Each model has its own eval baseline (`enriched-retrieval-eval.json` for L6-v2, `medcpt-retrieval-eval.json` for MedCPT) and pre-computed embedding caches committed to git for fast test runs.
 
-> Both baseline files were **deleted** in #179. Their tests (`EnrichedRetrievalEvalTest`, `RetrievalQualityEvalTest`) went with the rest of the in-process stack in #51, leaving 185 KB of relevance judgments and pinned ranked lists that nothing loaded — and retrieval-quality evaluation belongs to querystore now, so they could not be revived here either. `api/src/test/resources/embedding-cache/` still carries the vectors they were paired with, also unread by any code.
+> Both baseline files were **deleted** in #179. Their tests (`EnrichedRetrievalEvalTest`, `RetrievalQualityEvalTest`) went with the rest of the in-process stack in #51, leaving 185 KB of relevance judgments and pinned ranked lists that nothing loaded — and retrieval-quality evaluation belongs to querystore now, so they could not be revived here either. The vectors they were paired with (`api/src/test/resources/embedding-cache/`, 794 files / 6,555,996 B) were deleted in **#204** for the same reason: nothing read them, and cached embedding vectors in the test resources of a module that must not have an embedding pipeline are an invitation to rebuild one. No figure in this decision rests on them — they were a speed optimisation for a harness that no longer exists, and the numbers above came from that harness's runs.
 
 ### ONNX external data workaround
 

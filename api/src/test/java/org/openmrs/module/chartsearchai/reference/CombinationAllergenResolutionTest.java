@@ -66,7 +66,8 @@ public class CombinationAllergenResolutionTest {
 	 *  shape the gate on the split has to refuse. */
 	private static final String BENZOCAINE_CLOVE = "benzocaine / clove oil";
 
-	/** A SALT name a third entry claims only by containment — the equal-claimant leg's floor. */
+	/** A SALT name a third entry claims only by containment — what the equal-claimant leg must not
+	 *  admit. */
 	private static final String KETOROLAC_SALT = "ketorolac tromethamine";
 
 	private static DrugReference row(List<DrugReference> entries, String name) {
@@ -280,14 +281,13 @@ public class CombinationAllergenResolutionTest {
 	@Test
 	public void anEntryClaimingTheRecordedNameOnlyByContainmentIsNotAnImpliedSubstance()
 			throws IOException {
-		// The equal-claimant leg's FLOOR, and the one decision in this file whose failure is a chip that
-		// is WRONG rather than a chip that is missing. The leg admits an entry making the same strongest
-		// claim only when that claim is a NAME claim; lowering it by one rank — the natural "be as
-		// generous as the constituent gate" move — admits every entry whose alias merely occurs inside
-		// the recorded string, which is exactly what issue #192 established is a false claim on a name.
-		// Here that is Tromethamine, the buffer ketorolac is salted with. Over the shipped KB the same
-		// relaxation reaches an oral contraceptive's allergy to Fluoroestradiol f-18 and a povidone-iodine
-		// allergy to Iodide I-131; re-derive with findImpliedSubstances before quoting a count.
+		// The equal-claimant leg's own condition, and the one case in this file whose failure is a chip
+		// that is WRONG rather than one that is missing. The leg admits an entry only when it makes the
+		// SAME claim as the strongest, so an entry the recorded string merely CONTAINS is not an implied
+		// substance — issue #192's rule applied to the leg rather than to the resolution. Here that is
+		// Tromethamine, the buffer ketorolac is salted with. Relaxing the condition to "any match" fails
+		// this case and several others across the resolution tests (measured by mutation), so it is well
+		// held; what this case adds is the salt shape, which is how such a name reaches a chart.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
 		DrugReference ketorolac = row(entries, "Ketorolac");
 		DrugReference tromethamine = row(entries, "Tromethamine");

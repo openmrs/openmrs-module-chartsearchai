@@ -540,10 +540,11 @@ public class LlmProviderTest {
 
 	@Test
 	public void extractResponse_shouldReadNumericStringCitationsAsIndices() {
-		// Issue #219. response_format: json_object constrains the response to JSON, not its value
-		// types, so a model may write its citation indices as strings. A strict isInt() check read
-		// this array as empty and said nothing: an answer whose references the model got right
-		// arrived with none whenever its prose did not also anchor them inline.
+		// Issue #219. The module asks for a json_schema whose citation items are integers, but the
+		// SERVER enforces that, not this parser — so a model may still write its indices as strings.
+		// A strict isInt() check read this array as empty and said nothing: an answer whose
+		// references the model got right arrived with none whenever its prose did not anchor them
+		// inline as well.
 		String response = "{\"answer\": \"CD4 counts are 988.0 [9] and 1191.0 [10].\", "
 				+ "\"citations\": [\"9\", \"10\"]}";
 		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);

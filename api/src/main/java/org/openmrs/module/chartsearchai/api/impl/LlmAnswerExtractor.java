@@ -212,8 +212,8 @@ final class LlmAnswerExtractor {
 	 * ignore it. So {@code "citations": ["9","10"]} is a shape this parser can be handed, and a
 	 * strict {@code isInt()} check dropped it in SILENCE — an answer whose references the model got
 	 * right arrived with none, visible only when the prose did not also anchor them inline. The
-	 * regex salvage path below already concedes the same point about truncation, which is the same
-	 * class of event: a response that does not honour the schema.
+	 * regex salvage path in {@link #extractResponse(String)} already concedes the same point about
+	 * truncation, which is the same class of event: a response that does not honour the schema.
 	 *
 	 * <p><b>Why coerce rather than reject the response.</b> {@code "9"} has exactly one reading, so
 	 * there is nothing to guess — unlike the bracketed groups {@code normalizeSlashCitations} leaves
@@ -226,8 +226,9 @@ final class LlmAnswerExtractor {
 	 * accepted AND reported, not one or the other.
 	 *
 	 * <p><b>The bound.</b> This widens which JSON TYPES name an index, never which VALUES do:
-	 * {@code 0}, {@code -1} and {@code 99} parse here exactly as they did as integers and are still
-	 * dropped downstream for having no record. A non-integral number is not accepted either —
+	 * {@code 0}, {@code -1} and an index past the end of the chart parse here exactly as they did as
+	 * integers, and are still filtered by the one place that knows which records exist. A
+	 * non-integral number is not accepted either —
 	 * {@code 9.7} would have to be truncated to mean anything, and silently truncating is the
 	 * failure mode this change exists to remove, so it is reported as unusable instead. Nothing here
 	 * touches PROSE: {@code ChartSearchAiUtils.INLINE_CITATION} stays single-index, and an

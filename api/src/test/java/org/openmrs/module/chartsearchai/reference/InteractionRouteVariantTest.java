@@ -192,8 +192,13 @@ public class InteractionRouteVariantTest {
 		// kanamycin — so their two chips carry byte-identical notes. A key made of reference-data identity
 		// alone merges them, and a dedup on rendered text would too; they are two substances, exactly as
 		// enalapril and enalaprilat are (issue #121).
-		List<SafetyWarning> warnings = validator().validate("", "Is it safe to give esomeprazole?",
-				DrugReferenceTestSupport.ctx(60, null,
+		//
+		// The question NAMES BOTH, since issue #209. It used to name only esomeprazole and rely on that one
+		// word putting both in play, which is the over-admission #209 removed — so the vehicle changed and
+		// the property did not. It is now the stronger vehicle: each row is admitted by its own display
+		// name, so this case can no longer be satisfied by a name denoting a substance it is not.
+		List<SafetyWarning> warnings = validator().validate("",
+				"Is it safe to give omeprazole or esomeprazole?", DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Kanamycin 500mg"), null, null, null));
 
 		assertEquals(2, warnings.size(),

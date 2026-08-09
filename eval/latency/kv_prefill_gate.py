@@ -230,6 +230,10 @@ def main():
             # The count is READ now. 0 means this patient had no on-disk KV to remove, so the
             # "cold" arm is only as cold as the RAM pool happens to be — not a cold full
             # prefill, and its delta is not the number this script claims to report.
+            # A backstop, not the primary check: require_cold_cache_dir() already refused above
+            # if any patient lacked a .bin. This catches the gap between that check and here —
+            # an LRU eviction or a concurrent run — and prints the count either way, so a zero
+            # is visible in the table rather than inferred. Keep both.
             deleted = delete_kv(uuid)
             if deleted == 0:
                 not_cold.append(name)

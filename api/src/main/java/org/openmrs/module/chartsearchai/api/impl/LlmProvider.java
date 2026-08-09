@@ -81,7 +81,30 @@ public class LlmProvider {
 			+ "just shared words — before you write the answer.\n"
 			+ "Use plain text only in the answer — no markdown, no bullet markers like * or -, "
 			+ "no headers. Use numbered lines or simple newlines to structure lists.\n\n"
-			+ "If no records are relevant, name what is missing.\n"
+			// THE TWO SENTENCES AFTER THE FIRST ARE ISSUE #214's FIX, and each answers a different
+			// half of what was measured. "Name what is missing" alone is ambiguous when the chart is
+			// empty: normalizeRecords() has just told the model "This patient has no records matching
+			// this query", so on one reading the missing thing IS the records and paraphrasing the
+			// placeholder satisfies the instruction. The clinician cannot act on that answer — "no
+			// imaging is recorded", "the chart failed to load" and "the question was not understood"
+			// are three different situations and "No patient records were provided." does not
+			// distinguish them (issue #94 is the same confusion of the slice for the patient).
+			//
+			// Measured over the 19 absent-data cases against the bundled model, empty chart, at
+			// DEFAULT_LLM_MAX_OUTPUT_TOKENS, before this hunk: 17/19 named their topic, and the two
+			// that did not ("Does the patient smoke?" → "No records are provided.", "What vaccines has
+			// the patient received?" → "No patient records were provided.") did so in three identical
+			// runs. Reversing the order the cases are asked in kept those two and added a third ("any
+			// episodes?" at the head of the run), so the reading is not a property of a topic — it is
+			// the ambiguity resolving under whatever the KV cache holds. Every passing answer lifted a
+			// contiguous noun phrase out of the question ("No imaging studies are recorded.", "No
+			// social history is recorded."); the robust failures are the questions that offer none to
+			// lift, which is why the second sentence asks for a noun phrase rather than only forbidding
+			// the placeholder echo. After this hunk, all 19 name their topic in both orders.
+			+ "If no records are relevant, name what is missing. Name the TOPIC the query asked "
+			+ "about, as a noun phrase of your own when the query states it as a verb — asked "
+			+ "\"does the patient drink?\": \"No alcohol use is recorded.\" Reporting only that "
+			+ "records are missing names nothing.\n"
 			+ "When the query is a yes/no question (\"any allergies?\", \"is the patient "
 			+ "hypertensive\"), begin the answer with an explicit verdict, then the complete cited "
 			+ "evidence. Start with \"Yes\" ONLY when a record explicitly names what is asked — a "

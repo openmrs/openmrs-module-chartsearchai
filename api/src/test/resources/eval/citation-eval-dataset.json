@@ -191,7 +191,7 @@
       "question": "What medications is the patient on?",
       "simulatedLlmResponse": "{\"answer\": \"Azithromycin [1] [2].\", \"citations\": [1, 2,]}",
       "expectedRecordIndices": [1, 2],
-      "tags": ["citation", "malformed", "trailing-comma"]
+      "tags": ["citation", "trailing-comma"]
     },
     {
       "id": "citation-inline-markers-missing-from-array",

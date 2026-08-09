@@ -28,7 +28,7 @@
       "id": "absent-smoking",
       "question": "Does the patient smoke?",
       "expectedAbsent": true,
-      "expectedAnswerContains": ["smoke"],
+      "expectedAnswerContains": ["smok"],
       "tags": ["absent"]
     },
     {

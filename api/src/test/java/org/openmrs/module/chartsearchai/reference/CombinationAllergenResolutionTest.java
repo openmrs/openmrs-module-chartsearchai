@@ -70,16 +70,6 @@ public class CombinationAllergenResolutionTest {
 	 *  admit. */
 	private static final String KETOROLAC_SALT = "ketorolac tromethamine";
 
-	private static DrugReference row(List<DrugReference> entries, String name) {
-		for (DrugReference entry : entries) {
-			if (name.equals(entry.getName())) {
-				return entry;
-			}
-		}
-		throw new AssertionError("the fixture must carry the " + name + " row, was: "
-				+ DrugReferenceTestSupport.names(entries));
-	}
-
 	private static List<SafetyWarning> warningsFor(String question, String allergy) throws IOException {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
 				.validate("", question, DrugReferenceTestSupport.ctx(60, null, null, null,
@@ -92,8 +82,8 @@ public class CombinationAllergenResolutionTest {
 		// the equal-claim tie below — the ranking is working exactly as issue #192 defined it, and the
 		// constituent it drops is dropped correctly and still has to be checked.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
-		DrugReference sulfamethoxazole = row(entries, "Sulfamethoxazole");
-		DrugReference trimethoprim = row(entries, "Trimethoprim");
+		DrugReference sulfamethoxazole = DrugReferenceTestSupport.row(entries, "Sulfamethoxazole");
+		DrugReference trimethoprim = DrugReferenceTestSupport.row(entries, "Trimethoprim");
 		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, trimethoprim.nameMatchStrength(COTRIMOXAZOLE),
 				"precondition: the combination must be one of Trimethoprim's own names");
 		assertEquals(DrugReference.NAME_TOKEN_INSIDE_A_NAME,
@@ -158,11 +148,13 @@ public class CombinationAllergenResolutionTest {
 		// The other half of the population, and the one a rank cannot decide at all: both constituents
 		// publish the combination among their own names, so the tie is broken by dataset order.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
-		DrugReference abacavir = row(entries, "Abacavir");
-		DrugReference lamivudine = row(entries, "Lamivudine");
-		DrugReference zidovudine = row(entries, "Zidovudine");
-		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, abacavir.nameMatchStrength(ABACAVIR_LAMIVUDINE));
-		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, lamivudine.nameMatchStrength(ABACAVIR_LAMIVUDINE));
+		DrugReference abacavir = DrugReferenceTestSupport.row(entries, "Abacavir");
+		DrugReference lamivudine = DrugReferenceTestSupport.row(entries, "Lamivudine");
+		DrugReference zidovudine = DrugReferenceTestSupport.row(entries, "Zidovudine");
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, abacavir.nameMatchStrength(ABACAVIR_LAMIVUDINE),
+				"precondition: the combination must be one of Abacavir's own names");
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, lamivudine.nameMatchStrength(ABACAVIR_LAMIVUDINE),
+				"precondition: and one of Lamivudine's, at the same rank — so no rank can decide between them");
 		assertTrue(entries.indexOf(abacavir) < entries.indexOf(lamivudine),
 				"precondition: the slice must keep KB order, so the tie resolves to Abacavir");
 		assertFalse(zidovudine.matchesDrugName(ABACAVIR_LAMIVUDINE),
@@ -170,7 +162,8 @@ public class CombinationAllergenResolutionTest {
 		assertEquals(abacavir.atcSubgroups(), zidovudine.atcSubgroups(),
 				"precondition: while sharing an ATC subgroup with both constituents, so it is related to "
 						+ "the recorded allergy twice over");
-		assertEquals(lamivudine.atcSubgroups(), zidovudine.atcSubgroups());
+		assertEquals(lamivudine.atcSubgroups(), zidovudine.atcSubgroups(),
+				"precondition: with the OTHER constituent too, so the subject is related to both");
 	}
 
 	@Test
@@ -207,13 +200,14 @@ public class CombinationAllergenResolutionTest {
 		// constituent leg (which reads a separator) nor the moiety leg (which reads a trailing
 		// qualifier) can see either ingredient. Only the equal-claimant leg reaches them.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
-		DrugReference amoxicillin = row(entries, "Amoxicillin");
-		DrugReference clavulanate = row(entries, "Clavulanic acid");
+		DrugReference amoxicillin = DrugReferenceTestSupport.row(entries, "Amoxicillin");
+		DrugReference clavulanate = DrugReferenceTestSupport.row(entries, "Clavulanic acid");
 		assertTrue(DrugReference.combinationConstituents(CO_AMOXICLAV).isEmpty(),
 				"precondition: the name must carry no combination separator");
 		assertNull(DrugReference.parentMoietyName(CO_AMOXICLAV),
 				"precondition: nor a trailing qualifier");
-		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, amoxicillin.nameMatchStrength(CO_AMOXICLAV));
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, amoxicillin.nameMatchStrength(CO_AMOXICLAV),
+				"precondition: the combination must be one of Amoxicillin's own names");
 		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, clavulanate.nameMatchStrength(CO_AMOXICLAV),
 				"precondition: both ingredients must claim it equally, at the alias rank");
 		assertTrue(entries.indexOf(clavulanate) < entries.indexOf(amoxicillin),
@@ -265,10 +259,10 @@ public class CombinationAllergenResolutionTest {
 		// PresentationMoietyAllergenTest's Peanut oil / Peanut bound, arriving through the constituent
 		// leg instead of the moiety leg.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
-		DrugReference clove = row(entries, "Clove");
+		DrugReference clove = DrugReferenceTestSupport.row(entries, "Clove");
 		assertEquals(DrugReference.NAME_TOKEN_INSIDE_A_NAME, clove.nameMatchStrength("clove oil"),
 				"precondition: the row must reach the constituent by containment and no more");
-		assertNotEquals(clove.substanceKey(), row(entries, "Benzocaine (topical)").substanceKey(),
+		assertNotEquals(clove.substanceKey(), DrugReferenceTestSupport.row(entries, "Benzocaine (topical)").substanceKey(),
 				"precondition: and be a different substance from the constituent that does resolve");
 
 		assertEquals(0, warningsFor("Is it safe to give clove?", BENZOCAINE_CLOVE).size(),
@@ -289,8 +283,8 @@ public class CombinationAllergenResolutionTest {
 		// this case and several others across the resolution tests (measured by mutation), so it is well
 		// held; what this case adds is the salt shape, which is how such a name reaches a chart.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
-		DrugReference ketorolac = row(entries, "Ketorolac");
-		DrugReference tromethamine = row(entries, "Tromethamine");
+		DrugReference ketorolac = DrugReferenceTestSupport.row(entries, "Ketorolac");
+		DrugReference tromethamine = DrugReferenceTestSupport.row(entries, "Tromethamine");
 		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, ketorolac.nameMatchStrength(KETOROLAC_SALT),
 				"precondition: the salt must be one of Ketorolac's own names");
 		assertEquals(DrugReference.NAME_TOKEN_INSIDE_A_NAME,

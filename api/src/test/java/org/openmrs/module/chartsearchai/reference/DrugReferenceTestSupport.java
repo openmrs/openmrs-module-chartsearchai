@@ -346,6 +346,24 @@ public final class DrugReferenceTestSupport {
 		return service;
 	}
 
+	/**
+	 * @return the parsed entry whose own {@code name} is {@code name}, failing with the whole slice's
+	 *         names when it is absent — the "reach into a fixture slice for one row" arrangement, which
+	 *         is fixture-independent and so belongs here rather than being re-opened per file (the same
+	 *         rule CLAUDE.md states for {@code TestDatasetHelper}). Selecting by {@code getName()} and
+	 *         not through a resolver on purpose: every caller is stating a PREMISE about which row the
+	 *         slice carries, and resolving it would make the premise depend on the very ranking the
+	 *         case is about.
+	 */
+	static DrugReference row(List<DrugReference> entries, String name) {
+		for (DrugReference entry : entries) {
+			if (name.equals(entry.getName())) {
+				return entry;
+			}
+		}
+		throw new AssertionError("the fixture must carry the " + name + " row, was: " + names(entries));
+	}
+
 	/** @return the entries' own {@code name}s. {@link DrugReference} defines no {@code toString}, so a
 	 *          failure message built from the list itself prints identity hashes. */
 	static List<String> names(List<DrugReference> entries) {

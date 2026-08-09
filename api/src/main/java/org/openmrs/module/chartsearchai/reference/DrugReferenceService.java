@@ -285,9 +285,9 @@ public class DrugReferenceService {
 	 * qualifier on a combination name switches the wider legs off instead of composing with them:
 	 * {@code abacavir / lamivudine (oral)} is no entry's name, so the claim on it drops to the
 	 * containment rank and the equal-claimant leg is skipped, and the constituent it splits into is
-	 * {@code lamivudine (oral)}, which is no entry's name either. The set collapses to what
-	 * {@link #lookupByToken} alone would answer — which is what the arm had before all of this, so it is
-	 * a shape not reached rather than one made worse. No published name in the shipped KB loses a
+	 * {@code lamivudine (oral)}, which is no entry's name either — so that name implies one substance
+	 * where the unqualified spelling implies two. Never fewer than the arm had before all of this, so it
+	 * is a shape not reached rather than one made worse. No published name in the shipped KB loses a
 	 * substance this way (measured through this method; re-derive rather than trusting it), so it
 	 * reaches production through a free-text allergen and not through the reference data.
 	 *

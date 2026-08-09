@@ -2459,11 +2459,20 @@ public class DrugSafetyValidator {
 	 *         {@link #addAllergyContraindications}, resolved once per {@code validate} because it does
 	 *         not depend on the subject being checked.
 	 *
-	 *         <p>De-duplicated on the whole resolved SET rather than on one row of it: two tokens that
-	 *         name the same substances are one recorded allergy however they are spelled (this is the
-	 *         {@code seenAllergens} guard that used to live inside the arm), while two tokens whose sets
-	 *         merely OVERLAP are two records and are left to the ledger, which collapses them exactly
-	 *         when they reach the same substance by the same relationship.
+	 *         <p>De-duplicated on the whole resolved LIST rather than on one row of it — this is the
+	 *         {@code seenAllergens} guard that used to live inside the arm, widened because one row is
+	 *         no longer the answer. Two tokens whose lists merely OVERLAP are two records and are left
+	 *         to the ledger, which collapses them exactly when they reach the same substance by the
+	 *         same relationship.
+	 *
+	 *         <p>The list, not the set: {@link List#equals} is ordered, so two tokens naming the same
+	 *         substances in a different ORDER survive as two records where the old row-keyed guard
+	 *         collapsed them. That is a gap rather than a decision — see the PR discussion — and it is
+	 *         not reachable from the reference data: no two published names resolving to one row
+	 *         produce the same substances in a different order (measured through
+	 *         {@link DrugReferenceService#findImpliedSubstances}; re-derive rather than trusting it).
+	 *         A free-text allergen can, and the ledger then collapses the identity chip but not
+	 *         necessarily the class one.
 	 */
 	private List<List<DrugReference>> recordedAllergens(PatientClinicalContext context) {
 		if (context == null) {

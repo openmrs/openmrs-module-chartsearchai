@@ -55,16 +55,6 @@ public class PresentationMoietyAllergenTest {
 
 	private static final String FIXTURE = DrugReferenceTestSupport.DDI_PRESENTATION_MOIETY;
 
-	private static DrugReference row(List<DrugReference> entries, String name) {
-		for (DrugReference entry : entries) {
-			if (name.equals(entry.getName())) {
-				return entry;
-			}
-		}
-		throw new AssertionError("the fixture must carry the " + name + " row, was: "
-				+ DrugReferenceTestSupport.names(entries));
-	}
-
 	private static List<SafetyWarning> warningsFor(String question, String allergy) throws IOException {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
 				.validate("", question, DrugReferenceTestSupport.ctx(60, null, null, null,
@@ -90,8 +80,8 @@ public class PresentationMoietyAllergenTest {
 	@Test
 	public void theFixtureReallyCarriesAPresentationFiledApartFromItsMoiety() throws IOException {
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
-		DrugReference lispro = row(entries, "Insulin lispro");
-		DrugReference protamine = row(entries, "Insulin lispro (protamine)");
+		DrugReference lispro = DrugReferenceTestSupport.row(entries, "Insulin lispro");
+		DrugReference protamine = DrugReferenceTestSupport.row(entries, "Insulin lispro (protamine)");
 		assertEquals(DrugReference.NAME_IS_THE_DISPLAY_NAME,
 				protamine.nameMatchStrength("Insulin lispro (protamine)"),
 				"precondition: the presentation must be CALLED the recorded string, so issue #192's rank "
@@ -127,9 +117,9 @@ public class PresentationMoietyAllergenTest {
 		// identity comparison can produce a chip at all — issue #135's population, reached through a
 		// presentation rather than through a misresolution.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
-		DrugReference iron = row(entries, "Iron");
-		DrugReference bisglycinate = row(entries, "Iron (bisglycinate)");
-		DrugReference polysaccharide = row(entries, "Iron (polysaccharide)");
+		DrugReference iron = DrugReferenceTestSupport.row(entries, "Iron");
+		DrugReference bisglycinate = DrugReferenceTestSupport.row(entries, "Iron (bisglycinate)");
+		DrugReference polysaccharide = DrugReferenceTestSupport.row(entries, "Iron (polysaccharide)");
 		assertTrue(iron.atcSubgroups().isEmpty() && bisglycinate.atcSubgroups().isEmpty()
 				&& polysaccharide.atcSubgroups().isEmpty(),
 				"precondition: none of the three may carry an ATC subgroup");
@@ -160,8 +150,8 @@ public class PresentationMoietyAllergenTest {
 		// an immunocompromised patient may have the vaccine at all, so merging them on the stem alone
 		// would be wrong. Same shape, same answer, for the two manganese salts.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
-		DrugReference recombinant = row(entries, "Varicella Zoster Vaccine (Recombinant)");
-		DrugReference live = row(entries, "Varicella zoster vaccine (live/attenuated)");
+		DrugReference recombinant = DrugReferenceTestSupport.row(entries, "Varicella Zoster Vaccine (Recombinant)");
+		DrugReference live = DrugReferenceTestSupport.row(entries, "Varicella zoster vaccine (live/attenuated)");
 		assertNotEquals(recombinant.substanceKey(), live.substanceKey(),
 				"precondition: the KB files the two presentations as different substances");
 		assertFalse(someRowIsCalled(entries, "varicella zoster vaccine"),
@@ -184,8 +174,8 @@ public class PresentationMoietyAllergenTest {
 		// leg withholds it: a chip taking it would have to be named after the high-molecular-weight
 		// presentation, reporting an allergy to a preparation the chart does not record.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
-		DrugReference high = row(entries, "Dextran (high molecular weight)");
-		DrugReference low = row(entries, "Dextran (low molecular weight)");
+		DrugReference high = DrugReferenceTestSupport.row(entries, "Dextran (high molecular weight)");
+		DrugReference low = DrugReferenceTestSupport.row(entries, "Dextran (low molecular weight)");
 		assertTrue(high.isNamed("dextran"),
 				"precondition: the bare moiety must be one of the high-MW row's own names");
 		assertFalse(someRowIsCalled(entries, "dextran"),
@@ -204,7 +194,7 @@ public class PresentationMoietyAllergenTest {
 		// Digoxin — a patient allergic to digoxin's ANTIDOTE, which issue #192 measured and separated —
 		// so a rule that reached it by stripping a trailing word would undo that fix.
 		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
-		assertNotEquals(row(entries, "Peanut").substanceKey(), row(entries, "Peanut oil").substanceKey(),
+		assertNotEquals(DrugReferenceTestSupport.row(entries, "Peanut").substanceKey(), DrugReferenceTestSupport.row(entries, "Peanut oil").substanceKey(),
 				"precondition: the KB files the two as different drugbank substances");
 
 		assertEquals(0, warningsFor("Is it safe to give peanut?", "Peanut oil").size(),

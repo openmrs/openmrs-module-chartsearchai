@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * Which SUBSTANCES a recorded string puts in play — issue #209.
@@ -248,16 +249,24 @@ public class SubstanceCandidateSetTest {
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
 		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
 
-		List<?> references = DrugReferenceTestSupport.injectedReferences(injector.injectRecords(
-				DrugReferenceTestSupport.oneRecordChart(),
-				DrugReferenceTestSupport.ctx(60, null, null, null,
-						DrugReferenceTestSupport.set("Dexamethasone"), null),
-				"Is hydrocortisone safe for her?"));
+		List<RecordMapping> references = DrugReferenceTestSupport
+				.injectedReferences(injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Dexamethasone"), null),
+						"Is hydrocortisone safe for her?"));
 
-		assertEquals(1, references.size(),
+		// On the TEXT, not on the mappings: RecordMapping defines no toString, so a containment assertion
+		// over the list itself reads identity hashes and can never fail.
+		List<String> texts = new ArrayList<String>();
+		for (RecordMapping reference : references) {
+			texts.add(reference.getText());
+		}
+		assertEquals(1, texts.size(),
 				"one question word is one reference record, not one per substance sharing an alias, was: "
-						+ references);
-		assertFalse(references.toString().contains("Hydrocortisone butyrate"), "was: " + references);
+						+ texts);
+		assertTrue(texts.get(0).startsWith("Drug reference — Hydrocortisone "),
+				"and it is the substance the question named, was: " + texts.get(0));
+		assertFalse(texts.toString().contains("Hydrocortisone butyrate"), "was: " + texts);
 	}
 
 	private static List<String> details(List<SafetyWarning> warnings) {

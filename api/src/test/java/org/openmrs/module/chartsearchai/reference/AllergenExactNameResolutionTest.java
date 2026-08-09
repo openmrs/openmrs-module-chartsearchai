@@ -266,7 +266,7 @@ public class AllergenExactNameResolutionTest {
 	public void twoEntriesMakingTheSameStrongestClaimResolveToTheEarliestOfThem() throws IOException {
 		// The residual bound, and the reason the scan takes a STRICTLY stronger claim: where two entries
 		// claim one name equally the earliest keeps the role, which is the answer every one of those names
-		// already had. Not a corner — of the 7452 name strings the shipped KB publishes, 1367 are claimed
+		// already had. Not a corner — of the 5169 distinct normalized names the shipped KB publishes, 1367 are claimed
 		// equally by two or more entries at the strongest rank they reach, all of them at the alias rank
 		// (0 at the display-name rank, since no shipped entry's display name is filed twice; measured
 		// 2026-08-08 through nameMatchStrength). 1125 of the 1367 are '/'-joined combination names, each

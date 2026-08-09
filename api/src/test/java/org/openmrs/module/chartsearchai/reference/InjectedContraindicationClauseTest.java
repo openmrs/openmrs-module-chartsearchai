@@ -27,6 +27,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@code (substance, type, token)}, so the injected record and the chip beside it disagreed about how
  * many contraindications the entry has.
  *
+ * <p>The two surfaces do not count the same POPULATION and are not being made to: the record renders
+ * every rule the entry publishes (a record is reference material about the drug) while the chip renders
+ * the subset the patient's own chart matches. What they must agree on is the collapse UNIT, which is
+ * what one rule authored twice exposes.
+ *
  * <p>Curated-source-only by construction: the {@code ddinter} and {@code atc} sources publish no
  * contraindications at all (see {@link DdiDrugReferenceSource}'s class javadoc), so only an
  * operator-authored file can file one rule twice. The bundled seed does not — its four ibuprofen rows
@@ -113,8 +118,14 @@ public class InjectedContraindicationClauseTest {
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, QUESTION);
 		RecordMapping record = DrugReferenceTestSupport.injectedReferences(chart).get(0);
 
+		assertEquals(1, contraindicationClauses(record).size(),
+				"one rule authored twice is ONE clause, as it is one chip, was: " + record.getText());
+		// Equal here because this entry's only rule is one the patient matches. The two surfaces do NOT
+		// count the same population in general — the record renders every rule the entry publishes while
+		// the chip renders the subset the chart matches — so what #190 item 1 is about is the collapse
+		// UNIT, which is now the same on both sides.
 		assertEquals(chips.size(), contraindicationClauses(record).size(),
-				"the record must count contraindications as the chips do, was: " + record.getText());
+				"so the two surfaces agree for this entry, was: " + record.getText());
 	}
 
 	@Test

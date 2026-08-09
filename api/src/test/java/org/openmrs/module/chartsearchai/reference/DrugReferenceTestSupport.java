@@ -229,14 +229,23 @@ public final class DrugReferenceTestSupport {
 	 * is what leaves the active-order screening arm as the only arm that can chip, so an assertion
 	 * about that arm cannot be satisfied by a question-driven one.
 	 *
-	 * <p>Owned here for the same reason {@link #REFERENCE_LOGGER} is, and with the consequence issue
-	 * #153 names: it was copy-pasted into ten test files, and which arm it reaches is decided by
-	 * {@link org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter#isInteractionScreening}, so a
-	 * change to that classifier could move SOME copies onto a different arm while the rest kept
-	 * passing — and nothing would point at the divergence. One string, one verdict.
-	 * {@code DrugSafetyInteractionScreeningTest.theSharedScreeningQuestionIsStillClassifiedAsScreening}
-	 * asserts that verdict in CI, so the reclassification fails loudly in one place instead of
-	 * scattering.
+	 * <p>Owned here for the same reason {@link #REFERENCE_LOGGER} is, and for the consequence issue #153
+	 * names: it was copy-pasted into ten test files (six when the issue was filed), and which arm it
+	 * reaches is decided by
+	 * {@link org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter#isInteractionScreening}, so an
+	 * edit to ONE copy could move that file onto a different arm while the rest kept passing.
+	 *
+	 * <p>How big that risk actually was, measured on {@code ae09928} rather than asserted. Nine of the
+	 * ten copies were reworded one file at a time to "any medication conflicts with her current
+	 * medications?" — a paraphrase the classifier deliberately does not match, since "conflict" carries
+	 * an everyday non-drug sense — and that file's suite re-run. <b>Eight of the nine went red;
+	 * {@code DuplicateInteractionChipTest} stayed GREEN</b>, because its assertion is satisfied by a chip
+	 * the drug-in-play arm also raises. ({@code ActiveOrderAtcContextTest}, the tenth, was not measured —
+	 * it is context-sensitive and slow.) So the divergence the issue names is real but narrow, and what
+	 * removes it is not an assertion: it is that there is no longer a per-file copy to edit. The
+	 * screening-classification case in {@code DrugSafetyInteractionScreeningTest} covers the remaining
+	 * direction — a change to the classifier itself, which moves all ten at once — and makes that failure
+	 * name its cause in one place rather than arriving as eight files' worth of chip-count mismatches.
 	 *
 	 * <p>The pronoun is NOT load-bearing and one string therefore serves every patient's test: the
 	 * classifier reads an {@code interact*} cue and its own MEDICATIONS classification, neither of

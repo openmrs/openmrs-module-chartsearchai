@@ -44,6 +44,17 @@ final class LlmEndpointTestSupport {
 	/** Where a locally-run llama-server listens by default; every suite may override it by property. */
 	static final String DEFAULT_ENDPOINT = "http://localhost:18085/v1/chat/completions";
 
+	/**
+	 * How long one completion may take. The two earlier copies of this client each said 120s, which is
+	 * below what this module's own answers cost: a full chart at the production output ceiling
+	 * ({@code DEFAULT_LLM_MAX_OUTPUT_TOKENS}) is minutes of decoding on a local engine, and a cold start
+	 * is worse. Measured on the bundled Gemma over a 150-record chart: single answers past 1400 decoded
+	 * tokens at ~22 tokens/s, i.e. over a minute of generation alone before prefill. A timeout that fires
+	 * mid-generation surfaces as an ERRORED case, which reads like a defect in the answer rather than in
+	 * the clock.
+	 */
+	private static final Duration COMPLETION_TIMEOUT = Duration.ofSeconds(300);
+
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private LlmEndpointTestSupport() {
@@ -110,7 +121,7 @@ final class LlmEndpointTestSupport {
 		HttpResponse<String> response = HttpClient.newHttpClient().send(
 				HttpRequest.newBuilder()
 						.uri(URI.create(endpoint))
-						.timeout(Duration.ofSeconds(120))
+						.timeout(COMPLETION_TIMEOUT)
 						.header("Content-Type", "application/json")
 						.POST(HttpRequest.BodyPublishers.ofString(
 								MAPPER.writeValueAsString(root), StandardCharsets.UTF_8))

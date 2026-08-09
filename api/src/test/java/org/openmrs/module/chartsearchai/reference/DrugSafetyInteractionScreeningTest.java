@@ -96,13 +96,17 @@ public class DrugSafetyInteractionScreeningTest {
 
 	@Test
 	public void theSharedScreeningQuestionIsStillClassifiedAsScreening() {
-		// Issue #153's named consequence, asserted where it can fail. The string above is shared by ten
-		// test files, and which arm it reaches is decided by isInteractionScreening — so a change to that
-		// classifier decides whether ten files are testing the screening arm or something else. Every one
-		// of those files asserts a chip, and a chip can also come from the drug-in-play arm, so a
-		// reclassification does not necessarily turn any of them red: it can leave them green while they
-		// have stopped exercising the arm they are named for. Asked of the production predicate directly,
-		// so the reclassification fails HERE, once, naming itself.
+		// Issue #153, asserted where it can fail. The string above is shared by ten test files, and which
+		// arm it reaches is decided by isInteractionScreening — so a change to that classifier decides
+		// whether ten files are testing the screening arm or something else.
+		//
+		// What this adds over what those ten files already give, measured rather than assumed: rewording
+		// nine of the ten copies one file at a time (see DrugReferenceTestSupport.SCREENING_QUESTION for
+		// the exact mutation and why the tenth was not measured) turned eight of the nine red, so the
+		// condition was NOT unprotected. Two things it adds. It names the cause — eight files failing on
+		// chip counts do not say "the classifier changed" — and it covers the one file that stayed GREEN,
+		// DuplicateInteractionChipTest, whose assertion the drug-in-play arm satisfies too. Asked of the
+		// production predicate directly, so there is no chip count in between.
 		assertTrue(QueryScopeRouter.isInteractionScreening(DrugReferenceTestSupport.SCREENING_QUESTION),
 				"the shared screening question must still be classified as interaction screening, or the "
 						+ "ten files that use it are no longer testing the screening arm: "

@@ -27,8 +27,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.eval.EvalCase;
 import org.openmrs.module.chartsearchai.eval.EvalDataset;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,9 +51,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>How it is split now, and why.</b> Naming an absent topic requires a real answer, and a real
  * answer requires the LLM — there is no deterministic path in this module that writes "no records of
- * cancer"; the module's part is to put the empty-records placeholder and the question in front of the
- * model, and the model writes the sentence. Retrieval's part — that an absent topic retrieves nothing
- * — belongs to openmrs-module-querystore (issue #51) and is not assertable here at all. So:
+ * cancer"; the module's part is to put the chart and the question in front of the model, and the model
+ * writes the sentence. Retrieval's part — which records an absent-topic query retrieves — belongs to
+ * openmrs-module-querystore (issue #51) and is not assertable here at all. So:
  *
  * <ul>
  *   <li>{@link #absentTopicAnswerNamesWhatWasAskedAbout} runs all 19 absent cases against a real
@@ -61,9 +63,9 @@ import org.slf4j.LoggerFactory;
  *   <li>{@link #everyAbsentCaseIsRunAndEveryExpectationDiscriminates} runs unconditionally and is the
  *       guard against this defect recurring: it proves no absent case is filtered out of the run, and
  *       proves every single expectation of every case is one the assertion above would FAIL on. The
- *       same role {@code LlmAnswerQualityTest.promptVariations_shouldEachDifferFromTheBaselineAndFrom
- *       EachOther} plays for that suite — "the instrument has to assert it did something", and it has
- *       to do so in CI, where the LLM is not available.</li>
+ *       same role the prompt-variation guard plays in {@code LlmAnswerQualityTest} — "the instrument
+ *       has to assert it did something", and it has to do so in CI, where the LLM is not
+ *       available.</li>
  *   <li>{@link #theEmptyChartPromptAsksTheModelToNameWhatIsMissing} runs unconditionally and asserts
  *       the deterministic half against real production code: the exact bytes
  *       {@link LlmProvider#buildUserMessage} sends when the chart yields no records.</li>
@@ -84,10 +86,45 @@ public class AbsentDataEvalTest {
 
 	private static final String ENDPOINT_PROPERTY = "chartsearchai.absent.data.endpoint";
 
-	/** Enough for a "no records" sentence and its empty citations array; these answers are short. */
-	private static final int MAX_TOKENS = 512;
+	/**
+	 * Production's own ceiling, not a number chosen here. An answer cut off by the INSTRUMENT's token
+	 * limit arrives as an empty string — {@link LlmProvider#extractResponse} cannot parse truncated JSON
+	 * — so a ceiling below production's manufactures failures that read exactly like abstention defects.
+	 * Both wrong values were measured against the bundled Gemma before this line said
+	 * {@code DEFAULT_LLM_MAX_OUTPUT_TOKENS}: at 512, 2 of 19 answers came back empty; at 2048 against a
+	 * full chart, 14 of 19 did.
+	 */
+	private static final int MAX_TOKENS = ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS;
 
 	private static EvalDataset dataset;
+
+	private static String chartText;
+
+	/**
+	 * A real patient chart the absent topics are absent FROM — rendered by the real
+	 * {@link PatientChartSerializer} from {@link TestDatasetHelper#FULL_PATIENT_DATASET}, which is the
+	 * chart this dataset was evidently authored against: {@code absent-cancer}'s
+	 * {@code expectedAnswerNotContains} names CD4 and tuberculosis, and both are records in it
+	 * (asserted in {@link #everyAbsentCaseIsRunAndEveryExpectationDiscriminates}).
+	 *
+	 * <p>Why not an empty chart. It would be simpler, and it is a real production shape
+	 * ({@code LlmInferenceService.chartTextOrPlaceholder} substitutes a placeholder for one) — but it is
+	 * the EASY shape, and it makes every {@code expectedAnswerNotContains} vacuous, since a chart with
+	 * no records cannot bait the model into answering about a different topic. The shape that actually
+	 * fails in production is a chart that is FULL and irrelevant: the querystore focus path has no
+	 * relevance gate, so the K nearest neighbours are non-empty even when nothing in the chart is about
+	 * the query (see {@link LlmProvider}'s focus-hint note), and abstaining in front of records is the
+	 * hard part.
+	 */
+	private static String chartText() {
+		if (chartText == null) {
+			chartText = new PatientChartSerializer()
+					.serialize(null, TestDatasetHelper.toSerializedRecords(
+							TestDatasetHelper.FULL_PATIENT_DATASET))
+					.getText();
+		}
+		return chartText;
+	}
 
 	private static EvalDataset getDataset() {
 		if (dataset == null) {
@@ -121,14 +158,14 @@ public class AbsentDataEvalTest {
 	}
 
 	/**
-	 * Asked about an absent topic with a chart that yields no records, the answer must name what was
-	 * asked about and must not answer about a different topic.
+	 * Asked about a topic the chart carries nothing on, the answer must name what was asked about and
+	 * must not answer about a different topic the chart DOES carry.
 	 *
 	 * <p>Every piece below the transport is production code: {@link LlmProvider#DEFAULT_SYSTEM_PROMPT},
-	 * {@link LlmProvider#buildUserMessage} (the same method {@code search}, {@code searchStreaming} and
-	 * {@code warmup} build their bytes with), and {@link LlmProvider#extractResponse} for the reply. The
-	 * empty {@code numberedRecords} argument is the real absent-data shape:
-	 * {@code LlmInferenceService.chartTextOrPlaceholder} hands the empty case straight to this builder.
+	 * {@link PatientChartSerializer} for the chart, {@link LlmProvider#buildUserMessage} (the same
+	 * method {@code search}, {@code searchStreaming} and {@code warmup} build their bytes with), and
+	 * {@link LlmProvider#extractResponse} for the reply. See {@link #chartText()} for which chart and
+	 * why that one.
 	 */
 	@ParameterizedTest(name = "[{index}] {0}")
 	@MethodSource("absentDataCases")
@@ -140,7 +177,7 @@ public class AbsentDataEvalTest {
 				"Skipping: LLM endpoint not reachable at " + endpoint);
 
 		String raw = LlmEndpointTestSupport.complete(endpoint, LlmProvider.DEFAULT_SYSTEM_PROMPT,
-				LlmProvider.buildUserMessage("", evalCase.getQuestion()), MAX_TOKENS);
+				LlmProvider.buildUserMessage(chartText(), evalCase.getQuestion()), MAX_TOKENS);
 		String answer = LlmProvider.extractResponse(raw).getAnswer();
 
 		log.info("[{}] question='{}' answer='{}'", caseId, evalCase.getQuestion(), answer);
@@ -231,6 +268,22 @@ public class AbsentDataEvalTest {
 			}
 		}
 
+		// And that the CHART can actually bait the drift each expectedAnswerNotContains forbids. A
+		// forbidden term the chart does not contain cannot be drifted to, so that half of the dataset's
+		// expectations would be unfalsifiable — which is how the chart in chartText() was identified as
+		// the one this dataset was authored against, and is the property that makes it the right one.
+		for (EvalCase evalCase : absentCases()) {
+			if (evalCase.getExpectedAnswerNotContains() == null) {
+				continue;
+			}
+			for (String forbidden : evalCase.getExpectedAnswerNotContains()) {
+				assertTrue(chartText().toLowerCase(Locale.ROOT).contains(forbidden.toLowerCase(Locale.ROOT)),
+						evalCase.getId() + ": the chart must carry records about '" + forbidden + "', or "
+								+ "forbidding the answer to mention it asserts nothing — nothing could have "
+								+ "led the model there");
+			}
+		}
+
 		for (EvalCase evalCase : getDataset().getCases()) {
 			if (!evalCase.isExpectedAbsent()) {
 				// The present cases are inputs to a RETRIEVAL eval — "this topic must not read as absent" —
@@ -255,9 +308,10 @@ public class AbsentDataEvalTest {
 	 * makes the model answer from demographics alone
 	 * ({@code LlmInferenceService.chartTextOrPlaceholder}).
 	 *
-	 * <p>This is the only absent-data assertion that runs without an endpoint, which is why it also
-	 * pins the system prompt's instruction: with the 19 answer-level cases skipped in CI, nothing else
-	 * would notice that instruction leaving the prompt.
+	 * <p>This is the only assertion about absent-data BEHAVIOUR that runs without an endpoint — the
+	 * sibling CI case above is about the instrument, not the behaviour — which is why it also pins the
+	 * system prompt's instruction: with the 19 answer-level cases skipped in CI, nothing else would
+	 * notice that instruction leaving the prompt.
 	 */
 	@Test
 	public void theEmptyChartPromptAsksTheModelToNameWhatIsMissing() {

@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -343,6 +344,93 @@ public class DrugReference {
 			canonical = canonicalRow(canonical, row);
 		}
 		return canonical;
+	}
+
+	/**
+	 * The separator this reference data joins a COMBINATION PRODUCT's ingredient names with —
+	 * RxNorm's, and so the KB's: {@code sulfamethoxazole / trimethoprim},
+	 * {@code abacavir / dolutegravir / lamivudine}. A structural marker in the string itself, which is
+	 * why {@link #combinationConstituents} can read a multi-substance name off it rather than guessing
+	 * from pharmacology: a name joined this way denotes every ingredient it lists.
+	 *
+	 * <p>Sufficient, not necessary, and the difference matters. Its absence says nothing — the KB also
+	 * spells combinations with a word or a hyphen ({@code amoxicillin and clavulanic acid},
+	 * {@code potassium chloride-potassium gluconate}), which is what
+	 * {@link DrugReferenceService#findImpliedSubstances}'s equal-claimant leg is for. So this reads only
+	 * one way: a name carrying the separator lists ingredients, while a name without it may be one drug
+	 * however many words it has ({@code digoxin antibodies fab fragments},
+	 * {@code ciprofloxacin lactate}) or a combination this rule cannot see.
+	 */
+	private static final char COMBINATION_SEPARATOR = '/';
+
+	/** {@link #COMBINATION_SEPARATOR} as a split pattern, compiled once — {@code /} is not a regex
+	 *  metacharacter, so the pattern is the character itself. */
+	private static final Pattern COMBINATION_SPLIT = Pattern.compile(String.valueOf(COMBINATION_SEPARATOR));
+
+	/**
+	 * @return the ingredient names a recorded COMBINATION name lists, trimmed and in the order the name
+	 *         lists them — empty for a name carrying no {@value #COMBINATION_SEPARATOR}, which is every
+	 *         single-drug name. Each is a candidate, not a resolution: the caller decides what counts as
+	 *         an entry claiming one, and {@link DrugReferenceService#findImpliedSubstances} requires the
+	 *         KB to be NAMED it, which is what discards the fragments a separator inside a parenthesized
+	 *         qualifier produces ({@code Varicella zoster vaccine (live/attenuated)} splits into
+	 *         {@code varicella zoster vaccine (live} and {@code attenuated)}, and no entry is named
+	 *         either).
+	 *
+	 *         <p>The whole name is deliberately NOT among them: it is the caller's starting point, not
+	 *         a constituent, and returning it here would make the empty answer above indistinguishable
+	 *         from "one constituent".
+	 *
+	 *         <p><b>And deliberately not gated on a SPACED separator</b>, which is the obvious way to
+	 *         make the safety above structural rather than data-dependent — nearly every combination the
+	 *         KB publishes spaces its separator, while the strain designations and the qualifiers that
+	 *         contain one do not. It is refused because such a gate can only ever DROP an ingredient,
+	 *         and the KB does publish combinations that join their ingredients bare
+	 *         ({@code potassium citrate/potassium gluconate}). Dropping is the one direction this
+	 *         widening exists to prevent; the gate above is what handles the other.
+	 *
+	 *         <p>Nothing pins that choice, and the honest reason is worth recording rather than
+	 *         discovering twice: reverting this to {@code " / "} leaves the whole suite green (measured
+	 *         by mutation, 2026-08-09), because the one bare-separator combination the shipped KB names
+	 *         both ingredients of is ALSO claimed by both of them, so
+	 *         {@link DrugReferenceService#findImpliedSubstances}'s equal-claimant leg reaches it without
+	 *         this split. The dataset therefore offers no case that isolates the two, and a test
+	 *         asserting one would be asserting the other. What IS pinned, by
+	 *         {@code CombinationAllergenResolutionTest}, is the gate: a fragment the KB only CONTAINS
+	 *         must not be reached.
+	 */
+	static List<String> combinationConstituents(String recordedName) {
+		if (recordedName == null || recordedName.indexOf(COMBINATION_SEPARATOR) < 0) {
+			return Collections.emptyList();
+		}
+		List<String> out = new ArrayList<String>();
+		for (String part : COMBINATION_SPLIT.split(recordedName)) {
+			String trimmed = part.trim();
+			if (!trimmed.isEmpty()) {
+				out.add(trimmed);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * @return the name of the PARENT MOIETY a recorded PRESENTATION name is a presentation of — the
+	 *         recorded name with its trailing qualifier(s) removed ({@code Insulin lispro (protamine)}
+	 *         → {@code insulin lispro}) — or {@code null} when the name carries no qualifier and so
+	 *         names no moiety apart from itself.
+	 *
+	 *         <p>A derivation, not a claim: unlike a {@link #combinationConstituents constituent}, which
+	 *         the recorded string asserts is an ingredient, this is only what is left after removing a
+	 *         qualifier. That is why {@link DrugReferenceService#findImpliedSubstances} accepts it only
+	 *         from an entry that is CALLED it ({@link #NAME_IS_THE_DISPLAY_NAME}) — see there.
+	 */
+	static String parentMoietyName(String recordedName) {
+		String normalized = normalizeName(recordedName);
+		if (normalized == null) {
+			return null;
+		}
+		String stem = displayStem(recordedName);
+		return stem.isEmpty() || stem.equals(normalized) ? null : stem;
 	}
 
 	/** @return {@code name} with any trailing parenthesized qualifier(s) removed, normalized by

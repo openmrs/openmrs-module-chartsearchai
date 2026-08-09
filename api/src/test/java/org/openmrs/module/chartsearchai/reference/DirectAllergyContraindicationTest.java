@@ -193,9 +193,10 @@ public class DirectAllergyContraindicationTest {
 
 	@Test
 	public void twoAliasesOfOneUnclassifiedAllergyWarnOnce() throws IOException {
-		// The seenAllergens dedup, on a path that could not run before: "Leucovorin" and "Leucovorin
-		// calcium" are both aliases the dataset gives that one entry (its CIEL concept names), so two
-		// allergy records resolve to one allergen and must produce ONE chip.
+		// The recorded-allergen dedup (DrugSafetyValidator.recordedAllergens since issues #193/#195, the
+		// seenAllergens set inside the arm before that), on a path that could not run before:
+		// "Leucovorin" and "Leucovorin calcium" are both aliases the dataset gives that one entry (its
+		// CIEL concept names), so two allergy records resolve to one allergen and must produce ONE chip.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is leucovorin safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,

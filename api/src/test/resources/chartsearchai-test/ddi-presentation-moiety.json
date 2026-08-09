@@ -1,0 +1,268 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "note": "Verbatim DDInter 2.0 slice for issue #195 - a presentation filed as a separate substance from its parent moiety, together with the sibling pairs that must NOT be merged with it. Rows are field-for-field their shipped-KB rows in KB order; the KB carries no interaction row among any of them, which is why 'interactions' is empty. Insulin lispro (protamine) publishes its own rxnorm_name and NO ATC code, so issue #192's correct resolution lands on it, the class comparisons have nothing to compare and the chip vanishes rather than being mislabelled; its parent moiety Insulin lispro carries A10AB/A10AC/A10AD. Dextran is the same shape reached through an ALIAS rather than a display name - the bare name 'dextran' is one of Dextran (high molecular weight)'s CIEL names and no row's display name. The iron rows are a third shape: Iron and Iron (bisglycinate) are already ONE substance (one rxnorm_name, one drugbank_id) while Iron (polysaccharide) is not, and none of the three carries an ATC code, so only the identity arm can reach them at all. Manganese (chloride)/(sulfate) and the two Varicella Zoster Vaccine rows are the negative controls: each pair shares a display stem and publishes two substance names, and the KB names no bare 'manganese' and no bare 'varicella zoster vaccine' anywhere - so a widening gated on the KB being NAMED the stem must leave both pairs apart. Peanut/Peanut oil is the residual shape that gate does not reach: two drugbank substances whose display names differ by a bare word rather than by a trailing qualifier.",
+  "source": {
+   "name": "DDInter 2.0",
+   "url": "https://ddinter2.scbdd.com/",
+   "normalization": "RxNorm (NLM)",
+   "bridge": "CIEL v2026-07-20"
+  }
+ },
+ "mechanisms": {},
+ "drugs": [
+  {
+   "id": "DDInter1121",
+   "name": "Manganese (chloride)",
+   "rxcui": "29261",
+   "rxnorm_name": "manganese chloride",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "104309",
+     "uuid": "104309AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chromous chloride / copper sulfate / manganese chloride / molybdenum / selenious acid / sodium iodide / zinc sulfate"
+    },
+    {
+     "code": "104310",
+     "uuid": "104310AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chromous chloride / copper sulfate / manganese chloride / selenious acid / sodium iodide / zinc sulfate"
+    },
+    {
+     "code": "104311",
+     "uuid": "104311AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chromous chloride / copper sulfate / manganese chloride / zinc chloride"
+    },
+    {
+     "code": "79294",
+     "uuid": "79294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Manganese chloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1122",
+   "name": "Manganese (sulfate)",
+   "rxcui": "29268",
+   "rxnorm_name": "manganese sulfate",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "104298",
+     "uuid": "104298AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chromic chloride / copper sulfate / manganese sulfate / zinc sulfate"
+    },
+    {
+     "code": "104312",
+     "uuid": "104312AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chromous chloride / copper sulfate / manganese sulfate / selenious acid / zinc sulfate"
+    },
+    {
+     "code": "79299",
+     "uuid": "79299AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Manganese sulfate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1920",
+   "name": "Varicella Zoster Vaccine (Recombinant)",
+   "rxcui": "1986821",
+   "rxnorm_name": "varicella zoster virus glycoprotein E",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "168016",
+     "uuid": "01650bec-7a48-4b0b-bb94-586d1ad0e0fe",
+     "name": "Varicella zoster virus glycoprotein E vaccine, recombinant"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2072",
+   "name": "Peanut",
+   "rxcui": "891658",
+   "rxnorm_name": "peanut allergenic extract",
+   "drugbank_id": "DB10553",
+   "atc": [],
+   "ciel": []
+  },
+  {
+   "id": "DDInter2159",
+   "name": "Varicella zoster vaccine (live/attenuated)",
+   "rxcui": "1292422",
+   "rxnorm_name": "varicella-zoster virus vaccine live (Oka-Merck) strain",
+   "drugbank_id": "DB10318",
+   "atc": [
+    "J07BK01"
+   ],
+   "ciel": [
+    {
+     "code": "159702",
+     "uuid": "159702AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Measles Virus Vaccine Live, Enders' attenuated Edmonston strain / Mumps Virus Vaccine Live, Jeryl Lynn Strain / Rubella Virus Vaccine Live (Wistar RA 27-3 Strain) / Varicella Virus Vaccine Live (Oka-Merck) strain"
+    },
+    {
+     "code": "168015",
+     "uuid": "3c5d1d7b-affa-4c8b-8111-671c31a82970",
+     "name": "Varicella virus vaccine, live"
+    },
+    {
+     "code": "73193",
+     "uuid": "73193AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chickenpox vaccine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2187",
+   "name": "Iron (bisglycinate)",
+   "rxcui": "90176",
+   "rxnorm_name": "iron",
+   "drugbank_id": "DB01592",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "78218",
+     "uuid": "78218AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Iron"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2188",
+   "name": "Iron (polysaccharide)",
+   "rxcui": "219315",
+   "rxnorm_name": "iron polysaccharide",
+   "drugbank_id": "DB01592",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "78223",
+     "uuid": "78223AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Iron polysaccharide"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2272",
+   "name": "Peanut oil",
+   "rxcui": "18235",
+   "rxnorm_name": "peanut oil",
+   "drugbank_id": "DB13964",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "71500",
+     "uuid": "71500AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Arachis oil"
+    }
+   ]
+  },
+  {
+   "id": "DDInter524",
+   "name": "Dextran (high molecular weight)",
+   "rxcui": "42635",
+   "rxnorm_name": "dextran",
+   "drugbank_id": null,
+   "atc": [
+    "B05AA05"
+   ],
+   "ciel": [
+    {
+     "code": "104441",
+     "uuid": "104441AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextran / sodium chloride"
+    },
+    {
+     "code": "74653",
+     "uuid": "74653AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextran"
+    },
+    {
+     "code": "74660",
+     "uuid": "74660AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextran sulfate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter525",
+   "name": "Dextran (low molecular weight)",
+   "rxcui": "3272",
+   "rxnorm_name": "dextran 40",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "74656",
+     "uuid": "74656AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextran 40"
+    }
+   ]
+  },
+  {
+   "id": "DDInter940",
+   "name": "Insulin lispro",
+   "rxcui": "86009",
+   "rxnorm_name": "insulin lispro",
+   "drugbank_id": "DB00046",
+   "atc": [
+    "A10AB04",
+    "A10AC04",
+    "A10AD04"
+   ],
+   "ciel": [
+    {
+     "code": "104918",
+     "uuid": "104918AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Insulin, lispro, human / insulin, protamine lispro, human"
+    },
+    {
+     "code": "78070",
+     "uuid": "78070AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Insulin, lispro, human"
+    }
+   ]
+  },
+  {
+   "id": "DDInter941",
+   "name": "Insulin lispro (protamine)",
+   "rxcui": "314684",
+   "rxnorm_name": "insulin lispro protamine, human",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "104918",
+     "uuid": "104918AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Insulin, lispro, human / insulin, protamine lispro, human"
+    },
+    {
+     "code": "78075",
+     "uuid": "78075AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Insulin, protamine lispro, human"
+    }
+   ]
+  },
+  {
+   "id": "DDInter975",
+   "name": "Iron",
+   "rxcui": "90176",
+   "rxnorm_name": "iron",
+   "drugbank_id": "DB01592",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "78218",
+     "uuid": "78218AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Iron"
+    }
+   ]
+  }
+ ],
+ "interactions": []
+}

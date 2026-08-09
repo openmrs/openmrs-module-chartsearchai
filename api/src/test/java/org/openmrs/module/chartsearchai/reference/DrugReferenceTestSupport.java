@@ -209,6 +209,15 @@ public final class DrugReferenceTestSupport {
 	 *  contraindication arm's route-variant and must-not-collapse slice. */
 	static final String DDI_CONTRA_ROUTE_VARIANTS = "chartsearchai-test/ddi-contra-route-variants.json";
 
+	/** Combination-product names and their constituents — the co-trimoxazole and omeprazole/bicarbonate
+	 *  rows whose sulfa and PPI moieties a one-substance resolution never reaches, plus the
+	 *  abacavir/lamivudine pair that claims one name equally (issue #193). */
+	static final String DDI_COMBINATION_ALLERGEN = "chartsearchai-test/ddi-combination-allergen.json";
+
+	/** Presentations filed as their own substance beside the parent moiety they contain, with the
+	 *  sibling pairs that share a display stem and must NOT be merged with them (issue #195). */
+	static final String DDI_PRESENTATION_MOIETY = "chartsearchai-test/ddi-presentation-moiety.json";
+
 	private DrugReferenceTestSupport() {
 	}
 
@@ -335,6 +344,24 @@ public final class DrugReferenceTestSupport {
 		DrugReferenceService service = serviceWith(ddiFixtureEntries(classpathResource));
 		service.setCrossReactivityGroups(bundledGroups());
 		return service;
+	}
+
+	/**
+	 * @return the parsed entry whose own {@code name} is {@code name}, failing with the whole slice's
+	 *         names when it is absent — the "reach into a fixture slice for one row" arrangement, which
+	 *         is fixture-independent and so belongs here rather than being re-opened per file (the same
+	 *         rule CLAUDE.md states for {@code TestDatasetHelper}). Selecting by {@code getName()} and
+	 *         not through a resolver on purpose: every caller is stating a PREMISE about which row the
+	 *         slice carries, and resolving it would make the premise depend on the very ranking the
+	 *         case is about.
+	 */
+	static DrugReference row(List<DrugReference> entries, String name) {
+		for (DrugReference entry : entries) {
+			if (name.equals(entry.getName())) {
+				return entry;
+			}
+		}
+		throw new AssertionError("the fixture must carry the " + name + " row, was: " + names(entries));
 	}
 
 	/** @return the entries' own {@code name}s. {@link DrugReference} defines no {@code toString}, so a

@@ -325,10 +325,48 @@ PINNED = ["bc4ba445-a35c-4996-b804-4d5b68387571", "1128c659-2d0a-4314-af23-91bac
           "e9712a18-c181-46c5-8a17-46b02e39b23b"]
 
 
+RESELECT_ENV = "GOLD_ALLOW_RESELECT"
+
+
+def resolve_cohort(profiles):
+    """Returns the PINNED cohort, or refuses. Never silently re-picks.
+
+    This used to fall straight through to the greedy selection below whenever a single pinned
+    patient was absent from the DB, and then overwrite `metric_gold.rc2.json` keyed to FOUR
+    different patients with no warning — contradicting the PINNED comment directly above, which
+    exists to say that re-running "must NOT swap patients out from under already-taken captures"
+    (#179 item 8). The condition is not hypothetical: the rc.2 install those 22 UUIDs describe has
+    been replaced, so on today's DB every one of them is missing and the old code would have
+    rewritten the 7 MB gold that `score_directness.py` loads by default, silently, keyed to a
+    cohort no committed capture matches.
+
+    Re-selection is still reachable, because bootstrapping a gold on a fresh install is what the
+    greedy pass is for — but only as a deliberate act, via GOLD_ALLOW_RESELECT=1, and it says what
+    it is overwriting. Returns None to mean "caller may re-select"."""
+    present = {p[1] for p in profiles}
+    missing = [u for u in PINNED if u not in present]
+    if not missing:
+        by_uuid = {p[1]: p for p in profiles}
+        return [by_uuid[u] for u in PINNED]
+    if os.environ.get(RESELECT_ENV) == "1":
+        print("!! %s=1: re-selecting the cohort greedily and OVERWRITING metric_gold.rc2.json.\n"
+              "   %d of %d pinned patients are absent from this DB, so the new gold will be keyed\n"
+              "   to different patients and no existing capture will match it."
+              % (RESELECT_ENV, len(missing), len(PINNED)))
+        return None
+    raise SystemExit(
+        "ERROR: %d of %d pinned patients are absent from this DB, so the pinned gold cannot be\n"
+        "  rebuilt. Refusing to write: the greedy fallback would overwrite metric_gold.rc2.json\n"
+        "  keyed to DIFFERENT patients, and every committed capture would silently stop matching.\n"
+        "  Missing: %s\n"
+        "  If you really are bootstrapping a gold for a new install, re-run with %s=1."
+        % (len(missing), len(PINNED), missing[:6], RESELECT_ENV))
+
+
 def main():
     profiles = profile_patients()
-    pinned = [p for p in profiles if p[1] in PINNED]
-    if len(pinned) == len(PINNED):
+    pinned = resolve_cohort(profiles)
+    if pinned is not None:
         write_outputs(pinned)
         return
     # Selection: rank by chart size; greedily add patients that keep aggregate present/absent
@@ -423,6 +461,41 @@ def selftest():
     assert C("programs", "program", "pmtct", "") is True
     assert C("programs", "condition", "chronic kidney disease", "") is False
     assert C("medications", "drug_order", "warfarin", "") is True
+
+    # The pinned-cohort guard (#179 item 8), which needs no DB: profile tuples are built from the
+    # real PINNED constant, so this cannot pass by testing invented UUIDs. Tuple shape matches
+    # profile_patients(): (name, uuid, person_id, chart_size, per-topic counts).
+    def prof(uuids):
+        return [("p%d" % i, u, i, 500, {t: 1 for t in TOPICS}) for i, u in enumerate(uuids)]
+
+    full = resolve_cohort(prof(PINNED))
+    assert [p[1] for p in full] == PINNED, "a complete cohort must come back in PINNED order"
+
+    # One patient short must REFUSE, not fall through to greedy re-selection.
+    saved = os.environ.pop(RESELECT_ENV, None)
+    try:
+        try:
+            resolve_cohort(prof(PINNED[:-1]))
+        except SystemExit as e:
+            assert "Refusing to write" in str(e), "wrong refusal message: %s" % e
+            assert PINNED[-1] in str(e), "the refusal must name the missing patient"
+        else:
+            raise AssertionError("an incomplete pinned cohort must refuse to write, not re-select")
+        # An empty DB is the same refusal, not a fresh 4-patient gold.
+        try:
+            resolve_cohort([])
+        except SystemExit as e:
+            assert "Refusing to write" in str(e), "wrong refusal message: %s" % e
+        else:
+            raise AssertionError("an empty DB must refuse to write")
+        # ...and re-selection stays reachable, but only deliberately.
+        os.environ[RESELECT_ENV] = "1"
+        assert resolve_cohort(prof(PINNED[:-1])) is None, \
+            "%s=1 must permit re-selection" % RESELECT_ENV
+    finally:
+        os.environ.pop(RESELECT_ENV, None)
+        if saved is not None:
+            os.environ[RESELECT_ENV] = saved
     print("selftest OK")
 
 

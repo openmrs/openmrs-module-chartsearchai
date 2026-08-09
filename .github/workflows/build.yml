@@ -34,8 +34,16 @@ jobs:
         run: python3 eval/drift-metric/score_directness.py --selftest
       - name: metric_score.py
         run: python3 eval/drift-metric/metric_score.py --selftest
-      - name: build_gold_rc2.py
+      - name: build_gold_rc2.py (classify boundaries + the pinned-cohort refusal)
         run: python3 eval/drift-metric/build_gold_rc2.py --selftest
+      # Added by #179. Both instruments reported success without checking anything: compare_arms
+      # printed one lead-rate under two different metrics' names and had no exit code at all, and
+      # kv_prefill_gate discarded the count that was the only evidence its "cold" arm was cold.
+      # Neither selftest needs a server or a model.
+      - name: compare_arms.py (report, not a gate — two named rates + integrity exits)
+        run: python3 eval/drift-metric/compare_arms.py --selftest
+      - name: kv_prefill_gate.py (refuses to measure without a real KV cache dir)
+        run: python3 eval/latency/kv_prefill_gate.py --selftest
 
   owasp-dependency-check:
     if: ${{ github.event_name != 'pull_request' }}

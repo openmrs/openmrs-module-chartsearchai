@@ -123,6 +123,16 @@ timeout — warm the llama before batch runs).
 | baseline (no guard) | 62/64 | 33/29/2 | 0 |
 | candidate (guard) | **63/64** | 31/32/1 | **0** |
 
+> **These two figures survive #179's audit of the instrument that produced them, and the table
+> is why.** `compare_arms.py` computed its single rate as YES+NO+**CANNOT** while labelling it
+> "verdict-led" — a label `score_probe_safety.py` defines as YES/NO only, CANNOT being "a hedge,
+> not a verdict". So the number was ambiguous between two live definitions. It resolves here by
+> arithmetic rather than by re-running: the YES/NO/NONE column sums to exactly 64 in **both** arms
+> (33+29+2, 31+32+1), so **CANNOT was 0 in this capture** and the two definitions coincide —
+> 62/64 and 63/64 are correct read either way. The script now prints both rates under their own
+> names, so a future capture with a nonzero CANNOT cannot repeat the ambiguity. The captures
+> themselves are gone, so this is a reading of the committed record, not a re-score.
+
 Six class flips, read individually (full detail on
 [#107](https://github.com/openmrs/openmrs-module-chartsearchai/issues/107)): three are
 obs-only kidney cells moving **toward** the approved record-grounded form ("No kidney

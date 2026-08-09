@@ -1486,6 +1486,8 @@ Support MedCPT as an alternative to L6-v2 via the `chartsearchai.embedding.query
 
 Each model has its own eval baseline (`enriched-retrieval-eval.json` for L6-v2, `medcpt-retrieval-eval.json` for MedCPT) and pre-computed embedding caches committed to git for fast test runs.
 
+> Both baseline files were **deleted** in #179. Their tests (`EnrichedRetrievalEvalTest`, `RetrievalQualityEvalTest`) went with the rest of the in-process stack in #51, leaving 185 KB of relevance judgments and pinned ranked lists that nothing loaded — and retrieval-quality evaluation belongs to querystore now, so they could not be revived here either. `api/src/test/resources/embedding-cache/` still carries the vectors they were paired with, also unread by any code.
+
 ### ONNX external data workaround
 
 MedCPT's ONNX models split weights into `model.onnx` + `model.onnx.data`. The ONNX runtime 1.24.3 has a bug where it resolves the data file path as `<model_path>/model.onnx.data` instead of `<model_dir>/model.onnx.data`. The workaround is to merge weights back into a single file using `onnx.save()`. A `createSessionWithExternalData()` method attempts canonical path resolution first, falling back to byte-array loading.

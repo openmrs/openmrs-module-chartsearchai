@@ -144,7 +144,20 @@ public class DrugReferenceService {
 	 * this method and through {@link #findByQuery} (2026-08-09; re-derive rather than trusting the
 	 * figures): 33 names resolve fewer rows, 71 rows in total, and the two invariants below hold for every
 	 * one of the 2283 — nothing was emptied and no substance lost a row. The order-name leg
-	 * ({@link #findImpliedByDrugName}) narrows by the same counts over the same corpus.
+	 * ({@link #findImpliedByDrugName}) narrows by the same counts over the same corpus. Read the row total
+	 * with its cause attached: 7 of those names and 42 of those rows are the single upstream data defect
+	 * on issue #196, where {@code Pfizer-BioNTech Covid-19 Vaccine} publishes
+	 * {@code moderna covid-19 vaccine} among its aliases and all five {@code Tozinameran} rows inherit it.
+	 * Excluding it the ranking moves 26 names and 29 rows, so most of the row total is one bad alias's
+	 * consequences rather than a reshaping of clinical data.
+	 *
+	 * <p><b>Why that is fewer names than issue #209 counted, and deliberately.</b> The issue measured a
+	 * different question — how many display names the unranked scan admits a substance for that
+	 * {@link #findImpliedSubstances} does not report for the WHOLE STRING — and got a larger figure. Both
+	 * are correct; the gap is exactly the names where the whole-string rule would narrow and the
+	 * name-CARRIED rule refuses to, which is the paragraph below and not a shortfall. Re-derive both
+	 * before quoting either: they differ by roughly a factor of two on the shipped KB, so a reader
+	 * comparing the issue's figure with this one will otherwise read a fix as incomplete.
 	 *
 	 * <p><b>The rule: the name CARRIED, not the whole text.</b> An entry stays when one of its own names
 	 * that the text carries ({@link DrugReference#aliasesIn}) denotes its substance under

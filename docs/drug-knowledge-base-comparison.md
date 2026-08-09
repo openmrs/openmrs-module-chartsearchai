@@ -53,7 +53,7 @@ Their `data/drug_knowledge_base.json` entry shape is the ancestor of our
 
 Deterministic alias resolution is also shared in spirit: their
 `KnowledgeLoader.find_drug()` (exact match on generic/name/alias) ≈ our
-`DrugReferenceService.findByQuery` / `lookupByToken`.
+`DrugReferenceService.findImpliedByQuery` / `lookupByToken`.
 
 ---
 

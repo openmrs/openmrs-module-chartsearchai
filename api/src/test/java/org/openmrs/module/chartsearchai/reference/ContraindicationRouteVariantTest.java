@@ -213,8 +213,9 @@ public class ContraindicationRouteVariantTest {
 		// arms, but only this arm reaches it from the patient's own prescriptions with a question naming no
 		// drug.
 		//
-		// Unlike the vehicle it replaces, it cannot pass by admission: each substance is named by its own
-		// order, so a narrower resolver keeps both and only a MERGING key drops one.
+		// Measured by mutation: reducing `substanceKey` to its first component fails this. Reverting either
+		// resolution leg does not — each substance is named by its own order here, so this case is a canary
+		// for the KEY and a regression control for the legs.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", NO_DRUG_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Hydrocortisone Injection vial 100mg",

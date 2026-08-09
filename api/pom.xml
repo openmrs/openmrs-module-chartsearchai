@@ -50,20 +50,16 @@
 				<filtering>true</filtering>
 			</resource>
 		</resources>
+		<!-- One filtered stanza, because every test resource is text. The second, unfiltered stanza
+		     that used to sit here existed only to keep src/test/resources/embedding-cache/**'s 794
+		     binary vectors out of Maven's resource filtering; those were deleted in #204 (nothing had
+		     read them since the in-process embedding stack was removed in #51). Filtering stays on
+		     for the same behaviour as before — restore an unfiltered stanza if a BINARY test resource
+		     is ever added, since filtering corrupts one. -->
 		<testResources>
 			<testResource>
 				<directory>src/test/resources</directory>
 				<filtering>true</filtering>
-				<excludes>
-					<exclude>embedding-cache/**</exclude>
-				</excludes>
-			</testResource>
-			<testResource>
-				<directory>src/test/resources</directory>
-				<filtering>false</filtering>
-				<includes>
-					<include>embedding-cache/**</include>
-				</includes>
 			</testResource>
 		</testResources>
 	</build>

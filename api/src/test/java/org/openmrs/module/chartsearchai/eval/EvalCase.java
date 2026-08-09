@@ -35,8 +35,6 @@ public class EvalCase {
 
 	private String simulatedLlmResponse;
 
-	private List<Integer> simulatedCitations;
-
 	private String payload;
 
 	private List<String> tags;
@@ -110,20 +108,22 @@ public class EvalCase {
 		this.expectedAnswerNotContains = expectedAnswerNotContains;
 	}
 
+	/**
+	 * The raw text a simulated LLM returned, parsed by the production extractor exactly as a real
+	 * reply is.
+	 *
+	 * <p>There is deliberately no companion field for the citations that response carries. One
+	 * existed ({@code simulatedCitations}) and {@code CitationEvalTest} used it INSTEAD of the parsed
+	 * value, which made the one case where the two differed assert against a value production never
+	 * produced — issue #219. A case states its input here and its expectation in
+	 * {@link #getExpectedRecordIndices()}; anything in between is production's to compute.
+	 */
 	public String getSimulatedLlmResponse() {
 		return simulatedLlmResponse;
 	}
 
 	public void setSimulatedLlmResponse(String simulatedLlmResponse) {
 		this.simulatedLlmResponse = simulatedLlmResponse;
-	}
-
-	public List<Integer> getSimulatedCitations() {
-		return simulatedCitations;
-	}
-
-	public void setSimulatedCitations(List<Integer> simulatedCitations) {
-		this.simulatedCitations = simulatedCitations;
 	}
 
 	public String getPayload() {

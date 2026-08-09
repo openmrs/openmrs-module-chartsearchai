@@ -209,6 +209,15 @@ public final class DrugReferenceTestSupport {
 	 *  contraindication arm's route-variant and must-not-collapse slice. */
 	static final String DDI_CONTRA_ROUTE_VARIANTS = "chartsearchai-test/ddi-contra-route-variants.json";
 
+	/** Combination-product names and their constituents — the co-trimoxazole and omeprazole/bicarbonate
+	 *  rows whose sulfa and PPI moieties a one-substance resolution never reaches, plus the
+	 *  abacavir/lamivudine pair that claims one name equally (issue #193). */
+	static final String DDI_COMBINATION_ALLERGEN = "chartsearchai-test/ddi-combination-allergen.json";
+
+	/** Presentations filed as their own substance beside the parent moiety they contain, with the
+	 *  sibling pairs that share a display stem and must NOT be merged with them (issue #195). */
+	static final String DDI_PRESENTATION_MOIETY = "chartsearchai-test/ddi-presentation-moiety.json";
+
 	private DrugReferenceTestSupport() {
 	}
 

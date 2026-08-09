@@ -1,0 +1,611 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "note": "Verbatim DDInter 2.0 slice for issue #193 - a recorded drug name that denotes SEVERAL substances. Rows are field-for-field their shipped-KB rows in KB order, and the interaction rows are every KB pair among them. Two shapes. (1) One constituent claims the combination name and the others only occur inside it: 'sulfamethoxazole / trimethoprim' is one of Trimethoprim's own CIEL names (claim rank NAME_IS_ANOTHER_NAME) while Sulfamethoxazole merely occurs inside it as a bounded token (NAME_TOKEN_INSIDE_A_NAME), so issue #192's ranked resolution answers Trimethoprim alone and the sulfa moiety - the one that drives that allergy - is never compared: J01EA in place of J01EB. Sulfisoxazole is the J01EB sibling that lets the class arm be observed against the sulfa moiety and not only the identity arm. 'omeprazole / sodium bicarbonate' is the same shape with more at stake: it is one of Sodium bicarbonate's CIEL names, so the answer is B05CB/B05XA and the PPI class A02BC is lost entirely; Pantoprazole is the A02BC sibling it has to be compared against. Esomeprazole is present because Omeprazole's rxnorm_name IS 'esomeprazole' - without it that substance-name family would name one drugbank_id instead of two and the fixture's substance identities would stop matching the shipped KB's (issue #187). (2) SEVERAL constituents claim the name equally: 'abacavir / lamivudine' is a CIEL name of both Abacavir and Lamivudine, which is the 1367-name population issue #193 measures, and both are J05AF - so Zidovudine (J05AF01) shares a class with BOTH and is the subject that shows one recorded name still raises one chip.",
+  "source": {
+   "name": "DDInter 2.0",
+   "url": "https://ddinter2.scbdd.com/",
+   "normalization": "RxNorm (NLM)",
+   "bridge": "CIEL v2026-07-20"
+  }
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "3225": {
+   "text": "In a study with 14 HIV-positive patients, coadministration of trimethoprim/sulfamethoxazole (trimethoprim/sulfamethoxazole DS once a day for 5 days) and lamivudine (300 mg single dose on day 5) resulted in a mean decrease of 35% in lamivudine renal clearance and a mean increase of 43% in lamivudine area under the plasma concentration-time curve. The mechanism of interaction is thought to be competitive inhibition of tubular secretion by trimethoprim. Lamivudine did not affect the pharmacokinetic profile of trimethoprim/sulfamethoxazole. Given the favorable safety profile of lamivudine, this interaction is unlikely to be of clinical significance. However, patients with renal dysfunction should be monitored carefully and the lamivudine dose adjusted if necessary. In addition, it should be noted that the effect of higher dosages of trimethoprim/sulfamethoxazole on lamivudine pharmacokinetics has not been investigated.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "4734": {
+   "text": "Limited data indicate that zidovudine may significantly increase the serum half-life of both trimethoprim (TMP) and sulfamethoxazole (SMX). The mechanism is not known, but may be related to an increase in the volume of distribution of each drug. In addition, trimethoprim can decrease the renal clearance of zidovudine and its glucuronide metabolite by inhibiting their tubular secretion. However, net clearance is not affected because zidovudine is mostly metabolized and the glucuronide may be eliminated via biliary excretion. This interaction is not likely to be clinically important except when hepatic glucuronidation is also impaired by liver disease or drug inhibition.",
+   "categories": [
+    "synergistic_effect",
+    "excretion"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1",
+   "name": "Abacavir",
+   "rxcui": "190521",
+   "rxnorm_name": "abacavir",
+   "drugbank_id": "DB01048",
+   "atc": [
+    "J05AF06"
+   ],
+   "ciel": [
+    {
+     "code": "103166",
+     "uuid": "103166AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine"
+    },
+    {
+     "code": "165606",
+     "uuid": "165606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / dolutegravir / lamivudine"
+    },
+    {
+     "code": "70056",
+     "uuid": "70056AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir"
+    },
+    {
+     "code": "70057",
+     "uuid": "70057AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir sulfate"
+    },
+    {
+     "code": "817",
+     "uuid": "817AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine / zidovudine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1019",
+   "name": "Lamivudine",
+   "rxcui": "68244",
+   "rxnorm_name": "lamivudine",
+   "drugbank_id": "DB00709",
+   "atc": [
+    "J05AF05"
+   ],
+   "ciel": [
+    {
+     "code": "103166",
+     "uuid": "103166AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine"
+    },
+    {
+     "code": "161361",
+     "uuid": "161361AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Efavirenz / lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "161363",
+     "uuid": "161363AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / stavudine"
+    },
+    {
+     "code": "161364",
+     "uuid": "161364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "1652",
+     "uuid": "1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / zidovudine"
+    },
+    {
+     "code": "165606",
+     "uuid": "165606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / dolutegravir / lamivudine"
+    },
+    {
+     "code": "165607",
+     "uuid": "165607AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / tenofovir / zidovudine"
+    },
+    {
+     "code": "168597",
+     "uuid": "b0b9b204-de1f-430b-a55a-56e08a72e926",
+     "name": "Lamivudine / raltegravir"
+    },
+    {
+     "code": "169361",
+     "uuid": "0af318f4-94a2-4dbe-9727-fb1d682e75fb",
+     "name": "Dolutegravir / lamivudine / tenofovir alafenamide"
+    },
+    {
+     "code": "170472",
+     "uuid": "72f7a185-3673-4499-a314-9487a715eabc",
+     "name": "Dolutegravir / lamivudine"
+    },
+    {
+     "code": "170671",
+     "uuid": "b944c518-10b4-4a93-a928-d0e4d10a66e4",
+     "name": "Dolutegravir / lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "630",
+     "uuid": "630AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / zidovudine"
+    },
+    {
+     "code": "78643",
+     "uuid": "78643AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine"
+    },
+    {
+     "code": "792",
+     "uuid": "792AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / stavudine"
+    },
+    {
+     "code": "817",
+     "uuid": "817AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine / zidovudine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1340",
+   "name": "Omeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00338",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1388",
+   "name": "Pantoprazole",
+   "rxcui": "40790",
+   "rxnorm_name": "pantoprazole",
+   "drugbank_id": "DB00213",
+   "atc": [
+    "A02BC02"
+   ],
+   "ciel": [
+    {
+     "code": "81550",
+     "uuid": "81550AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pantoprazole"
+    },
+    {
+     "code": "81551",
+     "uuid": "81551AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pantoprazole (as pantoprazole sodium sesquihydrate)"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1683",
+   "name": "Sodium bicarbonate",
+   "rxcui": "36676",
+   "rxnorm_name": "sodium bicarbonate",
+   "drugbank_id": "DB01390",
+   "atc": [
+    "B05CB04",
+    "B05XA02"
+   ],
+   "ciel": [
+    {
+     "code": "103706",
+     "uuid": "103706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / citric acid / sodium bicarbonate"
+    },
+    {
+     "code": "104324",
+     "uuid": "104324AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / potassium bicarbonate / sodium bicarbonate"
+    },
+    {
+     "code": "104327",
+     "uuid": "104327AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / simethicone / sodium bicarbonate"
+    },
+    {
+     "code": "104328",
+     "uuid": "104328AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / sodium bicarbonate"
+    },
+    {
+     "code": "104876",
+     "uuid": "104876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrogen peroxide / sodium bicarbonate"
+    },
+    {
+     "code": "105012",
+     "uuid": "105012AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Magnesium hydroxide / omeprazole / sodium bicarbonate"
+    },
+    {
+     "code": "105118",
+     "uuid": "105118AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Omeprazole / sodium bicarbonate"
+    },
+    {
+     "code": "105125",
+     "uuid": "105125AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pancreatin / potassium bicarbonate / sodium bicarbonate"
+    },
+    {
+     "code": "105153",
+     "uuid": "105153AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenobarbital / potassium iodide / sodium bicarbonate / theobromine"
+    },
+    {
+     "code": "105183",
+     "uuid": "105183AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Polyethylene glycol 3350 / potassium chloride / sodium bicarbonate / sodium chloride / sodium sulfate"
+    },
+    {
+     "code": "105198",
+     "uuid": "105198AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium bicarbonate / sodium bicarbonate"
+    },
+    {
+     "code": "105199",
+     "uuid": "105199AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium bitartrate / sodium bicarbonate"
+    },
+    {
+     "code": "105259",
+     "uuid": "105259AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate / sodium chloride"
+    },
+    {
+     "code": "105260",
+     "uuid": "105260AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate / sodium citrate"
+    },
+    {
+     "code": "105261",
+     "uuid": "105261AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate / tartaric acid"
+    },
+    {
+     "code": "84041",
+     "uuid": "84041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1724",
+   "name": "Sulfamethoxazole",
+   "rxcui": "10178",
+   "rxnorm_name": "sulfamethazine",
+   "drugbank_id": "DB01015",
+   "atc": [
+    "J01EB03"
+   ],
+   "ciel": [
+    {
+     "code": "105280",
+     "uuid": "105280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sulfadiazine / sulfamerazine / sulfamethazine"
+    },
+    {
+     "code": "84469",
+     "uuid": "84469AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sulfamethazine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1727",
+   "name": "Sulfisoxazole",
+   "rxcui": "10207",
+   "rxnorm_name": "sulfisoxazole",
+   "drugbank_id": "DB00263",
+   "atc": [
+    "J01EB05",
+    "S01AB02"
+   ],
+   "ciel": [
+    {
+     "code": "104594",
+     "uuid": "104594AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Erythromycin / sulfisoxazole"
+    },
+    {
+     "code": "105146",
+     "uuid": "105146AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenazopyridine / sulfisoxazole"
+    },
+    {
+     "code": "70141",
+     "uuid": "70141AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetyl sulfisoxazole"
+    },
+    {
+     "code": "84491",
+     "uuid": "84491AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sulfisoxazole"
+    },
+    {
+     "code": "84492",
+     "uuid": "84492AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sulfisoxazole diolamine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1874",
+   "name": "Trimethoprim",
+   "rxcui": "10829",
+   "rxnorm_name": "trimethoprim",
+   "drugbank_id": "DB00440",
+   "atc": [
+    "J01EA01"
+   ],
+   "ciel": [
+    {
+     "code": "105145",
+     "uuid": "105145AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenazopyridine / sulfamethoxazole / trimethoprim"
+    },
+    {
+     "code": "105189",
+     "uuid": "105189AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Polymyxin B / trimethoprim"
+    },
+    {
+     "code": "105281",
+     "uuid": "105281AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sulfamethoxazole / trimethoprim"
+    },
+    {
+     "code": "85498",
+     "uuid": "85498AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trimethoprim"
+    },
+    {
+     "code": "85499",
+     "uuid": "85499AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trimethoprim hydrochloride"
+    },
+    {
+     "code": "85500",
+     "uuid": "85500AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trimethoprim lactate"
+    },
+    {
+     "code": "85501",
+     "uuid": "85501AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trimethoprim sulfate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1961",
+   "name": "Zidovudine",
+   "rxcui": "11413",
+   "rxnorm_name": "zidovudine",
+   "drugbank_id": "DB00495",
+   "atc": [
+    "J05AF01"
+   ],
+   "ciel": [
+    {
+     "code": "160123",
+     "uuid": "160123AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Zidovudine for PMTCT"
+    },
+    {
+     "code": "1652",
+     "uuid": "1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / zidovudine"
+    },
+    {
+     "code": "165607",
+     "uuid": "165607AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / tenofovir / zidovudine"
+    },
+    {
+     "code": "630",
+     "uuid": "630AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / zidovudine"
+    },
+    {
+     "code": "817",
+     "uuid": "817AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine / zidovudine"
+    },
+    {
+     "code": "86663",
+     "uuid": "86663AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Zidovudine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter676",
+   "name": "Esomeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00736",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1019",
+   "DDInter1340",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1388",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1683",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1874",
+   "Minor",
+   "3225"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1961",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1388",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1683",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1874",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1961",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1388",
+   "DDInter1683",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1388",
+   "DDInter1874",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1388",
+   "DDInter1961",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1724",
+   "DDInter1961",
+   "Minor",
+   "4734"
+  ],
+  [
+   "DDInter1874",
+   "DDInter1961",
+   "Minor",
+   "4734"
+  ],
+  [
+   "DDInter1",
+   "DDInter1019",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1",
+   "DDInter1340",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1",
+   "DDInter1388",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1",
+   "DDInter1874",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1",
+   "DDInter1961",
+   "Unknown",
+   "-1"
+  ]
+ ]
+}

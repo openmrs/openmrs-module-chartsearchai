@@ -11,9 +11,11 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -200,11 +202,125 @@ public class DrugReferenceService {
 	}
 
 	/**
+	 * Every SUBSTANCE a clinician-entered drug NAME implies, one representative row each, the row
+	 * {@link #lookupByToken} resolves the whole name to first (issues #193 and #195).
+	 *
+	 * <p><b>Why one entry was not enough.</b> Issues #176/#192 fixed <em>which</em> entry a recorded
+	 * name resolves to; it still resolved to exactly one, and two shapes of recorded name denote more
+	 * than one substance. A COMBINATION name denotes each of its ingredients, so one of them was
+	 * compared and the rest were never checked — measured through {@link #lookupByToken} over the
+	 * shipped 19 MB KB (2026-08-09; re-measure before relying on the figures),
+	 * {@code sulfamethoxazole / trimethoprim} answers {@code Trimethoprim} and nothing is compared
+	 * against the sulfa moiety that drives that allergy, and {@code omeprazole / sodium bicarbonate}
+	 * answers {@code Sodium bicarbonate}, losing the PPI class entirely. A PRESENTATION name denotes
+	 * the moiety it is a presentation of, so where the KB files the presentation as its own substance
+	 * AND gives it no ATC code the class comparisons have nothing to compare and the finding goes
+	 * silent ({@code Insulin lispro (protamine)}, {@code Insulin human (isophane)},
+	 * {@code Iron (polysaccharide)}).
+	 *
+	 * <p><b>What is added, and the gate on each.</b> Nothing here changes
+	 * {@link DrugReference#nameMatchStrength}'s ranking or {@link DrugReference#substanceKey()}: the
+	 * widening is in what the recorded STRING is read to name, not in what the reference data calls one
+	 * substance. In order:
+	 * <ul>
+	 *   <li>the substance of {@link #lookupByToken}'s answer — always first, so every caller's existing
+	 *       label is unchanged for a name implying one substance;</li>
+	 *   <li>the substance of every OTHER entry making the same strongest claim, when that claim is a
+	 *       NAME claim ({@link DrugReference#NAME_IS_ANOTHER_NAME} or stronger). 1367 of the shipped
+	 *       KB's 5169 distinct published names are claimed equally by two or more entries and 1110 of
+	 *       those by two or more SUBSTANCES, 1058 of them {@code /}-joined (measured 2026-08-09 through
+	 *       {@link DrugReference#nameMatchStrength} and {@link DrugReference#substanceGroupKey()}).
+	 *       Deliberately not extended to the containment rank, which is where issue #192's hazard lives:
+	 *       there a tie is two entries whose names merely occur inside the recorded one;</li>
+	 *   <li>the substance each {@link DrugReference#combinationConstituents constituent} of a
+	 *       combination name resolves to, when the KB is NAMED that constituent. Any rank of NAME claim
+	 *       is enough because the recorded string ASSERTS the constituent is an ingredient, so an entry
+	 *       named it is that ingredient — including one whose display name diverges from it
+	 *       ({@code aspirin} → {@code Acetylsalicylic acid}, whose
+	 *       {@link DrugReference#displayLabel()} carries both);</li>
+	 *   <li>the substance the {@link DrugReference#parentMoietyName parent moiety} of a presentation
+	 *       name resolves to, when an entry is CALLED it
+	 *       ({@link DrugReference#NAME_IS_THE_DISPLAY_NAME}). Stricter than the constituent gate, and
+	 *       that is the point: a moiety is a derivation rather than a claim, so an entry that merely
+	 *       lists the stem among its aliases is a different presentation, and naming it in a chip would
+	 *       report an allergy to a drug the chart does not record — issue #176's defect from the other
+	 *       side. It is also what leaves apart the sibling pairs that share a stem and no bare row:
+	 *       {@code Varicella Zoster Vaccine (Recombinant)} against {@code (live/attenuated)},
+	 *       {@code Manganese (chloride)} against {@code (sulfate)}, {@code Typhoid vaccine (live)}
+	 *       against {@code (inactivated)}.</li>
+	 * </ul>
+	 *
+	 * <p><b>The bound it carries.</b> A moiety the KB names by a bare WORD rather than by a qualifier is
+	 * not reached — {@code Peanut oil} against {@code Peanut}, {@code Dextran 40}, {@code penicillin g,
+	 * procaine} — because that shape is indistinguishable by spelling from
+	 * {@code Digoxin Immune Fab (Ovine)} against {@code Digoxin}, a patient allergic to digoxin's
+	 * ANTIDOTE, which issue #192 measured and separated. Reaching it needs a judgement about substances
+	 * rather than about names, which this module does not make; the curated cross-reactivity groups are
+	 * where a deployment can state one.
+	 *
+	 * @return one row per implied substance, first-appearance order, {@link #lookupByToken}'s answer
+	 *         first; empty exactly when that answer is null
+	 */
+	public List<DrugReference> findImpliedSubstances(String drugName) {
+		DrugReference strongest = lookupByToken(drugName);
+		if (strongest == null) {
+			return Collections.emptyList();
+		}
+		Map<Object, DrugReference> bySubstance = new LinkedHashMap<Object, DrugReference>();
+		bySubstance.put(strongest.substanceGroupKey(), strongest);
+		int claim = strongest.nameMatchStrength(drugName);
+		if (claim >= DrugReference.NAME_IS_ANOTHER_NAME) {
+			for (DrugReference ref : getAll()) {
+				// A full scan, unlike lookupByToken's, which stops at the first display-name claim: the
+				// equal claimants are exactly what it stops looking for.
+				if (ref != strongest && ref.nameMatchStrength(drugName) == claim) {
+					addSubstance(bySubstance, ref);
+				}
+			}
+		}
+		for (String constituent : DrugReference.combinationConstituents(drugName)) {
+			addResolvedSubstance(bySubstance, constituent, DrugReference.NAME_IS_ANOTHER_NAME);
+		}
+		addResolvedSubstance(bySubstance, DrugReference.parentMoietyName(drugName),
+				DrugReference.NAME_IS_THE_DISPLAY_NAME);
+		return new ArrayList<DrugReference>(bySubstance.values());
+	}
+
+	/** Adds the substance {@code candidate} resolves to, when an entry claims it at {@code minimumClaim}
+	 *  or better — through {@link #lookupByToken}, so a candidate string is resolved by the SAME ranking
+	 *  as the recorded name it was derived from and this cannot become a second resolution rule. */
+	private void addResolvedSubstance(Map<Object, DrugReference> bySubstance, String candidate,
+			int minimumClaim) {
+		if (candidate == null) {
+			return;
+		}
+		DrugReference resolved = lookupByToken(candidate);
+		if (resolved != null && resolved.nameMatchStrength(candidate) >= minimumClaim) {
+			addSubstance(bySubstance, resolved);
+		}
+	}
+
+	/** Keyed by {@link DrugReference#substanceGroupKey()}, first row seen kept: the representative of a
+	 *  substance is the row with the strongest claim on the string that brought it in, and the legs run
+	 *  strongest-claim-first, so a later leg can add a substance but never rename one. */
+	private static void addSubstance(Map<Object, DrugReference> bySubstance, DrugReference ref) {
+		Object key = ref.substanceGroupKey();
+		if (!bySubstance.containsKey(key)) {
+			bySubstance.put(key, ref);
+		}
+	}
+
+	/**
 	 * Name-driven matching for a clinician-entered drug NAME: EVERY entry that name resolves to, in
 	 * dataset order. The multi-entry counterpart of {@link #lookupByToken} — a combination product's
 	 * name resolves each of its constituents, and a drug the dataset files as several route variants
 	 * resolves all of them — and the order-name counterpart of {@link #findByQuery}, which stays bound
 	 * to the prose matcher because a question and an answer are prose.
+	 *
+	 * <p>Not the same question as {@link #findImpliedSubstances}, which is what a recorded name is read
+	 * to NAME: this returns every entry the name MATCHES, including the ones issue #192 established are
+	 * false claims on it ({@code Lactic acid} for {@code Ciprofloxacin lactate}). Its callers are the
+	 * order-driven ones, where a match is the join and the ranking never applied.
 	 */
 	public List<DrugReference> findByDrugName(String drugName) {
 		if (drugName == null || drugName.trim().isEmpty()) {

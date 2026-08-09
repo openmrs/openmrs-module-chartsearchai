@@ -47,6 +47,18 @@ import org.slf4j.LoggerFactory;
  * <b>1.000</b> too, because the regex salvage path recovers both its citations. Only
  * {@code citation-missing} scores 0. Every case is asserted now, in one of two branches, and
  * {@link #everyCaseReachesTheRunAndBothAssertionBranchesAreOccupied} keeps both branches occupied.
+ *
+ * <p><b>Why the dataset carries two string-typed cases (issue #219).</b>
+ * {@code citation-string-type-citations} cannot fail on the typing it is named for, and dropping the
+ * {@code simulatedCitations} substitution does not change that: its prose anchors {@code [9]} and
+ * {@code [10]} inline, and the inline markers alone resolve both references whether or not the array
+ * parsed. Only a case whose prose anchors NOTHING isolates the array — and by the carve-outs in
+ * {@code extractCitedReferences}, only a BLANK answer both anchors nothing and still lets the array
+ * resolve, since real prose with no inline marker discards the array wholesale (the #76
+ * unanchored-array guard). Hence {@code citation-string-type-citations-array-only}, the string-typed
+ * twin of {@code citation-empty-answer-with-citations}: it scores F1 0.000 when the array is dropped
+ * and 1.000 when it is read. That margin is the point — it does not depend on where the per-case
+ * threshold sits, so the case cannot quietly stop discriminating if the threshold moves.
  */
 public class CitationEvalTest {
 
@@ -205,19 +217,26 @@ public class CitationEvalTest {
 				"Citation F1 should be >= 0.8 but was " + String.format("%.3f", avgF1));
 	}
 
+	/**
+	 * The prediction under test: the raw simulated response through the real parse
+	 * ({@code extractResponse}) and the real reference resolution
+	 * ({@code extractCitedReferences}), with nothing substituted in between.
+	 *
+	 * <p><b>What this used to do (issue #219).</b> A case could carry a {@code simulatedCitations}
+	 * array, and when it did this method used that instead of what {@code extractResponse} returned
+	 * — so the case asserted against a value production never produced. In three of the four cases
+	 * that carried one the two agreed, which is what made it look harmless; in the fourth,
+	 * {@code citation-string-type-citations}, they differed, and the substitution hid the very defect
+	 * the case is named for: {@code "citations": ["9","10"]} parsed to an EMPTY list. The field is
+	 * gone from {@link EvalCase} as well as from the dataset, so the substitution cannot come back by
+	 * someone filling in a field that still exists.
+	 */
 	private static List<Integer> computePredictedIndices(EvalCase evalCase) {
 		LlmProvider.LlmResponse llmResponse = LlmProvider.extractResponse(
 				evalCase.getSimulatedLlmResponse());
 
-		List<Integer> predictedCitations;
-		if (evalCase.getSimulatedCitations() != null) {
-			predictedCitations = evalCase.getSimulatedCitations();
-		} else {
-			predictedCitations = llmResponse.getCitations();
-		}
-
 		List<RecordReference> refs = LlmInferenceService.extractCitedReferences(
-				llmResponse.getAnswer(), predictedCitations, getMappings());
+				llmResponse.getAnswer(), llmResponse.getCitations(), getMappings());
 		List<Integer> predictedIndices = new ArrayList<>();
 		for (RecordReference ref : refs) {
 			predictedIndices.add(ref.getIndex());

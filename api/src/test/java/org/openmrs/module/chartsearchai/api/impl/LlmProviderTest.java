@@ -22,7 +22,9 @@ import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 
 /**
@@ -537,6 +539,67 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void extractResponse_shouldReadNumericStringCitationsAsIndices() {
+		// Issue #219. response_format: json_object constrains the response to JSON, not its value
+		// types, so a model may write its citation indices as strings. A strict isInt() check read
+		// this array as empty and said nothing: an answer whose references the model got right
+		// arrived with none whenever its prose did not also anchor them inline.
+		String response = "{\"answer\": \"CD4 counts are 988.0 [9] and 1191.0 [10].\", "
+				+ "\"citations\": [\"9\", \"10\"]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals("CD4 counts are 988.0 [9] and 1191.0 [10].", result.getAnswer());
+		assertEquals(Arrays.asList(9, 10), result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldCoerceOnlyTheTypeNeverWhichValuesAreAdmitted() {
+		// The coercion reads the same VALUES the integer path reads — nothing more, nothing less.
+		// 0 and -1 are not record indices, but they are dropped downstream by
+		// extractCitedReferences (which surfaces only indices with a record behind them), exactly
+		// as the citation-zero-index and citation-negative-index cases pin for the integer path.
+		// Filtering them here instead would move that decision into the parser and hide it.
+		String strings = "{\"answer\": \"Allergy to Beef [5].\", \"citations\": [\"-1\", \"0\", \"5\"]}";
+		String integers = "{\"answer\": \"Allergy to Beef [5].\", \"citations\": [-1, 0, 5]}";
+		assertEquals(LlmProvider.extractResponse(integers).getCitations(),
+				LlmProvider.extractResponse(strings).getCitations(),
+				"a string-typed array must parse to exactly what its integer-typed twin parses to");
+		assertEquals(Arrays.asList(-1, 0, 5), LlmProvider.extractResponse(strings).getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldStillDropCitationEntriesThatNameNoIndex() {
+		// The bound on the coercion: a string is an index only when the whole string IS one. A
+		// label, a null or an object names no record, so widening the type must not turn the array
+		// into "anything goes" — 8 is the only citation this response carries.
+		String response = "{\"answer\": \"TB is active [8].\", "
+				+ "\"citations\": [8, \"eight\", \"9x\", \"\", null, {\"index\": 9}, 9.7]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals(Arrays.asList(8), result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldReportANonConformantCitationsArrayAtWarn() {
+		// Silence was the defect, so recovering the indices is only half the fix: an operator whose
+		// model is off-schema has to be able to find that out. Asserted on the LEVEL rather than the
+		// message, per LogCapture's javadoc — a re-wording must not be able to drop the guard.
+		String offSchema = "{\"answer\": \"CD4 is 988.0 [9].\", \"citations\": [\"9\"]}";
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
+			assertEquals(Arrays.asList(9), LlmProvider.extractResponse(offSchema).getCitations());
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"a citations array that does not honour the integer schema must be reported, not "
+							+ "silently repaired — the repair is a guess about a model that is "
+							+ "misbehaving in other ways too. Captured: " + capture.describeAll());
+		}
+		String conformant = "{\"answer\": \"CD4 is 988.0 [9].\", \"citations\": [9]}";
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
+			assertEquals(Arrays.asList(9), LlmProvider.extractResponse(conformant).getCitations());
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a schema-conformant array must stay quiet, or the warning is noise every install "
+							+ "learns to ignore. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
 	public void normalizeSlashCitations_shouldConvertSlashesToSeparateBrackets() {
 		assertEquals("Tuberculosis [1], [2] and Malaria [3], [4]",
 				LlmProvider.normalizeSlashCitations("Tuberculosis [1/2] and Malaria [3/4]"));
@@ -592,6 +655,19 @@ public class LlmProviderTest {
 		assertEquals("Condition [1].", result.getAnswer());
 		assertTrue(result.getCitations().contains(1),
 				"salvageable in-range citation must survive: " + result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldSalvageNumericStringCitationsFromTruncatedJson() {
+		// The salvage path exists BECAUSE the response is degraded, so it must not be stricter than
+		// the clean path about how the citations are typed: a model that writes "9" for 9 is also a
+		// model that can hit the output-token cap, and dropping both halves of that response leaves
+		// an answer with no references at all.
+		String truncated = "{\"answer\": \"CD4 counts are 988.0 [9] and 1191.0 [10].\", "
+				+ "\"citations\": [\"9\", \"10\"";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(truncated);
+		assertEquals("CD4 counts are 988.0 [9] and 1191.0 [10].", result.getAnswer());
+		assertEquals(Arrays.asList(9, 10), result.getCitations());
 	}
 
 	@Test

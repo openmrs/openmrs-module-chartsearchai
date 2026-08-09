@@ -168,10 +168,14 @@ public class DrugReferenceService {
 	 * outright) AND the parent substance (whose own name the string also carries), because neither name's
 	 * resolution is affected by the other appearing beside it.
 	 *
-	 * <p><b>What it cannot do.</b> It cannot empty a non-empty set: an entry's carried alias resolves to
-	 * some strongest claimant, that claimant carries the same alias and so is in the matched set, and
-	 * {@code findImpliedSubstances} always answers with its substance first — so whatever the text most
-	 * strongly names always survives. And it drops whole SUBSTANCES only, never a row of one that
+	 * <p><b>What it cannot do.</b> It cannot empty a non-empty set. On the DDInter and ATC datasets that
+	 * follows from the rule: an entry's carried alias resolves to some strongest claimant, that claimant
+	 * carries the same alias and so is in the matched set, and {@code findImpliedSubstances} always
+	 * answers with its substance first — so whatever the text most strongly names always survives. The
+	 * middle step is a property of those PARSERS rather than of this filter, and a hand-authored
+	 * {@code json} dataset can break it, so the invariant is ENFORCED in {@link #rowsOf} instead of being
+	 * left to follow — see there for the shape and for why emptying is the one answer this must never
+	 * give. And it drops whole SUBSTANCES only, never a row of one that
 	 * survives: the verdict is taken per substance and then applied to every matched row of it. That
 	 * second half is not decoration. A qualified row need not carry the alias its own family's bare row
 	 * carries — {@code Estrone sulfate (topical)} publishes {@code estrone} as its {@code rxnorm_name},
@@ -188,8 +192,10 @@ public class DrugReferenceService {
 	public List<DrugReference> findImpliedByQuery(String question) {
 		List<DrugReference> matched = findByQuery(question);
 		if (matched.size() < 2) {
-			// One match is its own strongest claimant, so the filter is provably a no-op — and this is the
-			// common case, which must not pay for the resolution.
+			// A no-op on one match, and provably so given rowsOf's empty-set fallback: either the single
+			// row's own alias denotes its substance and it is kept, or nothing is in play and rowsOf returns
+			// `matched` anyway. Purely a cost guard, so this is the common case not paying for the
+			// resolution; removing it cannot change an answer.
 			return matched;
 		}
 		String lower = question.toLowerCase(Locale.ROOT);
@@ -256,10 +262,38 @@ public class DrugReferenceService {
 		return rowsOf(matched, inPlay);
 	}
 
-	/** @return every row of {@code matched} whose substance is in {@code inPlay}, in the order given — the
-	 *          second half of both legs above, which is what makes their verdict per SUBSTANCE rather than
-	 *          per row. See {@link #findImpliedByQuery} for the presentation this exists to keep. */
+	/**
+	 * @return every row of {@code matched} whose substance is in {@code inPlay}, in the order given — the
+	 *         second half of both legs above, which is what makes their verdict per SUBSTANCE rather than
+	 *         per row. See {@link #findImpliedByQuery} for the presentation this exists to keep.
+	 *
+	 *         <p><b>And {@code matched} unchanged when nothing is in play</b>, which is where the
+	 *         "cannot empty a non-empty set" invariant is ENFORCED rather than assumed. The argument for
+	 *         it (see {@link #findImpliedByQuery}) needs the strongest claimant on a carried alias to
+	 *         carry that alias itself, and so to be in {@code matched} too. That is a property of the
+	 *         PARSERS, not of this filter: {@link DdiDrugReferenceSource} makes an entry's display name
+	 *         its first alias and {@link AtcDrugReferenceSource} makes it the only one, so on both of
+	 *         those every entry names itself. A hand-authored {@code json} dataset need not — the shape
+	 *         {@link DrugReference#nameMatchStrength}'s javadoc already records its gate as excluding —
+	 *         and {@code json} is the DEFAULT {@code sourceFormat}. There the rank-2 claimant can be an
+	 *         entry the prose matcher never reached, and then no matched row's alias denotes its own
+	 *         substance and every one is dropped.
+	 *
+	 *         <p>Emptying is the worst answer available. This list is what every arm iterates, so an
+	 *         emptied set means a question naming a drug gets no contraindication, no interaction and no
+	 *         overdose check, with nothing in the log to say so — the silent-and-closed failure the whole
+	 *         drug-safety feature is built to avoid. Falling back to {@code matched} is the pre-#209
+	 *         answer for that one shape: it over-reports, which for a non-blocking advisory is the safe
+	 *         direction. Measured over every shipped dataset, the fallback never fires — 0 firings on
+	 *         each, over the 7452 names and aliases of the full 19 MB KB and over the three bundled
+	 *         samples — so it costs the shipped configuration nothing and only bounds what an
+	 *         operator-authored dataset can do.
+	 *         {@code narrowingNeverEmptiesACandidateSetEvenWhenNoMatchedRowIsNamedTheWord} pins it.
+	 */
 	private static List<DrugReference> rowsOf(List<DrugReference> matched, Set<Object> inPlay) {
+		if (inPlay.isEmpty()) {
+			return matched;
+		}
 		List<DrugReference> out = new ArrayList<DrugReference>();
 		for (DrugReference ref : matched) {
 			if (inPlay.contains(ref.substanceGroupKey())) {

@@ -269,6 +269,81 @@ public class SubstanceCandidateSetTest {
 		assertFalse(texts.toString().contains("Hydrocortisone butyrate"), "was: " + texts);
 	}
 
+	/** A hand-authored {@code json} dataset carrying the one shape the DDInter and ATC parsers cannot
+	 *  produce: an entry whose {@code aliases} omit its own {@code name}. See the fixture's own
+	 *  {@code description}. */
+	private static final String NAME_NOT_ITS_OWN_ALIAS_FIXTURE =
+			"chartsearchai-test/drug-reference-name-not-its-own-alias.json";
+
+	@Test
+	public void narrowingNeverEmptiesACandidateSetEvenWhenNoMatchedRowIsNamedTheWord()
+			throws IOException {
+		// The invariant findImpliedByQuery's javadoc states — it cannot empty a non-empty set — asserted
+		// rather than assumed, on the one dataset shape that breaks the reasoning behind it.
+		//
+		// That reasoning is: an entry's carried alias resolves to some strongest claimant, that claimant
+		// carries the same alias and so is in the matched set too, so whatever the text most strongly
+		// names always survives. The middle step is a property of the PARSERS, not of this filter —
+		// DdiDrugReferenceSource makes the display name alias[0] and AtcDrugReferenceSource makes it the
+		// only alias, so on both of those an entry always names itself. A hand-authored `json` dataset
+		// need not, and `json` is the DEFAULT sourceFormat.
+		//
+		// Here `Ibuprofen` publishes only `ibuprof`. The recorded-name matcher reaches `ibuprofen` from
+		// that stem by its two-letter inflection allowance, so it is the rank-2 claimant on the word; the
+		// PROSE matcher does not reach it at all, so it is absent from the prose candidate set for that
+		// same word. Both presentations carry `ibuprofen` and neither is named it, so a filter that only
+		// asks "does my carried alias denote MY substance" answers no for every matched row.
+		//
+		// Emptying is the worst available failure: the drugs-in-play set is what every arm iterates, so a
+		// question naming a drug would silently get no contraindication, no interaction and no overdose
+		// check at all — and no log line says so. A superset is the pre-#209 answer and merely
+		// over-reports, which for a non-blocking advisory is the safe direction.
+		//
+		// This is the PROSE leg specifically. Without rowsOf's fallback it returns [] here, measured.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(NAME_NOT_ITS_OWN_ALIAS_FIXTURE));
+
+		// The premises, through the production predicates: without them this passes while asserting nothing.
+		DrugReference stem = DrugReferenceTestSupport.row(service.getAll(), "Ibuprofen");
+		assertFalse(stem.isNamed(stem.getName()),
+				"the fixture's point is an entry whose aliases omit its own name, was: " + stem.getAliases());
+		assertEquals(DrugReference.NAME_IS_THE_DISPLAY_NAME, stem.nameMatchStrength("ibuprofen"),
+				"it must still be the strongest claimant on the word");
+		assertEquals("[Ibuprofen tablets, Ibuprofen suspension]",
+				DrugReferenceTestSupport.names(service.findByQuery("is ibuprofen 400mg safe?")).toString(),
+				"while being absent from the prose candidate set for that same word");
+
+		assertEquals("[Ibuprofen tablets, Ibuprofen suspension]", DrugReferenceTestSupport
+				.names(service.findImpliedByQuery("is ibuprofen 400mg safe?")).toString(),
+				"a narrowing that keeps nothing must keep everything instead of emptying the set");
+
+		// The order-name leg does not reach the emptying shape from the same fixture, and the reason is
+		// worth recording rather than papering over: its boundary rule tolerates two inflection letters, so
+		// `Ibuprofen tablets 400mg` matches the stem row `Ibuprofen` (via `ibuprof` + `en`) as well as the
+		// two presentations. That row's own alias denotes its own substance, so it survives on the rule and
+		// the set is non-empty without the fallback. Asserted as the exact set rather than as "non-empty",
+		// because the interesting part is WHICH row survives.
+		assertEquals("[Ibuprofen]", DrugReferenceTestSupport
+				.names(service.findImpliedByDrugName("Ibuprofen tablets 400mg")).toString(),
+				"the order-name leg keeps the row whose own alias names it, so it never needed the fallback");
+
+		// And the consequence that makes it matter: the safety arms still run. Without the fallback this
+		// question yields ZERO chips for a patient recorded allergic to the drug it names — every arm
+		// iterates the drugs-in-play set, so emptying it switches the whole validator off silently.
+		// Asserted on the subjects rather than on the four rendered strings: what this case is about is
+		// that each admitted row was checked, not how the contraindication arms word themselves.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"is ibuprofen 400mg safe?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Ibuprofen"), null));
+		assertEquals(4, warnings.size(),
+				"both admitted rows must still be checked, against both findings, was: " + warnings);
+		for (String subject : new String[] { "Ibuprofen tablets", "Ibuprofen suspension" }) {
+			assertTrue(details(warnings).toString().contains(subject),
+					"every admitted row must be a chip subject, missing " + subject + ", was: "
+							+ details(warnings));
+		}
+	}
+
 	private static List<String> details(List<SafetyWarning> warnings) {
 		List<String> out = new ArrayList<String>();
 		for (SafetyWarning warning : warnings) {

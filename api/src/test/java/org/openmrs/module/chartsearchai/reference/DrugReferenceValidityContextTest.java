@@ -118,10 +118,13 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	// ------------------------------------------------------------------
 
 	/**
-	 * Issue #150. A whitespace-only alias is a token the boundary scan finds at every word gap, so the
-	 * entry carrying it matches allergen text it has nothing to do with, and its contraindications then
-	 * fire for every patient with any allergy recorded at all. Dropped at load, because the token — not
-	 * the entry — is what fails open.
+	 * Issue #150. A whitespace-only alias is a token the boundary scan finds wherever a space follows a
+	 * non-alphanumeric character, so the entry carrying it matches allergen text it has nothing to do
+	 * with, and its contraindications then fire for a patient with an unrelated allergy. Dropped at load,
+	 * because the token — not the entry — is what fails open.
+
+	 * <p>Narrower than every allergen, and the negative half is asserted below for that reason: a
+	 * single-word allergen has no space, and a space preceded by a letter fails the left boundary.
 	 */
 	@Test
 	public void aBlankAliasIsDroppedAtLoadSoTheEntryStopsMatchingEveryAllergen() throws IOException {
@@ -140,14 +143,22 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertEquals("[warfarin]", warfarin.getAliases().toString(),
 				"the blank alias must be gone from the loaded entry, leaving the usable ones");
 		assertFalse(warfarin.matchesDrugName("Vitamin A, B"),
-				"the whole point: with the blank alias present this is TRUE, so the warfarin "
-						+ "contraindication fires for a patient allergic to a multivitamin");
+				"the whole point: with the blank alias present this is TRUE (measured through this same "
+						+ "matcher), so the warfarin contraindication fires for a patient whose only "
+						+ "recorded allergy is to a multivitamin");
+		assertFalse(warfarin.matchesText("vitamin a, b"),
+				"and the prose matcher is false on the same string with or without the blank alias, which "
+						+ "is the asymmetry issue #150 reports: #148 gave allergen resolution the "
+						+ "recorded-name rule, whose inflection tail is what opened this");
 		assertTrue(warfarin.matchesDrugName("Warfarine Co 5mg"),
 				"and the entry must still resolve the drug it is about");
 
 		DrugReference gentamicin = DrugReferenceTestSupport.row(service.getAll(), "Gentamicin");
 		assertEquals("[gentamicin]", gentamicin.getAliases().toString(),
 				"the healthy entry in the same file is untouched");
+		assertFalse(gentamicin.matchesDrugName("Vitamin A, B"),
+				"the shape is narrow: an entry with no blank alias never matched this, so the drop is "
+						+ "removing a spurious match rather than narrowing a real one");
 		assertEquals(2, service.getAll().size(),
 				"and the entry itself is KEPT: it carries a real contraindication and a real ATC code, "
 						+ "so refusing it would trade a fail-open for a silent fail-closed");

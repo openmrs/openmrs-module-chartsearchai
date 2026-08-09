@@ -301,11 +301,20 @@ public final class DrugReferenceValidity {
 	 * <p><b>Blank aliases are DROPPED</b> (#150). An alias with no letter or digit in it names nothing, so
 	 * it cannot identify a drug and can only match by accident — and it does:
 	 * {@link DrugReference#containsBoundedToken} already refuses a token that is EMPTY after the
-	 * diacritic fold, but a single space is not empty. It is found at every word gap, where the left
-	 * boundary holds, and the recorded-name rule's two-letter inflection allowance carries the match past
-	 * the following word's last letters. So a blank alias makes {@link DrugReference#matchesDrugName} true
-	 * for allergen text the entry has nothing to do with, and that entry's contraindications fire for
-	 * every patient with any allergy recorded at all — failing OPEN, on every safety decision.
+	 * diacritic fold, but a single space is not empty. Where a space sits after a non-alphanumeric
+	 * character its left boundary holds, and the recorded-name rule's two-letter inflection allowance then
+	 * carries the match over a short trailing word. So a blank alias makes
+	 * {@link DrugReference#matchesDrugName} true for allergen text the entry has nothing to do with, and
+	 * that entry's contraindications fire for a patient with an unrelated allergy — failing OPEN.
+	 *
+	 * <p>Narrower than "every allergen", and worth stating because the bound is what makes this latent
+	 * rather than obvious. Measured through {@link DrugReference#matchesDrugName} on an entry carrying
+	 * {@code [warfarin, " "]}: {@code Vitamin A, B} matches and {@code Aspirin},
+	 * {@code Sodium chloride} and {@code Amphotericin B, liposomal} do not — a single-word allergen has no
+	 * space at all, and a space preceded by a letter fails the left boundary. It takes a recorded name
+	 * with a non-alphanumeric before a space and a short word after it. The prose matcher is false on the
+	 * same string, which is the asymmetry issue #150 reports: #148 gave allergen resolution the
+	 * recorded-name rule, and the tail allowance is what opened this.
 	 *
 	 * <p>The offending token and not the entry, deliberately. The entry's other aliases, its ATC codes and
 	 * its rules are all valid and may be its only coverage — the ATC codes especially, since
@@ -349,20 +358,23 @@ public final class DrugReferenceValidity {
 			}
 			// Asked of the entry AFTER the drop, and through its own predicate rather than a second
 			// reading of the same list: a blank alias is not a name, so an entry whose only "name" was
-			// blank is unnamed once it is gone.
-			if (entry.getName() != null && !entry.isNamed(entry.getName())) {
+			// blank is unnamed once it is gone. Gated on the display name being a name at all — the
+			// curated parser already drops a blank-named entry, and repairing one by giving it a blank
+			// alias would put back exactly what the rule above took out.
+			String own = DrugReference.normalizeName(entry.getName());
+			if (own != null && !entry.isNamed(own)) {
 				unnamed++;
 				unnamedIn.add(entry.getName());
-				usable.add(entry.getName().trim().toLowerCase(Locale.ROOT));
+				usable.add(own);
 				entry.setAliases(usable);
 			}
 		}
 		if (blanks > 0) {
 			report(BLANK_ALIAS, Remedy.DROPPED, true, blanks,
 					blanks + " alias(es) naming nothing (blank, or nothing but combining marks) were "
-							+ "dropped: such a token matches at any word boundary, so the entry's rules "
-							+ "would fire for every patient with any allergy recorded. Entries: "
-							+ sample(blankIn));
+							+ "dropped: such a token matches at a word boundary in text it has nothing to "
+							+ "do with, so the entry's rules would fire for a patient with an unrelated "
+							+ "allergy. Entries: " + sample(blankIn));
 		}
 		if (unnamed > 0) {
 			report(ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES, Remedy.REPAIRED, true, unnamed,
@@ -380,9 +392,14 @@ public final class DrugReferenceValidity {
 	 * claim, which is silent about rules, and it takes that verdict per SUBSTANCE — so where the rows of
 	 * what a clinician would call one drug key as DIFFERENT substances, only the strongest claimant on the
 	 * shared name survives and every other row's rules go with it. Measured on a hand-authored fixture: an
-	 * order for {@code Ibuprofen tablets 400mg} keeps the bare {@code Ibuprofen} row, which carries no
-	 * rules, and drops the two presentations that do. The candidate set is non-empty, so #210's
-	 * emptying guard is satisfied and the findings are gone anyway.
+	 * order for {@code Ibuprofen 400mg} keeps the bare {@code Ibuprofen} row, which carries no rules, and
+	 * drops the two presentations that do. The candidate set is non-empty, so #210's emptying guard is
+	 * satisfied and the findings are gone anyway.
+	 *
+	 * <p>An order naming a PRESENTATION ({@code Ibuprofen tablets 400mg}) keeps that presentation, because
+	 * the repair above gives every row its own name and the string carries it. So the shape that still
+	 * loses rules is the ordinary one — a name carrying only the substance's name — which is why the
+	 * repair narrows this defect without closing it.
 	 *
 	 * <p><b>Why this is a load-time rule and not a resolution change.</b> The issue records three options.
 	 * Preferring a rule-bearing row among equally-strong claimants re-introduces a rule-shaped tie-break

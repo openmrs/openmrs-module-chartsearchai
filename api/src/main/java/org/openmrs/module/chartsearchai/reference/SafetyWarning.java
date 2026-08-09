@@ -62,10 +62,19 @@ public class SafetyWarning {
 
 	private final String detail;
 
+	private final String severity;
+
+	/** A warning raised from something the reference data assigns no severity to — see
+	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
+		this(type, drug, detail, null);
+	}
+
+	public SafetyWarning(String type, String drug, String detail, String severity) {
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
+		this.severity = severity;
 	}
 
 	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */
@@ -88,6 +97,29 @@ public class SafetyWarning {
 	 *  as a display prefix. */
 	public String getDetail() {
 		return detail;
+	}
+
+	/**
+	 * The severity the reference data assigns the rule this warning was raised from — one of
+	 * {@code Major}, {@code Moderate}, {@code Minor}, {@code Unknown} for a DDInter-rated rule, ranked
+	 * by {@code DrugSafetyValidator.severityPriority}, which is also what
+	 * {@code addQuestionPairInteractions} and the screening arm sort their chips on.
+	 *
+	 * <p><b>Null means the source rates nothing here</b>, which is a real distinction rather than a
+	 * missing value: a hand-authored curated rule is deliberately UNRATED (and outranks {@code Major}
+	 * in that same ordering — unrated is not low-rated), an ATC-subgroup or cross-reactivity join
+	 * carries no rating at all, and neither a contraindication nor an overdose has one. Callers must
+	 * not read null as "no severity was determined".
+	 *
+	 * <p>Exposed for issue #207. The chip arms order themselves by this value and then discarded it,
+	 * so the ONLY remaining trace of the key they sorted on was a word inside the rendered
+	 * {@link #getDetail()} prose — which meant the ordering could only be asserted by parsing
+	 * clinician-facing text, anchored on a clause the module rewords freely. Measured: rewording that
+	 * clause left {@code thePairChipsAreOrderedBySeverityAndBounded} green while it asserted nothing at
+	 * all. Not serialized onto the REST response; the wire shape is unchanged.
+	 */
+	public String getSeverity() {
+		return severity;
 	}
 
 	@Override

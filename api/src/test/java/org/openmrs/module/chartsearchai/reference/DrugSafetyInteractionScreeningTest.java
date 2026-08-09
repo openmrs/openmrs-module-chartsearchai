@@ -19,6 +19,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -42,8 +43,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 public class DrugSafetyInteractionScreeningTest {
 
 	/** The canonical screening question from the issue, verbatim. */
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with her current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
 	private static DrugSafetyValidator ddinterValidator() {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterService());
@@ -92,6 +92,35 @@ public class DrugSafetyInteractionScreeningTest {
 	private static List<SafetyWarning> screen(DrugSafetyValidator validator, String question,
 			PatientClinicalContext context) {
 		return validator.validate("", question, context);
+	}
+
+	@Test
+	public void theSharedScreeningQuestionIsStillClassifiedAsScreening() {
+		// Issue #153, asserted where it can fail. The string above is shared by ten test files, and which
+		// arm it reaches is decided by isInteractionScreening — so a change to that classifier decides
+		// whether ten files are testing the screening arm or something else.
+		//
+		// What this adds over what those ten files already give, measured rather than assumed: rewording
+		// nine of the ten copies one file at a time (see DrugReferenceTestSupport.SCREENING_QUESTION for
+		// the exact mutation and why the tenth was not measured) turned eight of the nine red, so the
+		// condition was NOT unprotected. Two things it adds. It names the cause — eight files failing on
+		// chip counts do not say "the classifier changed" — and it covers the one file that stayed GREEN,
+		// DuplicateInteractionChipTest, whose assertion the drug-in-play arm satisfies too. Asked of the
+		// production predicate directly, so there is no chip count in between.
+		assertTrue(QueryScopeRouter.isInteractionScreening(DrugReferenceTestSupport.SCREENING_QUESTION),
+				"the shared screening question must still be classified as interaction screening, or the "
+						+ "ten files that use it are no longer testing the screening arm: "
+						+ DrugReferenceTestSupport.SCREENING_QUESTION);
+		// The other half of the same contract: it must name no reference drug. Both halves are what makes
+		// the arm reachable — a question that names a drug is handled by the drug-in-play arm instead
+		// (DrugSafetyValidator.validate stands the screen down as soon as inPlay is non-empty), so a
+		// screening question that started resolving an entry would silently move every one of those files
+		// onto the other arm without changing the classifier at all.
+		assertTrue(DrugReferenceTestSupport.ddinterService()
+				.findImpliedByQuery(DrugReferenceTestSupport.SCREENING_QUESTION).isEmpty(),
+				"and it must still name no reference drug, or the screening arm never runs for it: "
+						+ DrugReferenceTestSupport.names(DrugReferenceTestSupport.ddinterService()
+								.findImpliedByQuery(DrugReferenceTestSupport.SCREENING_QUESTION)));
 	}
 
 	@Test

@@ -387,21 +387,38 @@ public class DrugSafetyQuestionPairInteractionTest {
 			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"
 			+ " — any interactions?";
 
-	/** The severity word the chip's own note leads with, as a rank; -1 when the chip carries none.
-	 *  Read from the segment the pair chip appends after its provenance clause, so a severity word
-	 *  occurring later inside a mechanism paragraph cannot be mistaken for the rule's rating. */
+	/**
+	 * The rank the arm ordered this chip on — {@link SafetyWarning#getSeverity()} put through the one
+	 * definition of that ordering, {@code severityPriority}.
+	 *
+	 * <p>Issue #207: this used to read the severity WORD out of the rendered detail, locating it by
+	 * {@code indexOf("also named in the question — ")}, and returned {@code -1} when it could not find
+	 * that clause — a sentinel the ordering loop skipped. So rewording one clause of clinician-facing
+	 * prose made the helper answer "no opinion" for EVERY chip and
+	 * {@link #thePairChipsAreOrderedBySeverityAndBounded} passed while asserting nothing. Measured on
+	 * {@code ae09928}: with the sort removed the case fails; with the clause reworded to "also mentioned
+	 * in the question" it passes, and it passes with BOTH mutations applied at once. The clause is chip
+	 * text and chip text is reworded routinely (#182, #188, #192, #198, #205, #210 all changed
+	 * neighbouring strings), so the trigger was a normal action rather than a hypothetical.
+	 *
+	 * <p>Now it reads the structured rating the chip carries, so no prose is parsed, and it FAILS rather
+	 * than returning a sentinel when it cannot classify one: a pair chip built from a rated rule that
+	 * arrives with no rating means the ordering key was not carried, which is precisely the state in
+	 * which the ordering assertion below would otherwise silently stop asserting. Every chip this arm
+	 * raises from the bundled DDInter sample is rule-rated — the sample assigns every row one of the
+	 * four ratings — so an absent rating here is never the legitimate unrated case.
+	 */
 	private static int chipSeverityRank(SafetyWarning warning) {
-		int at = warning.getDetail().indexOf("also named in the question — ");
-		if (at < 0) {
-			return -1;
+		if (warning.getSeverity() == null) {
+			throw new AssertionError("this chip carries no severity, so the ordering it was sorted on is "
+					+ "not observable and the assertion below would skip it (issue #207): " + warning);
 		}
-		String tail = warning.getDetail().substring(at + "also named in the question — ".length());
-		for (String severity : Arrays.asList("Major", "Moderate", "Minor", "Unknown")) {
-			if (tail.startsWith(severity)) {
-				return DrugSafetyValidator.severityPriority(severity);
-			}
+		if (!Arrays.asList("Major", "Moderate", "Minor", "Unknown").contains(warning.getSeverity())) {
+			throw new AssertionError("unrecognized severity '" + warning.getSeverity() + "' — severityPriority "
+					+ "ranks it above Major as an unrated rule, which for a DDInter-rated chip means the "
+					+ "rating was mangled rather than absent: " + warning);
 		}
-		return -1;
+		return DrugSafetyValidator.severityPriority(warning.getSeverity());
 	}
 
 	@Test
@@ -462,6 +479,30 @@ public class DrugSafetyQuestionPairInteractionTest {
 	}
 
 	@Test
+	public void anInteractionChipCarriesTheRatingItWasOrderedOn() {
+		// The property the ordering case above rests on (issue #207). Both arms sort their chips by the
+		// source's rating and then dropped it, leaving the rendered prose as the only trace — so a chip
+		// that stopped carrying it would make the ordering assertion untestable except by parsing
+		// clinician-facing text. Asserted per arm, because they build their chips at different sites: the
+		// question-pair arm and the active-order arm.
+		SafetyWarning pairChip = ddinterValidator()
+				.validate(ABSTAINING_ANSWER, PAIR_QUESTION, patientOnNeitherDrug()).get(0);
+		assertTrue(pairChip.getDetail().contains("named in the question"),
+				"precondition: the pair arm's chip, was: " + pairChip);
+		assertEquals("Major", pairChip.getSeverity(),
+				"the pair chip must carry the source's rating for warfarin x aspirin, was: " + pairChip);
+
+		SafetyWarning orderChip = ddinterValidator().validate(
+				"Warfarin and aspirin together increase bleeding risk.", PAIR_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Aspirin 81mg"),
+						null, null, null)).get(0);
+		assertTrue(orderChip.getDetail().contains("active order"),
+				"precondition: the active-order arm's chip, was: " + orderChip);
+		assertEquals("Major", orderChip.getSeverity(),
+				"and so must the active-order chip for the same pair, was: " + orderChip);
+	}
+
+	@Test
 	public void thePairChipsAreOrderedBySeverityAndBounded() {
 		// The arm's output is question-controlled and grows as N²/2, while every chip is also an
 		// injected pre-answer finding. Before this bound, the question below raised 72 chips carrying
@@ -475,12 +516,17 @@ public class DrugSafetyQuestionPairInteractionTest {
 		assertTrue(interactionChips(warnings) <= 10,
 				"the pair arm must bound what one question can raise, was " + interactionChips(warnings)
 						+ " chips: " + warnings);
+		// Precondition on the INSTRUMENT, not on the arm: an ordering assertion over fewer than two chips
+		// is satisfied by anything, so the case has to know it received a list worth ordering (issue #207 —
+		// the same class of vacuity the helper above carried).
+		assertTrue(interactionChips(warnings) >= 2,
+				"precondition: this question must raise several chips, or there is no ordering to assert,"
+						+ " was: " + warnings);
 		int previous = Integer.MAX_VALUE;
 		for (SafetyWarning warning : warnings) {
+			// No skip: chipSeverityRank now throws rather than returning a sentinel, so a chip this case
+			// cannot classify fails it instead of passing through it.
 			int rank = chipSeverityRank(warning);
-			if (rank < 0) {
-				continue;
-			}
 			assertTrue(rank <= previous,
 					"pair chips must be ordered most-severe first, was: " + warnings);
 			previous = rank;

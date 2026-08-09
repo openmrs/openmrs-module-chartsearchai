@@ -60,8 +60,7 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"
 			+ " — any interactions?";
 
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with her current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
 	/** Above-floor pairs among the sample's 16 drugs — the candidate count every cap here cuts. */
 	private static final int CANDIDATE_PAIRS = 72;

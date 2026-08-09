@@ -86,8 +86,7 @@ public class RuleTokenAliasOrderMatchingTest {
 	 *  screening arm is the only thing that can chip and an assertion about it cannot be satisfied by
 	 *  a question-driven arm. The empty answer is the PRE-answer production shape
 	 *  ({@code DrugReferenceInjector.preAnswerFindings} calls the validator exactly that way). */
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with her current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
 	private DrugReferenceService service() throws IOException {
 		return DrugReferenceTestSupport

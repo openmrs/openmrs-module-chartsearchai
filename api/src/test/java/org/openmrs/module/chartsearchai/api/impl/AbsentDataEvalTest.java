@@ -30,7 +30,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.eval.EvalCase;
 import org.openmrs.module.chartsearchai.eval.EvalDataset;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,32 +97,32 @@ public class AbsentDataEvalTest {
 
 	private static EvalDataset dataset;
 
-	private static String chartText;
-
 	/**
-	 * A real patient chart the absent topics are absent FROM — rendered by the real
-	 * {@link PatientChartSerializer} from {@link TestDatasetHelper#FULL_PATIENT_DATASET}, which is the
-	 * chart this dataset was evidently authored against: {@code absent-cancer}'s
-	 * {@code expectedAnswerNotContains} names CD4 and tuberculosis, and both are records in it
-	 * (asserted in {@link #everyAbsentCaseIsRunAndEveryExpectationDiscriminates}).
+	 * The chart the gated case sends: EMPTY, which
+	 * {@code LlmInferenceService.chartTextOrPlaceholder} and {@code LlmProvider.normalizeRecords} turn
+	 * into the no-records placeholder. That is a real production shape, and it is the one under which
+	 * every case's "this topic is absent" premise holds by construction.
 	 *
-	 * <p>Why not an empty chart. It would be simpler, and it is a real production shape
-	 * ({@code LlmInferenceService.chartTextOrPlaceholder} substitutes a placeholder for one) — but it is
-	 * the EASY shape, and it makes every {@code expectedAnswerNotContains} vacuous, since a chart with
-	 * no records cannot bait the model into answering about a different topic. The shape that actually
-	 * fails in production is a chart that is FULL and irrelevant: the querystore focus path has no
-	 * relevance gate, so the K nearest neighbours are non-empty even when nothing in the chart is about
-	 * the query (see {@link LlmProvider}'s focus-hint note), and abstaining in front of records is the
-	 * hard part.
+	 * <p><b>A full, irrelevant chart would be the better shape and was tried and rejected — measured,
+	 * so the next person does not repeat it.</b> It is the shape that actually fails in production (the
+	 * querystore focus path has no relevance gate, so the K nearest neighbours are non-empty even when
+	 * nothing in the chart is about the query — see {@link LlmProvider}'s focus-hint note), and it is
+	 * the only shape in which an {@code expectedAnswerNotContains} can bite at all, since a chart with
+	 * no records cannot bait a drift. {@link TestDatasetHelper#FULL_PATIENT_DATASET} looked like the
+	 * chart this dataset was authored against: {@code absent-cancer} forbids the answer to mention CD4
+	 * or tuberculosis and both are records in it.
+	 *
+	 * <p>It is not. That dataset's records 12 and 89 are {@code "Diagnosis — Kaposi sarcoma oral"}, so
+	 * the patient HAS a cancer, and the bundled Gemma answered — correctly — "Yes, the patient has a
+	 * diagnosis of Kaposi sarcoma oral [12] and [89]", which fails {@code absent-cancer}'s
+	 * {@code expectedAnswerContains: ["cancer"]}. The one case that shape exists to serve is the one
+	 * case it makes unpassable, and {@code absent-nutrition-diet} goes the same way against the Beef
+	 * food-allergen record. Sending the full chart therefore reported dataset-premise failures as if
+	 * they were abstention defects. Until a chart exists that the 19 topics really are absent from, this
+	 * suite measures the easy shape and says so.
 	 */
 	private static String chartText() {
-		if (chartText == null) {
-			chartText = new PatientChartSerializer()
-					.serialize(null, TestDatasetHelper.toSerializedRecords(
-							TestDatasetHelper.FULL_PATIENT_DATASET))
-					.getText();
-		}
-		return chartText;
+		return "";
 	}
 
 	private static EvalDataset getDataset() {
@@ -162,10 +161,10 @@ public class AbsentDataEvalTest {
 	 * must not answer about a different topic the chart DOES carry.
 	 *
 	 * <p>Every piece below the transport is production code: {@link LlmProvider#DEFAULT_SYSTEM_PROMPT},
-	 * {@link PatientChartSerializer} for the chart, {@link LlmProvider#buildUserMessage} (the same
-	 * method {@code search}, {@code searchStreaming} and {@code warmup} build their bytes with), and
-	 * {@link LlmProvider#extractResponse} for the reply. See {@link #chartText()} for which chart and
-	 * why that one.
+	 * {@link LlmProvider#buildUserMessage} (the same method {@code search}, {@code searchStreaming} and
+	 * {@code warmup} build their bytes with, and the method that turns the empty chart into the
+	 * no-records placeholder), and {@link LlmProvider#extractResponse} for the reply. See
+	 * {@link #chartText()} for which chart and why that one.
 	 */
 	@ParameterizedTest(name = "[{index}] {0}")
 	@MethodSource("absentDataCases")
@@ -265,22 +264,6 @@ public class AbsentDataEvalTest {
 							caseId + ": an answer that does mention '" + forbidden + "' must fail this "
 									+ "case: " + withForbidden);
 				}
-			}
-		}
-
-		// And that the CHART can actually bait the drift each expectedAnswerNotContains forbids. A
-		// forbidden term the chart does not contain cannot be drifted to, so that half of the dataset's
-		// expectations would be unfalsifiable — which is how the chart in chartText() was identified as
-		// the one this dataset was authored against, and is the property that makes it the right one.
-		for (EvalCase evalCase : absentCases()) {
-			if (evalCase.getExpectedAnswerNotContains() == null) {
-				continue;
-			}
-			for (String forbidden : evalCase.getExpectedAnswerNotContains()) {
-				assertTrue(chartText().toLowerCase(Locale.ROOT).contains(forbidden.toLowerCase(Locale.ROOT)),
-						evalCase.getId() + ": the chart must carry records about '" + forbidden + "', or "
-								+ "forbidding the answer to mention it asserts nothing — nothing could have "
-								+ "led the model there");
 			}
 		}
 

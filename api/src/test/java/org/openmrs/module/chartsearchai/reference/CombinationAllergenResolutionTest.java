@@ -66,6 +66,9 @@ public class CombinationAllergenResolutionTest {
 	 *  shape the gate on the split has to refuse. */
 	private static final String BENZOCAINE_CLOVE = "benzocaine / clove oil";
 
+	/** A SALT name a third entry claims only by containment — the equal-claimant leg's floor. */
+	private static final String KETOROLAC_SALT = "ketorolac tromethamine";
+
 	private static DrugReference row(List<DrugReference> entries, String name) {
 		for (DrugReference entry : entries) {
 			if (name.equals(entry.getName())) {
@@ -235,15 +238,13 @@ public class CombinationAllergenResolutionTest {
 	}
 
 	@Test
-	public void aCombinationJoiningItsIngredientsWithoutSpacesIsStillSplit() throws IOException {
-		// Why the split is on the separator itself rather than on a spaced separator. The obvious way to
-		// make the split structural — require " / ", which every strain designation and every qualifier
-		// containing a separator lacks — is measurably wrong, and this is the case that measures it: a
-		// published name that joins its ingredients with a BARE separator and names both of them, which
-		// such a rule would close silently. Rare in the shipped KB (re-derive with findImpliedSubstances
-		// before relying on how rare), and rarity is not the point — one silently-closed allergy is the
-		// failure this whole widening exists to stop. What makes the split safe is the gate the next
-		// case pins, not the spacing.
+	public void aCombinationJoiningItsIngredientsWithoutSpacesStillReachesBothOfThem()
+			throws IOException {
+		// The shape a structural "only a spaced separator counts" split would stop reaching, which is
+		// why DrugReference.combinationConstituents splits on the separator itself. This case does NOT
+		// isolate that decision — both rows publish the whole name, so the equal-claimant leg reaches
+		// the second ingredient with the split reverted, and the shipped KB offers no name that
+		// separates the two. Recorded there rather than claimed here.
 		List<SafetyWarning> warnings = warningsFor("Is it safe to give potassium gluconate?",
 				POTASSIUM_SALTS);
 
@@ -274,6 +275,34 @@ public class CombinationAllergenResolutionTest {
 		assertEquals(1, warningsFor("Is it safe to give benzocaine?", BENZOCAINE_CLOVE).size(),
 				"while the constituent the KB IS named still does, so this case cannot pass by the "
 						+ "recorded name resolving to nothing at all");
+	}
+
+	@Test
+	public void anEntryClaimingTheRecordedNameOnlyByContainmentIsNotAnImpliedSubstance()
+			throws IOException {
+		// The equal-claimant leg's FLOOR, and the one decision in this file whose failure is a chip that
+		// is WRONG rather than a chip that is missing. The leg admits an entry making the same strongest
+		// claim only when that claim is a NAME claim; lowering it by one rank — the natural "be as
+		// generous as the constituent gate" move — admits every entry whose alias merely occurs inside
+		// the recorded string, which is exactly what issue #192 established is a false claim on a name.
+		// Here that is Tromethamine, the buffer ketorolac is salted with. Over the shipped KB the same
+		// relaxation reaches an oral contraceptive's allergy to Fluoroestradiol f-18 and a povidone-iodine
+		// allergy to Iodide I-131; re-derive with findImpliedSubstances before quoting a count.
+		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE);
+		DrugReference ketorolac = row(entries, "Ketorolac");
+		DrugReference tromethamine = row(entries, "Tromethamine");
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, ketorolac.nameMatchStrength(KETOROLAC_SALT),
+				"precondition: the salt must be one of Ketorolac's own names");
+		assertEquals(DrugReference.NAME_TOKEN_INSIDE_A_NAME,
+				tromethamine.nameMatchStrength(KETOROLAC_SALT),
+				"precondition: while the buffer only occurs inside it");
+		assertNotEquals(ketorolac.substanceKey(), tromethamine.substanceKey(),
+				"precondition: and the two are different substances");
+
+		assertEquals(0, warningsFor("Is it safe to give tromethamine?", KETOROLAC_SALT).size(),
+				"the buffer is not what the patient is allergic to");
+		assertEquals(1, warningsFor("Is it safe to give ketorolac?", KETOROLAC_SALT).size(),
+				"while the salt's own substance still reports, and once — the KB files it as two rows");
 	}
 
 	@Test

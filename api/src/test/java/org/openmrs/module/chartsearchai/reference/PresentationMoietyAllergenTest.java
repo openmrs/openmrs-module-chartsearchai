@@ -42,9 +42,14 @@ import org.junit.jupiter.api.Test;
  * the shape the widening must never reach, not as a test of which rank the gate takes.
  *
  * <p>Every case runs verbatim shipped-KB slices through the real {@link DdiDrugReferenceSource} parser
- * and the real {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)}, and asserts
- * chip TEXT rather than chip count alone: the failure mode is silence, so a case that passes on absence
- * proves nothing.
+ * and the real {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)}. The two
+ * cases that assert the fix — the presentation reaching its moiety, and the ATC-less presentation —
+ * assert chip TEXT rather than count, because the failure mode is silence and a case passing on "some
+ * chip appeared" would prove nothing. The three BOUND cases assert absence, which is all a bound can
+ * assert, and they differ in how much they hold: only the dextran pair discriminates the gate's RANK
+ * (relax it by one and that case fails). The vaccine, manganese and peanut pairs give no chip at any
+ * rank — the KB publishes no row named their stem at all — so they pin the shape the widening must
+ * never reach rather than the rank it takes, which each of their comments says.
  */
 public class PresentationMoietyAllergenTest {
 

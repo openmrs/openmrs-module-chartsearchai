@@ -281,6 +281,16 @@ public class DrugReferenceService {
 	 * rather than about names, which this module does not make; the curated cross-reactivity groups are
 	 * where a deployment can state one.
 	 *
+	 * <p>The other bound is that the legs read the RECORDED STRING and never each other's output, so a
+	 * qualifier on a combination name switches the wider legs off instead of composing with them:
+	 * {@code abacavir / lamivudine (oral)} is no entry's name, so the claim on it drops to the
+	 * containment rank and the equal-claimant leg is skipped, and the constituent it splits into is
+	 * {@code lamivudine (oral)}, which is no entry's name either. The set collapses to what
+	 * {@link #lookupByToken} alone would answer — which is what the arm had before all of this, so it is
+	 * a shape not reached rather than one made worse. No published name in the shipped KB loses a
+	 * substance this way (measured through this method; re-derive rather than trusting it), so it
+	 * reaches production through a free-text allergen and not through the reference data.
+	 *
 	 * @return one row per implied substance, first-appearance order, {@link #lookupByToken}'s answer
 	 *         first; empty exactly when that answer is null
 	 */
@@ -323,9 +333,21 @@ public class DrugReferenceService {
 		}
 	}
 
-	/** Keyed by {@link DrugReference#substanceGroupKey()}, first row seen kept: the representative of a
-	 *  substance is the row with the strongest claim on the string that brought it in, and the legs run
-	 *  strongest-claim-first, so a later leg can add a substance but never rename one. */
+	/** Keyed by {@link DrugReference#substanceGroupKey()}, FIRST row seen kept — so a later leg can add
+	 *  a substance but never rename one, which is what keeps every existing chip label unchanged for a
+	 *  name implying one substance.
+	 *
+	 *  <p>First is not the same as strongest-claiming, and the difference is visible: where the whole
+	 *  name reaches a substance only weakly and a constituent reaches the SAME substance by its own
+	 *  display name, the weaker-claiming row stays the representative — {@code 4-aminobenzoic acid /
+	 *  salicylic acid} keeps {@code Salicylic acid (sodium)} although its {@code salicylic acid}
+	 *  constituent names {@code Salicylic acid} outright (29 published names, measured through this
+	 *  method 2026-08-09; re-derive before relying on the figure). That is the answer
+	 *  {@link #lookupByToken} already gave the whole name, so it is a bound carried rather than one
+	 *  introduced, and preferring the stronger claimant would be a relabelling decision — which is
+	 *  {@link DrugReference#canonicalRow}'s question, deliberately not asked here (see
+	 *  {@link DrugReference#nameMatchStrength}: applying it would rename a charted
+	 *  {@code Ketorolac (ophthalmic)} allergy to {@code Ketorolac}). */
 	private static void addSubstance(Map<Object, DrugReference> bySubstance, DrugReference ref) {
 		Object key = ref.substanceGroupKey();
 		if (!bySubstance.containsKey(key)) {

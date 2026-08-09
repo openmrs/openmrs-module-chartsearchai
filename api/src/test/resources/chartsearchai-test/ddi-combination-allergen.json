@@ -1,7 +1,7 @@
 {
  "metadata": {
   "schema_version": "1.0",
-  "note": "Verbatim DDInter 2.0 slice for issue #193 - a recorded drug name that denotes SEVERAL substances. Rows are field-for-field their shipped-KB rows in KB order, and the interaction rows are every KB pair among them. Two shapes. (1) One constituent claims the combination name and the others only occur inside it: 'sulfamethoxazole / trimethoprim' is one of Trimethoprim's own CIEL names (claim rank NAME_IS_ANOTHER_NAME) while Sulfamethoxazole merely occurs inside it as a bounded token (NAME_TOKEN_INSIDE_A_NAME), so issue #192's ranked resolution answers Trimethoprim alone and the sulfa moiety - the one that drives that allergy - is never compared: J01EA in place of J01EB. Sulfisoxazole is the J01EB sibling that lets the class arm be observed against the sulfa moiety and not only the identity arm. 'omeprazole / sodium bicarbonate' is the same shape with more at stake: it is one of Sodium bicarbonate's CIEL names, so the answer is B05CB/B05XA and the PPI class A02BC is lost entirely; Pantoprazole is the A02BC sibling it has to be compared against. Esomeprazole is present because Omeprazole's rxnorm_name IS 'esomeprazole' - without it that substance-name family would name one drugbank_id instead of two and the fixture's substance identities would stop matching the shipped KB's (issue #187). (2) SEVERAL constituents claim the name equally: 'abacavir / lamivudine' is a CIEL name of both Abacavir and Lamivudine, which is the 1367-name population issue #193 measures, and both are J05AF - so Zidovudine (J05AF01) shares a class with BOTH and is the subject that shows one recorded name still raises one chip. (3) Three legs of the resolution that the cases above leave unpinned, each with the rows its own measurement needs. 'amoxicillin and clavulanic acid' carries NO '/' and no trailing qualifier, so neither the constituent leg nor the moiety leg can reach it: it is a CIEL name of both Amoxicillin and Clavulanic acid at the alias rank, and only the equal-claimant leg reaches the amoxicillin the patient is allergic to. 'potassium citrate/potassium gluconate' is the one published name in the shipped KB that joins its ingredients with a BARE separator and still names both of them, so it is what a structural 'only a spaced separator counts' rule would silently close. 'benzocaine / clove oil' is the same split's lower bound: the constituent 'clove oil' reaches the Clove row only by CONTAINMENT, which is the rank the gate refuses, and Benzocaine (topical) is the constituent that does resolve, so the case cannot pass by the fixture being inert.",
+  "note": "Verbatim DDInter 2.0 slice for issue #193 - a recorded drug name that denotes SEVERAL substances. Rows are field-for-field their shipped-KB rows in KB order, and the interaction rows are every KB pair among them. Two shapes. (1) One constituent claims the combination name and the others only occur inside it: 'sulfamethoxazole / trimethoprim' is one of Trimethoprim's own CIEL names (claim rank NAME_IS_ANOTHER_NAME) while Sulfamethoxazole merely occurs inside it as a bounded token (NAME_TOKEN_INSIDE_A_NAME), so issue #192's ranked resolution answers Trimethoprim alone and the sulfa moiety - the one that drives that allergy - is never compared: J01EA in place of J01EB. Sulfisoxazole is the J01EB sibling that lets the class arm be observed against the sulfa moiety and not only the identity arm. 'omeprazole / sodium bicarbonate' is the same shape with more at stake: it is one of Sodium bicarbonate's CIEL names, so the answer is B05CB/B05XA and the PPI class A02BC is lost entirely; Pantoprazole is the A02BC sibling it has to be compared against. Esomeprazole is present because Omeprazole's rxnorm_name IS 'esomeprazole' - without it that substance-name family would name one drugbank_id instead of two and the fixture's substance identities would stop matching the shipped KB's (issue #187). (2) SEVERAL constituents claim the name equally: 'abacavir / lamivudine' is a CIEL name of both Abacavir and Lamivudine, which is the 1367-name population issue #193 measures, and both are J05AF - so Zidovudine (J05AF01) shares a class with BOTH and is the subject that shows one recorded name still raises one chip. (3) Three legs of the resolution that the cases above leave unpinned, each with the rows its own measurement needs. 'amoxicillin and clavulanic acid' carries NO '/' and no trailing qualifier, so neither the constituent leg nor the moiety leg can reach it: it is a CIEL name of both Amoxicillin and Clavulanic acid at the alias rank, and only the equal-claimant leg reaches the amoxicillin the patient is allergic to. 'potassium citrate/potassium gluconate' joins its ingredients with a BARE separator and names both of them, which is the shape a structural 'only a spaced separator counts' split would stop reaching. It does NOT isolate that split from the equal-claimant leg - both rows publish the name, so the leg reaches the second ingredient without it, and reverting the split to ' / ' leaves the suite green. See DrugReference.combinationConstituents, which records that measured honestly rather than claiming a pin it does not have. 'benzocaine / clove oil' is the same split's lower bound: the constituent 'clove oil' reaches the Clove row only by CONTAINMENT, which is the rank the gate refuses, and Benzocaine (topical) is the constituent that does resolve, so the case cannot pass by the fixture being inert. (3) Three legs of the resolution that the cases above leave unpinned, each with the rows its own measurement needs. 'amoxicillin and clavulanic acid' carries NO '/' and no trailing qualifier, so neither the constituent leg nor the moiety leg can reach it: it is a CIEL name of both Amoxicillin and Clavulanic acid at the alias rank, and only the equal-claimant leg reaches the amoxicillin the patient is allergic to. 'potassium citrate/potassium gluconate' joins its ingredients with a BARE separator and names both of them, which is the shape a structural 'only a spaced separator counts' split would stop reaching. It does NOT isolate that split from the equal-claimant leg - both rows publish the name, so the leg reaches the second ingredient without it, and reverting the split to ' / ' leaves the suite green. See DrugReference.combinationConstituents, which records that measured honestly rather than claiming a pin it does not have. 'benzocaine / clove oil' is the same split's lower bound: the constituent 'clove oil' reaches the Clove row only by CONTAINMENT, which is the rank the gate refuses, and Benzocaine (topical) is the constituent that does resolve, so the case cannot pass by the fixture being inert. 'ketorolac tromethamine' is the equal-claimant leg's FLOOR: Tromethamine claims that name only by CONTAINMENT, which is the rank issue #192 established is a false claim on a name, so the floor holds it back; lower the floor by one rank and a patient allergic to the ketorolac salt is told they are allergic to the buffer. Ketorolac (ophthalmic) is present because it shares Ketorolac's substance and must not chip twice.",
   "source": {
    "name": "DDInter 2.0",
    "url": "https://ddinter2.scbdd.com/",
@@ -13,6 +13,12 @@
   "-1": {
    "text": null,
    "categories": []
+  },
+  "279": {
+   "text": "Concomitant use of nonsteroidal anti-inflammatory drugs (NSAIDs) with potassium salts may increase the risk of hyperkalemia. NSAIDs may produce potassium retention by reducing renal synthesis of prostaglandin E and impairing the renin-angiotensin system.",
+   "categories": [
+    "synergistic_effect"
+   ]
   },
   "3020": {
    "text": "Some topical anesthetics can be systemically absorbed and cause methemoglobinemia, particularly when applied to mucous membranes. Coadministration with other oxidizing agents that can also induce methemoglobinemia such as injectable local anesthetics, antimalarials (e.g., chloroquine, primaquine, quinine, tafenoquine), nitrates and nitrites, sulfonamides, acetaminophen, aminosalicylic acid, dapsone, dimethyl sulfoxide, flutamide, metoclopramide, nitrofurantoin, phenazopyridine, phenobarbital, phenytoin, and rasburicase may increase the risk. Additional risk factors include very young age (e.g., infants less than 6 months); application to inflamed/abraded areas or broken skin; anemia; cardiac or pulmonary disease; peripheral vascular disease; liver cirrhosis; shock; sepsis; acidosis; and genetic predisposition (e.g., NADH cytochrome-b5 reductase deficiency; glucose-6-phosphate dehydrogenase (G6PD) deficiency; hemoglobin M).",
@@ -30,6 +36,18 @@
    "text": "The use of trimethoprim in combination with other potassium-sparing drugs or potassium salts may increase the risk of hyperkalemia. Trimethoprim inhibits sodium reabsorption and potassium excretion by blocking sodium channels in the renal distal tubules.",
    "categories": [
     "excretion"
+   ]
+  },
+  "3281": {
+   "text": "Limited clinical data suggest that the concomitant use of zidovudine with nonsteroidal anti-inflammatory agents may increase the risk of hematological toxicity and/or bleeding in HIV-positive patients with hemophilia.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3976": {
+   "text": "Clove and clove oil may potentiate the effects of anticoagulants and other drugs that may affect hemostasis such as platelet inhibitors, thrombolytic agents, and nonsteroidal anti-inflammatory drugs, possibly increasing the risk of bleeding. Eugenol, the active constituent of clove and clove oil, has been shown to be an inhibitor of platelet activity.",
+   "categories": [
+    "synergistic_effect"
    ]
   },
   "4734": {
@@ -81,6 +99,52 @@
      "code": "817",
      "uuid": "817AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
      "name": "Abacavir / lamivudine / zidovudine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1010",
+   "name": "Ketorolac",
+   "rxcui": "35827",
+   "rxnorm_name": "ketorolac",
+   "drugbank_id": "DB00465",
+   "atc": [
+    "M01AB15",
+    "S01BC05"
+   ],
+   "ciel": [
+    {
+     "code": "78481",
+     "uuid": "78481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac"
+    },
+    {
+     "code": "78482",
+     "uuid": "78482AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac tromethamine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1011",
+   "name": "Ketorolac (ophthalmic)",
+   "rxcui": "35827",
+   "rxnorm_name": "ketorolac",
+   "drugbank_id": "DB00465",
+   "atc": [
+    "M01AB15",
+    "S01BC05"
+   ],
+   "ciel": [
+    {
+     "code": "78481",
+     "uuid": "78481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac"
+    },
+    {
+     "code": "78482",
+     "uuid": "78482AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac tromethamine"
     }
    ]
   },
@@ -790,6 +854,24 @@
    ]
   },
   {
+   "id": "DDInter1883",
+   "name": "Tromethamine",
+   "rxcui": "10865",
+   "rxnorm_name": "tromethamine",
+   "drugbank_id": "DB03754",
+   "atc": [
+    "B05BB03",
+    "B05XX02"
+   ],
+   "ciel": [
+    {
+     "code": "85590",
+     "uuid": "85590AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tromethamine"
+    }
+   ]
+  },
+  {
    "id": "DDInter1961",
    "name": "Zidovudine",
    "rxcui": "11413",
@@ -966,6 +1048,54 @@
   }
  ],
  "interactions": [
+  [
+   "DDInter1010",
+   "DDInter1340",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1388",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1498",
+   "Moderate",
+   "279"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1499",
+   "Moderate",
+   "279"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1683",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1961",
+   "Moderate",
+   "3281"
+  ],
+  [
+   "DDInter1010",
+   "DDInter417",
+   "Minor",
+   "3976"
+  ],
+  [
+   "DDInter1010",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
   [
    "DDInter1019",
    "DDInter1340",

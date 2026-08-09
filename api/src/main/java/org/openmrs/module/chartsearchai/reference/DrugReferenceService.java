@@ -139,7 +139,7 @@ public class DrugReferenceService {
 	 * this method and through {@link #findByQuery} (2026-08-09; re-derive rather than trusting the
 	 * figures): 33 names resolve fewer rows, 71 rows in total, and the two invariants below hold for every
 	 * one of the 2283 — nothing was emptied and no substance lost a row. The order-name leg
-	 * ({@link #findImpliedByDrugName}) narrows the same 33 names by the same 71 rows.
+	 * ({@link #findImpliedByDrugName}) narrows by the same counts over the same corpus.
 	 *
 	 * <p><b>The rule: the name CARRIED, not the whole text.</b> An entry stays when one of its own names
 	 * that the text carries ({@link DrugReference#aliasesIn}) denotes its substance under

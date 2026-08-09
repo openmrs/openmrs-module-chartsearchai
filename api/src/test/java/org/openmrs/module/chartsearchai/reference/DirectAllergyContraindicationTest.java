@@ -266,8 +266,10 @@ public class DirectAllergyContraindicationTest {
 				DrugReferenceTestSupport.ddiFixtureEntries(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS));
 		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
 
-		// Precondition, through the production matcher the validator itself uses: the question really
-		// does resolve to BOTH rows, so the case is the multi-entry one and not a single-entry retest.
+		// Precondition on the fixture's shape, through the unranked primitive: the question really does
+		// match BOTH rows, so the case is the multi-entry one and not a single-entry retest. Both rows are
+		// one substance, so the ranking above it (findImpliedByQuery, issue #209) keeps both — the verdict
+		// is taken per substance and applied to every matched row of it.
 		List<DrugReference> inPlay = service.findByQuery("Is it safe to give her iron?");
 		assertEquals(2, inPlay.size(), "the question must put both Iron rows in play, was: " + inPlay);
 		for (DrugReference entry : inPlay) {

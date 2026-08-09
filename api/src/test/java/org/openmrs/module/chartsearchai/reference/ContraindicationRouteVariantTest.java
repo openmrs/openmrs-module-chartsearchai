@@ -85,13 +85,20 @@ public class ContraindicationRouteVariantTest {
 
 	@Test
 	public void theFixturesReallyCarryTheTwoShapesUnderTest() throws IOException {
-		// Preconditions, through the production matchers the validator itself uses. Without these the
-		// cases below could pass while resolving one entry each — i.e. while testing nothing.
+		// Preconditions on the FIXTURE's shape, taken through the unranked primitives — which is what
+		// establishes that one alias really is shared by two substances here. They are deliberately NOT the
+		// accessor the validator now uses: since issue #209 that is findImpliedByQuery, and the ranked
+		// counterpart of each count is asserted beside it, because those are the numbers the cases below
+		// actually depend on. Without both, a case could pass while resolving one entry — i.e. while
+		// testing nothing — or while resolving a substance the string does not name.
 		DrugReferenceService ppi = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 		List<DrugReference> esomeprazole = ppi.findByQuery("Is it safe to give esomeprazole?");
 		assertEquals(2, esomeprazole.size(),
-				"one PPI word must resolve BOTH rows the KB files under it, was: "
+				"one PPI word must MATCH both rows the KB files under it, was: "
 						+ DrugReferenceTestSupport.names(esomeprazole));
+		assertEquals("[Esomeprazole]", DrugReferenceTestSupport
+				.names(ppi.findImpliedByQuery("Is it safe to give esomeprazole?")).toString(),
+				"while NAMING one of them — which is why the case below has to name both");
 		assertEquals(esomeprazole.get(0).normalizedAtcCodes(), esomeprazole.get(1).normalizedAtcCodes(),
 				"and their ATC codes must be identical, so no class comparison can tell them apart");
 		assertFalse(esomeprazole.get(0).displayLabel().equals(esomeprazole.get(1).displayLabel()),
@@ -99,8 +106,12 @@ public class ContraindicationRouteVariantTest {
 
 		List<DrugReference> hydrocortisone = ppi.findByQuery("Is hydrocortisone safe for her?");
 		assertEquals(4, hydrocortisone.size(),
-				"one order word must resolve all four hydrocortisone rows, was: "
+				"one question word must MATCH all four hydrocortisone rows, was: "
 						+ DrugReferenceTestSupport.names(hydrocortisone));
+		assertEquals("[Hydrocortisone, Hydrocortisone (ophthalmic), Hydrocortisone (topical)]",
+				DrugReferenceTestSupport
+						.names(ppi.findImpliedByQuery("Is hydrocortisone safe for her?")).toString(),
+				"while NAMING the three rows of one substance and not the ester (issue #209)");
 
 		DrugReferenceService variants = DrugReferenceTestSupport
 				.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
@@ -166,12 +177,17 @@ public class ContraindicationRouteVariantTest {
 		// second reading "Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy
 		// to Dexamethasone". The ester IS a different substance and must keep its own chip WHEN IT IS IN
 		// PLAY — that refusal is #121's and it still holds. What was never examined is whether one order
-		// name should put it in play at all: the ester's KB row merely carries `hydrocortisone` as an
-		// alias, and `Hydrocortisone Injection vial 100mg` denotes the parent alone
-		// (nameMatchStrength 2 against 1). So the number that changed is how many SUBSTANCES an order name
-		// admits, not the collapse. The non-collapse property is still asserted at the key level by
-		// theTwoPpiRowsShareTheSubstanceNameTheStemHasToVeto and at the CHIP level by
-		// twoDistinctSubstancesTheKbFilesUnderOneSubstanceNameStayTwoChips, both below.
+		// name should put it in play at all. It should not, and the rank that decides it is the rank of the
+		// alias each row CARRIED, never of the whole recorded string: measured through the production
+		// predicates on this fixture, both rows score NAME_TOKEN_INSIDE_A_NAME (0) against
+		// `Hydrocortisone Injection vial 100mg` — a recorded order name is nobody's name — while the alias
+		// both of them carry, `hydrocortisone`, scores 2 for the parent and 1 for the ester. So the number
+		// that changed is how many SUBSTANCES an order name admits, not the collapse. The non-collapse
+		// property is still asserted at the key level by theTwoPpiRowsShareTheSubstanceNameTheStemHasToVeto,
+		// at the CHIP level on the question-driven arm by
+		// twoDistinctSubstancesTheKbFilesUnderOneSubstanceNameStayTwoChips, and at the chip level on THIS
+		// arm by twoOrdersOfTwoSubstancesUnderOneAliasStayTwoChips — which is the shape that has to carry it
+		// here now that one order name reaches one substance.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", NO_DRUG_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Hydrocortisone Injection vial 100mg"), null,
@@ -182,8 +198,35 @@ public class ContraindicationRouteVariantTest {
 		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
 				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail(),
 				"the surviving variant chip is the dataset's first row, named by displayLabel()");
-		assertFalse(warnings.get(0).getDetail().contains("Hydrocortisone butyrate"),
-				"and no chip names a substance the order does not");
+		for (SafetyWarning warning : warnings) {
+			assertFalse(warning.getDetail().contains("Hydrocortisone butyrate"),
+					"and no chip names a substance the order does not: " + warning.getDetail());
+		}
+	}
+
+	@Test
+	public void twoOrdersOfTwoSubstancesUnderOneAliasStayTwoChips() throws IOException {
+		// The chip-level non-collapse case for the ORDER-DRIVEN arm, which the case above used to carry as a
+		// side effect of the over-admission issue #209 removed: one order name no longer reaches two
+		// substances, so the shape now needs two orders. This is what stops `substanceKey` merging the
+		// hydrocortisone ester into its parent from going unnoticed on this arm — the ledger spans both
+		// arms, but only this arm reaches it from the patient's own prescriptions with a question naming no
+		// drug.
+		//
+		// Unlike the vehicle it replaces, it cannot pass by admission: each substance is named by its own
+		// order, so a narrower resolver keeps both and only a MERGING key drops one.
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", NO_DRUG_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Hydrocortisone Injection vial 100mg",
+								"Hydrocortisone butyrate cream 0.1%"),
+						null, DrugReferenceTestSupport.set("Dexamethasone"), null));
+
+		assertEquals(2, warnings.size(),
+				"two substances the orders name keep their own chips, was: " + warnings);
+		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
+				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail());
+		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy"
+				+ " to Dexamethasone — possible cross-reactivity", warnings.get(1).getDetail());
 	}
 
 	/**
@@ -216,10 +259,16 @@ public class ContraindicationRouteVariantTest {
 		//
 		// The question NAMES BOTH, since issue #209. It used to name only esomeprazole and rely on that one
 		// word putting both in play — which was the defect #209 fixed, so the vehicle had to change and the
-		// property did not: this is still the case that fails if `substanceKey` ever merges the two PPIs,
-		// and it is now a stronger vehicle, because it can no longer be satisfied by over-admission. Each
-		// row is admitted by its OWN display name here (nameMatchStrength 2 apiece), which is what a
+		// property did not: this is still the case that fails if `substanceKey` ever merges the two PPIs.
+		// Each row is admitted by its OWN display name here (nameMatchStrength 2 apiece), which is what a
 		// clinician choosing between two PPIs writes.
+		//
+		// What the new vehicle does and does NOT buy, stated precisely because the obvious claim is false:
+		// it does not DETECT over-admission — an over-admitting resolver returns these same two rows for
+		// this question, measured — it stops the case DEPENDING on over-admission, which is what let the
+		// count stay at 2 while the resolver narrowed. What it gains is the opposite direction: an
+		// over-NARROWING resolver that kept one substance per text, or ranked the whole string, drops a PPI
+		// and this fails. That direction the old vehicle could not express at all.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
 				"Is it safe to give omeprazole or esomeprazole?", DrugReferenceTestSupport.ctx(60, null,
 						null, null, DrugReferenceTestSupport.set("Pantoprazole"), null));

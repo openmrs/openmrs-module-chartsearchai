@@ -98,7 +98,7 @@ public class SubstanceCandidateSetTest {
 	@Test
 	public void aQuestionWordPutsOnlyTheSubstanceItNamesInPlay() throws IOException {
 		// The prose leg on its own: no orders at all, so the only arm that can chip is the drug-in-play
-		// one, and the only thing that can put the ester in play is findByQuery.
+		// one, and the only thing that can put the ester in play is the question's prose.
 		List<SafetyWarning> warnings = fixtureValidator().validate("", "Is hydrocortisone safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Dexamethasone"), null));

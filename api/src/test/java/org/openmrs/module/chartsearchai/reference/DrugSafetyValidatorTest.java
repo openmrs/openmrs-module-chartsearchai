@@ -222,7 +222,7 @@ public class DrugSafetyValidatorTest {
 	public void contraindicationFiresWhenQuestionNamesDrugButAnswerDoesNot() throws IOException {
 		// Reliability fix: the clinician asks about ibuprofen and the patient has a recorded ibuprofen
 		// allergy, but the LLM's answer phrases it by class ("an NSAID allergy") and NEVER writes
-		// "ibuprofen". The safety net must still fire — it keys off the QUESTION (findByQuery), not only
+		// "ibuprofen". The safety net must still fire — it keys off the QUESTION (findImpliedByQuery), not only
 		// the answer's word choice. Pre-fix, the answer named no drug, so nothing was checked.
 		List<SafetyWarning> warnings = atcValidator().validate(
 				"The patient has an allergy to NSAID (drug allergen).",
@@ -262,9 +262,10 @@ public class DrugSafetyValidatorTest {
 	@Test
 	public void drugInBothQuestionAndAnswerWarnsOnlyOnce() throws IOException {
 		// A drug named in BOTH the question and the answer must be checked once, not twice. The
-		// question∪answer union dedups by identity, which holds only because findByQuery resolves
-		// against the shared getAll() cache; this pins that contract so a future findByQuery that
-		// returned copies (breaking dedup) would fail here rather than silently double-warn.
+		// question∪answer union dedups by identity, which holds only because findImpliedByQuery returns
+		// the shared getAll() cache's own objects (it filters that walk in place rather than copying rows);
+		// this pins that contract so a future findImpliedByQuery that returned copies (breaking dedup)
+		// would fail here rather than silently double-warn.
 		List<SafetyWarning> warnings = atcValidator().validate(
 				"Ibuprofen 200 mg as needed.",
 				"Is ibuprofen safe for her?",

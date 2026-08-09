@@ -214,9 +214,10 @@ public final class DrugReferenceTestSupport {
 	 *  abacavir/lamivudine pair that claims one name equally (issue #193). */
 	static final String DDI_COMBINATION_ALLERGEN = "chartsearchai-test/ddi-combination-allergen.json";
 
-	/** Eleven verbatim rows whose ALIAS SETS carry the shapes issues #128/#147 turn on — the entry named
-	 *  {@code Acetylsalicylic acid} whose every rule token is {@code aspirin}, and the nesting pairs
-	 *  ({@code opium} inside {@code tiotropium}). */
+	/** Eleven verbatim rows whose ALIAS SETS carry the shapes issues #136/#147 turn on — the entry named
+	 *  {@code Acetylsalicylic acid} whose every rule token is {@code aspirin} — plus the nesting pairs
+	 *  issue #86 removed ({@code opium} inside {@code tiotropium}). See the fixture's own
+	 *  {@code metadata.note}, which is the authority on what it carries. */
 	static final String DDI_ALIAS_DRUG_NAMES = "chartsearchai-test/ddi-alias-drug-names.json";
 
 	/** Presentations filed as their own substance beside the parent moiety they contain, with the

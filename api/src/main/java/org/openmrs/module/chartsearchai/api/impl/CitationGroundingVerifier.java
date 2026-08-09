@@ -270,14 +270,18 @@ public class CitationGroundingVerifier {
 				// retrieved chart evidence and published verdicts that tracked embedding noise —
 				// grounded=false on a MAJOR finding beside two byte-identical siblings at true, and
 				// one finding flipping across runs of a single probe (issue #122). What makes such an
-				// omission dangerous rather than merely wrong is an asymmetry: a client suppresses a
-				// true verdict for ALL reference-group citations, so a REFERENCE-group type missing
-				// from this set is verified here and hidden there.
+				// omission dangerous rather than merely wrong is that this set is the WHOLE guarantee:
+				// a REFERENCE-group type left out of it publishes grounded=true on module-generated
+				// prose, and no layer downstream re-derives provenance to catch that. Do not relax it
+				// on the assumption that a client re-filters by group — `group` is a provenance
+				// DISCLOSURE on the wire, not a second gate, which is why README's reference contract
+				// states the withholding as server-side ("never arrives as grounded: true however the
+				// client is written").
 				//
 				// active_drug_order (#118) is the case that fixes the rule's SHAPE, and the reason it
-				// cannot be "everything the module injects": it is chart-group evidence, so no client
-				// hides its verdict, and the #106 hazard does not apply — that is about reference
-				// prose whose subject roles can swap while still embedding near-identically ("A
+				// cannot be "everything the module injects": it is chart evidence, so withholding a
+				// pass would cost a real check, and the #106 hazard does not apply — that is about
+				// reference prose whose subject roles can swap while still embedding near-identically ("A
 				// interacts with B"), whereas this record is one drug name asserted of this patient,
 				// so a passing verdict is real assurance. Keyed off the group it stays graded, with
 				// nothing to remember.

@@ -409,6 +409,19 @@ public class AbsentDataEvalTest {
 				+ "missing."),
 				"the system prompt must still instruct the model to name what is missing — every case in "
 						+ "this file depends on it, and they are all skipped without an endpoint");
+		// The disambiguation that instruction needs, and why it is a separate assertion (issue #214).
+		// "Name what is missing" alone is ambiguous on an empty chart, because the most recent thing
+		// the prompt says is missing is RECORDS — the placeholder asserted below says exactly that —
+		// so paraphrasing the placeholder satisfies the instruction on one reading. Measured: two of
+		// the 19 questions took that reading in every run, and a third took it in one request order and
+		// not another. Both halves of the correction are pinned, because each answers a different half
+		// of what was measured: naming the topic instead of the records, and having a noun phrase to
+		// name it with when the query supplies only a verb ("Does the patient smoke?").
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("Reporting only that records are missing "
+				+ "names nothing."),
+				"the system prompt must still rule out the answer that names no topic at all — it is the "
+						+ "only thing standing between an absent-topic query and \"No patient records were "
+						+ "provided.\" (issue #214)");
 		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("noun phrase of your own when the query "
 				+ "states it as a verb"),
 				"the system prompt must still tell the model to nominalise a verb-shaped query — without "

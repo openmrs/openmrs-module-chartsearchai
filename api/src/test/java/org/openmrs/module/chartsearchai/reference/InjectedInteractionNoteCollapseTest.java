@@ -13,6 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -301,6 +303,56 @@ public class InjectedInteractionNoteCollapseTest {
 		assertTrue(interactions.contains("warfarin (moderate."),
 				"and under the rule the chip quotes, not the more severe row the patient does not "
 						+ "match: " + interactions);
+	}
+
+	/**
+	 * A curated slice carrying a {@code Warfarin} entry whose aliases are {@code warfarin} AND
+	 * {@code coumadin}, and an {@code Ibuprofen} entry with one rule under each of those names — issue
+	 * #136's shape, and issue #190 item 2's residue. Shared with
+	 * {@code DrugSafetyQuestionPairInteractionTest}, which asks the chart-precedence question of it.
+	 */
+	private static final String TWO_NAME_PARTNER_FIXTURE =
+			"chartsearchai-test/drug-reference-question-pairs.json";
+
+	@Test
+	public void twoNamesOfOnePartnerEntryRenderOneNote() throws Exception {
+		// Issue #190 item 2, re-scoped by its own comment thread: the label key stays — keying the whole
+		// grouping on a dataset-wide resolution merges genuinely distinct partners on 397 of the shipped
+		// KB's 2283 entries (trastuzumab with trastuzumab deruxtecan) and in a RECORD that costs a
+		// partner its name. What was missing is that where the rule resolves to one of the patient's own
+		// ACTIVE ORDERS the chip already keys on that ENTRY, so two names of one order produced two notes
+		// beside one chip. Adopting the chip's own two-tier key leaves the dataset tail on the label,
+		// where the 397-entry over-merge lives, and cannot reach it.
+		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(TWO_NAME_PARTNER_FIXTURE);
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Warfarin 5mg"), null, null, null);
+		String question = "is it safe to give ibuprofen?";
+
+		DrugReference warfarin = DrugReferenceTestSupport.row(entries, "Warfarin");
+		assertTrue(warfarin.isNamed("warfarin") && warfarin.isNamed("coumadin"),
+				"precondition: ONE entry must carry both names, or there is nothing to fold");
+		List<String> tokens = new ArrayList<String>();
+		for (DrugReference.Interaction rule : DrugReferenceTestSupport.row(entries, "Ibuprofen")
+				.getInteractions()) {
+			tokens.add(rule.getToken());
+		}
+		assertEquals(Arrays.asList("coumadin", "warfarin"), tokens,
+				"precondition: and two rules must reach it, one under each name");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(entries))
+				.validate("", question, context);
+		assertEquals(1, warnings.size(),
+				"precondition: the chip side is already ONE chip for this pair, was: " + warnings);
+
+		PatientChart chart = DrugReferenceTestSupport
+				.injector(DrugReferenceTestSupport.serviceWith(entries))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
+		String interactions =
+				interactionsOf(DrugReferenceTestSupport.injectedReferences(chart).get(0));
+
+		assertEquals(1, notesHeadedBy(interactions, "warfarin") + notesHeadedBy(interactions, "coumadin"),
+				"one partner entry is one note however many of its names the rules use: " + interactions);
 	}
 
 	@Test

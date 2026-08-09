@@ -1,0 +1,193 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: one substance's rows carry DIFFERENT severities for one partner (issues #189/#175)",
+  "note": "A verbatim slice of the full DDInter KB - the induced subgraph over Insulin human, Insulin human (inhalation, rapid acting), Fluticasone and Fluticasone (topical), in KB row order. The two insulin rows are ONE substance (shared rxnorm_name 'insulin, regular, human' and drugbank_id DB00030) and the two fluticasone rows are one partner substance (shared rxnorm_name 'fluticasone'), so every rule here carries the token 'fluticasone'. What makes the slice the shape #189 and #175 need is the ASYMMETRY: the family's FIRST row reaches that partner only through a Minor rule, while its second row reaches it through a Moderate one - so keeping the first row to reach the pair is not the same as keeping the most severe rule. And the second row's own name is the only alias that names it, so a text saying 'insulin human' resolves the FIRST row alone while an order named 'Insulin human (inhalation, rapid acting)' resolves both - which is what lets the drug-in-play arm see a strictly smaller row set than the chart did. Both mechanism texts are real and different lengths, so which rule survives is visible in the chip's prose as well as in its rating. Parsed by the real DdiDrugReferenceSource.",
+  "source": {
+   "name": "DDInter 2.0",
+   "url": "https://ddinter2.scbdd.com/",
+   "normalization": "RxNorm (NLM)",
+   "bridge": "CIEL v2026-07-20"
+  },
+  "format": {
+   "interactions": "[drug_a_id, drug_b_id, severity, group_id]",
+   "note": "Reproducible build from src/ via build_kb.py; clinician decisions in src/curation.json."
+  }
+ },
+ "mechanisms": {
+  "5607": {
+   "text": "INTERVAL: Bronchodilators and other orally inhaled products may alter the absorption of inhaled human insulin.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
+  "3606": {
+   "text": "The efficacy of insulin and other antidiabetic agents may be diminished by topical corticosteroids, particularly during prolonged or indiscriminate use. Corticosteroids can raise blood glucose level by antagonizing the action and suppressing the secretion of insulin, which results in inhibition of peripheral glucose uptake and increased gluconeogenesis. The duration of administration Close clinical monitoring of glycemic control is recommended if topical corticosteroids are administered chronically and/or to large areas in diabetic patients.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter766",
+   "name": "Fluticasone",
+   "rxcui": "41126",
+   "rxnorm_name": "fluticasone",
+   "drugbank_id": "DB13867",
+   "atc": [
+    "D07AC17",
+    "R01AD08",
+    "R03BA05"
+   ],
+   "ciel": [
+    {
+     "code": "104676",
+     "uuid": "104676AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fluticasone / salmeterol"
+    },
+    {
+     "code": "170556",
+     "uuid": "f31812b4-6596-431b-a6a8-279dffa04a5a",
+     "name": "Fluticasone / umeclidinium / vilanterol"
+    },
+    {
+     "code": "76586",
+     "uuid": "76586AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fluticasone"
+    },
+    {
+     "code": "76587",
+     "uuid": "76587AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fluticasone propionate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter768",
+   "name": "Fluticasone (topical)",
+   "rxcui": "41126",
+   "rxnorm_name": "fluticasone",
+   "drugbank_id": "DB13867",
+   "atc": [
+    "D07AC17",
+    "R01AD08",
+    "R03BA05"
+   ],
+   "ciel": [
+    {
+     "code": "104676",
+     "uuid": "104676AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fluticasone / salmeterol"
+    },
+    {
+     "code": "170556",
+     "uuid": "f31812b4-6596-431b-a6a8-279dffa04a5a",
+     "name": "Fluticasone / umeclidinium / vilanterol"
+    },
+    {
+     "code": "76586",
+     "uuid": "76586AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fluticasone"
+    },
+    {
+     "code": "76587",
+     "uuid": "76587AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fluticasone propionate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter934",
+   "name": "Insulin human",
+   "rxcui": "253182",
+   "rxnorm_name": "insulin, regular, human",
+   "drugbank_id": "DB00030",
+   "atc": [
+    "A10AB01",
+    "A10AC01",
+    "A10AD01",
+    "A10AE01",
+    "A10AF01"
+   ],
+   "ciel": [
+    {
+     "code": "104914",
+     "uuid": "104914AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Insulin, isophane, human / insulin, regular, human"
+    },
+    {
+     "code": "167931",
+     "uuid": "90103844-9578-4353-9a15-ea82c5046843",
+     "name": "Insulin regular inhaled"
+    },
+    {
+     "code": "282",
+     "uuid": "282AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Insulin, regular"
+    },
+    {
+     "code": "78082",
+     "uuid": "78082AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Insulin, regular, human"
+    }
+   ]
+  },
+  {
+   "id": "DDInter935",
+   "name": "Insulin human (inhalation, rapid acting)",
+   "rxcui": "253182",
+   "rxnorm_name": "insulin, regular, human",
+   "drugbank_id": "DB00030",
+   "atc": [
+    "A10AB01",
+    "A10AC01",
+    "A10AD01",
+    "A10AE01",
+    "A10AF01"
+   ],
+   "ciel": [
+    {
+     "code": "104914",
+     "uuid": "104914AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Insulin, isophane, human / insulin, regular, human"
+    },
+    {
+     "code": "167931",
+     "uuid": "90103844-9578-4353-9a15-ea82c5046843",
+     "name": "Insulin regular inhaled"
+    },
+    {
+     "code": "282",
+     "uuid": "282AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Insulin, regular"
+    },
+    {
+     "code": "78082",
+     "uuid": "78082AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Insulin, regular, human"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter766",
+   "DDInter935",
+   "Moderate",
+   "5607"
+  ],
+  [
+   "DDInter768",
+   "DDInter934",
+   "Minor",
+   "3606"
+  ],
+  [
+   "DDInter768",
+   "DDInter935",
+   "Minor",
+   "3606"
+  ]
+ ]
+}

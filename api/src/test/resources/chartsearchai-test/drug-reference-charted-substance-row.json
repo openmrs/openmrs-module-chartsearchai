@@ -1,0 +1,67 @@
+{
+  "version": "1.0",
+  "source": "test fixture — issues #194/#189: one substance whose CHARTED row is not the row the question's own word resolves, and which carries both an interaction rule and age bands so that every arm names a subject in one response",
+  "description": "The two Amoxicillin rows are ONE substance (both publish substanceName 'amoxicillin', and the curated schema derives the rest of the key from the display stem), but only the unqualified row lists the bare alias — so a question or answer saying 'amoxicillin' resolves that row ALONE while an order named 'Amoxicillin (suspension)' resolves both. That asymmetry is what makes the row sets of the text side and the chart side differ, which is the shape issues #175 and #194 turn on, and no bundled dataset can pose it: the ddinter source publishes substance names but no age bands, and the shipped curated seed publishes age bands but no substance names. The two rows publish DIFFERENT daily ceilings (3000 against 2000 mg/day) so the quoted band names the row that supplied it, and Warfarin is here only to be the interacting active order that lets one response carry an interaction chip and a dose warning at once.",
+  "entries": [
+    {
+      "id": "amoxicillin",
+      "name": "Amoxicillin",
+      "substanceName": "amoxicillin",
+      "aliases": [
+        "amoxicillin"
+      ],
+      "atcCodes": [
+        "J01CA04"
+      ],
+      "ageBands": [
+        {
+          "minYears": 0,
+          "maxYears": 120,
+          "mgPerKgMin": 15,
+          "mgPerKgMax": 30,
+          "maxDailyDoseMg": 3000
+        }
+      ],
+      "interactions": [
+        {
+          "token": "warfarin",
+          "severity": "Major",
+          "note": "Major. Broad-spectrum penicillins may potentiate warfarin; check the INR."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "amoxicillin-suspension",
+      "name": "Amoxicillin (suspension)",
+      "substanceName": "amoxicillin",
+      "aliases": [
+        "amoxicillin (suspension)"
+      ],
+      "atcCodes": [
+        "J01CA04"
+      ],
+      "ageBands": [
+        {
+          "minYears": 0,
+          "maxYears": 120,
+          "mgPerKgMin": 15,
+          "mgPerKgMax": 30,
+          "maxDailyDoseMg": 2000
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "warfarin",
+      "name": "Warfarin",
+      "aliases": [
+        "warfarin"
+      ],
+      "atcCodes": [
+        "B01AA03"
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

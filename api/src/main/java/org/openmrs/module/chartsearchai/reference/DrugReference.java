@@ -303,7 +303,7 @@ public class DrugReference {
 
 	/**
 	 * Which of two rows of ONE substance should represent it — the row a collapsed chip is named after
-	 * ({@code DrugSafetyValidator.addInteractionWarnings}, issue #162), the row a collapsed reference
+	 * ({@code DrugSafetyValidator.interactionSubject}, issue #162), the row a collapsed reference
 	 * record is rendered from ({@link DrugReferenceInjector#matchingEntries}, issue #163), and the row a
 	 * class chip names its PARTNER by ({@code DrugSafetyValidator.entryForAtcCode}, issue #174 site 1 —
 	 * where the ambiguity is not two rows a question resolved but the several rows that all publish the
@@ -311,6 +311,13 @@ public class DrugReference {
 	 * describe the same substance to the same clinician and to the same model: a chip naming the
 	 * substance beside a record naming one of its routes is the chip-versus-prose divergence this module
 	 * keeps having to remove.
+	 *
+	 * <p>At the CHIP-SUBJECT site this is the second step rather than the whole answer since issue #194:
+	 * {@code DrugSafetyValidator.interactionSubject} asks {@link #nameMatchStrength} first — the row the
+	 * patient's own record names is the truthful subject (#187) — and folds only the rows tied on that.
+	 * This fold is unchanged and still decides every case where the record names none of them, which is
+	 * most of them. Do not add the recorded-name step here: {@code DrugReferenceInjector.matchingEntries}
+	 * and the class-partner site have no recorded name to anchor on.
 	 *
 	 * @return {@code candidate} when it {@link #namesNoRoute()} and {@code incumbent} does not, else
 	 *         {@code incumbent} — so the route-unspecified row wins wherever the family has one, and
@@ -933,6 +940,11 @@ public class DrugReference {
 	 * picks a substance's representative row for DISPLAY, while this picks which row the chart's own
 	 * string is about, and applying it here would rename a charted {@code Ketorolac (ophthalmic)}
 	 * allergy to {@code Ketorolac}.
+	 *
+	 * <p>The two do COMPOSE at one site, in that order and only there: since issue #194
+	 * {@code DrugSafetyValidator.interactionSubject} asks this first and folds only the rows that tie,
+	 * because a chip about the patient's own order should name the row their chart records. Composing
+	 * them the other way round is the #187 regression above.
 	 *
 	 * <p><b>Gated on {@link #matchesDrugName} first</b>, so the entries a name can resolve to are
 	 * exactly the ones it resolved to before and only the CHOICE among them changes: this can never

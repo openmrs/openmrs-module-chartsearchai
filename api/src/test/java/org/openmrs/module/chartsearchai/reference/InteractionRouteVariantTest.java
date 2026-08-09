@@ -132,12 +132,39 @@ public class InteractionRouteVariantTest {
 	@Test
 	public void theSurvivingChipIsNotDecidedByWhichNoteIsLonger() throws IOException {
 		// The tie-break that grouping alone gets WRONG. Ketorolac's two rows rate lepirudin Moderate
-		// apiece, and the OPHTHALMIC row's note is the longer one (495 characters against 265, verbatim
-		// from the shipped KB and reproduced independently), so the pre-existing severity-then-longer-note
-		// rule would hand the chip to a row whose prose is about eye drops. This case is the pin: the
-		// note length cannot be what decides a route. How many (substance, partner) groups share the
-		// shape is deliberately NOT stated — two measurement passes disagreed about the count while
-		// agreeing about these two rows, so the rows are the evidence and the count was removed.
+		// apiece, and the OPHTHALMIC row's note is the longer one (verbatim from the shipped KB), so the
+		// pre-existing severity-then-longer-note rule would hand the chip to a row whose prose is about
+		// eye drops. This case is the pin: the note length cannot be what decides a route. How many
+		// (substance, partner) groups share the shape is deliberately NOT stated — two measurement passes
+		// disagreed about the count while agreeing about these two rows, so the rows are the evidence and
+		// the count was removed.
+		//
+		// The premise is asserted rather than described (issue #212). This case used to close with
+		// assertFalse(detail.contains("topically administered")) — an assertion that CANNOT FAIL, because
+		// the assertEquals above it already pins the detail to a string that does not contain that phrase,
+		// so its failure set is empty. What it was reaching for is a property of the FIXTURE: that the
+		// losing row's note is longer and says something the survivor's does not. Asserted there, it can
+		// fail — a fixture edit that shortened the ophthalmic note would leave the chip assertion green
+		// while quietly removing the shape this case exists to pin (measured: shortening it below the
+		// unqualified note's length leaves the old assertions green and fails the two below).
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
+		List<DrugReference> rows = service.findByQuery("Is it safe to give ketorolac?");
+		assertEquals("Ketorolac", rows.get(0).getName(), "precondition: the route-unspecified row, was: "
+				+ DrugReferenceTestSupport.names(rows));
+		assertEquals("Ketorolac (ophthalmic)", rows.get(1).getName(), "precondition: and the route-"
+				+ "qualified one, was: " + DrugReferenceTestSupport.names(rows));
+		String unqualifiedNote = lepirudinNote(rows.get(0));
+		String ophthalmicNote = lepirudinNote(rows.get(1));
+		assertTrue(ophthalmicNote.length() > unqualifiedNote.length(),
+				"precondition: the OPHTHALMIC note must be the longer one, or a severity-then-longer-note"
+						+ " rule would already pick the row this case says it picks wrongly — ophthalmic "
+						+ ophthalmicNote.length() + " chars, unqualified " + unqualifiedNote.length());
+		assertTrue(ophthalmicNote.contains("topically administered"),
+				"precondition: and must carry prose the surviving detail below cannot contain, or that"
+						+ " assertion no longer tells the two notes apart, was: " + ophthalmicNote);
+		assertFalse(unqualifiedNote.contains("topically administered"),
+				"precondition: while the surviving row's own note does not, was: " + unqualifiedNote);
+
 		List<SafetyWarning> warnings = validator().validate("", "Is it safe to give ketorolac?",
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Lepirudin 15mg"), null, null, null));
@@ -148,9 +175,22 @@ public class InteractionRouteVariantTest {
 				+ " inhibitors may potentiate the risk of bleeding. NSAIDs interfere with platelet"
 				+ " adhesion and aggregation and may prolong bleeding time in healthy individuals.",
 				warnings.get(0).getDetail(),
-				"the route-unspecified row keeps the chip even though its note is the shorter one");
-		assertFalse(warnings.get(0).getDetail().contains("topically administered"),
-				"so the ophthalmic row's prose must not survive, was: " + warnings.get(0).getDetail());
+				"the route-unspecified row keeps the chip even though its note is the shorter one — and,"
+						+ " given the preconditions above, the ophthalmic row's prose therefore does not"
+						+ " survive");
+	}
+
+	/** The parsed lepirudin rule's note on {@code row}, or a loud failure — the fixture premise the
+	 *  case above rests on is which of the two notes is longer, so a row that has stopped carrying
+	 *  the rule must not read as "no note". */
+	private static String lepirudinNote(DrugReference row) {
+		for (DrugReference.Interaction rule : row.getInteractions()) {
+			if ("lepirudin".equals(rule.getToken())) {
+				return rule.getNote();
+			}
+		}
+		throw new AssertionError(row.getName() + " no longer carries a lepirudin rule, so this case "
+				+ "cannot compare the two notes: " + row.getInteractions());
 	}
 
 	@Test

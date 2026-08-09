@@ -51,8 +51,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class ActiveOrderAtcContextTest extends BaseModuleContextSensitiveTest {
 
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with her current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
 	/** Concept 88 (ASPIRIN) — the concept behind patient 7's single active drug order. */
 	private static final int ORDERED_CONCEPT = 88;

@@ -83,8 +83,7 @@ public class ActiveOrderContraindicationTest {
 	/** The question that opens the interaction screen's gate (issue #113) — it resolves no reference
 	 *  drug, which is exactly what that arm requires, so it is the one question shape under which the
 	 *  new arm and the screen both run. See {@link #thePatientsOwnContraindicationsLeadTheScreensPairChips}. */
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with her current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
 	/** The patient's real querystore {@code drug_order} chart record for that order — the record an
 	 *  answer about her medications cites, and so the record echo scoping attributes the mention to. */

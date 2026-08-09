@@ -47,8 +47,7 @@ import org.junit.jupiter.api.Test;
 public class OneSubstanceOneRuleTest {
 
 	/** The canonical screening question, verbatim from issue #113 — it must name no drug. */
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with her current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
 	/**
 	 * A verbatim slice of the shipped KB whose {@code Insulin human} family reaches ONE partner

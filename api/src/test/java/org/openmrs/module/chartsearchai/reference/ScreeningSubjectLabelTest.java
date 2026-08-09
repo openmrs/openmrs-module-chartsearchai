@@ -41,8 +41,7 @@ import org.junit.jupiter.api.Test;
 public class ScreeningSubjectLabelTest {
 
 	/** The canonical screening question, verbatim from issue #113. */
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with her current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
 	/**
 	 * The verbatim slice whose {@code Chloroprocaine} family lists its OPHTHALMIC row first and

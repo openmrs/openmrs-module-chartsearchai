@@ -981,6 +981,9 @@ public class DrugSafetyValidator {
 			pairs.add(ref, rule.partnerKey());
 		}
 		for (String detail : classOnly) {
+			// No rating, and not an omission: a shared-ATC-subgroup or cross-reactivity join is a
+			// relationship the reference data states without severity, which is why these chips are never
+			// floor-filtered either. See SafetyWarning.getSeverity on why null is the correct value.
 			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
 		}
 	}
@@ -1787,8 +1790,10 @@ public class DrugSafetyValidator {
 		if (rule.getNote() != null && !rule.getNote().isEmpty()) {
 			detail += " — " + rule.getNote();
 		}
+		// The chip carries the rating it is ORDERED on (issue #207), so the ordering is observable
+		// without reading it back out of the prose above.
 		candidates.put(pairKey, new PairFinding(new SafetyWarning(SafetyWarning.TYPE_INTERACTION,
-				subject.displayLabel(), detail), rule.getSeverity(), row, rule));
+				subject.displayLabel(), detail, rule.getSeverity()), rule.getSeverity(), row, rule));
 	}
 
 	/**
@@ -2021,7 +2026,12 @@ public class DrugSafetyValidator {
 		if (alsoSameClass != null) {
 			detail = endSentence(detail) + " " + alsoSameClass;
 		}
-		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail);
+		// The rule's own rating travels with the chip (issue #207). Null for a curated hand-authored
+		// rule, which is unrated by design — see SafetyWarning.getSeverity, and note that a FOLDED chip
+		// still reports the RULE's rating: the class sentence appended to it carries none, so folding
+		// cannot lower or raise what the pair is rated.
+		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail,
+				i.getSeverity());
 	}
 
 	/**

@@ -46,8 +46,7 @@ import org.junit.jupiter.api.Test;
  */
 public class ActiveOrderAtcAttributionTest {
 
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with his current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
 	/** Simvastatin's code in the bundled sample; Clarithromycin's is the partner code its rule names. */
 	private static final String SIMVASTATIN_ATC = "C10AA01";

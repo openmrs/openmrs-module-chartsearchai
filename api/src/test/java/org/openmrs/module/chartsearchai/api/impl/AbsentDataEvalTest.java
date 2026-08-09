@@ -9,13 +9,21 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -25,13 +33,59 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Eval suite for absent-data detection. Tests that when retrieval finds
- * no matching records, the system produces a clear "no records" answer
- * naming what was asked about.
+ * Eval suite for absent-data detection: asked about a topic the chart carries nothing on, the system
+ * must produce a clear "no records" answer that names what was asked about, and must not answer about
+ * some other topic instead.
+ *
+ * <p><b>What this file used to do (issue #203).</b> Its {@code @MethodSource} filtered on
+ * {@code !isExpectedAbsent()}, so all 19 {@code expectedAbsent} cases of the 29-case dataset were
+ * dropped — silently, since a filtered case is not a skipped case: the build reported <b>10 tests, 0
+ * skipped</b> and nothing looked wrong. The 10 that ran asserted only that a stopword-stripped
+ * question was non-empty, i.e. a property of {@link QueryPreprocessor#stripQueryStopwords} (which
+ * {@code LlmInferenceServiceTest} owns, with six cases including the all-stopwords one), under a class
+ * name and javadoc claiming to test absent-data behaviour. The dataset's
+ * {@code expectedAnswerContains}/{@code expectedAnswerNotContains} held exactly the claimed
+ * expectations, {@link EvalCase} exposed them, and nothing read them.
+ *
+ * <p><b>How it is split now, and why.</b> Naming an absent topic requires a real answer, and a real
+ * answer requires the LLM — there is no deterministic path in this module that writes "no records of
+ * cancer"; the module's part is to put the empty-records placeholder and the question in front of the
+ * model, and the model writes the sentence. Retrieval's part — that an absent topic retrieves nothing
+ * — belongs to openmrs-module-querystore (issue #51) and is not assertable here at all. So:
+ *
+ * <ul>
+ *   <li>{@link #absentTopicAnswerNamesWhatWasAskedAbout} runs all 19 absent cases against a real
+ *       endpoint and asserts the dataset's expectations, joining the repo's opt-in convention
+ *       ({@code PromptInjectionEvalTest}, {@code LlmAnswerQualityTest}) — <b>skipped, but visibly
+ *       skipped</b>, which is the one thing the old filter was not.</li>
+ *   <li>{@link #everyAbsentCaseIsRunAndEveryExpectationDiscriminates} runs unconditionally and is the
+ *       guard against this defect recurring: it proves no absent case is filtered out of the run, and
+ *       proves every single expectation of every case is one the assertion above would FAIL on. The
+ *       same role {@code LlmAnswerQualityTest.promptVariations_shouldEachDifferFromTheBaselineAndFrom
+ *       EachOther} plays for that suite — "the instrument has to assert it did something", and it has
+ *       to do so in CI, where the LLM is not available.</li>
+ *   <li>{@link #theEmptyChartPromptAsksTheModelToNameWhatIsMissing} runs unconditionally and asserts
+ *       the deterministic half against real production code: the exact bytes
+ *       {@link LlmProvider#buildUserMessage} sends when the chart yields no records.</li>
+ * </ul>
+ *
+ * <p>The 10 {@code expectedAbsent: false} cases are deliberately not run here — see
+ * {@link #everyAbsentCaseIsRunAndEveryExpectationDiscriminates}, which asserts that they carry no
+ * answer expectations, so their being unused is a checked property rather than a silent one.
+ *
+ * <p>Run the LLM-gated case with {@code -Dchartsearchai.absent.data.test=true} and optionally
+ * {@code -Dchartsearchai.absent.data.endpoint=http://localhost:18085/v1/chat/completions}.
  */
 public class AbsentDataEvalTest {
 
 	private static final Logger log = LoggerFactory.getLogger(AbsentDataEvalTest.class);
+
+	private static final String ENABLE_PROPERTY = "chartsearchai.absent.data.test";
+
+	private static final String ENDPOINT_PROPERTY = "chartsearchai.absent.data.endpoint";
+
+	/** Enough for a "no records" sentence and its empty citations array; these answers are short. */
+	private static final int MAX_TOKENS = 512;
 
 	private static EvalDataset dataset;
 
@@ -47,26 +101,196 @@ public class AbsentDataEvalTest {
 		return dataset;
 	}
 
-	static Stream<Arguments> presentCases() {
-		List<Arguments> args = new ArrayList<>();
+	/** Every case the dataset marks {@code expectedAbsent}, in dataset order. */
+	private static List<EvalCase> absentCases() {
+		List<EvalCase> cases = new ArrayList<>();
 		for (EvalCase evalCase : getDataset().getCases()) {
-			if (!evalCase.isExpectedAbsent()) {
-				args.add(Arguments.of(evalCase.getId(), evalCase));
+			if (evalCase.isExpectedAbsent()) {
+				cases.add(evalCase);
 			}
+		}
+		return cases;
+	}
+
+	static Stream<Arguments> absentDataCases() {
+		List<Arguments> args = new ArrayList<>();
+		for (EvalCase evalCase : absentCases()) {
+			args.add(Arguments.of(evalCase.getId(), evalCase));
 		}
 		return args.stream();
 	}
 
+	/**
+	 * Asked about an absent topic with a chart that yields no records, the answer must name what was
+	 * asked about and must not answer about a different topic.
+	 *
+	 * <p>Every piece below the transport is production code: {@link LlmProvider#DEFAULT_SYSTEM_PROMPT},
+	 * {@link LlmProvider#buildUserMessage} (the same method {@code search}, {@code searchStreaming} and
+	 * {@code warmup} build their bytes with), and {@link LlmProvider#extractResponse} for the reply. The
+	 * empty {@code numberedRecords} argument is the real absent-data shape:
+	 * {@code LlmInferenceService.chartTextOrPlaceholder} hands the empty case straight to this builder.
+	 */
 	@ParameterizedTest(name = "[{index}] {0}")
-	@MethodSource("presentCases")
-	public void presentData_perCase(String caseId, EvalCase evalCase) {
-		String stripped = LlmInferenceService.stripQueryStopwords(evalCase.getQuestion());
+	@MethodSource("absentDataCases")
+	public void absentTopicAnswerNamesWhatWasAskedAbout(String caseId, EvalCase evalCase) throws Exception {
+		Assumptions.assumeTrue("true".equalsIgnoreCase(System.getProperty(ENABLE_PROPERTY)),
+				"Skipping: set -D" + ENABLE_PROPERTY + "=true to run");
+		String endpoint = LlmEndpointTestSupport.endpoint(ENDPOINT_PROPERTY);
+		Assumptions.assumeTrue(LlmEndpointTestSupport.isReachable(endpoint),
+				"Skipping: LLM endpoint not reachable at " + endpoint);
 
-		log.info("[{}] question='{}' stripped='{}'",
-				caseId, evalCase.getQuestion(), stripped);
+		String raw = LlmEndpointTestSupport.complete(endpoint, LlmProvider.DEFAULT_SYSTEM_PROMPT,
+				LlmProvider.buildUserMessage("", evalCase.getQuestion()), MAX_TOKENS);
+		String answer = LlmProvider.extractResponse(raw).getAnswer();
 
-		assertFalse(stripped.isEmpty(),
-				caseId + ": question should have searchable terms");
+		log.info("[{}] question='{}' answer='{}'", caseId, evalCase.getQuestion(), answer);
+
+		assertAnswerMatchesExpectations(caseId, evalCase, answer);
 	}
 
+	/**
+	 * The oracle, factored out so
+	 * {@link #everyAbsentCaseIsRunAndEveryExpectationDiscriminates} can prove — without an LLM — that
+	 * it rejects what it is supposed to reject, for every expectation of every case.
+	 *
+	 * <p>Case-insensitive on purpose: the expectations are topic words ({@code cancer},
+	 * {@code CBC}, {@code ray}) and which case the model writes them in is its own word choice, not a
+	 * property under test. Everything else is exact containment — a looser match (stemming, synonyms)
+	 * would be this file re-deciding what the dataset means.
+	 */
+	private static void assertAnswerMatchesExpectations(String caseId, EvalCase evalCase, String answer) {
+		assertNotNull(answer, caseId + ": no answer was produced");
+		String lower = answer.toLowerCase(Locale.ROOT);
+		for (String expected : expectedContains(evalCase)) {
+			assertTrue(lower.contains(expected.toLowerCase(Locale.ROOT)),
+					caseId + ": the answer must name what was asked about ('" + expected + "'), was: "
+							+ answer);
+		}
+		if (evalCase.getExpectedAnswerNotContains() != null) {
+			for (String forbidden : evalCase.getExpectedAnswerNotContains()) {
+				assertFalse(lower.contains(forbidden.toLowerCase(Locale.ROOT)),
+						caseId + ": the answer must not answer about a different topic ('" + forbidden
+								+ "'), was: " + answer);
+			}
+		}
+	}
+
+	private static List<String> expectedContains(EvalCase evalCase) {
+		return evalCase.getExpectedAnswerContains() == null ? new ArrayList<String>()
+				: evalCase.getExpectedAnswerContains();
+	}
+
+	/**
+	 * The guard against issue #203 recurring, and it runs in CI where the LLM does not.
+	 *
+	 * <p>Two things it establishes. First, that the run covers every {@code expectedAbsent} case the
+	 * dataset carries — the old provider dropped all 19 by predicate, and because a filtered case is
+	 * not a skipped one, no count anywhere reported it. Second, that each of those cases' expectations
+	 * actually <em>bites</em>: for every term, an answer missing it must fail the oracle, and for every
+	 * forbidden term, an answer containing it must fail. That is §11 of the working brief applied to an
+	 * assertion rather than a probe — a check offered as evidence has to be shown failing, and the
+	 * showing belongs where it cannot be skipped.
+	 *
+	 * <p>This exercises the ORACLE, not the pipeline: the answers it feeds in are constructed from the
+	 * dataset's own expectations, and no production behaviour is imitated. The pipeline half is
+	 * {@link #absentTopicAnswerNamesWhatWasAskedAbout}, which is skipped without an endpoint, and
+	 * {@link #theEmptyChartPromptAsksTheModelToNameWhatIsMissing}, which is not.
+	 */
+	@Test
+	public void everyAbsentCaseIsRunAndEveryExpectationDiscriminates() {
+		long absentInDataset = getDataset().getCases().stream().filter(EvalCase::isExpectedAbsent).count();
+		assertTrue(absentInDataset > 0, "the dataset must carry absent-data cases at all");
+		assertEquals(absentInDataset, absentDataCases().count(),
+				"every expectedAbsent case must reach the run: filtering one out is invisible, because a "
+						+ "case a @MethodSource never yields is not reported as skipped (issue #203)");
+
+		for (EvalCase evalCase : absentCases()) {
+			String caseId = evalCase.getId();
+			List<String> contains = expectedContains(evalCase);
+			assertFalse(contains.isEmpty(),
+					caseId + ": an absent case with no expectedAnswerContains asserts nothing about the "
+							+ "answer, so running it would be the same vacuity one level down");
+			String compliant = compliantAnswerFor(evalCase);
+			assertAnswerMatchesExpectations(caseId, evalCase, compliant);
+
+			for (String expected : contains) {
+				String missingOne = removeAll(compliant, expected);
+				assertThrows(AssertionError.class,
+						() -> assertAnswerMatchesExpectations(caseId, evalCase, missingOne),
+						caseId + ": an answer that never names '" + expected + "' must fail this case, or "
+								+ "that expectation is not being asserted: " + missingOne);
+			}
+			if (evalCase.getExpectedAnswerNotContains() != null) {
+				for (String forbidden : evalCase.getExpectedAnswerNotContains()) {
+					String withForbidden = compliant + " " + forbidden;
+					assertThrows(AssertionError.class,
+							() -> assertAnswerMatchesExpectations(caseId, evalCase, withForbidden),
+							caseId + ": an answer that does mention '" + forbidden + "' must fail this "
+									+ "case: " + withForbidden);
+				}
+			}
+		}
+
+		for (EvalCase evalCase : getDataset().getCases()) {
+			if (!evalCase.isExpectedAbsent()) {
+				// The present cases are inputs to a RETRIEVAL eval — "this topic must not read as absent" —
+				// and retrieval is querystore's (issue #51), so this module cannot assert anything about
+				// them. Asserted rather than assumed, so that adding an answer expectation to one of them
+				// fails here instead of joining the dataset unread, which is how issue #203 started.
+				assertTrue(evalCase.getExpectedAnswerContains() == null
+						&& evalCase.getExpectedAnswerNotContains() == null,
+						evalCase.getId() + ": a present case carries answer expectations, but nothing here "
+								+ "runs them — either drive it from a suite that can retrieve records, or "
+								+ "drop the expectations");
+			}
+		}
+	}
+
+	/**
+	 * The deterministic half, in CI: what this module actually does for an absent topic is put the
+	 * empty-records placeholder and the clinician's question in front of the model, and instruct it to
+	 * name what is missing. Asserted on the exact bytes the real builder produces, because those bytes
+	 * are also the KV-cache prefix contract ({@link LlmProvider#buildUserMessage}) — so an assertion
+	 * looser than equality would not notice the placeholder being dropped, which is the regression that
+	 * makes the model answer from demographics alone
+	 * ({@code LlmInferenceService.chartTextOrPlaceholder}).
+	 *
+	 * <p>This is the only absent-data assertion that runs without an endpoint, which is why it also
+	 * pins the system prompt's instruction: with the 19 answer-level cases skipped in CI, nothing else
+	 * would notice that instruction leaving the prompt.
+	 */
+	@Test
+	public void theEmptyChartPromptAsksTheModelToNameWhatIsMissing() {
+		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("If no records are relevant, name what is "
+				+ "missing."),
+				"the system prompt must still instruct the model to name what is missing — every case in "
+						+ "this file depends on it, and they are all skipped without an endpoint");
+
+		List<EvalCase> absent = absentCases();
+		assertFalse(absent.isEmpty(), "precondition: there must be absent cases to build prompts for");
+		for (EvalCase evalCase : absent) {
+			assertEquals("Patient records (most recent first):\n"
+					+ "This patient has no records matching this query.\n\n"
+					+ "Clinician's query: " + evalCase.getQuestion(),
+					LlmProvider.buildUserMessage("", evalCase.getQuestion()),
+					evalCase.getId() + ": an empty chart must reach the model as the no-records placeholder "
+							+ "followed by the question, or the answer is written from demographics alone");
+		}
+	}
+
+	/** An answer that satisfies {@code evalCase} — built from its own expectations, so it names exactly
+	 *  what the dataset says the real answer must name and nothing the dataset forbids. */
+	private static String compliantAnswerFor(EvalCase evalCase) {
+		StringBuilder sb = new StringBuilder("There are no records in this chart about");
+		for (String expected : expectedContains(evalCase)) {
+			sb.append(' ').append(expected);
+		}
+		return sb.append('.').toString();
+	}
+
+	/** {@code answer} with every case-insensitive occurrence of {@code term} removed, so the result
+	 *  cannot satisfy that expectation however the scaffolding above happens to be worded. */
+	private static String removeAll(String answer, String term) {
+		return answer.replaceAll("(?i)" + Pattern.quote(term), "");
+	}
 }

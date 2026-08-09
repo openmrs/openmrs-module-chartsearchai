@@ -224,6 +224,33 @@ public final class DrugReferenceTestSupport {
 	 *  sibling pairs that share a display stem and must NOT be merged with them (issue #195). */
 	static final String DDI_PRESENTATION_MOIETY = "chartsearchai-test/ddi-presentation-moiety.json";
 
+	/**
+	 * The canonical interaction-screening question, verbatim from issue #113 — it names no drug, which
+	 * is what leaves the active-order screening arm as the only arm that can chip, so an assertion
+	 * about that arm cannot be satisfied by a question-driven one.
+	 *
+	 * <p>Owned here for the same reason {@link #REFERENCE_LOGGER} is, and with the consequence issue
+	 * #153 names: it was copy-pasted into ten test files, and which arm it reaches is decided by
+	 * {@link org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter#isInteractionScreening}, so a
+	 * change to that classifier could move SOME copies onto a different arm while the rest kept
+	 * passing — and nothing would point at the divergence. One string, one verdict.
+	 * {@code DrugSafetyInteractionScreeningTest.theSharedScreeningQuestionIsStillClassifiedAsScreening}
+	 * asserts that verdict in CI, so the reclassification fails loudly in one place instead of
+	 * scattering.
+	 *
+	 * <p>The pronoun is NOT load-bearing and one string therefore serves every patient's test: the
+	 * classifier reads an {@code interact*} cue and its own MEDICATIONS classification, neither of
+	 * which is gendered. Two constants differing only in pronoun would re-create exactly the
+	 * divergence this one removes.
+	 *
+	 * <p>Deliberately NOT the only screening phrasing under test. {@code DrugSafetyInteractionScreening
+	 * Test} also drives "Do any of her meds interact?" and {@code DrugSafetyDiacriticOrderNameTest}
+	 * "Are there any interactions between her medications?" — those are separate phrasings covering the
+	 * classifier's breadth, not copies of this one, and collapsing them into this constant would delete
+	 * that coverage.
+	 */
+	static final String SCREENING_QUESTION = "Are there any drug interactions with her current medications?";
+
 	private DrugReferenceTestSupport() {
 	}
 

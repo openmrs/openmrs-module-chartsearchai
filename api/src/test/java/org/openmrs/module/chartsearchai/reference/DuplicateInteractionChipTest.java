@@ -198,7 +198,7 @@ public class DuplicateInteractionChipTest {
 		// subject reaches "in play" through the ANSWER (uncited, so echo scoping does not exempt it) —
 		// the shape #127 measured this suppression against.
 		List<SafetyWarning> warnings = foldValidator().validate("Ibuprofen is on the list.",
-				"Are there any drug interactions with her current medications?",
+				DrugReferenceTestSupport.SCREENING_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("ibuprofen 400mg", "aspirin 81mg"),
 						DrugReferenceTestSupport.set("M01AE01", "N02BA01"), null, null));

@@ -58,7 +58,7 @@ public class AllergenNameResolutionTest {
 	/** Warfarin, aspirin, clarithromycin, simvastatin and four nested-name pairs — see the fixture's
 	 *  own {@code metadata.note}. Shared with {@link RuleTokenAliasOrderMatchingTest}, which pins the
 	 *  order-name half of the same asymmetry. */
-	static final String FIXTURE = "chartsearchai-test/ddi-alias-drug-names.json";
+	static final String FIXTURE = DrugReferenceTestSupport.DDI_ALIAS_DRUG_NAMES;
 
 	private DrugSafetyValidator validator() throws IOException {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport

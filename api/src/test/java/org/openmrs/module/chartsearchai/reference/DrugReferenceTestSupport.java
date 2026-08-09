@@ -214,6 +214,11 @@ public final class DrugReferenceTestSupport {
 	 *  abacavir/lamivudine pair that claims one name equally (issue #193). */
 	static final String DDI_COMBINATION_ALLERGEN = "chartsearchai-test/ddi-combination-allergen.json";
 
+	/** Eleven verbatim rows whose ALIAS SETS carry the shapes issues #128/#147 turn on — the entry named
+	 *  {@code Acetylsalicylic acid} whose every rule token is {@code aspirin}, and the nesting pairs
+	 *  ({@code opium} inside {@code tiotropium}). */
+	static final String DDI_ALIAS_DRUG_NAMES = "chartsearchai-test/ddi-alias-drug-names.json";
+
 	/** Presentations filed as their own substance beside the parent moiety they contain, with the
 	 *  sibling pairs that share a display stem and must NOT be merged with them (issue #195). */
 	static final String DDI_PRESENTATION_MOIETY = "chartsearchai-test/ddi-presentation-moiety.json";

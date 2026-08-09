@@ -9,7 +9,10 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -57,14 +60,19 @@ public final class DrugReferenceLoad {
 
 	private final int entryCount;
 
+	private final List<DrugReferenceValidity.Finding> findings;
+
 	DrugReferenceLoad(String sourceFormat, String configuredSourceFormat, String configuredDataFilePath,
-			String origin, int entryCount) {
+			String origin, int entryCount, List<DrugReferenceValidity.Finding> findings) {
 		this.loaded = true;
 		this.sourceFormat = sourceFormat;
 		this.configuredSourceFormat = configuredSourceFormat;
 		this.configuredDataFilePath = configuredDataFilePath;
 		this.origin = origin == null ? ReferenceDataFiles.ORIGIN_NONE : origin;
 		this.entryCount = entryCount;
+		this.findings = findings == null ? Collections.<DrugReferenceValidity.Finding> emptyList()
+				: Collections.unmodifiableList(
+						new ArrayList<DrugReferenceValidity.Finding>(findings));
 	}
 
 	private DrugReferenceLoad() {
@@ -74,6 +82,7 @@ public final class DrugReferenceLoad {
 		this.configuredDataFilePath = null;
 		this.origin = null;
 		this.entryCount = 0;
+		this.findings = Collections.emptyList();
 	}
 
 	/** @return the outcome for "no load has happened", which is not a failure — see the class javadoc. */
@@ -148,6 +157,27 @@ public final class DrugReferenceLoad {
 		return entryCount;
 	}
 
+	/**
+	 * @return what the load-time validity check found wrong with this dataset and this configuration, and
+	 *         what the loader did about each — see {@link DrugReferenceValidity}. Empty for a healthy
+	 *         load and for "not loaded at all"; never null.
+	 *
+	 *         <p>Retained here rather than only logged for the reason the rest of this object is
+	 *         (issue #149): the load is lazy, so the most recent WARN may belong to a previous load or a
+	 *         previous process, and after a global-property flip that is exactly the line a verification
+	 *         pass misreads. This describes the dataset the safety layer is using.
+	 *
+	 *         <p>Deliberately NOT in {@link #toMap()}, and so not on the wire.
+	 *         {@code DrugReferenceLoadContextTest.loadStatusSerializesTheFieldsTheStatusEndpointReturns}
+	 *         and {@code ChartSearchAiDrugReferenceStatusTest}'s {@code DOCUMENTED_FIELDS} both assert
+	 *         the endpoint's key set EXACTLY, so adding a key means changing an expected value in two
+	 *         tests, which is a maintainer's call rather than this change's. Adding
+	 *         {@code map.put("findings", …)} below is the whole change when that call is made.
+	 */
+	public List<DrugReferenceValidity.Finding> getFindings() {
+		return findings;
+	}
+
 	/** @return this outcome as a JSON-serializable map, for the REST status endpoint. */
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new LinkedHashMap<String, Object>();
@@ -163,6 +193,6 @@ public final class DrugReferenceLoad {
 
 	@Override
 	public String toString() {
-		return toMap().toString();
+		return findings.isEmpty() ? toMap().toString() : toMap() + " findings=" + findings;
 	}
 }

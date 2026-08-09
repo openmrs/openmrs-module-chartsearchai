@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #211 — not shipped data",
+  "description": "The healthy counterpart of drug-reference-name-not-its-own-alias.json: the same three ibuprofen rows, authored the way the shipped datasets are. Two differences, and BOTH are needed — measured, because declaring substanceName alone is not enough. (1) Each row declares `substanceName`, the reference data's own claim that these rows are one substance. (2) The presentations are named with a TRAILING PARENTHESIZED qualifier, which is the convention DrugReference.substanceKey is built around (`Dexamethasone (nasal)`) — a curated file publishes no substance registry, so the display STEM is the veto on that claim, and `Ibuprofen tablets` stems to itself while `Ibuprofen (tablets)` stems to `Ibuprofen`. Each row also lists its own display name among its aliases, as the ddinter and atc parsers do, so the loader has nothing to repair. Result: one substance, so the per-substance verdict keeps every rule-bearing row, and the validity check reports nothing at all.",
+  "entries": [
+    {
+      "id": "ibuprofen-tablets",
+      "name": "Ibuprofen (tablets)",
+      "substanceName": "ibuprofen",
+      "aliases": ["ibuprofen (tablets)", "ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "contraindications": [
+        { "type": "allergy", "token": "ibuprofen", "note": "documented ibuprofen allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ibuprofen-suspension",
+      "name": "Ibuprofen (suspension)",
+      "substanceName": "ibuprofen",
+      "aliases": ["ibuprofen (suspension)", "ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "contraindications": [
+        { "type": "allergy", "token": "ibuprofen", "note": "documented ibuprofen allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "substanceName": "ibuprofen",
+      "aliases": ["ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

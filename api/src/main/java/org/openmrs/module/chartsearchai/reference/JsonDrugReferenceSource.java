@@ -47,18 +47,27 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 
 	private volatile String lastLoadOrigin;
 
+	private volatile List<DrugReferenceValidity.Finding> lastLoadFindings = Collections.emptyList();
+
 	@Override
 	public List<DrugReference> load() {
 		ReferenceDataFiles.Loaded<DrugReference> loaded = ReferenceDataFiles.loadWithClasspathFallback(
-				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, CLASSPATH_DEFAULT,
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
+				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH, CLASSPATH_DEFAULT,
 				"drug-reference entries", JsonDrugReferenceSource::parse);
 		lastLoadOrigin = loaded.getOrigin();
+		lastLoadFindings = loaded.getValidity().getFindings();
 		return loaded.getItems();
 	}
 
 	@Override
 	public String lastLoadOrigin() {
 		return lastLoadOrigin;
+	}
+
+	@Override
+	public List<DrugReferenceValidity.Finding> lastLoadFindings() {
+		return lastLoadFindings;
 	}
 
 	/**

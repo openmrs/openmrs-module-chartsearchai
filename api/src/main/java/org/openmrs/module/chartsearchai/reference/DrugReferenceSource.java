@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -55,5 +56,22 @@ public interface DrugReferenceSource {
 	 */
 	default String lastLoadOrigin() {
 		return null;
+	}
+
+	/**
+	 * @return what the validity check found while {@link #load()} resolved its dataset — the
+	 *         configuration rules, which only the resolution can see (see
+	 *         {@link DrugReferenceValidity#configuredDataFileNotRead}). Empty when the implementation
+	 *         runs none (the test seam, and {@link AtcDrugReferenceSource}, which resolves its own file
+	 *         and has no fallback to be silently taken).
+	 *
+	 *         <p>Read immediately after {@code load()} on the same instance and retained beside the
+	 *         entries, for the same reason as {@link #lastLoadOrigin()}: the load is lazy, so a log line
+	 *         cannot be trusted to describe the load that is in force. The content rules are NOT here —
+	 *         they need the loaded model rather than a stream, so {@link DrugReferenceService} runs them
+	 *         once for every format instead of each source running its own version.
+	 */
+	default List<DrugReferenceValidity.Finding> lastLoadFindings() {
+		return Collections.emptyList();
 	}
 }

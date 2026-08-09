@@ -230,7 +230,7 @@ public class DrugSafetyValidator {
 	 * parsing/matching logic is unit-testable. Honours the per-check toggles.
 	 *
 	 * <p>The drugs checked are the union of those the QUESTION resolves to (via the same
-	 * {@link DrugReferenceService#findByQuery} the injector uses, so the two never drift) and those
+	 * {@link DrugReferenceService#findImpliedByQuery} the injector uses, so the two never drift) and those
 	 * NAMED IN THE ANSWER text. Keying off the question — not only the answer — decouples the safety
 	 * net from the LLM's word choice: a contraindication for the asked-about drug fires even when the
 	 * answer phrases it by class ("an NSAID allergy") and never writes the drug name. Overdose still
@@ -284,19 +284,25 @@ public class DrugSafetyValidator {
 		List<DrugReference> all = drugReferenceService.getAll();
 
 		// Drugs in play = those the QUESTION resolves to UNION those the ANSWER names — both via the same
-		// DrugReferenceService.findByQuery the injector uses, so question/answer/injector matching can
-		// never drift, and identity-dedup holds (findByQuery resolves against the shared getAll() cache).
+		// DrugReferenceService.findImpliedByQuery the injector uses, so question/answer/injector matching
+		// can never drift, and identity-dedup holds (it resolves against the shared getAll() cache).
 		// Answer-side drugs are echo-scoped (issue #105): a drug the answer names while a record the
 		// answer cites already names it in its own text is an echo of that record (a recited reference
 		// partner, an allergy reported off the chart), not a proposal — validating it produced chips
 		// about drugs nobody suggested giving. Question-named drugs are always validated.
+		//
+		// findImpliedByQuery, not the bare findByQuery, since issue #209: what this set is is the drugs
+		// in PLAY, and prose carrying one alias of two substances put both in play — so a question about
+		// hydrocortisone chipped about `Hydrocortisone butyrate`, an ester nobody named. The prose matcher
+		// itself is unchanged (it answers "is this entry mentioned", correctly); the ranking is applied
+		// where the answer has to be a substance.
 		Set<DrugReference> questionDrugs = new LinkedHashSet<DrugReference>(
-				drugReferenceService.findByQuery(question));
+				drugReferenceService.findImpliedByQuery(question));
 		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(questionDrugs);
 		// The echo corpus is built lazily so the common case — the answer names no drug beyond
 		// the question's — does no citation parsing and no mapping sweep at all.
 		List<String> citedTextsLower = null;
-		for (DrugReference ref : drugReferenceService.findByQuery(answer)) {
+		for (DrugReference ref : drugReferenceService.findImpliedByQuery(answer)) {
 			if (questionDrugs.contains(ref)) {
 				continue; // already in play; question-named drugs are always validated
 			}
@@ -658,8 +664,8 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>The defect.</b> Both contraindication arms are keyed on a subject ENTRY, and DDInter files
 	 * one substance as several route/formulation rows. One clinician-facing string resolves all of them
-	 * — {@link DrugReferenceService#findByQuery} and {@link DrugReferenceService#findByDrugName} return
-	 * every entry whose aliases match — so one clinical fact became one chip per row. Measured live on
+	 * — a candidate set is every ROW of each substance the string names, and every row of a substance
+	 * publishes the same aliases — so one clinical fact became one chip per row. Measured live on
 	 * the 3.7.1 standalone: a recorded dexamethasone allergy asked about dexamethasone gave FOUR chips,
 	 * and only the row {@link DrugReferenceService#lookupByToken} resolved the allergy to matched by
 	 * identity, so the other three fell through to the class comparison and reported the substance as
@@ -842,10 +848,11 @@ public class DrugSafetyValidator {
 	 * <p><b>The subject is a substance, not a reference row (issue #162).</b> This ran once per entry in
 	 * the drugs-in-play set, and {@link #bestRulePerPartner} groups per PARTNER within one subject, so the
 	 * subject side was never grouped at all: one clinician word resolves every route/formulation row a KB
-	 * files a substance as ({@link DrugReferenceService#findByQuery} returns every entry whose aliases
-	 * match), and each row that carried a rule about the same order raised its own chip. Measured live on
-	 * the 3.7.1 standalone — Sarah Taylor, one diclofenac order, "Is it safe to give hydrocortisone?" —
-	 * as {@code Hydrocortisone interacts with active order diclofenac} AND
+	 * files a substance as (a candidate set is every ROW of each substance the word names, and the rows of
+	 * one substance publish the same aliases), and each row that carried a rule about the same order
+	 * raised its own chip. Measured live on the 3.7.1 standalone — Sarah Taylor, one diclofenac order,
+	 * "Is it safe to give hydrocortisone?" — as
+	 * {@code Hydrocortisone interacts with active order diclofenac} AND
 	 * {@code Hydrocortisone (ophthalmic) interacts with active order diclofenac}, each carrying its own
 	 * row's mechanism prose. So it was not a duplicate to drop but a choice to make, and both halves of
 	 * the choice are decided elsewhere and deliberately: which rule row survives by
@@ -1736,12 +1743,12 @@ public class DrugSafetyValidator {
 		}
 		// Whichever side carries the rule owns the sentence; with symmetric data both do, and the tie
 		// goes to whichever entry the DATASET lists first — not whichever the question names first,
-		// because questionDrugs comes from findByQuery, which walks getAll() and so returns dataset
-		// order. Measured on the 3.7.1 standalone: "does voxelotor interact with dexamethasone?" and
-		// "can dexamethasone be given with voxelotor?" both chip with Voxelotor as the subject, its
-		// entry sitting at index 1055 against dexamethasone's 1744. Stable either way, which is what
-		// the chip needs; a rule that followed the question's word order would need the drug's offset
-		// in the question, which findByQuery does not report.
+		// because questionDrugs comes from findImpliedByQuery, which filters a walk of getAll() in place
+		// and so returns dataset order. Measured on the 3.7.1 standalone: "does voxelotor interact with
+		// dexamethasone?" and "can dexamethasone be given with voxelotor?" both chip with Voxelotor as
+		// the subject, its entry sitting at index 1055 against dexamethasone's 1744. Stable either way,
+		// which is what the chip needs; a rule that followed the question's word order would need the
+		// drug's offset in the question, which neither the prose scan nor the ranking above it reports.
 		boolean fromFirst = !forward.isEmpty();
 		// The ROW decides which side owns the sentence and which rule it carries; the SUBSTANCE
 		// decides what the sentence calls the two drugs (issue #174). Naming the row asserted a
@@ -1896,8 +1903,8 @@ public class DrugSafetyValidator {
 	/**
 	 * One chip per clinical PAIR, not per pair of ENTRIES. DDInter carries a separate entry per route
 	 * variant and every variant publishes the same {@code rxnorm_name} — which is the token its rules
-	 * match on — so ONE word in the question resolves several entries ({@code findByQuery} returns
-	 * every entry whose aliases match) that all pair off the same rule: four dexamethasone entries
+	 * match on — so ONE word in the question resolves several entries (a candidate set is every ROW of
+	 * each substance the word names) that all pair off the same rule: four dexamethasone entries
 	 * against voxelotor is four near-identical chips, and four near-identical injected findings, for a
 	 * single clinical fact. That is issue #115's shape arriving on the question side (142
 	 * {@code rxnorm_name} values are shared by more than one entry across 332 entries of the full KB),
@@ -2418,7 +2425,8 @@ public class DrugSafetyValidator {
 	 *         that could have made {@code ref} a subject in
 	 *         {@link DrugReferenceService#findForActiveOrders}, asked of this
 	 *         one order: a drug-name alias match on one of its names
-	 *         ({@link DrugReferenceService#findByDrugName}) or one of its ATC codes
+	 *         ({@link DrugReference#matchesDrugName}, the primitive under
+	 *         {@link DrugReferenceService#findImpliedByDrugName}) or one of its ATC codes
 	 *         ({@link DrugReferenceService#findByActiveOrders}). So "which order is this subject's own"
 	 *         is answered by the matchers that chose it, and every arm of
 	 *         {@link PatientClinicalContext#hasActiveDrug} is thereby attributed — the reference-name
@@ -2430,6 +2438,17 @@ public class DrugSafetyValidator {
 	 *         <p>Sharing an exact ATC code means being the same substance (level 5 is per-substance;
 	 *         class relatedness is {@link DrugReference#atcSubgroups()}'s business, not this one's), so
 	 *         the code leg cannot mistake a different drug's order for the subject's own.
+	 *
+	 *         <p>Since issue #209 the name leg is a strict SUPERSET of what
+	 *         {@link DrugReferenceService#findImpliedByDrugName} would admit from the same order, because
+	 *         it asks the unranked primitive: an order named {@code Hydrocortisone Injection vial 100mg}
+	 *         still reads as {@code Hydrocortisone butyrate}'s own order, though that order no longer puts
+	 *         the ester in play. Deliberately not narrowed here, and the residue is in the safe direction:
+	 *         the only effect of counting an order as the subject's own is to withhold it as that
+	 *         subject's interaction PARTNER, so an over-wide answer misses a pair and can never invent
+	 *         one. Reaching such a pair needs the subject in play by another route (an answer naming the
+	 *         ester outright) AND a rule between the two — unmeasured on the shipped KB, so narrowing it
+	 *         would be a change without a case.
 	 */
 	/** @return true when ANY row of the subject's substance {@link #resolvesFrom} {@code order} — the
 	 *          group form of that test, since the screening arm's subject is a substance (issue #189). */

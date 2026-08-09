@@ -85,13 +85,20 @@ public class ContraindicationRouteVariantTest {
 
 	@Test
 	public void theFixturesReallyCarryTheTwoShapesUnderTest() throws IOException {
-		// Preconditions, through the production matchers the validator itself uses. Without these the
-		// cases below could pass while resolving one entry each — i.e. while testing nothing.
+		// Preconditions on the FIXTURE's shape, taken through the unranked primitives — which is what
+		// establishes that one alias really is shared by two substances here. They are deliberately NOT the
+		// accessor the validator now uses: since issue #209 that is findImpliedByQuery, and the ranked
+		// counterpart of each count is asserted beside it, because those are the numbers the cases below
+		// actually depend on. Without both, a case could pass while resolving one entry — i.e. while
+		// testing nothing — or while resolving a substance the string does not name.
 		DrugReferenceService ppi = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 		List<DrugReference> esomeprazole = ppi.findByQuery("Is it safe to give esomeprazole?");
 		assertEquals(2, esomeprazole.size(),
-				"one PPI word must resolve BOTH rows the KB files under it, was: "
+				"one PPI word must MATCH both rows the KB files under it, was: "
 						+ DrugReferenceTestSupport.names(esomeprazole));
+		assertEquals("[Esomeprazole]", DrugReferenceTestSupport
+				.names(ppi.findImpliedByQuery("Is it safe to give esomeprazole?")).toString(),
+				"while NAMING one of them — which is why the case below has to name both");
 		assertEquals(esomeprazole.get(0).normalizedAtcCodes(), esomeprazole.get(1).normalizedAtcCodes(),
 				"and their ATC codes must be identical, so no class comparison can tell them apart");
 		assertFalse(esomeprazole.get(0).displayLabel().equals(esomeprazole.get(1).displayLabel()),
@@ -99,8 +106,12 @@ public class ContraindicationRouteVariantTest {
 
 		List<DrugReference> hydrocortisone = ppi.findByQuery("Is hydrocortisone safe for her?");
 		assertEquals(4, hydrocortisone.size(),
-				"one order word must resolve all four hydrocortisone rows, was: "
+				"one question word must MATCH all four hydrocortisone rows, was: "
 						+ DrugReferenceTestSupport.names(hydrocortisone));
+		assertEquals("[Hydrocortisone, Hydrocortisone (ophthalmic), Hydrocortisone (topical)]",
+				DrugReferenceTestSupport
+						.names(ppi.findImpliedByQuery("Is hydrocortisone safe for her?")).toString(),
+				"while NAMING the three rows of one substance and not the ester (issue #209)");
 
 		DrugReferenceService variants = DrugReferenceTestSupport
 				.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
@@ -155,23 +166,64 @@ public class ContraindicationRouteVariantTest {
 	public void routeVariantsOfOneActiveOrderRaiseOneChipPerSubstance() throws IOException {
 		// Sarah Taylor's live shape, on the ORDER-DRIVEN arm (issue #143's), which the question-driven
 		// arm's collapse cannot reach: the patient is on one hydrocortisone order and allergic to
-		// dexamethasone, and the question names no drug at all. Four rows resolve from that one order
-		// name and all four share subgroup A01AC with the allergen, so before this fix it was four
-		// chips.
+		// dexamethasone, and the question names no drug at all. THREE rows of that substance resolve from
+		// the one order name and all three share subgroup A01AC with the allergen, so before issue #145's
+		// ledger it was three chips.
 		//
-		// TWO chips, not one: `Hydrocortisone butyrate` is an ester whose display name is not the
-		// family stem plus a qualifier, so the key deliberately keeps it separate — the conservative
-		// direction, and the same refusal that keeps Omeprazole and Esomeprazole apart below.
+		// WHAT THIS CASE ASSERTS, and what has not moved: the rows of ONE substance are ONE chip, raised by
+		// the arm whose own collapse #145 had to add, and named by {@code displayLabel()}.
+		//
+		// WHAT MOVED, and why it is not this case's property (issue #209). This expected TWO chips, the
+		// second reading "Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy
+		// to Dexamethasone". The ester IS a different substance and must keep its own chip WHEN IT IS IN
+		// PLAY — that refusal is #121's and it still holds. What was never examined is whether one order
+		// name should put it in play at all. It should not, and the rank that decides it is the rank of the
+		// alias each row CARRIED, never of the whole recorded string: measured through the production
+		// predicates on this fixture, both rows score NAME_TOKEN_INSIDE_A_NAME (0) against
+		// `Hydrocortisone Injection vial 100mg` — a recorded order name is nobody's name — while the alias
+		// both of them carry, `hydrocortisone`, scores 2 for the parent and 1 for the ester. So the number
+		// that changed is how many SUBSTANCES an order name admits, not the collapse. The non-collapse
+		// property is still asserted at the key level by theTwoPpiRowsShareTheSubstanceNameTheStemHasToVeto,
+		// at the CHIP level on the question-driven arm by
+		// twoDistinctSubstancesTheKbFilesUnderOneSubstanceNameStayTwoChips, and at the chip level on THIS
+		// arm by anOrderNamingTwoSubstancesOutrightKeepsAChipForEach — which is the shape that has to carry it
+		// here now that one order name reaches one substance.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", NO_DRUG_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Hydrocortisone Injection vial 100mg"), null,
 						DrugReferenceTestSupport.set("Dexamethasone"), null));
 
-		assertEquals(2, warnings.size(),
-				"three route variants collapse and the ester stays its own chip, was: " + warnings);
+		assertEquals(1, warnings.size(),
+				"the route variants collapse, and the order names one substance, was: " + warnings);
 		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
 				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail(),
 				"the surviving variant chip is the dataset's first row, named by displayLabel()");
+	}
+
+	@Test
+	public void anOrderNamingTwoSubstancesOutrightKeepsAChipForEach() throws IOException {
+		// The chip-level non-collapse case for the ORDER-DRIVEN arm, which the case above used to carry as a
+		// side effect of the over-admission issue #209 removed. It is what stops `substanceKey` merging the
+		// hydrocortisone ester into its parent from going unnoticed on this arm — the ledger spans both
+		// arms, but only this arm reaches it from the patient's own prescriptions, with a question naming no
+		// drug at all.
+		//
+		// One order carries the case, because the ester's own order name names BOTH substances outright:
+		// measured through the production predicate, `Hydrocortisone butyrate cream 0.1%` carries
+		// `hydrocortisone butyrate` and `hydrocortisone`, and each is the display name of one of the two.
+		// So the narrowing admits both and only the KEY can merge them.
+		//
+		// Measured by mutation: reducing `substanceKey` to its first component fails this. Reverting either
+		// resolution leg does not, so this is a canary for the key and a regression control for the legs.
+		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", NO_DRUG_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Hydrocortisone butyrate cream 0.1%"), null,
+						DrugReferenceTestSupport.set("Dexamethasone"), null));
+
+		assertEquals(2, warnings.size(),
+				"two substances the order names keep their own chips, was: " + warnings);
+		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
+				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail());
 		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy"
 				+ " to Dexamethasone — possible cross-reactivity", warnings.get(1).getDetail());
 	}
@@ -201,11 +253,24 @@ public class ContraindicationRouteVariantTest {
 		// The must-NOT-collapse case, and the sharp edge of the whole key: Omeprazole and Esomeprazole
 		// carry the same rxnorm_name, the same RxCUI and the same single ATC code, so every key made of
 		// reference-data identity alone merges them — and they are two substances, exactly as
-		// enalapril and enalaprilat are (issue #121). One PPI word puts both in play, and a Pantoprazole
-		// allergy is class-related to both, so a merging key would drop one of two real chips.
+		// enalapril and enalaprilat are (issue #121). A Pantoprazole allergy is class-related to both, so a
+		// merging key would drop one of two real chips.
+		//
+		// The question NAMES BOTH, since issue #209. It used to name only esomeprazole and rely on that one
+		// word putting both in play — which was the defect #209 fixed, so the vehicle had to change and the
+		// property did not: this is still the case that fails if `substanceKey` ever merges the two PPIs.
+		// Each row is admitted by its OWN display name here (nameMatchStrength 2 apiece), which is what a
+		// clinician choosing between two PPIs writes.
+		//
+		// What the new vehicle does and does NOT buy, stated precisely because the obvious claim is false:
+		// it does not DETECT over-admission — an over-admitting resolver returns these same two rows for
+		// this question, measured — it stops the case DEPENDING on over-admission, which is what let the
+		// count stay at 2 while the resolver narrowed. What it gains is the opposite direction: an
+		// over-NARROWING resolver that kept one substance per text, or ranked the whole string, drops a PPI
+		// and this fails. That direction the old vehicle could not express at all.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
-				"Is it safe to give esomeprazole?", DrugReferenceTestSupport.ctx(60, null, null, null,
-						DrugReferenceTestSupport.set("Pantoprazole"), null));
+				"Is it safe to give omeprazole or esomeprazole?", DrugReferenceTestSupport.ctx(60, null,
+						null, null, DrugReferenceTestSupport.set("Pantoprazole"), null));
 
 		assertEquals(2, warnings.size(),
 				"two distinct substances sharing one substance name keep their own chips, was: "
@@ -332,21 +397,24 @@ public class ContraindicationRouteVariantTest {
 		// first. (Two allergies about ONE substance are one clinical fact and do collapse, since issue
 		// #176 keyed the finding half on the allergen's substance; that is the case
 		// AllergenExactNameResolutionTest pins.)
+		//
+		// WHAT MOVED (issue #209): this expected FOUR chips, the last two of them about
+		// `Hydrocortisone butyrate`. Those two were the ester's admission — one question word carrying the
+		// parent's name put a different substance in play — and not this case's property, which is the
+		// finding half of the ledger key and is asserted entirely by the two chips below: ONE subject
+		// substance, TWO recorded findings, TWO chips. Four would still be the answer if the question named
+		// the ester too; what changed is that it does not name it.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
 				"Is hydrocortisone safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Dexamethasone", "Hydrocortisone"), null));
 
-		assertEquals(4, warnings.size(), "two substances x two findings, was: " + warnings);
+		assertEquals(2, warnings.size(), "one substance x two findings, was: " + warnings);
 		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
 				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail());
 		assertEquals("The patient has a recorded allergy to Hydrocortisone.",
 				warnings.get(1).getDetail(),
 				"the identity finding about the SAME substance keeps its own chip beside the "
 						+ "cross-reactivity one");
-		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy"
-				+ " to Dexamethasone — possible cross-reactivity", warnings.get(2).getDetail());
-		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy"
-				+ " to Hydrocortisone — possible cross-reactivity", warnings.get(3).getDetail());
 	}
 
 	@Test

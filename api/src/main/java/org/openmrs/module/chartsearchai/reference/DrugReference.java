@@ -863,6 +863,34 @@ public class DrugReference {
 	}
 
 	/**
+	 * @return WHICH of this entry's names {@code lowerText} carries — {@link #matchesText}'s witnesses,
+	 *         in alias order, empty exactly when that returns false. Same rule, same primitive
+	 *         ({@link #containsWord}), so the two cannot come to disagree about what prose carries; the
+	 *         boolean stays separate because it is the hot path and must not allocate.
+	 *
+	 *         <p><b>Why a caller needs the witness and not only the answer (issue #209).</b> A boolean
+	 *         says an entry is mentioned; it does not say by WHICH name, and that is what decides whether
+	 *         the mention is about this entry's substance. One alias is routinely shared by two
+	 *         substances — {@code hydrocortisone} is the display name of {@code Hydrocortisone} and an
+	 *         alias of {@code Hydrocortisone butyrate}, {@code esomeprazole} likewise for the two PPI rows
+	 *         the KB files under one {@code rxnorm_name} — so a set built by iterating the boolean admits
+	 *         both, and only the name actually carried can be ranked. See
+	 *         {@link DrugReferenceService#findImpliedByQuery}.
+	 */
+	List<String> aliasesIn(String lowerText) {
+		if (lowerText == null) {
+			return Collections.emptyList();
+		}
+		List<String> carried = new ArrayList<String>();
+		for (String alias : aliases) {
+			if (containsWord(lowerText, alias)) {
+				carried.add(alias);
+			}
+		}
+		return carried;
+	}
+
+	/**
 	 * @return true when this entry names the drug in {@code drugName} — a single clinician-entered
 	 *         drug NAME rather than prose: an active order's display name, an allergen as recorded.
 	 *         Case- and diacritic-insensitive; a null name never matches. Not restricted to
@@ -900,6 +928,26 @@ public class DrugReference {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * @return WHICH of this entry's names {@code drugName} carries — {@link #matchesDrugName}'s witnesses,
+	 *         in alias order, empty exactly when that returns false. The recorded-name counterpart of
+	 *         {@link #aliasesIn}, and separate from it for the reason {@link #matchesDrugName} is separate
+	 *         from {@link #matchesText}: the two boundary rules differ, so the set of names a recorded
+	 *         display name carries is not the set its prose reading would carry ({@code Aspirine Co 81mg}
+	 *         carries {@code aspirin} under this rule and nothing under the prose one, issue #147). Each
+	 *         witness accessor calls the same primitive as its own boolean
+	 *         ({@link #matchesOrderName} here, {@link #containsWord} there), so neither pair can drift.
+	 */
+	List<String> aliasesNaming(String drugName) {
+		List<String> carried = new ArrayList<String>();
+		for (String alias : aliases) {
+			if (matchesOrderName(drugName, alias)) {
+				carried.add(alias);
+			}
+		}
+		return carried;
 	}
 
 	/** {@link #nameMatchStrength}: this entry does not name {@code drugName} at all. */
@@ -1160,8 +1208,8 @@ public class DrugReference {
 	 * than in either named matcher: the same accented order name reaches both of them — as the
 	 * haystack when a rule token is matched against it ({@link #matchesOrderName}) and as the
 	 * haystack again when the order-driven arms resolve that order's own reference entry
-	 * ({@link DrugReferenceService#findForActiveOrders} → {@code findByDrugName} →
-	 * {@link #matchesDrugName}, which is this rule again since issue #147),
+	 * ({@link DrugReferenceService#findForActiveOrders} → {@code findImpliedByDrugName} →
+	 * {@code findByDrugName} → {@link #matchesDrugName}, which is this rule again since issue #147),
 	 * and as the NEEDLE when an order name is looked for in a rendered record
 	 * ({@code PatientClinicalContext.ActiveDrugOrder.namedIn}). Folding one matcher would leave the
 	 * same patient half-checked; folding one SIDE would break that third case, whose needle is the

@@ -241,7 +241,8 @@ public class DrugSafetyOrderNameMatchingTest {
 		// (/usr/share/dict/words, 235,976 entries), 22 of the single-word ones are one or two letters
 		// short of an English word (aspirin ~ aspiring, warfarin ~ warfaring, urea ~ urease, iron ~
 		// irony, clove ~ clover). The drugs a question or answer names are what the validator checks
-		// at all (DrugSafetyValidator.validate -> findByQuery -> matchesText), so a lenient prose
+		// at all (DrugSafetyValidator.validate -> findImpliedByQuery -> findByQuery ->
+		// matchesText), so a lenient prose
 		// rule does not mislabel an order — it invents the proposal the whole chip rests on. Widening
 		// containsWord to the order-name allowance passes every other test in this module, which is
 		// why this case exists.

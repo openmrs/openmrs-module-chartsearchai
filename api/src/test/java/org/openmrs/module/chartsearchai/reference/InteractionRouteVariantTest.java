@@ -71,8 +71,12 @@ public class InteractionRouteVariantTest {
 
 	@Test
 	public void theFixtureReallyCarriesTheShapesUnderTest() throws IOException {
-		// Preconditions through the production resolvers. Without them every count below could pass
-		// while one entry was in play, i.e. while asserting nothing.
+		// Preconditions on the FIXTURE's shape, taken through the unranked primitive — which is what
+		// establishes that one alias is shared by several rows here. Deliberately not the accessor the
+		// validator now uses (findImpliedByQuery, since issue #209): the ranked counterpart is asserted for
+		// the PPI pair below, where the two differ. For the route-variant families they cannot differ, since
+		// every row is the same substance and the verdict is taken per substance. Without these, a count
+		// below could pass while one entry was in play, i.e. while asserting nothing.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 
 		List<DrugReference> hydrocortisone = service.findByQuery("Is it safe to give hydrocortisone?");
@@ -92,8 +96,11 @@ public class InteractionRouteVariantTest {
 		}
 
 		List<DrugReference> ppis = service.findByQuery("Is it safe to give esomeprazole?");
-		assertEquals(2, ppis.size(), "one PPI word must resolve both rows the KB files under one "
+		assertEquals(2, ppis.size(), "one PPI word must MATCH both rows the KB files under one "
 				+ "rxnorm_name, was: " + DrugReferenceTestSupport.names(ppis));
+		assertEquals("[Esomeprazole]", DrugReferenceTestSupport
+				.names(service.findImpliedByQuery("Is it safe to give esomeprazole?")).toString(),
+				"while NAMING one of them — which is why the case below has to name both (issue #209)");
 		assertEquals(DrugReference.normalizeName(ppis.get(0).getSubstanceName()),
 				DrugReference.normalizeName(ppis.get(1).getSubstanceName()),
 				"they must share ONE substance name, or the stem is not what keeps them apart");
@@ -192,8 +199,15 @@ public class InteractionRouteVariantTest {
 		// kanamycin — so their two chips carry byte-identical notes. A key made of reference-data identity
 		// alone merges them, and a dedup on rendered text would too; they are two substances, exactly as
 		// enalapril and enalaprilat are (issue #121).
-		List<SafetyWarning> warnings = validator().validate("", "Is it safe to give esomeprazole?",
-				DrugReferenceTestSupport.ctx(60, null,
+		//
+		// The question NAMES BOTH, since issue #209. It used to name only esomeprazole and rely on that one
+		// word putting both in play, which is the over-admission #209 removed — so the vehicle changed and
+		// the property did not: each row is now admitted by its own display name. It does not DETECT
+		// over-admission (an over-admitting resolver returns the same two rows here, measured); it stops the
+		// case DEPENDING on it, and it gains the over-NARROWING direction, where dropping a PPI fails this.
+		// See ContraindicationRouteVariantTest's sibling case for the same note in full.
+		List<SafetyWarning> warnings = validator().validate("",
+				"Is it safe to give omeprazole or esomeprazole?", DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Kanamycin 500mg"), null, null, null));
 
 		assertEquals(2, warnings.size(),

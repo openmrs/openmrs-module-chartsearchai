@@ -145,11 +145,16 @@ public class ReferenceRecordSubstanceCollapseTest {
 		// one RxCUI and one ATC code and are two substances (issue #121), so they are two records — a
 		// reference record is the drug's own profile, and merging two drugs' profiles into one would hand
 		// the model one entry's interactions under another entry's name.
+		//
+		// The question NAMES BOTH, since issue #209. It used to name only esomeprazole and rely on that one
+		// word resolving both, which put a record for a substance nobody had named into the prompt — the
+		// injector leg of that issue. The vehicle changed; the property did not, and this is still the case
+		// that fails if `substanceKey` ever merges the two PPIs into one record.
 		List<String> texts = referenceTexts(DrugReferenceTestSupport
 				.injector(DrugReferenceTestSupport.ddiFixtureService(INTERACTION_FIXTURE))
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 						DrugReferenceTestSupport.ctx(60, null, null, null, null, null),
-						"Is it safe to give esomeprazole?"));
+						"Is it safe to give omeprazole or esomeprazole?"));
 
 		assertEquals(2, texts.size(), "two substances keep two records, was: " + texts);
 		assertTrue(texts.get(0).startsWith("Drug reference — Omeprazole"), "was: " + texts.get(0));

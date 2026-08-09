@@ -188,16 +188,28 @@ public class AllergenExactNameResolutionTest {
 		// #121). Both chips were then wrong in the same pass: the direct allergy was attributed to
 		// omeprazole, and esomeprazole — the drug the chart actually names — was reported as merely
 		// cross-reactive with it.
+		//
+		// WHAT THIS CASE ASSERTS, unchanged and still the whole point: the recorded allergy is attributed to
+		// the substance the CHART names. That is the surviving chip, and it is what issue #176's ranking
+		// bought.
+		//
+		// WHAT MOVED (issue #209): the second chip, which this case used to describe as "the OTHER substance
+		// is the cross-reactivity hedge". A question naming esomeprazole was putting Omeprazole in play too,
+		// because the KB row named `Omeprazole` carries `esomeprazole` as an alias — so the answer to "is
+		// esomeprazole safe" included a finding about a drug nobody named. The subject side is not this
+		// case's subject; the two substances are still two, asserted at the key level by
+		// theTwoPpiRowsShareTheSubstanceNameTheStemHasToVeto and at the chip level by
+		// twoDistinctSubstancesTheKbFilesUnderOneSubstanceNameStayTwoChips, both in
+		// ContraindicationRouteVariantTest over this same fixture.
 		List<SafetyWarning> warnings = fixtureValidator(PPI_FIXTURE)
 				.validate("", "Is it safe to give esomeprazole?", DrugReferenceTestSupport.ctx(60, null,
 						null, null, DrugReferenceTestSupport.set("Esomeprazole"), null));
 
-		assertEquals(2, warnings.size(), "two substances, two chips, was: " + warnings);
-		assertEquals("Omeprazole is in the same ATC class (A02BC) as the patient's allergy to"
-				+ " Esomeprazole — possible cross-reactivity", warnings.get(0).getDetail(),
-				"the OTHER substance is the cross-reactivity hedge");
-		assertEquals("The patient has a recorded allergy to Esomeprazole.", warnings.get(1).getDetail(),
-				"and the recorded drug is the direct allergy");
+		assertEquals(1, warnings.size(),
+				"the substance the question named, and no other, was: " + warnings);
+		assertEquals("The patient has a recorded allergy to Esomeprazole.", warnings.get(0).getDetail(),
+				"and the recorded drug is the direct allergy — not the row whose rxnorm_name is that "
+						+ "same string");
 	}
 
 	@Test
@@ -207,19 +219,25 @@ public class AllergenExactNameResolutionTest {
 		// because BOTH misresolved onto the same earlier row. Keyed on the resolved row, a correct
 		// resolution would split every such patient's chip in two — which is what makes the ledger's
 		// finding side a substance rather than a row (issues #145, #160, #187 in that direction).
+		//
+		// WHAT THIS CASE ASSERTS, unchanged: TWO allergy records naming two presentations of one substance
+		// raise ONE chip, named after the first record. The single surviving chip below is that property
+		// stated as directly as it can be — two records in, one chip out.
+		//
+		// WHAT MOVED (issue #209): the second chip was `Hydrocortisone butyrate is in the same ATC class …`,
+		// the ester admitted by the question word `hydrocortisone` although the ester's own name is not that
+		// word. That was the admission count, not the collapse this case is about, and the ester remains a
+		// separate substance with its own chip wherever it is genuinely in play.
 		List<SafetyWarning> warnings = fixtureValidator(PPI_FIXTURE)
 				.validate("", "Is hydrocortisone safe for her?",
 						DrugReferenceTestSupport.ctx(60, null, null, null, DrugReferenceTestSupport
 								.set("Hydrocortisone (ophthalmic)", "Hydrocortisone (topical)"), null));
 
-		assertEquals(2, warnings.size(),
-				"three presentations collapse and the ester keeps its own chip, was: " + warnings);
+		assertEquals(1, warnings.size(),
+				"two records naming one substance are one chip, was: " + warnings);
 		assertEquals("The patient has a recorded allergy to Hydrocortisone (ophthalmic).",
 				warnings.get(0).getDetail(),
 				"named after the FIRST record of the substance, since ties keep the incumbent");
-		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy"
-				+ " to Hydrocortisone (ophthalmic) — possible cross-reactivity",
-				warnings.get(1).getDetail());
 	}
 
 	@Test
@@ -321,14 +339,19 @@ public class AllergenExactNameResolutionTest {
 		assertNotNull(resolved, "a localized display name must still resolve");
 		assertEquals("Pantoprazole", resolved.getName());
 
+		// The chip half of the same statement: the allergen resolved, and the chip NAMES it `Pantoprazole`
+		// — the row the fallback reached — rather than the localized string or nothing at all. What moved
+		// (issue #209) is only the second chip, `Omeprazole is in the same ATC class …`: that row was in
+		// play because the question word `esomeprazole` is one of its aliases, which is the admission the
+		// ranking now refuses. Nothing about the fallback changed, and the `lookupByToken` assertions above
+		// are where it is asserted directly.
 		List<SafetyWarning> warnings = fixtureValidator(PPI_FIXTURE)
 				.validate("", "Is it safe to give esomeprazole?", DrugReferenceTestSupport.ctx(60, null,
 						null, null, DrugReferenceTestSupport.set("Pantoprazole Co 40mg"), null));
 
-		assertEquals(2, warnings.size(), "was: " + warnings);
-		assertEquals("Omeprazole is in the same ATC class (A02BC) as the patient's allergy to"
-				+ " Pantoprazole — possible cross-reactivity", warnings.get(0).getDetail());
+		assertEquals(1, warnings.size(), "was: " + warnings);
 		assertEquals("Esomeprazole is in the same ATC class (A02BC) as the patient's allergy to"
-				+ " Pantoprazole — possible cross-reactivity", warnings.get(1).getDetail());
+				+ " Pantoprazole — possible cross-reactivity", warnings.get(0).getDetail(),
+				"the allergen resolved, and the chip names the row the fallback reached");
 	}
 }

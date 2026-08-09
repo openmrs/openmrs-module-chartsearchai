@@ -558,6 +558,8 @@ Each suite is driven by a JSON dataset. To add a case, append an entry to the re
 
 The citation and prompt-injection suites append per-case rows to `api/target/eval-results.csv` (via `EvalReporter`) for tracking regressions over time; the citation suite also appends a summary row. The absent-data and drug-safety suites do not report to the CSV, so their results are only in the surefire output.
 
+**The CSV gates nothing, and reaching it is not what makes a suite trustworthy.** No workflow uploads or reads it, `EvalReporter` swallows its own write failures rather than failing a test, and every one of the four suites is gated by its JUnit assertions either way — `CitationEvalTest`'s `avgF1 >= 0.8`, `DrugSafetyEvalTest`'s expected warning types, `AbsentDataEvalTest`'s stopword check. So the two suites that skip the CSV are no less gated than the two that write to it, and wiring them in would add rows to a file with no consumer. Read the surefire result, not the CSV. (#179 originally recorded the reverse; the CSV's missing consumer is why.)
+
 ## Evaluated models
 
 The following models were evaluated for local inference via the embedded llama-server (Q4_K_M quantization, GGUF format). All figures are approximate and depend on hardware.

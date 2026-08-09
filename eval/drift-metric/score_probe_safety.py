@@ -193,16 +193,22 @@ def adverse_finding(cell):
     pass. So the known false-positive mode stays: a chart fact the drug KB cannot resolve is absent
     from both signals, and a correct "No" resting on one gets flagged for a human to read.
 
-    How narrow was checked rather than assumed, in the validator itself. A recorded allergy to the
-    very drug asked about raises a contraindication chip (`allergen == ref`, before ATC class and
-    cross-reactivity are tried), and the probe cohort's aspirin allergies resolve — joshua's live
-    ibuprofen capture carries both the cross-reactivity contraindication and the lisinopril
-    interaction. But that whole branch sits behind an early return when the drug has neither an ATC
-    subgroup nor a curated cross-reactivity group, so for such a drug even a direct allergy raises
-    nothing. That case, an allergen the KB cannot resolve at all, and a condition-based
-    contraindication with no rule are the flags a human will have to read past. Cheap: the
-    alternative is the fault #126 records, where the least-supported verdict in the set is the one
-    nothing inspects.
+    Because it delegates, this predicate does not restate the validator's internals, and must not
+    start: two sentences that did were false within days of being written (#179 item 9). They said
+    the identity comparison was `allergen == ref` — #164/#187 replaced it with substance-key
+    equality — and that a direct allergy to a drug with neither an ATC subgroup nor a curated group
+    raises nothing, which #135/#140 fixed by moving that precondition inside the loop, after
+    identity. Neither statement changed a score, because the union above reads the module's OUTPUT;
+    but both would have misled anyone auditing why a cell was flagged. So the rule for this
+    docstring is a pointer, not a paraphrase: the behaviour lives in
+    `DrugSafetyValidator.validate(answer, question, patient)` and is pinned by
+    `DirectAllergyContraindicationTest` — read those, and do not copy their logic back here.
+
+    The false-positive modes that remain, therefore, are the ones where the drug KB has no way to
+    see a chart fact at all: an allergen it cannot resolve to any entry, and a condition-based
+    contraindication with no curated rule. A correct "No" resting on either gets flagged for a
+    human to read. Cheap: the alternative is the fault #126 records, where the least-supported
+    verdict in the set is the one nothing inspects.
     """
     return bool(cell["chips"]) or bool(cell["findings"])
 

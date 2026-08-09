@@ -32,7 +32,6 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.source>11</maven.compiler.source>
 		<maven.compiler.target>11</maven.compiler.target>
-		<surefire.excludedGroups>eval</surefire.excludedGroups>
 	</properties>
 
 	<dependencyManagement>
@@ -96,13 +95,20 @@
 					<artifactId>maven-openmrs-plugin</artifactId>
 					<version>1.0.1</version>
 				</plugin>
+				<!-- No <excludedGroups>: this pinned an `eval` JUnit tag that existed nowhere in the
+				     repo (#179), so it matched nothing and only implied a boundary the build did not
+				     enforce. Restoring the boundary would mean tagging the four *EvalTest suites
+				     out of CI, which deletes coverage rather than restoring anything: three of them
+				     are model-free, fast, and carry live assertions (CitationEvalTest's
+				     avgF1 >= 0.8, DrugSafetyEvalTest's expected warning types, AbsentDataEvalTest's
+				     stopword check). The fourth, PromptInjectionEvalTest, is the only one needing an
+				     LLM, and it already opts itself out via a JUnit assumption on
+				     -Dchartsearchai.prompt.injection.test — so the exclusion this property implied
+				     was not needed for it either. -->
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-surefire-plugin</artifactId>
 					<version>3.5.5</version>
-					<configuration>
-						<excludedGroups>${surefire.excludedGroups}</excludedGroups>
-					</configuration>
 				</plugin>
 			</plugins>
 		</pluginManagement>

@@ -1084,14 +1084,18 @@ public class DrugSafetyValidator {
 	 *         {@link DrugReference#nameMatchStrength}, the one #192 introduced for the allergen side,
 	 *         rather than a second definition of "how strongly does this row claim that name".
 	 *
-	 *         <p>What it does NOT do is manufacture a preference where the record supports none. A
-	 *         clinician-entered name usually carries a strength or a form suffix
-	 *         ({@code Chloroprocaine 20mg/mL}), which no row's own name equals and no row's alias list
-	 *         holds, so every row scores {@link DrugReference#NAME_TOKEN_INSIDE_A_NAME} and the fold
-	 *         decides exactly as before — which is why the route-variant and no-unqualified-row cases in
-	 *         {@code InteractionRouteVariantTest} and {@code ScreeningSubjectLabelTest} are unchanged,
-	 *         and is also the residue: an order named after a row but carrying a dose suffix still falls
-	 *         back to the fold.
+	 *         <p>What it does NOT do is manufacture a preference where the record supports none. An
+	 *         order contributes two names ({@link PatientClinicalContextBuilder}): its drug row's name,
+	 *         which commonly carries a strength ({@code Aspirin 81mg}), and its CONCEPT's own name, which
+	 *         commonly does not ({@code Botulinum toxin type A}) — and an order with no drug row
+	 *         contributes only the second. So a row whose display name IS that concept name reaches
+	 *         {@link DrugReference#NAME_IS_THE_DISPLAY_NAME} and wins, which is what moves the botulinum
+	 *         case; where no recorded name is any row's name or alias every row scores
+	 *         {@link DrugReference#NAME_TOKEN_INSIDE_A_NAME} and the fold decides exactly as before. That
+	 *         second shape is what the route-variant and no-unqualified-row cases in
+	 *         {@code InteractionRouteVariantTest} and {@code ScreeningSubjectLabelTest} supply — their
+	 *         contexts carry the dosed form alone — which is why they are unchanged, and it is also the
+	 *         residue: a deployment whose order names all carry strengths gains nothing here.
 	 *
 	 *         <p>Kept as a named method over the shared fold rather than inlined at its call sites,
 	 *         because "what a chip calls its subject" is the decision issue #162 made, #174 site 3

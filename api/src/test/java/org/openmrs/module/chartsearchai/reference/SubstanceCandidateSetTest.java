@@ -276,7 +276,7 @@ public class SubstanceCandidateSetTest {
 			"chartsearchai-test/drug-reference-name-not-its-own-alias.json";
 
 	@Test
-	public void narrowingNeverEmptiesACandidateSetEvenWhenNoMatchedRowIsNamedTheWord()
+	public void narrowingNeverEmptiesACandidateSetEvenWhenNoMatchedRowIsTheStrongestClaimant()
 			throws IOException {
 		// The invariant findImpliedByQuery's javadoc states — it cannot empty a non-empty set — asserted
 		// rather than assumed, on the one dataset shape that breaks the reasoning behind it.
@@ -291,8 +291,9 @@ public class SubstanceCandidateSetTest {
 		// Here `Ibuprofen` publishes only `ibuprof`. The recorded-name matcher reaches `ibuprofen` from
 		// that stem by its two-letter inflection allowance, so it is the rank-2 claimant on the word; the
 		// PROSE matcher does not reach it at all, so it is absent from the prose candidate set for that
-		// same word. Both presentations carry `ibuprofen` and neither is named it, so a filter that only
-		// asks "does my carried alias denote MY substance" answers no for every matched row.
+		// same word. Both presentations carry `ibuprofen` as an alias, so each IS named it and each is in
+		// the candidate set — but neither is DISPLAY-named it, so neither is the strongest claimant, and a
+		// filter that only asks "does my carried alias denote MY substance" answers no for every matched row.
 		//
 		// Emptying is the worst available failure: the drugs-in-play set is what every arm iterates, so a
 		// question naming a drug would silently get no contraindication, no interaction and no overdose

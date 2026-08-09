@@ -279,16 +279,25 @@ public class DrugReferenceService {
 	 *         entry the prose matcher never reached, and then no matched row's alias denotes its own
 	 *         substance and every one is dropped.
 	 *
-	 *         <p>Emptying is the worst answer available. This list is what every arm iterates, so an
-	 *         emptied set means a question naming a drug gets no contraindication, no interaction and no
-	 *         overdose check, with nothing in the log to say so — the silent-and-closed failure the whole
-	 *         drug-safety feature is built to avoid. Falling back to {@code matched} is the pre-#209
-	 *         answer for that one shape: it over-reports, which for a non-blocking advisory is the safe
-	 *         direction. Measured over every shipped dataset, the fallback never fires — 0 firings on
-	 *         each, over the 7452 names and aliases of the full 19 MB KB and over the three bundled
-	 *         samples — so it costs the shipped configuration nothing and only bounds what an
-	 *         operator-authored dataset can do.
-	 *         {@code narrowingNeverEmptiesACandidateSetEvenWhenNoMatchedRowIsNamedTheWord} pins it.
+	 *         <p>Emptying has to be ruled out because this list is what every arm iterates: an emptied
+	 *         set means a question naming a drug gets no contraindication, no interaction and no overdose
+	 *         check, with nothing in the log to say so — the silent-and-closed failure this feature exists
+	 *         to prevent. Falling back to {@code matched} is the pre-#209 answer for that one shape, and it
+	 *         over-reports, which for a non-blocking advisory is the safe direction. Measured over every
+	 *         shipped dataset the fallback never fires — 0 firings on each, over the 7452 names and
+	 *         aliases of the full 19 MB KB and over the three bundled samples — so it costs the shipped
+	 *         configuration nothing.
+	 *         {@code narrowingNeverEmptiesACandidateSetEvenWhenNoMatchedRowIsTheStrongestClaimant} pins it.
+	 *
+	 *         <p>It bounds emptying and nothing more. A dataset carrying that same shape can still lose
+	 *         every rule-bearing row while keeping a rule-less one, because then {@code inPlay} is
+	 *         non-empty and this never fires — measured on the fixture above, an order for
+	 *         {@code Ibuprofen tablets 400mg} keeps only the bare {@code Ibuprofen} row and the reference
+	 *         data's findings go with the dropped rows. Not addressed here: it needs a dataset that both
+	 *         omits an entry's own name from its aliases AND files one drug as several substances without
+	 *         publishing a substance name, which no shipped dataset does (measured: 0 entries omit their
+	 *         own name on all four), and closing it means deciding what an identity-keyed source should
+	 *         mean by "one substance" — a question this issue does not settle.
 	 */
 	private static List<DrugReference> rowsOf(List<DrugReference> matched, Set<Object> inPlay) {
 		if (inPlay.isEmpty()) {

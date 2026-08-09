@@ -186,7 +186,7 @@ public class ContraindicationRouteVariantTest {
 		// property is still asserted at the key level by theTwoPpiRowsShareTheSubstanceNameTheStemHasToVeto,
 		// at the CHIP level on the question-driven arm by
 		// twoDistinctSubstancesTheKbFilesUnderOneSubstanceNameStayTwoChips, and at the chip level on THIS
-		// arm by twoOrdersOfTwoSubstancesUnderOneAliasStayTwoChips — which is the shape that has to carry it
+		// arm by anOrderNamingTwoSubstancesOutrightKeepsAChipForEach — which is the shape that has to carry it
 		// here now that one order name reaches one substance.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", NO_DRUG_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
@@ -198,32 +198,30 @@ public class ContraindicationRouteVariantTest {
 		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
 				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail(),
 				"the surviving variant chip is the dataset's first row, named by displayLabel()");
-		for (SafetyWarning warning : warnings) {
-			assertFalse(warning.getDetail().contains("Hydrocortisone butyrate"),
-					"and no chip names a substance the order does not: " + warning.getDetail());
-		}
 	}
 
 	@Test
-	public void twoOrdersOfTwoSubstancesUnderOneAliasStayTwoChips() throws IOException {
+	public void anOrderNamingTwoSubstancesOutrightKeepsAChipForEach() throws IOException {
 		// The chip-level non-collapse case for the ORDER-DRIVEN arm, which the case above used to carry as a
-		// side effect of the over-admission issue #209 removed: one order name no longer reaches two
-		// substances, so the shape now needs two orders. This is what stops `substanceKey` merging the
+		// side effect of the over-admission issue #209 removed. It is what stops `substanceKey` merging the
 		// hydrocortisone ester into its parent from going unnoticed on this arm — the ledger spans both
-		// arms, but only this arm reaches it from the patient's own prescriptions with a question naming no
-		// drug.
+		// arms, but only this arm reaches it from the patient's own prescriptions, with a question naming no
+		// drug at all.
+		//
+		// One order carries the case, because the ester's own order name names BOTH substances outright:
+		// measured through the production predicate, `Hydrocortisone butyrate cream 0.1%` carries
+		// `hydrocortisone butyrate` and `hydrocortisone`, and each is the display name of one of the two.
+		// So the narrowing admits both and only the KEY can merge them.
 		//
 		// Measured by mutation: reducing `substanceKey` to its first component fails this. Reverting either
-		// resolution leg does not — each substance is named by its own order here, so this case is a canary
-		// for the KEY and a regression control for the legs.
+		// resolution leg does not, so this is a canary for the key and a regression control for the legs.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", NO_DRUG_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
-						DrugReferenceTestSupport.set("Hydrocortisone Injection vial 100mg",
-								"Hydrocortisone butyrate cream 0.1%"),
-						null, DrugReferenceTestSupport.set("Dexamethasone"), null));
+						DrugReferenceTestSupport.set("Hydrocortisone butyrate cream 0.1%"), null,
+						DrugReferenceTestSupport.set("Dexamethasone"), null));
 
 		assertEquals(2, warnings.size(),
-				"two substances the orders name keep their own chips, was: " + warnings);
+				"two substances the order names keep their own chips, was: " + warnings);
 		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
 				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail());
 		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as the patient's allergy"

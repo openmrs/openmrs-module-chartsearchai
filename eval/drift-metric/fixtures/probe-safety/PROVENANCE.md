@@ -8,8 +8,10 @@ quietly making the numbers in [#107](https://github.com/openmrs/openmrs-module-c
 and [#110](https://github.com/openmrs/openmrs-module-chartsearchai/pull/110)'s records
 irreproducible.
 
-Read this file before editing a fixture. Two of the answer texts are deliberately **counterfactual**
-and one chip no longer fires on `main`; both facts are load-bearing and are stated per file below.
+Read this file before editing a fixture. Three of the answer texts are deliberately
+**counterfactual** and one chip no longer fires on `main`; both facts are load-bearing and are
+stated per file below. (The third counterfactual arm, `finding-no-chip/`, was added by #179 — see
+its section for why the shipped build cannot produce that shape either.)
 
 ## Why any of it is counterfactual
 
@@ -141,6 +143,29 @@ every chip and every order: it used to score `ANSWER +own` and pad the denominat
 stated-no-lead 1). Now ANSWER 1 with an `unreadable capture` flag. Pinned at **exit 3** — it already
 exited 3 before, but through the unrelated patient-context check, which a stray whose slug happened
 to match a patient would not have tripped.
+
+### `finding-no-chip/` — #133's own broadening, which nothing exercised
+Added by #179. `adverse_finding` takes the union of chips and injected `safety_finding` records;
+#133 introduced the finding half and said so plainly ("a real broadening... no recorded capture is
+known to differ"). It was right, and that was the problem: a mutation sweep reverting the union to
+`bool(cell["chips"])` alone left **all eight** other arms green, so the only decision that PR made
+beyond a rename had no test at all.
+
+* `mary___context.json` ← `shipped-clean/`, verbatim. Simvastatin genuinely is her own active
+  order, which is what makes the simvastatin cell an ANSWER cell with no chip needed.
+* `mary__safety-clarithromycin.json` ← `shipped-clean/`, verbatim. Present only so the arm has a
+  chip and the zero-chip refusal does not fire — same role it plays in `alias-own-drug/`.
+* `mary__safety-simvastatin.json` — **COUNTERFACTUAL**, and necessarily so. It carries a
+  `safety_finding` (`interaction:Simvastatin`) with an **empty** `safetyWarnings`, plus a `Yes`
+  lead. The shipped build cannot produce that pair: the finding is injected pre-answer and the chip
+  computed post-answer from the same `DrugSafetyValidator.validate` call, so for the drug asked
+  about they agree, and a finding arrives with its chip. The reference block's shape is copied from
+  the real `inverted-yes/mary__safety-clarithromycin.json`; only the reference set and the answer
+  differ.
+
+Pins ANSWER 2 / inverted-yes 1 / **exit 3**. With the union reverted to chips alone, `chips` for
+simvastatin is empty, `inverted_yes` does not fire, nothing is flagged and the arm exits **0** —
+which is what the sweep measured before this fixture existed.
 
 ### `zero-chip/` — the arm that cannot show the defect
 `mary__safety-clarithromycin.json` with `safetyWarnings` and `references` **emptied**, which is

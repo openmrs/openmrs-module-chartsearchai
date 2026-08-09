@@ -26,10 +26,15 @@ did anything. Measured 2026-08-09: the old constant resolved to a directory that
 while the real cache held 8 `.bin` files, 4 of them for corpus patients. So it would have
 deleted nothing for every patient, silently.
 
-Now: KVDIR is resolved from CHARTSEARCHAI_KVDIR (falling back to the 3.7.1 standalone), the
-directory must exist and hold at least one `.bin` before ANY request is made, and each
-patient's deleted count is printed. A patient whose cold arm deleted nothing has an
-unattributable delta and the run exits 3 rather than folding it into the median.
+Now: KVDIR is resolved from CHARTSEARCHAI_KVDIR (falling back to the 3.7.1 standalone), and
+before ANY request is made the directory must exist, hold at least one `.bin`, and hold one
+for every patient about to be measured — see `require_cold_cache_dir`. The per-patient check
+is up front rather than in the loop so a worthless reading costs nothing to discover instead
+of a 300s streaming pair, and the loop still prints each deleted count so a zero is visible.
+
+That third condition is not hypothetical either. Measured 2026-08-09 against the real cache:
+all SIX patients below have no `.bin`, so this cohort is as stale as the path was. The run
+now refuses and names them instead of reporting a median over six warm "cold" arms.
 
 Run against the live standalone on :8081. Prints a per-patient table + median delta.
 
@@ -120,14 +125,27 @@ def delete_kv(uuid):
     return n
 
 
-def require_cold_cache_dir():
-    """Refuses to measure anything until the KV cache directory is real and populated.
+def patients_without_kv(patients):
+    """The patients with no on-disk KV to delete, so no cold arm can be created for them.
 
-    This runs BEFORE any network call so the failure is cheap and unambiguous. Two distinct
+    Split out from the run loop and checked UP FRONT deliberately. Discovering this per patient
+    mid-loop meant spending a 300s-timeout streaming pair before learning the reading was worthless,
+    and — the actual #179 defect — the old code never learned it at all, because `delete_kv`'s
+    count was thrown away. A pure function over the filesystem, so the refusal is provable without
+    a server (see selftest); the loop then only has to report the count it already knows."""
+    return [name for name, uuid in patients.items() if not kv_files(uuid)]
+
+
+def require_cold_cache_dir(patients=None):
+    """Refuses to measure anything until a genuine cold arm is possible.
+
+    This runs BEFORE any network call so the failure is cheap and unambiguous. Three distinct
     conditions, because they need different responses from an operator: a directory that is
     absent or not a directory is a stale/wrong KVDIR (the #179 defect); a directory that exists
     but holds no `.bin` at all means llama-server was never launched with --slot-save-path, so
-    there is no on-disk KV to delete and `cold` and `warm` would differ only by RAM cache."""
+    there is no on-disk KV to delete and `cold` and `warm` would differ only by RAM cache; and a
+    directory that has some `.bin` but none for a given patient makes THAT patient's delta
+    unattributable while the median silently absorbs it."""
     if not os.path.isdir(KVDIR):
         raise SystemExit(
             "ERROR: KVDIR is not a directory: %s\n"
@@ -142,6 +160,13 @@ def require_cold_cache_dir():
             "  chartsearchai.llm.kvCache.path is set and the server was launched with\n"
             "  --slot-save-path, then run one query per patient to populate it." % KVDIR)
     print("KVDIR ok: %s (%d .bin present)" % (KVDIR, len(bins)))
+    missing = patients_without_kv(patients if patients is not None else PATIENTS)
+    if missing:
+        raise SystemExit(
+            "ERROR: %d of %d patients have no .bin in %s, so their 'cold' arm would not be a cold\n"
+            "  full prefill and the median would not be attributable: %s\n"
+            "  Run one query per patient to populate the cache, or drop them from PATIENTS."
+            % (len(missing), len(PATIENTS), KVDIR, missing))
 
 
 def stream_prefill(uuid, q):
@@ -239,44 +264,72 @@ def main():
           "were genuinely cold, not that the delta is acceptable.")
 
 
+def _run_with_kvdir(kvdir):
+    """Runs this script as a subprocess with KVDIR overridden. A subprocess rather than an
+    in-process call on purpose: it is the only way to show the precondition fires BEFORE the first
+    request, since with no server up any network attempt surfaces as a connection error."""
+    p = subprocess.Popen([sys.executable, os.path.abspath(__file__)],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         env=dict(os.environ, CHARTSEARCHAI_KVDIR=kvdir))
+    return p.communicate()[0].decode("utf-8", "replace"), p.returncode
+
+
 def selftest():
     """Precondition checks only — no server, no LLM, no model. Runs in CI.
 
-    Pins the two conditions whose absence was the defect: an absent KVDIR and an empty one must
-    both refuse to measure. Each is asserted by running this script as a subprocess with KVDIR
-    overridden, which is also the only way to prove the check fires BEFORE the first request
-    (with no server running, reaching the network at all shows up as a different error)."""
+    Pins the three conditions under which no genuine cold arm exists, each of which the old script
+    ran straight past into a fabricated DELTA: a stale KVDIR, an empty one, and one holding no
+    `.bin` for a patient it is about to measure."""
     import shutil
     import tempfile
     failures = []
 
-    def check(name, kvdir, want_fragment):
-        env = dict(os.environ, CHARTSEARCHAI_KVDIR=kvdir)
-        p = subprocess.Popen([sys.executable, os.path.abspath(__file__)],
-                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
-        out = p.communicate()[0].decode("utf-8", "replace")
-        if p.returncode == 0:
+    def check(name, kvdir, *want):
+        out, rc = _run_with_kvdir(kvdir)
+        if rc == 0:
             failures.append("%s: exited 0 — the precondition did not fire\n%s" % (name, out))
-        elif want_fragment not in out:
-            failures.append("%s: missing %r\n%s" % (name, want_fragment, out))
         elif "urlopen" in out or "Connection refused" in out:
             failures.append("%s: reached the network before checking KVDIR\n%s" % (name, out))
         else:
-            print("  ok  %-22s exit=%d" % (name, p.returncode))
+            missing = [w for w in want if w not in out]
+            if missing:
+                failures.append("%s: missing %r\n%s" % (name, missing, out))
+            else:
+                print("  ok  %-24s exit=%d" % (name, rc))
 
     check("absent-kvdir", os.path.join(tempfile.gettempdir(), "kv-does-not-exist-179"),
           "KVDIR is not a directory")
+
     empty = tempfile.mkdtemp(prefix="kv-empty-")
     try:
         check("empty-kvdir", empty, "no *.bin in KVDIR")
     finally:
         shutil.rmtree(empty, ignore_errors=True)
 
+    # A cache holding SOME .bin but none for ONE patient — the case the old code folded silently
+    # into the median. Populated for every patient but the last, so passing requires naming that
+    # patient, not merely noticing the directory is non-empty.
+    partial = tempfile.mkdtemp(prefix="kv-partial-")
+    try:
+        names = list(PATIENTS)
+        for name in names[:-1]:
+            open(os.path.join(partial, "%s-%s.bin" % (PATIENTS[name], "0" * 64)), "w").close()
+        check("partial-kvdir", partial, "have no .bin in", names[-1])
+    finally:
+        shutil.rmtree(partial, ignore_errors=True)
+
+    # The predicate itself, over the real PATIENTS constant rather than invented UUIDs.
+    if patients_without_kv({}) != []:
+        failures.append("patients_without_kv({}) must be empty")
+    if sorted(patients_without_kv(PATIENTS)) != sorted(n for n, u in PATIENTS.items()
+                                                       if not kv_files(u)):
+        failures.append("patients_without_kv disagrees with the filesystem")
+
     if failures:
         for f in failures:
             print("\nFAIL %s" % f)
         sys.exit("selftest FAILED (%d)" % len(failures))
-    print("selftest OK (2 precondition cases)")
+    print("selftest OK (3 precondition cases + the predicate)")
 
 
 if __name__ == "__main__":

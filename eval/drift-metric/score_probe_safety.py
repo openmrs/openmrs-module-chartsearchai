@@ -410,6 +410,18 @@ SELFTEST_CASES = [
       "abstained (the defect): 1",
       "ABSTAIN cells (unconnected): 0"],
      ["!!"]),
+    # #133's chip-OR-finding broadening, which until #179 no fixture exercised: reverting
+    # `adverse_finding` to chips alone left all eight arms above green, so the one decision that
+    # PR made beyond a rename was protected by nothing. A finding with no chip is the only shape
+    # that separates the two, and the shipped build does not emit it (findings arrive with a
+    # chip), so this arm is counterfactual by construction — see PROVENANCE.md.
+    (["finding-no-chip"], 3,
+     ["ANSWER cells (chip for this drug, or their own drug): 2",
+      "of which the records do not license: 1",
+      "inverted \"Yes\" against this drug's own finding: 1",
+      "negative lead, nothing adverse on record: 0",
+      "mary__safety-simvastatin"],
+     ["ZERO chips"]),
     # An arm captured with the drug-reference GPs off: every label collapses and the report reads
     # like a pass. This used to exit 0.
     (["zero-chip"], 3,

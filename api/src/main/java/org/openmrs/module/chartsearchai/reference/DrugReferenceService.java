@@ -293,11 +293,11 @@ public class DrugReferenceService {
 	 *         every rule-bearing row while keeping a rule-less one, because then {@code inPlay} is
 	 *         non-empty and this never fires — measured on the fixture above, an order for
 	 *         {@code Ibuprofen tablets 400mg} keeps only the bare {@code Ibuprofen} row and the reference
-	 *         data's findings go with the dropped rows. Not addressed here: it needs a dataset that both
-	 *         omits an entry's own name from its aliases AND files one drug as several substances without
-	 *         publishing a substance name, which no shipped dataset does (measured: 0 entries omit their
-	 *         own name on all four), and closing it means deciding what an identity-keyed source should
-	 *         mean by "one substance" — a question this issue does not settle.
+	 *         data's findings go with the dropped rows. Not addressed here: it needs the same precondition
+	 *         as the emptying shape — an entry whose aliases omit its own name — and no shipped dataset has
+	 *         one (measured: 0 such entries in the full 19 MB KB and in each of the three bundled samples).
+	 *         Closing it would mean deciding what a source publishing no substance name should mean by
+	 *         "one substance", which this issue does not settle.
 	 */
 	private static List<DrugReference> rowsOf(List<DrugReference> matched, Set<Object> inPlay) {
 		if (inPlay.isEmpty()) {

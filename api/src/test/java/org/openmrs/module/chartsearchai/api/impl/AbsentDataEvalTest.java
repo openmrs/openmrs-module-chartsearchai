@@ -300,10 +300,13 @@ public class AbsentDataEvalTest {
 								+ "that expectation is not being asserted: " + missingOne);
 			}
 			if (!anyOf.isEmpty()) {
-				// An OR group bites as a group: only an answer carrying NONE of its alternatives may
-				// fail it. Both halves are asserted, because each catches a different way to get the
-				// group wrong — a dead alternative nothing could ever satisfy, and a group so loose
-				// that dropping all of it still passes.
+				// An OR group bites as a group, so the only answer that may fail it is one carrying
+				// NONE of its alternatives. A per-alternative "and each one on its own satisfies the
+				// case" assertion was written here and DELETED: it cannot fail, because the answer it
+				// checks is built from the alternative itself, so even a misspelled alternative passes
+				// it (measured). Nothing in this file can detect a dead alternative; the bound that can
+				// be asserted is the opposite one, and it lives in
+				// anAnswerNamingNoTopicFailsEveryCaseThatNamesOne.
 				String namingNone = compliant;
 				for (String alternative : anyOf) {
 					namingNone = removeAll(namingNone, alternative);
@@ -313,10 +316,6 @@ public class AbsentDataEvalTest {
 						() -> assertAnswerMatchesExpectations(caseId, evalCase, withoutAnyAlternative),
 						caseId + ": an answer naming none of " + anyOf + " must fail this case, or the "
 								+ "OR group is not being asserted: " + withoutAnyAlternative);
-				for (String alternative : anyOf) {
-					assertAnswerMatchesExpectations(caseId, evalCase,
-							compliantAnswerNaming(evalCase, alternative));
-				}
 			}
 			if (evalCase.getExpectedAnswerNotContains() != null) {
 				for (String forbidden : evalCase.getExpectedAnswerNotContains()) {
@@ -443,19 +442,13 @@ public class AbsentDataEvalTest {
 	/** An answer that satisfies {@code evalCase} — built from its own expectations, so it names exactly
 	 *  what the dataset says the real answer must name and nothing the dataset forbids. */
 	private static String compliantAnswerFor(EvalCase evalCase) {
-		List<String> anyOf = expectedContainsAny(evalCase);
-		return compliantAnswerNaming(evalCase, anyOf.isEmpty() ? null : anyOf.get(0));
-	}
-
-	/** As {@link #compliantAnswerFor}, but naming {@code oneAlternative} as the case's single OR
-	 *  alternative, so each alternative can be shown to satisfy the case on its own. */
-	private static String compliantAnswerNaming(EvalCase evalCase, String oneAlternative) {
 		StringBuilder sb = new StringBuilder("There are no records in this chart about");
 		for (String expected : expectedContains(evalCase)) {
 			sb.append(' ').append(expected);
 		}
-		if (oneAlternative != null) {
-			sb.append(' ').append(oneAlternative);
+		List<String> anyOf = expectedContainsAny(evalCase);
+		if (!anyOf.isEmpty()) {
+			sb.append(' ').append(anyOf.get(0));
 		}
 		return sb.append('.').toString();
 	}

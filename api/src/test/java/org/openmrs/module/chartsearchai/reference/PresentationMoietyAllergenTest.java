@@ -36,8 +36,10 @@ import org.junit.jupiter.api.Test;
  * not assert that {@code insulin lispro} names anything. So only a row that is CALLED the stem may
  * stand for it. A row that merely lists the stem among its aliases is a different presentation, and
  * naming it in a chip would report an allergy to a drug the chart does not record — which is issue
- * #176's defect, arriving from the other side. That bound is asserted here on the dextran rows, and it
- * is what leaves the two vaccine and the two manganese rows apart.
+ * #176's defect, arriving from the other side. The dextran rows are where that rank is what decides:
+ * relax the gate by one rank and they merge. The two vaccine and the two manganese rows are held apart
+ * by less than that — the KB publishes no row named their stem at any rank — and are asserted here as
+ * the shape the widening must never reach, not as a test of which rank the gate takes.
  *
  * <p>Every case runs verbatim shipped-KB slices through the real {@link DdiDrugReferenceSource} parser
  * and the real {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)}, and asserts
@@ -142,7 +144,7 @@ public class PresentationMoietyAllergenTest {
 	}
 
 	@Test
-	public void twoPresentationsSharingAStemTheKbNamesNoRowAfterStayTwoSubstances() throws IOException {
+	public void twoPresentationsOfAStemTheKbPublishesNoBareRowForStayTwoSubstances() throws IOException {
 		// The negative control, and the reason the gate is what it is. Both vaccine rows reduce to the stem
 		// "varicella zoster vaccine" and the KB is named no such row — a distinction that decides whether
 		// an immunocompromised patient may have the vaccine at all, so merging them on the stem alone

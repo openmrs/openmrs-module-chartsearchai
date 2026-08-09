@@ -2362,12 +2362,18 @@ public class DrugSafetyValidator {
 	 * for each distinct published name whose resolution the ranking moves — ONE recorded allergy per
 	 * probe, asking about the row the pre-#192 rule landed on (2026-08-09, over the 5169 distinct names
 	 * the shipped KB publishes; re-measure before relying on the figures): resolution moves for 265 of
-	 * them and 87 raised no contraindication at all. Widening the resolution to the substances the name
-	 * denotes recovers most of that; what is left is the shape no rule over NAMES can reach — a moiety
-	 * the KB names by a bare word rather than by a trailing qualifier ({@code Peanut oil} against
-	 * {@code Peanut}, {@code Dextran 40}, {@code penicillin g, procaine}), which is spelled exactly like
+	 * them and 87 raised no contraindication at all. Reading the recorded name as the substances it
+	 * denotes brings 23 of those 87 back and silences none. Most of the remaining 64 are #192's own
+	 * correct withdrawals, where the row the old rule landed on was never the recorded drug — the
+	 * {@code …lactate} and {@code …salicylate} salts that used to resolve to {@code Lactic acid} and
+	 * {@code Salicylic acid}, {@code Moderna covid-19 vaccine} against the Pfizer row,
+	 * {@code digoxin antibodies fab fragments} against {@code Digoxin}. What is genuinely left is the
+	 * shape no rule over NAMES can reach: a moiety the KB names by a bare WORD rather than by a
+	 * trailing qualifier ({@code Peanut oil} against {@code Peanut}, {@code Dextran 40},
+	 * {@code penicillin g, procaine}), which is spelled exactly like
 	 * {@code Digoxin Immune Fab (Ovine)} against {@code Digoxin}, the patient allergic to digoxin's
-	 * ANTIDOTE that issue #192 measured and separated. See
+	 * ANTIDOTE that issue #192 measured and separated — plus a constituent the KB publishes no name for
+	 * at all ({@code apple pectin}, {@code dextran 70}). See
 	 * {@link DrugReferenceService#findImpliedSubstances} for the gates and
 	 * {@code PresentationMoietyAllergenTest} for the bound pinned as a test.
 	 */

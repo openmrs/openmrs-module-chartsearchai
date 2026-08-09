@@ -174,6 +174,12 @@ public class DrugReferenceService {
 	 * earliest still wins, so a dataset that files one display name twice (issue #164's shape) resolves
 	 * to whichever row it lists first, and a multi-drug name whose constituents it names separately
 	 * resolves to the first constituent that claims it.
+	 *
+	 * <p>That last bound is why this is now the PRIMITIVE rather than the answer: since issues
+	 * #193/#195 the allergy arm asks {@link #findImpliedSubstances}, which is built on this and adds the
+	 * substances the recorded string denotes BESIDES the one row it resolves to. Kept as its own method,
+	 * and unchanged, because "which single row is this string about" is the question every label still
+	 * needs answering — including the label on each chip the wider set raises.
 	 */
 	public DrugReference lookupByToken(String drugToken) {
 		if (drugToken == null || drugToken.trim().isEmpty()) {
@@ -227,11 +233,12 @@ public class DrugReferenceService {
 	 *       label is unchanged for a name implying one substance;</li>
 	 *   <li>the substance of every OTHER entry making the same strongest claim, when that claim is a
 	 *       NAME claim ({@link DrugReference#NAME_IS_ANOTHER_NAME} or stronger). 1367 of the shipped
-	 *       KB's 5169 distinct published names are claimed equally by two or more entries and 1110 of
-	 *       those by two or more SUBSTANCES, 1058 of them {@code /}-joined (measured 2026-08-09 through
-	 *       {@link DrugReference#nameMatchStrength} and {@link DrugReference#substanceGroupKey()}).
-	 *       Deliberately not extended to the containment rank, which is where issue #192's hazard lives:
-	 *       there a tie is two entries whose names merely occur inside the recorded one;</li>
+	 *       KB's 5169 distinct published names are claimed equally by two or more entries, 1125 of them
+	 *       {@code /}-joined, and 1110 of the 1367 by two or more SUBSTANCES (measured 2026-08-09
+	 *       through {@link DrugReference#nameMatchStrength} and
+	 *       {@link DrugReference#substanceGroupKey()}). Deliberately not extended to the containment
+	 *       rank, which is where issue #192's hazard lives: there a tie is two entries whose names
+	 *       merely occur inside the recorded one;</li>
 	 *   <li>the substance each {@link DrugReference#combinationConstituents constituent} of a
 	 *       combination name resolves to, when the KB is NAMED that constituent. Any rank of NAME claim
 	 *       is enough because the recorded string ASSERTS the constituent is an ingredient, so an entry
@@ -247,7 +254,14 @@ public class DrugReferenceService {
 	 *       side. It is also what leaves apart the sibling pairs that share a stem and no bare row:
 	 *       {@code Varicella Zoster Vaccine (Recombinant)} against {@code (live/attenuated)},
 	 *       {@code Manganese (chloride)} against {@code (sulfate)}, {@code Typhoid vaccine (live)}
-	 *       against {@code (inactivated)}.</li>
+	 *       against {@code (inactivated)}. Audited over the whole shipped KB rather than argued
+	 *       (2026-08-09, through this method): 313 published names carry a trailing qualifier and
+	 *       exactly 10 gain a substance from this leg — six Moderna COVID-19 presentations reaching
+	 *       {@code Moderna covid-19 vaccine}, plus {@code Iron (polysaccharide)} → {@code Iron},
+	 *       {@code Multivitamin (prenatal)} → {@code Multivitamin},
+	 *       {@code Insulin human (isophane)} → {@code Insulin human} and
+	 *       {@code Insulin lispro (protamine)} → {@code Insulin lispro}. Re-run that audit rather than
+	 *       trusting the list: it is a property of the dataset, not of this code.</li>
 	 * </ul>
 	 *
 	 * <p><b>The bound it carries.</b> A moiety the KB names by a bare WORD rather than by a qualifier is

@@ -357,6 +357,10 @@ public class DrugReference {
 	 */
 	private static final char COMBINATION_SEPARATOR = '/';
 
+	/** {@link #COMBINATION_SEPARATOR} as a split pattern, compiled once — {@code /} is not a regex
+	 *  metacharacter, so the pattern is the character itself. */
+	private static final Pattern COMBINATION_SPLIT = Pattern.compile(String.valueOf(COMBINATION_SEPARATOR));
+
 	/**
 	 * @return the ingredient names a recorded COMBINATION name lists, trimmed and in the order the name
 	 *         lists them — empty for a name carrying no {@value #COMBINATION_SEPARATOR}, which is every
@@ -376,7 +380,7 @@ public class DrugReference {
 			return Collections.emptyList();
 		}
 		List<String> out = new ArrayList<String>();
-		for (String part : recordedName.split("\\" + COMBINATION_SEPARATOR)) {
+		for (String part : COMBINATION_SPLIT.split(recordedName)) {
 			String trimmed = part.trim();
 			if (!trimmed.isEmpty()) {
 				out.add(trimmed);

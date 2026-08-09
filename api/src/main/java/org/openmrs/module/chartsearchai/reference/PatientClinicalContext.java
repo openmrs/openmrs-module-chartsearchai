@@ -281,7 +281,8 @@ public class PatientClinicalContext {
 	 * text, not the order-name corpus that settled #86. Exposure today is confined to hand-authored
 	 * contraindication rules: neither the {@code ddinter} nor the {@code atc} source emits any, and the
 	 * allergy contraindication arm ({@code DrugSafetyValidator.addAllergyContraindications}) resolves
-	 * allergens through {@link DrugReferenceService#lookupByToken}, which is boundary-aware.
+	 * allergens through {@link DrugReferenceService#findImpliedSubstances}, and so through
+	 * {@link DrugReferenceService#lookupByToken} beneath it, which is boundary-aware.
 	 * Boundary-aware is not the same as correct, though, and this is not a clean contrast: since issue
 	 * #176 that resolver prefers an entry the allergen NAMES over one whose alias merely occurs inside the
 	 * allergen, which settles the fragment case for every name the KB itself publishes, but an allergen

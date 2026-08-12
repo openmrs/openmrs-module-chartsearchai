@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "source": "hand-authored fixture for issue #146 — not shipped data",
-  "description": "The mirror of drug-reference-substance-name-declared.json: the same one substance filed as three rows, but the row carrying the self-named allergy rule is NOT the first. The bare row leads, so the allergen arm raises its identity chip first and the curated rule arrives afterwards — the direction in which ContraindicationChips has to REPLACE an incumbent in place rather than decline a newcomer. Authored the way that fixture is (each row declares substanceName, presentations are named with a trailing parenthesized qualifier, each row lists its own display name among its aliases) so the loader reports nothing and the three rows really are one substance.",
+  "description": "The mirror of drug-reference-substance-name-declared.json: the same one substance filed as three rows, but the row carrying the self-named allergy rule is NOT the first. The bare row leads, so the allergen arm raises its identity chip first and the curated rule arrives afterwards — the direction in which ContraindicationChips has to REPLACE an incumbent in place rather than decline a newcomer. Authored the way that fixture is — each row declares substanceName, presentations are named with a trailing parenthesized qualifier, and each row lists its own display name among its aliases — so the three rows really are one substance. Nothing here asserts that the loader stays silent about it, and nothing needs to: a validity rule that dropped this file's rule or its row would turn the test's own detail assertion red, not quiet.",
   "entries": [
     {
       "id": "ibuprofen",

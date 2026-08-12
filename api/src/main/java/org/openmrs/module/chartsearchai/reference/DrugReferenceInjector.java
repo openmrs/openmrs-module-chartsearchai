@@ -1137,8 +1137,9 @@ public class DrugReferenceInjector {
 	 *         <p><b>Curated-source-only</b>, by construction rather than by measurement: neither
 	 *         {@code ddinter} nor {@code atc} publishes contraindications at all, so only an
 	 *         operator-authored file can file one rule twice — and the bundled seed does not (its four
-	 *         ibuprofen rows are four distinct {@code (type, token)} pairs), so no shipped rendering
-	 *         moves. {@code InjectedContraindicationClauseTest} pins both halves.
+	 *         ibuprofen rows are four distinct keys: since issue #146 the self-named allergy one is the
+	 *         substance and the other three are their own {@code (type, token)}), so no shipped
+	 *         rendering moves. {@code InjectedContraindicationClauseTest} pins both halves.
 	 *
 	 *         <p><b>Joined, not dropped</b>, and that is the deliberate difference from issue #174 site 2:
 	 *         that collapse could discard a repeated row because the repeats were near-identical, while

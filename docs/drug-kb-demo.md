@@ -32,7 +32,7 @@ section and [ADR Decisions 23 & 24](adr.md). This document is only the **demo da
 | 1 | Question-driven injection | a KB drug name/alias in the question → a `drug_reference` citation is injected |
 | 2 | Contraindication — allergy | patient allergy token matches a KB contraindication (coded + non-coded) |
 | 3 | Contraindication — condition | patient condition token matches a KB contraindication (coded + non-coded) |
-| 4 | Contraindication — "recorded allergy to X" (ATC class) | allergy resolves to the very drug asked about — where the KB also carries an allergy rule *naming that drug*, the two are one chip and the rule's note is the wording kept ([#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146)) |
+| 4 | Contraindication — "recorded allergy to X" (ATC class) | allergy resolves to the very drug asked about. **Not reachable on the seeded allergies since [#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146)**: where the KB also carries an allergy rule *naming that drug* the two are ONE chip and the rule's note is the wording kept, and both seeded allergens that resolve to a bundled entry (Ibuprofen, Paracetamol) have such a rule. To see this path's own wording, record an allergy to **Gentamicin** — the one bundled entry whose allergy rule names a class rather than itself |
 | 5 | Interaction — active order | a patient's active order matches a KB interaction token |
 | 6 | Interaction — duplicate therapy (ATC class) | an active order shares the asked drug's ATC level-4 subgroup |
 | 7 | Order-driven injection | a reference is injected from an active order (needs `injectFromQuery=false` to see in isolation) |
@@ -168,7 +168,7 @@ UNION ALL SELECT 'active_drug_orders', COUNT(*) FROM orders WHERE patient_id=@pi
 
 | Type | Items | Drives |
 |------|-------|--------|
-| Allergies | Ibuprofen `77897…`, Penicillins `162297…`, Paracetamol `70116…`, non-coded "Aminoglycoside" (on "Other" `5622…`) | paths 2, 4, 8 |
+| Allergies | Ibuprofen `77897…`, Penicillins `162297…`, Paracetamol `70116…`, non-coded "Aminoglycoside" (on "Other" `5622…`) | paths 2, 8 (**not 4** — see below) |
 | Conditions | Peptic ulcer `114262…`, non-coded "Active GI bleed" / "Severe hepatic impairment" / "Significant renal impairment" | path 3 |
 | Active orders | Warfarin `5e97fe35…`, Aspirin `71617…`, Methotrexate `017dcf18…`, Furosemide `9f6c3927…` | path 5 |
 

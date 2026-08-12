@@ -2897,7 +2897,9 @@ public class DrugSafetyValidator {
 	 * Measured on the bundled curated dataset (the production default {@code sourceFormat=json}): an
 	 * active ibuprofen order plus an ibuprofen allergy, a question naming no drug and an answer citing
 	 * the real order record raised <b>0 chips</b>, where the identical call with {@code mappings=null}
-	 * raised <b>2</b>. An allergy to a currently-prescribed drug is a prescribing error the chart
+	 * raised <b>2</b> — which is <b>1</b> since issue #146, those two having been the curated rule and
+	 * the identity check reporting one allergy twice rather than two findings. An allergy to a
+	 * currently-prescribed drug is a prescribing error the chart
 	 * already contains, and it reached the clinician neither as a chip nor — since issue #110 turns
 	 * every chip into a citable pre-answer record — as anything in the prompt.
 	 *

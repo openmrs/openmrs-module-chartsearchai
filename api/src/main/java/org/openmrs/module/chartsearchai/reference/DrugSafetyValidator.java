@@ -3250,7 +3250,7 @@ public class DrugSafetyValidator {
 	 * contraindication arms make (issue #172), which silently re-opens issue #145.
 	 *
 	 * <p>What the repeat actually costs, since issue #185 added a second sweep to it: measured
-	 * 2026-08-12 by timing {@link #validate} over the shipped 19 MB KB with a 30-order, 60-name
+	 * 2026-08-13 by timing {@link #validate} over the shipped 19 MB KB with a 30-order, 60-name
 	 * context, <b>61 ms before that change and 106 ms after</b>, chips identical. Against an answer
 	 * this module waits seconds for, that is why the per-pass memo stays unbuilt — re-measure the same
 	 * way before treating the repeat as free at a larger order count.

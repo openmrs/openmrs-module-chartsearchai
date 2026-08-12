@@ -157,9 +157,8 @@ public class DuplicateTherapySelfChipTest {
 		// class-related drugs can show. A clinician asking about omeprazole for a patient already on
 		// omeprazole AND pantoprazole must still be told about the pantoprazole — that is the whole
 		// point of the arm. Attaching each order's substances to every partner rather than to the
-		// partners that order produced would lose exactly this chip, and no other case in the suite
-		// notices: every other two-order fixture supplies the flattened code set alone, which carries
-		// no order to attribute anything to.
+		// partners that order produced would lose exactly this chip — and measured, nothing else in
+		// the suite notices: that mutation left every other test green.
 		Set<String> pantoprazoleCodes = DrugReferenceTestSupport.set("A02BC02");
 		Set<String> pantoprazoleNames = DrugReferenceTestSupport.set("Pantoprazole 40mg");
 		Set<String> omeprazoleCodes = DrugReferenceTestSupport.set(OMEPRAZOLE_ORDER_CODE);

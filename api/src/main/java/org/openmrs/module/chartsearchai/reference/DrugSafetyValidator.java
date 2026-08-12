@@ -82,8 +82,8 @@ import org.springframework.stereotype.Service;
  *       itself ({@link ContraindicationChips}, issue #145). Per recorded FINDING and not per arm
  *       either: a hand-authored allergy rule naming the very drug it is filed against reports the
  *       identity check's fact, so the two fold into one chip keeping whichever wording carries the
- *       deployment's own note (issue #146 — 3 of the 4 entries in the shipped curated file).
- *       These same two checks additionally run
+ *       deployment's own note (issue #146 — 3 of the 4 entries in the shipped curated file). These
+ *       same two checks additionally run
  *       over the patient's OWN ACTIVE ORDERS, whatever the question and the answer name — "is the
  *       patient allergic to something they are taking?" is a fact about their chart, and the
  *       drug-in-play framing above could not ask it (see
@@ -751,8 +751,12 @@ public class DrugSafetyValidator {
 	 * key merges, and which is the thing to re-measure before widening the key, since the class chip
 	 * names a code and a divergent row's code would be dropped unheard. Curated-group membership needs
 	 * no separate check: {@link CrossReactivityGroup#groupsOf} is a pure function of those same codes,
-	 * so equal codes are equal membership. What is left for a tie to choose between is then only the
-	 * route qualifier in the subject's own label. Issue #176 widened the key's FINDING side onto the same
+	 * so equal codes are equal membership. What is left for a tie to choose between is then the route
+	 * qualifier in the subject's own label — and, since issue #146 put self-named rules in this space,
+	 * one such rule's NOTE against another's, where an entry authors the same rule twice
+	 * ({@code ContraindicationRouteVariantTest.oneCuratedRuleAuthoredTwiceRaisesOneChip}, whose comment
+	 * records why the incumbent is the right survivor for a re-spelling and lossy for two genuinely
+	 * different notes). Issue #176 widened the key's FINDING side onto the same
 	 * substance, so that instruction was carried out: re-measured 2026-08-08 through
 	 * {@link DrugReference#atcSubgroups()}, 0 of the 129 multi-row families publish differing level-4
 	 * subgroups, and 0 differ in curated-group membership.

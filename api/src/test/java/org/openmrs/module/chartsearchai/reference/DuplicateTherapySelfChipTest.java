@@ -201,6 +201,28 @@ public class DuplicateTherapySelfChipTest {
 	}
 
 	@Test
+	public void theCombinationAnswerDoesNotDependOnTheOrderOfItsCodes() throws IOException {
+		// The invariant behind the case above, and the one the gate makes non-obvious: the leg fires
+		// only for a partner NAMED AFTER THE ORDER, and a partner acquires that name part-way through
+		// the walk — J04AB05 builds it from the dataset entry, J04AC51 renames it. So which code the
+		// context lists first decides whether the partner is order-named at the moment its first code
+		// is read. The answer must not. The same invariant MultiCodeClassChipTest pins for which CLASS
+		// a chip names, asked here of whether a chip exists at all.
+		Set<String> names = DrugReferenceTestSupport.set("Isoniazid / Rifapentine");
+		PatientClinicalContext reversed = DrugReferenceTestSupport.ctx(60, null, names,
+				DrugReferenceTestSupport.set("J04AC51", "J04AB05"), null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-uuid-185f",
+						"Isoniazid / Rifapentine", names,
+						DrugReferenceTestSupport.set("J04AC51", "J04AB05"))));
+
+		assertEquals(
+				DrugReferenceTestSupport.details(
+						chips("Is it safe to give isoniazid?", isoniazidRifapentineOrder())),
+				DrugReferenceTestSupport.details(chips("Is it safe to give isoniazid?", reversed)),
+				"the same two codes, listed the other way round");
+	}
+
+	@Test
 	public void theHalfThatOrderResolvesByCodeIsStillSkipped() throws IOException {
 		// The same combination order, asked about the half its CODE names. Unchanged by this fix — the
 		// exact-code leg already covered it — and here so that the case above cannot be satisfied by a

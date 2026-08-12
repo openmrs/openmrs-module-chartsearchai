@@ -158,6 +158,34 @@ public class PartialOrderCoveragePartnerTest {
 	}
 
 	@Test
+	public void askingAboutOneConstituentOfThatCombinationStillReportsTheOther() throws Exception {
+		// The same two-partner combination, asked about one of the substances it contains — the case
+		// issue #185's restating-existing-therapy skip has to leave alone. The metronidazole half IS
+		// existing therapy and is silenced; the secnidazole half is a DIFFERENT nitroimidazole in the
+		// same subgroup, so adding metronidazole to this patient really is duplicate therapy and the
+		// chip naming Secnidazole has to survive.
+		//
+		// This is what scopes that skip's name-driven leg to a partner named after the ORDER. A
+		// partner the dataset named speaks for ONE substance; giving it the whole tablet's contents
+		// silences a chip that names it, which is the opposite of the defect #185 fixes.
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Metronidazole and secnidazole"),
+				DrugReferenceTestSupport.set("P01AB01", "P01AB07"), null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-1",
+						"Metronidazole and secnidazole",
+						DrugReferenceTestSupport.set("Metronidazole and secnidazole"),
+						DrugReferenceTestSupport.set("P01AB01", "P01AB07"))));
+
+		List<String> chips = classChipDetails(
+				validator().validate("", "Is it safe to give metronidazole?", context));
+
+		assertEquals(1, chips.size(),
+				"the metronidazole half is silenced and the secnidazole half is not, was: " + chips);
+		assertEquals("Metronidazole is in the same ATC class (P01AB) as active order Secnidazole"
+				+ " — possible duplicate therapy", chips.get(0));
+	}
+
+	@Test
 	public void anOrderTheDatasetDoesNotCoverAtAllIsStillOneCoMedication() throws Exception {
 		// The rung below, unchanged: with no entry for either code the order itself is the identity,
 		// so its codes are one partner named by the order's display name (issue #155).

@@ -128,7 +128,7 @@ import org.springframework.stereotype.Service;
  * <p>Conservative by design: overdose is flagged only when a value can be computed AND it
  * exceeds a published maximum — a daily total over {@code maxDailyDoseMg}, or (only with a
  * fresh recorded weight) a per-administration dose over {@code mgPerKgMax} × weight; class-based
- * interactions skip an active order that is the <em>same substance</em> (restating existing therapy
+ * interactions skip an active order that IS — or contains — the <em>same substance</em> (restating existing therapy
  * is not a duplicate). A question or answer that names no reference drug produces no warnings
  * (the no-false-positive case) unless the patient's own chart supplies the subject — the two
  * deliberate exceptions above, both still no-false-positive checks. The interaction screen reports
@@ -2996,8 +2996,8 @@ public class DrugSafetyValidator {
 	 * Class-based interaction reasoning: warns when the drug {@code ref} being checked shares
 	 * an ATC level-4 subgroup with one of the patient's active orders (additive effects / duplicate
 	 * therapy) or — failing that — a curated {@link CrossReactivityGroup} (a cross-branch family
-	 * overlap, e.g. ibuprofen recommended over an active aspirin order). An order that IS
-	 * {@code ref}'s own substance is skipped — restating existing therapy is not a duplicate — and
+	 * overlap, e.g. ibuprofen recommended over an active aspirin order). An order that IS — or, being
+	 * a fixed-dose combination, CONTAINS — {@code ref}'s own substance is skipped — restating existing therapy is not a duplicate — and
 	 * only that order: a class sibling the patient also happens to be on is exactly the finding this
 	 * arm exists to make, so the question is asked per PARTNER. Active orders carry ATC codes (the builder maps them), so this
 	 * matches on codes directly and names the order by the ladder {@link #orderPartners} documents —
@@ -3026,8 +3026,15 @@ public class DrugSafetyValidator {
 	 *       is whichever row {@link #entryForAtcCode} picks for the code — and that row's substance
 	 *       need not be the queried one. An order known only as {@code A02BC05} resolves to
 	 *       {@code Omeprazole}, the earlier row, so dropping this leg would newly raise a chip about
-	 *       {@code Esomeprazole} against it. Sharing a level-5 code is sharing a substance (the
-	 *       property {@link #resolvesFrom} records), so the leg cannot over-skip.</li>
+	 *       {@code Esomeprazole} against it, which this arm has never raised.
+	 *       <p>Not because a level-5 code cannot be shared by two substances — in THIS knowledge base
+	 *       it can, and the pair just named is the counterexample: {@code Omeprazole} and
+	 *       {@code Esomeprazole} publish one {@code A02BC05} and differ in {@code drugbank_id}. (The
+	 *       unqualified "sharing an exact ATC code means being the same substance" on
+	 *       {@link #resolvesFrom} is a claim about ATC the standard, and is false of this KB.) So the
+	 *       leg CAN over-skip, and does exactly there — deliberately, because what it skips is a
+	 *       partner the dataset can only name as {@code Omeprazole} anyway. Keeping it is a choice
+	 *       between two imperfect answers, made the way it already was before this issue.</li>
 	 * </ul>
 	 *
 	 * <p>Returns the sentences rather than adding the chips, because whether a relationship gets a chip
@@ -3124,11 +3131,19 @@ public class DrugSafetyValidator {
 		private final Set<String> codes = new LinkedHashSet<String>();
 
 		/**
-		 * The substances this co-medication is known to contain that its ATC codes do not say, as
+		 * The substances this co-medication is known to contain, as
 		 * {@link DrugReference#substanceGroupKey()} values: what the ORDER's own recorded names imply
 		 * ({@link DrugSafetyValidator#substancesNamedBy}). Read only by
 		 * {@link DrugSafetyValidator#classRelationships}'s restating-existing-therapy skip; nothing
 		 * here is rendered, so a partner may be named one thing and known to contain several.
+		 *
+		 * <p><b>Populated only for a partner {@link #namedByOrder}</b>, and that is the whole of the
+		 * scoping rule. A partner the DATASET named stands for one substance; a partner named after
+		 * the order stands for the order, so what the order names is what it holds. Attaching the
+		 * order's whole set to every partner it produced instead silences a real finding: one order
+		 * whose two codes both resolve is TWO partners, and a question about the first constituent
+		 * would then skip the second — {@code Metronidazole and secnidazole} losing
+		 * "Metronidazole is in the same ATC class (P01AB) as active order Secnidazole".
 		 *
 		 * <p><b>The names, and not also the entry the ladder resolved.</b> That entry's substance is
 		 * already what the skip's exact-code leg answers, and equivalently so: a row of it publishes
@@ -3141,15 +3156,13 @@ public class DrugSafetyValidator {
 		 * fixed-dose combination resolves an entry for one constituent while its name names the
 		 * other, and its combination code is typically absent from the KB. The 3.7.1 demo
 		 * dictionary's {@code Isoniazid / Rifapentine} concept is exactly that — {@code J04AB05}
-		 * resolves Rifapentine and {@code J04AC51} resolves nothing — so a skip reading only what the
-		 * codes resolve reports the isoniazid in the tablet as duplicating the tablet.
+		 * resolves Rifapentine and {@code J04AC51} resolves nothing, which merges both codes onto ONE
+		 * partner and renames it after the order — so a skip reading only what the codes resolve
+		 * reports the isoniazid in the tablet as duplicating the tablet.
 		 *
-		 * <p>The ORDER's whole substance set goes onto every partner that order contributed a code to,
-		 * which is why this is a set and not one key. What the skip needs to know is whether the drug
-		 * being asked about is already INSIDE this co-medication, and a constituent of a combination
-		 * is inside every partner that combination produced. Merging in the other direction is
-		 * already the ladder's rule: two orders of one substance are one partner, and this then holds
-		 * what both of them name.
+		 * <p>A SET rather than one key, because a combination names several and because two orders of
+		 * one substance are already one partner under the ladder's own rule, so this holds what both
+		 * of them name.
 		 */
 		private final Set<Object> substances = new LinkedHashSet<Object>();
 
@@ -3310,7 +3323,13 @@ public class DrugSafetyValidator {
 				partner.nameByOrder(ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode));
 			}
 			partner.codes.add(orderCode);
-			if (order != null) {
+			if (order != null && partner.namedByOrder) {
+				// Only a partner that speaks for the WHOLE order takes what the order NAMES. A partner
+				// the dataset named stands for ONE substance, and giving it the order's other
+				// constituents silences a chip that names it: one order mapped to two covered codes is
+				// two partners, and a question about the first would then skip the second — the very
+				// duplicate-therapy finding the arm exists to make. The two are the same condition
+				// OrderPartner.nameByOrder turns on, so a partner is read exactly as it is labelled.
 				partner.substances.addAll(substancesNamedBy(order, substancesByOrderName));
 			}
 		}
@@ -3333,12 +3352,16 @@ public class DrugSafetyValidator {
 	 *         answers a different question — which order is a SUBJECT's own, where admitting too much
 	 *         costs a pair rather than a suppression.
 	 *
+	 *         <p>Two shapes reach this through the ranked accessor UNRANKED, and both are that
+	 *         accessor's own documented behaviour rather than anything decided here: a name matching
+	 *         exactly one row (nothing to rank), and the {@code rowsOf} fallback for a dataset whose
+	 *         entries omit their own names. That fallback over-reports by design, which for a
+	 *         candidate set is the safe direction and for a SUPPRESSION is not. Measured there as
+	 *         never firing on any shipped dataset; if that stops being true it costs chips here first.
+	 *
 	 *         <p>Asked only of the order {@link #orderCarrying} returns for a code, which is the FIRST
-	 *         order carrying it — so where two orders publish identical code sets, only the first
-	 *         one's names are read. The residue is narrow because the partner needs a code in
-	 *         {@code ref}'s own subgroup before any of this is consulted, and the order that NAMES
-	 *         {@code ref} is normally the one carrying that code; it bites only where the naming
-	 *         order's codes are a subset of the other's. Left as it is rather than scanning every
+	 *         order carrying it — so where two orders share a code, only the first one's names are
+	 *         read for the partners that code builds. Left as it is rather than scanning every
 	 *         carrier, so this and the identity/label ladder read the orders the same way.
 	 *
 	 *         <p>Memoised through {@code cache} for the duration of one {@link #orderPartners} call:

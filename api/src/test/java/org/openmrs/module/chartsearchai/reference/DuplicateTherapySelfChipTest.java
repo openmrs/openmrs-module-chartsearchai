@@ -64,6 +64,12 @@ import org.junit.jupiter.api.Test;
  * never the matcher underneath it — measured here on issue #209's own case, where the unranked form
  * would suppress a real chip about {@code Hydrocortisone butyrate}. Swapping the two leaves the rest
  * of the suite green, which is why that case is in this file.
+ *
+ * <p>The third lives next door, in
+ * {@code PartialOrderCoveragePartnerTest.askingAboutOneConstituentOfThatCombinationStillReportsTheOther},
+ * because its fixture is the one that has a combination order resolving to TWO partners: what an
+ * order NAMES may be read onto a partner named after that ORDER and not onto one the DATASET named,
+ * or a question about one constituent silences the chip about the other.
  */
 public class DuplicateTherapySelfChipTest {
 

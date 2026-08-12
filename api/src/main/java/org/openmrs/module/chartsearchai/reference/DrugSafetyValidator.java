@@ -3281,7 +3281,7 @@ public class DrugSafetyValidator {
 		// entryForAtcCode is a full scan of getAll() and the rung added by issue #186 asks it once per
 		// code of an order as well as once per code of the context, so without the first two a
 		// partly-covered order rescans the dataset for every code it carries; substancesNamedBy is a
-		// resolution of every name of an order and issue #185 asks it once per code of that order. A
+		// resolution of every name of an order and issue #185 asks it once per UNNAMEABLE code. A
 		// field would be issue #172's trap — a memoised DrugReference outliving a getAll() hot-reload
 		// fails the reference comparisons the contraindication arms make, silently re-opening issue
 		// #145 — and the third memo holds substanceGroupKey() values, which can BE a DrugReference.
@@ -3371,14 +3371,16 @@ public class DrugSafetyValidator {
 	 *         self-chip issue #185 is about. Re-measure that way rather than reasoning about it: the
 	 *         population that matters is order names a dictionary actually publishes.
 	 *
-	 *         <p>Asked only of the order {@link #orderCarrying} returns for a code, which is the FIRST
-	 *         order carrying it — so where two orders share a code, only the first one's names are
-	 *         read for the partners that code builds. Left as it is rather than scanning every
-	 *         carrier, so this and the identity/label ladder read the orders the same way.
+	 *         <p>Asked only of the order {@link #orderCarrying} returns for an UNNAMEABLE code, which
+	 *         is the first order carrying it — so where two orders share such a code, only the
+	 *         first one's names are read for the partner that code builds. Left as it is rather
+	 *         than scanning every carrier, so this and the identity/label ladder read the orders
+	 *         the same way.
 	 *
 	 *         <p>Memoised through {@code cache} for the duration of one {@link #orderPartners} call:
-	 *         this is a dataset sweep per name and every code of an order asks it — see there for why
-	 *         the memo may not be a field. An empty set is a real answer and is cached as one.
+	 *         this is a dataset sweep per name, and an order with several unnameable codes asks it
+	 *         once per such code — see there for why the memo may not be a field. An empty set is a
+	 *         real answer and is cached as one.
 	 */
 	private Set<Object> substancesNamedBy(PatientClinicalContext.ActiveDrugOrder order,
 			Map<PatientClinicalContext.ActiveDrugOrder, Set<Object>> cache) {

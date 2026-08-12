@@ -27,9 +27,10 @@ import org.junit.jupiter.api.Test;
  * same drug — issue #185.
  *
  * <p><b>The defect.</b> {@code DrugSafetyValidator.classRelationships} skipped an active order that
- * is "the same drug as {@code ref}" by asking whether the two share an exact ATC code. Sharing a
- * level-5 code does mean sharing a substance, so the test never fired wrongly — but it is only
- * SUFFICIENT, and the arm needed a NECESSARY one. Where the co-medication's code and the reference
+ * is "the same drug as {@code ref}" by asking whether the two share an exact ATC code. That is a
+ * proxy for identity — and in this knowledge base not even a sound one, since {@code Omeprazole}
+ * and {@code Esomeprazole} share {@code A02BC05} and are two substances. What the arm needed was
+ * the identity itself. Where the co-medication's code and the reference
  * row's code are different codes of one substance, the sets are disjoint, their level-4 subgroups
  * still meet, and the chip fires against the order itself:
  *
@@ -47,8 +48,9 @@ import org.junit.jupiter.api.Test;
  *       publishes {@code A02BC05} (esomeprazole's code, with {@code rxnorm_name} "esomeprazole") and
  *       omeprazole's own {@code A02BC01} appears nowhere in the KB.</li>
  *   <li>The co-medication DOES resolve, to a different substance, and the order's name names
- *       {@code ref} anyway — a combination. That is the isoniazid slice, and it is the one that
- *       makes the order-name leg unconditional rather than a fallback for the first route.</li>
+ *       {@code ref} anyway — a combination. That is the isoniazid slice, and it is the one showing
+ *       the leg is not a fallback for a partner that resolves to NOTHING: this one resolves, by
+ *       code, to a substance that is not {@code ref}, and still needs its order's name.</li>
  * </ul>
  *
  * <p><b>What must not move.</b> A duplicate-therapy chip against a DIFFERENT substance in the same
@@ -192,8 +194,7 @@ public class DuplicateTherapySelfChipTest {
 		// Isoniazid / Rifapentine concept maps to J04AB05 and J04AC51, so the partner RESOLVES — by
 		// J04AB05, to Rifapentine — and a skip that reads only the resolved entry still reports the
 		// isoniazid in the tablet as duplicating the tablet. What names isoniazid is the ORDER'S NAME,
-		// which is why that leg is asked of every partner and not only of one the dataset could not
-		// name.
+		// read on the rung J04AC51 reaches — the same rung that renames the partner after the order.
 		assertEquals(Collections.<String> emptyList(),
 				DrugReferenceTestSupport.details(
 						chips("Is it safe to give isoniazid?", isoniazidRifapentineOrder())),
@@ -201,25 +202,42 @@ public class DuplicateTherapySelfChipTest {
 	}
 
 	@Test
-	public void theCombinationAnswerDoesNotDependOnTheOrderOfItsCodes() throws IOException {
-		// The invariant behind the case above, and the one the gate makes non-obvious: the leg fires
-		// only for a partner NAMED AFTER THE ORDER, and a partner acquires that name part-way through
-		// the walk — J04AB05 builds it from the dataset entry, J04AC51 renames it. So which code the
-		// context lists first decides whether the partner is order-named at the moment its first code
-		// is read. The answer must not. The same invariant MultiCodeClassChipTest pins for which CLASS
-		// a chip names, asked here of whether a chip exists at all.
-		Set<String> names = DrugReferenceTestSupport.set("Isoniazid / Rifapentine");
-		PatientClinicalContext reversed = DrugReferenceTestSupport.ctx(60, null, names,
-				DrugReferenceTestSupport.set("J04AC51", "J04AB05"), null, null,
-				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-uuid-185f",
-						"Isoniazid / Rifapentine", names,
-						DrugReferenceTestSupport.set("J04AC51", "J04AB05"))));
+	public void whichOrderNAMESAPartnerDoesNotDependOnTheOrderOfTheCodes() throws IOException {
+		// TWO orders resolving to ONE partner, which is where reading the order's names off the partner
+		// rather than off the code that reached it goes wrong. The patient is on a combination the
+		// dictionary mapped only to rifapentine's code, and on plain rifapentine whose concept also
+		// carries a code the dataset cannot name; both codes resolve to the same substance, so both
+		// orders are ONE co-medication, renamed after the plain one by the unnameable code.
+		//
+		// The chip is about ISONIAZID, which the plain rifapentine order does not contain. Attributing
+		// the combination's constituents to this partner silences it — and does so only for one of the
+		// two code orders, because which order is read depends on which code opened the gate. So the
+		// same patient, with the same prescriptions, would be told different things depending on the
+		// sequence OrderService returned them in. Both permutations are asserted, and the chip itself is
+		// asserted too, so the case cannot pass by both sides being empty.
+		Set<String> combinationNames = DrugReferenceTestSupport.set("Isoniazid / Rifapentine");
+		Set<String> plainNames = DrugReferenceTestSupport.set("Rifapentine 150mg");
+		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
+				DrugReferenceTestSupport.activeOrder("order-uuid-185g", "Isoniazid / Rifapentine",
+						combinationNames, DrugReferenceTestSupport.set("J04AB05")),
+				DrugReferenceTestSupport.activeOrder("order-uuid-185h", "Rifapentine 150mg", plainNames,
+						DrugReferenceTestSupport.set("J04AB05", "J04AC51")));
+		Set<String> names = DrugReferenceTestSupport.set("Isoniazid / Rifapentine", "Rifapentine 150mg");
 
-		assertEquals(
-				DrugReferenceTestSupport.details(
-						chips("Is it safe to give isoniazid?", isoniazidRifapentineOrder())),
-				DrugReferenceTestSupport.details(chips("Is it safe to give isoniazid?", reversed)),
+		List<SafetyWarning> unnameableFirst = chips("Is it safe to give isoniazid?",
+				DrugReferenceTestSupport.ctx(60, null, names,
+						DrugReferenceTestSupport.set("J04AC51", "J04AB05"), null, null, orders));
+		List<SafetyWarning> coveredFirst = chips("Is it safe to give isoniazid?",
+				DrugReferenceTestSupport.ctx(60, null, names,
+						DrugReferenceTestSupport.set("J04AB05", "J04AC51"), null, null, orders));
+
+		assertEquals(DrugReferenceTestSupport.details(coveredFirst),
+				DrugReferenceTestSupport.details(unnameableFirst),
 				"the same two codes, listed the other way round");
+		assertEquals(1, unnameableFirst.size(), "was: " + unnameableFirst);
+		assertEquals("Isoniazid is in the same ATC class (J04AC) as active order Rifapentine 150mg"
+				+ " — possible duplicate therapy", unnameableFirst.get(0).getDetail(),
+				"the co-medication that does NOT contain isoniazid still reports it");
 	}
 
 	@Test

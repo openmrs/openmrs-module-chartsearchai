@@ -128,7 +128,7 @@ import org.springframework.stereotype.Service;
  * <p>Conservative by design: overdose is flagged only when a value can be computed AND it
  * exceeds a published maximum — a daily total over {@code maxDailyDoseMg}, or (only with a
  * fresh recorded weight) a per-administration dose over {@code mgPerKgMax} × weight; class-based
- * interactions skip an active order that IS — or contains — the <em>same substance</em> (restating existing therapy
+ * interactions skip an active order that is the <em>same substance</em> (restating existing therapy
  * is not a duplicate). A question or answer that names no reference drug produces no warnings
  * (the no-false-positive case) unless the patient's own chart supplies the subject — the two
  * deliberate exceptions above, both still no-false-positive checks. The interaction screen reports
@@ -2996,10 +2996,12 @@ public class DrugSafetyValidator {
 	 * Class-based interaction reasoning: warns when the drug {@code ref} being checked shares
 	 * an ATC level-4 subgroup with one of the patient's active orders (additive effects / duplicate
 	 * therapy) or — failing that — a curated {@link CrossReactivityGroup} (a cross-branch family
-	 * overlap, e.g. ibuprofen recommended over an active aspirin order). An order that IS — or, being
-	 * a fixed-dose combination, CONTAINS — {@code ref}'s own substance is skipped — restating existing therapy is not a duplicate — and
-	 * only that order: a class sibling the patient also happens to be on is exactly the finding this
-	 * arm exists to make, so the question is asked per PARTNER. Active orders carry ATC codes (the builder maps them), so this
+	 * overlap, e.g. ibuprofen recommended over an active aspirin order). A co-medication that IS
+	 * {@code ref}'s own substance is skipped — restating existing therapy is not a duplicate — and
+	 * only that co-medication: a class sibling the patient also happens to be on is exactly the
+	 * finding this arm exists to make, so the question is asked per PARTNER. Where the dataset cannot
+	 * name a co-medication and the ORDER names it, what the order names is what it IS, so a
+	 * fixed-dose combination counts as each of its constituents. Active orders carry ATC codes (the builder maps them), so this
 	 * matches on codes directly and names the order by the ladder {@link #orderPartners} documents —
 	 * the dataset's name for the substance, else the order's own display name, else the code (issue
 	 * #155). The most specific match wins, so a subgroup + group double-match warns once — except
@@ -3093,7 +3095,8 @@ public class DrugSafetyValidator {
 					|| !Collections.disjoint(partner.codes, refCodes)) {
 				// Restating existing therapy is not a duplicate. Identity first because it is the
 				// question; the exact-code leg second because it answers where no order names the
-				// partner. See this method's javadoc for why both are needed and neither over-skips.
+				// partner. See this method's javadoc for why both are needed and why the code leg's
+				// one over-skip is deliberate.
 				continue;
 			}
 			String shared = sharedClass(refClasses, DrugReference.atcSubgroups(partner.codes));
@@ -3137,13 +3140,13 @@ public class DrugSafetyValidator {
 		 * {@link DrugSafetyValidator#classRelationships}'s restating-existing-therapy skip; nothing
 		 * here is rendered, so a partner may be named one thing and known to contain several.
 		 *
-		 * <p><b>Populated only for a partner {@link #namedByOrder}</b>, and that is the whole of the
-		 * scoping rule. A partner the DATASET named stands for one substance; a partner named after
-		 * the order stands for the order, so what the order names is what it holds. Attaching the
-		 * order's whole set to every partner it produced instead silences a real finding: one order
-		 * whose two codes both resolve is TWO partners, and a question about the first constituent
-		 * would then skip the second — {@code Metronidazole and secnidazole} losing
-		 * "Metronidazole is in the same ATC class (P01AB) as active order Secnidazole".
+		 * <p><b>Added only where {@link #nameByOrder} is</b>, and that is the whole of the scoping
+		 * rule. A partner the DATASET named stands for one substance; a partner named after an order
+		 * stands for that order, so what the order names is what it holds. Attaching the order's whole
+		 * set to every partner it produced instead silences a real finding: one order whose two codes
+		 * both resolve is TWO partners, and a question about the first constituent would then skip the
+		 * second — {@code Metronidazole and secnidazole} losing "Metronidazole is in the same ATC
+		 * class (P01AB) as active order Secnidazole".
 		 *
 		 * <p><b>The names, and not also the entry the ladder resolved.</b> That entry's substance is
 		 * already what the skip's exact-code leg answers, and equivalently so: a row of it publishes
@@ -3237,13 +3240,13 @@ public class DrugSafetyValidator {
 	 * display in {@link PatientClinicalContextBuilder} so it reaches the list at all, which is that
 	 * gap's own fix and has its own consequences for the injected record.
 	 *
-	 * <p><b>What each partner is known to CONTAIN is a separate answer</b> (issue #185), collected
-	 * beside the ladder rather than by it: {@link OrderPartner#substances} holds every substance the
-	 * order's own recorded names imply ({@link #substancesNamedBy}), which is why the order carrying a
-	 * code is now looked up for every code rather than only for one the dataset cannot name. The two
-	 * answers are deliberately not the same: the ladder picks ONE identity so the clinician sees one
-	 * partner named one way, while the skip that reads this has to know about every substance in the
-	 * tablet.
+	 * <p><b>What each partner is known to CONTAIN is a separate answer</b> (issue #185), collected on
+	 * the same rung the ladder takes the order's NAME from and under the same condition:
+	 * {@link OrderPartner#substances} holds what the order's own recorded names imply
+	 * ({@link #substancesNamedBy}), added exactly where {@link OrderPartner#nameByOrder} is applied.
+	 * The two answers are deliberately not the same thing: the ladder picks ONE identity so the
+	 * clinician sees one partner named one way, while the skip that reads this has to know about
+	 * every substance in the tablet.
 	 *
 	 * <p><b>The label follows the same ladder</b> (issue #155). It used to be the entry's label or,
 	 * failing that, the bare CODE — so on the default {@code sourceFormat=json}, whose four-entry
@@ -3264,11 +3267,13 @@ public class DrugSafetyValidator {
 	 * {@link DrugReference} outliving a {@code getAll()} reload fails the reference comparisons the
 	 * contraindication arms make (issue #172), which silently re-opens issue #145.
 	 *
-	 * <p>What the repeat actually costs, since issue #185 added a second sweep to it: measured
-	 * 2026-08-13 by timing {@link #validate} over the shipped 19 MB KB with a 30-order, 60-name
-	 * context, <b>61 ms before that change and 106 ms after</b>, chips identical. Against an answer
-	 * this module waits seconds for, that is why the per-pass memo stays unbuilt — re-measure the same
-	 * way before treating the repeat as free at a larger order count.
+	 * <p>Issue #185 added a second sweep to this loop, and bounded it rather than paying for it
+	 * everywhere: {@link #substancesNamedBy} runs only for a code the dataset cannot name, and is
+	 * memoised per order. Timed interleaved against the pre-change code over the shipped 19 MB KB with
+	 * a 30-order, 60-name context, the two were indistinguishable within this machine's run-to-run
+	 * spread — which is the reason no figure is quoted here, and the reason the per-pass memo stays
+	 * unbuilt. Measure it the same way, interleaved and more than once, before treating the repeat as
+	 * free at a larger order count.
 	 */
 	private List<OrderPartner> orderPartners(PatientClinicalContext context) {
 		Map<Object, OrderPartner> byIdentity = new LinkedHashMap<Object, OrderPartner>();
@@ -3287,17 +3292,15 @@ public class DrugSafetyValidator {
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, Set<Object>>();
 		for (String orderCode : context.getActiveDrugAtcCodes()) {
 			DrugReference entry = entryForAtcCode(orderCode, entryByCode);
-			// Resolved for EVERY code since issue #185, not only for one the dataset cannot name: what
-			// the order NAMES is what tells the skip that a combination already contains the drug being
-			// asked about, and that is true whether or not this particular code resolved. It changes
-			// nothing below — the identity/label ladder still consults the order only where the entry
-			// rung failed, which is the only branch that can reach the else.
-			PatientClinicalContext.ActiveDrugOrder order = orderCarrying(orderCode, context);
+			PatientClinicalContext.ActiveDrugOrder order = null;
 			boolean unnameableCode = entry == null;
-			if (unnameableCode && order != null) {
+			if (unnameableCode) {
 				// The dataset cannot name this code. Before falling to the order itself, ask whether
 				// the ORDER carrying it names one substance between all its codes — issue #186.
-				entry = soleSubstanceOf(order, entryByCode, substanceByOrder);
+				order = orderCarrying(orderCode, context);
+				if (order != null) {
+					entry = soleSubstanceOf(order, entryByCode, substanceByOrder);
+				}
 			}
 			Object identity;
 			String label;
@@ -3321,17 +3324,16 @@ public class DrugSafetyValidator {
 				// This partner holds a code the dataset cannot name, so the dataset's name for its
 				// other codes does not speak for the whole of it — see OrderPartner.nameByOrder.
 				partner.nameByOrder(ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode));
-			}
-			partner.codes.add(orderCode);
-			if (order != null && partner.namedByOrder) {
-				// Only a partner that speaks for the WHOLE order takes what the order NAMES. A partner
-				// the dataset named stands for ONE substance, and giving it the order's other
-				// constituents silences a chip that names it: one order mapped to two covered codes is
-				// two partners, and a question about the first would then skip the second — the very
-				// duplicate-therapy finding the arm exists to make. The two are the same condition
-				// OrderPartner.nameByOrder turns on, so a partner is read exactly as it is labelled.
+				// And, for the same reason and under the same condition, what that order NAMES is what
+				// this partner is known to contain (issue #185). Inside this branch and not beside it:
+				// the condition is exactly "the dataset could not name this code, and an order carries
+				// it", so the order read here is the one this code belongs to. Reading the partner's
+				// namedByOrder flag instead would let a LATER code of a DIFFERENT order pass the gate
+				// and attribute that order's constituents to this partner — a leak whose direction
+				// depends on the order OrderService happened to return the prescriptions in.
 				partner.substances.addAll(substancesNamedBy(order, substancesByOrderName));
 			}
+			partner.codes.add(orderCode);
 		}
 		return new ArrayList<OrderPartner>(byIdentity.values());
 	}

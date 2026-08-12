@@ -135,20 +135,25 @@ public class PartialOrderCoveragePartnerTest {
 				"two orders of one substance are one co-medication, was: " + chips);
 	}
 
-	@Test
-	public void aCombinationOrderCoveringTwoSubstancesIsStillTwoCoMedications() throws Exception {
-		// The other direction, and the reason the fix cannot simply be "group by order". One order
-		// whose concept maps to the codes of TWO different substances the dataset carries really is
-		// two co-medications in one tablet, and collapsing it would drop a duplicate-therapy chip.
-		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+	/** ONE order whose concept maps to the codes of TWO substances the dataset carries — the shape the
+	 *  two cases below share, so an edit to it cannot silently decouple them. */
+	private static PatientClinicalContext combinationOfTwoCoveredSubstances() {
+		return DrugReferenceTestSupport.ctx(60, null,
 				DrugReferenceTestSupport.set("Metronidazole and secnidazole"),
 				DrugReferenceTestSupport.set("P01AB01", "P01AB07"), null, null,
 				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-1",
 						"Metronidazole and secnidazole",
 						DrugReferenceTestSupport.set("Metronidazole and secnidazole"),
 						DrugReferenceTestSupport.set("P01AB01", "P01AB07"))));
+	}
 
-		List<String> chips = classChipDetails(validator().validate("", QUESTION, context));
+	@Test
+	public void aCombinationOrderCoveringTwoSubstancesIsStillTwoCoMedications() throws Exception {
+		// The other direction, and the reason the fix cannot simply be "group by order". One order
+		// whose concept maps to the codes of TWO different substances the dataset carries really is
+		// two co-medications in one tablet, and collapsing it would drop a duplicate-therapy chip.
+		List<String> chips = classChipDetails(
+				validator().validate("", QUESTION, combinationOfTwoCoveredSubstances()));
 
 		assertEquals(2, chips.size(),
 				"a combination order covering two substances stays two co-medications, was: " + chips);
@@ -168,16 +173,8 @@ public class PartialOrderCoveragePartnerTest {
 		// This is what scopes that skip's name-driven leg to a partner named after the ORDER. A
 		// partner the dataset named speaks for ONE substance; giving it the whole tablet's contents
 		// silences a chip that names it, which is the opposite of the defect #185 fixes.
-		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("Metronidazole and secnidazole"),
-				DrugReferenceTestSupport.set("P01AB01", "P01AB07"), null, null,
-				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-1",
-						"Metronidazole and secnidazole",
-						DrugReferenceTestSupport.set("Metronidazole and secnidazole"),
-						DrugReferenceTestSupport.set("P01AB01", "P01AB07"))));
-
-		List<String> chips = classChipDetails(
-				validator().validate("", "Is it safe to give metronidazole?", context));
+		List<String> chips = classChipDetails(validator().validate("",
+				"Is it safe to give metronidazole?", combinationOfTwoCoveredSubstances()));
 
 		assertEquals(1, chips.size(),
 				"the metronidazole half is silenced and the secnidazole half is not, was: " + chips);

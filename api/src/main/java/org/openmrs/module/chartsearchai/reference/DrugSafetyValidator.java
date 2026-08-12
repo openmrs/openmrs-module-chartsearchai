@@ -3163,9 +3163,18 @@ public class DrugSafetyValidator {
 		 * partner and renames it after the order — so a skip reading only what the codes resolve
 		 * reports the isoniazid in the tablet as duplicating the tablet.
 		 *
-		 * <p>A SET rather than one key, because a combination names several and because two orders of
-		 * one substance are already one partner under the ladder's own rule, so this holds what both
-		 * of them name.
+		 * <p>A SET rather than one key, because a combination names several and because a partner can be
+		 * reached by more than one order. What it holds is what EVERY order carrying an unnameable code
+		 * of this partner names — not what every order merged into the partner names: two orders of one
+		 * substance that merged through their COVERED codes contribute nothing here, and need not,
+		 * because the exact-code leg already answers for a code the dataset could name.
+		 *
+		 * <p><b>The bound this scoping leaves.</b> A combination order whose combination code the KB
+		 * DOES carry never reaches this rung at all, so a question about one of its constituents still
+		 * gets the self-chip. That is not closable from here — reading the order's names for a covered
+		 * code is exactly the over-skip above — and it is unreachable on the shipped KB, which carries
+		 * no row for any of the combination codes the 3.7.1 demo dictionary maps. Closing it needs the
+		 * KB to say which substances a combination row contains, which it does not publish.
 		 */
 		private final Set<Object> substances = new LinkedHashSet<Object>();
 
@@ -3220,9 +3229,9 @@ public class DrugSafetyValidator {
 	 * the dataset's name speaks only for the codes it covers (see {@link OrderPartner#nameByOrder}).
 	 *
 	 * <p>Grouping by the order OUTRIGHT would have been wrong in both directions, which is why the
-	 * order is consulted FOR IDENTITY AND LABEL only for the codes the dataset cannot speak for.
-	 * (What the order NAMES is a different question and is read for every code since issue #185 —
-	 * see {@link OrderPartner#substances}.) It would split a substance
+	 * order is consulted only for the codes the dataset cannot speak for. What the order NAMES is a
+	 * different question (issue #185) but is read on that same rung and under that same condition —
+	 * see {@link OrderPartner#substances}. It would split a substance
 	 * the patient holds TWO orders of into two partners, which this ladder deliberately merges; and
 	 * it would merge a fixed-dose COMBINATION — one order whose concept maps to the codes of two
 	 * different substances — into one, dropping a real duplicate-therapy chip. A combination is
@@ -3324,14 +3333,18 @@ public class DrugSafetyValidator {
 				// This partner holds a code the dataset cannot name, so the dataset's name for its
 				// other codes does not speak for the whole of it — see OrderPartner.nameByOrder.
 				partner.nameByOrder(ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode));
-				// And, for the same reason and under the same condition, what that order NAMES is what
-				// this partner is known to contain (issue #185). Inside this branch and not beside it:
-				// the condition is exactly "the dataset could not name this code, and an order carries
-				// it", so the order read here is the one this code belongs to. Reading the partner's
-				// namedByOrder flag instead would let a LATER code of a DIFFERENT order pass the gate
-				// and attribute that order's constituents to this partner — a leak whose direction
-				// depends on the order OrderService happened to return the prescriptions in.
-				partner.substances.addAll(substancesNamedBy(order, substancesByOrderName));
+				// And, for the same reason and under the same condition, what the orders carrying this
+				// code NAME is what this partner is known to contain (issue #185). Inside this branch
+				// and not beside it: the condition is exactly "the dataset could not name this code,
+				// and an order carries it", so what is read here belongs to this code. Reading the
+				// partner's namedByOrder flag instead would let a LATER code of a DIFFERENT order pass
+				// and attribute that order's constituents here. EVERY carrier and not just the one the
+				// label came from, for the mirror reason — see ordersCarrying. Both are the same
+				// hazard: a suppression that depends on the sequence OrderService returned the
+				// prescriptions in.
+				for (PatientClinicalContext.ActiveDrugOrder carrier : ordersCarrying(orderCode, context)) {
+					partner.substances.addAll(substancesNamedBy(carrier, substancesByOrderName));
+				}
 			}
 			partner.codes.add(orderCode);
 		}
@@ -3371,11 +3384,11 @@ public class DrugSafetyValidator {
 	 *         self-chip issue #185 is about. Re-measure that way rather than reasoning about it: the
 	 *         population that matters is order names a dictionary actually publishes.
 	 *
-	 *         <p>Asked only of the order {@link #orderCarrying} returns for an UNNAMEABLE code, which
-	 *         is the first order carrying it — so where two orders share such a code, only the
-	 *         first one's names are read for the partner that code builds. Left as it is rather
-	 *         than scanning every carrier, so this and the identity/label ladder read the orders
-	 *         the same way.
+	 *         <p>Asked of EVERY order carrying the unnameable code ({@link #ordersCarrying}), not of
+	 *         the one {@link #orderCarrying} names the partner after. The label may take the first
+	 *         carrier — that is a presentation choice — but a suppression may not, or two orders
+	 *         sharing one unnameable code make the skip a function of the sequence
+	 *         {@code OrderService} returned the prescriptions in.
 	 *
 	 *         <p>Memoised through {@code cache} for the duration of one {@link #orderPartners} call:
 	 *         this is a dataset sweep per name, and an order with several unnameable codes asks it
@@ -3461,12 +3474,34 @@ public class DrugSafetyValidator {
 	 */
 	private static PatientClinicalContext.ActiveDrugOrder orderCarrying(String upperCode,
 			PatientClinicalContext context) {
+		List<PatientClinicalContext.ActiveDrugOrder> carriers = ordersCarrying(upperCode, context);
+		return carriers.isEmpty() ? null : carriers.get(0);
+	}
+
+	/**
+	 * @return EVERY active order whose own concept maps to {@code upperCode}, in the order the context
+	 *         lists them; empty where {@link #orderCarrying} answers null.
+	 *
+	 *         <p>The set form, because a SKIP may not depend on which carrier came back first. The
+	 *         identity/label ladder takes {@link #orderCarrying}'s single answer and always has —
+	 *         a partner is named after one order, and naming it after the first is a presentation
+	 *         choice. What the partner is known to CONTAIN is not: with two orders carrying one code
+	 *         the dataset cannot name, reading only the first one's names made
+	 *         {@code classRelationships}'s restating-existing-therapy skip a function of the sequence
+	 *         {@code OrderService} returned the prescriptions in — the same patient told two different
+	 *         things (issue #185). Every carrier of the code that reached this partner contributes,
+	 *         which is order-independent because the result is a union.
+	 */
+	private static List<PatientClinicalContext.ActiveDrugOrder> ordersCarrying(String upperCode,
+			PatientClinicalContext context) {
+		List<PatientClinicalContext.ActiveDrugOrder> out =
+				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			if (order.getAtcCodes().contains(upperCode)) {
-				return order;
+				out.add(order);
 			}
 		}
-		return null;
+		return out;
 	}
 
 	/**

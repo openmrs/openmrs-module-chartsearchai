@@ -116,8 +116,8 @@ public class DuplicateTherapySelfChipTest {
 				"and the two rows must publish the SAME code, or nothing is being borrowed");
 		assertNotEquals(omeprazole.substanceKey(), esomeprazole.substanceKey(),
 				"while remaining two substances, or the surviving esomeprazole chip below is wrong");
-		assertEquals(omeprazole.atcSubgroups(), esomeprazole.atcSubgroups(),
-				"in one level-4 subgroup, which is what the class arm compares");
+		assertEquals(Collections.singleton("A02BC"), omeprazole.atcSubgroups(),
+				"in the level-4 subgroup the class arm compares — and the one every chip below names");
 		for (DrugReference entry : entries) {
 			assertFalse(entry.normalizedAtcCodes().contains(OMEPRAZOLE_ORDER_CODE),
 					"no row may carry " + OMEPRAZOLE_ORDER_CODE + ", or the order's code is nameable and"
@@ -206,8 +206,9 @@ public class DuplicateTherapySelfChipTest {
 		// TWO orders resolving to ONE partner, which is where reading the order's names off the partner
 		// rather than off the code that reached it goes wrong. The patient is on a combination the
 		// dictionary mapped only to rifapentine's code, and on plain rifapentine whose concept also
-		// carries a code the dataset cannot name; both codes resolve to the same substance, so both
-		// orders are ONE co-medication, renamed after the plain one by the unnameable code.
+		// carries a code the dataset cannot name. J04AC51 resolves to nothing; what resolves is each
+		// ORDER, through its other code, and to the same substance — so the two are ONE co-medication,
+		// renamed after the plain one by the unnameable code.
 		//
 		// The chip is about ISONIAZID, which the plain rifapentine order does not contain. Attributing
 		// the combination's constituents to this partner silences it — and does so only for one of the
@@ -241,10 +242,43 @@ public class DuplicateTherapySelfChipTest {
 	}
 
 	@Test
+	public void norOnTheOrderTheORDERSListHappensToPutFirst() throws IOException {
+		// The other permutation, and the one only a set-union over carriers survives. TWO orders carry
+		// the SAME unnameable code and resolve to the same substance, so they are one partner — and only
+		// the orders LIST distinguishes them. Reading just the first carrier's names makes the skip a
+		// function of the sequence OrderService returned the prescriptions in: the patient is on
+		// isoniazid either way, and would be told so only when the combination came back first.
+		Set<String> both = ISONIAZID_RIFAPENTINE_ORDER_CODES;
+		PatientClinicalContext.ActiveDrugOrder combination = DrugReferenceTestSupport.activeOrder(
+				"order-uuid-185i", "Isoniazid / Rifapentine",
+				DrugReferenceTestSupport.set("Isoniazid / Rifapentine"), both);
+		PatientClinicalContext.ActiveDrugOrder plain = DrugReferenceTestSupport.activeOrder(
+				"order-uuid-185j", "Rifapentine 150mg",
+				DrugReferenceTestSupport.set("Rifapentine 150mg"), both);
+		Set<String> names = DrugReferenceTestSupport.set("Isoniazid / Rifapentine", "Rifapentine 150mg");
+
+		List<SafetyWarning> combinationFirst = chips("Is it safe to give isoniazid?",
+				DrugReferenceTestSupport.ctx(60, null, names, both, null, null,
+						Arrays.asList(combination, plain)));
+		List<SafetyWarning> plainFirst = chips("Is it safe to give isoniazid?",
+				DrugReferenceTestSupport.ctx(60, null, names, both, null, null,
+						Arrays.asList(plain, combination)));
+
+		assertEquals(DrugReferenceTestSupport.details(combinationFirst),
+				DrugReferenceTestSupport.details(plainFirst),
+				"the same two orders, listed the other way round");
+		assertEquals(Collections.<String> emptyList(), DrugReferenceTestSupport.details(plainFirst),
+				"and isoniazid is inside one of them either way, so neither raises the chip");
+	}
+
+	@Test
 	public void theHalfThatOrderResolvesByCodeIsStillSkipped() throws IOException {
-		// The same combination order, asked about the half its CODE names. Unchanged by this fix — the
-		// exact-code leg already covered it — and here so that the case above cannot be satisfied by a
-		// change that silenced this arm for combination orders altogether.
+		// The same combination order, asked about the half its CODE names. Unchanged by this fix: both
+		// legs skip it, the exact-code one on its own. What this pins is therefore that SOME skip
+		// still reaches the code-named half — remove both legs and the chip returns and this reddens.
+		// It deliberately does not claim to guard the case above against an arm silenced altogether:
+		// an emptiness assertion cannot catch silence, and the cases that do are the ones asserting a
+		// chip.
 		assertEquals(Collections.<String> emptyList(),
 				DrugReferenceTestSupport.details(
 						chips("Is it safe to give rifapentine?", isoniazidRifapentineOrder())),

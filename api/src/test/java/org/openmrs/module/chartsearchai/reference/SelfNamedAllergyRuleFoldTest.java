@@ -223,6 +223,50 @@ public class SelfNamedAllergyRuleFoldTest {
 	}
 
 	@Test
+	public void aSelfNamedRuleWithNoNoteIsStillTheChipWhenNothingElseReportsTheDrug() throws IOException {
+		// The rank the case above chooses is BELOW every other relationship, which is a different
+		// decision from "do not raise it at all", and only this shape separates them: the allergen names
+		// no entry in the loaded dataset, so the allergen arm contributes nothing and the contentless
+		// rule is all there is. Not raising it would have made a curated rule conditional on an arm that
+		// never gated it — the two fire on different evidence, hasAllergyToken's bare containment here
+		// against findImpliedSubstances' boundary-aware resolution.
+		DrugReferenceService service = fixtureService();
+		assertTrue(service.findImpliedSubstances("dihydrocodeine").isEmpty(),
+				"precondition: the allergen must name no entry, so the allergen arm cannot chip");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"Is it safe to give her codeine?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("dihydrocodeine"), null));
+
+		assertEquals(1, warnings.size(), "the curated rule must still chip, was: " + warnings);
+		assertEquals("Codeine is contraindicated by an active allergy: codeine",
+				warnings.get(0).getDetail(), "in its own wording, was: " + warnings);
+	}
+
+	@Test
+	public void aConditionRuleNamingItsOwnDrugIsADifferentFindingAndKeepsItsChip() throws IOException {
+		// Only an ALLERGY rule may join the allergen arm's key space. A condition rule is a fact about a
+		// CONDITION record, which no chip in that space is about, so one naming its own drug — an
+		// operator flagging "diclofenac" in the condition list — stays in the rule key space and reports
+		// beside the folded allergy chip. Ungated, it would land on the identity key at the same rank as
+		// the allergy rule and one of the two findings would be lost to the incumbent.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixtureService()).validate("",
+				"Is it safe to give her diclofenac?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("diclofenac"),
+						DrugReferenceTestSupport.set("diclofenac-induced gastropathy")));
+
+		assertEquals(2, warnings.size(), "an allergy record and a condition record are two findings, "
+				+ "was: " + warnings);
+		assertTrue(details(warnings).contains(
+				"Diclofenac is contraindicated by an active allergy: documented diclofenac allergy"),
+				"the allergy rule, folded with identity, was: " + warnings);
+		assertTrue(details(warnings).contains(
+				"Diclofenac is contraindicated by an active condition: diclofenac-induced gastropathy"),
+				"and the condition rule beside it, was: " + warnings);
+	}
+
+	@Test
 	public void aClassLevelRuleAuthoredTwiceIsStillOneChip() throws IOException {
 		// The rule key space's own collapse, which used to be pinned by
 		// ContraindicationRouteVariantTest#oneCuratedRuleAuthoredTwiceRaisesOneChip and no longer is:

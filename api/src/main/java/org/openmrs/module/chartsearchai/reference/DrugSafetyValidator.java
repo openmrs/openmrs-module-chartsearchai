@@ -3359,6 +3359,16 @@ public class DrugSafetyValidator {
 	 *         candidate set is the safe direction and for a SUPPRESSION is not. Measured there as
 	 *         never firing on any shipped dataset; if that stops being true it costs chips here first.
 	 *
+	 *         <p><b>The residual hazard, and what bounds it.</b> An order name that merely CONTAINS
+	 *         another substance's whole name resolves it — the phrase-nesting shape
+	 *         {@link #identifies} records at its own site — and here that silences rather than
+	 *         fabricates, which is the worse direction. Measured 2026-08-13 rather than argued: over
+	 *         every one of the 3.7.1 demo dictionary's 116 {@code WHOATC}-mapped orderable names,
+	 *         asked about every substance the shipped 19 MB KB files in a level-4 subgroup that order
+	 *         carries — 606 questions — this change removes 5 chips and adds none, and all 5 are the
+	 *         self-chip issue #185 is about. Re-measure that way rather than reasoning about it: the
+	 *         population that matters is order names a dictionary actually publishes.
+	 *
 	 *         <p>Asked only of the order {@link #orderCarrying} returns for a code, which is the FIRST
 	 *         order carrying it — so where two orders share a code, only the first one's names are
 	 *         read for the partners that code builds. Left as it is rather than scanning every

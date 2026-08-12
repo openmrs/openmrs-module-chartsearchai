@@ -83,10 +83,9 @@ import org.springframework.stereotype.Service;
  *       either: a hand-authored allergy rule naming the very drug it is filed against reports the
  *       identity check's fact, so the two fold into one chip keeping whichever wording carries the
  *       deployment's own note (issue #146 — 3 of the 4 entries in the shipped curated file). These
- *       same two checks additionally run
- *       over the patient's OWN ACTIVE ORDERS, whatever the question and the answer name — "is the
- *       patient allergic to something they are taking?" is a fact about their chart, and the
- *       drug-in-play framing above could not ask it (see
+ *       same two checks additionally run over the patient's OWN ACTIVE ORDERS, whatever the question
+ *       and the answer name — "is the patient allergic to something they are taking?" is a fact
+ *       about their chart, and the drug-in-play framing above could not ask it (see
  *       {@link #addActiveOrderContraindications}, issue #143).</li>
  * </ul>
  *
@@ -709,8 +708,8 @@ public class DrugSafetyValidator {
 	 * shipped default {@code sourceFormat=json} that shape is 3 of the file's 4 entries (Gentamicin's
 	 * allergy rule names a class, which is why it was the control), and each of the three double-reported
 	 * one allergy: {@code Ibuprofen is contraindicated by an active allergy: documented ibuprofen
-	 * allergy} beside {@code The patient has a recorded allergy to Ibuprofen.} — the first defect in this
-	 * area that needed no non-default configuration to see. What is keyed is the FACT and never "both
+	 * allergy} beside {@code The patient has a recorded allergy to Ibuprofen.} — with no non-default
+	 * configuration needed to see it. What is keyed is the FACT and never "both
 	 * arms fired", which is what leaves a class-level rule its own chip beside the folded one for a
 	 * patient recorded as allergic to both the drug and its class.
 	 *
@@ -719,9 +718,10 @@ public class DrugSafetyValidator {
 	 * asks of an interaction rule's token. Deliberately NOT
 	 * {@link DrugReferenceService#findImpliedSubstances}: that answers which substances a RECORDED name
 	 * denotes and widens deliberately (issues #193/#195/#209), and applying it to a curated token is
-	 * exactly the wholesale resolution the paragraph above rules out. The narrower predicate also bounds
-	 * the fold to the one shape it is about — {@code isNamed} can only be true of the entry the rule is
-	 * filed on, so no rule can fold onto a substance other than its own subject.
+	 * exactly the wholesale resolution the paragraph above rules out. The fold is bounded to its own
+	 * subject by WHOM the question is asked OF, not by the predicate — {@code isNamed} is true of every
+	 * entry aliasing the token — and it is asked of the entry the rule is filed on, keying on that
+	 * entry's substance, so no rule can fold onto any other.
 	 *
 	 * <p><b>Which chip survives.</b> The most specific relationship, since that is this arm's analogue
 	 * of "the highest severity wins" — a contraindication chip carries no severity, and what it can
@@ -730,21 +730,27 @@ public class DrugSafetyValidator {
 	 * space it is ranked by what it ADDS, not by which arm produced it — issue #88's finding that "arm X
 	 * yields to arm Y" is the wrong dedup whenever the yielding arm can be the one carrying the content.
 	 * A rule with a note of its own says the identity fact in the deployment's own words and outranks it;
-	 * a rule with none renders its own token back
-	 * ({@link ChartSearchAiUtils#firstNonBlank}, "…: ibuprofen") and is outranked by every other
-	 * relationship, so it survives only where nothing else reports the substance at all. Ties keep the
-	 * incumbent, so a group of
-	 * equally-related rows is reported as the dataset's first row. NOT the same rule
+	 * a rule with none renders its own token back ({@link ChartSearchAiUtils#firstNonBlank}, "…:
+	 * ibuprofen") and is outranked, so it survives only where the allergen arm resolved nothing to this
+	 * SAME substance — a class or group chip about a DIFFERENT allergen is a different key and stands
+	 * beside it. Ties keep the incumbent, so a group of equally-related rows is reported as the
+	 * dataset's first row. NOT the same rule
 	 * {@link #bestRulePerPartner} applies since issue #162: that one prefers the row naming no route
 	 * before falling back to the incumbent, and this one does not — so a substance whose unqualified row
 	 * is not the dataset's first (7 of the shipped KB's multi-row families) can have an interaction chip
 	 * naming it and a contraindication chip naming one of its routes in the same response. That is the
 	 * route-qualifier residue this javadoc's last paragraph already accepts, now visible against a
-	 * canonicalized sibling arm rather than against another per-row one. It no longer reaches the
-	 * IDENTITY chip, which since issue #164 is named after the patient's own recorded allergen rather
-	 * than after whichever row of the substance raised it. The surviving chip is written back into the
-	 * position the group's first candidate took, so no client sees the chip sequence reshuffle when a
-	 * later, stronger row replaces an earlier one.
+	 * canonicalized sibling arm rather than against another per-row one. The chip RANKED as identity is
+	 * exempt: since issue #164 it is named after the patient's own recorded allergen rather than after
+	 * whichever row of the substance raised it. What may occupy that KEY is no longer only that chip,
+	 * though — since issue #146 a self-named rule can, and a curated rule chip has always been labelled
+	 * from the row it is authored on, so a dataset filing one substance as several rows and authoring
+	 * the rule on a qualified one reports it under that qualifier
+	 * ({@code SelfNamedAllergyRuleFoldTest.aRuleOnALaterRowReplacesTheIdentityChipInPlace} pins exactly
+	 * that, at {@code Ibuprofen (tablets)}). The residue therefore reaches this key again, by the same
+	 * route the paragraph above describes rather than by a new one. The surviving chip is written back
+	 * into the position the group's first candidate took, so no client sees the chip sequence reshuffle
+	 * when a later, stronger row replaces an earlier one.
 	 *
 	 * <p>Resolving a tie by position is lossless rather than merely tidier, and that rests on the rows
 	 * of one substance publishing the SAME ATC codes — which the shipped KB does for every group this
@@ -786,7 +792,7 @@ public class DrugSafetyValidator {
 		 *  besides, which nothing else in this ledger can reproduce — a deployment authoring
 		 *  {@code drug-reference.json} is recording exactly that wording, and a fold that kept the
 		 *  module's stock sentence would silently discard it. */
-		static final int NAMED_RULE = 4;
+		static final int SELF_NAMED_RULE = 4;
 
 		/** A recorded allergy to this very substance — needs no ATC code and outranks both class
 		 *  comparisons (the precedence {@link #addAllergyContraindications} already applies per
@@ -802,19 +808,22 @@ public class DrugSafetyValidator {
 		 *  comparison takes when no subgroup is shared, and so the least specific of the three. */
 		static final int SAME_GROUP = 1;
 
-		/** A curated contraindication rule. Its own key space, so this rank never competes with the
-		 *  three above; it exists so every call reads alike. */
+		/** A curated contraindication rule that does NOT name its own entry. Its own key space, so this
+		 *  rank never competes with the four above; it exists so every call reads alike. */
 		static final int CURATED_RULE = 1;
 
-		/** {@link #NAMED_RULE} with no note of its own — the same claim, rendered as the rule's own
+		/** {@link #SELF_NAMED_RULE} with no note of its own — the same claim, rendered as the rule's own
 		 *  token ("Ibuprofen is contraindicated by an active allergy: ibuprofen"), which says strictly
-		 *  less than {@link #IDENTITY}. Below every other relationship rather than merely below that
-		 *  one, so it can never displace a chip and is displaced by any: it is still RAISED, because the
-		 *  arms are independent and this rule fires on evidence the allergen arm need not reproduce
+		 *  less than {@link #IDENTITY}. What it has to be is BELOW identity; 0 rather than 2.5 is a
+		 *  reading convenience and nothing more, because {@link #SAME_CLASS} and {@link #SAME_GROUP} can
+		 *  never share this key — {@link #addAllergyContraindications} reaches them only after
+		 *  {@link #firstOfSameSubstance} returned null, so their finding is never the subject's own
+		 *  substance. What IS load-bearing is that the chip is still RAISED: the arms are independent and
+		 *  this rule fires on evidence the allergen arm need not reproduce
 		 *  ({@link PatientClinicalContext#hasAllergyToken} is bare containment where
-		 *  {@link DrugReferenceService#findImpliedSubstances} is boundary-aware), and dropping it would
+		 *  {@link DrugReferenceService#findImpliedSubstances} is boundary-aware), so dropping it would
 		 *  have made a curated rule conditional on an arm that never gated it. */
-		static final int NAMED_RULE_WITHOUT_A_NOTE = 0;
+		static final int SELF_NAMED_RULE_WITHOUT_A_NOTE = 0;
 
 		/** A chip already raised for one key: where it sits in {@code warnings}, and how specific the
 		 *  relationship behind it is. ONE entry rather than two maps keyed alike, so the position and the
@@ -871,7 +880,7 @@ public class DrugSafetyValidator {
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			boolean allergy = "allergy".equalsIgnoreCase(c.getType())
 					&& context.hasAllergyToken(c.getToken());
-			boolean condition = !allergy && "condition".equalsIgnoreCase(c.getType())
+			boolean condition = "condition".equalsIgnoreCase(c.getType())
 					&& context.hasConditionToken(c.getToken());
 			if (!allergy && !condition) {
 				continue;
@@ -881,8 +890,8 @@ public class DrugSafetyValidator {
 			// whose token no allergy token contains has already been skipped above.
 			int relationship = !selfNamedAllergyRule(ref, c) ? ContraindicationChips.CURATED_RULE
 					: ChartSearchAiUtils.isBlank(c.getNote())
-							? ContraindicationChips.NAMED_RULE_WITHOUT_A_NOTE
-							: ContraindicationChips.NAMED_RULE;
+							? ContraindicationChips.SELF_NAMED_RULE_WITHOUT_A_NOTE
+							: ContraindicationChips.SELF_NAMED_RULE;
 			chips.add(ref, contraindicationFinding(ref, c), relationship,
 					new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
 							ref.displayLabel() + " is contraindicated by an "
@@ -904,8 +913,9 @@ public class DrugSafetyValidator {
 	 *         {@link DrugReferenceService#findImpliedSubstances}, which reads a RECORDED name and widens
 	 *         on purpose (issues #193/#195/#209): applying it to a curated token is the wholesale
 	 *         resolution {@link ContraindicationChips}' javadoc rules out, because a token may name a
-	 *         CLASS. It is also the narrower bound — {@code isNamed} can only be true of the entry the
-	 *         rule is filed on, so no rule can fold onto a substance other than its own subject.
+	 *         CLASS. What bounds the fold to its own subject is not that predicate — {@code isNamed} is
+	 *         true of every entry aliasing the token — but that it is asked HERE of the entry the rule
+	 *         is filed on, and keyed on that entry's substance.
 	 *
 	 *         <p>Only the ALLERGY leg: a condition rule whose token happened to name the drug would be a
 	 *         fact about a CONDITION record, which no chip in that key space is about.

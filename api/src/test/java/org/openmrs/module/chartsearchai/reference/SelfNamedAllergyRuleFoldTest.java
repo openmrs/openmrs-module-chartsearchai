@@ -121,8 +121,10 @@ public class SelfNamedAllergyRuleFoldTest {
 
 		assertEquals(1, warnings.size(),
 				"one recorded allergy to the asked-about drug is one chip, was: " + warnings);
-		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, warnings.get(0).getType());
-		assertEquals("Ibuprofen", warnings.get(0).getDrug());
+		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, warnings.get(0).getType(),
+				"a contraindication, not an interaction, was: " + warnings);
+		assertEquals("Ibuprofen", warnings.get(0).getDrug(),
+				"labelled by the subject's displayLabel(), was: " + warnings);
 		assertEquals("Ibuprofen is contraindicated by an active allergy: documented ibuprofen allergy",
 				warnings.get(0).getDetail(),
 				"and the surviving chip is the one carrying the deployment's own wording — a fold that "
@@ -209,7 +211,11 @@ public class SelfNamedAllergyRuleFoldTest {
 	public void aSelfNamedRuleTheAllergenArmCannotCorroborateStillRaisesItsOwnChip() throws IOException {
 		// The curated arm must keep standing ALONE where the allergen arm resolves nothing about this
 		// substance — otherwise re-keying it onto the identity key would have quietly made it
-		// conditional on that arm. The fixture rides on an asymmetry this change does not introduce and
+		// conditional on that arm. What this adds over
+		// aSelfNamedRuleWithNoNoteIsStillTheChipWhenNothingElseReportsTheDrug, which asserts the same
+		// outcome, is the arrangement: there the allergen arm returns at its recordedAllergens.isEmpty()
+		// guard, here it runs its loop to completion over a substance that is not this one and declines.
+		// The fixture rides on an asymmetry this change does not introduce and
 		// PatientClinicalContext.hasAllergyToken documents by this very example: that test is bare
 		// containment, so "opium" matches an allergen recorded as "Tiotropium", while
 		// findImpliedSubstances is boundary-aware and resolves that allergen to the Tiotropium entry.
@@ -304,7 +310,9 @@ public class SelfNamedAllergyRuleFoldTest {
 
 	@Test
 	public void aDatasetCarryingNoCuratedRulesAtAllIsUnchanged() {
-		// The 444-entries-with-no-curated-rule case (issue #135), which is every entry of every DDInter
+		// Issue #135's case — the entries the identity arm exists for, which the 444 ATC-less rows of the
+		// full DDInter dataset are the sharpest of, and which for the CURATED-rule question is every
+		// entry of every DDInter
 		// load: that parser emits no contraindications at all, so nothing here can fold and the identity
 		// arm must fire exactly as it did. Asserted over the whole loaded dataset rather than over the
 		// one entry probed below, so a future source that started emitting rules would be caught here
@@ -320,7 +328,8 @@ public class SelfNamedAllergyRuleFoldTest {
 						DrugReferenceTestSupport.set("lisinopril"), null));
 
 		assertEquals(1, warnings.size(), "the identity arm alone, exactly as before, was: " + warnings);
-		assertEquals("The patient has a recorded allergy to Lisinopril.", warnings.get(0).getDetail());
+		assertEquals("The patient has a recorded allergy to Lisinopril.", warnings.get(0).getDetail(),
+				"in the identity arm's own wording, was: " + warnings);
 	}
 
 	@Test

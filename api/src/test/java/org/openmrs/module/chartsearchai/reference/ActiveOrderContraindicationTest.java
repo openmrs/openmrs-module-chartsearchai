@@ -169,7 +169,8 @@ public class ActiveOrderContraindicationTest {
 		assertEquals(1, contraindications(warnings).size(),
 				"the identity arm alone must still raise the prescribed drug, was: " + warnings);
 		assertEquals("The patient has a recorded allergy to Ibuprofen.",
-				warnings.get(0).getDetail(), "in the identity arm's own wording, was: " + warnings);
+				contraindications(warnings).get(0).getDetail(),
+				"in the identity arm's own wording, was: " + warnings);
 	}
 
 	@Test

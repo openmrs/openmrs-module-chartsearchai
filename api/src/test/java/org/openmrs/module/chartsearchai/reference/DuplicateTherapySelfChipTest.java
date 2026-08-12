@@ -58,6 +58,12 @@ import org.junit.jupiter.api.Test;
  * {@code rxnorm_name}, its {@code rxcui} and its one ATC code, and differs only in
  * {@code drugbank_id} — so it is a different substance by {@link DrugReference#substanceKey()} and
  * by nothing else the row publishes. Its chip must survive.
+ *
+ * <p>The second thing that must not move is WHICH accessor reads the order's name. It decides which
+ * chips are silenced, so it is the ranked {@link DrugReferenceService#findImpliedByDrugName} and
+ * never the matcher underneath it — measured here on issue #209's own case, where the unranked form
+ * would suppress a real chip about {@code Hydrocortisone butyrate}. Swapping the two leaves the rest
+ * of the suite green, which is why that case is in this file.
  */
 public class DuplicateTherapySelfChipTest {
 
@@ -76,6 +82,15 @@ public class DuplicateTherapySelfChipTest {
 	 *  rifapentine's own, and the combination code, which the KB does not carry. */
 	private static final Set<String> ISONIAZID_RIFAPENTINE_ORDER_CODES =
 			DrugReferenceTestSupport.set("J04AB05", "J04AC51");
+
+	/** Sarah Taylor's order name, verbatim from issue #209 — the recorded name whose unranked matcher
+	 *  reaches a second substance. */
+	private static final String HYDROCORTISONE_ORDER_NAME = "Hydrocortisone Injection vial 100mg";
+
+	/** A code in hydrocortisone's {@code H02AB} subgroup that no row of
+	 *  {@code ddi-contra-route-variants} publishes. Its only job is to leave the partner on the ORDER
+	 *  rung — the rung where the recorded NAME, and so the choice of accessor, decides. */
+	private static final String HYDROCORTISONE_ORDER_CODE = "H02AB01";
 
 	@Test
 	public void theFixtureReallyFilesOmeprazoleUnderEsomeprazolesCode() throws IOException {
@@ -209,6 +224,49 @@ public class DuplicateTherapySelfChipTest {
 				"was: " + warnings.get(0).getDetail());
 	}
 
+	@Test
+	public void theOrderNameIsReadByTheRANKEDAccessorSoANearNameKeepsItsChip() throws IOException {
+		// WHICH accessor reads the order's name decides which chips are SILENCED, so it is the ranked
+		// one. Issue #209's own measured case, on the fixture that carries it: over
+		// ddi-contra-route-variants, findByDrugName("Hydrocortisone Injection vial 100mg") admits four
+		// rows including Hydrocortisone butyrate, while findImpliedByDrugName admits the three
+		// hydrocortisone rows and not the ester. The ester is a genuinely different substance, so its
+		// duplicate-therapy chip against a hydrocortisone order is a real finding — and it is exactly
+		// what the unranked matcher would suppress. The premise is asserted below rather than assumed,
+		// because if the two accessors ever agreed on this name the case would pass either way.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS);
+		assertTrue(DrugReferenceTestSupport.names(service.findByDrugName(HYDROCORTISONE_ORDER_NAME))
+				.contains("Hydrocortisone butyrate"),
+				"the unranked matcher must reach the ester, or this case discriminates nothing");
+		assertFalse(DrugReferenceTestSupport.names(service.findImpliedByDrugName(HYDROCORTISONE_ORDER_NAME))
+				.contains("Hydrocortisone butyrate"),
+				"and the ranked one must not");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Is it safe to give hydrocortisone butyrate?", hydrocortisoneOrder());
+
+		assertEquals(1, warnings.size(), "was: " + warnings);
+		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as active order"
+				+ " Hydrocortisone Injection vial 100mg — possible duplicate therapy",
+				warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void andTheSubstanceThatOrderReallyIsIsStillSkipped() throws IOException {
+		// The other half of the pair above, and what makes its single chip mean something: the same
+		// order, the same class, asked about the substance the order actually IS. The order's code is
+		// one the dataset does not carry, so nothing but the name can reach this — it is the omeprazole
+		// case again, on a second family and through a different fixture.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport
+						.ddiFixtureService(DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS))
+				.validate("", "Is it safe to give hydrocortisone?", hydrocortisoneOrder());
+
+		assertEquals(Collections.<String> emptyList(), DrugReferenceTestSupport.details(warnings),
+				"the order's own substance does not duplicate the order");
+	}
+
 	/** An active order for omeprazole as a mapped dictionary presents it: the display name, and
 	 *  omeprazole's own ATC code — which is the code the KB's Omeprazole row does not carry. */
 	private static PatientClinicalContext omeprazoleOrder() {
@@ -225,6 +283,16 @@ public class DuplicateTherapySelfChipTest {
 		return DrugReferenceTestSupport.ctx(60, null, names, ISONIAZID_RIFAPENTINE_ORDER_CODES, null, null,
 				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-uuid-185b",
 						"Isoniazid / Rifapentine", names, ISONIAZID_RIFAPENTINE_ORDER_CODES)));
+	}
+
+	/** An active order for Sarah Taylor's hydrocortisone injection, mapped to a same-class code the
+	 *  fixture does not carry — see {@link #HYDROCORTISONE_ORDER_CODE}. */
+	private static PatientClinicalContext hydrocortisoneOrder() {
+		Set<String> codes = DrugReferenceTestSupport.set(HYDROCORTISONE_ORDER_CODE);
+		Set<String> names = DrugReferenceTestSupport.set(HYDROCORTISONE_ORDER_NAME);
+		return DrugReferenceTestSupport.ctx(60, null, names, codes, null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-uuid-185c",
+						HYDROCORTISONE_ORDER_NAME, names, codes)));
 	}
 
 	private static List<SafetyWarning> chips(String question, PatientClinicalContext context)

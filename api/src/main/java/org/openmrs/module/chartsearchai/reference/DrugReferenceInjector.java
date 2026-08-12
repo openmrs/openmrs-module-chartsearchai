@@ -1120,11 +1120,11 @@ public class DrugReferenceInjector {
 	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the
 	 *          prompt budget the reference slice spends, for the DEBUG line in {@code injectRecords}. */
 	/**
-	 * @return one clause per contraindication RULE, keyed exactly as
-	 *         {@code DrugSafetyValidator.addContraindications} keys its chip — the {@code (type, token)}
-	 *         pair, normalized the same way it normalizes it, except for an ALLERGY rule naming the
-	 *         entry it is filed on, which that arm keys on the SUBSTANCE (issue #146) and so does this.
-	 *         Each clause carries the distinct notes its rows authored, in dataset order.
+	 * @return one clause per contraindication RULE, keyed by the very method the chip ledger keys on —
+	 *         {@link DrugSafetyValidator#contraindicationFinding}, which is the {@code (type, token)}
+	 *         pair normalized, except for an ALLERGY rule naming the entry it is filed on, which is
+	 *         keyed on the SUBSTANCE (issue #146). Each clause carries the distinct notes its rows
+	 *         authored, in dataset order.
 	 *
 	 *         <p><b>Issue #190 item 1.</b> This rendered one clause per ROW while
 	 *         {@code DrugSafetyValidator.ContraindicationChips} raised one chip per rule, so an entry
@@ -1162,17 +1162,15 @@ public class DrugReferenceInjector {
 			if (notes.isEmpty()) {
 				continue;
 			}
-			// The very key the chip ledger uses, through the same normalisation, so "ALLERGY"/"Ibuprofen"
+			// The very key the chip ledger uses, from the very method it uses, so "ALLERGY"/"Ibuprofen"
 			// and "allergy"/"ibuprofen" are one rule here exactly as they are one chip there — including
 			// issue #146's exception, where an allergy rule NAMING this entry is keyed on the substance
-			// because that is the fact it reports. Without the exception two such rules under two aliases
-			// of one drug are two clauses beside one chip, which is #190 item 1 re-opened one rule shape
-			// along. The chip's own key adds the patient's match, which a record about the drug has no
-			// business consulting; what has to agree is the collapse UNIT.
-			Object key = "allergy".equalsIgnoreCase(c.getType()) && ref.isNamed(c.getToken())
-					? ref.substanceGroupKey()
-					: Arrays.<Object> asList(DrugReference.normalizeName(c.getType()),
-							DrugReference.normalizeName(c.getToken()));
+			// because that is the fact it reports. Shared rather than restated: a copy is how the two came
+			// apart when that exception was added, two such rules under two aliases of one drug becoming
+			// one chip and two clauses, which is #190 item 1 re-opened one rule shape along. The chip's
+			// own key additionally carries the SUBJECT and the patient's match, neither of which a record
+			// about the drug has any business consulting; what has to agree is the collapse UNIT.
+			Object key = DrugSafetyValidator.contraindicationFinding(ref, c);
 			String clause = byRule.get(key);
 			if (clause == null) {
 				byRule.put(key, notes.get(0));

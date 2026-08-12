@@ -65,13 +65,16 @@ public class SelfNamedAllergyRuleFoldTest {
 	static final String SELF_NAMED_SHAPES =
 			"chartsearchai-test/drug-reference-self-named-rule-shapes.json";
 
-	private static List<String> details(List<SafetyWarning> warnings) {
-		List<String> out = new ArrayList<String>();
-		for (SafetyWarning warning : warnings) {
-			out.add(warning.getDetail());
-		}
-		return out;
-	}
+	/** Three rows of ONE substance, the rule-bearing ones FIRST — issue #145's shape, so the two
+	 *  collapses meet on it. Shared with {@code DrugReferenceValidityContextTest}, which asserts the
+	 *  loader reports nothing about it. */
+	private static final String SUBSTANCE_DECLARED =
+			"chartsearchai-test/drug-reference-substance-name-declared.json";
+
+	/** The same substance with the rule on a LATER row, so the identity chip is raised first and the
+	 *  curated one has to replace it rather than decline. */
+	private static final String RULE_ON_A_LATER_ROW =
+			"chartsearchai-test/drug-reference-rule-on-a-later-row.json";
 
 	private static DrugReferenceService fixtureService() throws IOException {
 		return DrugReferenceTestSupport
@@ -80,10 +83,11 @@ public class SelfNamedAllergyRuleFoldTest {
 
 	@Test
 	public void theShippedCuratedFileCarriesThatShapeOnThreeOfItsFourEntries() {
-		// The issue's own table, re-measured here through the production predicates rather than by
-		// reading the JSON — CLAUDE.md forbids quoting a knowledge-base figure a reimplementation
-		// produced, and "is this rule token one of the entry's own names?" is exactly the question
-		// DrugReference.isNamed answers and a `jq` filter would only approximate.
+		// The issue's own table, re-measured here through the PRODUCTION predicate rather than by
+		// reading the JSON: CLAUDE.md forbids quoting a knowledge-base figure a reimplementation
+		// produced, and this figure is quoted in four places (ContraindicationChips' javadoc, ADR
+		// Decision 30, config.xml and the README). So it asks DrugSafetyValidator.selfNamedAllergyRule
+		// itself — the same call the arm makes — over entries the real loader loaded.
 		//
 		// It is also the reachability statement for this whole class: without it, every case below could
 		// be about a shape no shipped deployment ever loads.
@@ -91,7 +95,7 @@ public class SelfNamedAllergyRuleFoldTest {
 		List<String> selfNamed = new ArrayList<String>();
 		for (DrugReference entry : bundled.getAll()) {
 			for (DrugReference.Contraindication rule : entry.getContraindications()) {
-				if ("allergy".equalsIgnoreCase(rule.getType()) && entry.isNamed(rule.getToken())) {
+				if (DrugSafetyValidator.selfNamedAllergyRule(entry, rule)) {
 					selfNamed.add(entry.displayLabel());
 				}
 			}
@@ -177,10 +181,10 @@ public class SelfNamedAllergyRuleFoldTest {
 								DrugReferenceTestSupport.set("ibuprofen", "nsaid"), null));
 
 		assertEquals(2, warnings.size(), "two allergy records, two facts, two chips, was: " + warnings);
-		assertTrue(details(warnings).contains(
+		assertTrue(DrugReferenceTestSupport.details(warnings).contains(
 				"Ibuprofen is contraindicated by an active allergy: NSAID hypersensitivity"),
 				"the class-level rule keeps its own chip, was: " + warnings);
-		assertTrue(details(warnings).contains(
+		assertTrue(DrugReferenceTestSupport.details(warnings).contains(
 				"Ibuprofen is contraindicated by an active allergy: documented ibuprofen allergy"),
 				"beside the folded self-named one, was: " + warnings);
 	}
@@ -210,8 +214,8 @@ public class SelfNamedAllergyRuleFoldTest {
 		// containment, so "opium" matches an allergen recorded as "Tiotropium", while
 		// findImpliedSubstances is boundary-aware and resolves that allergen to the Tiotropium entry.
 		DrugReferenceService service = fixtureService();
-		assertEquals("Tiotropium",
-				service.findImpliedSubstances("Tiotropium").get(0).displayLabel(),
+		assertEquals("[Tiotropium]",
+				DrugReferenceTestSupport.names(service.findImpliedSubstances("Tiotropium")).toString(),
 				"precondition: the allergen must resolve to the OTHER entry, so identity cannot fire "
 						+ "for Opium");
 
@@ -226,9 +230,10 @@ public class SelfNamedAllergyRuleFoldTest {
 
 	@Test
 	public void aSelfNamedRuleWithNoNoteIsStillTheChipWhenNothingElseReportsTheDrug() throws IOException {
-		// The rank the case above chooses is BELOW every other relationship, which is a different
-		// decision from "do not raise it at all", and only this shape separates them: the allergen names
-		// no entry in the loaded dataset, so the allergen arm contributes nothing and the contentless
+		// The rank aSelfNamedRuleWithNoNoteFallsBackToTheIdentityWording chooses is BELOW every other
+		// relationship, which is a different decision from "do not raise it at all", and only this shape
+		// separates the two: the allergen names no entry in the loaded dataset, so the allergen arm
+		// contributes nothing and the contentless
 		// rule is all there is. Not raising it would have made a curated rule conditional on an arm that
 		// never gated it — the two fire on different evidence, hasAllergyToken's bare containment here
 		// against findImpliedSubstances' boundary-aware resolution.
@@ -260,10 +265,10 @@ public class SelfNamedAllergyRuleFoldTest {
 
 		assertEquals(2, warnings.size(), "an allergy record and a condition record are two findings, "
 				+ "was: " + warnings);
-		assertTrue(details(warnings).contains(
+		assertTrue(DrugReferenceTestSupport.details(warnings).contains(
 				"Diclofenac is contraindicated by an active allergy: documented diclofenac allergy"),
 				"the allergy rule, folded with identity, was: " + warnings);
-		assertTrue(details(warnings).contains(
+		assertTrue(DrugReferenceTestSupport.details(warnings).contains(
 				"Diclofenac is contraindicated by an active condition: diclofenac-induced gastropathy"),
 				"and the condition rule beside it, was: " + warnings);
 	}
@@ -283,7 +288,7 @@ public class SelfNamedAllergyRuleFoldTest {
 		assertEquals(2, naproxen.getContraindications().size(),
 				"precondition: the fixture must really carry the rule twice");
 		for (DrugReference.Contraindication rule : naproxen.getContraindications()) {
-			assertFalse(naproxen.isNamed(rule.getToken()),
+			assertFalse(DrugSafetyValidator.selfNamedAllergyRule(naproxen, rule),
 					"precondition: and neither spelling may NAME the entry, or this pins the other key "
 							+ "space — " + rule.getToken());
 		}
@@ -326,7 +331,7 @@ public class SelfNamedAllergyRuleFoldTest {
 		// through the same ledger on the same substanceGroupKey. Two dedups that merely stacked would
 		// leave the rule chips beside the identity one, or one rule chip per row.
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
-				.fixtureEntries("chartsearchai-test/drug-reference-substance-name-declared.json"));
+				.fixtureEntries(SUBSTANCE_DECLARED));
 		List<DrugReference> rows = service.findByQuery("Is it safe to give her ibuprofen?");
 		assertEquals(3, rows.size(), "precondition: one word must resolve all three rows, was: " + rows);
 		int ruleBearing = 0;
@@ -359,7 +364,7 @@ public class SelfNamedAllergyRuleFoldTest {
 		// only ever declined newcomers would report the module's stock sentence and drop the note for
 		// every dataset whose rule happens to sit on a later row.
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
-				.fixtureEntries("chartsearchai-test/drug-reference-rule-on-a-later-row.json"));
+				.fixtureEntries(RULE_ON_A_LATER_ROW));
 		List<DrugReference> rows = service.findByQuery("Is it safe to give her ibuprofen?");
 		assertEquals(3, rows.size(), "precondition: one word must resolve all three rows, was: " + rows);
 		assertTrue(rows.get(0).getContraindications().isEmpty(),

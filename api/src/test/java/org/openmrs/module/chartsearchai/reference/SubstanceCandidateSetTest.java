@@ -152,10 +152,10 @@ public class SubstanceCandidateSetTest {
 						null, DrugReferenceTestSupport.set("Dexamethasone"), null));
 
 		assertEquals(2, warnings.size(), "both substances the question names, was: " + warnings);
-		assertTrue(details(warnings).contains(ESTER_CHIP),
-				"the ester the question named outright, was: " + details(warnings));
-		assertTrue(details(warnings).contains(SUBSTANCE_CHIP),
-				"and the substance whose own name the string also carries, was: " + details(warnings));
+		assertTrue(DrugReferenceTestSupport.details(warnings).contains(ESTER_CHIP),
+				"the ester the question named outright, was: " + DrugReferenceTestSupport.details(warnings));
+		assertTrue(DrugReferenceTestSupport.details(warnings).contains(SUBSTANCE_CHIP),
+				"and the substance whose own name the string also carries, was: " + DrugReferenceTestSupport.details(warnings));
 	}
 
 	@Test
@@ -175,11 +175,11 @@ public class SubstanceCandidateSetTest {
 						DrugReferenceTestSupport.set("Abacavir / lamivudine 600mg+300mg"), null,
 						DrugReferenceTestSupport.set("Lamivudine"), null));
 
-		assertTrue(details(warnings).contains("The patient has a recorded allergy to Lamivudine."),
-				"the constituent the allergy names, was: " + details(warnings));
-		assertTrue(details(warnings).contains("Abacavir is in the same ATC class (J05AF) as the patient's"
+		assertTrue(DrugReferenceTestSupport.details(warnings).contains("The patient has a recorded allergy to Lamivudine."),
+				"the constituent the allergy names, was: " + DrugReferenceTestSupport.details(warnings));
+		assertTrue(DrugReferenceTestSupport.details(warnings).contains("Abacavir is in the same ATC class (J05AF) as the patient's"
 				+ " allergy to Lamivudine — possible cross-reactivity"),
-				"and the other constituent, was: " + details(warnings));
+				"and the other constituent, was: " + DrugReferenceTestSupport.details(warnings));
 	}
 
 	@Test
@@ -339,18 +339,10 @@ public class SubstanceCandidateSetTest {
 		assertEquals(4, warnings.size(),
 				"both admitted rows must still be checked, against both findings, was: " + warnings);
 		for (String subject : new String[] { "Ibuprofen tablets", "Ibuprofen suspension" }) {
-			assertTrue(details(warnings).toString().contains(subject),
+			assertTrue(DrugReferenceTestSupport.details(warnings).toString().contains(subject),
 					"every admitted row must be a chip subject, missing " + subject + ", was: "
-							+ details(warnings));
+							+ DrugReferenceTestSupport.details(warnings));
 		}
-	}
-
-	private static List<String> details(List<SafetyWarning> warnings) {
-		List<String> out = new ArrayList<String>();
-		for (SafetyWarning warning : warnings) {
-			out.add(warning.getDetail());
-		}
-		return out;
 	}
 
 	private static DrugSafetyValidator fixtureValidator() throws IOException {

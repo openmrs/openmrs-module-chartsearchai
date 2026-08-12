@@ -99,14 +99,6 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 				null, null));
 	}
 
-	private static List<String> details(List<SafetyWarning> warnings) {
-		List<String> out = new ArrayList<String>();
-		for (SafetyWarning warning : warnings) {
-			out.add(warning.getDetail());
-		}
-		return out;
-	}
-
 	/** Chips whose SOURCE RATING is Major. Matched on the severity segment both arms render ahead of
 	 *  the mechanism prose ({@code "— Major."}), not on the bare word: real DDInter notes talk about
 	 *  "the risk of major bleeding", and counting those would make a severity assertion pass on prose. */
@@ -158,7 +150,7 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(3, lowered.size(), "a lowered cap must be honoured, was: " + lowered.size());
 		assertEquals(3, majors(lowered),
 				"and what survives a lowered cap must be the most severe, not the dataset's first: "
-						+ details(lowered));
+						+ DrugReferenceTestSupport.details(lowered));
 	}
 
 	@Test
@@ -189,12 +181,12 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		// most-severe-first ordering. A future change that sorted after cutting, or capped while
 		// collecting, would still be descending at every setting and would still break this.
 		configureCap("1000");
-		List<String> full = details(questionPairChips());
+		List<String> full = DrugReferenceTestSupport.details(questionPairChips());
 		assertEquals(CANDIDATE_PAIRS, full.size(), "precondition: the uncut list is every candidate");
 
 		for (int cap : new int[] { 1, 3, 10, 25, 71 }) {
 			configureCap(String.valueOf(cap));
-			assertEquals(full.subList(0, cap), details(questionPairChips()),
+			assertEquals(full.subList(0, cap), DrugReferenceTestSupport.details(questionPairChips()),
 					"at cap " + cap + " the shown chips must be the first " + cap + " of the ordered list");
 		}
 	}
@@ -209,7 +201,7 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		List<SafetyWarning> capped = screeningChips();
 		assertEquals(3, capped.size(), "the screening arm must honour the cap too, was: " + capped.size());
 		assertEquals(3, majors(capped),
-				"and keep the most severe pairs: " + details(capped));
+				"and keep the most severe pairs: " + DrugReferenceTestSupport.details(capped));
 
 		configureCap("15");
 		assertEquals(15, screeningChips().size(),

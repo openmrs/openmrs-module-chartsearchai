@@ -181,7 +181,7 @@ public class InjectedContraindicationClauseTest {
 		assertEquals(2, nurofen.getContraindications().size(),
 				"precondition: the fixture must carry two rules, each naming the entry");
 		for (DrugReference.Contraindication rule : nurofen.getContraindications()) {
-			assertTrue(nurofen.isNamed(rule.getToken()),
+			assertTrue(DrugSafetyValidator.selfNamedAllergyRule(nurofen, rule),
 					"precondition: under a DIFFERENT alias each — " + rule.getToken());
 			assertTrue(context.hasAllergyToken(rule.getToken()),
 					"precondition: and both must match the one recorded allergy — " + rule.getToken());

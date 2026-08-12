@@ -876,30 +876,64 @@ public class DrugSafetyValidator {
 			if (!allergy && !condition) {
 				continue;
 			}
-			// The rule as the two tests above compared it — type case-insensitively, token through
-			// hasAllergyToken/hasConditionToken, which lower-case — so the key says what the match
-			// said, and two rows differing only in case cannot chip twice.
-			Object finding = Arrays.asList("rule", DrugReference.normalizeName(c.getType()),
-					DrugReference.normalizeName(c.getToken()));
-			int relationship = ContraindicationChips.CURATED_RULE;
-			if (allergy && ref.isNamed(c.getToken())) {
-				// The rule names the drug it is filed against, so it reports what
-				// addAllergyContraindications reports: one allergy, one chip (issue #146). Keyed the way
-				// that arm keys it — on the SUBSTANCE, so this also collapses across the rows one
-				// substance is filed as, exactly as issue #145's dedup does on the subject side. Only an
-				// ALLERGY rule can join it; a condition rule token that happened to name the drug would
-				// be a fact about a condition record, which no chip in this key space is about.
-				finding = ref.substanceGroupKey();
-				relationship = ChartSearchAiUtils.isBlank(c.getNote())
-						? ContraindicationChips.NAMED_RULE_WITHOUT_A_NOTE
-						: ContraindicationChips.NAMED_RULE;
-			}
-			chips.add(ref, finding, relationship,
+			// Reaching here means the rule MATCHED, so a self-named allergy rule is necessarily one whose
+			// allergy leg matched: the two booleans are exclusive, and a rule whose type is "allergy" and
+			// whose token no allergy token contains has already been skipped above.
+			int relationship = !selfNamedAllergyRule(ref, c) ? ContraindicationChips.CURATED_RULE
+					: ChartSearchAiUtils.isBlank(c.getNote())
+							? ContraindicationChips.NAMED_RULE_WITHOUT_A_NOTE
+							: ContraindicationChips.NAMED_RULE;
+			chips.add(ref, contraindicationFinding(ref, c), relationship,
 					new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
 							ref.displayLabel() + " is contraindicated by an "
 									+ (allergy ? "active allergy" : "active condition") + ": "
 									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
 		}
+	}
+
+	/**
+	 * @return whether {@code c} is an ALLERGY rule whose token is one of {@code ref}'s own names — the
+	 *         one rule shape that reports {@link #addAllergyContraindications}'s fact rather than its
+	 *         own, and so the one that crosses into that arm's key space (issue #146). A property of the
+	 *         rule and the entry alone, never of the patient: a record ABOUT the drug has to reach the
+	 *         same answer as a chip about this patient, and only the collapse UNIT is shared between
+	 *         them.
+	 *
+	 *         <p>{@link DrugReference#isNamed} — name IDENTITY between two REFERENCE strings, the same
+	 *         predicate {@link #namesEntry} asks of an interaction rule's token. Deliberately NOT
+	 *         {@link DrugReferenceService#findImpliedSubstances}, which reads a RECORDED name and widens
+	 *         on purpose (issues #193/#195/#209): applying it to a curated token is the wholesale
+	 *         resolution {@link ContraindicationChips}' javadoc rules out, because a token may name a
+	 *         CLASS. It is also the narrower bound — {@code isNamed} can only be true of the entry the
+	 *         rule is filed on, so no rule can fold onto a substance other than its own subject.
+	 *
+	 *         <p>Only the ALLERGY leg: a condition rule whose token happened to name the drug would be a
+	 *         fact about a CONDITION record, which no chip in that key space is about.
+	 */
+	static boolean selfNamedAllergyRule(DrugReference ref, DrugReference.Contraindication c) {
+		return "allergy".equalsIgnoreCase(c.getType()) && ref.isNamed(c.getToken());
+	}
+
+	/**
+	 * @return the {@code recorded finding} half of the ledger key for {@code c} — the substance for a
+	 *         {@link #selfNamedAllergyRule}, else the rule's own {@code (type, token)} tagged
+	 *         {@code "rule"}. Normalized the way {@link PatientClinicalContext#hasAllergyToken} and
+	 *         {@link PatientClinicalContext#hasConditionToken} compare them (both lower-case), so the
+	 *         key says what the match said and two rows differing only in case cannot chip twice; and
+	 *         tagged, because that tag plus the key's LENGTH is what keeps the two spaces from colliding
+	 *         — see {@link ContraindicationChips}, where both are justified.
+	 *
+	 *         <p>ONE definition, called by the chip ledger here and by
+	 *         {@code DrugReferenceInjector.contraindicationClauses}, which renders one clause per rule
+	 *         and must count the same unit or the model is told the drug has two contraindications where
+	 *         the deterministic layer found one (issue #190 item 1). A second copy is how those two came
+	 *         apart when issue #146 moved this key: two allergy rules under two aliases of one drug were
+	 *         one chip and two clauses, silently.
+	 */
+	static Object contraindicationFinding(DrugReference ref, DrugReference.Contraindication c) {
+		return selfNamedAllergyRule(ref, c) ? ref.substanceGroupKey()
+				: Arrays.<Object> asList("rule", DrugReference.normalizeName(c.getType()),
+						DrugReference.normalizeName(c.getToken()));
 	}
 
 	/**

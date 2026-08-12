@@ -36,7 +36,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p>Curated-source-only by construction: the {@code ddinter} and {@code atc} sources publish no
  * contraindications at all (see {@link DdiDrugReferenceSource}'s class javadoc), so only an
  * operator-authored file can file one rule twice. The bundled seed does not — its four ibuprofen rows
- * are four distinct {@code (type, token)} pairs — which is why nothing shipped changes here and why
+ * are four distinct keys, the self-named allergy one being the substance since issue #146 and the
+ * other three their own {@code (type, token)} — which is why nothing shipped changes here and why
  * this needs a fixture.
  *
  * <p><b>Joining rather than dropping.</b> Issue #174 site 2 could drop a repeated row because the
@@ -51,7 +52,11 @@ public class InjectedContraindicationClauseTest {
 
 	/** Shared with {@code ContraindicationRouteVariantTest}, which asks the same question of the CHIP:
 	 *  one curated {@code allergy}/{@code ibuprofen} rule authored twice, under two spellings and with
-	 *  two different notes. */
+	 *  two different notes. Both spellings NAME the entry, so since issue #146 they collapse on the
+	 *  substance key rather than on the normalized {@code (type, token)} one this fixture was built
+	 *  for; what it still pins is the JOIN, which is what this class is about. The rule key space's own
+	 *  normalization is pinned by
+	 *  {@code SelfNamedAllergyRuleFoldTest.aClassLevelRuleAuthoredTwiceIsStillOneChip}. */
 	private static final String DUPLICATE_RULE_FIXTURE =
 			"chartsearchai-test/drug-reference-duplicate-rule-tokens.json";
 
@@ -182,7 +187,7 @@ public class InjectedContraindicationClauseTest {
 				"precondition: the fixture must carry two rules, each naming the entry");
 		for (DrugReference.Contraindication rule : nurofen.getContraindications()) {
 			assertTrue(DrugSafetyValidator.selfNamedAllergyRule(nurofen, rule),
-					"precondition: under a DIFFERENT alias each — " + rule.getToken());
+					"precondition: each rule must NAME the entry — " + rule.getToken());
 			assertTrue(context.hasAllergyToken(rule.getToken()),
 					"precondition: and both must match the one recorded allergy — " + rule.getToken());
 		}

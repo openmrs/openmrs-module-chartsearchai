@@ -41,7 +41,7 @@ section and [ADR Decisions 23 & 24](adr.md). This document is only the **demo da
 
 The bundled KB has four drugs: **ibuprofen** (`M01AE01`), **paracetamol** (`N02BE01`),
 **amoxicillin** (`J01CA04`), **gentamicin** (`J01GB03`). Paths 1–7 work against the bundled
-KB; path 8 needs the [custom KB](#step-4-cross-reactivity-custom-kb) (it adds Naproxen,
+KB — except path 4, which since [#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146) needs an allergy the seed does not carry (see its row above); path 8 needs the [custom KB](#step-4-cross-reactivity-custom-kb) (it adds Naproxen,
 `M01AE02`, sharing ibuprofen's subgroup).
 
 ---
@@ -168,7 +168,7 @@ UNION ALL SELECT 'active_drug_orders', COUNT(*) FROM orders WHERE patient_id=@pi
 
 | Type | Items | Drives |
 |------|-------|--------|
-| Allergies | Ibuprofen `77897…`, Penicillins `162297…`, Paracetamol `70116…`, non-coded "Aminoglycoside" (on "Other" `5622…`) | paths 2, 8 (**not 4** — see below) |
+| Allergies | Ibuprofen `77897…`, Penicillins `162297…`, Paracetamol `70116…`, non-coded "Aminoglycoside" (on "Other" `5622…`) | paths 2, 8 (**not 4** — see path 4 above) |
 | Conditions | Peptic ulcer `114262…`, non-coded "Active GI bleed" / "Severe hepatic impairment" / "Significant renal impairment" | path 3 |
 | Active orders | Warfarin `5e97fe35…`, Aspirin `71617…`, Methotrexate `017dcf18…`, Furosemide `9f6c3927…` | path 5 |
 

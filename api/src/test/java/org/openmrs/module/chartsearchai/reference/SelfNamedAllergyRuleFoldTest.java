@@ -85,8 +85,8 @@ public class SelfNamedAllergyRuleFoldTest {
 	public void theShippedCuratedFileCarriesThatShapeOnThreeOfItsFourEntries() {
 		// The issue's own table, re-measured here through the PRODUCTION predicate rather than by
 		// reading the JSON: CLAUDE.md forbids quoting a knowledge-base figure a reimplementation
-		// produced, and this figure is quoted in four places (ContraindicationChips' javadoc, ADR
-		// Decision 30, config.xml and the README). So it asks DrugSafetyValidator.selfNamedAllergyRule
+		// produced, and this figure is quoted in four places (DrugSafetyValidator's class javadoc,
+		// ContraindicationChips' javadoc, ADR Decision 30 and config.xml). So it asks selfNamedAllergyRule
 		// itself — the same call the arm makes — over entries the real loader loaded.
 		//
 		// It is also the reachability statement for this whole class: without it, every case below could

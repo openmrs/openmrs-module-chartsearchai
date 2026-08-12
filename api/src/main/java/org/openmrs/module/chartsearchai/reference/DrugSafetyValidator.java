@@ -689,8 +689,9 @@ public class DrugSafetyValidator {
 	 * <p><b>The key.</b> {@code (subject substance, recorded finding)}. The subject side is
 	 * {@link DrugReference#substanceKey()}, which is where the measurement behind it lives and why it
 	 * is not simply the dataset's substance name; an entry from a source publishing none keys on its
-	 * own identity, so nothing collapses for the {@code atc} adapter or the shipped curated
-	 * {@code json} dataset. The finding side is what the arm actually compared — the resolved allergen's
+	 * own identity, so no two ROWS group for the {@code atc} adapter or the shipped curated
+	 * {@code json} dataset — the FINDING side still folds there, which is what the paragraph after
+	 * next is about. The finding side is what the arm actually compared — the resolved allergen's
 	 * SUBSTANCE for the allergy arm, by the same {@link DrugReference#substanceGroupKey()} as the
 	 * subject side, and the curated rule's own {@code (type, token)} for the rule arm.
 	 * Those stay two key spaces, and the reason is unchanged: a rule's token is free text that may name a
@@ -775,21 +776,27 @@ public class DrugSafetyValidator {
 	 * presentations, {@code Insulin aspart (aspart)}, {@code Iobenguane (I-131)}). Issue #164 removed
 	 * that route: identity is now decided by SUBSTANCE, so every row of one group answers the identity
 	 * question the same way and an identity chip can no longer arrive after a class one for the same
-	 * key. What is left to replace is a class chip by a more specific class chip — a group whose rows
-	 * publish DIFFERENT ATC codes, so that one shares only a curated group with the allergen while
-	 * another shares a level-4 subgroup. The shipped KB has no such group (0 of the 129 it files as
-	 * more than one row; measured 2026-08-07 and the same 0 before this key widened), so the branch is
-	 * currently unexercised rather than wrong, and it is kept because "the most specific relationship
-	 * survives" is this arm's contract and first-wins is not: a refresh that diverges one row's codes
-	 * would otherwise silently report the weaker relationship. Re-measure that 0 rather than trusting
-	 * it — it is a property of the dataset, not of this code.
+	 * key. Since issue #146 the replacement branch has a LIVE route again — a self-named rule outranks
+	 * identity, and a dataset authoring that rule on a row that is not its family's first raises the
+	 * identity chip before the rule reaches the same key, which
+	 * {@code SelfNamedAllergyRuleFoldTest.aRuleOnALaterRowReplacesTheIdentityChipInPlace} exercises. So
+	 * {@code warnings.set} is not dead code, whatever becomes of the class case below.
+	 *
+	 * <p>That class case is the OTHER thing left to replace: a class chip by a more specific class chip
+	 * — a group whose rows publish DIFFERENT ATC codes, so that one shares only a curated group with
+	 * the allergen while another shares a level-4 subgroup. The shipped KB has no such group (0 of the
+	 * 129 it files as more than one row; measured 2026-08-07 and the same 0 before this key widened),
+	 * so that branch alone is currently unexercised rather than wrong, and it is kept because "the
+	 * most specific relationship survives" is this arm's contract and first-wins is not: a refresh that
+	 * diverges one row's codes would otherwise silently report the weaker relationship. Re-measure that
+	 * 0 rather than trusting it — it is a property of the dataset, not of this code.
 	 */
 	private static final class ContraindicationChips {
 
 		/** A curated allergy rule NAMING THE SUBSTANCE it is filed against and carrying a note of its
 		 *  own (issue #146): the identity relationship below, stated in the deployment's own clinical
-		 *  wording. Above {@link #IDENTITY} because it says everything that sentence says and the note
-		 *  besides, which nothing else in this ledger can reproduce — a deployment authoring
+		 *  wording. Above {@link #IDENTITY} because it says the identity fact and the note besides,
+		 *  which nothing else in this ledger can reproduce — a deployment authoring
 		 *  {@code drug-reference.json} is recording exactly that wording, and a fold that kept the
 		 *  module's stock sentence would silently discard it. */
 		static final int SELF_NAMED_RULE = 4;
@@ -809,7 +816,9 @@ public class DrugSafetyValidator {
 		static final int SAME_GROUP = 1;
 
 		/** A curated contraindication rule that does NOT name its own entry. Its own key space, so this
-		 *  rank never competes with the four above; it exists so every call reads alike. */
+		 *  rank never competes with any of the identity-key ranks — not the four declared above it nor
+		 *  the one below — and it shares a VALUE with {@link #SAME_GROUP} for that reason rather than in
+		 *  spite of it. It exists so every call reads alike. */
 		static final int CURATED_RULE = 1;
 
 		/** {@link #SELF_NAMED_RULE} with no note of its own — the same claim, rendered as the rule's own

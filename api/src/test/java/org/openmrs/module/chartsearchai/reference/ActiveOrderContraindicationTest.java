@@ -34,7 +34,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * no drug and an answer citing the real order record raised <b>0 chips</b>, where the identical call
  * with {@code mappings=null} raised <b>2</b>. Measured on the default {@code sourceFormat=json}.
  * That 2 is <b>1</b> since issue #146 — it was the curated rule and the identity check reporting one
- * allergy twice, not two findings — which changes none of the reasoning above and every count below.
+ * allergy twice, not two findings — which changes none of the reasoning above and every ALLERGY count
+ * below (a condition rule cannot fold, so that case is untouched).
  *
  * <p>{@code isEchoOfCitedRecord} justified that residual risk by asserting a proposal-worthy drug is
  * "usually question-named (always validated) or actively ordered (checked directly by the

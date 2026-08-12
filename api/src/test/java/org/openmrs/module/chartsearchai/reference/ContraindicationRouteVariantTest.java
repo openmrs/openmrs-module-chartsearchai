@@ -440,10 +440,16 @@ public class ContraindicationRouteVariantTest {
 
 	@Test
 	public void oneCuratedRuleAuthoredTwiceRaisesOneChip() throws IOException {
-		// The ledger's OTHER key space, and the one source that publishes no substance name at all: a
-		// curated entry keys on its own identity, so nothing about it collapses across rows — but its
-		// rules still key on (type, token) NORMALIZED the way the arm compared them, so one rule authored
-		// twice in different case is one chip rather than two. Pre-fix both were appended unconditionally.
+		// The one source that publishes no substance name at all: a curated entry keys on its own
+		// identity, so nothing about it collapses across rows — yet one rule authored twice in different
+		// case is still one chip rather than two. Pre-fix both were appended unconditionally.
+		//
+		// WHICH key collapses them moved with issue #146. Both spellings name the entry they are filed
+		// on, so both are now filed in the allergy arm's key space and the substance key collapses them
+		// (and the identity chip with them, which is why this is one chip and not two). The rule key
+		// space's own case normalization is therefore no longer exercised HERE — see
+		// SelfNamedAllergyRuleFoldTest#aClassLevelRuleAuthoredTwiceIsStillOneChip, which pins it on a
+		// token that names a class instead.
 		//
 		// The cost this pins: ties keep the incumbent, so the second rule's NOTE is dropped. That is the
 		// right call for a re-spelling of one rule and a lossy one for two genuinely different notes
@@ -469,9 +475,9 @@ public class ContraindicationRouteVariantTest {
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
 				.validate("", "Is ibuprofen safe for her?", context);
 
-		assertEquals(2, warnings.size(),
-				"the rule collapses to one chip, and the identity chip beside it is issue #146's separate "
-						+ "key space — deliberately NOT collapsed with it, was: " + warnings);
+		assertEquals(1, warnings.size(),
+				"the rule collapses to one chip, and since issue #146 the identity chip is that same "
+						+ "chip rather than a second one beside it, was: " + warnings);
 		List<String> ruleChips = new ArrayList<String>();
 		for (SafetyWarning warning : warnings) {
 			if (warning.getDetail().contains("is contraindicated by an")) {

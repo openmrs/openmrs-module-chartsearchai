@@ -33,6 +33,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * asked about medications. So an active ibuprofen order plus an ibuprofen allergy, a question naming
  * no drug and an answer citing the real order record raised <b>0 chips</b>, where the identical call
  * with {@code mappings=null} raised <b>2</b>. Measured on the default {@code sourceFormat=json}.
+ * That 2 is <b>1</b> since issue #146 — it was the curated rule and the identity check reporting one
+ * allergy twice, not two findings — which changes none of the reasoning above and every count below.
  *
  * <p>{@code isEchoOfCitedRecord} justified that residual risk by asserting a proposal-worthy drug is
  * "usually question-named (always validated) or actively ordered (checked directly by the
@@ -133,15 +135,33 @@ public class ActiveOrderContraindicationTest {
 		List<SafetyWarning> warnings = validator().validate(ECHOING_ANSWER, NO_DRUG_QUESTION,
 				ctx(DrugReferenceTestSupport.set("ibuprofen"), null), chart.getMappings());
 
-		assertEquals(2, contraindications(warnings).size(),
+		assertEquals(1, contraindications(warnings).size(),
 				"an allergy to a drug the patient is PRESCRIBED must be raised, was: " + warnings);
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
 				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", "documented ibuprofen allergy"),
 				"the curated allergy rule fires, was: " + warnings);
-		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
-				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen",
-				"The patient has a recorded allergy to Ibuprofen."),
-				"and so does the identity check issue #135 un-suppressed, was: " + warnings);
+		// The identity check issue #135 un-suppressed reaches this arm too, and since issue #146 it is
+		// the SAME chip: ibuprofen's curated rule names ibuprofen, so the two arms report one fact once
+		// and the operator's note is the wording that survives. The case below keeps that arm asserted
+		// here in its own right, on an allergen no curated rule matches.
+	}
+
+	@Test
+	public void thePrescribedDrugIsCheckedByTheIdentityArmToo() {
+		// The half of this arm that carries no curated rule — issue #135's identity check, on the
+		// echo-scoped prescribed-drug path. Brufen is one of the bundled ibuprofen entry's aliases but
+		// is NOT any of its rule tokens, so hasAllergyToken matches nothing and only
+		// findImpliedSubstances can reach the drug. Split out of the case above when issue #146 folded
+		// the two arms' chips there into one: without it, nothing on this path would still assert that
+		// the identity arm reaches a prescribed drug at all.
+		List<SafetyWarning> warnings = validator().validate(ECHOING_ANSWER, NO_DRUG_QUESTION,
+				ctx(DrugReferenceTestSupport.set("brufen"), null),
+				chartWithTheOrderRecord().getMappings());
+
+		assertEquals(1, contraindications(warnings).size(),
+				"the identity arm alone must still raise the prescribed drug, was: " + warnings);
+		assertEquals("The patient has a recorded allergy to Ibuprofen.",
+				warnings.get(0).getDetail(), "in the identity arm's own wording, was: " + warnings);
 	}
 
 	@Test
@@ -153,7 +173,7 @@ public class ActiveOrderContraindicationTest {
 				"Her most recent blood pressure is 120/80 mmHg [1].", "What is her blood pressure?",
 				ctx(DrugReferenceTestSupport.set("ibuprofen"), null), chartWithTheOrderRecord().getMappings());
 
-		assertEquals(2, contraindications(warnings).size(),
+		assertEquals(1, contraindications(warnings).size(),
 				"the allergy to the active order must be raised with no drug named anywhere, was: "
 						+ warnings);
 	}
@@ -190,14 +210,14 @@ public class ActiveOrderContraindicationTest {
 				injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 						ctx(DrugReferenceTestSupport.set("ibuprofen"), null), NO_DRUG_QUESTION));
 
-		assertEquals(2, findings.size(), "both chips must be injected as citable records, was: " + findings);
+		assertEquals(1, findings.size(), "the chip must be injected as a citable record, was: " + findings);
 		List<String> texts = new ArrayList<String>();
 		for (RecordMapping finding : findings) {
 			texts.add(finding.getText());
 		}
-		assertTrue(texts.contains(DrugReferenceInjector.FINDING_PREFIX
-				+ "Ibuprofen: The patient has a recorded allergy to Ibuprofen."),
-				"a record must carry the identity chip's own detail verbatim, was: " + texts);
+		assertTrue(texts.contains(DrugReferenceInjector.FINDING_PREFIX + "Ibuprofen: Ibuprofen is "
+				+ "contraindicated by an active allergy: documented ibuprofen allergy"),
+				"a record must carry the chip's own detail verbatim, was: " + texts);
 	}
 
 	@Test
@@ -205,13 +225,13 @@ public class ActiveOrderContraindicationTest {
 		// Composition with the question-driven arms, and with the identity check of issue #135: the
 		// same patient
 		// asked ABOUT the drug by name. Question-named drugs were never echo-scoped out, so the
-		// in-play loop already raises both chips — the new arm must skip an entry it has covered
-		// rather than double every one of them. Two, not four.
+		// in-play loop already raises the chip — the new arm must skip an entry it has covered
+		// rather than double every one of them. One, not two.
 		List<SafetyWarning> warnings = validator().validate("Ibuprofen is not appropriate here.",
 				"Is it safe to give her ibuprofen?", ctx(DrugReferenceTestSupport.set("ibuprofen"), null),
 				chartWithTheOrderRecord().getMappings());
 
-		assertEquals(2, contraindications(warnings).size(),
+		assertEquals(1, contraindications(warnings).size(),
 				"a prescribed drug the question also names must be checked once, not twice, was: "
 						+ warnings);
 	}
@@ -234,16 +254,12 @@ public class ActiveOrderContraindicationTest {
 						null, DrugReferenceTestSupport.set("ibuprofen", "penicillin"), null),
 				null);
 
-		assertEquals(3, warnings.size(),
-				"two of the three orders are contraindicated, and only contraindications may be "
-						+ "raised here, was: " + warnings);
+		assertEquals(2, warnings.size(),
+				"two of the three orders are contraindicated — one chip each since issue #146 — and only "
+						+ "contraindications may be raised here, was: " + warnings);
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
 				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", "documented ibuprofen allergy"),
 				"the second order's curated allergy rule fires, was: " + warnings);
-		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
-				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen",
-				"The patient has a recorded allergy to Ibuprofen."),
-				"and so does its identity check, was: " + warnings);
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
 				SafetyWarning.TYPE_CONTRAINDICATION, "Amoxicillin", "penicillin-class hypersensitivity"),
 				"the THIRD order's curated rule fires too — the allergy names a class, not the drug, "
@@ -282,15 +298,13 @@ public class ActiveOrderContraindicationTest {
 						DrugReferenceTestSupport.set("ibuprofen"), null),
 				null);
 
-		assertEquals(3, warnings.size(),
-				"both contraindications and the screened pair must be raised, was: " + warnings);
+		assertEquals(2, warnings.size(),
+				"the contraindication and the screened pair must both be raised, was: " + warnings);
 		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, warnings.get(0).getType(),
 				"the patient's own contraindication must lead, was: " + warnings);
-		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, warnings.get(1).getType(),
-				"and so must the second, was: " + warnings);
-		assertEquals(SafetyWarning.TYPE_INTERACTION, warnings.get(2).getType(),
+		assertEquals(SafetyWarning.TYPE_INTERACTION, warnings.get(1).getType(),
 				"with the reference lookup about a pair last, was: " + warnings);
-		assertTrue(warnings.get(2).getDetail().toLowerCase().contains("warfarin"),
+		assertTrue(warnings.get(1).getDetail().toLowerCase().contains("warfarin"),
 				"precondition: the screen must really have chipped the ibuprofen x warfarin pair, "
 						+ "or the ordering above is asserted over the wrong arm, was: " + warnings);
 	}

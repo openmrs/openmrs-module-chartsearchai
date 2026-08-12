@@ -74,7 +74,7 @@ public class ContraindicationToggleContextTest extends BaseModuleContextSensitiv
 		// this reads the same GP through the same path and the pair of cases isolates the flag itself.
 		configureContraindicationWarnings("true");
 
-		assertEquals(2, chipsForAPrescribedAllergy().size(),
-				"with the switch on, the prescribed allergy must still raise its two chips");
+		assertEquals(1, chipsForAPrescribedAllergy().size(),
+				"with the switch on, the prescribed allergy must still raise its chip");
 	}
 }

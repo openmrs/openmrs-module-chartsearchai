@@ -223,6 +223,35 @@ public class SelfNamedAllergyRuleFoldTest {
 	}
 
 	@Test
+	public void aClassLevelRuleAuthoredTwiceIsStillOneChip() throws IOException {
+		// The rule key space's own collapse, which used to be pinned by
+		// ContraindicationRouteVariantTest#oneCuratedRuleAuthoredTwiceRaisesOneChip and no longer is:
+		// both spellings there name the entry, so since this change they collapse on the SUBSTANCE key
+		// instead and that case would pass with the rule key's case normalization deleted. This token
+		// names a class, so it stays in the rule key space and only (type, token) normalized can
+		// collapse the two spellings — mutation-verified by dropping DrugReference.normalizeName from
+		// that key, which reddens this case and nothing else in the suite.
+		DrugReferenceService service = fixtureService();
+		DrugReference naproxen = service.lookupByToken("naproxen");
+		assertNotNull(naproxen, "precondition: the fixture entry must resolve");
+		assertEquals(2, naproxen.getContraindications().size(),
+				"precondition: the fixture must really carry the rule twice");
+		for (DrugReference.Contraindication rule : naproxen.getContraindications()) {
+			assertFalse(naproxen.isNamed(rule.getToken()),
+					"precondition: and neither spelling may NAME the entry, or this pins the other key "
+							+ "space — " + rule.getToken());
+		}
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"Is it safe to give her naproxen?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("nsaid"), null));
+
+		assertEquals(1, warnings.size(), "one rule is one chip however it is spelled, was: " + warnings);
+		assertEquals("Naproxen is contraindicated by an active allergy: NSAID hypersensitivity",
+				warnings.get(0).getDetail(), "and the incumbent survives, was: " + warnings);
+	}
+
+	@Test
 	public void aDatasetCarryingNoCuratedRulesAtAllIsUnchanged() {
 		// The 444-entries-with-no-curated-rule case (issue #135), which is every entry of every DDInter
 		// load: that parser emits no contraindications at all, so nothing here can fold and the identity

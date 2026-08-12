@@ -32,7 +32,7 @@ section and [ADR Decisions 23 & 24](adr.md). This document is only the **demo da
 | 1 | Question-driven injection | a KB drug name/alias in the question → a `drug_reference` citation is injected |
 | 2 | Contraindication — allergy | patient allergy token matches a KB contraindication (coded + non-coded) |
 | 3 | Contraindication — condition | patient condition token matches a KB contraindication (coded + non-coded) |
-| 4 | Contraindication — "recorded allergy to X" (ATC class) | allergy resolves to the very drug asked about |
+| 4 | Contraindication — "recorded allergy to X" (ATC class) | allergy resolves to the very drug asked about — where the KB also carries an allergy rule *naming that drug*, the two are one chip and the rule's note is the wording kept ([#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146)) |
 | 5 | Interaction — active order | a patient's active order matches a KB interaction token |
 | 6 | Interaction — duplicate therapy (ATC class) | an active order shares the asked drug's ATC level-4 subgroup |
 | 7 | Order-driven injection | a reference is injected from an active order (needs `injectFromQuery=false` to see in isolation) |
@@ -454,9 +454,9 @@ Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless not
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|
-| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication (ibuprofen allergy, GI bleed, peptic ulcer), "The patient has a recorded allergy to Ibuprofen.", interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), an "Ibuprofen is in the same cross-reactivity group (NSAID)…" interaction |
+| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication — "Ibuprofen is contraindicated by an active allergy: documented ibuprofen allergy" (**one** chip: the curated `ibuprofen` rule and the identity check are one finding since [#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146)), GI bleed, peptic ulcer — interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), an "Ibuprofen is in the same cross-reactivity group (NSAID)…" interaction |
 | *Is amoxicillin safe for this patient?* | injected `amoxicillin`; contraindication (penicillin-class), interaction (methotrexate), **duplicate therapy J01CA** (Ampicillin) |
-| *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "The patient has a recorded allergy to Paracetamol.", interaction (warfarin) |
+| *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "Paracetamol is contraindicated by an active allergy: documented paracetamol allergy" (one chip — see [#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146)), interaction (warfarin) |
 | *Is gentamicin appropriate for this patient?* | injected `gentamicin`; contraindication (aminoglycoside allergy, renal impairment), interaction (furosemide), **duplicate therapy J01GB** (Amikacin) |
 | *Is naproxen safe for this patient?* | injected `naproxen`; **cross-reactivity** "Naproxen is in the same ATC class (M01AE) as the patient's allergy to Ibuprofen…" *(needs Step 4)* |
 | any KB alias (brufen, advil, panadol, tylenol, amoxil…) on **any** patient | a `drug_reference` citation (question-driven injection needs no patient data) |

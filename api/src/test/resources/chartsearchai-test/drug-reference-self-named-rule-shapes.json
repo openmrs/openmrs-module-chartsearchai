@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "source": "hand-authored fixture for issue #146 — not shipped data",
-  "description": "Two shapes of self-named curated allergy rule that the shipped curated file does not carry, both about a rule whose token names the very entry it is filed against. (1) Ibuprofen's rule carries a BLANK note, so its sentence would state nothing the identity sentence does not already say. (2) Opium's rule carries a note, but its token is a FRAGMENT of the recorded allergen 'Tiotropium': PatientClinicalContext.hasAllergyToken is deliberately bare containment while DrugReferenceService.findImpliedSubstances is boundary-aware, so the curated arm fires there where the identity arm resolves a different substance — the shape that proves the rule arm still stands alone. Tiotropium is a third entry so that allergen really does resolve to something, rather than to nothing. No entry carries ATC codes, so no class comparison can chip and every count below is the two allergy arms' own.",
+  "description": "Shapes the shipped curated file does not carry, all about a curated allergy rule and which key space it belongs in. (1) Ibuprofen's rule NAMES the entry and carries a BLANK note, so its sentence would state nothing the identity sentence does not already say. (2) Opium's rule names the entry and carries a note, but its token is a FRAGMENT of the recorded allergen 'Tiotropium': PatientClinicalContext.hasAllergyToken is deliberately bare containment while DrugReferenceService.findImpliedSubstances is boundary-aware, so the curated arm fires there where the identity arm resolves a different substance — the shape that proves the rule arm still stands alone. Tiotropium is a third entry so that allergen really does resolve to something, rather than to nothing. (3) Naproxen's rule is authored TWICE differing only in case and names a CLASS rather than the entry, so it stays in the rule key space and is collapsed by that key's own normalization. No entry carries ATC codes, so no class comparison can chip and every count is the allergy arms' own.",
   "entries": [
     {
       "id": "ibuprofen",
@@ -25,6 +25,16 @@
       "id": "tiotropium",
       "name": "Tiotropium",
       "aliases": ["tiotropium"],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "naproxen",
+      "name": "Naproxen",
+      "aliases": ["naproxen"],
+      "contraindications": [
+        { "type": "allergy", "token": "nsaid", "note": "NSAID hypersensitivity" },
+        { "type": "ALLERGY", "token": "NSAID", "note": "avoid all NSAIDs" }
+      ],
       "source": "hand-authored fixture"
     }
   ]

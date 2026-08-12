@@ -2638,7 +2638,10 @@ public class DrugSafetyValidator {
 	 * several reference rows one substance is filed as warn once between them, and so do two allergy
 	 * RECORDS for two presentations of one substance
 	 * ({@link ContraindicationChips}, issue #145 — the ledger this arm adds to rather than appending to
-	 * the chip list, and the reason it takes one). The two class comparisons need only ATC codes, which
+	 * the chip list, and the reason it takes one). That ledger is shared with the curated arm, whose
+	 * allergy rules NAMING their own entry land on this arm's key since issue #146 and report the same
+	 * fact; so "at most one" spans the two arms and not only this one's own loop.
+	 * The two class comparisons need only ATC codes, which
 	 * is how an authoritative classification source carrying no rules ({@link AtcDrugReferenceSource})
 	 * still produces allergy reasoning.
 	 *
@@ -2881,7 +2884,8 @@ public class DrugSafetyValidator {
 	 * contraindication on the question's wording is what produced this defect. What bounds the arm
 	 * instead is the chart: it can only fire where an allergy or condition record and an active order
 	 * point at the same drug, and the two arms it delegates to bound it further — one chip per
-	 * (substance, allergen's substance) and one per (substance, matching curated rule), through the same
+	 * (substance, allergen's substance) and one per (substance, matching curated rule), those two being
+	 * ONE bound wherever the rule names the substance itself (issue #146), through the same
 	 * {@link ContraindicationChips} ledger the drug-in-play call site uses, which is what stops one
 		 * order that resolves several reference rows raising a chip per row (issue #145). That is a bound
 	 * in the patient's own records, the same kind every other contraindication chip has and the reason

@@ -24,7 +24,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * Issue #190 item 1 — {@code DrugReferenceInjector.render}'s {@code Contraindicated with:} clause
  * rendered one clause per contraindication ROW while
  * {@code DrugSafetyValidator.ContraindicationChips} raises one chip per
- * {@code (substance, type, token)}, so the injected record and the chip beside it disagreed about how
+ * {@code (substance, type, token)} — or, since issue #146, per {@code (substance, substance)} for an
+ * allergy rule naming its own entry — so the injected record and the chip beside it disagreed about how
  * many contraindications the entry has.
  *
  * <p>The two surfaces do not count the same POPULATION and are not being made to: the record renders
@@ -161,5 +162,41 @@ public class InjectedContraindicationClauseTest {
 				"active gastrointestinal bleeding", "active peptic ulcer disease"),
 				contraindicationClauses(record),
 				"four distinct rules are four clauses, unchanged: " + record.getText());
+	}
+
+	@Test
+	public void twoAllergyRulesNamingTheDRUGAreOneClauseBecauseTheyAreOneChip() throws Exception {
+		// Issue #146 moved the chip's collapse unit for an allergy rule NAMING the entry it is filed on:
+		// two such rules under two aliases of one drug are one chip, because they report one fact. This
+		// clause rendering keys on the chip's unit by contract, so it had to move with it — left keyed on
+		// (type, token) it put TWO clauses in the record beside ONE chip, which is exactly the disagreement
+		// issue #190 item 1 removed, re-opened one rule shape along. Silent: the model is simply told the
+		// drug has two contraindications where the deterministic layer found one.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
+				.fixtureEntries("chartsearchai-test/drug-reference-self-named-rule-shapes.json"));
+		String question = "Is it safe to give her nurofen?";
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null,
+				DrugReferenceTestSupport.set("Brufen/Nurofen brand"), null);
+		DrugReference nurofen = service.lookupByToken("nurofen");
+		assertEquals(2, nurofen.getContraindications().size(),
+				"precondition: the fixture must carry two rules, each naming the entry");
+		for (DrugReference.Contraindication rule : nurofen.getContraindications()) {
+			assertTrue(nurofen.isNamed(rule.getToken()),
+					"precondition: under a DIFFERENT alias each — " + rule.getToken());
+			assertTrue(context.hasAllergyToken(rule.getToken()),
+					"precondition: and both must match the one recorded allergy — " + rule.getToken());
+		}
+
+		List<SafetyWarning> chips = ruleChips(
+				DrugReferenceTestSupport.validator(service).validate("", question, context));
+		PatientChart chart = DrugReferenceTestSupport.injector(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
+		List<String> clauses = contraindicationClauses(
+				DrugReferenceTestSupport.injectedReferences(chart).get(0));
+
+		assertEquals(1, chips.size(), "one fact is one chip, was: " + chips);
+		assertEquals(1, clauses.size(), "and one clause beside it, was: " + clauses);
+		assertEquals("documented nurofen allergy — avoid the other brand too", clauses.get(0),
+				"joined, so the note the chip drops still reaches the prompt, was: " + clauses);
 	}
 }

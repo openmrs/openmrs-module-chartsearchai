@@ -1120,9 +1120,11 @@ public class DrugReferenceInjector {
 	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the
 	 *          prompt budget the reference slice spends, for the DEBUG line in {@code injectRecords}. */
 	/**
-	 * @return one clause per contraindication RULE — the {@code (type, token)} pair
-	 *         {@code DrugSafetyValidator.addContraindications} chips on, normalized the same way it
-	 *         normalizes it — each carrying the distinct notes its rows authored, in dataset order.
+	 * @return one clause per contraindication RULE, keyed exactly as
+	 *         {@code DrugSafetyValidator.addContraindications} keys its chip — the {@code (type, token)}
+	 *         pair, normalized the same way it normalizes it, except for an ALLERGY rule naming the
+	 *         entry it is filed on, which that arm keys on the SUBSTANCE (issue #146) and so does this.
+	 *         Each clause carries the distinct notes its rows authored, in dataset order.
 	 *
 	 *         <p><b>Issue #190 item 1.</b> This rendered one clause per ROW while
 	 *         {@code DrugSafetyValidator.ContraindicationChips} raises one chip per
@@ -1152,7 +1154,7 @@ public class DrugReferenceInjector {
 	 *         than emit a literal {@code null}.
 	 */
 	private static Collection<String> contraindicationClauses(DrugReference ref) {
-		Map<List<Object>, String> byRule = new LinkedHashMap<List<Object>, String>();
+		Map<Object, String> byRule = new LinkedHashMap<Object, String>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			List<String> notes = new ArrayList<String>();
 			addIfPresent(notes, ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()));
@@ -1160,9 +1162,16 @@ public class DrugReferenceInjector {
 				continue;
 			}
 			// The very key the chip ledger uses, through the same normalisation, so "ALLERGY"/"Ibuprofen"
-			// and "allergy"/"ibuprofen" are one rule here exactly as they are one chip there.
-			List<Object> key = Arrays.<Object> asList(DrugReference.normalizeName(c.getType()),
-					DrugReference.normalizeName(c.getToken()));
+			// and "allergy"/"ibuprofen" are one rule here exactly as they are one chip there — including
+			// issue #146's exception, where an allergy rule NAMING this entry is keyed on the substance
+			// because that is the fact it reports. Without the exception two such rules under two aliases
+			// of one drug are two clauses beside one chip, which is #190 item 1 re-opened one rule shape
+			// along. The chip's own key adds the patient's match, which a record about the drug has no
+			// business consulting; what has to agree is the collapse UNIT.
+			Object key = "allergy".equalsIgnoreCase(c.getType()) && ref.isNamed(c.getToken())
+					? ref.substanceGroupKey()
+					: Arrays.<Object> asList(DrugReference.normalizeName(c.getType()),
+							DrugReference.normalizeName(c.getToken()));
 			String clause = byRule.get(key);
 			if (clause == null) {
 				byRule.put(key, notes.get(0));

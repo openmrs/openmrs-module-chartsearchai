@@ -346,4 +346,30 @@ public class SelfNamedAllergyRuleFoldTest {
 				+ "allergy", warnings.get(0).getDetail(),
 				"and it is the first rule-bearing row's chip, carrying the note, was: " + warnings);
 	}
+
+	@Test
+	public void aRuleOnALaterRowReplacesTheIdentityChipInPlace() throws IOException {
+		// The other direction through the ledger, which the case above cannot reach: there the
+		// rule-bearing row leads, so the curated chip is raised first and the identity chip is simply
+		// declined. Here the BARE row leads — the allergen arm raises identity first and the rule has to
+		// REPLACE it, in the position the identity chip already took, so no client sees the chip sequence
+		// reshuffle. Nothing else in the suite exercises that branch for this rank pair, and a fold that
+		// only ever declined newcomers would report the module's stock sentence and drop the note for
+		// every dataset whose rule happens to sit on a later row.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
+				.fixtureEntries("chartsearchai-test/drug-reference-rule-on-a-later-row.json"));
+		List<DrugReference> rows = service.findByQuery("Is it safe to give her ibuprofen?");
+		assertEquals(3, rows.size(), "precondition: one word must resolve all three rows, was: " + rows);
+		assertTrue(rows.get(0).getContraindications().isEmpty(),
+				"precondition: and the FIRST of them must carry no rule, or identity is not raised first");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"Is it safe to give her ibuprofen?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("ibuprofen"), null));
+
+		assertEquals(1, warnings.size(), "still one chip, was: " + warnings);
+		assertEquals("Ibuprofen (tablets) is contraindicated by an active allergy: documented ibuprofen "
+				+ "allergy", warnings.get(0).getDetail(),
+				"and the note survives however late its row is, was: " + warnings);
+	}
 }

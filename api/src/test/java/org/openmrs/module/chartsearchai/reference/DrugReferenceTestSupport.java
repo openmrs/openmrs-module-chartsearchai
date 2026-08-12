@@ -406,6 +406,17 @@ public final class DrugReferenceTestSupport {
 		throw new AssertionError("the fixture must carry the " + name + " row, was: " + names(entries));
 	}
 
+	/** @return the chips' {@code detail} sentences, for asserting membership or the whole set exactly.
+	 *          The counterpart of {@link #detailContains} for the cases that compare a WHOLE detail
+	 *          rather than a substring, which is the stricter of the two. */
+	static List<String> details(List<SafetyWarning> warnings) {
+		List<String> out = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			out.add(warning.getDetail());
+		}
+		return out;
+	}
+
 	/** @return the entries' own {@code name}s. {@link DrugReference} defines no {@code toString}, so a
 	 *          failure message built from the list itself prints identity hashes. */
 	static List<String> names(List<DrugReference> entries) {

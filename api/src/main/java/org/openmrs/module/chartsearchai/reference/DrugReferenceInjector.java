@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -1120,22 +1119,26 @@ public class DrugReferenceInjector {
 	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the
 	 *          prompt budget the reference slice spends, for the DEBUG line in {@code injectRecords}. */
 	/**
-	 * @return one clause per contraindication RULE — the {@code (type, token)} pair
-	 *         {@code DrugSafetyValidator.addContraindications} chips on, normalized the same way it
-	 *         normalizes it — each carrying the distinct notes its rows authored, in dataset order.
+	 * @return one clause per contraindication RULE, keyed by the very method the chip ledger keys on —
+	 *         {@link DrugSafetyValidator#contraindicationFinding}, which is the {@code (type, token)}
+	 *         pair normalized, except for an ALLERGY rule naming the entry it is filed on, which is
+	 *         keyed on the SUBSTANCE (issue #146). Each clause carries the distinct notes its rows
+	 *         authored, in dataset order.
 	 *
 	 *         <p><b>Issue #190 item 1.</b> This rendered one clause per ROW while
-	 *         {@code DrugSafetyValidator.ContraindicationChips} raises one chip per
-	 *         {@code (substance, type, token)}, so an entry filing one rule twice put two clauses in the
-	 *         record beside one chip and the model was told the drug has two contraindications where the
-	 *         deterministic layer had found one. Keyed on the rule the CHIP compares, not on the rendered
-	 *         text, so the two counts cannot drift.
+	 *         {@code DrugSafetyValidator.ContraindicationChips} raised one chip per rule, so an entry
+	 *         filing one rule twice put two clauses in the record beside one chip and the model was told
+	 *         the drug has two contraindications where the deterministic layer had found one. Keyed on
+	 *         the rule the CHIP compares, not on the rendered text, so the two counts cannot drift —
+	 *         which is why the exception issue #146 added on that side had to be added here too, and why
+	 *         a future change to that key belongs in both places or in neither.
 	 *
 	 *         <p><b>Curated-source-only</b>, by construction rather than by measurement: neither
 	 *         {@code ddinter} nor {@code atc} publishes contraindications at all, so only an
 	 *         operator-authored file can file one rule twice — and the bundled seed does not (its four
-	 *         ibuprofen rows are four distinct {@code (type, token)} pairs), so no shipped rendering
-	 *         moves. {@code InjectedContraindicationClauseTest} pins both halves.
+	 *         ibuprofen rows are four distinct keys: since issue #146 the self-named allergy one is the
+	 *         substance and the other three are their own {@code (type, token)}), so no shipped
+	 *         rendering moves. {@code InjectedContraindicationClauseTest} pins both halves.
 	 *
 	 *         <p><b>Joined, not dropped</b>, and that is the deliberate difference from issue #174 site 2:
 	 *         that collapse could discard a repeated row because the repeats were near-identical, while
@@ -1152,17 +1155,22 @@ public class DrugReferenceInjector {
 	 *         than emit a literal {@code null}.
 	 */
 	private static Collection<String> contraindicationClauses(DrugReference ref) {
-		Map<List<Object>, String> byRule = new LinkedHashMap<List<Object>, String>();
+		Map<Object, String> byRule = new LinkedHashMap<Object, String>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			List<String> notes = new ArrayList<String>();
 			addIfPresent(notes, ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()));
 			if (notes.isEmpty()) {
 				continue;
 			}
-			// The very key the chip ledger uses, through the same normalisation, so "ALLERGY"/"Ibuprofen"
-			// and "allergy"/"ibuprofen" are one rule here exactly as they are one chip there.
-			List<Object> key = Arrays.<Object> asList(DrugReference.normalizeName(c.getType()),
-					DrugReference.normalizeName(c.getToken()));
+			// The very key the chip ledger uses, from the very method it uses, so "ALLERGY"/"Ibuprofen"
+			// and "allergy"/"ibuprofen" are one rule here exactly as they are one chip there — including
+			// issue #146's exception, where an allergy rule NAMING this entry is keyed on the substance
+			// because that is the fact it reports. Shared rather than restated: a copy is how the two came
+			// apart when that exception was added, two such rules under two aliases of one drug becoming
+			// one chip and two clauses, which is #190 item 1 re-opened one rule shape along. The chip's
+			// own key additionally carries the SUBJECT and the patient's match, neither of which a record
+			// about the drug has any business consulting; what has to agree is the collapse UNIT.
+			Object key = DrugSafetyValidator.contraindicationFinding(ref, c);
 			String clause = byRule.get(key);
 			if (clause == null) {
 				byRule.put(key, notes.get(0));

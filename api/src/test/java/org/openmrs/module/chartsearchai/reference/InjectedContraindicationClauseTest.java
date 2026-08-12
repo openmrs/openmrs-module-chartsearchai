@@ -24,7 +24,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * Issue #190 item 1 — {@code DrugReferenceInjector.render}'s {@code Contraindicated with:} clause
  * rendered one clause per contraindication ROW while
  * {@code DrugSafetyValidator.ContraindicationChips} raises one chip per
- * {@code (substance, type, token)}, so the injected record and the chip beside it disagreed about how
+ * {@code (substance, type, token)} — or, since issue #146, per {@code (substance, substance)} for an
+ * allergy rule naming its own entry — so the injected record and the chip beside it disagreed about how
  * many contraindications the entry has.
  *
  * <p>The two surfaces do not count the same POPULATION and are not being made to: the record renders
@@ -35,7 +36,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p>Curated-source-only by construction: the {@code ddinter} and {@code atc} sources publish no
  * contraindications at all (see {@link DdiDrugReferenceSource}'s class javadoc), so only an
  * operator-authored file can file one rule twice. The bundled seed does not — its four ibuprofen rows
- * are four distinct {@code (type, token)} pairs — which is why nothing shipped changes here and why
+ * are four distinct keys, the self-named allergy one being the substance since issue #146 and the
+ * other three their own {@code (type, token)} — which is why nothing shipped changes here and why
  * this needs a fixture.
  *
  * <p><b>Joining rather than dropping.</b> Issue #174 site 2 could drop a repeated row because the
@@ -50,7 +52,11 @@ public class InjectedContraindicationClauseTest {
 
 	/** Shared with {@code ContraindicationRouteVariantTest}, which asks the same question of the CHIP:
 	 *  one curated {@code allergy}/{@code ibuprofen} rule authored twice, under two spellings and with
-	 *  two different notes. */
+	 *  two different notes. Both spellings NAME the entry, so since issue #146 they collapse on the
+	 *  substance key rather than on the normalized {@code (type, token)} one this fixture was built
+	 *  for; what it still pins is the JOIN, which is what this class is about. The rule key space's own
+	 *  normalization is pinned by
+	 *  {@code SelfNamedAllergyRuleFoldTest.aClassLevelRuleAuthoredTwiceIsStillOneChip}. */
 	private static final String DUPLICATE_RULE_FIXTURE =
 			"chartsearchai-test/drug-reference-duplicate-rule-tokens.json";
 
@@ -161,5 +167,41 @@ public class InjectedContraindicationClauseTest {
 				"active gastrointestinal bleeding", "active peptic ulcer disease"),
 				contraindicationClauses(record),
 				"four distinct rules are four clauses, unchanged: " + record.getText());
+	}
+
+	@Test
+	public void twoAllergyRulesNamingTheDRUGAreOneClauseBecauseTheyAreOneChip() throws Exception {
+		// Issue #146 moved the chip's collapse unit for an allergy rule NAMING the entry it is filed on:
+		// two such rules under two aliases of one drug are one chip, because they report one fact. This
+		// clause rendering keys on the chip's unit by contract, so it had to move with it — left keyed on
+		// (type, token) it put TWO clauses in the record beside ONE chip, which is exactly the disagreement
+		// issue #190 item 1 removed, re-opened one rule shape along. Silent: the model is simply told the
+		// drug has two contraindications where the deterministic layer found one.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.fixtureEntries(SelfNamedAllergyRuleFoldTest.SELF_NAMED_SHAPES));
+		String question = "Is it safe to give her nurofen?";
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null,
+				DrugReferenceTestSupport.set("Brufen/Nurofen brand"), null);
+		DrugReference nurofen = service.lookupByToken("nurofen");
+		assertEquals(2, nurofen.getContraindications().size(),
+				"precondition: the fixture must carry two rules, each naming the entry");
+		for (DrugReference.Contraindication rule : nurofen.getContraindications()) {
+			assertTrue(DrugSafetyValidator.selfNamedAllergyRule(nurofen, rule),
+					"precondition: each rule must NAME the entry — " + rule.getToken());
+			assertTrue(context.hasAllergyToken(rule.getToken()),
+					"precondition: and both must match the one recorded allergy — " + rule.getToken());
+		}
+
+		List<SafetyWarning> chips = ruleChips(
+				DrugReferenceTestSupport.validator(service).validate("", question, context));
+		PatientChart chart = DrugReferenceTestSupport.injector(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
+		List<String> clauses = contraindicationClauses(
+				DrugReferenceTestSupport.injectedReferences(chart).get(0));
+
+		assertEquals(1, chips.size(), "one fact is one chip, was: " + chips);
+		assertEquals(1, clauses.size(), "and one clause beside it, was: " + clauses);
+		assertEquals("documented nurofen allergy — avoid the other brand too", clauses.get(0),
+				"joined, so the note the chip drops still reaches the prompt, was: " + clauses);
 	}
 }

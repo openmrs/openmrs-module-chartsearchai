@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #146 — not shipped data",
+  "description": "Shapes the shipped curated file does not carry, all about a curated allergy rule and which key space it belongs in. (1) Ibuprofen's rule NAMES the entry and carries a BLANK note, so its sentence would state nothing the identity sentence does not already say. (2) Opium's rule names the entry and carries a note, but its token is a FRAGMENT of the recorded allergen 'Tiotropium': PatientClinicalContext.hasAllergyToken is deliberately bare containment while DrugReferenceService.findImpliedSubstances is boundary-aware, so the curated arm fires there where the identity arm resolves a different substance — the shape that proves the rule arm still stands alone. Tiotropium is a third entry so that allergen really does resolve to something, rather than to nothing. (3) Naproxen's rule is authored TWICE, differing in case AND in note — the differing notes are load-bearing, because they are what lets the test assert which spelling won the tie — and names a CLASS rather than the entry, so it stays in the rule key space and is collapsed by that key's own normalization. (4) Codeine's rule names the entry and carries a BLANK note, and the allergen it fires on ('dihydrocodeine') is deliberately NOT an entry here, so nothing corroborates it — the shape where a contentless self-named rule is the only chip available. (5) Nurofen carries TWO self-naming allergy rules, one per alias, with different notes — one fact, so one chip and one injected clause, which is what keeps the chip and the record counting the same unit (issue #190 item 1). (6) Diclofenac carries a self-naming rule of each TYPE, an allergy one and a condition one, which are two findings about two different records and must stay two chips. No entry carries ATC codes, so no class comparison can chip and every count is the allergy arms' own.",
+  "entries": [
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": ["ibuprofen"],
+      "contraindications": [
+        { "type": "allergy", "token": "ibuprofen", "note": "" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "opium",
+      "name": "Opium",
+      "aliases": ["opium"],
+      "contraindications": [
+        { "type": "allergy", "token": "opium", "note": "documented opium allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "tiotropium",
+      "name": "Tiotropium",
+      "aliases": ["tiotropium"],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "naproxen",
+      "name": "Naproxen",
+      "aliases": ["naproxen"],
+      "contraindications": [
+        { "type": "allergy", "token": "nsaid", "note": "NSAID hypersensitivity" },
+        { "type": "ALLERGY", "token": "NSAID", "note": "avoid all NSAIDs" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "codeine",
+      "name": "Codeine",
+      "aliases": ["codeine"],
+      "contraindications": [
+        { "type": "allergy", "token": "codeine", "note": "" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "nurofen",
+      "name": "Nurofen",
+      "aliases": ["nurofen", "brufen"],
+      "contraindications": [
+        { "type": "allergy", "token": "nurofen", "note": "documented nurofen allergy" },
+        { "type": "allergy", "token": "brufen", "note": "avoid the other brand too" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "diclofenac",
+      "name": "Diclofenac",
+      "aliases": ["diclofenac"],
+      "contraindications": [
+        { "type": "allergy", "token": "diclofenac", "note": "documented diclofenac allergy" },
+        { "type": "condition", "token": "diclofenac", "note": "diclofenac-induced gastropathy" }
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

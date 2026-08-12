@@ -1127,11 +1127,12 @@ public class DrugReferenceInjector {
 	 *         Each clause carries the distinct notes its rows authored, in dataset order.
 	 *
 	 *         <p><b>Issue #190 item 1.</b> This rendered one clause per ROW while
-	 *         {@code DrugSafetyValidator.ContraindicationChips} raises one chip per
-	 *         {@code (substance, type, token)}, so an entry filing one rule twice put two clauses in the
-	 *         record beside one chip and the model was told the drug has two contraindications where the
-	 *         deterministic layer had found one. Keyed on the rule the CHIP compares, not on the rendered
-	 *         text, so the two counts cannot drift.
+	 *         {@code DrugSafetyValidator.ContraindicationChips} raised one chip per rule, so an entry
+	 *         filing one rule twice put two clauses in the record beside one chip and the model was told
+	 *         the drug has two contraindications where the deterministic layer had found one. Keyed on
+	 *         the rule the CHIP compares, not on the rendered text, so the two counts cannot drift —
+	 *         which is why the exception issue #146 added on that side had to be added here too, and why
+	 *         a future change to that key belongs in both places or in neither.
 	 *
 	 *         <p><b>Curated-source-only</b>, by construction rather than by measurement: neither
 	 *         {@code ddinter} nor {@code atc} publishes contraindications at all, so only an

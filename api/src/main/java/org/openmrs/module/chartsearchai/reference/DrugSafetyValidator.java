@@ -79,7 +79,11 @@ import org.springframework.stereotype.Service;
  *       reference row: a dataset that files one substance as several route or formulation rows put
  *       every one of them in play from one clinician-facing word, and each raised its own chip — the
  *       siblings of the row the allergy resolved to reporting the substance as cross-reactive with
- *       itself ({@link ContraindicationChips}, issue #145). These same two checks additionally run
+ *       itself ({@link ContraindicationChips}, issue #145). Per recorded FINDING and not per arm
+ *       either: a hand-authored allergy rule naming the very drug it is filed against reports the
+ *       identity check's fact, so the two fold into one chip keeping whichever wording carries the
+ *       deployment's own note (issue #146 — 3 of the 4 entries in the shipped curated file).
+ *       These same two checks additionally run
  *       over the patient's OWN ACTIVE ORDERS, whatever the question and the answer name — "is the
  *       patient allergic to something they are taking?" is a fact about their chart, and the
  *       drug-in-play framing above could not ask it (see
@@ -690,20 +694,46 @@ public class DrugSafetyValidator {
 	 * {@code json} dataset. The finding side is what the arm actually compared — the resolved allergen's
 	 * SUBSTANCE for the allergy arm, by the same {@link DrugReference#substanceGroupKey()} as the
 	 * subject side, and the curated rule's own {@code (type, token)} for the rule arm.
-	 * Those are two key spaces on purpose: the rule arm's token is free text that may name a class
-	 * ({@code nsaid}, {@code aminoglycoside}) rather than a drug, so resolving it to an entry to make
-	 * the two arms comparable would collapse a class-level rule into an identity chip. What keeps the two
-	 * spaces from colliding is no longer their TYPE — the allergy finding used to be a
-	 * {@link DrugReference}, which defines no {@code equals}, and is now usually a {@link List} like the
-	 * rule's — but their LENGTH, two against three, plus the rule's leading {@code "rule"} tag. Both are
-	 * needed: a substance key that grew a third component would collide on length alone. A curated rule
-	 * and an identity match about ONE allergy therefore still raise two chips — that is issue #146,
-	 * filed separately, which {@code ActiveOrderContraindicationTest} currently pins at two.
+	 * Those stay two key spaces, and the reason is unchanged: a rule's token is free text that may name a
+	 * CLASS ({@code nsaid}, {@code aminoglycoside}) rather than a drug, so resolving tokens to entries
+	 * wholesale in order to make the two arms comparable would collapse a class-level rule into an
+	 * identity chip — a different and worse defect. What keeps the two spaces from colliding is no longer
+	 * their TYPE — the allergy finding used to be a {@link DrugReference}, which defines no
+	 * {@code equals}, and is now usually a {@link List} like the rule's — but their LENGTH, two against
+	 * three, plus the rule's leading {@code "rule"} tag. Both are needed: a substance key that grew a
+	 * third component would collide on length alone.
+	 *
+	 * <p><b>The one rule that crosses (issue #146).</b> An allergy rule whose token is one of the SUBJECT
+	 * ENTRY'S OWN names reports the allergy arm's fact — the patient is allergic to this very drug — so
+	 * it is filed in the allergy arm's key space instead of the rule one, and the two collapse. On the
+	 * shipped default {@code sourceFormat=json} that shape is 3 of the file's 4 entries (Gentamicin's
+	 * allergy rule names a class, which is why it was the control), and each of the three double-reported
+	 * one allergy: {@code Ibuprofen is contraindicated by an active allergy: documented ibuprofen
+	 * allergy} beside {@code The patient has a recorded allergy to Ibuprofen.} — the first defect in this
+	 * area that needed no non-default configuration to see. What is keyed is the FACT and never "both
+	 * arms fired", which is what leaves a class-level rule its own chip beside the folded one for a
+	 * patient recorded as allergic to both the drug and its class.
+	 *
+	 * <p>The test is name IDENTITY between two REFERENCE strings — a curated token against the entry's
+	 * own alias list — so it is {@link DrugReference#isNamed}, the same predicate {@link #namesEntry}
+	 * asks of an interaction rule's token. Deliberately NOT
+	 * {@link DrugReferenceService#findImpliedSubstances}: that answers which substances a RECORDED name
+	 * denotes and widens deliberately (issues #193/#195/#209), and applying it to a curated token is
+	 * exactly the wholesale resolution the paragraph above rules out. The narrower predicate also bounds
+	 * the fold to the one shape it is about — {@code isNamed} can only be true of the entry the rule is
+	 * filed on, so no rule can fold onto a substance other than its own subject.
 	 *
 	 * <p><b>Which chip survives.</b> The most specific relationship, since that is this arm's analogue
 	 * of "the highest severity wins" — a contraindication chip carries no severity, and what it can
 	 * under-report is the STRENGTH of the claim: identity ("the patient has a recorded allergy to X")
-	 * over a shared ATC class over a shared curated group. Ties keep the incumbent, so a group of
+	 * over a shared ATC class over a shared curated group. Where a self-named curated rule joins that
+	 * space it is ranked by what it ADDS, not by which arm produced it — issue #88's finding that "arm X
+	 * yields to arm Y" is the wrong dedup whenever the yielding arm can be the one carrying the content.
+	 * A rule with a note of its own says the identity fact in the deployment's own words and outranks it;
+	 * a rule with none renders its own token back
+	 * ({@link ChartSearchAiUtils#firstNonBlank}, "…: ibuprofen") and is outranked by every other
+	 * relationship, so it survives only where nothing else reports the substance at all. Ties keep the
+	 * incumbent, so a group of
 	 * equally-related rows is reported as the dataset's first row. NOT the same rule
 	 * {@link #bestRulePerPartner} applies since issue #162: that one prefers the row naming no route
 	 * before falling back to the incumbent, and this one does not — so a substance whose unqualified row
@@ -746,6 +776,14 @@ public class DrugSafetyValidator {
 	 */
 	private static final class ContraindicationChips {
 
+		/** A curated allergy rule NAMING THE SUBSTANCE it is filed against and carrying a note of its
+		 *  own (issue #146): the identity relationship below, stated in the deployment's own clinical
+		 *  wording. Above {@link #IDENTITY} because it says everything that sentence says and the note
+		 *  besides, which nothing else in this ledger can reproduce — a deployment authoring
+		 *  {@code drug-reference.json} is recording exactly that wording, and a fold that kept the
+		 *  module's stock sentence would silently discard it. */
+		static final int NAMED_RULE = 4;
+
 		/** A recorded allergy to this very substance — needs no ATC code and outranks both class
 		 *  comparisons (the precedence {@link #addAllergyContraindications} already applies per
 		 *  allergen, extended across the rows of one substance). Since issue #164 the comparison behind
@@ -763,6 +801,16 @@ public class DrugSafetyValidator {
 		/** A curated contraindication rule. Its own key space, so this rank never competes with the
 		 *  three above; it exists so every call reads alike. */
 		static final int CURATED_RULE = 1;
+
+		/** {@link #NAMED_RULE} with no note of its own — the same claim, rendered as the rule's own
+		 *  token ("Ibuprofen is contraindicated by an active allergy: ibuprofen"), which says strictly
+		 *  less than {@link #IDENTITY}. Below every other relationship rather than merely below that
+		 *  one, so it can never displace a chip and is displaced by any: it is still RAISED, because the
+		 *  arms are independent and this rule fires on evidence the allergen arm need not reproduce
+		 *  ({@link PatientClinicalContext#hasAllergyToken} is bare containment where
+		 *  {@link DrugReferenceService#findImpliedSubstances} is boundary-aware), and dropping it would
+		 *  have made a curated rule conditional on an arm that never gated it. */
+		static final int NAMED_RULE_WITHOUT_A_NOTE = 0;
 
 		/** A chip already raised for one key: where it sits in {@code warnings}, and how specific the
 		 *  relationship behind it is. ONE entry rather than two maps keyed alike, so the position and the
@@ -817,25 +865,36 @@ public class DrugSafetyValidator {
 			return;
 		}
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
-			boolean hit = false;
-			String against = null;
-			if ("allergy".equalsIgnoreCase(c.getType()) && context.hasAllergyToken(c.getToken())) {
-				hit = true;
-				against = "active allergy";
-			} else if ("condition".equalsIgnoreCase(c.getType()) && context.hasConditionToken(c.getToken())) {
-				hit = true;
-				against = "active condition";
+			boolean allergy = "allergy".equalsIgnoreCase(c.getType())
+					&& context.hasAllergyToken(c.getToken());
+			boolean condition = !allergy && "condition".equalsIgnoreCase(c.getType())
+					&& context.hasConditionToken(c.getToken());
+			if (!allergy && !condition) {
+				continue;
 			}
-			if (hit) {
-				// The rule as the two tests above compared it — type case-insensitively, token through
-				// hasAllergyToken/hasConditionToken, which lower-case — so the key says what the match
-				// said, and two rows differing only in case cannot chip twice.
-				chips.add(ref, Arrays.asList("rule", DrugReference.normalizeName(c.getType()),
-						DrugReference.normalizeName(c.getToken())), ContraindicationChips.CURATED_RULE,
-						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-								ref.displayLabel() + " is contraindicated by an " + against + ": "
-										+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
+			// The rule as the two tests above compared it — type case-insensitively, token through
+			// hasAllergyToken/hasConditionToken, which lower-case — so the key says what the match
+			// said, and two rows differing only in case cannot chip twice.
+			Object finding = Arrays.asList("rule", DrugReference.normalizeName(c.getType()),
+					DrugReference.normalizeName(c.getToken()));
+			int relationship = ContraindicationChips.CURATED_RULE;
+			if (allergy && ref.isNamed(c.getToken())) {
+				// The rule names the drug it is filed against, so it reports what
+				// addAllergyContraindications reports: one allergy, one chip (issue #146). Keyed the way
+				// that arm keys it — on the SUBSTANCE, so this also collapses across the rows one
+				// substance is filed as, exactly as issue #145's dedup does on the subject side. Only an
+				// ALLERGY rule can join it; a condition rule token that happened to name the drug would
+				// be a fact about a condition record, which no chip in this key space is about.
+				finding = ref.substanceGroupKey();
+				relationship = ChartSearchAiUtils.isBlank(c.getNote())
+						? ContraindicationChips.NAMED_RULE_WITHOUT_A_NOTE
+						: ContraindicationChips.NAMED_RULE;
 			}
+			chips.add(ref, finding, relationship,
+					new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
+							ref.displayLabel() + " is contraindicated by an "
+									+ (allergy ? "active allergy" : "active condition") + ": "
+									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
 		}
 	}
 

@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #146 — not shipped data",
+  "description": "Two shapes of self-named curated allergy rule that the shipped curated file does not carry, both about a rule whose token names the very entry it is filed against. (1) Ibuprofen's rule carries a BLANK note, so its sentence would state nothing the identity sentence does not already say. (2) Opium's rule carries a note, but its token is a FRAGMENT of the recorded allergen 'Tiotropium': PatientClinicalContext.hasAllergyToken is deliberately bare containment while DrugReferenceService.findImpliedSubstances is boundary-aware, so the curated arm fires there where the identity arm resolves a different substance — the shape that proves the rule arm still stands alone. Tiotropium is a third entry so that allergen really does resolve to something, rather than to nothing. No entry carries ATC codes, so no class comparison can chip and every count below is the two allergy arms' own.",
+  "entries": [
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": ["ibuprofen"],
+      "contraindications": [
+        { "type": "allergy", "token": "ibuprofen", "note": "" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "opium",
+      "name": "Opium",
+      "aliases": ["opium"],
+      "contraindications": [
+        { "type": "allergy", "token": "opium", "note": "documented opium allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "tiotropium",
+      "name": "Tiotropium",
+      "aliases": ["tiotropium"],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

@@ -73,9 +73,11 @@ public class ContraindicationRouteVariantTest {
 	private static final String FIXTURE = DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS;
 
 	/** One curated entry carrying the same contraindication rule twice, differing only in the CASE of
-	 *  its type and token — the ledger's other key space, on the source that publishes no substance
-	 *  name. Curated schema, so it is parsed by {@link JsonDrugReferenceSource} rather than the DDInter
-	 *  parser above. */
+	 *  its type and token, on the source that publishes no substance name. Both spellings NAME the
+	 *  entry, so since issue #146 they land in the allergy arm's key space rather than the rule one —
+	 *  {@code SelfNamedAllergyRuleFoldTest.aClassLevelRuleAuthoredTwiceIsStillOneChip} is where the rule
+	 *  key space's own case normalization is pinned now. Curated schema, so it is parsed by
+	 *  {@link JsonDrugReferenceSource} rather than the DDInter parser above. */
 	private static final String DUPLICATE_RULE_FIXTURE =
 			"chartsearchai-test/drug-reference-duplicate-rule-tokens.json";
 

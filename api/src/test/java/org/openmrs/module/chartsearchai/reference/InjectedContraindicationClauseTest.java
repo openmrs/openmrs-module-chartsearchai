@@ -172,8 +172,8 @@ public class InjectedContraindicationClauseTest {
 		// (type, token) it put TWO clauses in the record beside ONE chip, which is exactly the disagreement
 		// issue #190 item 1 removed, re-opened one rule shape along. Silent: the model is simply told the
 		// drug has two contraindications where the deterministic layer found one.
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
-				.fixtureEntries("chartsearchai-test/drug-reference-self-named-rule-shapes.json"));
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.fixtureEntries(SelfNamedAllergyRuleFoldTest.SELF_NAMED_SHAPES));
 		String question = "Is it safe to give her nurofen?";
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null,
 				DrugReferenceTestSupport.set("Brufen/Nurofen brand"), null);

@@ -154,9 +154,17 @@ public class ActiveOrderContraindicationTest {
 		// findImpliedSubstances can reach the drug. Split out of the case above when issue #146 folded
 		// the two arms' chips there into one: without it, nothing on this path would still assert that
 		// the identity arm reaches a prescribed drug at all.
-		List<SafetyWarning> warnings = validator().validate(ECHOING_ANSWER, NO_DRUG_QUESTION,
-				ctx(DrugReferenceTestSupport.set("brufen"), null),
-				chartWithTheOrderRecord().getMappings());
+		DrugReferenceService service = DrugReferenceTestSupport.bundledService();
+		PatientClinicalContext context = ctx(DrugReferenceTestSupport.set("brufen"), null);
+		for (DrugReference.Contraindication rule : service.lookupByToken("ibuprofen")
+				.getContraindications()) {
+			assertFalse(context.hasAllergyToken(rule.getToken()),
+					"precondition: no curated rule may match this allergen, or the chip below is not the "
+							+ "identity arm's — " + rule.getToken());
+		}
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate(
+				ECHOING_ANSWER, NO_DRUG_QUESTION, context, chartWithTheOrderRecord().getMappings());
 
 		assertEquals(1, contraindications(warnings).size(),
 				"the identity arm alone must still raise the prescribed drug, was: " + warnings);

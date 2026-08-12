@@ -58,9 +58,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class SelfNamedAllergyRuleFoldTest {
 
-	/** A curated fixture carrying the two self-named shapes the shipped file does not — see its own
-	 *  {@code description} field. */
-	private static final String SELF_NAMED_SHAPES =
+	/** A curated fixture carrying the self-named-rule shapes the shipped file does not — one entry per
+	 *  shape, each described in the fixture's own {@code description} field. Shared with
+	 *  {@link InjectedContraindicationClauseTest}, which asks the same collapse question of the
+	 *  injected record instead of the chip. */
+	static final String SELF_NAMED_SHAPES =
 			"chartsearchai-test/drug-reference-self-named-rule-shapes.json";
 
 	private static List<String> details(List<SafetyWarning> warnings) {

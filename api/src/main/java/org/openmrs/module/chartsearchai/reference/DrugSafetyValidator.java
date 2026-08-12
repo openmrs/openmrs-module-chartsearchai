@@ -3243,19 +3243,28 @@ public class DrugSafetyValidator {
 	 * substance and calls this each time, and {@link #ruleAbout} re-runs {@link #entryForAtcCode}
 	 * itself rather than reading the resolution carried here. They agree because that scan is a
 	 * function of {@code getAll()} alone, which is loaded once — a property of the service, not
-	 * something this method enforces. The memo below is per CALL and does not change that; widening it
-	 * to the whole {@code validate} pass would, and would cut the repeated full scans, but it must
-	 * then be a local threaded through the pass and NEVER a field: a memoised {@link DrugReference}
-	 * outliving a {@code getAll()} reload fails the reference comparisons the contraindication arms
-	 * make (issue #172), which silently re-opens issue #145.
+	 * something this method enforces. The memos below are per CALL and do not change that; widening
+	 * them to the whole {@code validate} pass would, and would cut the repeated full scans, but they
+	 * must then be locals threaded through the pass and NEVER fields: a memoised
+	 * {@link DrugReference} outliving a {@code getAll()} reload fails the reference comparisons the
+	 * contraindication arms make (issue #172), which silently re-opens issue #145.
+	 *
+	 * <p>What the repeat actually costs, since issue #185 added a second sweep to it: measured
+	 * 2026-08-12 by timing {@link #validate} over the shipped 19 MB KB with a 30-order, 60-name
+	 * context, <b>61 ms before that change and 106 ms after</b>, chips identical. Against an answer
+	 * this module waits seconds for, that is why the per-pass memo stays unbuilt — re-measure the same
+	 * way before treating the repeat as free at a larger order count.
 	 */
 	private List<OrderPartner> orderPartners(PatientClinicalContext context) {
 		Map<Object, OrderPartner> byIdentity = new LinkedHashMap<Object, OrderPartner>();
-		// Per-CALL memos, never fields: entryForAtcCode is a full scan of getAll() and the rung added
-		// by issue #186 asks it once per code of an order as well as once per code of the context, so
-		// without them a partly-covered order rescans the dataset for every code it carries. A field
-		// would be issue #172's trap — a memoised DrugReference outliving a getAll() hot-reload fails
-		// the reference comparisons the contraindication arms make, silently re-opening issue #145.
+		// Per-CALL memos, never fields. Each covers a dataset sweep this loop would otherwise repeat:
+		// entryForAtcCode is a full scan of getAll() and the rung added by issue #186 asks it once per
+		// code of an order as well as once per code of the context, so without the first two a
+		// partly-covered order rescans the dataset for every code it carries; substancesNamedBy is a
+		// resolution of every name of an order and issue #185 asks it once per code of that order. A
+		// field would be issue #172's trap — a memoised DrugReference outliving a getAll() hot-reload
+		// fails the reference comparisons the contraindication arms make, silently re-opening issue
+		// #145 — and the third memo holds substanceGroupKey() values, which can BE a DrugReference.
 		Map<String, DrugReference> entryByCode = new LinkedHashMap<String, DrugReference>();
 		Map<PatientClinicalContext.ActiveDrugOrder, DrugReference> substanceByOrder =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, DrugReference>();
@@ -3321,6 +3330,14 @@ public class DrugSafetyValidator {
 	 *         that order has to survive. {@link #resolvesFrom} is deliberately that superset and
 	 *         answers a different question — which order is a SUBJECT's own, where admitting too much
 	 *         costs a pair rather than a suppression.
+	 *
+	 *         <p>Asked only of the order {@link #orderCarrying} returns for a code, which is the FIRST
+	 *         order carrying it — so where two orders publish identical code sets, only the first
+	 *         one's names are read. The residue is narrow because the partner needs a code in
+	 *         {@code ref}'s own subgroup before any of this is consulted, and the order that NAMES
+	 *         {@code ref} is normally the one carrying that code; it bites only where the naming
+	 *         order's codes are a subset of the other's. Left as it is rather than scanning every
+	 *         carrier, so this and the identity/label ladder read the orders the same way.
 	 *
 	 *         <p>Memoised through {@code cache} for the duration of one {@link #orderPartners} call:
 	 *         this is a dataset sweep per name and every code of an order asks it — see there for why

@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * <pre>Omeprazole is in the same ATC class (A02BC) as active order Omeprazole 20mg</pre>
  *
  * <p>Identity is what the skip is actually about, so it asks
- * {@link DrugReference#substanceGroupKey()} — the same correction issue #164/#187 made for the two
+ * {@link DrugReference#substanceGroupKey()} — the same correction issues #164/#187 made for the two
  * cross-reactivity routes to the same symptom, and the reason issue #173 built that key.
  *
  * <p><b>Two routes in, and they need different halves of the answer.</b> Both are pinned here, over

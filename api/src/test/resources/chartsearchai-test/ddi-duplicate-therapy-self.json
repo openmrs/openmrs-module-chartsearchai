@@ -1,0 +1,198 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #185 - the restating-existing-therapy skip in the duplicate-therapy (class) arm. Rows are field-for-field their KB rows in KB order, and the interaction rows are every KB pair among these drugs. TWO slices, one per route into the defect. (1) The PPIs: the KB's Omeprazole row publishes rxnorm_name 'esomeprazole' and the single ATC code A02BC05, which is esomeprazole's; omeprazole's own A02BC01 is absent from the whole 19 MB KB (measured 2026-08-12 through DrugReference.normalizedAtcCodes over DdiDrugReferenceSource.parse), so an omeprazole order on a dictionary that maps the concept correctly carries a code the KB's Omeprazole row does not - the two code sets are disjoint while their level-4 subgroups still meet. Esomeprazole keeps the fix honest: same rxnorm_name family, same ATC code, a different drugbank_id and so a different DrugReference.substanceKey, so a chip about it against an omeprazole order is a genuine finding and must survive. Pantoprazole is the third A02BC substance and the only one of the three the KB rates against Omeprazole. (2) Isoniazid and Rifapentine: the 3.7.1 demo dictionary's own 'Isoniazid / Rifapentine' concept maps to J04AB05 (rifapentine) and J04AC51 (the combination code, absent KB-wide), so the partner RESOLVES - to Rifapentine, by the code - and it is the ORDER'S NAME that names isoniazid. That is the route a skip keyed on the resolved entry alone would still miss."
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1340",
+   "name": "Omeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00338",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1388",
+   "name": "Pantoprazole",
+   "rxcui": "40790",
+   "rxnorm_name": "pantoprazole",
+   "drugbank_id": "DB00213",
+   "atc": [
+    "A02BC02"
+   ],
+   "ciel": [
+    {
+     "code": "81550",
+     "uuid": "81550AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pantoprazole"
+    },
+    {
+     "code": "81551",
+     "uuid": "81551AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pantoprazole (as pantoprazole sodium sesquihydrate)"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1592",
+   "name": "Rifapentine",
+   "rxcui": "35617",
+   "rxnorm_name": "rifapentine",
+   "drugbank_id": "DB01201",
+   "atc": [
+    "J04AB05"
+   ],
+   "ciel": [
+    {
+     "code": "83360",
+     "uuid": "83360AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifapentine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter676",
+   "name": "Esomeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00736",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter986",
+   "name": "Isoniazid",
+   "rxcui": "6038",
+   "rxnorm_name": "isoniazid",
+   "drugbank_id": "DB00951",
+   "atc": [
+    "J04AC01"
+   ],
+   "ciel": [
+    {
+     "code": "104943",
+     "uuid": "104943AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / rifampin"
+    },
+    {
+     "code": "104944",
+     "uuid": "104944AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / vitamin B6"
+    },
+    {
+     "code": "1108",
+     "uuid": "1108AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ethambutol and isoniazid"
+    },
+    {
+     "code": "1131",
+     "uuid": "1131AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid pyrazinamide and ethambutol"
+    },
+    {
+     "code": "1194",
+     "uuid": "1194AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin and isoniazid"
+    },
+    {
+     "code": "159851",
+     "uuid": "159851AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid and ethambutol"
+    },
+    {
+     "code": "768",
+     "uuid": "768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / pyrazinamide / rifampin"
+    },
+    {
+     "code": "78280",
+     "uuid": "78280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1340",
+   "DDInter1388",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter986",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1388",
+   "DDInter986",
+   "Unknown",
+   "-1"
+  ]
+ ]
+}

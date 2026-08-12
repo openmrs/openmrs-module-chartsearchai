@@ -152,6 +152,36 @@ public class DuplicateTherapySelfChipTest {
 	}
 
 	@Test
+	public void theSkipIsPerPartnerSoASecondOrderInTheSameClassKeepsItsChip() throws IOException {
+		// The skip silences the partner that IS the drug and no other, which only a patient on TWO
+		// class-related drugs can show. A clinician asking about omeprazole for a patient already on
+		// omeprazole AND pantoprazole must still be told about the pantoprazole — that is the whole
+		// point of the arm. Attaching each order's substances to every partner rather than to the
+		// partners that order produced would lose exactly this chip, and no other case in the suite
+		// notices: every other two-order fixture supplies the flattened code set alone, which carries
+		// no order to attribute anything to.
+		Set<String> pantoprazoleCodes = DrugReferenceTestSupport.set("A02BC02");
+		Set<String> pantoprazoleNames = DrugReferenceTestSupport.set("Pantoprazole 40mg");
+		Set<String> omeprazoleCodes = DrugReferenceTestSupport.set(OMEPRAZOLE_ORDER_CODE);
+		Set<String> omeprazoleNames = DrugReferenceTestSupport.set("Omeprazole 20mg");
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Omeprazole 20mg", "Pantoprazole 40mg"),
+				DrugReferenceTestSupport.set(OMEPRAZOLE_ORDER_CODE, "A02BC02"), null, null,
+				Arrays.asList(
+						DrugReferenceTestSupport.activeOrder("order-uuid-185d", "Omeprazole 20mg",
+								omeprazoleNames, omeprazoleCodes),
+						DrugReferenceTestSupport.activeOrder("order-uuid-185e", "Pantoprazole 40mg",
+								pantoprazoleNames, pantoprazoleCodes)));
+
+		List<SafetyWarning> warnings = chips("Is it safe to give omeprazole?", context);
+
+		assertEquals(1, warnings.size(), "the omeprazole order is silenced and the pantoprazole one is"
+				+ " not, was: " + warnings);
+		assertEquals("Omeprazole is in the same ATC class (A02BC) as active order Pantoprazole"
+				+ " — possible duplicate therapy", warnings.get(0).getDetail());
+	}
+
+	@Test
 	public void aCombinationOrderNamesItsConstituentEvenWhenItsCodeNamesTheOtherHalf() throws IOException {
 		// The second route, and the one reachable on the 3.7.1 demo dictionary as it ships: its
 		// Isoniazid / Rifapentine concept maps to J04AB05 and J04AC51, so the partner RESOLVES — by

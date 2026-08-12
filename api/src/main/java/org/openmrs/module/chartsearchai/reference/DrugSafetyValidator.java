@@ -3204,7 +3204,9 @@ public class DrugSafetyValidator {
 	 * the dataset's name speaks only for the codes it covers (see {@link OrderPartner#nameByOrder}).
 	 *
 	 * <p>Grouping by the order OUTRIGHT would have been wrong in both directions, which is why the
-	 * order is consulted only for the codes the dataset cannot speak for. It would split a substance
+	 * order is consulted FOR IDENTITY AND LABEL only for the codes the dataset cannot speak for.
+	 * (What the order NAMES is a different question and is read for every code since issue #185 —
+	 * see {@link OrderPartner#substances}.) It would split a substance
 	 * the patient holds TWO orders of into two partners, which this ladder deliberately merges; and
 	 * it would merge a fixed-dose COMBINATION — one order whose concept maps to the codes of two
 	 * different substances — into one, dropping a real duplicate-therapy chip. A combination is

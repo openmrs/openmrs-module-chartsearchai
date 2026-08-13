@@ -205,7 +205,10 @@ final class LlmAnswerExtractor {
 	}
 
 	/**
-	 * The record index a {@code citations} entry names, or {@code null} when it names none.
+	 * The record index a {@code citations} entry names, or {@code null} when it names none. Since
+	 * issue #221 this also reads the whole {@code citations} value when it is not an array, so the
+	 * container and its entries admit exactly the same JSON types — see
+	 * {@link #readNonArrayCitations}.
 	 *
 	 * <p><b>Why a string counts (issue #219).</b> The module asks for a strict json_schema whose
 	 * citation items are {@code "type":"integer"}, but that schema is enforced by the SERVER, not

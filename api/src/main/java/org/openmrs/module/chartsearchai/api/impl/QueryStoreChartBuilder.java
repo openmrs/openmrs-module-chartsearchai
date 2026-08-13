@@ -179,10 +179,13 @@ class QueryStoreChartBuilder {
 	 * that was in force even when the chart came back empty.
 	 *
 	 * <p>Taken from the {@code usePreFilter} this method already dispatched on, not a second read,
-	 * so the stamp and the {@code mode=} label above can only ever say the same thing. The
-	 * null-patient guard returns before that resolution — the case this class labels
-	 * {@link #MODE_UNKNOWN} — and so leaves the chart unstamped; that chart reaches no audit row,
-	 * because the REST layer resolves the patient before it can call the pipeline at all.
+	 * so the stamp and the {@code mode=} label above can only ever say the same thing.
+	 *
+	 * <p>The null-patient guard returns before that resolution — the case this class labels
+	 * {@link #MODE_UNKNOWN} — so its chart is unstamped and would be named as a plain full chart.
+	 * That is not reachable from a row: the REST layer resolves the patient (404 otherwise) before
+	 * it can call the pipeline, and the other caller of a null-patient build, warmup, writes no
+	 * audit row.
 	 */
 	private static PatientChart markPreFilter(PatientChart chart, boolean usePreFilter) {
 		if (usePreFilter) {

@@ -72,11 +72,11 @@ class ChartBuildingStrategy {
 	 * purpose is to say what the clinician was actually shown. It also means labelling costs no
 	 * {@code Context} access, so the answer can be labelled on every path the pipeline has, not only
 	 * the ones holding an OpenMRS session.
+	 *
+	 * @param chart a chart from {@link #buildChart} (never null), after any rebuild — the caller
+	 *        dereferences it either way, so there is no null case to name a mode for
 	 */
 	String searchModeLabel(PatientChart chart) {
-		if (chart == null) {
-			return ChartSearchAiConstants.SEARCH_MODE_UNKNOWN;
-		}
 		if (chart.isQueryScoped()) {
 			return ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED;
 		}

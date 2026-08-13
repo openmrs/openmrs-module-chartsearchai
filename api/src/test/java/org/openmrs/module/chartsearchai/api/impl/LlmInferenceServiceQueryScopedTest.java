@@ -44,6 +44,12 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * </ul>
  * fullChart mode (the non-default alternative since 2026-07) must keep today's behavior
  * byte-for-byte — the negative controls assert that.
+ *
+ * <p>Since issue #178 it also locks the other thing the chart mode decides: which mode the answer
+ * REPORTS, as {@code ChartAnswer.getSearchMode()} — the value the audit row records. Those cases sit
+ * here because they are decided by the same chartMode dispatch, and because the race they must
+ * survive is the one the KV cases above already pin: the label follows the chart that was built, not
+ * a later read of the GP.
  */
 public class LlmInferenceServiceQueryScopedTest {
 

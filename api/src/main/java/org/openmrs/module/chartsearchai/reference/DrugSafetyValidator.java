@@ -1071,11 +1071,8 @@ public class DrugSafetyValidator {
 		// file that presentation as its own substance, which is what a row publishing no substanceName
 		// already does.
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
-			boolean allergy = "allergy".equalsIgnoreCase(c.getType())
-					&& context.hasAllergyToken(c.getToken());
-			boolean condition = "condition".equalsIgnoreCase(c.getType())
-					&& context.hasConditionToken(c.getToken());
-			if (!allergy && !condition) {
+			String recorded = recordedContraindicationKind(c, context);
+			if (recorded == null) {
 				continue;
 			}
 			// Resolved after the match rather than above the loop: the shipped ddinter source emits no
@@ -1084,18 +1081,56 @@ public class DrugSafetyValidator {
 			// asking it once per MATCHED rule costs no more than asking it once.
 			DrugReference subject = chips.subjectOf(ref);
 			// Reaching here means the rule MATCHED, so a self-named allergy rule is necessarily one whose
-			// allergy leg matched: the two booleans are exclusive, and a rule whose type is "allergy" and
-			// whose token no allergy token contains has already been skipped above.
+			// allergy leg matched: recordedContraindicationKind's legs are exclusive by TYPE, and a rule
+			// whose type is "allergy" and whose token no allergy token contains answered null above.
 			int relationship = !selfNamedAllergyRule(ref, c) ? ContraindicationChips.CURATED_RULE
 					: ChartSearchAiUtils.isBlank(c.getNote())
 							? ContraindicationChips.SELF_NAMED_RULE_WITHOUT_A_NOTE
 							: ContraindicationChips.SELF_NAMED_RULE;
 			chips.add(subject, contraindicationFinding(ref, c), relationship,
 					new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
-							subject.displayLabel() + " is contraindicated by an "
-									+ (allergy ? "active allergy" : "active condition") + ": "
+							subject.displayLabel() + " is contraindicated by an " + recorded + ": "
 									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
 		}
+	}
+
+	/**
+	 * @return what the patient's own chart records that makes {@code c} apply to THEM — the words the
+	 *         chip sentence uses, {@code "active allergy"} or {@code "active condition"} — or null when
+	 *         the chart records neither, which is every rule of every drug for most patients.
+	 *
+	 *         <p>ONE definition, called by the chip arm above and by
+	 *         {@code DrugReferenceInjector.contraindicationSections}, which renders the injected
+	 *         record's patient-specific reading of the contraindication list (issue #208 item 2). The
+	 *         record lists every rule the entry publishes, because a drug's contraindications are the
+	 *         drug's; what it must not do is leave a model unable to tell which of them this patient
+	 *         has, since the record is injected as CITABLE evidence and a model reports what it can
+	 *         see. Shared rather than restated for exactly the reason
+	 *         {@link #contraindicationFinding} is (issue #190 item 1): a second copy of the match is how
+	 *         a record and the chip beside it come to disagree, and here the disagreement would be the
+	 *         record asserting more about the patient than the deterministic layer found.
+	 *
+	 *         <p>The two legs are exclusive by TYPE, not merely by evidence: an {@code allergy} rule is
+	 *         answered from the allergy list alone and a {@code condition} rule from the condition list
+	 *         alone, so a token naming a drug the patient is allergic to cannot satisfy a condition rule
+	 *         written with the same word. Any other type is unrecorded, which is the conservative
+	 *         direction — an unrecognised type states nothing about the patient rather than everything.
+	 *
+	 *         <p>A null {@code context} is "nothing known", not "nothing recorded": both consumers must
+	 *         then assert nothing at all rather than report an absence they cannot see.
+	 */
+	static String recordedContraindicationKind(DrugReference.Contraindication c,
+			PatientClinicalContext context) {
+		if (c == null || context == null) {
+			return null;
+		}
+		if ("allergy".equalsIgnoreCase(c.getType()) && context.hasAllergyToken(c.getToken())) {
+			return "active allergy";
+		}
+		if ("condition".equalsIgnoreCase(c.getType()) && context.hasConditionToken(c.getToken())) {
+			return "active condition";
+		}
+		return null;
 	}
 
 	/**

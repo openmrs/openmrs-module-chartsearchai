@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1118,9 +1119,21 @@ public class DrugReferenceInjector {
 			sb.append(" Warnings: ").append(String.join("; ", warningLines)).append(".");
 		}
 
-		Collection<String> contraindicationNotes = contraindicationClauses(ref);
-		if (!contraindicationNotes.isEmpty()) {
-			sb.append(" Contraindicated with: ").append(String.join("; ", contraindicationNotes)).append(".");
+		ContraindicationSections contraindications = contraindicationSections(ref, context);
+		if (!contraindications.clauses.isEmpty()) {
+			// The patient-specific reading BEFORE the list it qualifies (issue #208 item 2), so a model
+			// reading forward has the qualifier before the content — the same reason the interactions
+			// section below promotes this patient's own partners to its front rather than appending them.
+			// Omitted entirely when the context is null, which is "nothing known" and not "nothing
+			// recorded": a record that cannot see the chart must not report an absence.
+			if (context != null) {
+				sb.append(" Of the contraindications below, this patient's chart records: ")
+						.append(contraindications.recorded.isEmpty() ? "none"
+								: String.join("; ", contraindications.recorded))
+						.append(".");
+			}
+			sb.append(" Contraindicated with: ").append(String.join("; ", contraindications.clauses))
+					.append(".");
 		}
 
 		OrderedInteractions interactions = orderedInteractionNotes(ref, context, orderEntries);
@@ -1200,8 +1213,23 @@ public class DrugReferenceInjector {
 		return new RenderedReference(sb.toString(), source != null ? source.trim() : null, withheld);
 	}
 
-	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the
-	 *          prompt budget the reference slice spends, for the DEBUG line in {@code injectRecords}. */
+	/** The contraindication half of a rendered record: every rule the entry publishes, and the subset
+	 *  of those clauses the patient's own chart records. One value rather than two calls because the
+	 *  two are computed in ONE walk of the rules — the subset is a selection FROM the clauses, keyed on
+	 *  the same collapsed rule, so recomputing it beside them is how a record comes to mark a clause it
+	 *  does not carry (or carry one it cannot mark). */
+	private static final class ContraindicationSections {
+
+		private final Collection<String> clauses;
+
+		private final Collection<String> recorded;
+
+		ContraindicationSections(Collection<String> clauses, Collection<String> recorded) {
+			this.clauses = clauses;
+			this.recorded = recorded;
+		}
+	}
+
 	/**
 	 * @return one clause per contraindication RULE, keyed by the very method the chip ledger keys on —
 	 *         {@link DrugSafetyValidator#contraindicationFinding}, which is the {@code (type, token)}
@@ -1237,9 +1265,24 @@ public class DrugReferenceInjector {
 	 *         <p>A rule whose note and token are both blank contributes nothing, exactly as before — the
 	 *         dataset is operator-editable and every section must degrade to "skip that element" rather
 	 *         than emit a literal {@code null}.
+	 *
+	 *         <p><b>Issue #208 item 2 — and which of them the patient's chart records, in the same
+	 *         walk.</b> This record is the only reference material the prompt carries about the drug, so
+	 *         the list stays the drug's whole list; what it may not do is leave a model unable to tell
+	 *         the drug's properties from this patient's, because a model reports what it can see and
+	 *         since issue #110 this record is citable evidence. Measured live on the 3.7.1 standalone:
+	 *         a patient with no such condition on record got a record reading "Contraindicated with: …
+	 *         active gastrointestinal bleeding", with no chip beside it. The predicate is
+	 *         {@link DrugSafetyValidator#recordedContraindicationKind}, the chip arm's own, for the same
+	 *         reason the KEY here is the chip ledger's own; and a clause is marked when ANY rule folded
+	 *         into it matched, which is exactly when the ledger raises a chip for that key. Selecting
+	 *         from the clauses in this walk rather than recomputing them afterwards is what keeps the
+	 *         marked strings a subset of the rendered ones by construction.
 	 */
-	private static Collection<String> contraindicationClauses(DrugReference ref) {
+	private static ContraindicationSections contraindicationSections(DrugReference ref,
+			PatientClinicalContext context) {
 		Map<Object, String> byRule = new LinkedHashMap<Object, String>();
+		Set<Object> recordedRules = new LinkedHashSet<Object>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			List<String> notes = new ArrayList<String>();
 			addIfPresent(notes, ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()));
@@ -1263,10 +1306,27 @@ public class DrugReferenceInjector {
 				// #174 site 2 could make, made only where it is provably lossless.
 				byRule.put(key, clause + " — " + notes.get(0));
 			}
+			if (DrugSafetyValidator.recordedContraindicationKind(c, context) != null) {
+				// ANY rule of the collapsed key, because that is precisely when the ledger raises a chip
+				// for it: two spellings of one rule are one clause and one chip, and the patient matching
+				// either is the drug being contraindicated once.
+				recordedRules.add(key);
+			}
 		}
-		return byRule.values();
+		List<String> recorded = new ArrayList<String>();
+		// Walked in CLAUSE order, not in the order the matches were found: a rule authored twice can be
+		// matched by its second spelling while its clause sits at the first's position, and a reading
+		// that listed those out of order would be a subset a reader cannot line up against the list.
+		for (Map.Entry<Object, String> clause : byRule.entrySet()) {
+			if (recordedRules.contains(clause.getKey())) {
+				recorded.add(clause.getValue());
+			}
+		}
+		return new ContraindicationSections(byRule.values(), recorded);
 	}
 
+	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the
+	 *          prompt budget the reference slice spends, for the DEBUG line in {@code injectRecords}. */
 	private static int referenceCharacters(List<RecordMapping> mappings) {
 		int chars = 0;
 		for (RecordMapping mapping : mappings) {

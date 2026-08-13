@@ -199,7 +199,8 @@ public class ContraindicationRouteVariantTest {
 				"the route variants collapse, and the order names one substance, was: " + warnings);
 		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
 				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail(),
-				"the surviving variant chip is the dataset's first row, named by displayLabel()");
+				"the surviving variant chip is named by the row this response calls the substance — here "
+						+ "the family's unqualified row, which is also its first (issue #206)");
 	}
 
 	@Test

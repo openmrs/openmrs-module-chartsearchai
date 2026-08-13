@@ -108,10 +108,17 @@ public class ContraindicationSubjectLabelTest {
 	public void twoFindingsAboutOneSubjectStayTwoChips() throws IOException {
 		// The ledger key and the subject choice have to move together. Two rows of one substance are in
 		// play and TWO recorded allergies are class-related to it, so two chips are correct — one per
-		// recorded finding. A subject resolved per substance while the ledger still keyed per ROW answers
-		// this with FOUR, two of them word-for-word repeats of the other two, which is duplicating the
-		// chips rather than renaming them. Measured by mutation: keying ContraindicationChips on the
-		// subject ROW rather than on its substanceGroupKey fails this at 4.
+		// recorded finding. Measured by mutation: resolving the chip's LABEL from the subject while still
+		// handing the ledger the RAISING ROW, and keying the ledger on that row, fails this at FOUR —
+		// `Chloroprocaine … allergy to Procaine` and `… to Tetracaine`, each twice, word for word. That is
+		// duplicating the chips rather than renaming them, which is what "a more precise resolver without
+		// a matching ledger key" costs.
+		//
+		// Keying the ledger on the resolved subject ROW alone is NOT that mutation and changes nothing —
+		// also measured, all 1124 tests green — because the resolver answers with one row per substance,
+		// so row identity and substanceGroupKey partition the chips identically once the subject is
+		// resolved. substanceGroupKey is kept because it says which partition is intended without
+		// depending on that.
 		List<SafetyWarning> warnings = fixtureValidator().validate("", QUESTION,
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Procaine", "Tetracaine"), null));

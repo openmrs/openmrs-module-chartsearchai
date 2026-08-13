@@ -394,7 +394,10 @@ public class ChartSearchAiConstants {
 	public static final String DEFAULT_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH =
 			"chartsearchai/cross-reactivity-groups.json";
 
-	/** Patient-driven injection: inject reference entries that match an active order's ATC code. */
+	/** Patient-driven injection: inject the reference entries the patient's active orders resolve to —
+	 *  an ATC-code hit OR the order's own display name, whichever the reference data answers
+	 *  ({@code DrugReferenceService.findForActiveOrders}, issue #151) — scoped to the orders in a
+	 *  family with the drug the question names. */
 	public static final String GP_DRUG_REFERENCE_INJECT_FROM_ORDERS = "chartsearchai.drugReference.injectFromOrders";
 
 	public static final boolean DEFAULT_DRUG_REFERENCE_INJECT_FROM_ORDERS = true;

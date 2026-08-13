@@ -480,7 +480,8 @@ public class DrugReferenceInjector {
 	 * <p><b>Which orders are candidates is the caller's answer, not this method's (issue #151).</b> The
 	 * order leg resolved its own candidates through {@code DrugReferenceService.findByActiveOrders} —
 	 * the ATC-only primitive — while {@code DrugSafetyValidator.validate} has screened
-	 * {@code findForActiveOrders} (ATC ∪ name) since issue #148 gave order names a matcher. The split
+	 * {@code findForActiveOrders} (ATC ∪ name) since issue #148 extracted that union into a method of
+	 * its own (its name leg carries issue #147's recorded-name matcher). The split
 	 * is not merely an inconsistency; it made this leg ask its two questions off two different keys:
 	 * an order's RELEVANCE came from the reference ENTRY's own ATC codes ({@link #relatedToAny} reads
 	 * {@code order.atcSubgroups()}), while its MEMBERSHIP came from the ORDER's concept mappings. Only
@@ -498,8 +499,33 @@ public class DrugReferenceInjector {
 	 * see that test's unrelated-order and no-drug-question cases, which are what distinguish this from
 	 * "inject every active order".
 	 *
-	 * @param orderEntries the reference entries the patient's active orders resolve to, already
-	 *        resolved by {@link #injectRecords}; empty when there are none
+	 * <p><b>Two consequences of a wider candidate set that are not "one more record".</b> Neither is new
+	 * in kind — both were already reachable through an ATC-mapped order — but both are now the common
+	 * case rather than the rare one, so they are stated here rather than discovered.
+	 * <ul>
+	 *   <li>{@link #collect} folds over a SUPERSET, so a substance the question leg represented by a
+	 *       route-qualified row can now be represented by the route-unspecified one — a different
+	 *       {@code resourceId} on the wire and a different row's rules rendered. The direction is
+	 *       monotone and is the one issue #163 asks for ({@link DrugReference#canonicalRow} only ever
+	 *       moves toward {@link DrugReference#namesNoRoute()}), and it makes this record agree with the
+	 *       chip layer's subject rather than diverge from it.</li>
+	 *   <li>An order that IS the question's drug shares every subgroup with itself, so the order leg
+	 *       collects it. Under the default configuration that is invisible — the question leg collected
+	 *       it first — but with {@code injectFromQuery=false} the order leg is now what supplies it on a
+	 *       dictionary that maps no ATC codes. That is the behaviour {@code docs/drug-kb-demo.md}'s
+	 *       path-7 recipe documents as the feature, previously reachable only where the concept happened
+	 *       to be mapped; no self-identity skip is added here for that reason.</li>
+	 * </ul>
+	 *
+	 * @param orderEntries the reference entries the patient's active orders resolve to, already resolved
+	 *        by {@link #injectRecords}. Never null — {@code findForActiveOrders} answers an empty list
+	 *        for a null context, which is what makes this the same guard the removed {@code context !=
+	 *        null} was. No null check is added for it deliberately: a null here would be swallowed by
+	 *        {@code inject}'s catch and drop the WHOLE injection, question-driven records and safety
+	 *        findings included, behind one WARN, so the coupling is pinned by a test that goes red
+	 *        instead ({@code OrderDrivenInjectionResolutionTest
+	 *        .aNullClinicalContextStillInjectsTheQuestionsOwnDrug})
+	 * @param question the clinician's query, which drives the question leg and scopes the order leg
 	 */
 	List<DrugReference> matchingEntries(List<DrugReference> orderEntries, String question) {
 		// One record per SUBSTANCE, not per reference row (issue #163). A per-call local, never a field:
@@ -588,8 +614,9 @@ public class DrugReferenceInjector {
 	 * it sounds — it needs the question's drug to be ATC-related to one order and that order's substance
 	 * to be multi-row — but it is a real reduction in what the prompt carries, not a re-presentation of
 	 * it. Less narrow since issue #151 than when that was written: the leg's candidate set is now every
-	 * order the patient has rather than the ATC-mapped subset of them, so a deployment whose dictionary
-	 * maps few drug concepts reaches this residue where it previously could not reach the leg at all.
+	 * order the reference data RESOLVES — by ATC code or by display name — rather than the ATC-mapped
+	 * subset of them, so a deployment whose dictionary maps few drug concepts reaches this residue where
+	 * it previously could not reach the leg at all.
 	 *
 	 * <p>Issue #174's {@code orderedInteractionNotes} sweep did NOT close that residue and was never
 	 * going to: it collapses several rules of ONE entry that name one PARTNER, which is the other

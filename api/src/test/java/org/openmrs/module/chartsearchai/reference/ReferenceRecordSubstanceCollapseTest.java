@@ -61,14 +61,6 @@ public class ReferenceRecordSubstanceCollapseTest {
 						DrugReferenceTestSupport.ctx(60, null, null, null, null, null), question);
 	}
 
-	private static List<String> referenceTexts(PatientChart chart) {
-		List<String> out = new ArrayList<String>();
-		for (RecordMapping mapping : DrugReferenceTestSupport.injectedReferences(chart)) {
-			out.add(mapping.getText());
-		}
-		return out;
-	}
-
 	private static int characters(List<String> texts) {
 		int total = 0;
 		for (String text : texts) {
@@ -93,7 +85,7 @@ public class ReferenceRecordSubstanceCollapseTest {
 
 	@Test
 	public void aSubstanceFiledAsFourRowsInjectsOneRecord() throws IOException {
-		List<String> texts = referenceTexts(inject("Is it safe to give dexamethasone?"));
+		List<String> texts = DrugReferenceTestSupport.referenceTexts(inject("Is it safe to give dexamethasone?"));
 
 		assertEquals(1, texts.size(),
 				"four route variants of one substance are one reference record, was: " + texts);
@@ -108,8 +100,8 @@ public class ReferenceRecordSubstanceCollapseTest {
 		// The budget statement, as a comparison rather than as a number, so it cannot rot: what the
 		// collapse buys is that the number of rows a KB happens to file a substance under stops being
 		// something a clinician's question pays for.
-		List<String> variants = referenceTexts(inject("Is it safe to give dexamethasone?"));
-		List<String> singleRow = referenceTexts(inject("Is it safe to give phenytoin?"));
+		List<String> variants = DrugReferenceTestSupport.referenceTexts(inject("Is it safe to give dexamethasone?"));
+		List<String> singleRow = DrugReferenceTestSupport.referenceTexts(inject("Is it safe to give phenytoin?"));
 
 		assertEquals(1, singleRow.size(), "the control drug is one row, was: " + singleRow);
 		assertEquals(singleRow.size(), variants.size(),
@@ -134,8 +126,8 @@ public class ReferenceRecordSubstanceCollapseTest {
 								DrugReferenceTestSupport.set("H02AB02"), null, null),
 						"Is it safe to give dexamethasone?");
 
-		assertEquals(1, referenceTexts(chart).size(),
-				"one substance is one record however many legs reach it, was: " + referenceTexts(chart));
+		assertEquals(1, DrugReferenceTestSupport.referenceTexts(chart).size(),
+				"one substance is one record however many legs reach it, was: " + DrugReferenceTestSupport.referenceTexts(chart));
 	}
 
 	@Test
@@ -150,7 +142,7 @@ public class ReferenceRecordSubstanceCollapseTest {
 		// word resolving both, which put a record for a substance nobody had named into the prompt — the
 		// injector leg of that issue. The vehicle changed; the property did not, and this is still the case
 		// that fails if `substanceKey` ever merges the two PPIs into one record.
-		List<String> texts = referenceTexts(DrugReferenceTestSupport
+		List<String> texts = DrugReferenceTestSupport.referenceTexts(DrugReferenceTestSupport
 				.injector(DrugReferenceTestSupport.ddiFixtureService(INTERACTION_FIXTURE))
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 						DrugReferenceTestSupport.ctx(60, null, null, null, null, null),
@@ -187,7 +179,7 @@ public class ReferenceRecordSubstanceCollapseTest {
 
 		// Preconditions: the chart must carry records of the OTHER two kinds with text of their own, or
 		// the "only those" half of this assertion is vacuous — a total that counted everything would pass.
-		int references = characters(referenceTexts(chart));
+		int references = characters(DrugReferenceTestSupport.referenceTexts(chart));
 		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
 				"precondition: a safety-finding record must be injected beside the reference records");
 		assertTrue(references > 0, "precondition: and reference records with text");
@@ -215,7 +207,7 @@ public class ReferenceRecordSubstanceCollapseTest {
 		// (measured 2026-08-06) — Chloroprocaine is one of them, and the slice keeps the KB's order. A
 		// first-wins collapse injects "Chloroprocaine (ophthalmic)" for a question about chloroprocaine,
 		// i.e. an ophthalmic monograph as the profile of a drug asked about by its bare name.
-		List<String> texts = referenceTexts(DrugReferenceTestSupport
+		List<String> texts = DrugReferenceTestSupport.referenceTexts(DrugReferenceTestSupport
 				.injector(DrugReferenceTestSupport.ddiFixtureService(INTERACTION_FIXTURE))
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 						DrugReferenceTestSupport.ctx(60, null, null, null, null, null),

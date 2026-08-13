@@ -371,11 +371,12 @@ public class DrugReferenceService {
 	 * Patient-driven matching: entries whose ATC codes match an active drug order
 	 * on the patient's chart, regardless of whether the question mentions the drug.
 	 *
-	 * <p>The PRIMITIVE and not the answer, in the same sense as {@link #findByQuery} and
-	 * {@link #findByDrugName}: it reports the orders a DICTIONARY happened to map to ATC, which is a
-	 * strict subset of the patient's orders. {@link #findForActiveOrders} is the answer — "which
-	 * reference entries are this patient's active orders" — and nothing else may build a candidate set
-	 * from this one. That admission was issue #151: {@code DrugReferenceInjector.matchingEntries}
+	 * <p>The PRIMITIVE and not the answer, as {@link #findByQuery} and {@link #findByDrugName} are —
+	 * though it errs the other way. Those two answer a WIDER question than their callers ask; this one
+	 * answers a narrower: it reports only the entries reached from the orders a DICTIONARY happened to
+	 * map to ATC, which is a subset of what {@link #findForActiveOrders} answers and empty on a
+	 * dictionary that maps none. That method is the answer — "which reference entries are this
+	 * patient's active orders" — and nothing else may build a candidate set from this one. That admission was issue #151: {@code DrugReferenceInjector.matchingEntries}
 	 * resolved its order-driven leg here while {@code DrugSafetyValidator} screened the union, so the
 	 * two layers disagreed about which orders the patient had, and reference material about a drug she
 	 * was on stayed out of the prompt behind the chip that named it.

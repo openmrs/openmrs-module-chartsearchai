@@ -1680,7 +1680,7 @@ Chart-search answers are grounded only in what the patient's chart contains. The
 
 Add an additive, opt-in (`chartsearchai.drugReference.enabled`, default `false`) drug-reference subsystem in two deterministic parts:
 
-1. **Injection (`DrugReferenceInjector`, pre-answer)** — append reference entries matching the question (by alias) or the patient's active orders (by ATC code) to the serialized chart as numbered, citable records carrying the `drug_reference` resource type. Numeric dosing is age-gated (a pediatric maximum is never surfaced for an adult). The LLM cites them the same way it cites chart records; the system prompt notes that `drug_reference` records are reference data, not the patient's own.
+1. **Injection (`DrugReferenceInjector`, pre-answer)** — append reference entries matching the question (by alias) or the patient's active orders (by whatever resolves them — an ATC code or the order's display name; ATC-only until #151) to the serialized chart as numbered, citable records carrying the `drug_reference` resource type. Numeric dosing is age-gated (a pediatric maximum is never surfaced for an adult). The LLM cites them the same way it cites chart records; the system prompt notes that `drug_reference` records are reference data, not the patient's own.
 2. **Validation (`DrugSafetyValidator`, post-answer)** — a deterministic check that annotates the answer with non-blocking `SafetyWarning`s (overdose / interaction / contraindication), cross-referencing the reference table against the patient's age, active orders, allergies, and conditions. It never rewrites or blocks the answer.
 
 ### Why deterministic + data-driven

@@ -254,9 +254,10 @@ final class LlmAnswerExtractor {
 	 * Reads the conformant shape — a {@code citations} ARRAY — appending each index its entries name.
 	 * Entry typing is issue #219/#220's subject: a numeric string is coerced through
 	 * {@link #citationIndex} and the coercion is reported, an entry naming no index is dropped and
-	 * reported. Extracted so the three container shapes read as one flat decision at the call site,
-	 * with the "an explicit null says nothing" rule stated once rather than buried in a compound
-	 * condition — that rule is half of what #221 decided, and it is easy to delete by accident.
+	 * reported. The body is unchanged; extracting it is what lets the call site state the container
+	 * decision in one guard — "absent or explicit null: nothing to read and nothing to say" — instead
+	 * of leaving that rule inside a compound condition beside an unrelated array test. It is half of
+	 * what #221 decided and the half easiest to delete by accident.
 	 */
 	private static void readCitationsArray(JsonNode citationsNode, List<Integer> citations) {
 		int coerced = 0;

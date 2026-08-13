@@ -1118,10 +1118,14 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>A null {@code context} is "nothing known", not "nothing recorded": both consumers must
 	 *         then assert nothing at all rather than report an absence they cannot see.
+	 *
+	 *         <p>Null does NOT distinguish "the chart says no" from "this rule cannot be evaluated" —
+	 *         see {@link #evaluatesAgainstTheChart}, which a consumer making a NEGATIVE claim has to ask
+	 *         as well.
 	 */
 	static String recordedContraindicationKind(DrugReference.Contraindication c,
 			PatientClinicalContext context) {
-		if (c == null || context == null) {
+		if (context == null) {
 			return null;
 		}
 		if ("allergy".equalsIgnoreCase(c.getType()) && context.hasAllergyToken(c.getToken())) {
@@ -1131,6 +1135,50 @@ public class DrugSafetyValidator {
 			return "active condition";
 		}
 		return null;
+	}
+
+	/**
+	 * @return whether {@code c} is a rule this module can put to the patient's chart AT ALL — a
+	 *         recognised {@code type} carrying a token there is something to look for. Distinguishing
+	 *         that from "asked and the chart says no" is what a NEGATIVE claim needs and a chip does not:
+	 *         {@link #recordedContraindicationKind} answers null for both, and the chip arm treats null
+	 *         as "stay silent", which is right either way. The injected record's unrecorded half is the
+	 *         second consumer, and there null would mean "print that this patient does not have it" —
+	 *         which for a rule typed {@code diagnosis}, or one carrying no token, would be issue #208's
+	 *         own failure with the sign flipped, asserted about a patient the module never checked.
+	 *
+	 *         <p>The token half is {@link PatientClinicalContext#matchableToken}, the very emptiness rule
+	 *         the matcher applies, so "not matchable" and "did not match" cannot come to disagree about a
+	 *         token of nothing but combining marks. The type half is stated here because these two names
+	 *         are the two chart lists this class reads; a dataset may carry any string, and the curated
+	 *         parser validates neither field (it drops an entry only for a blank id or name).
+	 */
+	/**
+	 * @return whether this configuration can raise a contraindication chip AT ALL — the two toggles the
+	 *         chip arms are gated on, read together and in one place.
+	 *
+	 *         <p>The injected record's patient-specific reading of a contraindication list is gated on
+	 *         this (issue #208 item 2), because that reading is the record's half of a chip: an operator
+	 *         who switched the chips off would otherwise get a citable record asserting "Recorded for this
+	 *         patient: documented ibuprofen allergy" into the prompt with no chip and no
+	 *         {@code safety_finding} record beside it — prose without a chip, which is exactly the
+	 *         divergence {@code DrugReferenceInjector.preAnswerFindings} gates the first of these toggles
+	 *         to prevent, and which {@code README} promises the {@code drugSafety.*} toggles govern.
+	 *
+	 *         <p>Both, not either: {@code validateAnswers} gates the pass and
+	 *         {@code warnOnContraindications} gates both contraindication arms within it, so a chip needs
+	 *         the two. The injector reads {@code drugReference.enabled} for itself before any of this.
+	 */
+	static boolean reportsContraindications() {
+		return toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)
+				&& toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS);
+	}
+
+	static boolean evaluatesAgainstTheChart(DrugReference.Contraindication c) {
+		return ("allergy".equalsIgnoreCase(c.getType()) || "condition".equalsIgnoreCase(c.getType()))
+				&& PatientClinicalContext.matchableToken(c.getToken());
 	}
 
 	/**
@@ -4397,7 +4445,7 @@ public class DrugSafetyValidator {
 		String label = subject.displayLabel();
 		// Whose ceiling this is, said once for both arms — a mismatch is a property of the ROW PAIR, not
 		// of which arm noticed it, so wording it per arm is how one arm keeps the defect.
-		String ceilingSource = ceilingAttribution(subject, ref);
+		String ceilingSource = ceilingAttribution(label, ref);
 		if (dailyArm) {
 			Double dailyMg = parseDailyDoseMg(doses);
 			if (dailyMg != null && dailyMg > band.getMaxDailyDoseMg()) {
@@ -4430,8 +4478,9 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return the clause that says whose published ceiling a dose warning just quoted, or the empty
-	 *         string when it is the named row's own — which is every warning any BUNDLED dataset can
+	 * @return the clause that says whose published ceiling a dose warning just quoted, given the label
+	 *         the warning NAMES and the row the band was read off, or the empty string when it is the
+	 *         named row's own — which is every warning any BUNDLED dataset can
 	 *         raise, since none of them files a substance as more than one row carrying age bands.
 	 *
 	 *         <p>Worded as a CONTRAST rather than as a bare second name, and that is the whole care in
@@ -4442,17 +4491,21 @@ public class DrugSafetyValidator {
 	 *         leaves the sentence a fact about the DATASET, which is what it is: the row is where the
 	 *         number was filed, not something known about this patient.
 	 *
-	 *         <p>Silent unless it has something to say: when the two rows are one row, when they publish
-	 *         the SAME label — the dataset is operator-editable and two rows may carry one display name,
-	 *         for which "publishes for X, not for X" is a contradiction rather than a provenance — and
-	 *         when either label is blank, which the same operator-editable boundary demands of every
-	 *         section this module renders rather than emitting a literal {@code null}.
+	 *         <p>Silent unless it has something to say, and LABELS are what it compares rather than row
+	 *         identity: the same row trivially publishes the same label, and two DIFFERENT rows may carry
+	 *         one display name in an operator-editable dataset — for which "publishes for X, not for X" is
+	 *         a contradiction rather than a provenance — compared by {@link DrugReference#normalizeName},
+	 *         the module's own identity rule between two REFERENCE strings, because {@code Ranitidine} and
+	 *         {@code ranitidine} are one name and {@code equals} would let that pair through. Silent for a
+	 *         blank label too, which the same
+	 *         boundary demands of every section this module renders rather than emitting a literal
+	 *         {@code null}. Taking the caller's own label string, not the subject row, is what keeps the
+	 *         clause naming what the SENTENCE names: {@code addOverdose} builds both from one value.
 	 */
-	private static String ceilingAttribution(DrugReference subject, DrugReference ref) {
+	private static String ceilingAttribution(String named, DrugReference ref) {
 		String published = ref.displayLabel();
-		String named = subject.displayLabel();
-		if (ref == subject || ChartSearchAiUtils.isBlank(published) || ChartSearchAiUtils.isBlank(named)
-				|| published.equals(named)) {
+		if (ChartSearchAiUtils.isBlank(published) || ChartSearchAiUtils.isBlank(named)
+				|| DrugReference.normalizeName(published).equals(DrugReference.normalizeName(named))) {
 			return "";
 		}
 		return " — a ceiling this dataset publishes for " + published + ", not for " + named;

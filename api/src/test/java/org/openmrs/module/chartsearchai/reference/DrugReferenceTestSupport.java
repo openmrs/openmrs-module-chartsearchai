@@ -513,6 +513,37 @@ public final class DrugReferenceTestSupport {
 	 *         verbatim between two of them, javadoc included, and a shared filter cannot drift into two
 	 *         answers about which chips a case is counting.
 	 */
+	/**
+	 * @return the {@code detail} sentences of the CONTRAINDICATION chips alone — the counterpart of
+	 *         {@link #classChipDetails} for the other chip type a rule-driven dataset raises, and here
+	 *         for the same reason: five test files had grown their own copy of this three-line filter,
+	 *         and a shared one cannot drift into two answers about which chips a case is counting.
+	 */
+	static List<String> contraindicationDetails(List<SafetyWarning> warnings) {
+		List<String> out = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(warning.getType())) {
+				out.add(warning.getDetail());
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * @return the injected drug-reference record rendered for the entry NAMED {@code name}, or null when
+	 *         no record names it — the text-returning form of {@link #namesDrug}, sharing its terminator
+	 *         rule rather than restating it. A selector written as a bare {@code startsWith(name)} also
+	 *         accepts a route-qualified SIBLING, which is the whole reason that rule lives in one place.
+	 */
+	static String referenceTextNaming(PatientChart chart, String name) {
+		for (String text : referenceTexts(chart)) {
+			if (namesDrug(Collections.singletonList(text), name)) {
+				return text;
+			}
+		}
+		return null;
+	}
+
 	static List<String> classChipDetails(List<SafetyWarning> warnings) {
 		List<String> out = new ArrayList<String>();
 		for (SafetyWarning warning : warnings) {

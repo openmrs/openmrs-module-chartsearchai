@@ -272,6 +272,18 @@ public class PatientClinicalContext {
 	}
 
 	/**
+	 * @return whether {@code token} is something this class could match a record AGAINST at all — the
+	 *         emptiness half of {@link #containsToken}, extracted so a second reader can ask it without
+	 *         re-deriving it (issue #208 item 2: the injected record has to tell "the chart does not
+	 *         record this" apart from "the module cannot evaluate this rule", and a blank token is the
+	 *         second). Both emptiness checks live here, including the post-fold one {@link #containsToken} documents.
+	 */
+	static boolean matchableToken(String token) {
+		return token != null && !token.trim().isEmpty()
+				&& !DrugReference.foldDiacritics(token.trim().toLowerCase(Locale.ROOT)).isEmpty();
+	}
+
+	/**
 	 * Deliberately still bare containment, unlike the order-name arm above (issue #86): these
 	 * haystacks are free text — an allergen name, a condition in the clinician's own wording — where a
 	 * curated rule is meant to match a fragment ({@code nsaid} inside "NSAIDs", {@code peptic ulcer}
@@ -313,15 +325,12 @@ public class PatientClinicalContext {
 	 * above survives on {@code nonCodedAllergen}, which is genuinely free text.
 	 */
 	private static boolean containsToken(Set<String> haystack, String token) {
-		if (token == null || token.trim().isEmpty()) {
+		if (!matchableToken(token)) {
+			// A token of nothing but combining marks folds to empty AFTER the fold, not before — and the
+			// empty string is contained in everything, so both emptiness checks live in matchableToken.
 			return false;
 		}
 		String t = DrugReference.foldDiacritics(token.trim().toLowerCase(Locale.ROOT));
-		if (t.isEmpty()) {
-			// After the fold, not before — a token of nothing but combining marks folds to empty, and
-			// the empty string is contained in everything.
-			return false;
-		}
 		for (String value : haystack) {
 			if (DrugReference.foldDiacritics(value).contains(t)) {
 				return true;

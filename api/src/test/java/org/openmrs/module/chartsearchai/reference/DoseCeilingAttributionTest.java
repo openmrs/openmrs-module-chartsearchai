@@ -10,12 +10,11 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -74,18 +73,17 @@ public class DoseCeilingAttributionTest {
 	private static final String PER_KG_SIBLING_FIXTURE =
 			"chartsearchai-test/drug-reference-sibling-per-kg-ceiling.json";
 
-	/** The pass's one dose warning. Exactly one, asserted rather than assumed: one substance and one
-	 *  stated dose is one warning ({@code OverdoseSubstanceCollapseTest}), and a second would mean this
-	 *  case is asserting the wording of whichever arrived first. */
-	private static SafetyWarning onlyOverdose(List<SafetyWarning> warnings) {
-		List<SafetyWarning> found = new ArrayList<SafetyWarning>();
-		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_OVERDOSE.equals(warning.getType())) {
-				found.add(warning);
-			}
-		}
-		assertEquals(1, found.size(), "precondition: exactly one dose warning, was: " + warnings);
-		return found.get(0);
+	/**
+	 * The sentence of the pass's one dose warning for {@code drug}, through the shared accessors the
+	 * sibling overdose tests use — with the substance's own chip count asserted first, because
+	 * {@code overdoseDetail} answers with the FIRST match and would otherwise let a case assert the
+	 * wording of whichever of two warnings arrived first (one substance and one stated dose is one
+	 * warning; {@code OverdoseSubstanceCollapseTest} is where that is settled).
+	 */
+	private static String overdoseSentence(List<SafetyWarning> warnings, String drug) {
+		assertEquals(1, DrugReferenceTestSupport.overdoseCount(warnings, drug),
+				"precondition: exactly one dose warning for " + drug + ", was: " + warnings);
+		return DrugReferenceTestSupport.overdoseDetail(warnings, drug);
 	}
 
 	@Test
@@ -109,14 +107,15 @@ public class DoseCeilingAttributionTest {
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(30, 70.0,
 				DrugReferenceTestSupport.set("Amoxicillin (suspension)", "Warfarin 5mg"), null, null,
 				null);
-		SafetyWarning overdose = onlyOverdose(DrugReferenceTestSupport.validator(service).validate(
-				"Give amoxicillin 2000 mg twice daily.", "Is amoxicillin safe for her?", context));
+		// Asked for by the CHARTED row's name (issue #206), which is also the assertion that the warning
+		// is named after it: overdoseSentence answers "" for a drug no dose warning names.
+		String overdose = overdoseSentence(DrugReferenceTestSupport.validator(service).validate(
+				"Give amoxicillin 2000 mg twice daily.", "Is amoxicillin safe for her?", context),
+				"Amoxicillin (suspension)");
 
-		assertEquals("Amoxicillin (suspension)", overdose.getDrug(),
-				"precondition: the warning is named after the row the chart records (issue #206)");
 		assertEquals("The stated Amoxicillin (suspension) dose ~4000 mg/day exceeds the 3000 mg/day "
 				+ "maximum for ages 0-120 — a ceiling this dataset publishes for Amoxicillin, not for "
-				+ "Amoxicillin (suspension)", overdose.getDetail(),
+				+ "Amoxicillin (suspension)", overdose,
 				"the quoted ceiling must be attributed to the row that published it");
 	}
 
@@ -137,16 +136,13 @@ public class DoseCeilingAttributionTest {
 		assertEquals(0.0, paediatric.bandForAge(6).getMaxDailyDoseMg(), 0.0,
 				"precondition: and no daily ceiling, so the weight arm is the arm that trips");
 
-		SafetyWarning overdose = onlyOverdose(DrugReferenceTestSupport.validator(service).validate(
+		String overdose = overdoseSentence(DrugReferenceTestSupport.validator(service).validate(
 				"Give ceftriaxone 1500 mg once daily.", "What dose of ceftriaxone?",
-				DrugReferenceTestSupport.ctx(6, 20.0, null, null, null, null)));
+				DrugReferenceTestSupport.ctx(6, 20.0, null, null, null, null)), "Ceftriaxone");
 
-		assertEquals("Ceftriaxone", overdose.getDrug(),
-				"precondition: named after the route-unspecified row");
 		assertEquals("The stated Ceftriaxone dose ~1500 mg exceeds the 50 mg/kg per-dose maximum "
 				+ "(~1000 mg) for the patient's weight 20 kg (ages 0-11) — a ceiling this dataset "
-				+ "publishes for Ceftriaxone (paediatric injection), not for Ceftriaxone",
-				overdose.getDetail(),
+				+ "publishes for Ceftriaxone (paediatric injection), not for Ceftriaxone", overdose,
 				"the weight arm must attribute its ceiling as well");
 	}
 
@@ -159,16 +155,20 @@ public class DoseCeilingAttributionTest {
 		// and read "publishes for Amoxicillin, not for Amoxicillin".
 		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(DOSING_ROWS_FIXTURE);
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(entries);
-		assertNotSame(DrugReferenceTestSupport.row(entries, "Amoxicillin"),
-				DrugReferenceTestSupport.row(entries, "Amoxicillin (suspension)"),
-				"precondition: the substance really is filed as two rows");
+		// Asserted on the KEY, not on object identity: `row` selects by exact name, so two lookups under
+		// two names can never answer the same object and an assertNotSame between them cannot fail. This
+		// is the premise that matters — delete either row's substanceName and the case stops exercising a
+		// multi-row substance at all, reaching `ref == subject` through the ungrouped fallback instead.
+		assertEquals(DrugReferenceTestSupport.row(entries, "Amoxicillin").substanceGroupKey(),
+				DrugReferenceTestSupport.row(entries, "Amoxicillin (suspension)").substanceGroupKey(),
+				"precondition: the substance really is filed as two rows of ONE substance");
 
-		SafetyWarning overdose = onlyOverdose(DrugReferenceTestSupport.validator(service).validate(
+		String overdose = overdoseSentence(DrugReferenceTestSupport.validator(service).validate(
 				"Give amoxicillin 2000 mg twice daily.", "what dose of amoxicillin?",
-				DrugReferenceTestSupport.ctx(30, 70.0, null, null, null, null)));
+				DrugReferenceTestSupport.ctx(30, 70.0, null, null, null, null)), "Amoxicillin");
 
 		assertEquals("The stated Amoxicillin dose ~4000 mg/day exceeds the 3000 mg/day maximum for "
-				+ "ages 0-120", overdose.getDetail(),
+				+ "ages 0-120", overdose,
 				"an unattributed ceiling is the row's own, and says nothing further");
 	}
 
@@ -183,15 +183,25 @@ public class DoseCeilingAttributionTest {
 		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(PER_KG_SIBLING_FIXTURE);
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(entries);
 		DrugReference first = DrugReferenceTestSupport.row(entries, "Ranitidine");
-		assertNull(first.bandForAge(40),
-				"precondition: the row the substance is named after publishes no band for this age");
+		DrugReference banded = DrugReferenceTestSupport.row(entries, "ranitidine");
+		// Every premise pinned through a production predicate, because the two rows' labels fold to ONE
+		// name and the warning therefore cannot say which row it was named after: one substance, the
+		// subject is the bandless row, and only its sibling publishes a ceiling. Without the canonicalRow
+		// assertion a later change to subject selection would silently turn this into a duplicate of the
+		// same-row control above, and the guard it exists for would go untested with nothing reddening.
+		assertEquals(first.substanceGroupKey(), banded.substanceGroupKey(),
+				"precondition: one substance");
+		assertSame(first, DrugReference.canonicalRow(Arrays.asList(first, banded)),
+				"precondition: the bandless row is the one the warning is named after");
+		assertNull(first.bandForAge(40), "precondition: which publishes no band for this age");
+		assertNotNull(banded.bandForAge(40), "precondition: while its sibling does");
 
-		SafetyWarning overdose = onlyOverdose(DrugReferenceTestSupport.validator(service).validate(
+		String overdose = overdoseSentence(DrugReferenceTestSupport.validator(service).validate(
 				"Give ranitidine 400 mg twice daily.", "What dose of ranitidine?",
-				DrugReferenceTestSupport.ctx(40, 70.0, null, null, null, null)));
+				DrugReferenceTestSupport.ctx(40, 70.0, null, null, null, null)), "Ranitidine");
 
 		assertEquals("The stated Ranitidine dose ~800 mg/day exceeds the 300 mg/day maximum for ages "
-				+ "0-120", overdose.getDetail(),
+				+ "0-120", overdose,
 				"the sibling's ceiling still warns, and says nothing it cannot say");
 	}
 
@@ -209,13 +219,12 @@ public class DoseCeilingAttributionTest {
 				"precondition: the seed publishes no substance name, which is WHY every substance in it is "
 						+ "one row — substanceGroupKey then keys on the row itself");
 
-		SafetyWarning overdose = onlyOverdose(DrugReferenceTestSupport.validator(service).validate(
+		String overdose = overdoseSentence(DrugReferenceTestSupport.validator(service).validate(
 				"Give ibuprofen 800 mg four times daily.", "What dose of ibuprofen?",
-				DrugReferenceTestSupport.ctx(30, 70.0, null, null, null, null)));
+				DrugReferenceTestSupport.ctx(30, 70.0, null, null, null, null)), "Ibuprofen");
 
 		assertEquals("The stated Ibuprofen dose ~3200 mg/day exceeds the 2400 mg/day maximum for ages "
-				+ "12-120", overdose.getDetail(), "the shipped wording is unchanged");
-		assertFalse(overdose.getDetail().contains("this dataset publishes"),
-				"and carries no attribution clause, was: " + overdose.getDetail());
+				+ "12-120", overdose, "the shipped wording is unchanged — no attribution clause, and "
+						+ "nothing else moved either");
 	}
 }

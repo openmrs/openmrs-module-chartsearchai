@@ -66,13 +66,12 @@ public class InjectedContraindicationPatientReadingTest {
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(
 				DrugReferenceTestSupport.bundledService())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, QUESTION);
-		for (String text : DrugReferenceTestSupport.referenceTexts(chart)) {
-			if (text.startsWith("Drug reference — Ibuprofen")) {
-				return text;
-			}
-		}
-		throw new IllegalStateException("no ibuprofen reference record was injected: "
+		// Through the shared terminator rule, not a bare startsWith: that also accepts a route-qualified
+		// sibling, and every case here asserts the content of ONE named entry's record.
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Ibuprofen");
+		assertNotNull(record, "no ibuprofen reference record was injected: "
 				+ DrugReferenceTestSupport.referenceTexts(chart));
+		return record;
 	}
 
 	/** The rendering's own section lead for the drug's whole list, so a case asserting the list is
@@ -86,6 +85,11 @@ public class InjectedContraindicationPatientReadingTest {
 	/** The text between {@code marker} and the sentence's own full stop, read off the rendered record
 	 *  rather than recomputed — what a model reads is what the string says. */
 	private static String sentenceAfter(String record, String marker) {
+		// The positive lead is one capital letter away from being a substring of the negative one, so a
+		// production reword to "Not Recorded" would silently make every recordedReading below read the
+		// NEGATIVE half and still pass. Asserted rather than relied on.
+		assertFalse(NOT_RECORDED_MARKER.contains(RECORDED_MARKER),
+				"the two leads must stay distinguishable by indexOf");
 		int start = record.indexOf(marker);
 		if (start < 0) {
 			return null;
@@ -99,7 +103,7 @@ public class InjectedContraindicationPatientReadingTest {
 	private static String recordedReading(String record) {
 		String reading = sentenceAfter(record, RECORDED_MARKER);
 		assertNotNull(reading, "the record must state the patient-specific reading, was: " + record);
-		assertTrue(record.indexOf(RECORDED_MARKER) < record.indexOf(" Contraindicated with: "),
+		assertTrue(record.indexOf(RECORDED_MARKER) < record.indexOf(RULE_LIST_MARKER),
 				"and state it before the list it qualifies, was: " + record);
 		return reading;
 	}
@@ -108,19 +112,9 @@ public class InjectedContraindicationPatientReadingTest {
 	private static String notRecordedReading(String record) {
 		String reading = sentenceAfter(record, NOT_RECORDED_MARKER);
 		assertNotNull(reading, "the record must name the unrecorded half too, was: " + record);
-		assertTrue(record.indexOf(NOT_RECORDED_MARKER) < record.indexOf(" Contraindicated with: "),
+		assertTrue(record.indexOf(NOT_RECORDED_MARKER) < record.indexOf(RULE_LIST_MARKER),
 				"before the list as well, was: " + record);
 		return reading;
-	}
-
-	private static List<String> contraindicationChips(List<SafetyWarning> warnings) {
-		List<String> out = new ArrayList<String>();
-		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(warning.getType())) {
-				out.add(warning.getDetail());
-			}
-		}
-		return out;
 	}
 
 	@Test
@@ -134,7 +128,7 @@ public class InjectedContraindicationPatientReadingTest {
 		// question about amoxicillin for a patient with no penicillin allergy was answered "the patient
 		// has a documented amoxicillin allergy" — a clause of the list beside that very sentence.
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null, null, null);
-		assertTrue(contraindicationChips(DrugReferenceTestSupport
+		assertTrue(DrugReferenceTestSupport.contraindicationDetails(DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.bundledService()).validate("", QUESTION, context))
 						.isEmpty(),
 				"precondition: no chip may be raised, or the record is not the only place this is stated");
@@ -201,8 +195,17 @@ public class InjectedContraindicationPatientReadingTest {
 				DrugReferenceTestSupport.set("Ibuprofen"),
 				DrugReferenceTestSupport.set("Active GI bleed"));
 
-		List<String> chips = contraindicationChips(DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService()).validate("", QUESTION, context));
+		// The RULE chips about this entry, not every contraindication chip of the pass: the class, group
+		// and identity arms raise chips with no clause to name (and the issue #143 arm raises them about
+		// other drugs), so an equality against all of them would redden on inputs that are not defects —
+		// the sibling InjectedContraindicationClauseTest filters the same way and says why.
+		List<String> chips = new ArrayList<String>();
+		for (String detail : DrugReferenceTestSupport.contraindicationDetails(DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.bundledService()).validate("", QUESTION, context))) {
+			if (detail.startsWith("Ibuprofen is contraindicated by an ")) {
+				chips.add(detail);
+			}
+		}
 		String reading = recordedReading(ibuprofenRecord(context));
 
 		assertEquals(2, chips.size(), "precondition: two rules match, so two chips, was: " + chips);
@@ -223,6 +226,44 @@ public class InjectedContraindicationPatientReadingTest {
 				"and must name every one of them, was: " + reading + " against " + chips);
 	}
 
+	/** Issue #208 item 2's own fixture for the rule shapes the negative half may not claim — see the
+	 *  file's own description. */
+	private static final String UNEVALUABLE_FIXTURE =
+			"chartsearchai-test/drug-reference-unevaluable-contraindications.json";
+
+	@Test
+	public void aRuleTheModuleCannotEvaluateIsListedAndClaimedNeitherWay() throws Exception {
+		// The sign-flipped form of this very issue, and the reason the shared predicate's null is not
+		// enough on its own: "did not match" and "cannot be asked" are one answer to the chip arm, which
+		// stays silent either way, and two answers to a record that prints a NEGATIVE claim. A rule typed
+		// `diagnosis` and a rule carrying no token are both unaskable; a record saying this patient does
+		// not have them asserts something nobody checked.
+		//
+		// The same case carries the cross-half duplicate: rules 1 and 2 render ONE note under two keys,
+		// and only the allergy leg matches, so a partition by KEY would print "Recorded for this patient:
+		// NSAID hypersensitivity. Not recorded for this patient: NSAID hypersensitivity."
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(UNEVALUABLE_FIXTURE));
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null,
+				DrugReferenceTestSupport.set("NSAIDs"),
+				DrugReferenceTestSupport.set("Chronic kidney disease stage 5",
+						"Severe hepatic impairment"));
+
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, QUESTION);
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Ibuprofen");
+		assertNotNull(record, "precondition: the ibuprofen record must be injected");
+
+		assertEquals("NSAID hypersensitivity", recordedReading(record),
+				"the rule the chart matches, named once, was: " + record);
+		assertNull(sentenceAfter(record, NOT_RECORDED_MARKER),
+				"and nothing on the negative side: the duplicate note is already claimed true, and the "
+						+ "other two rules were never askable, was: " + record);
+		assertTrue(record.contains("avoid in CKD stage 4 or worse")
+				&& record.contains("avoid in severe hepatic impairment"),
+				"while the drug's own list still carries them — marked, not filtered, was: " + record);
+	}
+
 	@Test
 	public void anEntryWithNoContraindicationRulesClaimsNothingEitherWay() throws Exception {
 		// The bound on the prompt cost, and on what may be asserted: the ddinter and atc sources publish
@@ -233,7 +274,7 @@ public class InjectedContraindicationPatientReadingTest {
 		String record = DrugReferenceTestSupport.injectedDdinterReferenceText("is warfarin safe to add?");
 
 		assertNotNull(record, "precondition: a ddinter record must be injected");
-		assertFalse(record.contains("Contraindicated with:"),
+		assertFalse(record.contains(RULE_LIST_MARKER.trim()),
 				"precondition: the ddinter source publishes no contraindications, was: " + record);
 		assertNull(sentenceAfter(record, RECORDED_MARKER),
 				"so there is nothing to state a patient-specific reading of, was: " + record);

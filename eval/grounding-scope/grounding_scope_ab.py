@@ -11,11 +11,16 @@ no stubbed unit test can reproduce.
 
 For each (patient, query) case it runs POST /chartsearchai/search under each
 value of the `chartsearchai.grounding.clauseScoped` GP and records, per cited
-index, the grounded verdict. Sentence-scope (clauseScoped=false) is the SAFE
+index, whatever the wire published for it. Sentence-scope (clauseScoped=false) is the SAFE
 baseline. Versus it:
   * a True->False flip is a REGRESSION candidate (e.g. patient 165497e8
     "any feeding problems?" cite [5], a provisional-diagnosis false negative);
   * a False->True flip is a WIN candidate (e.g. "any ear problems?" cite [89]).
+
+Only CHART-group citations are measurable here: a reference-group citation
+publishes no verdict at all (issue #201), so its cells read `withheld` and a
+scoping flip on one cannot be seen from the wire. The gate below is therefore a
+statement about chart citations.
 
 The GP is saved before and restored after. Answers are grounding-independent,
 so a differing answer between modes signals LLM nondeterminism (reported).
@@ -72,8 +77,17 @@ def set_gp(name, value):
 
 
 def search(patient, question):
+    # A reference-group citation's `grounded` is always null on the wire, whatever the pass
+    # concluded (issue #201), so a clause-scope flip on one is NOT observable from here. Those
+    # cells are tagged `withheld` rather than printed as None, which would read as "unverified"
+    # and let this harness's gate be quoted over citations it is structurally blind to.
+    # The two tallies below are unaffected either way: both require a True on one side, and a
+    # reference-group citation can never be True (demote-only, issue #106).
     d = req("/chartsearchai/search", {"patient": patient, "question": question}, "POST")
-    verdicts = {r.get("index"): r.get("grounded") for r in (d.get("references") or [])}
+    verdicts = {}
+    for r in (d.get("references") or []):
+        withheld = r.get("group") == "reference"
+        verdicts[r.get("index")] = "withheld" if withheld else r.get("grounded")
     return (d.get("answer", "") or "").strip(), verdicts
 
 

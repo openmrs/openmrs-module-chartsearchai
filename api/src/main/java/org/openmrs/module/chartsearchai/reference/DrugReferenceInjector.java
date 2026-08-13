@@ -57,7 +57,12 @@ import org.springframework.stereotype.Service;
  * #122): reference material is demote-only, so its verdict is never {@code true}, while chart
  * evidence is graded normally. Both consequences follow from the single provenance judgement and
  * both are asserted by that guard — they used to be two separate registrations, and the second was
- * missed when {@code safety_finding} was added.
+ * missed when {@code safety_finding} was added. Since issue #201 it decides a third thing: a
+ * reference-group citation publishes no verdict at all, serializing {@code grounded: null} however
+ * it was graded. So classifying a new injected type as reference material silently removes its
+ * citations from the grounding signal a client sees — which is correct for module-supplied prose
+ * and wrong for the patient's own record, and is one more reason to decide on provenance rather
+ * than on "the module injected it".
  *
  * <p>Three kinds are injected today, and they are not all module-supplied: a
  * {@code drug_reference} entry and a {@code safety_finding} present as reference material, while an

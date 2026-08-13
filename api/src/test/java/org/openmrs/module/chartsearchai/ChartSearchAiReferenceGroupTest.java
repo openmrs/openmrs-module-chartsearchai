@@ -104,7 +104,10 @@ public class ChartSearchAiReferenceGroupTest {
 	 * <p>Recording {@code reference} has a second consequence since issue #122, so decide knowing it:
 	 * the type becomes demote-only for citation grounding, i.e. its citations can be flagged but never
 	 * verified. That follows from the same provenance judgement — a cosine pass cannot check
-	 * module-rendered prose against itself — and it is asserted by the guard below.
+	 * module-rendered prose against itself — and it is asserted by the guard below. Since issue #201
+	 * that flag is module-internal: the wire serializes {@code grounded: null} for every
+	 * {@code reference}-group citation, so recording a type here removes its citations from the
+	 * grounding signal a client sees at all.
 	 */
 	@Test
 	public void referenceGroup_everyDeclaredResourceTypeConstant_shouldHaveADecidedGroup() {

@@ -34,12 +34,15 @@ import org.openmrs.api.context.UserContext;
  *
  * <p>Restoring matters as much as installing: surefire runs this module in a single reused JVM with
  * no configured {@code runOrder}, so a leaked service silently alters whichever classes happen to
- * run afterwards. What it would cost here is specific — three classes in this package
+ * run afterwards. What it would cost here is specific — several classes in this package
  * ({@code ChartSearchAiStreamEventOrderTest}, {@code ChartSearchAiReferenceGroupingTest},
- * {@code ChartSearchAiReferenceProvenanceTest}) drive {@code streamAnswer} with NO context at all,
- * and that is the only thing enforcing its "free of {@code Context} reads" contract: a re-added
- * global-property read throws because nothing is installed. A leaked stub answers instead of
- * throwing, and those three go green over exactly the drift issue #178 removed.
+ * {@code ChartSearchAiReferenceProvenanceTest}, and the contextless tests of
+ * {@code ChartSearchAiReferenceGroundingWithholdingTest}) drive {@code streamAnswer} with NO context
+ * at all, and that is the only thing enforcing its "free of {@code Context} reads" contract: a
+ * re-added global-property read throws because nothing is installed. A leaked stub answers instead of
+ * throwing, and they go green over exactly the drift issue #178 removed. That last class installs
+ * this fixture for its one blocking-endpoint test and restores it in a {@code finally} rather than an
+ * {@code @AfterEach}, precisely so its own SSE tests keep running contextless.
  *
  * <p>{@link #restore()} cannot simply put back "nothing", because {@code ServiceContext} has no
  * removal API and its {@code setService} returns silently when handed a null. So when there was no

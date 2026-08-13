@@ -204,9 +204,13 @@ public class ChartSearchAiReferenceGroupingTest {
 		// unconditionally. Presence rather than value, because every fixture record is null-dated
 		// (see the class javadoc for why that is the realistic shape here).
 		assertTrue(drugRef.has("date"), "the date key must survive grouping, null value included");
-		// Passthrough only: the fixture supplies a null verdict, so this pins that grouping did not
-		// disturb the tri-state `grounded` field. The demote-only RULE that produces the null for a
-		// drug_reference lives in CitationGroundingVerifier and is tested there.
+		// The fixture supplies a null verdict, so this pins that grouping did not disturb the
+		// `grounded` field it serializes alongside. It is no longer a passthrough for THIS record:
+		// since issue #201 the serializer withholds the verdict of every reference-group citation,
+		// so a drug_reference reads null whatever the fixture attached. That withholding, and the
+		// chart-group passthrough that must survive it, are pinned in
+		// ChartSearchAiReferenceGroundingWithholdingTest; the demote-only GRADING rule upstream of
+		// it lives in CitationGroundingVerifier and is tested there.
 		assertTrue(drugRef.get("grounded").isNull(),
 				"grouping must not disturb the tri-state grounded verdict it serializes alongside");
 	}

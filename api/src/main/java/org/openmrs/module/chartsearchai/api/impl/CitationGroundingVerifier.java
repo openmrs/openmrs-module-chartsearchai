@@ -94,7 +94,10 @@ import org.springframework.stereotype.Service;
  * cost: under entailment mode these citations now take the lazy Tier-1 path (up to two
  * embedding passes each) that the amortized Tier-2 batch previously spared them — the
  * off-topic flag is kept mode-uniform at the price of ~one embed pair per reference
- * citation on CPU deployments.
+ * citation on CPU deployments. That surviving {@code false} is a module-internal signal: since
+ * issue #201 the REST layer publishes no verdict at all for a reference-group citation, because
+ * its meaning is "off-topic citation" and a client reading it as "unsupported claim" renders the
+ * module's own deterministic finding in red.
  *
  * <p>Two record types are reference material today —
  * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE}, the case #106 measured, and
@@ -269,14 +272,16 @@ public class CitationGroundingVerifier {
 				// and left out of this set, so the module's own deterministic findings were graded as
 				// retrieved chart evidence and published verdicts that tracked embedding noise —
 				// grounded=false on a MAJOR finding beside two byte-identical siblings at true, and
-				// one finding flipping across runs of a single probe (issue #122). What makes such an
-				// omission dangerous rather than merely wrong is that this set is the WHOLE guarantee:
-				// a REFERENCE-group type left out of it publishes grounded=true on module-generated
-				// prose, and no layer downstream re-derives provenance to catch that. Do not relax it
-				// on the assumption that a client re-filters by group — `group` is a provenance
-				// DISCLOSURE on the wire, not a second gate, which is why README's reference contract
-				// states the withholding as server-side ("never arrives as grounded: true however the
-				// client is written").
+				// one finding flipping across runs of a single probe (issue #122). Since issue #201 the
+				// REST serializer withholds the whole verdict for a reference-group citation, derived
+				// from the same classification, so a type left out HERE no longer reaches a client as
+				// grounded=true — but do not read that as cover. Two consequences are still this set's
+				// alone and neither is visible downstream: the omitted type spends Tier-2 cap slots
+				// meant for chart claims, and it records an entailment verdict on its RecordReference
+				// that the judge cannot competently give on recited prose. Nor is the
+				// wire a reason to relax it on the assumption that a client re-filters by group —
+				// `group` is a provenance DISCLOSURE, not a second gate, which is why the withholding
+				// is stated server-side in README's reference contract.
 				//
 				// active_drug_order (#118) is the case that fixes the rule's SHAPE, and the reason it
 				// cannot be "everything the module injects": it is chart evidence, so withholding a

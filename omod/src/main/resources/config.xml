@@ -213,7 +213,7 @@
 	<globalProperty>
 		<property>chartsearchai.grounding.enabled</property>
 		<defaultValue>false</defaultValue>
-		<description>When true, every cited record is checked for grounding after the LLM answers: the record's text must be semantically close enough to the answer sentence(s) that cite it, otherwise the citation is flagged as unverified. Index validation alone (does [N] map to a real retrieved record?) cannot catch the dangerous case of a real record cited for a claim it does not actually support. Default: false (opt-in).</description>
+		<description>When true, every cited record is checked for grounding after the LLM answers: the record's text must be semantically close enough to the answer sentence(s) that cite it, otherwise the citation is flagged as unverified. Index validation alone (does [N] map to a real retrieved record?) cannot catch the dangerous case of a real record cited for a claim it does not actually support. Verdicts are published for chart-group citations only; a reference-group citation (module-supplied drug-reference prose or a safety finding) always serializes grounded=null, whatever this is set to (issue #201). Default: false (opt-in).</description>
 	</globalProperty>
 
 	<globalProperty>

@@ -12,3 +12,7 @@ bin/
 models/
 de/
 /chartsearchai/
+
+# Python bytecode from running the eval harnesses locally
+__pycache__/
+*.pyc

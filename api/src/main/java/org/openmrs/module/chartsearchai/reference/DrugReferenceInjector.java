@@ -70,7 +70,10 @@ import org.springframework.stereotype.Service;
  * <p>Matching is deterministic and age-gated:
  * <ul>
  *   <li><b>Question-driven</b> — an alias hit against the query text.</li>
- *   <li><b>Patient-driven</b> — an ATC-code hit against an active drug order.</li>
+ *   <li><b>Patient-driven</b> — the reference entries the patient's active orders resolve to, which
+ *       since issue #151 is whatever {@code DrugReferenceService.findForActiveOrders} answers (an ATC
+ *       code hit OR the order's own display name) rather than the ATC hit alone, so this layer and
+ *       {@link DrugSafetyValidator} cannot disagree about which orders the patient has.</li>
  * </ul>
  * Numeric dosing is rendered only when an age band matches the patient's age, so
  * a pediatric maximum is never surfaced for an adult query; contraindication and
@@ -214,10 +217,12 @@ public class DrugReferenceInjector {
 		// groups a partner by the active-order ENTRY the rule names (issue #190 item 2), which is the
 		// chip's own key, so these entries have to be the same resolution the names above come from —
 		// two resolutions is how the record and the chip come to disagree about which rows are one
-		// partner, which is the very thing that grouping exists to settle.
+		// partner, which is the very thing that grouping exists to settle. Since issue #151 the same
+		// list is also the order-driven leg's candidate set, which used to resolve itself and by a
+		// narrower key — see matchingEntries.
 		List<DrugReference> orderEntries = drugReferenceService.findForActiveOrders(rawContext);
 		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext, orderEntries);
-		List<DrugReference> matched = matchingEntries(context, question);
+		List<DrugReference> matched = matchingEntries(orderEntries, question);
 		List<SafetyWarning> findings = preAnswerFindings(context, question);
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
 		if (matched.isEmpty() && findings.isEmpty() && unrepresented.isEmpty()) {
@@ -471,8 +476,32 @@ public class DrugReferenceInjector {
 	 * clinician in no way. The safety validator reads active orders directly, so the chips never
 	 * depend on this injection; the answer's medication awareness comes from the chart's own
 	 * drug-order records, and from {@link #unrepresentedActiveOrders} for any the chart is missing.
+	 *
+	 * <p><b>Which orders are candidates is the caller's answer, not this method's (issue #151).</b> The
+	 * order leg resolved its own candidates through {@code DrugReferenceService.findByActiveOrders} —
+	 * the ATC-only primitive — while {@code DrugSafetyValidator.validate} has screened
+	 * {@code findForActiveOrders} (ATC ∪ name) since issue #148 gave order names a matcher. The split
+	 * is not merely an inconsistency; it made this leg ask its two questions off two different keys:
+	 * an order's RELEVANCE came from the reference ENTRY's own ATC codes ({@link #relatedToAny} reads
+	 * {@code order.atcSubgroups()}), while its MEMBERSHIP came from the ORDER's concept mappings. Only
+	 * the second is sparse — a dictionary maps a minority of drug concepts to ATC, while the knowledge
+	 * base publishes ATC for most of its entries — so an order the relevance rule would have admitted
+	 * at once could not be a candidate to be asked about. See
+	 * {@code OrderDrivenInjectionResolutionTest}, which pins the shape rather than a coverage figure
+	 * (the figure is a property of a deployment's dictionary and rots; the shape does not). Taking the
+	 * list the caller already resolved fixes the key and removes the second resolution in one move: the
+	 * injector cannot now disagree with the chips about which orders the patient has, because it no
+	 * longer has an opinion of its own.
+	 *
+	 * <p>The gate is deliberately NOT widened with it, so this is a change of candidates and not of
+	 * policy. What reaches the prompt is still only what the question's own drug is in a family with —
+	 * see that test's unrelated-order and no-drug-question cases, which are what distinguish this from
+	 * "inject every active order".
+	 *
+	 * @param orderEntries the reference entries the patient's active orders resolve to, already
+	 *        resolved by {@link #injectRecords}; empty when there are none
 	 */
-	List<DrugReference> matchingEntries(PatientClinicalContext context, String question) {
+	List<DrugReference> matchingEntries(List<DrugReference> orderEntries, String question) {
 		// One record per SUBSTANCE, not per reference row (issue #163). A per-call local, never a field:
 		// a memoised DrugReference outliving a getAll() hot-reload breaks the reference comparisons the
 		// safety arms make against the same objects (issue #172).
@@ -500,9 +529,9 @@ public class DrugReferenceInjector {
 		boolean fromOrders = ChartSearchAiUtils.getBooleanGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_INJECT_FROM_ORDERS,
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_INJECT_FROM_ORDERS);
-		if (fromOrders && context != null) {
+		if (fromOrders && !orderEntries.isEmpty()) {
 			List<CrossReactivityGroup> groups = drugReferenceService.getCrossReactivityGroups();
-			for (DrugReference ref : drugReferenceService.findByActiveOrders(context)) {
+			for (DrugReference ref : orderEntries) {
 				// Only when the question names a drug this active order is clinically related to. A
 				// question naming no drug has no relevance anchor, so nothing is injected here
 				// (relatedToAny returns false for an empty questionDrugs).
@@ -576,7 +605,21 @@ public class DrugReferenceInjector {
 	/** @return true when {@code order} shares an ATC level-4 subgroup — or, failing that, a curated
 	 *          cross-reactivity group — with any of {@code questionDrugs}: a genuine class/family
 	 *          relationship (duplicate therapy / cross-reactivity) that makes the active-order
-	 *          reference relevant to the question. An order with no ATC codes is unrelated. */
+	 *          reference relevant to the question.
+	 *
+	 *          <p>Every code here is the ENTRY's own, never the order's: {@code order} is the reference
+	 *          row the patient's order resolved to, and {@code atcSubgroups()} reads what the knowledge
+	 *          base publishes for it. That is why widening the candidate set to name-resolved orders
+	 *          (issue #151) needed nothing here — an entry reached by name carries the same codes as one
+	 *          reached by code, since they are the same rows — and it is why an entry the KB gives no
+	 *          ATC code and no curated group is unrelated to everything and injects nothing. That last
+	 *          case is now the reachable one rather than a formality: an ATC-keyed candidate set could
+	 *          only ever contain entries with codes, while a name-keyed one routinely resolves entries
+	 *          the KB classifies nowhere (in the full 19 MB DDInter KB, {@code Tiotropium} and
+	 *          {@code Ipratropium} both publish no ATC code at all — measured 2026-08-13 through
+	 *          {@link DrugReference#normalizedAtcCodes}). Such an order is silent here, exactly as an
+	 *          unrelated one is; if a deployment wants those families related, the curated
+	 *          {@link CrossReactivityGroup} file is where it says so. */
 	private static boolean relatedToAny(DrugReference order, List<DrugReference> questionDrugs,
 			List<CrossReactivityGroup> groups) {
 		Set<String> orderSubgroups = order.atcSubgroups();

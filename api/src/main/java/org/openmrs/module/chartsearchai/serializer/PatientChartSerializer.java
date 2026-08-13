@@ -322,6 +322,19 @@ public class PatientChartSerializer {
 
 		private final List<Integer> focusIndices;
 
+		// THE STAMPS START HERE — queryScoped, preFiltered, completeResourceTypes. Each records what
+		// the BUILDER decided, so a later consumer reads the chart that was actually assembled
+		// instead of re-deriving it from a global property that may since have changed.
+		//
+		// Adding a fourth? It must also be carried across DrugReferenceInjector.injectRecords, which
+		// rebuilds this object from scratch to append its records — a fresh PatientChart defaults
+		// every stamp to "not set", so a stamp that is not copied there is silently lost on any
+		// question that matches the drug reference, and lost in the fail-OPEN direction. That has
+		// been the failure twice: once for queryScoped (a slice persisted under a patient's KV
+		// scope) and once for preFiltered (a focus-hinted prompt filed in the audit log as a plain
+		// full chart, issue #178). Each stamp has a regression test in DrugReferenceInjectorTest;
+		// a fourth needs one too.
+
 		/** Whether this chart is a question-dependent query-scoped slice (set by the scoped
 		 *  builder via {@link #markQueryScoped}) rather than the stable full chart. Carried ON
 		 *  the chart so downstream KV decisions are made against the chart that was actually

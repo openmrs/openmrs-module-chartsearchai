@@ -73,8 +73,14 @@ public class InjectedContraindicationReadingToggleContextTest extends BaseModule
 			assertTrue(record.contains(" Not recorded for this patient: "),
 					"and the unrecorded half beside it, was: " + record);
 		} else {
+			// BOTH leads, and not just the positive one: " Not recorded for this patient: " does not
+			// contain "Recorded for this patient" (the capital R), so a regression that gated only the
+			// positive half would leave a negative claim about the patient in a citable record with the
+			// chips switched off — the very thing this file exists to forbid — and pass.
 			assertFalse(record.contains("Recorded for this patient"),
 					"with the switch off, the record may claim nothing about this patient, was: " + record);
+			assertFalse(record.contains("Not recorded for this patient"),
+					"on either side of the split, was: " + record);
 		}
 	}
 

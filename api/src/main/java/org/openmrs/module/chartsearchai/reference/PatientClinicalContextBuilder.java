@@ -136,6 +136,12 @@ final class PatientClinicalContextBuilder {
 			log.debug("Could not read active orders for drug-reference context", e);
 		}
 
+		// Whether the two contraindication reads below actually happened. Each catch degrades its
+		// dimension to an empty set, which is right for a chip and wrong for a record that would report
+		// that emptiness as a fact about the patient (issue #208 item 2) — so the failure is recorded
+		// rather than only logged.
+		boolean contraindicationRecordsRead = true;
+
 		// Active allergies -> allergen tokens (for contraindication checks).
 		try {
 			for (Allergy allergy : Context.getPatientService().getAllergies(patient)) {
@@ -147,6 +153,7 @@ final class PatientClinicalContextBuilder {
 		}
 		catch (RuntimeException e) {
 			log.debug("Could not read allergies for drug-reference context", e);
+			contraindicationRecordsRead = false;
 		}
 
 		// Active conditions -> condition tokens (for contraindication checks).
@@ -161,10 +168,11 @@ final class PatientClinicalContextBuilder {
 		}
 		catch (RuntimeException e) {
 			log.debug("Could not read conditions for drug-reference context", e);
+			contraindicationRecordsRead = false;
 		}
 
 		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
-				activeOrders);
+				activeOrders, null, contraindicationRecordsRead);
 	}
 
 	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by

@@ -251,8 +251,13 @@ public class DrugReferenceInjector {
 			index++;
 		}
 
+		// Decided ONCE for the whole chart, not per record: it reads two global properties, and every
+		// other GP read in this class is hoisted to a once-per-injection site for the same reason
+		// LlmInferenceService gives for trusting the chart over a re-read — a flag that flips mid-loop
+		// would leave record [7] carrying a patient-specific reading and record [8] not.
+		boolean patientReading = statesTheChartsContraindicationReading(context);
 		for (DrugReference ref : matched) {
-			RenderedReference rendered = render(ref, age, context, orderEntries);
+			RenderedReference rendered = render(ref, age, context, orderEntries, patientReading);
 			// The rendering's own bookkeeping rides on the mapping, not in the line — see
 			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
 			// grounding verifier still compares against exactly what the model read.
@@ -1080,6 +1085,35 @@ public class DrugReferenceInjector {
 	 */
 	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context,
 			List<DrugReference> orderEntries) {
+		return render(ref, age, context, orderEntries,
+				statesTheChartsContraindicationReading(context));
+	}
+
+	/**
+	 * @return whether an injected record may state what THIS patient's chart records of a drug's
+	 *         contraindications — three things, all of which have to hold, and none of which is a
+	 *         property of the drug:
+	 *         <ul>
+	 *           <li>there is a context at all;</li>
+	 *           <li>the allergy and condition lists were actually READ
+	 *               ({@link PatientClinicalContext#contraindicationRecordsRead}) rather than degraded to
+	 *               empty by a swallowed failure — otherwise the record reports "this patient records
+	 *               none of these" because the module could not look, which is issue #208's own defect
+	 *               with the sign flipped, and the chips beside it fall silent on the same failure;</li>
+	 *           <li>and the deployment has the contraindication chips switched on
+	 *               ({@link DrugSafetyValidator#reportsContraindications}), because this reading is the
+	 *               record's half of one.</li>
+	 *         </ul>
+	 *         The drug's own contraindication LIST is governed by none of this: it is reference
+	 *         material, and it is rendered either way.
+	 */
+	private static boolean statesTheChartsContraindicationReading(PatientClinicalContext context) {
+		return context != null && context.contraindicationRecordsRead()
+				&& DrugSafetyValidator.reportsContraindications();
+	}
+
+	private static RenderedReference render(DrugReference ref, Integer age,
+			PatientClinicalContext context, List<DrugReference> orderEntries, boolean patientReading) {
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
 		StringBuilder paren = new StringBuilder();
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {
@@ -1129,10 +1163,9 @@ public class DrugReferenceInjector {
 		// reading forward has the qualifier before the content — the same reason the interactions section
 		// below promotes this patient's own partners to its front rather than appending them. Omitted
 		// entirely when the context is null, which is "nothing known" and not "nothing recorded": a record
-		// that cannot see the chart must not report an absence. Omitted too when the deployment has the
-		// contraindication chips switched off, because this reading is the record's half of one — see
-		// DrugSafetyValidator.reportsContraindications.
-		if (context != null && DrugSafetyValidator.reportsContraindications()) {
+		// that cannot see the chart must not report an absence — see
+		// statesTheChartsContraindicationReading for the three things that decides.
+		if (patientReading) {
 			// BOTH halves named, each by its own clauses, and neither left to be inferred from the other.
 			// Two weaker forms were tried live on the 3.7.1 standalone 2026-08-13 and BOTH were measured
 			// failing on the model this module ships against:

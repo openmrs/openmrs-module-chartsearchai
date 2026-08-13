@@ -323,6 +323,19 @@ public final class DrugReferenceTestSupport {
 		return ctx(age, weightKg, drugs, atc, allergies, conditions, null);
 	}
 
+	/**
+	 * As {@link #ctx}, but for a context whose allergy and condition reads FAILED — the shape
+	 * {@link PatientClinicalContextBuilder} produces when {@code getAllergies} or
+	 * {@code getActiveConditions} throws and it degrades that dimension to an empty set. The token sets
+	 * are empty for exactly that reason, which is why they are not arguments: a caller cannot both have
+	 * read the chart and not have read it.
+	 */
+	static PatientClinicalContext unreadableRecordsCtx(Integer age, Double weightKg) {
+		return new PatientClinicalContext(age, weightKg, Collections.<String> emptySet(),
+				Collections.<String> emptySet(), Collections.<String> emptySet(),
+				Collections.<String> emptySet(), null, null, false);
+	}
+
 	/** As {@link #ctx}, additionally carrying the identified active drug orders the
 	 *  chart/service reconciliation reads (null means none). */
 	static PatientClinicalContext ctx(Integer age, Double weightKg, Set<String> drugs, Set<String> atc,
@@ -505,19 +518,13 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
-	 * @return the {@code detail} sentences of the INTERACTION chips alone — which over a rule-less
-	 *         dataset is the class arm's output, so a count of them is a count of co-medications that
-	 *         arm decided about.
-	 *
-	 *         <p>Here rather than in each file for the reason {@link #row} records: it was copied
-	 *         verbatim between two of them, javadoc included, and a shared filter cannot drift into two
-	 *         answers about which chips a case is counting.
-	 */
-	/**
 	 * @return the {@code detail} sentences of the CONTRAINDICATION chips alone — the counterpart of
 	 *         {@link #classChipDetails} for the other chip type a rule-driven dataset raises, and here
-	 *         for the same reason: five test files had grown their own copy of this three-line filter,
-	 *         and a shared one cannot drift into two answers about which chips a case is counting.
+	 *         for the same reason: two other files had already grown their own copy of this three-line
+	 *         filter ({@code AllergenNameResolutionTest}, {@code ActiveOrderContraindicationTest}), and a
+	 *         shared one cannot drift into two answers about which chips a case is counting. Those two
+	 *         are deliberately not migrated here — they are outside this change — so the drift they can
+	 *         still make is theirs, not this helper's.
 	 */
 	static List<String> contraindicationDetails(List<SafetyWarning> warnings) {
 		List<String> out = new ArrayList<String>();
@@ -544,6 +551,15 @@ public final class DrugReferenceTestSupport {
 		return null;
 	}
 
+	/**
+	 * @return the {@code detail} sentences of the INTERACTION chips alone — which over a rule-less
+	 *         dataset is the class arm's output, so a count of them is a count of co-medications that
+	 *         arm decided about.
+	 *
+	 *         <p>Here rather than in each file for the reason {@link #row} records: it was copied
+	 *         verbatim between two of them, javadoc included, and a shared filter cannot drift into two
+	 *         answers about which chips a case is counting.
+	 */
 	static List<String> classChipDetails(List<SafetyWarning> warnings) {
 		List<String> out = new ArrayList<String>();
 		for (SafetyWarning warning : warnings) {

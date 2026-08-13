@@ -265,6 +265,26 @@ public class InjectedContraindicationPatientReadingTest {
 	}
 
 	@Test
+	public void aChartTheModuleCouldNotReadIsNotAChartThatRecordsNothing() throws Exception {
+		// The other half of "cannot evaluate", one level up: the RULE is askable and the CHART is not.
+		// PatientClinicalContextBuilder swallows a failed allergy or condition read and degrades that
+		// dimension to an empty set — right for a chip, which must not raise what it cannot substantiate,
+		// and wrong for a record that would report the emptiness as a fact about the patient. Without the
+		// readability flag this reads "Not recorded for this patient: NSAID hypersensitivity; documented
+		// ibuprofen allergy; …" for a patient who may well be allergic, as citable evidence, with no chip
+		// beside it — this issue's own defect with the sign flipped.
+		String record = ibuprofenRecord(DrugReferenceTestSupport.unreadableRecordsCtx(60, null));
+
+		assertNull(sentenceAfter(record, RECORDED_MARKER),
+				"a chart that could not be read supports no claim either way, was: " + record);
+		assertNull(sentenceAfter(record, NOT_RECORDED_MARKER),
+				"least of all a negative one, was: " + record);
+		assertTrue(record.contains(RULE_LIST_MARKER + String.join("; ", SHIPPED_IBUPROFEN_RULES) + "."),
+				"while the drug's own list is reference material and is rendered either way, was: "
+						+ record);
+	}
+
+	@Test
 	public void anEntryWithNoContraindicationRulesClaimsNothingEitherWay() throws Exception {
 		// The bound on the prompt cost, and on what may be asserted: the ddinter and atc sources publish
 		// no contraindications at all, so a record rendered from them must carry neither the list nor a

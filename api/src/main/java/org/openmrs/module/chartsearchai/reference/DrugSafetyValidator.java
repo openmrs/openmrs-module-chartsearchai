@@ -1138,22 +1138,6 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return whether {@code c} is a rule this module can put to the patient's chart AT ALL — a
-	 *         recognised {@code type} carrying a token there is something to look for. Distinguishing
-	 *         that from "asked and the chart says no" is what a NEGATIVE claim needs and a chip does not:
-	 *         {@link #recordedContraindicationKind} answers null for both, and the chip arm treats null
-	 *         as "stay silent", which is right either way. The injected record's unrecorded half is the
-	 *         second consumer, and there null would mean "print that this patient does not have it" —
-	 *         which for a rule typed {@code diagnosis}, or one carrying no token, would be issue #208's
-	 *         own failure with the sign flipped, asserted about a patient the module never checked.
-	 *
-	 *         <p>The token half is {@link PatientClinicalContext#matchableToken}, the very emptiness rule
-	 *         the matcher applies, so "not matchable" and "did not match" cannot come to disagree about a
-	 *         token of nothing but combining marks. The type half is stated here because these two names
-	 *         are the two chart lists this class reads; a dataset may carry any string, and the curated
-	 *         parser validates neither field (it drops an entry only for a blank id or name).
-	 */
-	/**
 	 * @return whether this configuration can raise a contraindication chip AT ALL — the two toggles the
 	 *         chip arms are gated on, read together and in one place.
 	 *
@@ -1176,6 +1160,22 @@ public class DrugSafetyValidator {
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS);
 	}
 
+	/**
+	 * @return whether {@code c} is a rule this module can put to the patient's chart AT ALL — a
+	 *         recognised {@code type} carrying a token there is something to look for. Distinguishing
+	 *         that from "asked and the chart says no" is what a NEGATIVE claim needs and a chip does not:
+	 *         {@link #recordedContraindicationKind} answers null for both, and the chip arm treats null
+	 *         as "stay silent", which is right either way. The injected record's unrecorded half is the
+	 *         second consumer, and there null would mean "print that this patient does not have it" —
+	 *         which for a rule typed {@code diagnosis}, or one carrying no token, would be issue #208's
+	 *         own failure with the sign flipped, asserted about a patient the module never checked.
+	 *
+	 *         <p>The token half is {@link PatientClinicalContext#matchableToken}, the very emptiness rule
+	 *         the matcher applies, so "not matchable" and "did not match" cannot come to disagree about a
+	 *         token of nothing but combining marks. The type half is stated here because these two names
+	 *         are the two chart lists this class reads; a dataset may carry any string, and the curated
+	 *         parser validates neither field (it drops an entry only for a blank id or name).
+	 */
 	static boolean evaluatesAgainstTheChart(DrugReference.Contraindication c) {
 		return ("allergy".equalsIgnoreCase(c.getType()) || "condition".equalsIgnoreCase(c.getType()))
 				&& PatientClinicalContext.matchableToken(c.getToken());

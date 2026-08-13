@@ -130,9 +130,10 @@ public class LlmInferenceService implements ChartSearchService {
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
 
-			List<RecordReference> references = groundReferences(response.getAnswer(),
-					extractCitedReferences(response.getAnswer(), response.getCitations(),
-							chart.getMappings()),
+			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
+					response.getCitations(), chart.getMappings());
+			ClassCodeFidelityCheck.unsupportedClassCodes(response.getAnswer(), cited, chart.getMappings());
+			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
 					patient, chart.getMappings());
@@ -413,6 +414,12 @@ public class LlmInferenceService implements ChartSearchService {
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode));
+
+			// After the user-visible handoff, before grounding: an exact token comparison that
+			// reports an ATC class code no cited record states (issue #142). It answers in
+			// microseconds and reports only to the log, so nothing downstream — and no consumer
+			// above — waits on it.
+			ClassCodeFidelityCheck.unsupportedClassCodes(response.getAnswer(), cited, chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,

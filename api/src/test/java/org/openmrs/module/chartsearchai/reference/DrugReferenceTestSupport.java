@@ -194,11 +194,26 @@ public final class DrugReferenceTestSupport {
 	 *         cannot silently assert nothing
 	 */
 	public static RecordMapping injectedSafetyFinding(String question, String activeDrug, String atcCode) {
-		DrugReferenceService service = ddinterServiceWithGroups();
-		PatientChart chart = injectorWithSafety(service).injectRecords(oneRecordChart(),
-				ctx(60, null, set(activeDrug), set(atcCode), null, null), question);
+		PatientChart chart = injectedSafetyFindingChart(question, activeDrug, atcCode);
 		return injectedFindings(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
 				"no safety-finding record was injected for question: " + question));
+	}
+
+	/**
+	 * The whole chart {@link #injectedSafetyFinding} reads its record out of — the one arrangement
+	 * behind both, so the finding's citation index means the same thing in a test that takes the
+	 * record and a test that takes the chart it sits in.
+	 *
+	 * <p>Exposed whole for the inference tests, which need what production hands the model rather
+	 * than one record of it: the class-code fidelity check (issue #142) compares an answer against
+	 * EVERY cited record, so a test that served it only the finding would not be able to fail if the
+	 * check ignored the rest of the chart.
+	 */
+	public static PatientChart injectedSafetyFindingChart(String question, String activeDrug,
+			String atcCode) {
+		DrugReferenceService service = ddinterServiceWithGroups();
+		return injectorWithSafety(service).injectRecords(oneRecordChart(),
+				ctx(60, null, set(activeDrug), set(atcCode), null, null), question);
 	}
 
 	/**

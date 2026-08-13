@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -217,19 +218,54 @@ public class CrossReactivityClassChoiceTest {
 	}
 
 	@Test
+	public void anIntestinalAntiinfectiveSubgroupStillLosesToTheSystemicOneAsDuplicateTherapy()
+			throws IOException {
+		// ADDED by issues #183/#184, for a coverage loss the change above would otherwise make
+		// silently. The case above still passes and still reports J01GB — but it no longer PINS A07A's
+		// membership of DrugReference.LOCALLY_APPLIED_ATC_GROUPS, because A07AA "Antibiotics" is now
+		// refused by the cross-reactivity arm before the locally-applied question is ever asked, so
+		// dropping A07A from that list changes nothing it can see. Measured by mutation on a throwaway
+		// tree: with only the case above, dropping A07A reddened NOTHING in the suite.
+		//
+		// The duplicate-therapy arm still considers A07AA, so the property is still observable there,
+		// on the same pair. Same mutation, this case red — which is what makes this an addition rather
+		// than a restatement.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"Is neomycin safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null, null,
+						null, Collections.singletonList(order(service, "Kanamycin"))));
+
+		assertEquals(1, warnings.size(), "was: " + warnings);
+		assertEquals("Neomycin is in the same ATC class (J01GB) as active order"
+				+ " Kanamycin — possible duplicate therapy", warnings.get(0).getDetail());
+	}
+
+	@Test
 	public void anIrrigatingSolutionSubgroupDoesNotBecomeTheSystemicAnswer() throws IOException {
 		// The same gap in the direction where there is no systemic class to fall forward to: B05C
 		// "Irrigating solutions" names how it is given, and neomycin and chlorhexidine share nothing
 		// but locally-applied subgroups. So the answer must be the FIRST of those, not the one that
 		// merely happens to sit outside the anatomical main groups — a rule that reads B05CA as
 		// classifying the substance names it here and says something false about both drugs.
-		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("", "Is chlorhexidine safe for her?",
-				DrugReferenceTestSupport.ctx(60, null, null, null,
-						DrugReferenceTestSupport.set("Neomycin"), null));
+		//
+		// MOVED TO THE DUPLICATE-THERAPY ARM by issues #183/#184, keeping the pair, the shape and the
+		// exact-string assertion. This case used to run on the cross-reactivity arm, where the same
+		// four shared subgroups now assert too little to license that claim at all (every one of
+		// A01AB, B05CA, S02AA and S03AA is "Antiinfectives …" — see DrugReference.isPurposeOnlyAtcCode),
+		// so the chip it asserted is gone by design and the case could no longer carry the property.
+		// The property itself is untouched, because the duplicate-therapy arm still considers all four:
+		// B05CA has to be READ as locally applied here or it is returned outright as the systemic
+		// answer. Verified by mutation on a throwaway tree — dropping B05C from
+		// DrugReference.LOCALLY_APPLIED_ATC_GROUPS reddens this case and NOTHING else in the suite, so
+		// this is still the only thing pinning that member.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"Is chlorhexidine safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						null, null, Collections.singletonList(order(service, "Neomycin"))));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
-		assertEquals("Chlorhexidine is in the same ATC class (A01AB) as the patient's allergy to"
-				+ " Neomycin — possible cross-reactivity", warnings.get(0).getDetail());
+		assertEquals("Chlorhexidine is in the same ATC class (A01AB) as active order"
+				+ " Neomycin — possible duplicate therapy", warnings.get(0).getDetail());
 	}
 
 	@Test
@@ -266,6 +302,18 @@ public class CrossReactivityClassChoiceTest {
 		assertEquals("Tioconazole is in the same ATC class (D01AC) as the patient's allergy to"
 				+ " Ketoconazole — possible cross-reactivity", warnings.get(0).getDetail(),
 				"the same chip the ascending fixture produces");
+	}
+
+	/** One active drug order for the named fixture row, carrying the ATC codes that row publishes —
+	 *  the shape {@code PatientClinicalContextBuilder} builds for a mapped concept, and the only shape
+	 *  the duplicate-therapy arm reads. Codes come off the fixture through the production accessor
+	 *  rather than being copied, so the order and the entry cannot come to disagree. */
+	private static PatientClinicalContext.ActiveDrugOrder order(DrugReferenceService service,
+			String name) {
+		DrugReference entry = service.lookupByToken(name);
+		assertNotNull(entry, name + " must resolve");
+		return DrugReferenceTestSupport.activeOrder("i183-" + name, name,
+				DrugReferenceTestSupport.set(name), entry.normalizedAtcCodes());
 	}
 
 	/** The subgroups {@code question}'s entry shares with {@code allergen}, sorted, through the

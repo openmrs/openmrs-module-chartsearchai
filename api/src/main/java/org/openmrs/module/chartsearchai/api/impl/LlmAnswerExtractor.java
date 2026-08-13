@@ -92,6 +92,11 @@ final class LlmAnswerExtractor {
 	 *  can put in the array, and a log line should not be one of them. */
 	private static final int MAX_REPORTED_UNUSABLE = 5;
 
+	/** Shared opening of both WARNs {@link #readNonArrayCitations} can emit, so one grep finds every
+	 *  non-array {@code citations} container whichever way it was resolved (issue #221). */
+	private static final String NON_ARRAY_CITATIONS_MSG =
+			"The LLM's citations field was not the array the request's schema asked for";
+
 	static LlmResponse extractResponse(String response, int inputTokens, int outputTokens) {
 		return extractResponse(response, inputTokens, outputTokens, 0);
 	}
@@ -127,21 +132,14 @@ final class LlmAnswerExtractor {
 			if (answerNode != null && answerNode.isTextual()) {
 				List<Integer> citations = new ArrayList<>();
 				JsonNode citationsNode = root.get("citations");
-				if (citationsNode != null && citationsNode.isArray()) {
-					int coerced = 0;
-					List<String> unusable = new ArrayList<>();
-					for (JsonNode n : citationsNode) {
-						Integer index = citationIndex(n);
-						if (index == null) {
-							unusable.add(abbreviate(n.toString()));
-						} else {
-							if (!n.isIntegralNumber()) {
-								coerced++;
-							}
-							citations.add(index);
-						}
+				// An absent field and an explicit null say the same thing — no citations — and
+				// neither is reported at any level, deliberately: see readNonArrayCitations (#221).
+				if (citationsNode != null && !citationsNode.isNull()) {
+					if (citationsNode.isArray()) {
+						readCitationsArray(citationsNode, citations);
+					} else {
+						readNonArrayCitations(citationsNode, citations);
 					}
-					reportNonConformantCitations(coerced, unusable);
 				}
 				String answer = normalizeSlashCitations(answerNode.asText().trim(), citations);
 				return new LlmResponse(answer, citations);
@@ -203,7 +201,10 @@ final class LlmAnswerExtractor {
 	}
 
 	/**
-	 * The record index a {@code citations} entry names, or {@code null} when it names none.
+	 * The record index a {@code citations} entry names, or {@code null} when it names none. Unchanged
+	 * by issue #221, which merely ALSO applies it to the whole {@code citations} value when that is
+	 * not an array (see {@link #readNonArrayCitations}) — so the container and its entries admit
+	 * exactly the same JSON types, and cannot come to differ.
 	 *
 	 * <p><b>Why a string counts (issue #219).</b> The module asks for a strict json_schema whose
 	 * citation items are {@code "type":"integer"}, but that schema is enforced by the SERVER, not
@@ -252,6 +253,84 @@ final class LlmAnswerExtractor {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Reads the conformant shape — a {@code citations} ARRAY — appending each index its entries name.
+	 * Entry typing is issue #219/#220's subject: a numeric string is coerced through
+	 * {@link #citationIndex} and the coercion is reported, an entry naming no index is dropped and
+	 * reported. The body is unchanged; extracting it is what lets the call site state the container
+	 * decision in one guard — "absent or explicit null: nothing to read and nothing to say" — instead
+	 * of leaving that rule inside a compound condition beside an unrelated array test. It is half of
+	 * what #221 decided and the half easiest to delete by accident.
+	 */
+	private static void readCitationsArray(JsonNode citationsNode, List<Integer> citations) {
+		int coerced = 0;
+		List<String> unusable = new ArrayList<>();
+		for (JsonNode n : citationsNode) {
+			Integer index = citationIndex(n);
+			if (index == null) {
+				unusable.add(abbreviate(n.toString()));
+			} else {
+				if (!n.isIntegralNumber()) {
+					coerced++;
+				}
+				citations.add(index);
+			}
+		}
+		reportNonConformantCitations(coerced, unusable);
+	}
+
+	/**
+	 * Reads a {@code citations} value that is not an array, appending to {@code citations} the one
+	 * index it names — if it names one.
+	 *
+	 * <p><b>Why this exists (issue #221).</b> #219/#220 fixed how an ENTRY may be typed; the
+	 * {@code isArray()} guard above is the same defect one level out. The schema the module sends
+	 * declares {@code citations} an array, but the SERVER enforces that, so a remote that
+	 * approximates the schema can send a bare value — and the guard discarded the whole field in
+	 * silence, exactly as {@code isInt()} discarded string entries.
+	 *
+	 * <p><b>The split in what is READ.</b> A scalar {@code 8} has exactly one reading: an array of
+	 * one. That is the same test #219 applied to {@code "9"}, so it is coerced — through
+	 * {@link #citationIndex} rather than a second rule, so the container and its entries admit the
+	 * same JSON types and cannot drift apart. Anything with no single reading (an object, a
+	 * non-numeric string, {@code 9.7}, a boolean) is left alone: there is nothing to recover, and
+	 * picking a reading would widen which VALUES name a record, which is the line #219/#220 drew and
+	 * this does not cross.
+	 *
+	 * <p><b>Both outcomes WARN, and the split above is not a split in reporting.</b> Whichever branch
+	 * runs, a provider has broken the array contract the request asked for, and either an index was
+	 * recovered by guesswork or one was lost. {@link #reportNonConformantCitations} already WARNs for
+	 * the same information loss one level in — an array whose ENTRIES name no index — so reporting
+	 * the container case any more quietly would be two channels for one failure. Both lines here
+	 * share a prefix with each other for the same reason: one grep finds every non-array container.
+	 *
+	 * <p><b>Why {@code null} is different, and stays silent.</b> This is the load-bearing distinction
+	 * and the two branches must not be collapsed on the strength of both being "not an array". An
+	 * explicit {@code null} never reaches here (the caller's guard): it ASSERTS ABSENCE — the same
+	 * statement as an omitted field, made by a provider whose answer simply cites nothing — and this
+	 * code already does exactly what it says. Nothing is lost and nothing is guessed, so there is
+	 * nothing to report; a channel that fires on a provider behaving correctly is worth less than no
+	 * channel. Everything that does reach here ASSERTS PRESENCE of something this parser could not
+	 * use. Absence honoured is not a defect; presence discarded is.
+	 *
+	 * <p>The earlier draft of this logged the unreadable case at DEBUG, reasoning that the shape had
+	 * no observed instance. That was wrong twice over: the branch cannot fire unless a real provider
+	 * really did send an unusable container, so it is not a warning on hypothetical data at all; and
+	 * the default {@code org.openmrs.*} level is WARN, so DEBUG would have made it evidence for
+	 * someone already looking rather than a signal that arrives.
+	 */
+	private static void readNonArrayCitations(JsonNode citationsNode, List<Integer> citations) {
+		Integer index = citationIndex(citationsNode);
+		if (index == null) {
+			log.warn(NON_ARRAY_CITATIONS_MSG + ", and names no index — it was dropped: {}",
+					abbreviate(citationsNode.toString()));
+			return;
+		}
+		citations.add(index);
+		log.warn(NON_ARRAY_CITATIONS_MSG + ": read as the one index its single value names: {}",
+				abbreviate(citationsNode.toString()));
 	}
 
 	/**

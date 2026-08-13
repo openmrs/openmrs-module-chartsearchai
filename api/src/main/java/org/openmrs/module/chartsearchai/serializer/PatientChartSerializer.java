@@ -322,6 +322,19 @@ public class PatientChartSerializer {
 
 		private final List<Integer> focusIndices;
 
+		// THE STAMPS START HERE — queryScoped, preFiltered, completeResourceTypes. Each records what
+		// the BUILDER decided, so a later consumer reads the chart that was actually assembled
+		// instead of re-deriving it from a global property that may since have changed.
+		//
+		// Adding a fourth? It must also be carried across DrugReferenceInjector.injectRecords, which
+		// rebuilds this object from scratch to append its records — a fresh PatientChart defaults
+		// every stamp to "not set", so a stamp that is not copied there is silently lost on any
+		// question that matches the drug reference, and lost in the fail-OPEN direction. That has
+		// been the failure twice: once for queryScoped (a slice persisted under a patient's KV
+		// scope) and once for preFiltered (a focus-hinted prompt filed in the audit log as a plain
+		// full chart, issue #178). Each stamp has a regression test in DrugReferenceInjectorTest;
+		// a fourth needs one too.
+
 		/** Whether this chart is a question-dependent query-scoped slice (set by the scoped
 		 *  builder via {@link #markQueryScoped}) rather than the stable full chart. Carried ON
 		 *  the chart so downstream KV decisions are made against the chart that was actually
@@ -329,6 +342,13 @@ public class PatientChartSerializer {
 		 *  chart (a transient GP-read failure, or an operator flip mid-request), and persisting
 		 *  a slice prompt under a patient's KV scope would purge their real full-chart entry. */
 		private boolean queryScoped;
+
+		/** Whether this chart carries the similarity focus hint the {@code embedding.preFilter}
+		 *  global property turns on — the second of the two full-chart shapes, and only ever set on
+		 *  a chart that is not {@link #queryScoped}. Carried ON the chart for the same reason that
+		 *  flag is: the audit row naming which mode assembled a prompt has to follow the chart that
+		 *  was built, and a later re-read of the GP can disagree with the read that built it. */
+		private boolean preFiltered;
 
 		/** The resource types this chart carries COMPLETELY — every record querystore holds of
 		 *  that type for this patient. Only a query-scoped slice needs to state this: the full
@@ -373,6 +393,21 @@ public class PatientChartSerializer {
 		 *  race-free signal for KV decisions (see the field note). */
 		public boolean isQueryScoped() {
 			return queryScoped;
+		}
+
+		/** Marks this chart as carrying the preFilter focus hint. Called by the full-chart builder
+		 *  from the same {@code usePreFilter} it dispatched on, and again by
+		 *  {@code DrugReferenceInjector} on its rebuilt chart — a rebuild that dropped the stamp
+		 *  would file a focus-hinted prompt in the audit log as a plain full chart. */
+		public void markPreFiltered() {
+			this.preFiltered = true;
+		}
+
+		/** True when this chart carries the preFilter focus hint — the race-free signal for which of
+		 *  the two full-chart shapes assembled it, and (with {@link #isQueryScoped()}) what
+		 *  {@code ChartBuildingStrategy.searchModeLabel} names in the audit row. */
+		public boolean isPreFiltered() {
+			return preFiltered;
 		}
 
 		/** Declares the resource types this chart carries completely. Called by the scoped chart

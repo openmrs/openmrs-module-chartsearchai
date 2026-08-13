@@ -884,7 +884,7 @@ Requires the `View AI Audit Logs` privilege. All query parameters are optional. 
   - The authenticated user and patient
   - The question asked and the LLM's response
   - The number of source references returned
-  - The search mode used (`pre-filter` or `full-chart`)
+  - The search mode used: `queryScoped` (the [Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped) default), or `full-chart`, or `pre-filter` for a full chart carrying a focus hint. Stated by the pipeline on the answer and written unchanged, rather than derived at the REST layer — [#178](https://github.com/openmrs/openmrs-module-chartsearchai/issues/178) was that derivation, which branched on `chartsearchai.embedding.preFilter` alone and so could never record `queryScoped` at all. A fourth value, `unknown`, is written when an answer states no mode — unreachable from the shipped pipeline, but a deployment that substitutes its own `chartSearchAi.chartSearchServiceRouter` bean can produce it, so a consumer mapping this column must handle it rather than assume three
   - Response time in milliseconds
   - Input and output token counts (for monitoring LLM usage and cost)
   - Timestamp

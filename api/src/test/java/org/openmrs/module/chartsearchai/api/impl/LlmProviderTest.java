@@ -601,6 +601,114 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void extractResponse_shouldReadAScalarCitationsValueAsTheOneIndexItNames() {
+		// Issue #221 — the CONTAINER case of what #219/#220 fixed for ENTRIES. The isArray() guard
+		// discarded a whole citations field that was not an array, in silence. A scalar has exactly
+		// one reading (an array of one), which is the same test #219 applied to "9": coerce what
+		// cannot be read two ways. Both JSON types citationIndex already accepts appear here, so the
+		// container's admitted types cannot drift from the entries'.
+		LlmProvider.LlmResponse number = LlmProvider.extractResponse(
+				"{\"answer\": \"TB is active [8].\", \"citations\": 8}");
+		assertEquals("TB is active [8].", number.getAnswer());
+		assertEquals(Arrays.asList(8), number.getCitations());
+
+		LlmProvider.LlmResponse text = LlmProvider.extractResponse(
+				"{\"answer\": \"TB is active [8].\", \"citations\": \"8\"}");
+		assertEquals(Arrays.asList(8), text.getCitations(),
+				"a scalar string index reads exactly as its integer twin, as it does inside an array");
+	}
+
+	@Test
+	public void extractResponse_shouldReadAScalarCitationsValueExactlyAsItsOneElementArray() {
+		// The bound, stated as an equality so it cannot rot: coercing the CONTAINER admits no value
+		// the one-element array does not already admit. 0 and -1 are not record indices and are not
+		// filtered here either — extractCitedReferences remains the only thing that decides which
+		// indices become references.
+		for (String value : new String[] { "8", "0", "-1", "\"8\"", "\"-1\"" }) {
+			String scalar = "{\"answer\": \"A [8].\", \"citations\": " + value + "}";
+			String array = "{\"answer\": \"A [8].\", \"citations\": [" + value + "]}";
+			assertEquals(LlmProvider.extractResponse(array).getCitations(),
+					LlmProvider.extractResponse(scalar).getCitations(),
+					"scalar citations " + value + " must parse to exactly what [" + value
+							+ "] parses to");
+		}
+	}
+
+	@Test
+	public void extractResponse_shouldReportAScalarCitationsValueAtWarn() {
+		// Silence was the defect, so recovering the index is only half the fix — same argument as
+		// #220's entry-typing WARN. Asserted on the LEVEL, per LogCapture's javadoc, so a re-wording
+		// cannot drop the guard.
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
+			assertEquals(Arrays.asList(8), LlmProvider.extractResponse(
+					"{\"answer\": \"TB is active [8].\", \"citations\": 8}").getCitations());
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"a citations field the server should have constrained to an array must be "
+							+ "reported when it is coerced, not silently repaired. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void extractResponse_shouldStayQuietOnAnExplicitNullCitations() {
+		// The distinction this pins is the load-bearing one, and it is NOT "array versus not an
+		// array" — every other non-array container now warns (see the case above). It is what the
+		// container ASSERTS. null asserts ABSENCE: the same statement as an omitted field, made by a
+		// provider whose answer cites nothing, and this code already does exactly what it says.
+		// Nothing is lost and nothing is guessed, so there is nothing to report — and a channel that
+		// fires on a provider behaving correctly is worth less than no channel. Everything that
+		// reaches readNonArrayCitations asserts PRESENCE of something unusable, which is a loss.
+		//
+		// Captured at DEBUG so the assertion covers every level, not just WARN: this must log
+		// nothing at all, which is what stops the two branches being folded together later.
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName(), Level.DEBUG)) {
+			LlmProvider.LlmResponse result = LlmProvider.extractResponse(
+					"{\"answer\": \"No records.\", \"citations\": null}");
+			assertEquals("No records.", result.getAnswer());
+			assertTrue(result.getCitations().isEmpty());
+			assertTrue(capture.describeAll().isEmpty(),
+					"an explicit null citations names no defect and must log nothing at all. "
+							+ "Captured: " + capture.describeAll());
+		}
+		// And the same for an omitted field, which is the statement null is equivalent to.
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName(), Level.DEBUG)) {
+			assertTrue(LlmProvider.extractResponse("{\"answer\": \"No records.\"}")
+					.getCitations().isEmpty());
+			assertTrue(capture.describeAll().isEmpty(),
+					"an omitted citations field must stay indistinguishable from an explicit null. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void extractResponse_shouldReportACitationsContainerWithNoSingleReadingAtWarn() {
+		// A container that is neither an array nor a scalar naming an index has no ONE reading, so
+		// there is nothing to coerce and inventing one would be widening a VALUE. The VALUE
+		// behaviour is therefore unchanged — no citations — but the loss is reported at WARN, at the
+		// same level and in the same shape as reportNonConformantCitations, which already warns for
+		// this exact information loss one level in (an array whose ENTRIES name no index). Reporting
+		// the container more quietly would be two channels for one failure.
+		//
+		// This is not a warning on hypothetical data: the branch cannot run unless a provider really
+		// did send a citations field this parser cannot use. An earlier draft logged it at DEBUG on
+		// an "unobserved shape" argument that does not apply, and which the default org.openmrs.*
+		// level of WARN would have made worse — DEBUG is evidence for someone already looking.
+		for (String value : new String[] { "{\"index\": 9}", "\"eight\"", "9.7", "true" }) {
+			String response = "{\"answer\": \"A [9].\", \"citations\": " + value + "}";
+			try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
+				LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+				assertEquals("A [9].", result.getAnswer(),
+						"the answer is the half that is not in doubt and must survive " + value);
+				assertTrue(result.getCitations().isEmpty(),
+						"citations " + value + " names no index; inventing one would widen a value");
+				assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+						"a citations container this parser cannot use must be reported, not skipped "
+								+ "quietly: " + value + ". Captured: " + capture.describeAll());
+			}
+		}
+	}
+
+	@Test
 	public void normalizeSlashCitations_shouldConvertSlashesToSeparateBrackets() {
 		assertEquals("Tuberculosis [1], [2] and Malaria [3], [4]",
 				LlmProvider.normalizeSlashCitations("Tuberculosis [1/2] and Malaria [3/4]"));

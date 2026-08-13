@@ -117,6 +117,10 @@ public class LlmInferenceService implements ChartSearchService {
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
 			chart = drugReferenceInjector.inject(chart, patient, question);
+			// Resolved once, off the chart that was actually assembled, and carried on the answer —
+			// so the audit row the REST layer writes states the mode instead of re-deriving it
+			// (issue #178). After inject() deliberately: that is the chart the LLM sees.
+			String searchMode = chartBuildingStrategy.searchModeLabel(chart);
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			long llmStart = System.currentTimeMillis();
@@ -134,7 +138,7 @@ public class LlmInferenceService implements ChartSearchService {
 					patient, chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyWarnings);
+					response.getCachedTokens(), safetyWarnings, searchMode);
 			outcome = "ok";
 			return answer;
 		}
@@ -366,6 +370,11 @@ public class LlmInferenceService implements ChartSearchService {
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
 			chart = drugReferenceInjector.inject(chart, patient, question);
+			// One resolution for BOTH answers this method produces (issue #178). The early-done path
+			// audits the ungrounded answer and the classic path audits the returned one, so a mode
+			// each of them derived separately is two audit-write sites that can disagree — which is
+			// half of what #178 was, one layer up.
+			String searchMode = chartBuildingStrategy.searchModeLabel(chart);
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
@@ -403,7 +412,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// Fires regardless of whether grounding is enabled — see the interface contract.
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens()));
+					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode));
 
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
@@ -414,7 +423,7 @@ public class LlmInferenceService implements ChartSearchService {
 					patient, chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyWarnings);
+					response.getCachedTokens(), safetyWarnings, searchMode);
 			outcome = "ok";
 			return answer;
 		}

@@ -177,10 +177,6 @@ public class ChartSearchAiRestController {
 			return rateLimitError;
 		}
 
-		String preFilter = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
-		boolean preFilterEnabled = !"false".equalsIgnoreCase(preFilter.trim());
-
 		ChartAnswer chartAnswer;
 		long responseTimeMs;
 		try {
@@ -209,23 +205,13 @@ public class ChartSearchAiRestController {
 					HttpStatus.INTERNAL_SERVER_ERROR);
 		}
 
-		ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
-		auditLog.setUser(user);
-		auditLog.setPatient(patient);
-		auditLog.setQuestion(question);
-		auditLog.setAnswer(chartAnswer.getAnswer());
-		auditLog.setReferenceCount(chartAnswer.getReferences().size());
-		auditLog.setSearchMode(preFilterEnabled ? "pre-filter" : "full-chart");
-		auditLog.setResponseTimeMs(responseTimeMs);
-		auditLog.setInputTokens(chartAnswer.getInputTokens() > 0 ? chartAnswer.getInputTokens() : null);
-		auditLog.setOutputTokens(chartAnswer.getOutputTokens() > 0 ? chartAnswer.getOutputTokens() : null);
-		auditLog.setDateCreated(new Date());
-		try {
-			auditLogService.saveAuditLog(auditLog);
-		}
-		catch (Exception e) {
-			log.warn("Failed to save audit log for search query", e);
-		}
+		// One row builder for both request paths. Issue #178 removed the last thing that made this
+		// site and the streaming one differ — each derived the search mode for itself — and what was
+		// left was the same eleven setters written twice. Two sites that must agree about a row's
+		// contents, and agree only by being kept in step by hand, is the structural condition that
+		// let search_mode hold one value for 6036 rows; the next column added would land in one of
+		// them and be silently absent from the other, exactly as cachedTokens is absent from both.
+		String questionId = saveAuditLog(user, patient, question, chartAnswer, responseTimeMs);
 
 		Map<String, Object> response = new HashMap<String, Object>();
 		response.put("answer", chartAnswer.getAnswer());
@@ -235,8 +221,8 @@ public class ChartSearchAiRestController {
 		// tri-state `grounded` verdict and the `group` discriminator; see serializeReferences.
 		response.put("references", serializeReferences(chartAnswer.getReferences()));
 		response.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
-		if (auditLog.getAuditLogId() != null) {
-			response.put("questionId", String.valueOf(auditLog.getAuditLogId()));
+		if (questionId != null) {
+			response.put("questionId", questionId);
 		}
 
 		return new ResponseEntity<Object>(response, HttpStatus.OK);
@@ -454,12 +440,7 @@ public class ChartSearchAiRestController {
 		// Commit the response headers now so chunked transfer starts
 		unwrapped.flushBuffer();
 
-		String preFilterProp = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_EMBEDDING_PRE_FILTER, "false");
-		String searchMode = !"false".equalsIgnoreCase(preFilterProp.trim())
-				? "pre-filter" : "full-chart";
-
-		streamAnswer(out, patient, sanitizedQuestion, user, searchMode, isAsyncGroundingActive());
+		streamAnswer(out, patient, sanitizedQuestion, user, isAsyncGroundingActive());
 	}
 
 	/**
@@ -488,10 +469,12 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>Package-private and free of {@code Context} reads so event-order behavior is unit-tested
 	 * directly (see {@code ChartSearchAiStreamEventOrderTest}); {@code searchStream} resolves all
-	 * configuration before delegating here.</p>
+	 * configuration before delegating here. The audit row's search mode is NOT among that
+	 * configuration: it is stated by the answer the pipeline returns (issue #178), so there is no
+	 * parameter for a caller to get wrong and no second derivation to drift from the first.</p>
 	 */
 	void streamAnswer(final OutputStream out, Patient patient, String sanitizedQuestion, User user,
-			String searchMode, boolean asyncGrounding) {
+			boolean asyncGrounding) {
 		try {
 			long startTime = System.currentTimeMillis();
 
@@ -517,7 +500,7 @@ public class ChartSearchAiRestController {
 							return;
 						}
 						earlyQuestionId[0] = saveAuditLog(user, patient, sanitizedQuestion,
-								ungrounded, searchMode, System.currentTimeMillis() - startTime);
+								ungrounded, System.currentTimeMillis() - startTime);
 						try {
 							writeSseEvent(out, "done",
 									doneEventJson(ungrounded, earlyQuestionId[0]));
@@ -553,7 +536,7 @@ public class ChartSearchAiRestController {
 				// Classic shape: async off, or the service returned an already-final answer (cache
 				// hit) without surfacing an ungrounded stage — audit and emit the single done.
 				String questionId = saveAuditLog(user, patient, sanitizedQuestion, chartAnswer,
-						searchMode, System.currentTimeMillis() - startTime);
+						System.currentTimeMillis() - startTime);
 				writeSseEvent(out, "done", doneEventJson(chartAnswer, questionId));
 			} else {
 				// done already went out before grounding; deliver the verdicts in the trailing
@@ -615,21 +598,31 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Persists the audit row for a streaming answer and returns its id as the client-facing
-	 * {@code questionId}, or {@code null} when the save failed — audit failures are logged and
-	 * never break the response, exactly as before the async-grounding split. Shared by the
-	 * classic post-return path and the async early-{@code done} path so both emit identical
-	 * audit rows and {@code done} payloads.
+	 * Persists the audit row for one answer and returns its id as the client-facing
+	 * {@code questionId}, or {@code null} when the save failed — audit failures are logged and never
+	 * break the response, exactly as before the async-grounding split.
+	 *
+	 * <p><b>The only place a row is built.</b> All three write sites go through here: the blocking
+	 * {@code /search} handler, the streaming classic post-return path, and the streaming async
+	 * early-{@code done} path. Before issue #178 the blocking site had its own copy of these
+	 * setters, and the one expression that differed between the copies — how each derived
+	 * {@code searchMode} — is the whole of that issue. The mode now travels on the answer, which left
+	 * two identical copies; keeping them as copies would leave the next column added to this table
+	 * present in one row shape and silently absent from the other, which is the same defect wearing
+	 * a different field's name.
+	 *
+	 * <p>The mode is read off {@code answer}, never re-derived here, so the row states what the
+	 * pipeline actually did rather than what a global property says at write time.
 	 */
 	private String saveAuditLog(User user, Patient patient, String question, ChartAnswer answer,
-			String searchMode, long responseTimeMs) {
+			long responseTimeMs) {
 		ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
 		auditLog.setUser(user);
 		auditLog.setPatient(patient);
 		auditLog.setQuestion(question);
 		auditLog.setAnswer(answer.getAnswer());
 		auditLog.setReferenceCount(answer.getReferences().size());
-		auditLog.setSearchMode(searchMode);
+		auditLog.setSearchMode(answer.getSearchMode());
 		auditLog.setResponseTimeMs(responseTimeMs);
 		auditLog.setInputTokens(answer.getInputTokens() > 0 ? answer.getInputTokens() : null);
 		auditLog.setOutputTokens(answer.getOutputTokens() > 0 ? answer.getOutputTokens() : null);
@@ -638,7 +631,7 @@ public class ChartSearchAiRestController {
 			auditLogService.saveAuditLog(auditLog);
 		}
 		catch (Exception e) {
-			log.warn("Failed to save audit log for streaming query", e);
+			log.warn("Failed to save audit log", e);
 		}
 		return auditLog.getAuditLogId() != null ? String.valueOf(auditLog.getAuditLogId()) : null;
 	}

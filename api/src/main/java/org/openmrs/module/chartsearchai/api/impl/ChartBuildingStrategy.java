@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -53,6 +54,35 @@ class ChartBuildingStrategy {
 	 */
 	PatientChart buildFocusedChart(Patient patient, String question) {
 		return queryStoreChartBuilder.buildFocused(patient, question);
+	}
+
+	/**
+	 * The audit-facing label for the chart-assembly mode that produced {@code chart} — one of the
+	 * {@code ChartSearchAiConstants.SEARCH_MODE_*} values, and the single derivation of it.
+	 *
+	 * <p>It lives here because this class is where the chartMode dispatch lives, for the reason
+	 * {@link #buildChart} states: so every caller sees the same mode without re-reading the GP. A
+	 * second derivation elsewhere is exactly issue #178 — the REST layer branched on the preFilter
+	 * GP alone at both of its audit-write sites, and {@code queryScoped}, the shipped default, could
+	 * therefore never reach the column.
+	 *
+	 * <p>Read entirely off the CHART's own stamps, never off a fresh GP read, for the reason
+	 * {@code PatientChart.markQueryScoped} exists: a re-read can disagree with the read that built
+	 * the chart (a transient read failure, or an operator flip mid-request), and an audit row's whole
+	 * purpose is to say what the clinician was actually shown. It also means labelling costs no
+	 * {@code Context} access, so the answer can be labelled on every path the pipeline has, not only
+	 * the ones holding an OpenMRS session.
+	 *
+	 * @param chart a chart from {@link #buildChart} (never null), after any rebuild — the caller
+	 *        dereferences it either way, so there is no null case to name a mode for
+	 */
+	String searchModeLabel(PatientChart chart) {
+		if (chart.isQueryScoped()) {
+			return ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED;
+		}
+		return chart.isPreFiltered()
+				? ChartSearchAiConstants.SEARCH_MODE_PRE_FILTER
+				: ChartSearchAiConstants.SEARCH_MODE_FULL_CHART;
 	}
 
 	boolean usePreFilter() {

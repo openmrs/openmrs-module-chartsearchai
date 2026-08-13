@@ -90,6 +90,46 @@ public class ChartSearchAiConstants {
 	 */
 	public static final String CHART_MODE_DEFAULT = CHART_MODE_QUERY_SCOPED;
 
+	/**
+	 * A full chart carrying the similarity focus hint {@code chartsearchai.embedding.preFilter}
+	 * turns on — and the anchor for the whole {@code SEARCH_MODE_*} family, documented here because
+	 * the family has no {@code GP_} declaration of its own to hang from the way {@code CHART_MODE_*}
+	 * hangs from {@link #GP_CHART_MODE}.
+	 *
+	 * <p>The vocabulary of the audit log's {@code search_mode} column — how the prompt's chart context
+	 * was assembled for the query that row records. Resolved once per request by
+	 * {@code ChartBuildingStrategy.searchModeLabel} and carried on the answer; the REST layer writes
+	 * it and derives nothing, because deriving it there is what issue #178 was: both audit-write
+	 * sites branched on the preFilter GP alone, so {@link #CHART_MODE_QUERY_SCOPED} — the shipped
+	 * {@link #CHART_MODE_DEFAULT default} — could not appear in the column at all, and every row on a
+	 * default install claimed {@link #SEARCH_MODE_FULL_CHART} while the prompt carried a slice.
+	 *
+	 * <p>{@link #SEARCH_MODE_PRE_FILTER} and {@link #SEARCH_MODE_FULL_CHART} keep the exact spellings
+	 * they have written since the column existed: these rows are read outside this module, so #178
+	 * ADDS a third value rather than re-spelling two. {@link #SEARCH_MODE_QUERY_SCOPED} is defined AS
+	 * the GP value, so the row names the mode with the same token an operator sets. Note the
+	 * {@code [timing] querystoreBuild} log lines spell the same two dispatch shapes
+	 * {@code preFilter}/{@code fullChart} — a separate ops contract, deliberately not unified here.
+	 */
+	public static final String SEARCH_MODE_PRE_FILTER = "pre-filter";
+
+	/** A full chart with no focus hint. See {@link #SEARCH_MODE_PRE_FILTER} for the family. */
+	public static final String SEARCH_MODE_FULL_CHART = "full-chart";
+
+	/** A query-scoped slice — the same token {@link #GP_CHART_MODE} takes, by construction.
+	 *  See {@link #SEARCH_MODE_PRE_FILTER} for the family. */
+	public static final String SEARCH_MODE_QUERY_SCOPED = CHART_MODE_QUERY_SCOPED;
+
+	/**
+	 * Written when an answer states no mode. The column is {@code not-null}, so something must be
+	 * written; it is deliberately none of the three real modes, because a row that silently claims a
+	 * mode nobody resolved is the defect #178 fixed rather than a tidier version of it. Unreachable
+	 * from the in-tree pipeline, which labels every answer it builds — it exists for an alternative
+	 * {@code ChartSearchService}, and mirrors {@code QueryStoreChartBuilder.MODE_UNKNOWN}, which
+	 * buckets the dispatch it cannot honestly label the same way.
+	 */
+	public static final String SEARCH_MODE_UNKNOWN = "unknown";
+
 	public static final String GP_AUDIT_LOG_RETENTION_DAYS = "chartsearchai.auditLogRetentionDays";
 
 	public static final int DEFAULT_AUDIT_LOG_RETENTION_DAYS = 90;

@@ -268,6 +268,12 @@ public final class DrugReferenceTestSupport {
 	 *  sibling pairs that share a display stem and must NOT be merged with them (issue #195). */
 	static final String DDI_PRESENTATION_MOIETY = "chartsearchai-test/ddi-presentation-moiety.json";
 
+	/** Three nitroimidazoles, curated ({@link JsonDrugReferenceSource}) rather than DDInter-shaped: the
+	 *  class arm's co-medication GROUPING slice, where one order's codes are covered only in part
+	 *  (issue #186) and the same order shapes are asked of the name rung (issue #228). */
+	static final String PARTIAL_ORDER_COVERAGE =
+			"chartsearchai-test/drug-reference-partial-order-coverage.json";
+
 	/**
 	 * The canonical interaction-screening question, verbatim from issue #113 — it names no drug, which
 	 * is what leaves the active-order screening arm as the only arm that can chip, so an assertion
@@ -473,6 +479,25 @@ public final class DrugReferenceTestSupport {
 		List<String> out = new ArrayList<String>();
 		for (SafetyWarning warning : warnings) {
 			out.add(warning.getDetail());
+		}
+		return out;
+	}
+
+	/**
+	 * @return the {@code detail} sentences of the INTERACTION chips alone — which over a rule-less
+	 *         dataset is the class arm's output, so a count of them is a count of co-medications that
+	 *         arm decided about.
+	 *
+	 *         <p>Here rather than in each file for the reason {@link #row} records: it was copied
+	 *         verbatim between two of them, javadoc included, and a shared filter cannot drift into two
+	 *         answers about which chips a case is counting.
+	 */
+	static List<String> classChipDetails(List<SafetyWarning> warnings) {
+		List<String> out = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())) {
+				out.add(warning.getDetail());
+			}
 		}
 		return out;
 	}

@@ -265,14 +265,20 @@ public class DrugReferenceService {
 	/**
 	 * As {@link #findImpliedByDrugName(String)}, sharing one resolution cache with the other names of the
 	 * same call — which is {@link #findForActiveOrders}, where a patient's orders contribute two names
-	 * each (the drug's and its concept's) and several orders of one family carry the same aliases.
+	 * each (the drug's and its concept's) and several orders of one family carry the same aliases, and
+	 * since issue #228 {@code DrugSafetyValidator.substanceRowsNamedBy}, which asks the same question of
+	 * the same names once per in-play substance. What the cache saves is not the match scan but the
+	 * WITNESS resolution behind it: each alias a matched row carries costs a {@link #findImpliedSubstances},
+	 * and those repeat across the names of one order and across orders of one family.
 	 *
 	 * <p>The cache is a per-call LOCAL of the outermost caller, never a field: it holds
 	 * {@link DrugReference#substanceGroupKey()} values, which can be a {@link DrugReference} itself, and a
 	 * memoised entry outliving a {@link #getAll()} hot-reload fails the identity comparisons the safety
-	 * arms make against those same objects (issue #172).
+	 * arms make against those same objects (issue #172). Package-private for that second caller and no
+	 * wider: the cache is the whole of what it adds, and a caller that cannot hold one has
+	 * {@link #findImpliedByDrugName(String)}.
 	 */
-	private List<DrugReference> findImpliedByDrugName(String drugName,
+	List<DrugReference> findImpliedByDrugName(String drugName,
 			Map<Object, Set<Object>> impliedByName) {
 		List<DrugReference> matched = findByDrugName(drugName);
 		if (matched.size() < 2) {

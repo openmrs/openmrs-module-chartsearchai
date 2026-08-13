@@ -46,20 +46,13 @@ public class PartialOrderCoveragePartnerTest {
 	 * ({@code Metronidazole}) and {@code P01AB07} ({@code Secnidazole}) and no {@code J01XD} code at
 	 * all, which is what makes an order mapped to {@code J01XD01} partly-covered.
 	 */
-	private static final String FIXTURE = "chartsearchai-test/drug-reference-partial-order-coverage.json";
+	private static final String FIXTURE = DrugReferenceTestSupport.PARTIAL_ORDER_COVERAGE;
 
 	private static final String QUESTION = "Is it safe to give tinidazole?";
 
 	private static DrugSafetyValidator validator() throws Exception {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(FIXTURE)));
-	}
-
-	/** The details of the class-relationship chips, which is all this arm can raise over a rule-less
-	 *  dataset — so a count here is a count of co-medications the arm decided about. */
-	private static List<String> classChipDetails(List<SafetyWarning> warnings) {
-		return warnings.stream().filter(w -> SafetyWarning.TYPE_INTERACTION.equals(w.getType()))
-				.map(SafetyWarning::getDetail).collect(java.util.stream.Collectors.toList());
 	}
 
 	@Test
@@ -76,7 +69,7 @@ public class PartialOrderCoveragePartnerTest {
 						DrugReferenceTestSupport.set("Metronidazole 500mg"),
 						DrugReferenceTestSupport.set("P01AB01", "J01XD01"))));
 
-		List<String> chips = classChipDetails(validator().validate("", QUESTION, context));
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(validator().validate("", QUESTION, context));
 
 		assertEquals(1, chips.size(),
 				"one order is one co-medication however many of its codes the dataset covers, was: "
@@ -106,7 +99,7 @@ public class PartialOrderCoveragePartnerTest {
 						DrugReferenceTestSupport.set("Secnidazole and ornidazole"),
 						DrugReferenceTestSupport.set("P01AB07", "J01XD01"))));
 
-		List<String> chips = classChipDetails(validator().validate("", QUESTION, context));
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(validator().validate("", QUESTION, context));
 
 		assertEquals(1, chips.size(), "one order is one co-medication, was: " + chips);
 		assertTrue(chips.get(0).contains("as active order Secnidazole and ornidazole —"),
@@ -129,7 +122,7 @@ public class PartialOrderCoveragePartnerTest {
 								DrugReferenceTestSupport.set("Metronidazole gel"),
 								DrugReferenceTestSupport.set("P01AB09"))));
 
-		List<String> chips = classChipDetails(validator().validate("", QUESTION, context));
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(validator().validate("", QUESTION, context));
 
 		assertEquals(1, chips.size(),
 				"two orders of one substance are one co-medication, was: " + chips);
@@ -152,7 +145,7 @@ public class PartialOrderCoveragePartnerTest {
 		// The other direction, and the reason the fix cannot simply be "group by order". One order
 		// whose concept maps to the codes of TWO different substances the dataset carries really is
 		// two co-medications in one tablet, and collapsing it would drop a duplicate-therapy chip.
-		List<String> chips = classChipDetails(
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(
 				validator().validate("", QUESTION, combinationOfTwoCoveredSubstances()));
 
 		assertEquals(2, chips.size(),
@@ -173,7 +166,7 @@ public class PartialOrderCoveragePartnerTest {
 		// This is what scopes that skip's name-driven leg to a partner named after the ORDER. A
 		// partner the dataset named speaks for ONE substance; giving it the whole tablet's contents
 		// silences a chip that names it, which is the opposite of the defect #185 fixes.
-		List<String> chips = classChipDetails(validator().validate("",
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(validator().validate("",
 				"Is it safe to give metronidazole?", combinationOfTwoCoveredSubstances()));
 
 		assertEquals(1, chips.size(),
@@ -193,7 +186,7 @@ public class PartialOrderCoveragePartnerTest {
 						DrugReferenceTestSupport.set("Ornidazole 500mg"),
 						DrugReferenceTestSupport.set("J01XD03", "P01AB03"))));
 
-		List<String> chips = classChipDetails(validator().validate("", QUESTION, context));
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(validator().validate("", QUESTION, context));
 
 		assertEquals(1, chips.size(),
 				"an uncovered order is one co-medication, was: " + chips);

@@ -135,6 +135,29 @@ public class ContraindicationSubjectLabelTest {
 	}
 
 	@Test
+	public void theIdentityChipStillNamesTheRecordedAllergen() throws IOException {
+		// The exemption, pinned where it is explained — and pinned as the case where it is VISIBLE, two
+		// chips about one substance carrying two names, both correct. The patient is recorded as allergic
+		// to the ophthalmic presentation, so the sentence quoting that RECORD has to keep saying so
+		// (issue #164; folding it is the #187 regression), while the class chip asserts something about
+		// the drug being CHECKED and takes the shared subject. Live shape: Kevin Brown, whose chart
+		// records exactly this.
+		//
+		// Measured by mutation: subjecting the identity chip too fails this and four existing cases.
+		List<SafetyWarning> warnings = fixtureValidator().validate("", QUESTION,
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Chloroprocaine (ophthalmic)", "Procaine"), null));
+
+		assertEquals(2, warnings.size(), "two recorded findings, two chips, was: " + warnings);
+		assertEquals("The patient has a recorded allergy to Chloroprocaine (ophthalmic).",
+				warnings.get(0).getDetail(),
+				"the identity chip names the row the CHART records, was: " + warnings);
+		assertEquals("Chloroprocaine is in the same ATC class (N01BA) as the patient's allergy to"
+				+ " Procaine — possible cross-reactivity", warnings.get(1).getDetail(),
+				"while the class chip names the substance's shared subject, was: " + warnings);
+	}
+
+	@Test
 	public void theOrderDrivenArmNamesTheSubstanceTheSameWay() throws IOException {
 		// The other call site (issue #143's), which the question-driven arm cannot reach: the substance is
 		// resolved from the patient's own ORDER and the question names no drug at all. It needs the rows of

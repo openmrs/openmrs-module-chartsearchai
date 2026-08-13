@@ -191,12 +191,24 @@ public class OrderedSubjectRowTest {
 				"and the dose warning must call the substance the same thing, was: " + warnings);
 		assertTrue(overdose.getDetail().startsWith("The stated Amoxicillin (suspension) dose "),
 				"in its sentence as well as in its drug field, was: " + overdose.getDetail());
-		// Which row's published CEILING the sentence quotes is a different decision, and deliberately
-		// not this one's: addOverdose reads the row the answer's own wording attributed the dose to
-		// (issue #174 site 4 — "every row is still tried", so a band on a sibling is never a lost
-		// warning), which here is the unqualified row and its 3000 mg/day. Asserted as-is rather than
-		// tightened, because tightening it would mean preferring the subject row's band, and a subject
-		// row publishing none would then drop the warning entirely.
+		// WHICH row's ceiling the sentence quotes is still addOverdose's own answer and is unchanged: the
+		// row the answer's own wording attributed the dose to (issue #174 site 4 — "every row is still
+		// tried", so a band on a sibling is never a lost warning), which here is the unqualified row and
+		// its 3000 mg/day. What this line pins is that the NUMBER is still quoted, and that is the half
+		// issue #208 deliberately left alone: preferring the subject row's own band would drop the
+		// warning wherever that row publishes none, which is the one direction this layer never takes.
+		//
+		// What #208 DID settle — and what this comment used to say was nobody's decision — is that the
+		// sentence now says WHOSE ceiling that is when the quoting row is not the row the warning names.
+		// It is not visible here: the sentence appends the clause after this substring, so this assertion
+		// reads the same either way. {@code DoseCeilingAttributionTest} is where the clause itself is
+		// pinned, over this very fixture.
+		//
+		// The residue #208 measured and did not fix: the charted row publishes a STRICTER 2000 mg/day
+		// ceiling that no arm reaches, because the answer said the bare word and only the unqualified
+		// row's aliases resolve it — so a stated 2500 mg/day raises nothing at all here. That is an
+		// under-warning rather than a mis-naming, it moves this very assertion, and it is filed on its
+		// own issue with its own before/after to measure.
 		assertTrue(overdose.getDetail().contains("3000 mg/day maximum"),
 				"was: " + overdose.getDetail());
 	}

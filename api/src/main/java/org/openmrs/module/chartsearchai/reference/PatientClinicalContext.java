@@ -56,6 +56,16 @@ public class PatientClinicalContext {
 
 	private final Set<String> activeDrugReferenceNames;
 
+	/** Whether the two chart lists a contraindication rule is put to — allergies and conditions — were
+	 *  actually READ, as opposed to read and found empty. {@link PatientClinicalContextBuilder} swallows
+	 *  a failure of either read and degrades that dimension to an empty set, which is right for a chip
+	 *  (a finding it cannot substantiate is a finding it must not raise) and wrong for the injected
+	 *  record's NEGATIVE half, which would otherwise tell the model this patient records none of a
+	 *  drug's contraindications because the module could not look (issue #208 item 2). Every other
+	 *  reader is unaffected and should stay that way: this says nothing about whether the lists are
+	 *  empty, only about whether the emptiness means anything. */
+	private final boolean contraindicationRecordsRead;
+
 	public PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens) {
 		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens, null);
@@ -87,6 +97,21 @@ public class PatientClinicalContext {
 	private PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
 			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames) {
+		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
+				activeDrugOrders, activeDrugReferenceNames, true);
+	}
+
+	/**
+	 * As above, additionally recording whether the allergy and condition reads SUCCEEDED — see
+	 * {@link #contraindicationRecordsRead}. Package-private and defaulted to {@code true} everywhere
+	 * else on purpose: only {@link PatientClinicalContextBuilder}, which performs those reads, is in a
+	 * position to say otherwise, and a caller assembling a context by hand knows what it put in it.
+	 */
+	PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
+			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
+			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
+			boolean contraindicationRecordsRead) {
+		this.contraindicationRecordsRead = contraindicationRecordsRead;
 		this.ageYears = ageYears;
 		this.weightKg = weightKg;
 		this.activeDrugNames = lower(activeDrugNames);
@@ -104,7 +129,15 @@ public class PatientClinicalContext {
 	 */
 	PatientClinicalContext withActiveDrugReferenceNames(Set<String> referenceNames) {
 		return new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
-				allergyTokens, conditionTokens, activeDrugOrders, referenceNames);
+				allergyTokens, conditionTokens, activeDrugOrders, referenceNames,
+				contraindicationRecordsRead);
+	}
+
+	/** @return whether the allergy and condition lists were read at all — see
+	 *          {@link #contraindicationRecordsRead}. A reader that makes a NEGATIVE claim out of their
+	 *          emptiness has to ask; a reader that only acts on what IS in them does not. */
+	boolean contraindicationRecordsRead() {
+		return contraindicationRecordsRead;
 	}
 
 	/** Pre-weight constructor, retained for test convenience (production uses the weight-carrying
@@ -272,6 +305,18 @@ public class PatientClinicalContext {
 	}
 
 	/**
+	 * @return whether {@code token} is something this class could match a record AGAINST at all — the
+	 *         emptiness half of {@link #containsToken}, extracted so a second reader can ask it without
+	 *         re-deriving it (issue #208 item 2: the injected record has to tell "the chart does not
+	 *         record this" apart from "the module cannot evaluate this rule", and a blank token is the
+	 *         second). Both emptiness checks live here, including the post-fold one {@link #containsToken} documents.
+	 */
+	static boolean matchableToken(String token) {
+		return token != null && !token.trim().isEmpty()
+				&& !DrugReference.foldDiacritics(token.trim().toLowerCase(Locale.ROOT)).isEmpty();
+	}
+
+	/**
 	 * Deliberately still bare containment, unlike the order-name arm above (issue #86): these
 	 * haystacks are free text — an allergen name, a condition in the clinician's own wording — where a
 	 * curated rule is meant to match a fragment ({@code nsaid} inside "NSAIDs", {@code peptic ulcer}
@@ -313,15 +358,12 @@ public class PatientClinicalContext {
 	 * above survives on {@code nonCodedAllergen}, which is genuinely free text.
 	 */
 	private static boolean containsToken(Set<String> haystack, String token) {
-		if (token == null || token.trim().isEmpty()) {
+		if (!matchableToken(token)) {
+			// A token of nothing but combining marks folds to empty AFTER the fold, not before — and the
+			// empty string is contained in everything, so both emptiness checks live in matchableToken.
 			return false;
 		}
 		String t = DrugReference.foldDiacritics(token.trim().toLowerCase(Locale.ROOT));
-		if (t.isEmpty()) {
-			// After the fold, not before — a token of nothing but combining marks folds to empty, and
-			// the empty string is contained in everything.
-			return false;
-		}
 		for (String value : haystack) {
 			if (DrugReference.foldDiacritics(value).contains(t)) {
 				return true;

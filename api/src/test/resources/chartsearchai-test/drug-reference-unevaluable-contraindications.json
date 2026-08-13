@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "source": "test fixture — issue #208 item 2: the contraindication rule shapes the injected record's NEGATIVE half may not claim",
+  "description": "Four rules on one entry, three of them shapes that a curated file may carry and the module cannot simply call absent. (1) An allergy rule the patient matches. (2) A CONDITION rule carrying the very note of rule 1 — a natural way to author 'recorded either way', and the shape that would otherwise put one clause in both halves and make the record contradict itself. (3) A rule typed 'diagnosis', which is neither of the two chart lists this module reads, so it cannot be evaluated at all — JsonDrugReferenceSource validates neither type nor token, dropping an entry only for a blank id or name. (4) A condition rule with an EMPTY token, which the matcher can never match against anything. Rules 3 and 4 must be listed and claimed neither way: saying the chart does not record them would be issue #208's own failure with the sign flipped, asserted about a patient nobody checked.",
+  "entries": [
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": [
+        "ibuprofen"
+      ],
+      "atcCodes": [
+        "M01AE01"
+      ],
+      "contraindications": [
+        {
+          "type": "allergy",
+          "token": "nsaid",
+          "note": "NSAID hypersensitivity"
+        },
+        {
+          "type": "condition",
+          "token": "nsaid hypersensitivity",
+          "note": "NSAID hypersensitivity"
+        },
+        {
+          "type": "diagnosis",
+          "token": "chronic kidney disease",
+          "note": "avoid in CKD stage 4 or worse"
+        },
+        {
+          "type": "condition",
+          "token": "",
+          "note": "avoid in severe hepatic impairment"
+        }
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

@@ -323,6 +323,19 @@ public final class DrugReferenceTestSupport {
 		return ctx(age, weightKg, drugs, atc, allergies, conditions, null);
 	}
 
+	/**
+	 * As {@link #ctx}, but for a context whose allergy and condition reads FAILED — the shape
+	 * {@link PatientClinicalContextBuilder} produces when {@code getAllergies} or
+	 * {@code getActiveConditions} throws and it degrades that dimension to an empty set. The token sets
+	 * are empty for exactly that reason, which is why they are not arguments: a caller cannot both have
+	 * read the chart and not have read it.
+	 */
+	static PatientClinicalContext unreadableRecordsCtx(Integer age, Double weightKg) {
+		return new PatientClinicalContext(age, weightKg, Collections.<String> emptySet(),
+				Collections.<String> emptySet(), Collections.<String> emptySet(),
+				Collections.<String> emptySet(), null, null, false);
+	}
+
 	/** As {@link #ctx}, additionally carrying the identified active drug orders the
 	 *  chart/service reconciliation reads (null means none). */
 	static PatientClinicalContext ctx(Integer age, Double weightKg, Set<String> drugs, Set<String> atc,
@@ -502,6 +515,40 @@ public final class DrugReferenceTestSupport {
 			out.add(warning.getDetail());
 		}
 		return out;
+	}
+
+	/**
+	 * @return the {@code detail} sentences of the CONTRAINDICATION chips alone — the counterpart of
+	 *         {@link #classChipDetails} for the other chip type a rule-driven dataset raises, and here
+	 *         for the same reason: two other files had already grown their own copy of this three-line
+	 *         filter ({@code AllergenNameResolutionTest}, {@code ActiveOrderContraindicationTest}), and a
+	 *         shared one cannot drift into two answers about which chips a case is counting. Those two
+	 *         are deliberately not migrated here — they are outside this change — so the drift they can
+	 *         still make is theirs, not this helper's.
+	 */
+	static List<String> contraindicationDetails(List<SafetyWarning> warnings) {
+		List<String> out = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(warning.getType())) {
+				out.add(warning.getDetail());
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * @return the injected drug-reference record rendered for the entry NAMED {@code name}, or null when
+	 *         no record names it — the text-returning form of {@link #namesDrug}, sharing its terminator
+	 *         rule rather than restating it. A selector written as a bare {@code startsWith(name)} also
+	 *         accepts a route-qualified SIBLING, which is the whole reason that rule lives in one place.
+	 */
+	static String referenceTextNaming(PatientChart chart, String name) {
+		for (String text : referenceTexts(chart)) {
+			if (namesDrug(Collections.singletonList(text), name)) {
+				return text;
+			}
+		}
+		return null;
 	}
 
 	/**

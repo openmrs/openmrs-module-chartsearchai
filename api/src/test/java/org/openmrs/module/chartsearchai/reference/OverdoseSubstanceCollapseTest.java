@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -77,9 +76,18 @@ public class OverdoseSubstanceCollapseTest {
 
 		assertEquals("Amoxicillin", warnings.get(0).getDrug(),
 				"the dose warning must name the substance, was: " + warnings);
-		assertFalse(warnings.get(0).getDetail().contains("(suspension)"),
-				"and its detail must not assert a formulation either, was: "
-						+ warnings.get(0).getDetail());
+		// The same property in the SENTENCE, asserted on its opening rather than on the absence of the
+		// string "(suspension)" anywhere in it. That blanket form was a fair companion while a formulation
+		// in the detail could only mean the subject had leaked; since issue #208 a formulation appears
+		// there for a different and legitimate reason — the clause naming the row whose published ceiling
+		// the sentence quoted, when that is not the row the warning names
+		// ({@code DoseCeilingAttributionTest}) — so the blanket form forbade what the module now correctly
+		// does. Narrowed, not dropped: a first-row survivor still reddens here, because the sentence would
+		// then open "The stated Amoxicillin (suspension) dose" (mutation-verified — subjectOf replaced by
+		// rows.get(0) fails this assertion and line 78 together).
+		assertTrue(warnings.get(0).getDetail().startsWith("The stated Amoxicillin dose "),
+				"and its sentence must lead with that same subject, not with the row the file listed "
+						+ "first, was: " + warnings.get(0).getDetail());
 	}
 
 	@Test

@@ -32,8 +32,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  *
  * <p>Matching keys:
  * <ul>
- *   <li>{@link #getAliases()} — lowercase free-text names for question-driven matching.</li>
- *   <li>{@link #getAtcCodes()} — ATC codes for order-driven matching against active orders.</li>
+ *   <li>{@link #getAliases()} — lowercase free-text names, for question-driven matching and (through
+ *       {@link #matchesDrugName}) for resolving an active order's own display name.</li>
+ *   <li>{@link #getAtcCodes()} — ATC codes for order-driven matching against an active order's concept
+ *       mappings. One of those two keys since issue #151, not the only one — see
+ *       {@link DrugReferenceService#findForActiveOrders}.</li>
  * </ul>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)

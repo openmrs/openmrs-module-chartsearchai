@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -126,8 +125,9 @@ public class ReferenceRecordSubstanceCollapseTest {
 								DrugReferenceTestSupport.set("H02AB02"), null, null),
 						"Is it safe to give dexamethasone?");
 
-		assertEquals(1, DrugReferenceTestSupport.referenceTexts(chart).size(),
-				"one substance is one record however many legs reach it, was: " + DrugReferenceTestSupport.referenceTexts(chart));
+		List<String> texts = DrugReferenceTestSupport.referenceTexts(chart);
+		assertEquals(1, texts.size(),
+				"one substance is one record however many legs reach it, was: " + texts);
 	}
 
 	@Test

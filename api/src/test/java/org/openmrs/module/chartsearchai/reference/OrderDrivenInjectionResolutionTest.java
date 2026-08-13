@@ -276,8 +276,9 @@ public class OrderDrivenInjectionResolutionTest {
 		// screening question is the one that most obviously must not turn into a medication-list dump.
 		PatientChart chart = inject(byName(ASPIRIN_ORDER), DrugReferenceTestSupport.SCREENING_QUESTION);
 
-		assertEquals(0, DrugReferenceTestSupport.injectedReferences(chart).size(),
+		List<String> injected = DrugReferenceTestSupport.referenceTexts(chart);
+		assertEquals(0, injected.size(),
 				"a question naming no drug injects no reference record from the order leg, was: "
-						+ DrugReferenceTestSupport.referenceTexts(chart));
+						+ injected);
 	}
 }

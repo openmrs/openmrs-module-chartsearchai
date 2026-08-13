@@ -85,7 +85,8 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * The injected {@code drug_reference} records' full rendered text, in injection order — the
 	 * text-shaped view of {@link #injectedReferences}, owned here for the same reason that filter is:
-	 * three files had grown their own copy.
+	 * two files had grown their own copy of it ({@code SubstanceCandidateSetTest}'s inline loop is
+	 * deliberately left as one — it reads a single record, not a set).
 	 *
 	 * <p>Whole texts rather than extracted names, deliberately. A rendered record is
 	 * {@code "Drug reference — <name>"} followed by {@code " (<class>; ATC …)"} only when the entry

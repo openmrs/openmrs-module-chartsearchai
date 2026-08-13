@@ -52,14 +52,10 @@ public class DrugReferenceInjectorTest {
 		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.ddinterService());
 	}
 
-	/** Injector wired with the validator, so the deterministic findings can be injected pre-answer.
-	 *  Groups are wired back because {@link DrugReferenceService#setEntries} deliberately clears them. */
+	/** Injector wired with the validator, so the deterministic findings can be injected pre-answer. */
 	private DrugReferenceInjector ddinterInjectorWithSafety() {
-		DrugReferenceService service = DrugReferenceTestSupport.ddinterService();
-		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
-		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
-		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
-		return injector;
+		return DrugReferenceTestSupport
+				.injectorWithSafety(DrugReferenceTestSupport.ddinterServiceWithGroups());
 	}
 
 	private Set<String> set(String... values) {

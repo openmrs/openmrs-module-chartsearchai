@@ -1167,7 +1167,7 @@ public class DrugSafetyValidator {
 	 *         — see {@link ContraindicationChips}, where both are justified.
 	 *
 	 *         <p>ONE definition, called by the chip ledger here and by
-	 *         {@code DrugReferenceInjector.contraindicationClauses}, which renders one clause per rule
+	 *         {@code DrugReferenceInjector.contraindicationSections}, which renders one clause per rule
 	 *         and must count the same unit or the model is told the drug has two contraindications where
 	 *         the deterministic layer found one (issue #190 item 1). A second copy is how those two came
 	 *         apart when issue #146 moved this key: two allergy rules under two aliases of one drug were

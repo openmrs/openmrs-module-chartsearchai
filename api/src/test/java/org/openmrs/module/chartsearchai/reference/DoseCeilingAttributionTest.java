@@ -173,6 +173,29 @@ public class DoseCeilingAttributionTest {
 	}
 
 	@Test
+	public void twoRowsPublishingOneNameAreAttributedToNobodyEither() throws Exception {
+		// The operator-editable boundary this module guards everywhere else: a curated file may file two
+		// rows under one display name — the parse only drops an entry whose name is BLANK — and the rows
+		// then differ in what they publish while agreeing on what they are called. The provenance clause
+		// would read "publishes for Ranitidine, not for Ranitidine", which is not a provenance but a
+		// contradiction, shown to a clinician beside a real dose warning. So the warning still fires and
+		// says nothing further.
+		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(PER_KG_SIBLING_FIXTURE);
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(entries);
+		DrugReference first = DrugReferenceTestSupport.row(entries, "Ranitidine");
+		assertNull(first.bandForAge(40),
+				"precondition: the row the substance is named after publishes no band for this age");
+
+		SafetyWarning overdose = onlyOverdose(DrugReferenceTestSupport.validator(service).validate(
+				"Give ranitidine 400 mg twice daily.", "What dose of ranitidine?",
+				DrugReferenceTestSupport.ctx(40, 70.0, null, null, null, null)));
+
+		assertEquals("The stated Ranitidine dose ~800 mg/day exceeds the 300 mg/day maximum for ages "
+				+ "0-120", overdose.getDetail(),
+				"the sibling's ceiling still warns, and says nothing it cannot say");
+	}
+
+	@Test
 	public void noShippedConfigurationCanReachTheAttributionAtAll() throws Exception {
 		// The bound on what this changes in the field, asserted over the SHIPPED curated seed rather than
 		// argued: no bundled dataset sets substanceName on a curated entry, so every substance is one row,

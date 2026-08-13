@@ -1069,10 +1069,14 @@ public class DrugReferenceInjector {
 	 * dosing is included only when an age band matches {@code age}; prose warnings,
 	 * contraindications and interactions are always rendered.
 	 *
-	 * <p>{@code context} orders the capped {@code Interactions:} section — see
-	 * {@link #orderedInteractionNotes}. It may be null (nothing to prioritise by), in which case
-	 * the section keeps dataset order. {@code orderEntries} is passed straight through to that method,
-	 * which groups a partner the patient is on by the entry it resolves to (issue #190 item 2).
+	 * <p>{@code context} does two things here. It orders the capped {@code Interactions:} section — see
+	 * {@link #orderedInteractionNotes} — and it splits the contraindication list into what this patient's
+	 * chart records and what it does not (issue #208 item 2, {@link #contraindicationSections}). It may be
+	 * null, which is "nothing known about the patient": the interactions section then keeps dataset order
+	 * and the contraindication list is rendered with no reading at all, because a record that cannot see
+	 * the chart must not report an absence. {@code orderEntries} is passed straight through to the
+	 * interactions method, which groups a partner the patient is on by the entry it resolves to (issue
+	 * #190 item 2).
 	 */
 	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context,
 			List<DrugReference> orderEntries) {

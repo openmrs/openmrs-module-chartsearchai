@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "source": "test fixture — issue #208 item 1: the per-kg arm of the dose warning, with the only published band on a SIBLING row",
-  "description": "One substance filed as two rows. The route-unspecified row — the one canonicalRow picks and the one the warning is therefore named after — publishes NO age band at all, so only its paediatric sibling can supply a ceiling; and that sibling publishes mgPerKgMax with maxDailyDoseMg 0, so the weight arm is the arm that trips rather than the daily one. Both arms word the ceiling's provenance through the same helper, and this is the row set that reaches the weight arm's copy of it. No bundled dataset can pose the shape: the ddinter source publishes substance names but no age bands, and the shipped curated seed publishes age bands but no substance names, so the grouping and the dosing cannot meet without a hand-authored file.",
+  "description": "Two substances, each filed as two rows. CEFTRIAXONE: the route-unspecified row — the one canonicalRow picks and the one the warning is therefore named after — publishes NO age band at all, so only its paediatric sibling can supply a ceiling; and that sibling publishes mgPerKgMax with maxDailyDoseMg 0, so the weight arm is the arm that trips rather than the daily one. Both arms word the ceiling's provenance through the same helper, and this is the row set that reaches the weight arm's copy of it. RANITIDINE: the same split — a bandless first row and a sibling that publishes one — except that the two rows carry the SAME display name, which an operator-editable dataset permits and which makes the provenance clause a contradiction rather than a fact ('publishes for Ranitidine, not for Ranitidine'), so it must stay silent. No bundled dataset can pose either shape: the ddinter source publishes substance names but no age bands, and the shipped curated seed publishes age bands but no substance names, so the grouping and the dosing cannot meet without a hand-authored file.",
   "entries": [
     {
       "id": "ceftriaxone",
@@ -32,6 +32,39 @@
           "mgPerKgMin": 20,
           "mgPerKgMax": 50,
           "maxDailyDoseMg": 0
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "ranitidine-a",
+      "name": "Ranitidine",
+      "substanceName": "ranitidine",
+      "aliases": [
+        "ranitidine"
+      ],
+      "atcCodes": [
+        "A02BA02"
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "ranitidine-b",
+      "name": "Ranitidine",
+      "substanceName": "ranitidine",
+      "aliases": [
+        "ranitidine"
+      ],
+      "atcCodes": [
+        "A02BA02"
+      ],
+      "ageBands": [
+        {
+          "minYears": 0,
+          "maxYears": 120,
+          "mgPerKgMin": 2,
+          "mgPerKgMax": 4,
+          "maxDailyDoseMg": 300
         }
       ],
       "source": "test fixture"

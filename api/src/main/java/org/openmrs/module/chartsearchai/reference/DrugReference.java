@@ -695,7 +695,7 @@ public class DrugReference {
 	 * antiepileptics, {@code N02AX} opioids. Vetoing every residue would have dropped a class claim
 	 * from 1974 of the KB's 7783 pairs that share a subgroup; 1488 of those keep it here.
 	 *
-	 * <p><b>The three families, and the reading of ATC's words that puts each here:</b>
+	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
 	 * <ul>
 	 *   <li>a residue inside a group ATC defines by SITE OF APPLICATION — the groups
 	 *       {@link #isLocallyAppliedAtcCode} already recognises. {@code A01AD} "Other agents for local

@@ -218,9 +218,9 @@ public class AtcCrossReactivityLicensingTest {
 		// antiinfectives given for local oral treatment, and they cross-react because both are
 		// imidazoles. Naming them alike would make one of the two false.
 		//
-		// Rare: 4 of the 3693 shipped-KB pairs that chip on both arms, measured at
-		// DrugSafetyValidator.sharedClass. Reachable together only for a patient allergic to a drug
-		// they are already on, which is the arm issue #143 added.
+		// Rare: 4 of the 3693 shipped-KB pairs that answer on both arms, measured at
+		// DrugSafetyValidator.sharedClass, whose javadoc records which joins can raise the two
+		// together.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 		assertEquals("[A01AB, D01AC, G01AF]", shared(service, "Miconazole", "Clotrimazole"),
 				"the pair must share a purpose-named subgroup AND a chemically named one, with the "

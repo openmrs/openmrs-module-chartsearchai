@@ -4093,7 +4093,7 @@ public class DrugSafetyValidator {
 	/** @return the ATC level-4 subgroup {@code other} shares with {@code refClasses} that best
 	 *          explains a CROSS-REACTIVITY concern between them, or null when they share none that
 	 *          may justify one. The choice and its rationale live on {@link #sharedClass}; this
-	 *          overload exists so the arm that holds a resolved ENTRY does not reduce it itself. */
+	 *          wrapper exists so the arm that holds a resolved ENTRY does not reduce it itself. */
 	private static String sharedCrossReactivityClass(Set<String> refClasses, DrugReference other) {
 		return sharedClass(refClasses, other.atcSubgroups(), true);
 	}
@@ -4109,7 +4109,6 @@ public class DrugSafetyValidator {
 	 * got the preference in issue #161/#166 and the interaction arm kept naming whichever code it
 	 * reached first, so one build could report a pair's topical subgroup as duplicate therapy and its
 	 * systemic one as cross-reactivity.
-
 	 */
 	private static String sharedTherapyClass(Set<String> refClasses, Set<String> otherSubgroups) {
 		return sharedClass(refClasses, otherSubgroups, false);

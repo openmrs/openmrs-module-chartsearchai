@@ -651,11 +651,16 @@ public class LlmProviderTest {
 
 	@Test
 	public void extractResponse_shouldStayQuietOnAnExplicitNullCitations() {
-		// null is UNAMBIGUOUS and already means what this code does with it — no citations. Warning
-		// here is the cry-wolf case CLAUDE.md forbids: it would fire on every response from a
-		// provider that legitimately writes null for "none", and a channel that fires on correct
-		// behaviour is filtered within a week. An absent field is the same statement, and must stay
-		// indistinguishable from it.
+		// The distinction this pins is the load-bearing one, and it is NOT "array versus not an
+		// array" — every other non-array container now warns (see the case above). It is what the
+		// container ASSERTS. null asserts ABSENCE: the same statement as an omitted field, made by a
+		// provider whose answer cites nothing, and this code already does exactly what it says.
+		// Nothing is lost and nothing is guessed, so there is nothing to report — and a channel that
+		// fires on a provider behaving correctly is worth less than no channel. Everything that
+		// reaches readNonArrayCitations asserts PRESENCE of something unusable, which is a loss.
+		//
+		// Captured at DEBUG so the assertion covers every level, not just WARN: this must log
+		// nothing at all, which is what stops the two branches being folded together later.
 		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName(), Level.DEBUG)) {
 			LlmProvider.LlmResponse result = LlmProvider.extractResponse(
 					"{\"answer\": \"No records.\", \"citations\": null}");
@@ -665,31 +670,40 @@ public class LlmProviderTest {
 					"an explicit null citations names no defect and must log nothing at all. "
 							+ "Captured: " + capture.describeAll());
 		}
+		// And the same for an omitted field, which is the statement null is equivalent to.
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName(), Level.DEBUG)) {
+			assertTrue(LlmProvider.extractResponse("{\"answer\": \"No records.\"}")
+					.getCitations().isEmpty());
+			assertTrue(capture.describeAll().isEmpty(),
+					"an omitted citations field must stay indistinguishable from an explicit null. "
+							+ "Captured: " + capture.describeAll());
+		}
 	}
 
 	@Test
-	public void extractResponse_shouldLeaveACitationsContainerWithNoSingleReadingAloneButNotInSilence() {
+	public void extractResponse_shouldReportACitationsContainerWithNoSingleReadingAtWarn() {
 		// A container that is neither an array nor a scalar naming an index has no ONE reading, so
-		// there is nothing to coerce and inventing one would be widening a VALUE. The behaviour is
-		// unchanged — no citations — but it becomes explainable to an operator who turns DEBUG on.
-		// (Not a signal that arrives unasked: the default org.openmrs.* level is WARN, which is why
-		// this case has to raise the level to see the line at all.) DEBUG rather than WARN because
-		// nothing has been dropped that this parser could have recovered, and because these shapes
-		// have never been observed: a WARN on an unobserved shape is the noise #217 argued against.
+		// there is nothing to coerce and inventing one would be widening a VALUE. The VALUE
+		// behaviour is therefore unchanged — no citations — but the loss is reported at WARN, at the
+		// same level and in the same shape as reportNonConformantCitations, which already warns for
+		// this exact information loss one level in (an array whose ENTRIES name no index). Reporting
+		// the container more quietly would be two channels for one failure.
+		//
+		// This is not a warning on hypothetical data: the branch cannot run unless a provider really
+		// did send a citations field this parser cannot use. An earlier draft logged it at DEBUG on
+		// an "unobserved shape" argument that does not apply, and which the default org.openmrs.*
+		// level of WARN would have made worse — DEBUG is evidence for someone already looking.
 		for (String value : new String[] { "{\"index\": 9}", "\"eight\"", "9.7", "true" }) {
 			String response = "{\"answer\": \"A [9].\", \"citations\": " + value + "}";
-			try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName(), Level.DEBUG)) {
+			try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
 				LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
 				assertEquals("A [9].", result.getAnswer(),
 						"the answer is the half that is not in doubt and must survive " + value);
 				assertTrue(result.getCitations().isEmpty(),
 						"citations " + value + " names no index; inventing one would widen a value");
-				assertFalse(capture.hasEventAtOrAbove(Level.WARN),
-						"an unobserved shape that cost nothing recoverable must not warn: " + value
-								+ ". Captured: " + capture.describeAll());
-				assertFalse(capture.messagesAt(Level.DEBUG).isEmpty(),
-						"a skipped citations container must be observable, or the guard is silent "
-								+ "exactly as the isArray() guard was: " + value);
+				assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+						"a citations container this parser cannot use must be reported, not skipped "
+								+ "quietly: " + value + ". Captured: " + capture.describeAll());
 			}
 		}
 	}

@@ -92,6 +92,11 @@ final class LlmAnswerExtractor {
 	 *  can put in the array, and a log line should not be one of them. */
 	private static final int MAX_REPORTED_UNUSABLE = 5;
 
+	/** Shared opening of both WARNs {@link #readNonArrayCitations} can emit, so one grep finds every
+	 *  non-array {@code citations} container whichever way it was resolved (issue #221). */
+	private static final String NON_ARRAY_CITATIONS_MSG =
+			"The LLM's citations field was not the array the request's schema asked for";
+
 	static LlmResponse extractResponse(String response, int inputTokens, int outputTokens) {
 		return extractResponse(response, inputTokens, outputTokens, 0);
 	}
@@ -286,39 +291,45 @@ final class LlmAnswerExtractor {
 	 * approximates the schema can send a bare value — and the guard discarded the whole field in
 	 * silence, exactly as {@code isInt()} discarded string entries.
 	 *
-	 * <p><b>The split, and why it is not uniform.</b> A scalar {@code 8} has exactly one reading: an
-	 * array of one. That is the same test #219 applied to {@code "9"}, so it is coerced and reported,
-	 * and it is coerced through {@link #citationIndex} rather than a second rule — the container and
-	 * its entries admit the same JSON types, and cannot drift apart. Anything with no single reading
-	 * (an object, a non-numeric string, {@code 9.7}, a boolean) is left alone: there is nothing to
-	 * recover, and picking a reading would widen which VALUES name a record, which is the line
-	 * #219/#220 drew and this does not cross.
+	 * <p><b>The split in what is READ.</b> A scalar {@code 8} has exactly one reading: an array of
+	 * one. That is the same test #219 applied to {@code "9"}, so it is coerced — through
+	 * {@link #citationIndex} rather than a second rule, so the container and its entries admit the
+	 * same JSON types and cannot drift apart. Anything with no single reading (an object, a
+	 * non-numeric string, {@code 9.7}, a boolean) is left alone: there is nothing to recover, and
+	 * picking a reading would widen which VALUES name a record, which is the line #219/#220 drew and
+	 * this does not cross.
 	 *
-	 * <p>That skip is logged at DEBUG rather than WARN, because nothing recoverable was lost and no
-	 * instance of these shapes has been observed — a warning on an unobserved shape is the
-	 * noise-that-gets-filtered #217 argued against. Be precise about what DEBUG buys, though: the
-	 * default {@code org.openmrs.*} level is WARN (see {@code QueryStoreChartBuilder}, which records
-	 * that premise), so this line is reachable evidence for an operator who goes looking, NOT a
-	 * signal that arrives on its own. The honest summary is that the skip stops being unexplainable,
-	 * not that it stops being quiet. The tension with {@link #reportNonConformantCitations}, which
-	 * WARNs when an ARRAY's entries name no index — the same information loss by the same cause — is
-	 * real and deliberate: the container case has no observed instance and the entry case did.
+	 * <p><b>Both outcomes WARN, and the split above is not a split in reporting.</b> Whichever branch
+	 * runs, a provider has broken the array contract the request asked for, and either an index was
+	 * recovered by guesswork or one was lost. {@link #reportNonConformantCitations} already WARNs for
+	 * the same information loss one level in — an array whose ENTRIES name no index — so reporting
+	 * the container case any more quietly would be two channels for one failure. Both lines here
+	 * share a prefix with each other for the same reason: one grep finds every non-array container.
 	 *
-	 * <p>An explicit {@code null} never reaches here (the caller's guard). It is unambiguous, it
-	 * already means what this code does with it — no citations — and it is the same statement as an
-	 * absent field, so it stays silent at every level: a channel that fires on a provider behaving
-	 * correctly is worth less than no channel.
+	 * <p><b>Why {@code null} is different, and stays silent.</b> This is the load-bearing distinction
+	 * and the two branches must not be collapsed on the strength of both being "not an array". An
+	 * explicit {@code null} never reaches here (the caller's guard): it ASSERTS ABSENCE — the same
+	 * statement as an omitted field, made by a provider whose answer simply cites nothing — and this
+	 * code already does exactly what it says. Nothing is lost and nothing is guessed, so there is
+	 * nothing to report; a channel that fires on a provider behaving correctly is worth less than no
+	 * channel. Everything that does reach here ASSERTS PRESENCE of something this parser could not
+	 * use. Absence honoured is not a defect; presence discarded is.
+	 *
+	 * <p>The earlier draft of this logged the unreadable case at DEBUG, reasoning that the shape had
+	 * no observed instance. That was wrong twice over: the branch cannot fire unless a real provider
+	 * really did send an unusable container, so it is not a warning on hypothetical data at all; and
+	 * the default {@code org.openmrs.*} level is WARN, so DEBUG would have made it evidence for
+	 * someone already looking rather than a signal that arrives.
 	 */
 	private static void readNonArrayCitations(JsonNode citationsNode, List<Integer> citations) {
 		Integer index = citationIndex(citationsNode);
 		if (index == null) {
-			log.debug("Ignoring a citations value that is neither an array nor a single index: {}",
+			log.warn(NON_ARRAY_CITATIONS_MSG + ", and names no index — it was dropped: {}",
 					abbreviate(citationsNode.toString()));
 			return;
 		}
 		citations.add(index);
-		log.warn("The LLM's citations field was a single value rather than the array the request's "
-				+ "schema asked for; read as the one index it names: {}",
+		log.warn(NON_ARRAY_CITATIONS_MSG + ": read as the one index its single value names: {}",
 				abbreviate(citationsNode.toString()));
 	}
 

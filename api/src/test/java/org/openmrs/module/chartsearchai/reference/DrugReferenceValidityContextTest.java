@@ -60,6 +60,9 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	private static final String ALIAS_NAMES_ANOTHER_SUBSTANCE_FIXTURE =
 			"chartsearchai-test/ddi-alias-names-another-substance.json";
 
+	private static final String DERIVATIVE_MERGED_FIXTURE =
+			"chartsearchai-test/ddi-derivative-merged-into-one-substance.json";
+
 	private final List<File> created = new ArrayList<File>();
 
 	@AfterEach
@@ -104,6 +107,19 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		}
 		throw new AssertionError("no finding for rule '" + rule + "' — findings were: "
 				+ status.getFindings());
+	}
+
+	/** @return the loaded row with exactly this display name — for a case that has to compare two named
+	 *          rows of one fixture, which no production accessor answers (they all resolve a string to a
+	 *          SET of rows, which is the question being asked ABOUT here). */
+	private static DrugReference rowNamed(DrugReferenceService service, String name) {
+		for (DrugReference entry : service.getAll()) {
+			if (name.equals(entry.getName())) {
+				return entry;
+			}
+		}
+		throw new AssertionError("no loaded row named '" + name + "' — loaded: "
+				+ DrugReferenceTestSupport.names(service.getAll()));
 	}
 
 	private static List<String> rulesOf(DrugReferenceLoad status) {
@@ -335,6 +351,84 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 						+ "which issue #164 decided is one substance. Detail was: " + found.getDetail());
 
 		assertEquals(9, service.getAll().size(), "every row is still loaded; nothing was dropped");
+	}
+
+	/**
+	 * Issue #196 item 4, over a verbatim slice of the shipped 19 MB knowledge base. The rule above
+	 * cannot see this one and never could: it reports a published name denoting a DIFFERENT substance,
+	 * and here the two rows are the SAME substance to {@link DrugReference#substanceGroupKey()}, so its
+	 * first exclusion removes the case by construction. Measured on the shipped file 2026-08-13 by
+	 * driving {@link DrugReferenceService#getLoadStatus()} over it: {@code alias-names-another-substance}
+	 * fires 18 times and {@code Fluoroestradiol f-18} is in none of them.
+	 *
+	 * <p>The five controls are the point of the case. A rule keyed on "one substance, unlike names"
+	 * would report {@code Daxibotulinumtoxina} — a merge issue #164 measured as CORRECT — so this one is
+	 * keyed on the derivative relationship the row's OWN name states, and
+	 * {@code Beclomethasone dipropionate (nasal)} is the control that separates the two: same inherited
+	 * identity as the tracer, name extending the substance's by a word rather than embedding it.
+	 *
+	 * <p>The loaded-row count is asserted rather than assumed: a {@code ddi} document that parses to
+	 * nothing does so in silence (issue #242), and a rule-count assertion over an empty load passes
+	 * vacuously.
+	 */
+	@Test
+	public void aDerivativeMergedIntoItsParentSubstanceIsReportedAndTheDataIsLeftAlone()
+			throws IOException {
+		DrugReferenceService service = loading(DERIVATIVE_MERGED_FIXTURE, "h196-item4-slice.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"a PET tracer and a therapeutic oestrogen keyed as one substance is exactly the "
+							+ "content defect this check exists to be loud about. Captured: "
+							+ capture.describeAll());
+		}
+
+		DrugReferenceValidity.Finding found = finding(status,
+				DrugReferenceValidity.DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE);
+		assertEquals(DrugReferenceValidity.Remedy.REPORTED, found.getRemedy());
+		assertEquals(1, found.getOccurrences(),
+				"exactly the one merge in this slice, and not the five controls beside it. Detail was: "
+						+ found.getDetail());
+		assertTrue(found.getDetail().contains("Fluoroestradiol f-18")
+				&& found.getDetail().contains("estradiol"),
+				"item 4: the tracer, and the substance it was merged into. Detail was: "
+						+ found.getDetail());
+		assertFalse(found.getDetail().contains("Beclomethasone dipropionate (nasal) is filed as"),
+				"the closest control there is — a row with no drugbank_id of its own inheriting its "
+						+ "family's, exactly as the tracer does, but whose name extends the substance "
+						+ "name by a WORD. Only containsWord keeps it silent, and 12 rows of the shipped "
+						+ "KB are silent for that reason. Detail was: " + found.getDetail());
+		// Asked as "not the SUBJECT of an occurrence" rather than "absent", because this control is a row
+		// of the offending row's own family and the detail names those deliberately — an operator needs
+		// to know what the derivative was merged WITH. The three controls below are each their own
+		// single-row family, so they cannot appear in any position, and absence is the stricter claim.
+		assertFalse(found.getDetail().contains("Estradiol (topical) is filed as"),
+				"the control a route variant is: its stem IS the substance name, so it is a "
+						+ "presentation rather than a derivative. Detail was: " + found.getDetail());
+		assertFalse(found.getDetail().contains("Levoketoconazole"),
+				"the control the merge gate excludes — the identical prefix-derivative shape, but the "
+						+ "family names two DrugBank substances, so the id is withheld and the display "
+						+ "stem already separates them. Detail was: " + found.getDetail());
+		assertFalse(found.getDetail().contains("Daxibotulinumtoxina"),
+				"the control that makes this rule narrower than 'one substance, unlike names': issue "
+						+ "#164 measured that merge as correct. Detail was: " + found.getDetail());
+		assertFalse(found.getDetail().contains("Ospemifene"),
+				"an unrelated partner is not a derivative of anything here. Detail was: "
+						+ found.getDetail());
+
+		assertEquals(11, service.getAll().size(), "every row is still loaded; nothing was dropped");
+		assertEquals(rowNamed(service, "Estradiol").substanceGroupKey(),
+				rowNamed(service, "Fluoroestradiol f-18").substanceGroupKey(),
+				"and nothing was repaired: the two rows are still one substance, because deciding they "
+						+ "are two would be inventing a fact the data does not carry");
+
+		assertTrue(rulesOf(status).contains(DrugReferenceValidity.ALIAS_NAMES_ANOTHER_SUBSTANCE),
+				"the sibling rule still fires on this slice — Levoketoconazole publishes 'ketoconazole' "
+						+ "— which is what shows the two rules answer different questions about the same "
+						+ "row. Rules were: " + rulesOf(status));
 	}
 
 	// ------------------------------------------------------------------

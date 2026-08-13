@@ -1,0 +1,590 @@
+{
+  "metadata": {
+    "note": "Verbatim DDInter 2.0 slice for the load-time validity check on issue #196 item 4 - real shipped rows, unedited. ONE POSITIVE: Fluoroestradiol f-18 publishes rxnorm_name `estradiol` and no drugbank_id of its own, so the per-family resolution hands it Estradiol's DB00783 and a PET imaging tracer and a therapeutic oestrogen become ONE substance to substanceKey(). Its own name says otherwise - `fluoroestradiol` carries `estradiol` as a substring and NOT as a word, which is this module's own rule for a derivative being a different substance. FIVE CONTROLS that must NOT be reported, each excluding a shape that is correct: (1) Beclomethasone dipropionate (nasal) is the closest control there is - a row with no drugbank_id of its own inheriting DB00394 from its family, exactly as the tracer does - but its name extends the substance name `beclomethasone` by a WORD, which is what an ester or a salt legitimately looks like, so containsWord alone keeps it silent; 12 rows of the shipped KB are silent for that reason and every one inspected is an ester, a salt or a preparation. (2) Estradiol (topical) is a route variant of the positive's own family whose stem IS the substance name - a presentation, not a derivative. (3) Levoketoconazole is the identical prefix-derivative shape and carries its OWN drugbank_id (DB05667) against Ketoconazole's DB01026, so the family names two DrugBank substances, the id is withheld and the display stem already separates them - nothing is merged, so there is nothing to report. (4) Daxibotulinumtoxina and Botulinum toxin type A are one substance under two DISJOINT names, which issue #164 measured as a correct merge - this is the row a rule keyed on \"one substance, unlike names\" would flag, and it is why this rule is keyed on the derivative relationship instead. (5) Ospemifene and Bcg vaccine are the interaction partners that give every row here a rule, so no entry is rule-less and the load is not the parses-to-nothing-in-silence shape issue #242 records."
+  },
+  "mechanisms": {
+    "1985": {
+      "text": "The concurrent use of ospemifene with estrogens or other estrogen agonists/antagonists has not been evaluated. Safety and efficacy of this combination are unknown.",
+      "categories": [
+        "others"
+      ]
+    },
+    "3720": {
+      "text": "Azole antifungal agents may increase the plasma concentrations of estrogens and progestins. The mechanism is decreased clearance of the hormones due to inhibition of CYP450 3A4 activity by azole antifungals.",
+      "categories": [
+        "metabolism"
+      ]
+    },
+    "4988": {
+      "text": "Coadministration with potent inhibitors of CYP450 3A4 may increase the plasma concentrations of ospemifene, which is partially metabolized by the isoenzyme.",
+      "categories": [
+        "metabolism"
+      ]
+    },
+    "6406": {
+      "text": "Coadministration with potent inhibitors of CYP450 3A4 may increase the plasma concentrations of ospemifene, which is partially metabolized by the isoenzyme.",
+      "categories": [
+        "metabolism"
+      ]
+    },
+    "6747": {
+      "text": "Levoketoconazole can cause concentration-dependent, life-threatening prolongation of the QT interval.",
+      "categories": [
+        "synergistic_effect"
+      ]
+    },
+    "6939": {
+      "text": "Coadministration of the radioactive diagnostic agent fluoroestradiol F 18 with drugs that block the estrogen receptor (ER), such as tamoxifen and fulvestrant, may reduce the uptake of fluoroestradiol F 18 into ER-positive tumors.",
+      "categories": [
+        "distribution"
+      ]
+    },
+    "7257": {
+      "text": "The effect of administering different botulinum neurotoxin serotypes concurrently or within several months of one another is unknown.  Excessive weakness may be exacerbated by another administration of botulinum toxin prior to the resolution of the effects of a previously administered botulinum toxin.",
+      "categories": [
+        "others"
+      ]
+    },
+    "7258": {
+      "text": "Azole antifungal agents may increase the plasma concentrations of estrogens and progestins.  The mechanism is decreased clearance of the hormones due to inhibition of CYP450 3A4 activity by azole antifungals.",
+      "categories": [
+        "metabolism"
+      ]
+    },
+    "7481": {
+      "text": "Administration of intravesical BCG during immunosuppressive corticosteroid therapy may be associated with a risk of disseminated infection due to enhanced replication of the BCG strain of Mycobacterium bovis in the presence of diminished immune competence.",
+      "categories": [
+        "synergistic_effect"
+      ]
+    }
+  },
+  "drugs": [
+    {
+      "id": "DDInter1008",
+      "name": "Ketoconazole",
+      "rxcui": "6135",
+      "rxnorm_name": "ketoconazole",
+      "drugbank_id": "DB01026",
+      "atc": [
+        "D01AC08",
+        "G01AF11",
+        "H02CA03",
+        "J02AB02"
+      ],
+      "ciel": [
+        {
+          "code": "78476",
+          "uuid": "78476AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ketoconazole"
+        }
+      ]
+    },
+    {
+      "id": "DDInter1353",
+      "name": "Ospemifene",
+      "rxcui": "1370971",
+      "rxnorm_name": "ospemifene",
+      "drugbank_id": "DB04938",
+      "atc": [
+        "G03XC05"
+      ],
+      "ciel": []
+    },
+    {
+      "id": "DDInter168",
+      "name": "Beclomethasone dipropionate",
+      "rxcui": "1347",
+      "rxnorm_name": "beclomethasone",
+      "drugbank_id": "DB00394",
+      "atc": [
+        "A07EA07",
+        "D07AC15",
+        "R01AD01",
+        "R03BA01"
+      ],
+      "ciel": [
+        {
+          "code": "103335",
+          "uuid": "103335AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Albuterol / beclomethasone"
+        },
+        {
+          "code": "169918",
+          "uuid": "6070c4ba-c62f-433b-9802-7c14a80a88a9",
+          "name": "Beclomethasone / formoterol"
+        },
+        {
+          "code": "71916",
+          "uuid": "71916AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Beclomethasone"
+        },
+        {
+          "code": "71917",
+          "uuid": "71917AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Beclomethasone dipropionate"
+        },
+        {
+          "code": "71918",
+          "uuid": "71918AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Beclomethasone dipropionate monohydrate"
+        }
+      ]
+    },
+    {
+      "id": "DDInter169",
+      "name": "Beclomethasone dipropionate (nasal)",
+      "rxcui": "1347",
+      "rxnorm_name": "beclomethasone",
+      "drugbank_id": null,
+      "atc": [
+        "A07EA07",
+        "D07AC15",
+        "R01AD01",
+        "R03BA01"
+      ],
+      "ciel": [
+        {
+          "code": "103335",
+          "uuid": "103335AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Albuterol / beclomethasone"
+        },
+        {
+          "code": "169918",
+          "uuid": "6070c4ba-c62f-433b-9802-7c14a80a88a9",
+          "name": "Beclomethasone / formoterol"
+        },
+        {
+          "code": "71916",
+          "uuid": "71916AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Beclomethasone"
+        },
+        {
+          "code": "71917",
+          "uuid": "71917AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Beclomethasone dipropionate"
+        },
+        {
+          "code": "71918",
+          "uuid": "71918AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Beclomethasone dipropionate monohydrate"
+        }
+      ]
+    },
+    {
+      "id": "DDInter1974",
+      "name": "Bcg vaccine",
+      "rxcui": "221050",
+      "rxnorm_name": "BCG, live, Tice strain",
+      "drugbank_id": null,
+      "atc": [],
+      "ciel": [
+        {
+          "code": "71905",
+          "uuid": "71905AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "BCG, live, tice strain"
+        }
+      ]
+    },
+    {
+      "id": "DDInter2007",
+      "name": "Levoketoconazole",
+      "rxcui": "6135",
+      "rxnorm_name": "ketoconazole",
+      "drugbank_id": "DB05667",
+      "atc": [
+        "D01AC08",
+        "G01AF11",
+        "H02CA03",
+        "J02AB02"
+      ],
+      "ciel": [
+        {
+          "code": "78476",
+          "uuid": "78476AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ketoconazole"
+        }
+      ]
+    },
+    {
+      "id": "DDInter2152",
+      "name": "Fluoroestradiol f-18",
+      "rxcui": "4083",
+      "rxnorm_name": "estradiol",
+      "drugbank_id": null,
+      "atc": [
+        "G03CA03"
+      ],
+      "ciel": [
+        {
+          "code": "104597",
+          "uuid": "104597AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / ethinyl estradiol / levonorgestrel"
+        },
+        {
+          "code": "104598",
+          "uuid": "104598AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / hydroxyprogesterone"
+        },
+        {
+          "code": "104599",
+          "uuid": "104599AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / levonorgestrel"
+        },
+        {
+          "code": "104600",
+          "uuid": "104600AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / medroxyprogesterone"
+        },
+        {
+          "code": "104601",
+          "uuid": "104601AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / norethindrone"
+        },
+        {
+          "code": "104602",
+          "uuid": "104602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / norgestimate"
+        },
+        {
+          "code": "104603",
+          "uuid": "104603AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / testosterone"
+        },
+        {
+          "code": "165449",
+          "uuid": "165449AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol valerate / norethisterone enantate"
+        },
+        {
+          "code": "165467",
+          "uuid": "165467AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Algestone acetophenide / estradiol enantate"
+        },
+        {
+          "code": "167605",
+          "uuid": "7911cbdf-66f0-42a1-a75d-e398d675f25c",
+          "name": "Estradiol / norethindrone / relugolix"
+        },
+        {
+          "code": "75900",
+          "uuid": "75900AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol"
+        },
+        {
+          "code": "75901",
+          "uuid": "75901AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol 17 beta-cypionate"
+        },
+        {
+          "code": "75902",
+          "uuid": "75902AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol 3-benzoate"
+        },
+        {
+          "code": "75904",
+          "uuid": "75904AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol hemihydrate"
+        },
+        {
+          "code": "75905",
+          "uuid": "75905AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol valerate"
+        }
+      ]
+    },
+    {
+      "id": "DDInter2169",
+      "name": "Daxibotulinumtoxina",
+      "rxcui": "1712",
+      "rxnorm_name": "botulinum toxin type A",
+      "drugbank_id": null,
+      "atc": [],
+      "ciel": [
+        {
+          "code": "72303",
+          "uuid": "72303AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Botulinum toxin type A"
+        },
+        {
+          "code": "72305",
+          "uuid": "72305AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Botulinum type A toxin-haemagglutinin complex"
+        }
+      ]
+    },
+    {
+      "id": "DDInter225",
+      "name": "Botulinum toxin type A",
+      "rxcui": "1712",
+      "rxnorm_name": "botulinum toxin type A",
+      "drugbank_id": "DB00083",
+      "atc": [],
+      "ciel": [
+        {
+          "code": "72303",
+          "uuid": "72303AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Botulinum toxin type A"
+        },
+        {
+          "code": "72305",
+          "uuid": "72305AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Botulinum type A toxin-haemagglutinin complex"
+        }
+      ]
+    },
+    {
+      "id": "DDInter679",
+      "name": "Estradiol",
+      "rxcui": "4083",
+      "rxnorm_name": "estradiol",
+      "drugbank_id": "DB00783",
+      "atc": [
+        "G03CA03"
+      ],
+      "ciel": [
+        {
+          "code": "104597",
+          "uuid": "104597AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / ethinyl estradiol / levonorgestrel"
+        },
+        {
+          "code": "104598",
+          "uuid": "104598AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / hydroxyprogesterone"
+        },
+        {
+          "code": "104599",
+          "uuid": "104599AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / levonorgestrel"
+        },
+        {
+          "code": "104600",
+          "uuid": "104600AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / medroxyprogesterone"
+        },
+        {
+          "code": "104601",
+          "uuid": "104601AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / norethindrone"
+        },
+        {
+          "code": "104602",
+          "uuid": "104602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / norgestimate"
+        },
+        {
+          "code": "104603",
+          "uuid": "104603AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / testosterone"
+        },
+        {
+          "code": "165449",
+          "uuid": "165449AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol valerate / norethisterone enantate"
+        },
+        {
+          "code": "165467",
+          "uuid": "165467AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Algestone acetophenide / estradiol enantate"
+        },
+        {
+          "code": "167605",
+          "uuid": "7911cbdf-66f0-42a1-a75d-e398d675f25c",
+          "name": "Estradiol / norethindrone / relugolix"
+        },
+        {
+          "code": "75900",
+          "uuid": "75900AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol"
+        },
+        {
+          "code": "75901",
+          "uuid": "75901AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol 17 beta-cypionate"
+        },
+        {
+          "code": "75902",
+          "uuid": "75902AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol 3-benzoate"
+        },
+        {
+          "code": "75904",
+          "uuid": "75904AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol hemihydrate"
+        },
+        {
+          "code": "75905",
+          "uuid": "75905AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol valerate"
+        }
+      ]
+    },
+    {
+      "id": "DDInter680",
+      "name": "Estradiol (topical)",
+      "rxcui": "4083",
+      "rxnorm_name": "estradiol",
+      "drugbank_id": "DB00783",
+      "atc": [
+        "G03CA03"
+      ],
+      "ciel": [
+        {
+          "code": "104597",
+          "uuid": "104597AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / ethinyl estradiol / levonorgestrel"
+        },
+        {
+          "code": "104598",
+          "uuid": "104598AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / hydroxyprogesterone"
+        },
+        {
+          "code": "104599",
+          "uuid": "104599AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / levonorgestrel"
+        },
+        {
+          "code": "104600",
+          "uuid": "104600AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / medroxyprogesterone"
+        },
+        {
+          "code": "104601",
+          "uuid": "104601AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / norethindrone"
+        },
+        {
+          "code": "104602",
+          "uuid": "104602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / norgestimate"
+        },
+        {
+          "code": "104603",
+          "uuid": "104603AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol / testosterone"
+        },
+        {
+          "code": "165449",
+          "uuid": "165449AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol valerate / norethisterone enantate"
+        },
+        {
+          "code": "165467",
+          "uuid": "165467AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Algestone acetophenide / estradiol enantate"
+        },
+        {
+          "code": "167605",
+          "uuid": "7911cbdf-66f0-42a1-a75d-e398d675f25c",
+          "name": "Estradiol / norethindrone / relugolix"
+        },
+        {
+          "code": "75900",
+          "uuid": "75900AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol"
+        },
+        {
+          "code": "75901",
+          "uuid": "75901AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol 17 beta-cypionate"
+        },
+        {
+          "code": "75902",
+          "uuid": "75902AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol 3-benzoate"
+        },
+        {
+          "code": "75904",
+          "uuid": "75904AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol hemihydrate"
+        },
+        {
+          "code": "75905",
+          "uuid": "75905AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Estradiol valerate"
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    [
+      "DDInter1008",
+      "DDInter1353",
+      "Moderate",
+      "4988"
+    ],
+    [
+      "DDInter1008",
+      "DDInter2007",
+      "Major",
+      "6747"
+    ],
+    [
+      "DDInter1008",
+      "DDInter679",
+      "Moderate",
+      "3720"
+    ],
+    [
+      "DDInter1008",
+      "DDInter680",
+      "Moderate",
+      "3720"
+    ],
+    [
+      "DDInter1353",
+      "DDInter2007",
+      "Moderate",
+      "6406"
+    ],
+    [
+      "DDInter1353",
+      "DDInter2152",
+      "Major",
+      "6939"
+    ],
+    [
+      "DDInter1353",
+      "DDInter679",
+      "Moderate",
+      "1985"
+    ],
+    [
+      "DDInter1353",
+      "DDInter680",
+      "Moderate",
+      "1985"
+    ],
+    [
+      "DDInter168",
+      "DDInter1974",
+      "Moderate",
+      "7481"
+    ],
+    [
+      "DDInter169",
+      "DDInter1974",
+      "Moderate",
+      "7481"
+    ],
+    [
+      "DDInter2007",
+      "DDInter679",
+      "Moderate",
+      "7258"
+    ],
+    [
+      "DDInter2007",
+      "DDInter680",
+      "Moderate",
+      "7258"
+    ],
+    [
+      "DDInter2169",
+      "DDInter225",
+      "Moderate",
+      "7257"
+    ]
+  ]
+}

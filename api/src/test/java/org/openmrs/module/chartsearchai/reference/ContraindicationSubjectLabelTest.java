@@ -193,6 +193,49 @@ public class ContraindicationSubjectLabelTest {
 				"the charted row names the chip, was: " + warnings);
 	}
 
+	/** Three rows of one substance, the two rule shapes that do NOT name their own entry authored on the
+	 *  route-qualified one. Curated schema, so it is parsed by {@link JsonDrugReferenceSource}. */
+	private static final String CLASS_RULE_ON_A_LATER_ROW =
+			"chartsearchai-test/drug-reference-class-rule-on-a-later-row.json";
+
+	@Test
+	public void aCuratedRuleOnALaterRowIsReportedUnderTheSubstancesName() throws IOException {
+		// The curated arm's OTHER two rule shapes, which no fixture reached: a rule whose token names a
+		// CLASS rather than this entry, and a CONDITION rule. Both stay in the rule arm's own key space —
+		// they are not selfNamedAllergyRule, so they never fold onto the allergen arm's chip — and both
+		// are renamed by the same line as the class chips. SelfNamedAllergyRuleFoldTest's fixtures cannot
+		// cover them: every rule there names its own entry.
+		//
+		// It is also the case that shows what the rename COSTS, stated rather than hidden: the rules are
+		// authored on `Ibuprofen (tablets)` alone and are now asserted about the substance. That is the
+		// trade issue #162 already took for an interaction rule, and addContraindications records why
+		// exempting a curated rule instead re-creates issue #206 inside this arm.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.fixtureEntries(CLASS_RULE_ON_A_LATER_ROW));
+		List<DrugReference> rows = service.findByQuery("Is ibuprofen safe for her?");
+		assertEquals(3, rows.size(), "precondition: one word must resolve all three rows, was: "
+				+ DrugReferenceTestSupport.names(rows));
+		assertEquals("Ibuprofen (tablets)", rows.get(2).getName(),
+				"precondition: and the rules must sit on a row that is not the subject");
+		assertTrue(rows.get(0).getContraindications().isEmpty(),
+				"precondition: while the row the chip is named after carries none");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"Is ibuprofen safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("nsaid"),
+						DrugReferenceTestSupport.set("peptic ulcer")));
+
+		assertEquals(2, warnings.size(), "one allergy rule and one condition rule, was: " + warnings);
+		assertEquals(1, subjects(warnings).size(),
+				"both named for the one subject, was: " + subjects(warnings));
+		assertEquals("Ibuprofen is contraindicated by an active allergy: NSAID hypersensitivity",
+				warnings.get(0).getDetail(),
+				"a class-token allergy rule is reported under the substance's name, was: " + warnings);
+		assertEquals("Ibuprofen is contraindicated by an active condition: active peptic ulcer disease",
+				warnings.get(1).getDetail(),
+				"and so is a condition rule, which no other case here reaches, was: " + warnings);
+	}
+
 	/** @return the distinct subjects the chips name, in the order they first appear — every chip here is
 	 *          about the one substance under test, so a size above 1 IS the defect. */
 	private static Set<String> subjects(List<SafetyWarning> warnings) {

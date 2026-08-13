@@ -292,8 +292,10 @@ public class DrugReference {
 	 *         which route is in play (every variant publishes the same aliases and the same ATC list —
 	 *         the data-side gap issue #115 records), so the only route it can honestly assert is none.
 	 *
-	 *         <p>Consumed by {@link #canonicalRow}, which is where the two collapses that need it agree
-	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-07; re-measure before relying
+	 *         <p>Consumed by {@link #canonicalRow}, which is where the collapses that need it agree
+	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-07; re-measured 2026-08-13 for
+	 *         issue #206 by driving {@link #substanceGroupKey()}, this predicate and
+	 *         {@link #canonicalRow} over the shipped file, unchanged at 129/119/7; re-measure before relying
 	 *         on the figures): of the 129 substances filed as more than one row, 119 have such a row and
 	 *         10 do not — {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
 	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in 7 of the 119 it is NOT the family's
@@ -306,7 +308,8 @@ public class DrugReference {
 
 	/**
 	 * Which of two rows of ONE substance should represent it — the row a collapsed chip is named after
-	 * ({@code DrugSafetyValidator.interactionSubject}, issue #162), the row a collapsed reference
+	 * ({@code DrugSafetyValidator.interactionSubject}, issue #162, and since issue #206 every chip arm
+	 * through {@code DrugSafetyValidator.SubstanceSubjects}), the row a collapsed reference
 	 * record is rendered from ({@link DrugReferenceInjector#matchingEntries}, issue #163), and the row a
 	 * class chip names its PARTNER by ({@code DrugSafetyValidator.entryForAtcCode}, issue #174 site 1 —
 	 * where the ambiguity is not two rows a question resolved but the several rows that all publish the
@@ -343,10 +346,14 @@ public class DrugReference {
 	 *         {@code rows}, which is the only way this can answer nothing.
 	 *
 	 *         <p>Shared rather than written out at each site for the reason the pairwise form exists
-	 *         at all: four surfaces now choose a substance's representative row — the interaction
+	 *         at all: five surfaces now choose a substance's representative row — the interaction
 	 *         chip's subject (issue #162), the injected record (#163), the class chip's partner
-	 *         (#174 site 1) and the dose warning's subject (#174 site 4) — and a fold written four
-	 *         times is four chances for one of them to iterate in an order the others do not.
+	 *         (#174 site 1), the dose warning's subject (#174 site 4) and the contraindication chip's
+	 *         subject (#206) — and a fold written five times is five chances for one of them to iterate
+	 *         in an order the others do not. The three CHIP subjects reach it through one per-request
+	 *         lookup since #206 ({@code DrugSafetyValidator.SubstanceSubjects}), so what varies between
+	 *         them is nothing at all; the other two ask this directly, having no recorded name to rank
+	 *         by first.
 	 */
 	static DrugReference canonicalRow(Iterable<DrugReference> rows) {
 		DrugReference canonical = null;

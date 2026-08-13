@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #206 — not shipped data",
+  "description": "Three rows of ONE substance whose route-qualified row carries the two curated rule shapes that do NOT name their own entry: a class-token allergy rule (token 'nsaid', which no row of this substance is named) and a CONDITION rule. Both stay in the rule arm's own key space, so neither can fold onto the allergen arm's chip — which is what makes them the path SelfNamedAllergyRuleFoldTest's fixtures cannot reach, since every rule there names its own entry. The bare row leads and carries no rule, so the chip's subject and the rule's row are genuinely different rows and a chip named positionally reads 'Ibuprofen (tablets)'. Authored the way drug-reference-substance-name-declared.json is — each row declares substanceName, presentations carry a trailing parenthesized qualifier, and each row lists its own display name among its aliases — so the three rows really are one substance.",
+  "entries": [
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "substanceName": "ibuprofen",
+      "aliases": ["ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ibuprofen-suspension",
+      "name": "Ibuprofen (suspension)",
+      "substanceName": "ibuprofen",
+      "aliases": ["ibuprofen (suspension)", "ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ibuprofen-tablets",
+      "name": "Ibuprofen (tablets)",
+      "substanceName": "ibuprofen",
+      "aliases": ["ibuprofen (tablets)", "ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "contraindications": [
+        { "type": "allergy", "token": "nsaid", "note": "NSAID hypersensitivity" },
+        { "type": "condition", "token": "peptic ulcer", "note": "active peptic ulcer disease" }
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

@@ -36,7 +36,7 @@ section and [ADR Decisions 23 & 24](adr.md). This document is only the **demo da
 | 5 | Interaction — active order | a patient's active order matches a KB interaction token |
 | 6 | Interaction — duplicate therapy (ATC class) | an active order shares the asked drug's ATC level-4 subgroup |
 | 7 | Order-driven injection | a reference is injected from an active order (needs `injectFromQuery=false` to see in isolation) |
-| 8 | Cross-reactivity (ATC class) | an allergy to a *different* drug in the same ATC subgroup as the asked drug |
+| 8 | Cross-reactivity (ATC class) | an allergy to a *different* drug in the same ATC subgroup as the asked drug — one whose own published name names chemistry or a molecular target, not merely a purpose ([Decision 34](adr.md#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts)) |
 | 9 | Overdose | the answer states a dose above the KB maximum (LLM-output dependent — see [caveat](#overdose-caveat)) |
 
 The bundled KB has four drugs: **ibuprofen** (`M01AE01`), **paracetamol** (`N02BE01`),
@@ -273,7 +273,7 @@ SELECT order_number, (SELECT cn.name FROM concept_name cn WHERE cn.concept_id=o.
 > `sourceFormat=atc` reads a WHO-ATC classification export instead of JSON — classification only,
 > no hand-authored rules; the default `json` format is the curated, rule-bearing KB.)*
 
-Cross-reactivity (path 8) needs two KB drugs sharing an ATC subgroup. The bundled four are all
+Cross-reactivity (path 8) needs two KB drugs sharing an ATC subgroup that names chemistry or a molecular target — a purpose-named one such as `S01AA` "Antibiotics" licenses path 6 and not path 8 ([Decision 34](adr.md#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts)). The bundled four are all
 in different subgroups, so this path is unreachable by patient data alone. Extend the KB via
 the external-file mechanism (no rebuild):
 
@@ -328,7 +328,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | `name` | string | injection, validator | **Required** — an entry with a blank `name` is dropped at load (it would render a null display name). Shown in the injected reference and in `safetyWarnings[].drug`. |
 | `drugClass` | string | injection | Human-readable class label rendered in the reference text (e.g. "NSAID"). Informational only — class **logic** uses `atcCodes`, not this. |
 | `aliases` | string[] | injection, validator | Lowercase names matched **whole-word, case-insensitive** against the question and the answer ("advil" matches "is advil safe?"; "amox" won't spuriously match). Drives question-driven injection and which drug a warning is attributed to. |
-| `atcCodes` | string[] | injection, validator | WHO-ATC codes. Used two ways: **exact code** → order-driven injection (or, since [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151), the order's display name) / interaction match against an active order's ATC; **level-4 prefix** (`M01AE01` → `M01AE`) → the class-based cross-reactivity & duplicate-therapy checks. Two drugs are "same class" when their level-4 subgroups intersect in a subgroup that classifies the substances — a residual bucket ATC fills by exclusion inside a group it defines by site of application, and everything under `V03A`/`V07A`, are skipped (issue #167; see `DrugReference.isUnclassifyingAtcCode`). |
+| `atcCodes` | string[] | injection, validator | WHO-ATC codes. Used two ways: **exact code** → order-driven injection (or, since [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151), the order's display name) / interaction match against an active order's ATC; **level-4 prefix** (`M01AE01` → `M01AE`) → the class-based cross-reactivity & duplicate-therapy checks. Two drugs are "same class" when their level-4 subgroups intersect in a subgroup that classifies the substances — a residual bucket ATC fills by exclusion inside a group it defines by site of application, and everything under `V03A`/`V07A`, are skipped (issue #167; see `DrugReference.isUnclassifyingAtcCode`) — since #184 so are six residues whose ancestry asserts nothing at any level, and since #183 the cross-reactivity arm alone skips 117 further subgroups whose names state only a purpose (`DrugReference.isPurposeOnlyAtcCode`). |
 | `ageBands` | object[] | injection, overdose | Age-banded dosing (below). The band whose range contains the patient's age is selected; **no matching band → no numeric dosing rendered and no overdose check** (this is the age-gating that stops a pediatric max being shown for an adult). |
 | `warnings` | string[] | injection | Optional free-text prose warnings (e.g. a Reye-syndrome caution) rendered verbatim into the injected, citable record so the LLM can ground and cite them. **Display-only** — no matchable token, so the validator never fires on them; enforceable facts belong in the rule fields. |
 | `interactions` | object[] | interaction warning | Drug–drug interaction rules (below). |

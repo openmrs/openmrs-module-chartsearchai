@@ -40,7 +40,10 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Both are fixed by the two arms sharing ONE decision — {@code sharedClass} over the partner's
  * whole code set — so this file pins the chip COUNT and the exact class named, through the real
- * {@link DrugSafetyValidator#validate} over verbatim rows of the shipped 19 MB KB.
+ * {@link DrugSafetyValidator#validate} over verbatim rows of the shipped 19 MB KB. Since issues
+ * #183/#184 that method takes the ARM as a parameter: the preference between candidates is still the
+ * one decision, and the candidate sets are not, so the two arms may name different classes for one
+ * pair. It is still one decision in one place, which is what fixes the two defects above.
  */
 public class MultiCodeClassChipTest {
 

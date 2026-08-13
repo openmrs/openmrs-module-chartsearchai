@@ -39,6 +39,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 31: Name the class that explains the relationship, not the first one shared](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared)
 - [Decision 32: Observable drug-reference load status](#decision-32-observable-drug-reference-load-status)
 - [Decision 33: A residual ATC subgroup is not a relationship](#decision-33-a-residual-atc-subgroup-is-not-a-relationship)
+- [Decision 34: An ATC subgroup licenses only the claim its own name asserts](#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -2115,8 +2116,8 @@ The same assumption reads a code as a reliable route back to a **name**, and as 
 
 Four sites, two rules.
 
-1. **`DrugReference.isUnclassifyingAtcCode`** — a shared subgroup that classifies neither the substances nor a therapy is *skipped* in both of `sharedClass`'s tiers, so the method can answer "they share nothing that explains anything" and both arms fall through to the curated cross-reactivity groups. A residue **inherits** whatever its containing group asserts, so a blanket residual veto is wrong: `R06AX` sits under "ANTIHISTAMINES FOR SYSTEMIC USE" and two drugs sharing it really are both antihistamines. The list is the residues inside the [Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared) locally applied groups, plus `V03A` and `V07A`, plus `S02DC`. Its derivation, its deliberate over-reach and its measured cost are recorded on the constant.
-2. **One claim per co-medication** — `classRelationships` groups the active-order codes by the co-medication they identify and words one sentence per partner, choosing the class with the same `sharedClass` the allergy arm uses. The partner is named by a ladder: the dataset's entry for the code (through `DrugReference.canonicalRow`, so one substance is one name wherever it appears), else the ORDER's own display name, else the code.
+1. **`DrugReference.isUnclassifyingAtcCode`** — a shared subgroup that classifies neither the substances nor a therapy is *skipped* in both of `sharedClass`'s tiers, so the method can answer "they share nothing that explains anything" and both arms fall through to the curated cross-reactivity groups. A residue **inherits** whatever its containing group asserts, so a blanket residual veto is wrong: `R06AX` sits under "ANTIHISTAMINES FOR SYSTEMIC USE" and two drugs sharing it really are both antihistamines. The list is the residues inside the [Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared) locally applied groups, plus `V03A` and `V07A`, plus `S02DC` — and, since [Decision 34](#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts), the residues whose ancestry asserts nothing at any level. Decision 34 also makes the skip **per-arm**: the sentence opening this bullet, about both arms and both tiers, describes the duplicate-therapy bar; the cross-reactivity arm now has a higher one. Its derivation, its deliberate over-reach and its measured cost are recorded on the constant.
+2. **One claim per co-medication** — `classRelationships` groups the active-order codes by the co-medication they identify and words one sentence per partner, choosing the class with the same `sharedClass` the allergy arm uses (since [Decision 34](#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts), the same method with the arm as a parameter — one preference, two candidate sets). The partner is named by a ladder: the dataset's entry for the code (through `DrugReference.canonicalRow`, so one substance is one name wherever it appears), else the ORDER's own display name, else the code.
 
 ### Why skip rather than demote
 
@@ -2124,7 +2125,57 @@ A demotion needs a tier left to fall to. Potassium iodide and acetylcysteine sha
 
 ### What it costs, and why that is accepted
 
-Of the 7783 shipped-KB pairs that share a level-4 subgroup, 486 lose the class claim and 54 keep one under a subgroup that does classify. 116 of the 486 name a subgroup whose own published name states a therapy or an indication — `D06AX` "Other antibiotics for topical use" is a residue *and* an assertion — so those claims were defensible. Separating the groups that mean something from the ones that do not is a per-group pharmacological judgement this module has no curated data to make, and per-child hand-tuning is exactly what left Decision 31's own list incomplete. The curated cross-reactivity groups remain the fall-through for every vetoed pair.
+Of the 7783 shipped-KB pairs that share a level-4 subgroup, 486 lose the class claim and 54 keep one under a subgroup that does classify (measured for the 30 groups the list held at this decision; [Decision 34](#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts) took it to 36 and added a second predicate, so re-measure before quoting these for today's code). 116 of the 486 name a subgroup whose own published name states a therapy or an indication — `D06AX` "Other antibiotics for topical use" is a residue *and* an assertion — so those claims were defensible. Separating the groups that mean something from the ones that do not is a per-group pharmacological judgement this module has no curated data to make, and per-child hand-tuning is exactly what left Decision 31's own list incomplete. The curated cross-reactivity groups remain the fall-through for every vetoed pair.
+
+## Decision 34: An ATC subgroup licenses only the claim its own name asserts
+
+**Status: Accepted** (August 2026) — implemented ([#183](https://github.com/openmrs/openmrs-module-chartsearchai/issues/183), [#184](https://github.com/openmrs/openmrs-module-chartsearchai/issues/184)).
+
+### Context
+
+[Decision 33](#decision-33-a-residual-atc-subgroup-is-not-a-relationship) skips a shared subgroup that classifies neither the substances nor a therapy, in **both** of `sharedClass`'s tiers and for both arms alike. It left two families standing and said so: broad therapeutic buckets that group heterogeneous chemistry by purpose or site (`S01AA` "Antibiotics", i.e. *ophthalmic* antibiotics), and a residue whose parent is itself ATC's residue (`A16AX` under "OTHER ALIMENTARY TRACT AND METABOLISM PRODUCTS"). Both were deferred because excluding them looked like a per-group pharmacological judgement rather than a reading of ATC's words.
+
+The proposal put to this work was blunter: ATC classifies purpose and route rather than chemistry, so it should license **duplicate therapy only**, and cross-reactivity should come from the curated groups alone.
+
+### The measurement, because the proposal was conditional on it
+
+Driving the real `DrugSafetyValidator.validate` over the shipped 19 MB knowledge base, on each of the 5550 substance pairs it relates by a level-4 subgroup:
+
+| | cross-reactivity claims | duplicate-therapy claims | curated-group claims |
+|---|---|---|---|
+| before | 5266 | 5271 | 0 |
+| ATC licenses duplicate therapy only | 0 | 5271 | 24 |
+| this decision | 3701 | 5114 | 0 |
+
+Of the 5266 the blunt rule removes, **3701 rest on a subgroup that does name chemistry or a molecular target** — `J01CA` penicillins, `J01DD` cephalosporins, `J01GB` aminoglycosides, `N05BA` benzodiazepines, `C10AA` statins — and 1565 on purpose or on nothing. The single curated group the module ships replaces 24. It loses real signal at 2.4 times the rate it removes false claims, so it was rejected on its own stated test. The premise does not survive either: ATC level 4 is its *chemical* subgroup tier and mostly reads like one.
+
+### Decision
+
+A subgroup may justify a claim only as strong as what its published name asserts, and — extending Decision 33's rule from one level to every level — a residue asserts whatever the group containing it asserts.
+
+1. **Names a chemical family, a derivative class, or a molecular target** — licenses both claim types. `J01CA` "Penicillins with extended spectrum", `R06AX` "Other antihistamines for systemic use" (a receptor), `C01BD` "Antiarrhythmics, class III" (a channel).
+2. **Names only what its members are FOR** — an indication, an organism acted against, a therapeutic area, a diagnostic use — licenses **duplicate therapy and not cross-reactivity** (`DrugReference.isPurposeOnlyAtcCode`, 117 subgroups). Two ophthalmic antibiotics really are duplicate therapy for one another, and really do not thereby cross-react.
+3. **Asserts nothing at any level** — a residue that contributes no term its ancestors' names lack, and whose ancestry is residue up to a bare **level-1 anatomical** main group — licenses **neither** (6 subgroups added to `isUnclassifyingAtcCode`). Level 1 and not level 2: ATC's level 2 is its *therapeutic* tier, so a residue inheriting "ANTINEOPLASTIC AGENTS" or "ANTIBACTERIALS FOR SYSTEMIC USE" does assert a purpose and belongs in rule 2. Drawing the line at level 2 first would have withdrawn 381 further duplicate-therapy claims that are genuine, including every pair of systemic antibacterials ATC files as "other".
+
+`sharedClass` takes the arm as a parameter. The preference among surviving candidates — systemic over locally applied, sorted — stays in that one method, which is what #171 asked for. It does **not** follow that the arms always name the same class: their candidate *sets* now differ, so where a pair shares a purpose-named subgroup and a chemically named one, duplicate therapy is honestly about the first and cross-reactivity about the second. Measured at `sharedClass` over the 5550 pairs — a pair base, not the claim base the table above uses: 3693 answer on both arms, 4 differ (miconazole × clotrimazole names `A01AB` and `D01AC`). Naming them alike would make one of the two sentences false.
+
+### Why per-arm rather than one wider veto
+
+One list serving both arms cannot express this: extending `isUnclassifyingAtcCode` far enough to stop "both are ophthalmic antibiotics" being cross-reactivity also stops it being duplicate therapy, which it is. Measured, that variant removed 1228 duplicate-therapy claims against this decision's 157 — and the 157 are the family that asserts *nothing*, where withdrawing both claims is the correct answer.
+
+### Why this is a reading and not the judgement Decision 33 declined
+
+Decision 33 said separating meaningful groups from meaningless ones is "a per-group pharmacological judgement this module has no curated data to make". The data it lacked is ATC's own published group names, which the module does not carry and which were read for all 939 level-4 subgroups. The criterion is applied to the index, not to the reported cases, and it independently reproduces every decision Decision 33 states — `R06AX`, `J01GB` and `N02AX` keep; `A01AD`, `D11AX`, `S01XA` and `D06AX` are vetoed — differing on 19 of the 51 level-4 codes Decision 33's list covers, all of them that decision's own declared over-reach: `S02DC`, which it says a name test structurally cannot find; `V03A`/`V07A`'s 17 children, written at group level deliberately so a KB refresh cannot add one that escapes; and `C05BX` "Other sclerosing agents", whose own name does classify. Nothing moves — this change is additive, so all 19 stay vetoed by Decision 33's entries. Reproducing a previously settled list is the evidence that the criterion is a reading rather than a fit.
+
+### What it costs, and why that is accepted
+
+1565 cross-reactivity claims go, 586 of them for a pair DDInter also rates, so for those the interaction chip survives and only the class claim goes; 157 duplicate-therapy claims go with them, 14 rated. The residue family costs real relationships too — `G02CX` bremelanotide × flibanserin, `M09AX` onasemnogene × risdiplam, `A16AX` miglustat × eliglustat are genuine pairs — because no rule over ATC's words can tell them from eliglustat × givosiran, which is not one.
+
+### Rejected
+
+- **A blanket rule** (ATC → duplicate therapy only). Measured above; rejected 2.4 to 1.
+- **A list of the subgroups the two issues reported.** `S01AA`, `A07AA`, `S02AA`, `A16AX`, `N07XX`, `V04CX`, `G02CX`, `R07AX`, `M09AX` — nine, against the criterion's 123, and the criterion also disagrees with #184 about where `V04CX` belongs. Hand-picking is what left Decision 31's own list incomplete in a way that reproduced the defect it was fixing.
+- **Breaking the remaining alphabetical tie-break** inside the systemic tier ([#168](https://github.com/openmrs/openmrs-module-chartsearchai/issues/168)). This narrows it — 20 substance pairs leave more than one systemic candidate for the duplicate-therapy arm, 16 for the cross-reactivity arm — and cannot close it: `H02CA` "Anticorticosteroids" and `J02AB` "Imidazole derivatives" both name a class, so preferring either is the unmeasured preference Decision 31 refused to invent.
 
 ## Known limitations
 

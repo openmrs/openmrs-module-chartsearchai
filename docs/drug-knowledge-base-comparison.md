@@ -88,8 +88,8 @@ What they *do* with it diverges:
 **chartsearchai** — on every query:
 - `DrugReferenceInjector` injects matching reference entries into the serialized
   chart as **numbered, citable records** the LLM grounds on (question-driven by
-  alias + order-driven by ATC, relevance-scoped — see ADR Decision 24). Dosing is
-  age-gated.
+  alias + order-driven by whatever an active order resolves to, ATC code or display
+  name, relevance-scoped — see ADR Decision 24). Dosing is age-gated.
 - `DrugSafetyValidator` runs **after** the answer and *computes* the checks
   deterministically: it parses the dose the answer states and flags **overdose**
   vs the age-band maximum, flags **interactions** with active orders, and flags

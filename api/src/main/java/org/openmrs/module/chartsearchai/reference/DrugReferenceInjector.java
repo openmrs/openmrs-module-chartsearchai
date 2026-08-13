@@ -587,7 +587,9 @@ public class DrugReferenceInjector {
 	 * sibling row is therefore prose this record no longer carries and no chip replaces. Narrower than
 	 * it sounds — it needs the question's drug to be ATC-related to one order and that order's substance
 	 * to be multi-row — but it is a real reduction in what the prompt carries, not a re-presentation of
-	 * it.
+	 * it. Less narrow since issue #151 than when that was written: the leg's candidate set is now every
+	 * order the patient has rather than the ATC-mapped subset of them, so a deployment whose dictionary
+	 * maps few drug concepts reaches this residue where it previously could not reach the leg at all.
 	 *
 	 * <p>Issue #174's {@code orderedInteractionNotes} sweep did NOT close that residue and was never
 	 * going to: it collapses several rules of ONE entry that name one PARTNER, which is the other

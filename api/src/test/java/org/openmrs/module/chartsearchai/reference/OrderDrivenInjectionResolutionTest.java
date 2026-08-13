@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -110,12 +111,23 @@ public class OrderDrivenInjectionResolutionTest {
 		return out;
 	}
 
-	/** @return whether one of {@code texts} is the record rendered for the entry NAMED {@code name} —
-	 *          {@code render} writes {@code "Drug reference — <name> (<class>; ATC …)."}, so the name
-	 *          followed by the opening parenthesis is where the name provably ends. */
+	/** @return whether one of {@code texts} is the record rendered for the entry NAMED {@code name}.
+	 *          {@code render} writes {@code "Drug reference — <name>"} then, only when the entry
+	 *          publishes a class or an ATC code, {@code " (<class>; ATC …)"}, then a full stop — so
+	 *          BOTH terminators have to be accepted. Accepting only the parenthesis is a blind check
+	 *          rather than a strict one: an entry the knowledge base classifies nowhere renders as
+	 *          {@code "Drug reference — Iron."} and would then never be found, which is exactly the
+	 *          entry {@link #anOrderWhoseEntryTheKnowledgeBaseClassifiesNowhereIsStillNotInjected} is
+	 *          about (caught by mutating {@code relatedToAny} to admit it — the assertion stayed green).
+	 *
+	 *          <p>It cannot tell a bare name from a route-qualified sibling when neither publishes a
+	 *          class or a code ({@code Iron} against {@code Iron (bisglycinate)}), because the
+	 *          qualifier and the class parenthesis are the same two characters. Every case below
+	 *          therefore pins the record COUNT as well, so no absence rests on this helper alone. */
 	private static boolean namesDrug(List<String> texts, String name) {
 		for (String text : texts) {
-			if (text.startsWith("Drug reference — " + name + " (")) {
+			if (text.startsWith("Drug reference — " + name + " (")
+					|| text.startsWith("Drug reference — " + name + ".")) {
 				return true;
 			}
 		}
@@ -155,6 +167,7 @@ public class OrderDrivenInjectionResolutionTest {
 		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
 				"precondition: the deterministic layer must raise a finding about this pair");
 		List<String> injected = referenceTexts(chart);
+		assertEquals(2, injected.size(), "exactly the question's drug and the order, was: " + injected);
 		assertTrue(namesDrug(injected, "Ibuprofen"),
 				"the question's own drug is injected, as it always was, was: " + injected);
 		assertTrue(namesDrug(injected, "Acetylsalicylic acid"),
@@ -193,10 +206,93 @@ public class OrderDrivenInjectionResolutionTest {
 				"precondition: this pair really does raise a finding, so the absence below is the gate's "
 						+ "doing and not an empty pass");
 		List<String> injected = referenceTexts(chart);
+		assertEquals(1, injected.size(),
+				"the question's drug and nothing else — a count, so the absence below cannot rest on a "
+						+ "name match alone, was: " + injected);
 		assertTrue(namesDrug(injected, "Ibuprofen"), "was: " + injected);
 		assertFalse(namesDrug(injected, "Warfarin"),
 				"an active order sharing no family with the question's drug stays out of the prompt "
 						+ "however it resolved, was: " + injected);
+	}
+
+	@Test
+	public void anOrderWhoseEntryTheKnowledgeBaseClassifiesNowhereIsStillNotInjected()
+			throws IOException {
+		// The branch of relatedToAny this fix makes REACHABLE for the first time, so it is the one that
+		// needed a case. An ATC-keyed candidate set could only ever hold entries carrying ATC codes; a
+		// name-keyed one routinely resolves entries the KB classifies nowhere, and the shipped 19 MB KB
+		// has 444 of 2283 (measured 2026-08-13 through DrugReference.normalizedAtcCodes over the real
+		// DdiDrugReferenceSource). Such an entry is in no ATC subgroup and no curated group, so it is
+		// related to nothing and injects nothing — the same answer an unrelated order gets. Live
+		// counterpart: a patient on Tiotropium asked about ipratropium, where the KB publishes no ATC
+		// code for either.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
+		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
+		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
+		PatientClinicalContext context = byName("Iron 65mg");
+
+		// Premises: the order really does resolve an entry, and that entry really does publish no ATC
+		// code — without both, the absence below would prove nothing about the gate.
+		List<DrugReference> resolved = service.findForActiveOrders(context);
+		assertFalse(resolved.isEmpty(), "the order must resolve an entry by name");
+		for (DrugReference ref : resolved) {
+			assertTrue(ref.normalizedAtcCodes().isEmpty(),
+					"the fixture's iron rows must publish no ATC code, was: " + ref.getName() + " "
+							+ ref.normalizedAtcCodes());
+		}
+
+		PatientChart chart = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context,
+				"Is it safe to give dolutegravir?");
+
+		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
+				"precondition: iron x dolutegravir is Major in this fixture, so a finding IS raised — the "
+						+ "absence below is the relevance gate's answer, not an empty pass");
+		List<String> injected = referenceTexts(chart);
+		assertEquals(1, injected.size(),
+				"the question's drug and nothing else — the count is what makes this case able to fail, "
+						+ "since an ATC-less entry renders with no parenthesis at all, was: " + injected);
+		assertTrue(namesDrug(injected, "Dolutegravir"), "was: " + injected);
+		assertFalse(namesDrug(injected, "Iron"),
+				"an entry the knowledge base places in no class and no curated group is relevant to "
+						+ "nothing, so widening the candidate set cannot admit it: " + injected);
+	}
+
+	@Test
+	public void aDrugTheQuestionNamesAndThePatientIsAlreadyOnStaysOneRecord() throws IOException {
+		// The regression the widening could plausibly introduce: both legs now reach the drug a patient
+		// is ON and a question NAMES, and if the collapse missed them the prompt would carry two
+		// monographs of one drug — issue #163's defect returning by a new route, and invisible from the
+		// REST response, which returns only CITED references. The name-keyed counterpart of
+		// ReferenceRecordSubstanceCollapseTest.theQuestionLegAndTheOrderLegShareOneRecordForOneSubstance,
+		// which makes the same statement for an ATC-keyed order.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
+		List<String> injected = referenceTexts(DrugReferenceTestSupport.injector(service).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(), byName("Dexamethasone 4mg"),
+				"Is it safe to give dexamethasone?"));
+
+		assertEquals(1, injected.size(),
+				"one substance is one record however many legs reach it — and this family is four rows, "
+						+ "so a per-row leak would show as four: " + injected);
+		assertTrue(injected.get(0).startsWith("Drug reference — Dexamethasone (ATC"),
+				"and it is the route-unspecified row, was: " + injected.get(0));
+	}
+
+	@Test
+	public void aNullClinicalContextStillInjectsTheQuestionsOwnDrug() {
+		// The guard this fix MOVED. The order leg used to stand down on `context != null`; it now stands
+		// down on an empty candidate list, and the two are the same condition only because
+		// findForActiveOrders answers an empty list for a null context rather than null. If that ever
+		// stopped being true the leg would throw, and the throw is caught by `inject` — so the whole
+		// injection, question-driven records included, would degrade to nothing with only a WARN. A
+		// silent loss of every record, from a null the compiler cannot see.
+		PatientChart chart = inject(null, IBUPROFEN_QUESTION);
+
+		List<String> injected = referenceTexts(chart);
+		assertEquals(1, injected.size(), "the question's own drug, and no order leg to add to it: "
+				+ injected);
+		assertTrue(namesDrug(injected, "Ibuprofen"), "was: " + injected);
 	}
 
 	@Test

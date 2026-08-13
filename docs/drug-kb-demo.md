@@ -178,6 +178,10 @@ UNION ALL SELECT 'active_drug_orders', COUNT(*) FROM orders WHERE patient_id=@pi
 
 Adds WHO-ATC mappings to real, correctly-classified concepts plus four more active orders, so
 the **duplicate-therapy** (path 6) and **order-driven injection** (path 7) paths can fire.
+Path 7 no longer *requires* them since [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151)
+— an order is recognised by its display name too, so the mapping only has to make the two drugs
+class-related, which is the KB entries' own data. Path 6 still requires them: the duplicate-therapy
+chip resolves a co-medication from the **order's** ATC codes, so an unmapped concept raises none.
 Ampicillin (`J01CA01`) is a sibling of amoxicillin (`J01CA04`); Amikacin (`J01GB06`) a sibling
 of gentamicin (`J01GB03`). Run **after** the seed:
 

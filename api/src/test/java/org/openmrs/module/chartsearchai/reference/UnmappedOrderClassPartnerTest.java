@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -68,6 +69,10 @@ public class UnmappedOrderClassPartnerTest {
 	/** Dexamethasone's own WHO ATC code — what a dictionary that maps the concept supplies, and what
 	 *  the 27 of 43 active orders on the 3.7.1 standalone measured for issue #228 do not have. */
 	private static final String DEXAMETHASONE_CODE = "H02AB02";
+
+	/** Sarah Taylor's order name, verbatim from issue #209 — the recorded name whose unranked matcher
+	 *  reaches a second substance. Her order carries no ATC map at all, which is what brings it here. */
+	private static final String HYDROCORTISONE_ORDER_NAME = "Hydrocortisone Injection vial 100mg";
 
 	@Test
 	public void anOrderTheDictionaryDidNotMapToAtcIsStillACoMedication() throws IOException {
@@ -141,6 +146,37 @@ public class UnmappedOrderClassPartnerTest {
 	}
 
 	@Test
+	public void theOrderNameIsReadByTheRANKEDAccessorSoOneOrderStaysOneCoMedication() throws IOException {
+		// WHICH accessor resolves the order's name decides how many co-medications one prescription
+		// becomes. Issue #209's measured case, on the fixture that carries it: over this slice
+		// findByDrugName("Hydrocortisone Injection vial 100mg") admits four rows spanning TWO substances
+		// — the three hydrocortisone rows and Hydrocortisone butyrate — while findImpliedByDrugName
+		// admits only the substance the name denotes. Unranked, this leg would make that one order two
+		// partners and report the patient as being on an ester she was never prescribed.
+		//
+		// The premise is asserted rather than assumed: if the two accessors ever agreed on this name the
+		// case would pass either way.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
+		assertTrue(DrugReferenceTestSupport.names(service.findByDrugName(HYDROCORTISONE_ORDER_NAME))
+				.contains("Hydrocortisone butyrate"),
+				"the unranked matcher must reach the ester, or this case discriminates nothing");
+		assertFalse(DrugReferenceTestSupport.names(service.findImpliedByDrugName(HYDROCORTISONE_ORDER_NAME))
+				.contains("Hydrocortisone butyrate"),
+				"and the ranked one must not");
+
+		Set<String> names = DrugReferenceTestSupport.set(HYDROCORTISONE_ORDER_NAME);
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"Is it safe to give dexamethasone?",
+				DrugReferenceTestSupport.ctx(60, null, names, null, null, null,
+						Arrays.asList(DrugReferenceTestSupport.activeOrder("order-228-f",
+								HYDROCORTISONE_ORDER_NAME, names, null))));
+
+		assertEquals(1, warnings.size(), "one order is one co-medication, was: " + warnings);
+		assertEquals("Dexamethasone is in the same ATC class (H02AB) as active order Hydrocortisone"
+				+ " — possible duplicate therapy", warnings.get(0).getDetail());
+	}
+
+	@Test
 	public void anUnmappedOrderTheDatasetCannotNameRaisesNothing() throws IOException {
 		// The bound, stated rather than left to be rediscovered: with no code to look up and no name
 		// the loaded dataset carries an alias for, there is nothing to classify the order by. A
@@ -153,6 +189,31 @@ public class UnmappedOrderClassPartnerTest {
 
 		assertEquals(Collections.<String> emptyList(),
 				DrugReferenceTestSupport.details(chips(HYDROCORTISONE_QUESTION, context)));
+	}
+
+	@Test
+	public void thePartnerIsNamedByTheRowTheORDERRecords() throws IOException {
+		// Which ROW of a substance a chip calls the co-medication, on the one rung where the chart says.
+		// Issue #174 site 1 gave the class arm {@code canonicalRow}, and rightly: a partner reached from
+		// a bare ATC CODE has no recorded name to prefer. A partner reached from an order's NAME does,
+		// and issue #194 measured what ignoring it costs — a Botulinum toxin type A order named after
+		// Daxibotulinumtoxina, because both rows name no route and the other one is the dataset's first.
+		//
+		// So this rung composes the two the way DrugSafetyValidator.interactionSubject does for a chip's
+		// subject: the row the record claims most strongly, then the fold among the rows tied there. The
+		// order records the topical presentation verbatim; the fold alone would answer "Hydrocortisone",
+		// naming a presentation the chart does not.
+		Set<String> names = DrugReferenceTestSupport.set("Hydrocortisone (topical)");
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, names, null, null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-228-e",
+						"Hydrocortisone (topical)", names, null)));
+
+		List<SafetyWarning> warnings = chips("Is it safe to give dexamethasone?", context);
+
+		assertEquals(1, warnings.size(), "was: " + warnings);
+		assertEquals("Dexamethasone is in the same ATC class (H02AB) as active order"
+				+ " Hydrocortisone (topical) — possible duplicate therapy",
+				warnings.get(0).getDetail());
 	}
 
 	@Test

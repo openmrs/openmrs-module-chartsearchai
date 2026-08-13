@@ -132,7 +132,8 @@ public class LlmInferenceService implements ChartSearchService {
 
 			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
 					response.getCitations(), chart.getMappings());
-			ClassCodeFidelityCheck.unsupportedClassCodes(response.getAnswer(), cited, chart.getMappings());
+			ClassCodeFidelityCheck.reportUnsupportedClassCodes(response.getAnswer(), cited,
+					chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
@@ -419,7 +420,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// reports an ATC class code no cited record states (issue #142). It answers in
 			// microseconds and reports only to the log, so nothing downstream — and no consumer
 			// above — waits on it.
-			ClassCodeFidelityCheck.unsupportedClassCodes(response.getAnswer(), cited, chart.getMappings());
+			ClassCodeFidelityCheck.reportUnsupportedClassCodes(response.getAnswer(), cited,
+					chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,

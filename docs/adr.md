@@ -40,6 +40,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 32: Observable drug-reference load status](#decision-32-observable-drug-reference-load-status)
 - [Decision 33: A residual ATC subgroup is not a relationship](#decision-33-a-residual-atc-subgroup-is-not-a-relationship)
 - [Decision 34: An ATC subgroup licenses only the claim its own name asserts](#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts)
+- [Decision 35: A class code in the answer must come from a record the answer cites](#decision-35-a-class-code-in-the-answer-must-come-from-a-record-the-answer-cites)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -2176,6 +2177,34 @@ Decision 33 said separating meaningful groups from meaningless ones is "a per-gr
 - **A blanket rule** (ATC → duplicate therapy only). Measured above; rejected 2.4 to 1.
 - **A list of the subgroups the two issues reported.** `S01AA`, `A07AA`, `S02AA`, `A16AX`, `N07XX`, `V04CX`, `G02CX`, `R07AX`, `M09AX` — nine, against the criterion's 123, and the criterion also disagrees with #184 about where `V04CX` belongs. Hand-picking is what left Decision 31's own list incomplete in a way that reproduced the defect it was fixing.
 - **Breaking the remaining alphabetical tie-break** inside the systemic tier ([#168](https://github.com/openmrs/openmrs-module-chartsearchai/issues/168)). This narrows it — 20 substance pairs leave more than one systemic candidate for the duplicate-therapy arm, 16 for the cross-reactivity arm — and cannot close it: `H02CA` "Anticorticosteroids" and `J02AB` "Imidazole derivatives" both name a class, so preferring either is the unmeasured preference Decision 31 refused to invent.
+
+## Decision 35: A class code in the answer must come from a record the answer cites
+
+**Status: Accepted** (August 2026) — implemented ([#142](https://github.com/openmrs/openmrs-module-chartsearchai/issues/142)).
+
+### Context
+
+[Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation) injects the deterministic safety finding as a citable record precisely so the model reports a conclusion it will not re-derive, and [Decision 25](#decision-25-citation-grounding-tier-1-cosine--tier-2-entailment) checks whether a cited record supports the sentence citing it. Neither can see the model *edit* the fact it was handed. Tier-1 is cosine over the record's text, and a two-character change inside an alphanumeric token barely moves an embedding; Tier-2 entailment is paraphrase-tolerant, which is exactly the wrong tolerance for a code substitution; index validation passes because the citation is real. Live, the chip said `J01MA` (fluoroquinolones) while the answer, citing that finding's record number, said `J01CA` (penicillins) — two drug families, one character apart, in a sentence a clinician reads as a classification claim. Six further captures on #142 show the same handling: a character mutated, a code invented beside the true one, granularity changed in either direction, a correct code duplicated.
+
+### Decision
+
+`ClassCodeFidelityCheck` runs after every answer on both the blocking and the streaming path, and reports at WARN every ATC-shaped token the answer states that appears in **no** record the answer cites, carrying the codes stated, the records cited and the codes those records state. Five things are deliberate.
+
+1. **It reports; it never rewrites.** Deleting a token from a clinician-facing sentence is a larger decision than this check is licensed to make, and a silent edit is worse than a visible flag. Nothing about the verdict reaches the wire either: since [Decision 25](#decision-25-citation-grounding-tier-1-cosine--tier-2-entailment)/#201 a reference-group citation publishes no verdict at all, so a clinician-visible form is a wire and UI change and is deliberately left open on #142.
+2. **Whole tokens, on both sides.** The answer's codes and the record's codes are read by one pattern and compared as tokens, so `A02B` is not "found in" `A02BC`. A `contains()` comparison would pass the truncation and the duplication captures alike; the granularity change is a different, broader claim, not a copy.
+3. **Every cited record, chart evidence and reference material alike.** A code can be read off a chart record — a note, an order's display name — not only off an injected finding, so restricting the comparison to `safety_finding` records would accuse a faithful answer.
+4. **It abstains for the whole answer when any cited record carries no readable text** — the same "cannot verify" treatment the grounding verifier gives a null/blank record text. A record we could not read may be the one that states the code.
+5. **Its pattern is not `ChartSearchAiUtils.INLINE_CITATION` and must never be merged with it.** That one parses citation *markers* and is deliberately single-index, because a bracketed group in prose can always be a clinical value (`[120, 80]`) and widening it fabricates references. This one matches a code token wherever it appears. Same brackets, different question, no shared consumer.
+
+### What it costs, and what it cannot see
+
+One regex pass over the answer and over each cited record's text; no model call, no embedding, nothing on the request's critical path. Measured over the 340 live answers captured by this project's probe sweeps (August 2026), 33 state an ATC-shaped token and every one of them is a real ATC code in a real classification sentence — the shape does not match ordinary clinical prose, and reading it case-insensitively matches nothing further. Two modes stay invisible by construction: a duplicated correct code is textually supported by its record, and so is any code the answer OMITS — this reads what the answer states, never what it fails to state.
+
+### Rejected
+
+- **Keeping the code out of the record the model recites** (#142's direction 1: render the class *name* instead of, or beside, the code, so a miscopy reads as visibly wrong). The names are the data [Decision 34](#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts) records the module as not carrying: no shipped dataset has them (the `atc` source format reads them only from a file an operator supplies), and whether the WHO ATC/DDD index they were read from may be redistributed with this module has not been established. The chip and the finding record share one sentence, so it is also a change to what a clinician reads, and the sentence is written out in 66 lines across 17 test files, 62 of them inside a string literal. Complementary rather than alternative: rendering a name makes a miscopy legible, it does not detect one — and a name can be miscopied too.
+- **Documenting it and doing nothing** (#142's direction 3). Defensible only if the failure is rare, and its rate is unmeasurable here: answer prose is not reproducible on the reference box (`cache_prompt` KV reuse), so "rare" cannot be established. What *is* deterministic is the check.
+- **Comparing the answer's codes against the CHIPS instead of the cited records.** The chips are what the answer was expected to report, not what it was licensed to state; a model that legitimately declines to repeat a chip would be reported, and a code read off a chart record would be too.
 
 ## Known limitations
 

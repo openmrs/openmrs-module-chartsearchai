@@ -141,6 +141,8 @@ public class ClassCodeFidelityTest {
 
 	@Test
 	public void search_shouldStaySilentWhenTheAnswerCopiesTheCodeFaithfully() {
+		// The other half of the pair above, on the same arrangement: that one fails if the check
+		// never runs, this one fails if it accuses a faithful answer. Neither alone discriminates.
 		service.setLlmProvider(answering(sentenceStating(TRUE_CODE)));
 		try (LogCapture capture = LogCapture.on(PACKAGE)) {
 			service.search(patient(), QUESTION);
@@ -209,6 +211,15 @@ public class ClassCodeFidelityTest {
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"a code the cited CHART record states is supported. Captured: "
 							+ capture.describeAll());
+		}
+		// The second half is what makes the first half readable: silence is also what a check that
+		// never ran produces. Same chart, same citation, one character different in the answer.
+		onCharted.setLlmProvider(answering("The chart documents ATC class " + MISCOPIED_CODE + " [1]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			onCharted.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, MISCOPIED_CODE, TRUE_CODE),
+					"the chart record was read: a code it does not state must still be reported. "
+							+ "Captured: " + capture.describeAll());
 		}
 	}
 

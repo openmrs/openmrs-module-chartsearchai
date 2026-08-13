@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,11 +32,18 @@ import org.slf4j.LoggerFactory;
  * <p><b>The failure.</b> Measured live: the deterministic chip said class {@code J01MA}
  * (fluoroquinolones) while the answer, citing that finding's record number, said {@code J01CA}
  * (penicillins). The chip is right, the record is right, the citation is right, and the sentence a
- * clinician reads is wrong. Four more captures on the same issue show the model treating a code as
- * editable text rather than as an identifier: {@code V03AB}→{@code V03AV} and
- * {@code S01BC}→{@code S01SC} (a character mutated), {@code (D01AC)}→{@code (D01AC07, G01AF08)} and
- * {@code (H02AB)}→{@code (H02AB, S01BA02)} (a code invented beside the true one),
- * {@code (A02BC)}→{@code (A02B)} (the parent group substituted).
+ * clinician reads is wrong. Six further captures on #142 show the model treating a code as editable
+ * text rather than as an identifier: a character mutated ({@code V03AB}→{@code V03AV},
+ * {@code S01BC}→{@code S01SC}), a code invented beside the true one
+ * ({@code (H02AB)}→{@code (H02AB, S01BA02)}), granularity changed in both directions
+ * ({@code (A02BC)}→{@code (A02B)}, {@code (D01AC)}→{@code (D01AC07, G01AF08)}), and a correct code
+ * duplicated ({@code (A01AD) (A01AD)}).
+ *
+ * <p><b>Two of those modes this check cannot see, by construction.</b> A duplicated correct code is
+ * textually supported by its record, and so is any code the answer OMITS — this reads what the
+ * answer states, never what it fails to state. Detecting either needs a comparison against the
+ * chips the answer was expected to report, which is a different question with a different failure
+ * mode (a chip the model deliberately did not repeat is not an error).
  *
  * <p><b>Why the existing passes cannot catch it.</b> {@link CitationGroundingVerifier}'s Tier-1 is
  * cosine similarity over the cited record's text, and a two-character edit inside an alphanumeric
@@ -55,6 +61,13 @@ import org.slf4j.LoggerFactory;
  * option is a wire or UI change, and since issue #201 a reference-group citation publishes no
  * verdict at all.
  *
+ * <p><b>Where it runs.</b> Both answer paths — {@link LlmInferenceService#search} and
+ * {@code searchStreaming} — so the endpoint users actually hit is covered. Deliberately NOT the
+ * progressive-reasoning preview: that pass discards its answer, streams only reasoning from a
+ * focused top-K chart, and resolves no citations at all, so every code in it would be reported and
+ * the signal would be noise within a day. A cached answer ({@code ChartSearchServiceRouter}) is not
+ * re-checked either — it was checked when it was produced.
+ *
  * <p><b>Conservative by construction</b>, because a check that cries wolf is worse than no check:
  * <ul>
  *   <li>it compares WHOLE tokens, in both directions — a code the record does not state as a token
@@ -65,7 +78,10 @@ import org.slf4j.LoggerFactory;
  *       treatment {@link CitationGroundingVerifier} gives a null/blank record text;</li>
  *   <li>it matches only upper-case tokens, the form the WHO ATC index publishes and the form
  *       {@code DrugReference.normalizeAtcToken} renders, so no lower-case word can be mistaken for
- *       a code. A lower-cased code in prose is therefore a silent pass, deliberately.</li>
+ *       a code. A lower-cased code in prose is therefore a silent pass, deliberately — and one that
+ *       costs nothing measured: over the 340 answers captured from this pipeline's live probe
+ *       sweeps (2026-08-14), reading the same shape case-insensitively matched not one further
+ *       token.</li>
  * </ul>
  */
 final class ClassCodeFidelityCheck {
@@ -126,14 +142,12 @@ final class ClassCodeFidelityCheck {
 	 *            click, so a code traceable to none of them is traceable to nothing the reader can
 	 *            check. An answer that cites nothing therefore supports no code.
 	 * @param mappings the chart's records, cited or not — the carrier of the cited records' text
-	 * @return the unsupported codes in first-appearance order, empty when there are none and when
-	 *         the check abstains
 	 */
-	static List<String> unsupportedClassCodes(String answer, List<RecordReference> cited,
+	static void reportUnsupportedClassCodes(String answer, List<RecordReference> cited,
 			List<RecordMapping> mappings) {
 		Set<String> stated = classCodesIn(answer);
 		if (stated.isEmpty()) {
-			return Collections.emptyList();
+			return;
 		}
 		Map<Integer, String> textByIndex = new HashMap<Integer, String>();
 		if (mappings != null) {
@@ -152,7 +166,7 @@ final class ClassCodeFidelityCheck {
 					// states the code, and accusing the prose of a code we could not look for is
 					// exactly the false alarm this check must not raise.
 					log.debug("Class-code check skipped: cited record [{}] carries no text", index);
-					return Collections.emptyList();
+					return;
 				}
 				citedIndexes.add(index);
 				supported.addAll(classCodesIn(text));
@@ -172,6 +186,5 @@ final class ClassCodeFidelityCheck {
 					+ "record(s) {} state {}. The answer prose is left unchanged (issue #142).",
 					unsupported, citedIndexes, supported);
 		}
-		return unsupported;
 	}
 }

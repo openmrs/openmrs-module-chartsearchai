@@ -73,21 +73,55 @@ public class CrossReactivityGroup {
 
 	/** @return true when the given normalized (upper-cased) ATC code falls under any of this group's prefixes. */
 	public boolean containsCode(String normalizedAtcCode) {
-		if (normalizedAtcCode == null || normalizedAtcCode.isEmpty()) {
-			return false;
-		}
-		for (String prefix : normalizedAtcPrefixes()) {
-			if (normalizedAtcCode.startsWith(prefix)) {
+		return fallsUnder(normalizedAtcCode, normalizedAtcPrefixes());
+	}
+
+	/**
+	 * @return true when any of the given normalized ATC codes falls under any of this group's
+	 *         prefixes.
+	 *
+	 *         <p>Normalizes this group's prefixes ONCE per call rather than once per code:
+	 *         {@link #normalizedAtcPrefixes()} rebuilds the set every time it is asked, and this
+	 *         runs inside {@code DrugSafetyValidator}'s per-pair screening across the candidate
+	 *         set, so asking per code cost one normalization per (group, code) pair (issue #230).
+	 *         No speedup was measured and none is claimed: the shipped file carries one group with
+	 *         two prefixes. This is about not carrying a shape that scales with (groups × codes)
+	 *         into a deployment that expands the curated groups, which is what that path is for
+	 *         (#183).
+	 *
+	 *         <p>The normalized set is held in a LOCAL and never in a field. {@link #setAtcPrefixes} is
+	 *         the write path — Jackson calls it, and so does anything wiring groups programmatically —
+	 *         and it has to stay authoritative AFTER a membership question has been asked, which a set
+	 *         cached on the instance would not: it would go on answering with the prefixes the group
+	 *         used to carry, and silently, because no other test REPLACES a group's prefixes after
+	 *         asking. (Being asked twice is not the trigger and is entirely ordinary:
+	 *         {@link CrossReactivityGroupsLoader} asks every group it keeps for its prefixes once, as
+	 *         its own drop filter, before any caller does.) Same rule as issue #172's "in a local,
+	 *         never in a field", pinned by
+	 *         {@code CrossReactivityGroupsTest#replacedPrefixesAreSeenOnTheNextQuestion_soTheNormalizationIsNeverCachedOnTheInstance}.
+	 */
+	public boolean containsAnyCode(Set<String> normalizedAtcCodes) {
+		Set<String> prefixes = normalizedAtcPrefixes();
+		for (String code : normalizedAtcCodes) {
+			if (fallsUnder(code, prefixes)) {
 				return true;
 			}
 		}
 		return false;
 	}
 
-	/** @return true when any of the given normalized ATC codes falls under any of this group's prefixes. */
-	public boolean containsAnyCode(Set<String> normalizedAtcCodes) {
-		for (String code : normalizedAtcCodes) {
-			if (containsCode(code)) {
+	/** The one membership rule both accessors above answer with, so the two cannot drift apart.
+	 *  Deliberately NOT shared with {@code DrugReference}'s private {@code fallsUnderAnyGroup}, which
+	 *  runs the same loop over the hardcoded ATC group constants on that side: the two sides answer
+	 *  for different data (curated prefixes loaded from a file here; compiled-in group constants
+	 *  there) and each says so in its own javadoc. Merging them would put one refinement in front of
+	 *  both. */
+	private static boolean fallsUnder(String normalizedAtcCode, Set<String> normalizedPrefixes) {
+		if (normalizedAtcCode == null || normalizedAtcCode.isEmpty()) {
+			return false;
+		}
+		for (String prefix : normalizedPrefixes) {
+			if (normalizedAtcCode.startsWith(prefix)) {
 				return true;
 			}
 		}

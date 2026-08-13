@@ -637,6 +637,31 @@ public class QueryStoreChartBuilderTest {
 				"the failure happened inside searchByPatient — it was reached, then swallowed");
 	}
 
+	@Test
+	public void theTimingModeLabelsAreAnOpsContract_soTheirSpellingsArePinnedAsLiterals() {
+		// Issue #232. Every other use of these constants either interpolates one into a log line or
+		// compares a constant to a constant, and neither can notice a change to the VALUE — which is
+		// the whole of what the consumer sees, since a dashboard or saved log query greps
+		// `mode=fullChart` out of the [timing] querystoreBuild lines. Measured by mutation: renaming
+		// MODE_FULL_CHART's value to "TYPO_fullChart" makes THIS the only failing test in the api
+		// module; omod cannot see these package-private constants and no omod test asserts on the
+		// labels (the "fullChart" in omod's config.xml is the chartsearchai.chartMode GP token, a
+		// different contract). So before this assertion existed the re-spelling shipped green, as a
+		// metric going quietly to zero.
+		//
+		// Literals, deliberately — the same shape as ChartSearchAiAuditSearchModeTest's
+		// theColumnsVocabularyIsAWireContract_soItsSpellingsArePinnedAsLiterals, and allowed to be
+		// brittle for the same reason: it should fail the moment a spelling moves, and its failure
+		// is the notification that an ops contract is being changed rather than a constant renamed.
+		//
+		// These are deliberately NOT the audit column's spellings (full-chart / pre-filter, pinned
+		// in that other test). Two contracts, two audiences; unifying them was considered and
+		// declined during #178 — so a change that made these agree with those fails here.
+		assertEquals("preFilter", QueryStoreChartBuilder.MODE_PRE_FILTER);
+		assertEquals("fullChart", QueryStoreChartBuilder.MODE_FULL_CHART);
+		assertEquals("unknown", QueryStoreChartBuilder.MODE_UNKNOWN);
+	}
+
 	/**
 	 * Subclass that bypasses {@code Context.getService} so this test runs without
 	 * a live OpenMRS context. The {@code resolve*} overrides are the seam — every

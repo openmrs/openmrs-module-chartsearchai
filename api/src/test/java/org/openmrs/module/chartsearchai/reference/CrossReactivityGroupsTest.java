@@ -12,12 +12,15 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -31,10 +34,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * linkage is carried as data in {@code cross-reactivity-groups.json} and consumed
  * alongside <em>any</em> drug-reference source.
  *
- * <p>Tests run the real {@link DrugSafetyValidator}/{@link DrugReferenceInjector}
- * over the real WHO ATC sample (parsed by the real {@link AtcDrugReferenceSource})
- * with the real bundled groups file (loaded by the real
- * {@link CrossReactivityGroupsLoader} production path). The existing ADR-24 boundary
+ * <p>The validator and injector tests below run the real {@link DrugSafetyValidator}/{@link
+ * DrugReferenceInjector} over the real WHO ATC sample (parsed by the real
+ * {@link AtcDrugReferenceSource}) with the real bundled groups file (loaded by the real
+ * {@link CrossReactivityGroupsLoader} production path). The dataset and membership-mechanics tests
+ * above them sit one level lower on purpose — the real loader and the real
+ * {@link CrossReactivityGroup} entry points, with no validator in the loop — because what they
+ * assert is a property of the data mechanism itself. The existing ADR-24 boundary
  * tests in {@link DrugSafetyValidatorTest} stay true because {@code setEntries} pins a
  * hermetic dataset with NO groups — this class asserts both sides: without the groups
  * data the branches stay unlinked; with it, they link.
@@ -118,6 +124,91 @@ public class CrossReactivityGroupsTest {
 
 	private InputStream stream(String json) {
 		return new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
+	}
+
+	// --- Membership questions: what one costs, and what it re-reads ---
+
+	@Test
+	public void aMembershipQuestionNormalizesEachGroupsPrefixesOnce_notOncePerCode() {
+		// Issue #230. containsCode() rebuilds the group's normalized prefix set every time it is
+		// asked, and containsAnyCode() asked it once per code — so one membership question cost one
+		// normalization per (group, code) pair, and it runs inside DrugSafetyValidator's per-pair
+		// screening across the candidate set.
+		//
+		// Driven through CrossReactivityGroup.sharedGroupForCodes, the production order-code entry
+		// point — the one that takes a SET because one order's concept can map to several codes
+		// (issue #171) — over the real bundled groups' own prefixes and three real WHO level-5 codes
+		// from the ATC sample: paracetamol, amoxicillin and gentamicin, none of them an NSAID. A
+		// non-matching set is deliberately the case chosen, because it is the one that scans every
+		// code instead of returning on the first match.
+		//
+		// CountingGroup only counts; the membership decision is entirely production code.
+		List<CrossReactivityGroup> counted = new ArrayList<CrossReactivityGroup>();
+		for (CrossReactivityGroup bundled : bundledGroups()) {
+			counted.add(new CountingGroup(bundled));
+		}
+		assertFalse(counted.isEmpty(), "the bundled groups file must load, or this counts nothing");
+
+		Set<String> orderCodes = set("N02BE01", "J01CA04", "J01GB03");
+		assertNull(CrossReactivityGroup.sharedGroupForCodes(counted, orderCodes),
+				"paracetamol/amoxicillin/gentamicin must be in no curated group — that is what makes "
+						+ "every code get scanned. If a curated group is ever added that claims one of "
+						+ "them, replace them with three the shipped file does not claim rather than "
+						+ "relaxing this: a matching set returns early and counts nothing.");
+
+		for (CrossReactivityGroup group : counted) {
+			assertEquals(1, ((CountingGroup) group).normalizations,
+					"group '" + group.getName() + "' must normalize its prefixes once for the whole "
+							+ orderCodes.size() + "-code question, not once per code");
+		}
+	}
+
+	@Test
+	public void replacedPrefixesAreSeenOnTheNextQuestion_soTheNormalizationIsNeverCachedOnTheInstance()
+			throws IOException {
+		// The one thing the hoist above must not be "improved" into: a field. setAtcPrefixes is the
+		// write path a group's prefixes arrive by — Jackson calls it, which is how
+		// CrossReactivityGroupsLoader.parse builds a deployment's own file — so it has to stay
+		// authoritative AFTER a membership question has been asked. A normalized set cached on the
+		// instance would go on answering with the prefixes the group used to carry, and nothing would
+		// fail: no other test here REPLACES a prefix list after asking. (Being asked twice is not the
+		// trigger and is entirely ordinary — the loader asks every group it keeps for its normalized
+		// prefixes once, as its own drop filter, before any caller does.) Same rule as issue #172's
+		// "in a local, never in a field".
+		List<CrossReactivityGroup> groups = CrossReactivityGroupsLoader.parse(stream(
+				"{\"groups\":[{\"name\":\"NSAID\",\"atcPrefixes\":[\"M01AE\"]}]}"));
+		assertNotNull(CrossReactivityGroup.sharedGroupForCodes(groups, set("M01AE01")),
+				"the loaded prefix must match before anything is replaced");
+
+		groups.get(0).setAtcPrefixes(Collections.singletonList("N02BA"));
+
+		assertNull(CrossReactivityGroup.sharedGroupForCodes(groups, set("M01AE01")),
+				"the replaced-away prefix must stop matching — a cached set would still say it does");
+		assertNotNull(CrossReactivityGroup.sharedGroupForCodes(groups, set("N02BA01")),
+				"the prefix written last must be the one that matches");
+	}
+
+	/**
+	 * A real {@link CrossReactivityGroup} carrying a real loaded group's own name, note and
+	 * prefixes, which counts how many times production asks it to normalize them. It overrides
+	 * nothing else and delegates to the production {@link CrossReactivityGroup#normalizedAtcPrefixes()},
+	 * so every membership decision under test is made by production code — the counter only observes.
+	 */
+	private static final class CountingGroup extends CrossReactivityGroup {
+
+		int normalizations;
+
+		CountingGroup(CrossReactivityGroup source) {
+			setName(source.getName());
+			setNote(source.getNote());
+			setAtcPrefixes(source.getAtcPrefixes());
+		}
+
+		@Override
+		public Set<String> normalizedAtcPrefixes() {
+			normalizations++;
+			return super.normalizedAtcPrefixes();
+		}
 	}
 
 	// --- Validator: contraindication (allergy) reasoning across ATC branches ---

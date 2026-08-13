@@ -82,9 +82,28 @@ public class SafetyWarning {
 		return type;
 	}
 
-	/** The reference drug the warning is about — its display label, which may carry a
-	 *  parenthesized generic synonym when the dataset's display name diverges from it,
-	 *  e.g. {@code "Acetylsalicylic acid (aspirin)"} (see {@link DrugReference#displayLabel()}). */
+	/**
+	 * The reference drug the warning is about — its display label, which may carry a parenthesized
+	 * generic synonym when the dataset's display name diverges from it, e.g.
+	 * {@code "Acetylsalicylic acid (aspirin)"} (see {@link DrugReference#displayLabel()}).
+	 *
+	 * <p>Since issue #206 this names a SUBSTANCE, not a finding, and not the dataset row an arm
+	 * happened to match. Several warnings about one substance therefore carry the same string by
+	 * construction: issue #238 records a live patient with seven hydrocortisone chips that all do.
+	 *
+	 * <p><b>So it is not a deduplication key.</b> A client collapsing on {@code (type, drug)} would
+	 * discard six of those seven distinct findings — #238's second item exists because this class's
+	 * javadoc invited exactly that, saying the field was for "grouping/sorting/deduping" (it said so
+	 * on {@link #getDetail()}, where a reader is least likely to look). Nor is it a stable substance
+	 * name to group on: which arms share one subject and which resolve their own is
+	 * {@code DrugSafetyValidator}'s to state, and {@code SubstanceSubjects}' javadoc states it,
+	 * exemptions and residues included. Do not re-derive that list here — it has moved.
+	 *
+	 * <p>What distinguishes one warning from another is {@link #getDetail()}: of the three fields a
+	 * client receives, it is the one that varies between warnings about a single substance, because it
+	 * names the interacting order, the allergen or the ceiling that particular finding is about. Key
+	 * per-finding identity on {@code detail}, or on the whole warning.
+	 */
 	public String getDrug() {
 		return drug;
 	}
@@ -93,8 +112,8 @@ public class SafetyWarning {
 	 *  Ibuprofen dose ~2400 mg/day exceeds the 1200 mg/day maximum for ages 2-11" or
 	 *  "Warfarin interacts with active order aspirin — Major. …". <b>Renderers should display
 	 *  this alone</b>; prefixing {@link #getDrug()} duplicates the subject, because every
-	 *  detail already leads with it. The drug field exists for grouping/sorting/deduping, not
-	 *  as a display prefix. */
+	 *  detail already leads with it. It is also this field, not {@link #getDrug()}, that
+	 *  tells one warning from another — see {@link #getDrug()} for why. */
 	public String getDetail() {
 		return detail;
 	}

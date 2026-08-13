@@ -1074,6 +1074,10 @@ public class DrugReferenceInjector {
 	 * dosing is included only when an age band matches {@code age}; prose warnings,
 	 * contraindications and interactions are always rendered.
 	 *
+	 * <p>{@code patientReading} is {@link #statesTheChartsContraindicationReading}, decided once for the
+	 * whole injection by the caller rather than re-derived here: it reads global properties, and two
+	 * records of one chart must not disagree about whether this patient's chart may be described.
+	 *
 	 * <p>{@code context} does two things here. It orders the capped {@code Interactions:} section — see
 	 * {@link #orderedInteractionNotes} — and it splits the contraindication list into what this patient's
 	 * chart records and what it does not (issue #208 item 2, {@link #contraindicationSections}). It may be
@@ -1083,12 +1087,6 @@ public class DrugReferenceInjector {
 	 * interactions method, which groups a partner the patient is on by the entry it resolves to (issue
 	 * #190 item 2).
 	 */
-	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context,
-			List<DrugReference> orderEntries) {
-		return render(ref, age, context, orderEntries,
-				statesTheChartsContraindicationReading(context));
-	}
-
 	/**
 	 * @return whether an injected record may state what THIS patient's chart records of a drug's
 	 *         contraindications — three things, all of which have to hold, and none of which is a
@@ -1112,8 +1110,8 @@ public class DrugReferenceInjector {
 				&& DrugSafetyValidator.reportsContraindications();
 	}
 
-	private static RenderedReference render(DrugReference ref, Integer age,
-			PatientClinicalContext context, List<DrugReference> orderEntries, boolean patientReading) {
+	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context,
+			List<DrugReference> orderEntries, boolean patientReading) {
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
 		StringBuilder paren = new StringBuilder();
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {

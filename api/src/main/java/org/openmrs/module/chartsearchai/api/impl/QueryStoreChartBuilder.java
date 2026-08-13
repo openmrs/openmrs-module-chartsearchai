@@ -66,8 +66,19 @@ class QueryStoreChartBuilder {
 
 	// Mode labels emitted in the [timing] querystoreBuild log lines so ops dashboards can
 	// distinguish the two dispatch shapes. preFilter mode does the extra searchByPatient
-	// call for the focus hint; fullChart skips it. Kept as compile-time constants so a typo
-	// on any future log line surfaces at compile time rather than as a silently-dropped grep.
+	// call for the focus hint; fullChart skips it.
+	//
+	// These VALUES are a consumer contract: a dashboard or saved log query greps mode=fullChart, so
+	// a re-spelling breaks it silently — as a metric that quietly goes to zero. Being constants does
+	// not protect that, and issue #232 is this comment having claimed it did: a misspelled IDENTIFIER
+	// on a future log line fails to compile, but the value is what the consumer reads and changing it
+	// compiles fine. Measured by mutation: renaming MODE_FULL_CHART's value to "TYPO_fullChart" fails
+	// exactly one test, the one that exists to notice —
+	// QueryStoreChartBuilderTest#theTimingModeLabelsAreAnOpsContract_soTheirSpellingsArePinnedAsLiterals.
+	//
+	// Deliberately NOT the audit column's vocabulary (ChartSearchAiConstants.SEARCH_MODE_*, which
+	// spells the same two shapes full-chart/pre-filter). Two contracts, two audiences; unifying
+	// them was considered and declined during #178.
 	static final String MODE_PRE_FILTER = "preFilter";
 
 	static final String MODE_FULL_CHART = "fullChart";

@@ -81,15 +81,19 @@ public class ChartSearchAiUtils {
 	 * injected record are added — three exist already, and they do not all fall on the same side
 	 * (see below).
 	 *
-	 * <p>Two behaviours now hang off this one classification, not just the display grouping: the
+	 * <p>Three behaviours now hang off this one classification, not just the display grouping. The
 	 * demote-only grounding carve-out in {@code CitationGroundingVerifier} is derived from it via
 	 * {@link #isGroundingDemoteOnly}. That gate used to test the {@code drug_reference} type directly,
 	 * so when {@code safety_finding} arrived (#110) it was classified here and NOT registered there,
 	 * and the module's own deterministic findings were graded as retrieved chart evidence — publishing
 	 * unstable {@code grounded} verdicts with no error anywhere (issue #122). Deriving both from one
 	 * classification is what makes that class of omission unrepresentable, and it is why editing this
-	 * method now also changes whether a type's citations can be verified. Both consequences are swept
-	 * off one enumeration in {@code ChartSearchAiReferenceGroupTest}.
+	 * method now also changes whether a type's citations can be verified. Those two are swept off one
+	 * enumeration in {@code ChartSearchAiReferenceGroupTest}. The third is the wire: since #201 a
+	 * reference-group citation publishes no verdict at all, so editing this method also changes what a
+	 * CLIENT can see — swept off its own enumeration in
+	 * {@code ChartSearchAiReferenceGroundingWithholdingTest}, in the omod module, because that is
+	 * where the serializer lives.
 	 *
 	 * <p>The two groups are exhaustive because exactly two code paths mint a
 	 * {@code RecordMapping}: {@code PatientChartSerializer}, which passes through whatever

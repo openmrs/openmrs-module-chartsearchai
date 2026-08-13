@@ -217,8 +217,9 @@ public class ChartSearchAiRestController {
 		response.put("answer", chartAnswer.getAnswer());
 		response.put("disclaimer", DISCLAIMER);
 
-		// Shared with the SSE emission sites so all four stay in step — carries the
-		// tri-state `grounded` verdict and the `group` discriminator; see serializeReferences.
+		// Shared with the SSE emission sites so all four stay in step — carries the `grounded`
+		// verdict (withheld for reference material, see groundedForWire) and the `group`
+		// discriminator; see serializeReferences.
 		response.put("references", serializeReferences(chartAnswer.getReferences()));
 		response.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
 		if (questionId != null) {

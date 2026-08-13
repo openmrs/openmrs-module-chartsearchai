@@ -49,10 +49,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p><strong>Why the value is withheld rather than published.</strong> Grounding treats
  * module-supplied material as demote-only — a pass renders {@code null}, a Tier-1 off-topic
  * citation still renders {@code false} (#106, #122). That {@code false} is reachable by design, and
- * on the wire it is a value a client must not interpret: the reference frontend classifies
- * citations by {@code resourceType} rather than by {@code group}, so a {@code safety_finding}
- * falls through to its grounding branch and renders "Unsupported — The cited record may not
- * support this statement", in red, on this module's own deterministic Major-interaction finding.
+ * on the wire it is a value a client must not interpret: it means "this citation is not about that
+ * record", which only {@code group} distinguishes from a chart citation's "this claim may not be
+ * supported". A client that classified by {@code resourceType} instead rendered it as
+ * "Unsupported — The cited record may not support this statement", in red, on this module's own
+ * deterministic Major-interaction finding — see
+ * {@code ChartSearchAiRestController.groundedForWire} for which client, at which commit, and why
+ * the wire was chosen over patching it.
  * A field that must not be interpreted is a trap, so the wire stops offering one. The off-topic
  * signal is not lost to the module — the verifier still computes it and
  * {@code CitationGroundingVerifierTest.safetyFinding_offTopicCitationIsStillFlagged} still pins it —
@@ -138,7 +141,7 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 	@Test
 	public void searchResponse_withholdsTheVerdictFromEveryReferenceGroupCitation() {
 		// The OpenMRS static context is installed HERE rather than in setUp, and torn down whatever
-		// happens, because the three SSE assertions below must keep running with no context at all:
+		// happens, because every other test in this class must keep running with no context at all:
 		// that absence is the only thing enforcing streamAnswer's "free of Context reads" contract
 		// (see RestControllerContext's javadoc).
 		openmrsContext.install();
@@ -226,8 +229,8 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 	 * The structural half. The withholding must be derived from the reference GROUP — through
 	 * {@link ChartSearchAiUtils#isGroundingDemoteOnly} or {@link ChartSearchAiUtils#referenceGroup} —
 	 * and never from a list of type names, because a name list is what silently excluded
-	 * {@code safety_finding} from the grounding carve-out for two releases (#122) and what the
-	 * frontend of #201 is doing right now.
+	 * {@code safety_finding} from the grounding carve-out for two releases (#122), and is the same
+	 * mistake the client in #201 made.
 	 *
 	 * <p>No behavioural test can catch that regression today: with exactly two reference-group types,
 	 * a hardcoded pair agrees with the classifier on every input that exists. So this asserts the
@@ -442,18 +445,17 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 		return classes;
 	}
 
-	/** Whether the class file's bytes contain {@code text} — i.e. whether the class names it. */
+	/**
+	 * Whether the class file's bytes contain {@code text} — i.e. whether the class names it.
+	 *
+	 * <p>Decoded as ISO-8859-1 rather than scanned by hand: that charset maps every byte 0x00–0xFF
+	 * to the same code point, so the decode is lossless and a {@code String.contains} over it is
+	 * exactly a byte-subsequence search. (UTF-8 would not be — an invalid sequence decodes to U+FFFD
+	 * and the positions shift.) The needles here are the ASCII resource-type wire values, whose
+	 * ISO-8859-1 bytes are themselves.
+	 */
 	private static boolean contains(byte[] compiled, String text) {
-		byte[] needle = text.getBytes(StandardCharsets.UTF_8);
-		outer: for (int start = 0; start <= compiled.length - needle.length; start++) {
-			for (int i = 0; i < needle.length; i++) {
-				if (compiled[start + i] != needle[i]) {
-					continue outer;
-				}
-			}
-			return true;
-		}
-		return false;
+		return new String(compiled, StandardCharsets.ISO_8859_1).contains(text);
 	}
 
 	/** Returns the fixture answer: one sentence, and a citation of every declared resource type. */

@@ -11,7 +11,7 @@ no stubbed unit test can reproduce.
 
 For each (patient, query) case it runs POST /chartsearchai/search under each
 value of the `chartsearchai.grounding.clauseScoped` GP and records, per cited
-index, the grounded verdict. Sentence-scope (clauseScoped=false) is the SAFE
+index, whatever the wire published for it. Sentence-scope (clauseScoped=false) is the SAFE
 baseline. Versus it:
   * a True->False flip is a REGRESSION candidate (e.g. patient 165497e8
     "any feeding problems?" cite [5], a provisional-diagnosis false negative);

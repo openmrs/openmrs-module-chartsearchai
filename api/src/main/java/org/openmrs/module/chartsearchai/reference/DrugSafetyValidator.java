@@ -15,6 +15,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -326,46 +327,47 @@ public class DrugSafetyValidator {
 		// prose, or prose with no chip, which is the exact defect the shared floor exists to prevent.
 		int severityFloor = configuredSeverityFloor();
 
+		// The rows of every substance this pass resolved, from EITHER side — the question and answer text,
+		// and the patient's own orders (issue #175) — grouped by the substance each stands for; and the
+		// one row each of those substances is NAMED by in this response (issue #206).
+		//
+		// The subject of a chip is a SUBSTANCE, not a reference row (issue #162): one clinician word
+		// resolves every route/formulation row of a substance, and the arms ran once per row, so one fact
+		// became one chip per row. Grouped here rather than inside each arm because an arm is what has to
+		// see the whole group at once — the interaction arm's survivor rule compares rows against each
+		// other, and choosing what to CALL the substance is a comparison over the group by definition.
+		//
+		// ONE resolution for every arm, not one per arm: the interaction chip, the dose warning and the
+		// contraindication chip can all be about one substance in one response, and three arms answering
+		// "which row is this?" separately is three chances to answer it differently — which is exactly
+		// what issue #206 is, the contraindication arm having answered it positionally while the other two
+		// went through interactionSubject.
+		//
+		// Per-validate locals, never fields: a memoised DrugReference outliving a getAll() hot-reload
+		// fails the reference comparisons the contraindication arms make against the same objects
+		// (issue #172), which would silently re-open #145 with no test failing.
+		Map<Object, List<DrugReference>> substanceRows = resolvedSubstanceRows(inPlay, orderEntries);
+		SubstanceSubjects subjects = new SubstanceSubjects(substanceRows, recordedDrugNames(context));
+
 		// One ledger for every contraindication chip this pass raises, across BOTH arms and both of
 		// their call sites (the drug-in-play loop below and the order-driven arm after it) — see
 		// ContraindicationChips. It has to span them: one substance's route variants can arrive as
 		// several drugs in play, as several entries of one active order, or as some of each, and a
 		// collapse living inside one arm would still let the other emit the siblings.
-		ContraindicationChips contraindications = new ContraindicationChips(warnings);
+		ContraindicationChips contraindications = new ContraindicationChips(warnings, subjects);
 
-		// The interaction arms' subject is a SUBSTANCE, not a reference row (issue #162): one clinician
-		// word resolves every route/formulation row of a substance, and the arm ran once per row, so one
-		// pair became one chip per row. Grouped here rather than inside the arm because the arm is what
-		// has to see the whole group at once — its survivor rule compares rows against each other.
-		//
-		// A per-validate local, never a field: a memoised DrugReference outliving a getAll() hot-reload
-		// fails the reference comparisons the contraindication arms make against the same objects
-		// (issue #172), which would silently re-open #145 with no test failing.
-		//
-		// Consumed inside the row loop below, keyed by the group's first row, so the substance's chips
-		// land where its first row's chips have always landed and no client sees the chip sequence
-		// reshuffle — the same positional promise ContraindicationChips makes.
-		//
-		// The group is the rows of that substance this pass resolved from EITHER side — the question and
-		// answer text, and the patient's own orders (issue #175); see resolvedSubstanceRows.
-		Map<Object, List<DrugReference>> interactionSubjects = warnInteractions
-				? resolvedSubstanceRows(inPlay, orderEntries)
-				: Collections.<Object, List<DrugReference>> emptyMap();
-
-		// The same grouping for the DOSE arm (issue #174 site 4), which ran once per row and so
-		// produced one dose warning per row for one stated dose — see addOverdose. Its own map rather
-		// than the one above, because both are consumed by remove() as the loop reaches each group's
-		// first row and one map cannot be drained twice; and gated on its own toggle, so switching
-		// interactions off does not silently switch the dose grouping off with it.
-		//
-		// The same GROUP as well, not merely the same grouping method: both arms name their subject
-		// through interactionSubject, so a narrower row set here would let one response call one
-		// substance two things — the divergence this PR exists to remove, re-created by fixing only the
-		// interaction arms. It also gives this arm what its own javadoc asks for, every row of the
-		// substance the request resolved being tried for a published band.
-		Map<Object, List<DrugReference>> doseSubjects = warnDose
-				? resolvedSubstanceRows(inPlay, orderEntries)
-				: Collections.<Object, List<DrugReference>> emptyMap();
+		// Which substances still owe the interaction arm and the dose arm their one call. Drained as the
+		// loop below reaches each group's first row, so a substance's chips land where its first row's
+		// chips have always landed and no client sees the chip sequence reshuffle — the same positional
+		// promise ContraindicationChips makes. A key set apiece rather than a map apiece, because the ROWS
+		// are now shared: two maps of the same groups was two chances for the two arms to be handed
+		// different row sets, and a narrower set for either would let one response call one substance two
+		// things. Gated on their own toggles, so switching interactions off does not silently switch the
+		// dose grouping off with it.
+		Set<Object> interactionsPending = warnInteractions
+				? new HashSet<Object>(substanceRows.keySet()) : Collections.<Object> emptySet();
+		Set<Object> dosePending = warnDose
+				? new HashSet<Object>(substanceRows.keySet()) : Collections.<Object> emptySet();
 
 		// One ledger of the (substance, partner) pairs an interaction chip has been raised for, spanning
 		// the drug-in-play arm below and the screening arm at the end — see InteractionPairs. Like the
@@ -389,26 +391,18 @@ public class DrugSafetyValidator {
 				addContraindications(contraindications, ref, context);
 				addAllergyContraindications(contraindications, ref, recordedAllergens);
 			}
-			if (warnInteractions) {
-				// remove(), so a substance's rows are handed to the arm ONCE — at the first of them — and
-				// the map itself is the already-done ledger.
-				List<DrugReference> substance = interactionSubjects.remove(ref.substanceGroupKey());
-				if (substance != null) {
-					// One call, not one per arm: the rule arm and the class arm can both raise a chip about
-					// the same active order, so the decision of how many chips that pair gets belongs to a
-					// method that sees both (issue #88).
-					addInteractionWarnings(warnings, substance, context, severityFloor, orderEntries,
-							interactionPairs);
-				}
+			// remove(), so a substance's rows are handed to each arm ONCE — at the first of them — and the
+			// pending key set is itself the already-done ledger.
+			if (interactionsPending.remove(ref.substanceGroupKey())) {
+				// One call, not one per arm: the rule arm and the class arm can both raise a chip about
+				// the same active order, so the decision of how many chips that pair gets belongs to a
+				// method that sees both (issue #88).
+				addInteractionWarnings(warnings, substanceRows.get(ref.substanceGroupKey()), subjects,
+						context, severityFloor, orderEntries, interactionPairs);
 			}
-			if (warnDose) {
-				// remove(), for the same reason as the interaction arm above: a substance's rows are
-				// handed to the arm ONCE, at the first of them, so its warning keeps the position that
-				// row's warning has always had and the map itself is the already-done ledger.
-				List<DrugReference> substance = doseSubjects.remove(ref.substanceGroupKey());
-				if (substance != null) {
-					addOverdose(warnings, substance, context, lower, all);
-				}
+			if (dosePending.remove(ref.substanceGroupKey())) {
+				addOverdose(warnings, substanceRows.get(ref.substanceGroupKey()), subjects, context, lower,
+						all);
 			}
 		}
 		// The patient's own prescriptions against their own allergy and condition records — the one
@@ -662,6 +656,58 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * What ONE {@code validate} pass calls each substance it resolved: {@link #interactionSubject} over
+	 * that substance's rows, asked once and remembered, so no two arms can answer it differently.
+	 *
+	 * <p><b>Issue #206.</b> Three arms name a subject — the interaction chip (issue #162), the dose
+	 * warning (#174 site 4) and the contraindication chip — and the third answered POSITIONALLY, keeping
+	 * whichever row reached it first. On the shipped KB that disagreed with the other two for the
+	 * families whose route-unspecified row is not the dataset's first; since issue #194 anchored the
+	 * other two on the chart it disagreed wherever the CHART names some other row, which is a property of
+	 * the patient's data rather than of the dataset. Either way one response called one substance two
+	 * things.
+	 *
+	 * <p>A shared lookup rather than three calls to one method, because equal answers from three call
+	 * sites are equal only while their INPUTS stay equal: the row group and the recorded names are both
+	 * arguments, and it is a narrowed row set at one site that this class's own history says to expect
+	 * (issues #162, #174, #175 are all "this arm was handed fewer rows than that one"). Here the group is
+	 * looked up rather than passed, so a caller cannot supply a different one.
+	 *
+	 * <p>Memoised for the pass and not beyond it — a {@link DrugReference} outliving a {@code getAll()}
+	 * hot-reload fails the identity comparisons the contraindication arms make (issue #172).
+	 */
+	private static final class SubstanceSubjects {
+
+		private final Map<Object, List<DrugReference>> rows;
+
+		private final Collection<String> recordedNames;
+
+		private final Map<Object, DrugReference> named = new HashMap<Object, DrugReference>();
+
+		SubstanceSubjects(Map<Object, List<DrugReference>> rows, Collection<String> recordedNames) {
+			this.rows = rows;
+			this.recordedNames = recordedNames;
+		}
+
+		/**
+		 * @return the row {@code row}'s substance is named by in this response — {@code row} itself when
+		 *         this pass grouped no rows for it, which is the answer every arm gave before there was a
+		 *         group to choose from and keeps a caller holding an ungrouped row honest rather than
+		 *         null.
+		 */
+		DrugReference of(DrugReference row) {
+			Object substance = row.substanceGroupKey();
+			DrugReference subject = named.get(substance);
+			if (subject == null) {
+				List<DrugReference> group = rows.get(substance);
+				subject = group == null || group.isEmpty() ? row : interactionSubject(group, recordedNames);
+				named.put(substance, subject);
+			}
+			return subject;
+		}
+	}
+
+	/**
 	 * Every contraindication chip one {@code validate} pass raises: <b>at most one per (substance,
 	 * recorded finding)</b>, whatever arm reaches it and however many reference rows the loaded
 	 * dataset files that substance as (issue #145).
@@ -735,32 +781,37 @@ public class DrugSafetyValidator {
 	 * a rule with none renders its own token back ({@link ChartSearchAiUtils#firstNonBlank}, "…:
 	 * ibuprofen") and is outranked, so it survives only where the allergen arm resolved nothing to this
 	 * SAME substance — a class or group chip about a DIFFERENT allergen is a different key and stands
-	 * beside it. Ties keep the incumbent, so a group of equally-related rows is reported as the
-	 * dataset's first row. NOT the same rule
-	 * {@link #bestRulePerPartner} applies since issue #162: that one prefers the row naming no route
-	 * before falling back to the incumbent, and this one does not — so a substance whose unqualified row
-	 * is not the dataset's first (7 of the shipped KB's multi-row families) can have an interaction chip
-	 * naming it and a contraindication chip naming one of its routes in the same response. That is the
-	 * route-qualifier residue this javadoc's last paragraph already accepts, now visible against a
-	 * canonicalized sibling arm rather than against another per-row one. The chip RANKED as identity is
-	 * exempt: since issue #164 it is named after the patient's own recorded allergen rather than after
-	 * whichever row of the substance raised it. What may occupy that KEY is no longer only that chip,
-	 * though — since issue #146 a self-named rule can, and a curated rule chip has always been labelled
-	 * from the row it is authored on, so a dataset filing one substance as several rows and authoring
-	 * the rule on a qualified one reports it under that qualifier
-	 * ({@code SelfNamedAllergyRuleFoldTest.aRuleOnALaterRowReplacesTheIdentityChipInPlace} pins exactly
-	 * that, at {@code Ibuprofen (tablets)}). The residue therefore reaches this key again, by the same
-	 * route the paragraph above describes rather than by a new one. The surviving chip is written back
-	 * into the position the group's first candidate took, so no client sees the chip sequence reshuffle
-	 * when a later, stronger row replaces an earlier one.
+	 * beside it. Ties keep the incumbent, so a group of equally-related rows is reported with the
+	 * dataset's first such row's CONTENT. The surviving chip is written back into the position the
+	 * group's first candidate took, so no client sees the chip sequence reshuffle when a later, stronger
+	 * row replaces an earlier one.
+	 *
+	 * <p><b>What the chip CALLS that substance is a separate question, and not a positional one (issue
+	 * #206).</b> It is {@link SubstanceSubjects} — {@link #interactionSubject} over the substance's rows,
+	 * the same answer the interaction chip (issue #162) and the dose warning (#174 site 4) get, resolved
+	 * once for the pass. This arm used to name the chip after whichever row reached it first, which
+	 * disagreed with those two for the shipped families whose route-unspecified row is not the dataset's
+	 * first, and — once issue #194 anchored them on the chart — wherever the chart names some other row,
+	 * i.e. on a property of the patient's data rather than of the dataset. Renaming, not re-counting:
+	 * every row of one substance answers {@link DrugReference#substanceGroupKey()} alike, so moving the
+	 * NAME to another row of the same group cannot move the key, which is why the subject is resolved
+	 * through {@link ContraindicationChips#subjectOf} and handed to {@link ContraindicationChips#add} as
+	 * the very row it keys on rather than resolved beside it.
+	 *
+	 * <p>The chip RANKED as identity is exempt, and stays named after the patient's own recorded
+	 * allergen (issue #164): that sentence quotes an allergy RECORD, and naming the row the chart records
+	 * is what makes a finding truthful — issue #187 settled it and #192 re-measured it at a charted
+	 * {@code Ketorolac (ophthalmic)} allergy the fold renames wrongly. Both are chart-anchored, on
+	 * different records; only the chips ASSERTING something about the drug being checked take the shared
+	 * subject.
 	 *
 	 * <p>Resolving a tie by position is lossless rather than merely tidier, and that rests on the rows
 	 * of one substance publishing the SAME ATC codes — which the shipped KB does for every group this
 	 * key merges, and which is the thing to re-measure before widening the key, since the class chip
 	 * names a code and a divergent row's code would be dropped unheard. Curated-group membership needs
 	 * no separate check: {@link CrossReactivityGroup#groupsOf} is a pure function of those same codes,
-	 * so equal codes are equal membership. What is left for a tie to choose between is then the route
-	 * qualifier in the subject's own label — and, since issue #146 put self-named rules in this space,
+	 * so equal codes are equal membership. What is left for a tie to choose between is then, since issue
+	 * #206 took the label out of its hands and issue #146 put self-named rules in this space,
 	 * one such rule's NOTE against another's, where an entry authors the same rule twice
 	 * ({@code ContraindicationRouteVariantTest.oneCuratedRuleAuthoredTwiceRaisesOneChip}, whose comment
 	 * records why the incumbent is the right survivor for a re-spelling and lossy for two genuinely
@@ -854,20 +905,41 @@ public class DrugSafetyValidator {
 
 		private final List<SafetyWarning> warnings;
 
+		private final SubstanceSubjects subjects;
+
 		private final Map<List<Object>, RaisedChip> raised = new LinkedHashMap<List<Object>, RaisedChip>();
 
-		ContraindicationChips(List<SafetyWarning> warnings) {
+		ContraindicationChips(List<SafetyWarning> warnings, SubstanceSubjects subjects) {
 			this.warnings = warnings;
+			this.subjects = subjects;
+		}
+
+		/**
+		 * @return the row {@code row}'s substance is NAMED by in this response — {@link SubstanceSubjects},
+		 *         the same answer the interaction and dose arms get (issue #206).
+		 *
+		 *         <p>Reached through this ledger rather than beside it so that the name and the KEY cannot
+		 *         come apart: {@link #add} keys on the subject it is handed, and a caller resolving the
+		 *         label from one row while keying on another is how a more precise resolver duplicates
+		 *         chips instead of renaming them.
+		 */
+		DrugReference subjectOf(DrugReference row) {
+			return subjects.of(row);
 		}
 
 		/**
 		 * Raise {@code chip} for {@code subject} about {@code finding}, unless a chip for that pair is
 		 * already raised — in which case the more specific {@code relationship} wins, in place.
+		 *
+		 * @param subject the row this chip NAMES, i.e. {@link #subjectOf}'s answer — so what the chip says
+		 *        and what the ledger counts are one substance's one representative
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip) {
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
-			// merge different sets of rows. Its javadoc is where the two key spaces are justified.
+			// merge different sets of rows. Its javadoc is where the two key spaces are justified. It is
+			// what keeps issue #206's resolved subject a RENAME: every row of one substance answers this
+			// alike, so choosing a different row of the group to name the chip after cannot move its key.
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
 			if (already == null) {
@@ -887,6 +959,13 @@ public class DrugSafetyValidator {
 		if (context == null) {
 			return;
 		}
+		// The row this response names ref's substance by (issue #206), which is not necessarily the row the
+		// RULE is authored on. Both readings are needed and they are different questions: the rule is a
+		// fact about the row that publishes it — which is what selfNamedAllergyRule and
+		// contraindicationFinding below keep asking ref, since a token naming a QUALIFIED row's own names
+		// says nothing about a sibling's — while what the chip CALLS the drug is a fact about the
+		// substance, and must be the one thing every arm calls it.
+		DrugReference subject = chips.subjectOf(ref);
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			boolean allergy = "allergy".equalsIgnoreCase(c.getType())
 					&& context.hasAllergyToken(c.getToken());
@@ -902,9 +981,9 @@ public class DrugSafetyValidator {
 					: ChartSearchAiUtils.isBlank(c.getNote())
 							? ContraindicationChips.SELF_NAMED_RULE_WITHOUT_A_NOTE
 							: ContraindicationChips.SELF_NAMED_RULE;
-			chips.add(ref, contraindicationFinding(ref, c), relationship,
-					new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-							ref.displayLabel() + " is contraindicated by an "
+			chips.add(subject, contraindicationFinding(ref, c), relationship,
+					new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
+							subject.displayLabel() + " is contraindicated by an "
 									+ (allergy ? "active allergy" : "active condition") + ": "
 									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
 		}
@@ -1045,15 +1124,15 @@ public class DrugSafetyValidator {
 	 * fallback), where nothing says which order contributed which code: there each code is its own
 	 * partner again and the two chips stand. {@code ClassChipPartnerLabelTest} pins both halves.
 	 */
-	private void addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> subjects,
-			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries,
-			InteractionPairs pairs) {
+	private void addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
+			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
+			List<DrugReference> orderEntries, InteractionPairs pairs) {
 		if (context == null) {
 			return;
 		}
-		DrugReference ref = interactionSubject(subjects, recordedDrugNames(context));
+		DrugReference ref = subjects.of(rows.get(0));
 		List<SubjectRule> rules = new ArrayList<SubjectRule>(
-				bestRulePerPartner(subjects, context, severityFloor, orderEntries));
+				bestRulePerPartner(rows, context, severityFloor, orderEntries));
 		// Which rule row carries which class sentence, decided before anything is emitted: the class
 		// arm is walked per active-order CO-MEDICATION (issue #171 — it used to walk per CODE, so a
 		// substance filed under several codes reached this loop once per code) while the chips are one
@@ -1146,12 +1225,15 @@ public class DrugSafetyValidator {
 	 * {@code mometasone}, Minor deferred over Moderate. {@code OneSubstanceOneRuleTest} pins that very
 	 * slice.
 	 *
-	 * <p>Only substances already in play gain rows: this map is keyed on the in-play groups and the
-	 * caller drains it while walking {@code inPlay}, so an order the question says nothing about still
-	 * raises nothing here (it is the screening arm's business). What the widening does change is that a
-	 * partner whose rule sits only on an order-resolved row now reaches a chip from this arm too —
-	 * the same chip the screen raises for the same pair, which is the point: the two arms must not
-	 * choose from different row sets.
+	 * <p>A substance ONLY the orders resolved gets a group of its own too, since issue #206 — the
+	 * order-driven contraindication arm ({@link #addActiveOrderContraindications}) subjects chips on
+	 * exactly those, and it has to call them what every other arm would. That does not put them in play:
+	 * the interaction and dose arms are drained by the caller as it walks {@code inPlay}, so a key no
+	 * in-play row reaches is never handed to them, and an order the question says nothing about still
+	 * raises no interaction chip here (it is the screening arm's business). What the #175 widening does
+	 * change is that a partner whose rule sits only on an order-resolved row now reaches a chip from
+	 * this arm too — the same chip the screen raises for the same pair, which is the point: the two arms
+	 * must not choose from different row sets.
 	 *
 	 * <p>In-play rows come FIRST and order rows after, so a full tie on {@link #outranks} keeps a row
 	 * the text actually named. It is still a per-{@code validate} local for issue #172's reason, and the
@@ -1162,9 +1244,13 @@ public class DrugSafetyValidator {
 		Map<Object, List<DrugReference>> groups = substanceRows(inPlay);
 		for (DrugReference ordered : orderEntries) {
 			List<DrugReference> rows = groups.get(ordered.substanceGroupKey());
+			if (rows == null) {
+				rows = new ArrayList<DrugReference>();
+				groups.put(ordered.substanceGroupKey(), rows);
+			}
 			// contains() is identity here — DrugReference defines no equals, and both sets are resolved
 			// against DrugReferenceService's shared getAll() cache, so one row is one object.
-			if (rows != null && !rows.contains(ordered)) {
+			if (!rows.contains(ordered)) {
 				rows.add(ordered);
 			}
 		}
@@ -2833,6 +2919,11 @@ public class DrugSafetyValidator {
 		// replaced (issue #164) rather than sitting beside it. It is also the key the ledger groups on, so
 		// a substance whose rows arrive from several call sites cannot raise one chip twice.
 		Object refSubstance = ref.substanceGroupKey();
+		// The row this response names that substance by (issue #206) — see addContraindications. The two
+		// CLASS comparisons below assert something about the drug being checked and so must call it what
+		// every other arm calls it; the identity chip does not and is exempt, for the reason recorded at
+		// its own branch.
+		DrugReference subject = chips.subjectOf(ref);
 		for (List<DrugReference> allergen : recordedAllergens) {
 			// Identity FIRST, over every substance the recorded name implies, and only then the class
 			// comparisons over the same set: precedence belongs to the recorded allergy as a whole, so a
@@ -2841,7 +2932,14 @@ public class DrugSafetyValidator {
 			// chip however many of the implied substances the subject is related to.
 			DrugReference sameSubstance = firstOfSameSubstance(allergen, refSubstance);
 			if (sameSubstance != null) {
-				chips.add(ref, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
+				// Named after the ALLERGEN ROW the chart resolved, not after the subject the other chips
+				// name (issue #164, and exempt from issue #206 deliberately). This sentence reports the
+				// patient's own allergy RECORD, and naming the row the chart records is what makes a
+				// finding truthful — issue #187 settled that and #192 re-measured it, at a charted
+				// `Ketorolac (ophthalmic)` allergy that the fold renames wrongly. So the two are anchored on
+				// the same kind of evidence and simply on different records of it: the class chips below
+				// assert something about the drug being CHECKED, this one quotes a record.
+				chips.add(subject, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION,
 								sameSubstance.displayLabel(), "The patient has a recorded allergy to "
 										+ sameSubstance.displayLabel() + "."));
@@ -2858,9 +2956,9 @@ public class DrugSafetyValidator {
 			for (DrugReference implied : allergen) {
 				String shared = sharedClass(refClasses, implied);
 				if (shared != null) {
-					chips.add(ref, implied.substanceGroupKey(), ContraindicationChips.SAME_CLASS,
-							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-									ref.displayLabel() + " is in the same ATC class (" + shared
+					chips.add(subject, implied.substanceGroupKey(), ContraindicationChips.SAME_CLASS,
+							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
+									subject.displayLabel() + " is in the same ATC class (" + shared
 											+ ") as the patient's allergy to " + implied.displayLabel()
 											+ " — possible cross-reactivity"));
 					chipped = true;
@@ -2873,9 +2971,9 @@ public class DrugSafetyValidator {
 			for (DrugReference implied : allergen) {
 				CrossReactivityGroup group = CrossReactivityGroup.sharedGroup(refGroups, implied);
 				if (group != null) {
-					chips.add(ref, implied.substanceGroupKey(), ContraindicationChips.SAME_GROUP,
-							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, ref.displayLabel(),
-									ref.displayLabel() + " is in the same cross-reactivity group ("
+					chips.add(subject, implied.substanceGroupKey(), ContraindicationChips.SAME_GROUP,
+							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
+									subject.displayLabel() + " is in the same cross-reactivity group ("
 											+ group.getName() + ") as the patient's allergy to "
 											+ implied.displayLabel() + " — possible cross-reactivity"));
 					break;
@@ -3987,17 +4085,18 @@ public class DrugSafetyValidator {
 	 * {@link DrugReference#namesNoRoute()}), so a second ceiling is a second guess, not a second
 	 * fact.
 	 */
-	private void addOverdose(List<SafetyWarning> warnings, List<DrugReference> subjects,
-			PatientClinicalContext context, String lowerAnswer, List<DrugReference> allEntries) {
-		// The same choice of representative row the interaction arms make, recorded names and all
-		// (issue #194): a dose warning and an interaction chip about ONE substance in ONE response must
-		// not call it two things, which is exactly the divergence anchoring only the interaction arms
-		// would have created.
-		DrugReference subject = interactionSubject(subjects, recordedDrugNames(context));
+	private void addOverdose(List<SafetyWarning> warnings, List<DrugReference> rows,
+			SubstanceSubjects subjects, PatientClinicalContext context, String lowerAnswer,
+			List<DrugReference> allEntries) {
+		// The same choice of representative row the other arms make, recorded names and all (issues #194,
+		// #206): a dose warning, an interaction chip and a contraindication chip about ONE substance in
+		// ONE response must not call it three things, which is exactly the divergence anchoring only some
+		// of them would have created.
+		DrugReference subject = subjects.of(rows.get(0));
 		if (addOverdose(warnings, subject, subject, context, lowerAnswer, allEntries)) {
 			return;
 		}
-		for (DrugReference row : subjects) {
+		for (DrugReference row : rows) {
 			if (row != subject && addOverdose(warnings, subject, row, context, lowerAnswer, allEntries)) {
 				return;
 			}

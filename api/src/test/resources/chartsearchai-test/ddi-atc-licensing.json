@@ -1,0 +1,530 @@
+{
+    "metadata": {
+        "schema_version": "1.0",
+        "title": "Test fixture: what an ATC subgroup's own published NAME licenses (issues #183, #184)",
+        "note": "Rows copied field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, in KB order, with interactions emptied so every assertion here is about contraindication chip TEXT. One pair per limb of the criterion: Chloramphenicol/Gentamicin share only purpose-headed subgroups (S01AA Antibiotics, S02AA/S03AA Antiinfectives) and no chemistry; Rifampicin/Capreomycin share only J04AB Antibiotics, which is purpose-headed and NOT inside a locally applied group; Eliglustat/Givosiran and Miglustat/Eliglustat share only A16AX, a residue whose ancestry is residue all the way to the anatomical main group. The controls: Ampicillin/Amoxicillin share J01CA (Penicillins with extended spectrum), Gentamicin/Tobramycin share J01GB (Other aminoglycosides, a residue under a chemically named parent), Loratadine/Ketotifen share R06AX (a residue under ANTIHISTAMINES FOR SYSTEMIC USE, a mechanism), and Fluorometholone/Dexamethasone share S01BA/C05AA (Corticosteroids) inside locally applied groups - all four name chemistry or a molecular target and keep their claim."
+    },
+    "mechanisms": {},
+    "drugs": [
+        {
+            "id": "DDInter351",
+            "name": "Chloramphenicol",
+            "rxcui": "2348",
+            "rxnorm_name": "chloramphenicol",
+            "drugbank_id": "DB00446",
+            "atc": [
+                "D06AX02",
+                "D10AF03",
+                "G01AA05",
+                "J01BA01",
+                "S01AA01",
+                "S02AA01",
+                "S03AA08"
+            ],
+            "ciel": [
+                {
+                    "code": "104168",
+                    "uuid": "104168AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chloramphenicol / hydrocortisone"
+                },
+                {
+                    "code": "104169",
+                    "uuid": "104169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chloramphenicol / hydrocortisone / polymyxin B"
+                },
+                {
+                    "code": "165446",
+                    "uuid": "165446AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chloramphenicol / sodium sulfacetamide"
+                },
+                {
+                    "code": "73239",
+                    "uuid": "73239AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chloramphenicol"
+                },
+                {
+                    "code": "73240",
+                    "uuid": "73240AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chloramphenicol palmitate"
+                },
+                {
+                    "code": "73241",
+                    "uuid": "73241AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chloramphenicol sodium succinate"
+                },
+                {
+                    "code": "73242",
+                    "uuid": "73242AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chloramphenicol stearate"
+                },
+                {
+                    "code": "73243",
+                    "uuid": "73243AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Chloramphenicol succinate"
+                }
+            ]
+        },
+        {
+            "id": "DDInter815",
+            "name": "Gentamicin",
+            "rxcui": "1596450",
+            "rxnorm_name": "gentamicin",
+            "drugbank_id": "DB00798",
+            "atc": [
+                "D06AX07",
+                "J01GB03",
+                "S01AA11",
+                "S02AA14",
+                "S03AA06"
+            ],
+            "ciel": [
+                {
+                    "code": "100",
+                    "uuid": "100AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Gentamicin"
+                },
+                {
+                    "code": "104706",
+                    "uuid": "104706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Gentamicin sulfate (usp) / hydrocortisone"
+                },
+                {
+                    "code": "104707",
+                    "uuid": "104707AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Gentamicin sulfate (usp) / prednisolone"
+                },
+                {
+                    "code": "168548",
+                    "uuid": "f5c7c86c-2b95-42d4-95f2-6d9e8949f39e",
+                    "name": "Dexamethasone / gentamicin"
+                },
+                {
+                    "code": "76942",
+                    "uuid": "76942AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Gentamicin sulfate (usp)"
+                }
+            ]
+        },
+        {
+            "id": "DDInter1822",
+            "name": "Tobramycin",
+            "rxcui": "10627",
+            "rxnorm_name": "tobramycin",
+            "drugbank_id": "DB00684",
+            "atc": [
+                "J01GB01",
+                "S01AA12"
+            ],
+            "ciel": [
+                {
+                    "code": "104426",
+                    "uuid": "104426AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone / tobramycin"
+                },
+                {
+                    "code": "104671",
+                    "uuid": "104671AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Fluorometholone / tobramycin"
+                },
+                {
+                    "code": "104997",
+                    "uuid": "104997AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Loteprednol etabonate / tobramycin"
+                },
+                {
+                    "code": "85185",
+                    "uuid": "85185AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Tobramycin"
+                },
+                {
+                    "code": "85186",
+                    "uuid": "85186AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Tobramycin sulfate"
+                }
+            ]
+        },
+        {
+            "id": "DDInter89",
+            "name": "Ampicillin",
+            "rxcui": "733",
+            "rxnorm_name": "ampicillin",
+            "drugbank_id": "DB00415",
+            "atc": [
+                "J01CA01",
+                "S01AA19"
+            ],
+            "ciel": [
+                {
+                    "code": "103572",
+                    "uuid": "103572AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ampicillin / sulbactam"
+                },
+                {
+                    "code": "294",
+                    "uuid": "294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ampicillin and cloxacillin"
+                },
+                {
+                    "code": "71188",
+                    "uuid": "71188AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ampicillin"
+                },
+                {
+                    "code": "71189",
+                    "uuid": "71189AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ampicillin (anhydrous)"
+                },
+                {
+                    "code": "71190",
+                    "uuid": "71190AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ampicillin sodium"
+                },
+                {
+                    "code": "71191",
+                    "uuid": "71191AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ampicillin trihydrate"
+                },
+                {
+                    "code": "84514",
+                    "uuid": "84514AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Sultamicillin tosylate"
+                }
+            ]
+        },
+        {
+            "id": "DDInter83",
+            "name": "Amoxicillin",
+            "rxcui": "723",
+            "rxnorm_name": "amoxicillin",
+            "drugbank_id": "DB01060",
+            "atc": [
+                "J01CA04"
+            ],
+            "ciel": [
+                {
+                    "code": "167977",
+                    "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+                    "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+                },
+                {
+                    "code": "167995",
+                    "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+                    "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+                },
+                {
+                    "code": "168005",
+                    "uuid": "48f1556f-56e3-41ed-a2ba-773fa4e6de14",
+                    "name": "Amoxicillin / floxacillin"
+                },
+                {
+                    "code": "168663",
+                    "uuid": "39559906-b467-47a7-abaa-499cf6b51562",
+                    "name": "Amoxicillin / clarithromycin / vonoprazan combination kit"
+                },
+                {
+                    "code": "450",
+                    "uuid": "450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Amoxicillin and clavulanic acid"
+                },
+                {
+                    "code": "71160",
+                    "uuid": "71160AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Amoxicillin"
+                },
+                {
+                    "code": "71161",
+                    "uuid": "71161AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Amoxicillin monosodium salt"
+                },
+                {
+                    "code": "71162",
+                    "uuid": "71162AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Amoxicillin trihydrate"
+                }
+            ]
+        },
+        {
+            "id": "DDInter629",
+            "name": "Eliglustat",
+            "rxcui": "1547220",
+            "rxnorm_name": "eliglustat",
+            "drugbank_id": "DB09039",
+            "atc": [
+                "A16AX10"
+            ],
+            "ciel": []
+        },
+        {
+            "id": "DDInter821",
+            "name": "Givosiran",
+            "rxcui": "2265712",
+            "rxnorm_name": "givosiran",
+            "drugbank_id": "DB15066",
+            "atc": [
+                "A16AX16"
+            ],
+            "ciel": []
+        },
+        {
+            "id": "DDInter1218",
+            "name": "Miglustat",
+            "rxcui": "402316",
+            "rxnorm_name": "miglustat",
+            "drugbank_id": "DB00419",
+            "atc": [
+                "A16AX06"
+            ],
+            "ciel": [
+                {
+                    "code": "79875",
+                    "uuid": "79875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Miglustat"
+                }
+            ]
+        },
+        {
+            "id": "DDInter1091",
+            "name": "Loratadine",
+            "rxcui": "28889",
+            "rxnorm_name": "loratadine",
+            "drugbank_id": "DB00455",
+            "atc": [
+                "R06AX13"
+            ],
+            "ciel": [
+                {
+                    "code": "104995",
+                    "uuid": "104995AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Loratadine / pseudoephedrine"
+                },
+                {
+                    "code": "79053",
+                    "uuid": "79053AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Loratadine"
+                }
+            ]
+        },
+        {
+            "id": "DDInter1012",
+            "name": "Ketotifen",
+            "rxcui": "6146",
+            "rxnorm_name": "ketotifen",
+            "drugbank_id": "DB00920",
+            "atc": [
+                "R06AX17",
+                "S01GX08"
+            ],
+            "ciel": [
+                {
+                    "code": "78485",
+                    "uuid": "78485AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ketotifen"
+                },
+                {
+                    "code": "78486",
+                    "uuid": "78486AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ketotifen fumarate"
+                }
+            ]
+        },
+        {
+            "id": "DDInter1590",
+            "name": "Rifampicin",
+            "rxcui": "9384",
+            "rxnorm_name": "rifampin",
+            "drugbank_id": "DB01045",
+            "atc": [
+                "J04AB02"
+            ],
+            "ciel": [
+                {
+                    "code": "104943",
+                    "uuid": "104943AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Isoniazid / rifampin"
+                },
+                {
+                    "code": "1131",
+                    "uuid": "1131AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Rifampicin isoniazid pyrazinamide and ethambutol"
+                },
+                {
+                    "code": "1194",
+                    "uuid": "1194AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Rifampicin and isoniazid"
+                },
+                {
+                    "code": "159851",
+                    "uuid": "159851AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Rifampicin isoniazid and ethambutol"
+                },
+                {
+                    "code": "767",
+                    "uuid": "767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Rifampicin"
+                },
+                {
+                    "code": "768",
+                    "uuid": "768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Isoniazid / pyrazinamide / rifampin"
+                }
+            ]
+        },
+        {
+            "id": "DDInter288",
+            "name": "Capreomycin",
+            "rxcui": "78903",
+            "rxnorm_name": "capreomycin",
+            "drugbank_id": "DB00314",
+            "atc": [
+                "J04AB30"
+            ],
+            "ciel": [
+                {
+                    "code": "72794",
+                    "uuid": "72794AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Capreomycin"
+                },
+                {
+                    "code": "72795",
+                    "uuid": "72795AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Capreomycin sulfate"
+                }
+            ]
+        },
+        {
+            "id": "DDInter755",
+            "name": "Fluorometholone",
+            "rxcui": "4491",
+            "rxnorm_name": "fluorometholone",
+            "drugbank_id": "DB00324",
+            "atc": [
+                "C05AA06",
+                "D07AB06",
+                "D07XB04",
+                "D10AA01",
+                "S01BA07",
+                "S01CB05"
+            ],
+            "ciel": [
+                {
+                    "code": "104670",
+                    "uuid": "104670AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Fluorometholone / sulfacetamide"
+                },
+                {
+                    "code": "104671",
+                    "uuid": "104671AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Fluorometholone / tobramycin"
+                },
+                {
+                    "code": "76545",
+                    "uuid": "76545AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Fluorometholone"
+                },
+                {
+                    "code": "76546",
+                    "uuid": "76546AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Fluorometholone acetate"
+                }
+            ]
+        },
+        {
+            "id": "DDInter513",
+            "name": "Dexamethasone",
+            "rxcui": "3264",
+            "rxnorm_name": "dexamethasone",
+            "drugbank_id": "DB01234",
+            "atc": [
+                "A01AC02",
+                "C05AA09",
+                "D07AB19",
+                "D07XB05",
+                "D10AA03",
+                "H02AB02",
+                "R01AD03",
+                "S01BA01",
+                "S01CB01",
+                "S02BA06",
+                "S03BA01"
+            ],
+            "ciel": [
+                {
+                    "code": "104317",
+                    "uuid": "104317AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Ciprofloxacin / dexamethasone"
+                },
+                {
+                    "code": "104422",
+                    "uuid": "104422AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone / hypromellose"
+                },
+                {
+                    "code": "104423",
+                    "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone / lidocaine"
+                },
+                {
+                    "code": "104424",
+                    "uuid": "104424AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone / neomycin"
+                },
+                {
+                    "code": "104425",
+                    "uuid": "104425AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone / neomycin / polymyxin B"
+                },
+                {
+                    "code": "104426",
+                    "uuid": "104426AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone / tobramycin"
+                },
+                {
+                    "code": "104427",
+                    "uuid": "104427AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone / tramazoline"
+                },
+                {
+                    "code": "168548",
+                    "uuid": "f5c7c86c-2b95-42d4-95f2-6d9e8949f39e",
+                    "name": "Dexamethasone / gentamicin"
+                },
+                {
+                    "code": "170697",
+                    "uuid": "d2a620d9-138d-4125-a84a-7ddbf3b2ee45",
+                    "name": "Dexamethasone / framycetin"
+                },
+                {
+                    "code": "74609",
+                    "uuid": "74609AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone"
+                },
+                {
+                    "code": "74610",
+                    "uuid": "74610AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone acetate"
+                },
+                {
+                    "code": "74612",
+                    "uuid": "74612AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone isonicotinate"
+                },
+                {
+                    "code": "74613",
+                    "uuid": "74613AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone phosphate"
+                },
+                {
+                    "code": "74614",
+                    "uuid": "74614AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone sodium phosphate"
+                },
+                {
+                    "code": "74615",
+                    "uuid": "74615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Dexamethasone trimethyl acetate"
+                }
+            ]
+        }
+    ],
+    "interactions": []
+}

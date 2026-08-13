@@ -3106,7 +3106,7 @@ public class DrugSafetyValidator {
 			}
 			boolean chipped = false;
 			for (DrugReference implied : allergen) {
-				String shared = sharedClass(refClasses, implied);
+				String shared = sharedCrossReactivityClass(refClasses, implied);
 				if (shared != null) {
 					chips.add(subject, implied.substanceGroupKey(), ContraindicationChips.SAME_CLASS,
 							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
@@ -3395,7 +3395,7 @@ public class DrugSafetyValidator {
 				// one over-skip is deliberate.
 				continue;
 			}
-			String shared = sharedClass(refClasses, DrugReference.atcSubgroups(partner.codes));
+			String shared = sharedTherapyClass(refClasses, DrugReference.atcSubgroups(partner.codes));
 			if (shared != null) {
 				out.put(partner, ref.displayLabel() + " is in the same ATC class (" + shared
 						+ ") as active order " + partner.label + " — possible duplicate therapy");
@@ -4082,10 +4082,40 @@ public class DrugSafetyValidator {
 		return out;
 	}
 
+	/** @return the ATC level-4 subgroup {@code other} shares with {@code refClasses} that best
+	 *          explains a CROSS-REACTIVITY concern between them, or null when they share none that
+	 *          may justify one. The choice and its rationale live on {@link #sharedClass}; this
+	 *          overload exists so the arm that holds a resolved ENTRY does not reduce it itself. */
+	private static String sharedCrossReactivityClass(Set<String> refClasses, DrugReference other) {
+		return sharedClass(refClasses, other.atcSubgroups(), true);
+	}
+
 	/**
-	 * @return the ATC level-4 subgroup {@code other} shares with {@code refClasses} that best explains
-	 *         a cross-reactivity concern between them — the one classifying the SUBSTANCE where they
-	 *         share one, else the locally-applied one they do share — or null when they share none.
+	 * The same choice over a bare code set, for the arm whose "other" is a CO-MEDICATION rather than a
+	 * resolved entry — the interaction arm compares an order's own ATC mappings, and the dataset need not
+	 * carry the substance they identify at all ({@link #classRelationships}). Since issue #228 that set
+	 * can instead be a reference row's own codes, for an order no dictionary classified; the choice made
+	 * over it is the same one either way, which is the point of it being made here.
+	 *
+	 * <p>One decision shared by the two arms rather than a scan in each (issue #171): the allergy arm
+	 * got the preference in issue #161/#166 and the interaction arm kept naming whichever code it
+	 * reached first, so one build could report a pair's topical subgroup as duplicate therapy and its
+	 * systemic one as cross-reactivity.
+	 *
+	 * <p>{@code otherSubgroups} must be level-4 SUBGROUPS, not full codes — everything here is compared
+	 * against {@code refClasses}, which holds subgroups, so a full code would silently match nothing
+	 * and the arm would report no relationship rather than fail. Callers reduce first, both through
+	 * {@link DrugReference#atcSubgroups(Set)}.
+	 */
+	private static String sharedTherapyClass(Set<String> refClasses, Set<String> otherSubgroups) {
+		return sharedClass(refClasses, otherSubgroups, false);
+	}
+
+	/**
+	 * @return the ATC level-4 subgroup the two code sets share that best explains the claim named by
+	 *         {@code crossReactivity} — the one classifying the SUBSTANCE where they share one, else
+	 *         the locally-applied one they do share — or null when they share none that may justify
+	 *         that claim at all.
 	 *
 	 * <p><b>The defect this exists to fix (issue #161).</b> This returned the first shared subgroup in
 	 * the allergen's own ATC array. Every array in the shipped 19 MB KB is in ascending code order
@@ -4128,7 +4158,15 @@ public class DrugSafetyValidator {
 	 * groups. In 70 pairs the systemic tier itself holds more than one candidate and the tie-break
 	 * between them is still alphabetical (issue #168, filed against the pre-correction count of 87);
 	 * both are true statements about the substance, so that is a choice between honest answers rather
-	 * than the defect above.
+	 * than the defect above. Issues #183/#184 narrow that population without closing it: counted over
+	 * SUBSTANCE pairs rather than the row pairs the figures above use — the two bases have not been
+	 * reconciled, so do not read one against the other — 20 pairs leave more than one candidate in the
+	 * systemic tier for the duplicate-therapy arm and 16 for the cross-reactivity arm, whose stronger
+	 * requirement removes four of them (measured 2026-08-13 by calling
+	 * {@link DrugReference#isLocallyAppliedAtcCode}, {@link DrugReference#isUnclassifyingAtcCode} and
+	 * {@link DrugReference#isPurposeOnlyAtcCode} over the shipped KB). Nothing in ATC's words breaks
+	 * the remainder: {@code H02CA} "Anticorticosteroids" and {@code J02AB} "Imidazole derivatives"
+	 * both name a class, so preferring one would be the unmeasured preference issue #161 refused.
 	 *
 	 * <p>Sorted rather than in the allergen's array order so the result is a function of the two code
 	 * SETS and not of the position a dataset happened to write a code in — what keeps a KB refresh that
@@ -4146,32 +4184,28 @@ public class DrugSafetyValidator {
 	 * another bucket that means nothing either. The caller then decides what "no shared class" implies:
 	 * both arms fall through to the curated cross-reactivity groups, which is the one class statement
 	 * this module makes from data a clinician curated rather than from a code.
-	 */
-	private static String sharedClass(Set<String> refClasses, DrugReference other) {
-		return sharedClass(refClasses, other.atcSubgroups());
-	}
-
-	/**
-	 * The same choice over a bare code set, for the arm whose "other" is a CO-MEDICATION rather than a
-	 * resolved entry — the interaction arm compares an order's own ATC mappings, and the dataset need not
-	 * carry the substance they identify at all ({@link #classRelationships}). Since issue #228 that set
-	 * can instead be a reference row's own codes, for an order no dictionary classified; the choice made
-	 * over it is the same one either way, which is the point of it being made here.
 	 *
-	 * <p>One decision shared by the two arms rather than a scan in each (issue #171): the allergy arm
-	 * got the preference in issue #161/#166 and the interaction arm kept naming whichever code it
-	 * reached first, so one build could report a pair's topical subgroup as duplicate therapy and its
-	 * systemic one as cross-reactivity.
+	 * <p><b>And how strong an assertion each ARM needs</b> (issues #183/#184). {@code crossReactivity}
+	 * decides only that, and nothing else: the preference between the surviving candidates — systemic
+	 * over locally applied, and sorted so the answer is a function of the two code SETS — is the same
+	 * either way and stays here, so it cannot come to differ between the arms. That was issue #171's
+	 * defect and it is not being re-introduced by the back door.
 	 *
-	 * <p>{@code otherSubgroups} must be level-4 SUBGROUPS, not full codes — everything here is compared
-	 * against {@code refClasses}, which holds subgroups, so a full code would silently match nothing
-	 * and the arm would report no relationship rather than fail. Callers reduce first, both through
-	 * {@link DrugReference#atcSubgroups(Set)}.
+	 * <p>A subgroup may justify a claim only as strong as what its own published name asserts. Naming
+	 * a purpose is enough to say two drugs duplicate one another and is not enough to say they
+	 * cross-react, so the cross-reactivity arm requires a subgroup that
+	 * {@link DrugReference#isPurposeOnlyAtcCode} does not recognise and the duplicate-therapy arm only
+	 * the weaker {@link DrugReference#isUnclassifyingAtcCode}. Refusing a subgroup does not drop the
+	 * claim: the scan continues, so a pair sharing both a purpose-headed and a chemically named
+	 * subgroup keeps its cross-reactivity claim under the second — which is why this narrowing costs
+	 * only the pairs that share nothing better. The impact of each list is measured on the list
+	 * itself.
 	 */
-	private static String sharedClass(Set<String> refClasses, Set<String> otherSubgroups) {
+	private static String sharedClass(Set<String> refClasses, Set<String> otherSubgroups,
+			boolean crossReactivity) {
 		String locallyApplied = null;
 		for (String subgroup : new TreeSet<String>(otherSubgroups)) {
-			if (!refClasses.contains(subgroup) || DrugReference.isUnclassifyingAtcCode(subgroup)) {
+			if (!refClasses.contains(subgroup) || !licensesClaim(subgroup, crossReactivity)) {
 				continue;
 			}
 			if (!DrugReference.isLocallyAppliedAtcCode(subgroup)) {
@@ -4182,6 +4216,14 @@ public class DrugSafetyValidator {
 			}
 		}
 		return locallyApplied;
+	}
+
+	/** @return whether {@code subgroup} asserts enough to justify the claim being made — chemistry or
+	 *          a molecular target for a cross-reactivity claim, any classifying property at all for a
+	 *          duplicate-therapy one. The one place the two arms differ. */
+	private static boolean licensesClaim(String subgroup, boolean crossReactivity) {
+		return crossReactivity ? !DrugReference.isPurposeOnlyAtcCode(subgroup)
+				: !DrugReference.isUnclassifyingAtcCode(subgroup);
 	}
 
 	/**

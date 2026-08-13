@@ -3016,9 +3016,11 @@ public class DrugSafetyValidator {
 	 * only that co-medication: a class sibling the patient also happens to be on is exactly the
 	 * finding this arm exists to make, so the question is asked per PARTNER. Where the dataset cannot
 	 * name a co-medication and the ORDER names it, what the order names is what it IS, so a
-	 * fixed-dose combination counts as each of its constituents. Active orders carry ATC codes (the builder maps them), so this
-	 * matches on codes directly and names the order by the ladder {@link #orderPartners} documents —
-	 * the dataset's name for the substance, else the order's own display name, else the code (issue
+	 * fixed-dose combination counts as each of its constituents. The comparison is on ATC codes
+	 * throughout — an order's own where a dictionary published them and the dataset's for the substance
+	 * an unmapped order NAMES (issue #228) — and the order is named by the ladder
+	 * {@link #orderPartners} documents: the dataset's name for the substance, else the order's own
+	 * display name, else the code (issue
 	 * #155). The most specific match wins, so a subgroup + group double-match warns once — except
 	 * where the shared subgroup is one {@link DrugReference#isUnclassifyingAtcCode} vetoes, which is
 	 * not a match at all and lets the group answer (issue #167).
@@ -3083,8 +3085,9 @@ public class DrugSafetyValidator {
 	 * mappings in.
 	 *
 	 * @return the class relationship sentence for each active-order partner that has one, keyed by that
-	 *         partner, in partner FIRST-APPEARANCE order over the context's codes; empty when the drug
-	 *         is in no class or group at all.
+	 *         partner, in partner FIRST-APPEARANCE order over the context's codes and then over the
+	 *         orders none of those codes reached (issue #228); empty when the drug is in no class or
+	 *         group at all.
 	 *         <p>Not the same as the per-code order this returned before issue #171, and the difference
 	 *         is observable: a partner whose first code shares nothing now sorts by that first code
 	 *         rather than by the code that produced its sentence, so it can precede a partner that the
@@ -3163,6 +3166,17 @@ public class DrugSafetyValidator {
 		 * second — {@code Metronidazole and secnidazole} losing "Metronidazole is in the same ATC
 		 * class (P01AB) as active order Secnidazole".
 		 *
+		 * <p><b>And its own key on the rung issue #228 added</b>, which is the same rule read the other
+		 * way. A partner reached from an order's NAME rather than from a code is a partner the dataset
+		 * named, so it stands for exactly one substance and holds exactly that one — never the rest of
+		 * the tablet, or a question about one constituent of an unmapped combination would lose the chip
+		 * naming the other, which is the loss the paragraph above describes. It is held explicitly rather
+		 * than left to the exact-code leg beside it because that leg answers only while every row of a
+		 * substance publishes the same ATC list, which is a DATA invariant of the shipped KB (see
+		 * {@link DrugSafetyValidator#addInteractionWarnings}) and not something this arm enforces: a
+		 * refresh that gave one route variant a code its siblings lack would otherwise report a drug as
+		 * duplicating the patient's own order of it, which is issue #185 arriving by a new route.
+		 *
 		 * <p><b>The names, and not also the entry the ladder resolved.</b> That entry's substance is
 		 * already what the skip's exact-code leg answers, and equivalently so: a row of it publishes
 		 * the code that resolved it, and every row of one substance in the shipped KB publishes the
@@ -3224,7 +3238,8 @@ public class DrugSafetyValidator {
 
 	/**
 	 * The patient's co-medications as the class arm sees them: every active-order ATC code, grouped by
-	 * the co-medication it identifies, in first-appearance order.
+	 * the co-medication it identifies, followed by the orders no such code reached at all
+	 * ({@link #addPartnersForUnmappedOrders}, issue #228) — each in first-appearance order.
 	 *
 	 * <p><b>The identity ladder</b>, best evidence first, applied PER CODE. The dataset's own entry for
 	 * the code where it has one, keyed by {@link DrugReference#substanceGroupKey()} so a substance filed
@@ -3253,6 +3268,13 @@ public class DrugSafetyValidator {
 	 * exactly the case {@link #soleSubstanceOf} answers null for, so its uncovered codes stay on the
 	 * order rung: with two substances in one tablet there is no evidence which of them an uncovered
 	 * code belongs to, and the order is the honest answer.
+	 *
+	 * <p><b>The ladder is only reached by an order the dictionary CLASSIFIED</b>, which is the whole of
+	 * what issue #228 added and is a leg rather than a rung: it is walked per CODE, so an order mapped to
+	 * no code entered nowhere on it and the arm was blind to that prescription entirely. Such orders are
+	 * resolved afterwards, by name, in {@link #addPartnersForUnmappedOrders} — which is where the
+	 * scoping, the naming and the deliberate asymmetry with this loop are recorded. Nothing here changes:
+	 * an order this loop walks is grouped, named and skipped exactly as before.
 	 *
 	 * <p><b>Where the ladder still does not hold its promise.</b> The builder's KNOWN GAP: a nameless
 	 * order reaches {@link PatientClinicalContext#getActiveDrugAtcCodes()} without reaching
@@ -3304,16 +3326,17 @@ public class DrugSafetyValidator {
 		// Per-CALL memos, never fields. Each covers a dataset sweep this loop would otherwise repeat:
 		// entryForAtcCode is a full scan of getAll() and the rung added by issue #186 asks it once per
 		// code of an order as well as once per code of the context, so without the first two a
-		// partly-covered order rescans the dataset for every code it carries; substancesNamedBy is a
-		// resolution of every name of an order and issue #185 asks it once per UNNAMEABLE code. A
+		// partly-covered order rescans the dataset for every code it carries; substanceRowsNamedBy is a
+		// resolution of every name of an order and issue #185 asks it once per UNNAMEABLE code while
+		// issue #228's leg asks it once per unmapped order. A
 		// field would be issue #172's trap — a memoised DrugReference outliving a getAll() hot-reload
 		// fails the reference comparisons the contraindication arms make, silently re-opening issue
 		// #145 — and the third memo holds substanceGroupKey() values, which can BE a DrugReference.
 		Map<String, DrugReference> entryByCode = new LinkedHashMap<String, DrugReference>();
 		Map<PatientClinicalContext.ActiveDrugOrder, DrugReference> substanceByOrder =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, DrugReference>();
-		Map<PatientClinicalContext.ActiveDrugOrder, Set<Object>> substancesByOrderName =
-				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, Set<Object>>();
+		Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, DrugReference>> substancesByOrderName =
+				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, Map<Object, DrugReference>>();
 		for (String orderCode : context.getActiveDrugAtcCodes()) {
 			DrugReference entry = entryForAtcCode(orderCode, entryByCode);
 			PatientClinicalContext.ActiveDrugOrder order = null;
@@ -3363,7 +3386,89 @@ public class DrugSafetyValidator {
 			}
 			partner.codes.add(orderCode);
 		}
+		addPartnersForUnmappedOrders(byIdentity, context, substancesByOrderName);
 		return new ArrayList<OrderPartner>(byIdentity.values());
+	}
+
+	/**
+	 * The co-medications the loop above could not see at all: those of the patient's active orders whose
+	 * concept the dictionary mapped to no ATC code the context carries, resolved by the ORDER'S NAME
+	 * instead and added to {@code byIdentity} as partners of their own (issue #228).
+	 *
+	 * <p><b>The defect this closes.</b> That loop walks {@link PatientClinicalContext#getActiveDrugAtcCodes()}
+	 * and nothing else, so a patient's co-medications were exactly the subset of her prescriptions a
+	 * concept DICTIONARY happened to classify. An order carrying no {@code WHOATC} map produced no
+	 * partner and the whole duplicate-therapy arm was unreachable for it, however well the loaded
+	 * reference data knows that drug — silently, with no chip and no log line to separate "no duplicate
+	 * therapy" from "could not look". Measured on the 3.7.1 standalone (2026-08-13, by SQL applying the
+	 * predicate {@link PatientClinicalContextBuilder}'s {@code addAtcCodes} applies — a
+	 * concept-reference-source name containing {@code ATC}): <b>27 of its 43 active drug orders</b> carry
+	 * no ATC code, while {@link DrugReference#normalizedAtcCodes()} over the real
+	 * {@link DdiDrugReferenceSource} parse of the 19 MB KB publishes codes for 1839 of its 2283 entries.
+	 * The sparsity is the dictionary's, never the reference data's — the same key mismatch issue #151
+	 * fixed one layer over, where the injector decided an order's relevance from the ENTRY's codes and
+	 * its membership from the ORDER's.
+	 *
+	 * <p><b>Which orders</b>: the complement of what the loop walked, computed from what it walked rather
+	 * than from a proxy for it — an order none of whose codes is in the set above contributed no code to
+	 * it and so produced no partner there. That is every order the dictionary mapped to nothing, and also
+	 * the shape a context assembled from an order list and a narrower flattened set can hold. An order
+	 * the loop DID walk is left alone completely, whatever it resolved to: how a partly-covered order is
+	 * grouped and named is issue #186's answer, and this arm's own reachability is not a reason to
+	 * re-open it.
+	 *
+	 * <p><b>Through {@link DrugReferenceService#findImpliedByDrugName}</b>, inside
+	 * {@link #substanceRowsNamedBy}, which is the ranked accessor for a recorded drug NAME and the same
+	 * resolution {@link DrugReferenceService#findForActiveOrders} — the list the chip layer already
+	 * screens and the injector already takes — resolves its own name leg with. One resolution behind two
+	 * views, so this arm and that list cannot come to disagree about which of the patient's prescriptions
+	 * the reference data covers. Never the unranked matcher underneath it: this decides which chips are
+	 * SILENCED as well as which are raised, and unranked it reaches a second substance (issue #209).
+	 *
+	 * <p><b>Named and classified by the dataset, both.</b> The label is the entry's, by
+	 * {@link DrugReference#canonicalRow}, which is issue #155's ladder taken at its first rung — the
+	 * dataset HAS a name for this substance, so the chip reads the same "as active order Dexamethasone"
+	 * whether or not a dictionary classified the concept, which is the property this fix is for. The
+	 * codes are the entry's for the same reason and because there is no alternative: the order published
+	 * none, so what the reference data files the substance under is the only classification there is.
+	 *
+	 * <p>That last point is an ASYMMETRY with the loop above, and it is worth stating rather than
+	 * discovering: a partner the dictionary mapped is compared on the codes the DICTIONARY published for
+	 * it, which can be a proper subset of the substance's, while a partner reached here is compared on
+	 * every code the dataset files it under. So a partly-mapped order can still be blind to a subgroup an
+	 * unmapped one would see. Widening the first to match would change chips this issue is not about, and
+	 * is the narrower gap left open deliberately.
+	 *
+	 * <p>The entry's CANONICAL row alone, not every row of its substance — the same choice
+	 * {@link #entryForAtcCode} makes for the same arm, and lossless on the same DATA invariant recorded
+	 * at {@link #addInteractionWarnings}: every row of a substance in the shipped KB publishes the same
+	 * ATC list. What does not rest on that invariant is the self-skip, which is held explicitly — see
+	 * {@link OrderPartner#substances}.
+	 *
+	 * <p><b>Appended after the code walk</b>, so every chip this arm already raised keeps its position and
+	 * a newly-reachable co-medication sorts after the ones a dictionary classified. A substance the walk
+	 * already produced a partner for is skipped outright: two orders of one substance are ONE
+	 * co-medication (issue #186) whether they resolved by code or by name, and the partner that exists
+	 * already carries the dictionary's own attribution.
+	 */
+	private void addPartnersForUnmappedOrders(Map<Object, OrderPartner> byIdentity,
+			PatientClinicalContext context,
+			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, DrugReference>> namedRows) {
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (!Collections.disjoint(order.getAtcCodes(), context.getActiveDrugAtcCodes())) {
+				continue;
+			}
+			for (Map.Entry<Object, DrugReference> named : substanceRowsNamedBy(order, namedRows).entrySet()) {
+				if (byIdentity.containsKey(named.getKey())) {
+					continue;
+				}
+				OrderPartner partner = new OrderPartner(named.getValue().displayLabel(), false);
+				partner.codes.addAll(named.getValue().normalizedAtcCodes());
+				// This partner IS this substance, so restating it is not duplicating it.
+				partner.substances.add(named.getKey());
+				byIdentity.put(named.getKey(), partner);
+			}
+		}
 	}
 
 	/**
@@ -3405,25 +3510,49 @@ public class DrugSafetyValidator {
 	 *         sharing one unnameable code make the skip a function of the sequence
 	 *         {@code OrderService} returned the prescriptions in.
 	 *
-	 *         <p>Memoised through {@code cache} for the duration of one {@link #orderPartners} call:
-	 *         this is a dataset sweep per name, and an order with several unnameable codes asks it
-	 *         once per such code — see there for why the memo may not be a field. An empty set is a
-	 *         real answer and is cached as one.
+	 *         <p>The keys of {@link #substanceRowsNamedBy}, which is where the resolution and its memo
+	 *         live: a suppression needs only the identities, while issue #228's leg needs the rows too,
+	 *         and resolving one order's names twice for the two of them is the split issue #151 exists
+	 *         to warn about.
 	 */
 	private Set<Object> substancesNamedBy(PatientClinicalContext.ActiveDrugOrder order,
-			Map<PatientClinicalContext.ActiveDrugOrder, Set<Object>> cache) {
-		Set<Object> cached = cache.get(order);
+			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, DrugReference>> cache) {
+		return substanceRowsNamedBy(order, cache).keySet();
+	}
+
+	/**
+	 * @return the substances {@code order}'s own recorded names imply, each mapped to the row that NAMES
+	 *         it ({@link DrugReference#canonicalRow}), in first-appearance order — the resolution
+	 *         {@link #substancesNamedBy} projects the keys of and issue #228's leg reads whole, because
+	 *         a partner reached from a name needs the row as well as the identity: the dataset's label
+	 *         for the chip and the dataset's codes to compare classes on.
+	 *
+	 *         <p>ONE resolution behind both views rather than a second walk of the same names for the
+	 *         second view — the rule issue #151 settled one layer over, where two derivations of "which
+	 *         orders does this patient have" disagreed silently and in one direction. Everything
+	 *         {@link #substancesNamedBy}'s accessor choice decides therefore binds both callers by
+	 *         construction.
+	 *
+	 *         <p>Memoised through {@code cache} for the duration of one {@link #orderPartners} call:
+	 *         this is a dataset sweep per name, and an order with several unnameable codes asks it
+	 *         once per such code — see there for why the memo may not be a field. An empty answer is a
+	 *         real one and is cached as such.
+	 */
+	private Map<Object, DrugReference> substanceRowsNamedBy(PatientClinicalContext.ActiveDrugOrder order,
+			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, DrugReference>> cache) {
+		Map<Object, DrugReference> cached = cache.get(order);
 		if (cached != null) {
 			return cached;
 		}
-		Set<Object> substances = new LinkedHashSet<Object>();
+		Map<Object, DrugReference> rows = new LinkedHashMap<Object, DrugReference>();
 		for (String name : order.getNames()) {
 			for (DrugReference row : drugReferenceService.findImpliedByDrugName(name)) {
-				substances.add(row.substanceGroupKey());
+				Object substance = row.substanceGroupKey();
+				rows.put(substance, DrugReference.canonicalRow(rows.get(substance), row));
 			}
 		}
-		cache.put(order, substances);
-		return substances;
+		cache.put(order, rows);
+		return rows;
 	}
 
 	/**

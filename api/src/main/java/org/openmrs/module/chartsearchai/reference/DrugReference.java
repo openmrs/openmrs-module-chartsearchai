@@ -831,7 +831,7 @@ public class DrugReference {
 	 *         them at all, which is a different answer from "known to mean nothing".
 	 *         <p>Package-private for the same reason as its siblings: it is a rule about ATC's own
 	 *         group names, not a fact about a substance. Two callers since issue #183 —
-	 *         {@code DrugSafetyValidator.licensesClaim} for the duplicate-therapy arm, and
+	 *         {@code DrugSafetyValidator.justifiesClaim} for the duplicate-therapy arm, and
 	 *         {@link #isPurposeOnlyAtcCode}, which subsumes it for the cross-reactivity one.
 	 */
 	static boolean isUnclassifyingAtcCode(String code) {
@@ -912,7 +912,7 @@ public class DrugReference {
 	 *         nothing cannot assert a purpose either, so refusing it for duplicate therapy while
 	 *         admitting it for cross-reactivity would have the two arms disagree about which claim is
 	 *         the stronger one. {@code AtcCrossReactivityLicensingTest} pins that ordering.
-	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.licensesClaim}) for the
+	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.justifiesClaim}) for the
 	 *         same reason as its siblings: it is a rule about ATC's own group names, not a fact about a
 	 *         substance.
 	 */

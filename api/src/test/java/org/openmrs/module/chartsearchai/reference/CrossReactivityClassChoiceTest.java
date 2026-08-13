@@ -233,7 +233,7 @@ public class CrossReactivityClassChoiceTest {
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
 				"Is neomycin safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null, null,
-						null, Collections.singletonList(order(service, "Kanamycin"))));
+						null, Collections.singletonList(DrugReferenceTestSupport.activeOrderFor(service, "Kanamycin"))));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
 		assertEquals("Neomycin is in the same ATC class (J01GB) as active order"
@@ -261,7 +261,7 @@ public class CrossReactivityClassChoiceTest {
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
 				"Is chlorhexidine safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null,
-						null, null, Collections.singletonList(order(service, "Neomycin"))));
+						null, null, Collections.singletonList(DrugReferenceTestSupport.activeOrderFor(service, "Neomycin"))));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
 		assertEquals("Chlorhexidine is in the same ATC class (A01AB) as active order"
@@ -304,17 +304,6 @@ public class CrossReactivityClassChoiceTest {
 				"the same chip the ascending fixture produces");
 	}
 
-	/** One active drug order for the named fixture row, carrying the ATC codes that row publishes —
-	 *  the shape {@code PatientClinicalContextBuilder} builds for a mapped concept, and the only shape
-	 *  the duplicate-therapy arm reads. Codes come off the fixture through the production accessor
-	 *  rather than being copied, so the order and the entry cannot come to disagree. */
-	private static PatientClinicalContext.ActiveDrugOrder order(DrugReferenceService service,
-			String name) {
-		DrugReference entry = service.lookupByToken(name);
-		assertNotNull(entry, name + " must resolve");
-		return DrugReferenceTestSupport.activeOrder("i183-" + name, name,
-				DrugReferenceTestSupport.set(name), entry.normalizedAtcCodes());
-	}
 
 	/** The subgroups {@code question}'s entry shares with {@code allergen}, sorted, through the
 	 *  production resolver and the production accessor the arm compares with. A set intersection

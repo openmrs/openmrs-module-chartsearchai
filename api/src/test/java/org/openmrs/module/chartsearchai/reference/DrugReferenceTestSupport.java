@@ -357,6 +357,20 @@ public final class DrugReferenceTestSupport {
 		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, names, atcCodes);
 	}
 
+	/**
+	 * One active drug order for the named entry of {@code service}, carrying the ATC codes that entry
+	 * publishes — the shape {@link PatientClinicalContextBuilder} builds for a MAPPED concept, and the
+	 * only shape the duplicate-therapy arm reads. Codes are read off the loaded dataset through the
+	 * production accessor rather than copied into the case, so an order and the entry it stands for
+	 * cannot come to disagree when a fixture is edited.
+	 */
+	static PatientClinicalContext.ActiveDrugOrder activeOrderFor(DrugReferenceService service,
+			String name) {
+		DrugReference entry = service.lookupByToken(name);
+		assertNotNull(entry, name + " must resolve before it can be an active order");
+		return activeOrder("order-" + name, name, set(name), entry.normalizedAtcCodes());
+	}
+
 	/** A service over the real bundled datasets (classpath fallback — the production default path). */
 	static DrugReferenceService bundledService() {
 		return new DrugReferenceService();

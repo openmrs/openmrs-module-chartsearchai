@@ -4106,11 +4106,7 @@ public class DrugSafetyValidator {
 	 * got the preference in issue #161/#166 and the interaction arm kept naming whichever code it
 	 * reached first, so one build could report a pair's topical subgroup as duplicate therapy and its
 	 * systemic one as cross-reactivity.
-	 *
-	 * <p>{@code otherSubgroups} must be level-4 SUBGROUPS, not full codes — everything here is compared
-	 * against {@code refClasses}, which holds subgroups, so a full code would silently match nothing
-	 * and the arm would report no relationship rather than fail. Callers reduce first, both through
-	 * {@link DrugReference#atcSubgroups(Set)}.
+
 	 */
 	private static String sharedTherapyClass(Set<String> refClasses, Set<String> otherSubgroups) {
 		return sharedClass(refClasses, otherSubgroups, false);
@@ -4220,12 +4216,19 @@ public class DrugSafetyValidator {
 	 * subgroup keeps its cross-reactivity claim under the second — which is why this narrowing costs
 	 * only the pairs that share nothing better. The impact of each list is measured on the list
 	 * itself.
+	 *
+	 * <p>{@code otherSubgroups} must be level-4 SUBGROUPS, not full codes — everything here is compared
+	 * against {@code refClasses}, which holds subgroups, so a full code would silently match nothing
+	 * and the method would report no relationship rather than fail. Both entries satisfy that
+	 * differently and neither may stop doing so: {@link #sharedTherapyClass}'s callers reduce first
+	 * through {@link DrugReference#atcSubgroups(Set)}, while {@link #sharedCrossReactivityClass}
+	 * reduces internally off the entry it is handed.
 	 */
 	private static String sharedClass(Set<String> refClasses, Set<String> otherSubgroups,
 			boolean crossReactivity) {
 		String locallyApplied = null;
 		for (String subgroup : new TreeSet<String>(otherSubgroups)) {
-			if (!refClasses.contains(subgroup) || !licensesClaim(subgroup, crossReactivity)) {
+			if (!refClasses.contains(subgroup) || !justifiesClaim(subgroup, crossReactivity)) {
 				continue;
 			}
 			if (!DrugReference.isLocallyAppliedAtcCode(subgroup)) {
@@ -4241,7 +4244,7 @@ public class DrugSafetyValidator {
 	/** @return whether {@code subgroup} asserts enough to justify the claim being made — chemistry or
 	 *          a molecular target for a cross-reactivity claim, any classifying property at all for a
 	 *          duplicate-therapy one. The one place the two arms differ. */
-	private static boolean licensesClaim(String subgroup, boolean crossReactivity) {
+	private static boolean justifiesClaim(String subgroup, boolean crossReactivity) {
 		return crossReactivity ? !DrugReference.isPurposeOnlyAtcCode(subgroup)
 				: !DrugReference.isUnclassifyingAtcCode(subgroup);
 	}

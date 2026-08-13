@@ -109,7 +109,7 @@ public class AtcCrossReactivityLicensingTest {
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
 				"Is it safe to give gentamicin?", DrugReferenceTestSupport.ctx(60, null, null, null,
-						null, null, Collections.singletonList(order(service, "Chloramphenicol"))));
+						null, null, Collections.singletonList(DrugReferenceTestSupport.activeOrderFor(service, "Chloramphenicol"))));
 
 		assertEquals("[Gentamicin is in the same ATC class (S01AA) as active order Chloramphenicol"
 				+ " — possible duplicate therapy]",
@@ -144,7 +144,7 @@ public class AtcCrossReactivityLicensingTest {
 		assertEquals("[]", DrugReferenceTestSupport.details(DrugReferenceTestSupport.validator(service)
 				.validate("", "Is it safe to give givosiran?",
 						DrugReferenceTestSupport.ctx(60, null, null, null, null, null,
-								Collections.singletonList(order(service, "Eliglustat"))))).toString(),
+								Collections.singletonList(DrugReferenceTestSupport.activeOrderFor(service, "Eliglustat"))))).toString(),
 				"and none to duplicate either — unlike the purpose-headed case above, which keeps its "
 						+ "duplicate-therapy chip");
 	}
@@ -239,7 +239,7 @@ public class AtcCrossReactivityLicensingTest {
 				DrugReferenceTestSupport.details(DrugReferenceTestSupport.validator(service).validate(
 						"", "Is it safe to give clotrimazole?",
 						DrugReferenceTestSupport.ctx(60, null, null, null, null, null,
-								Collections.singletonList(order(service, "Miconazole"))))).toString(),
+								Collections.singletonList(DrugReferenceTestSupport.activeOrderFor(service, "Miconazole"))))).toString(),
 				"while the duplicate-therapy claim keeps the purpose-named class it is actually about");
 	}
 
@@ -277,17 +277,6 @@ public class AtcCrossReactivityLicensingTest {
 		}
 	}
 
-	/** One active drug order for the named fixture row, carrying the ATC codes that row publishes —
-	 *  the shape {@code PatientClinicalContextBuilder} builds for a mapped concept, and the only shape
-	 *  the duplicate-therapy arm reads. Codes are read off the fixture through the production accessor
-	 *  rather than copied, so the order and the entry cannot come to disagree. */
-	private static PatientClinicalContext.ActiveDrugOrder order(DrugReferenceService service,
-			String name) {
-		DrugReference entry = service.lookupByToken(name);
-		assertNotNull(entry, name + " must resolve");
-		return DrugReferenceTestSupport.activeOrder("i183-" + name, name,
-				DrugReferenceTestSupport.set(name), entry.normalizedAtcCodes());
-	}
 
 	/** The subgroups two fixture rows share, sorted, through the production resolver and the
 	 *  production accessor the arms compare with. */

@@ -178,7 +178,7 @@ class QueryStoreChartBuilder {
 	 * that got as far as resolving it, degraded empties included, so the audit row names the mode
 	 * that was in force even when the chart came back empty.
 	 *
-	 * <p>Taken from the {@code usePreFilter} this method already dispatched on, not a second read,
+	 * <p>Taken from the {@code usePreFilter} {@link #build} already dispatched on, not a second read,
 	 * so the stamp and the {@code mode=} label above can only ever say the same thing.
 	 *
 	 * <p>The null-patient guard returns before that resolution — the case this class labels

@@ -14,13 +14,20 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 
 /**
- * Answers natural language questions about a patient's chart using a local LLM.
- * When {@code chartsearchai.embedding.preFilter} is {@code true} (default), uses
- * embedding similarity to narrow records to the most relevant ones before sending
- * them to the LLM. Set to {@code false} to send the full patient chart instead.
+ * Answers natural language questions about a patient's chart using an LLM.
+ *
+ * <p>How the prompt's chart context is assembled is decided by {@code chartsearchai.chartMode}
+ * (default {@code queryScoped} — a query-scoped slice, not the whole chart) and, within
+ * {@code fullChart}, by {@code chartsearchai.embedding.preFilter} (default {@code false}), which
+ * appends a similarity focus hint rather than narrowing anything. {@link ChartAnswer#getSearchMode()}
+ * reports which of the three produced a given answer. This paragraph replaced one that described a
+ * default-on pre-filter narrowing the chart — machinery removed with the querystore migration
+ * (issue #51) and a default that has been {@code false} since before it; the correction belongs with
+ * issue #178, which is what a reader trusting the old sentence would have got wrong.
  */
 public interface ChartSearchService {
 
@@ -298,7 +305,7 @@ public interface ChartSearchService {
 
 		/**
 		 * How the prompt's chart context was assembled for this answer — one of the
-		 * {@code ChartSearchAiConstants.SEARCH_MODE_*} values, and what the audit log's
+		 * {@link ChartSearchAiConstants}{@code .SEARCH_MODE_*} values, and what the audit log's
 		 * {@code search_mode} column records.
 		 *
 		 * <p>The producer states it, so the consumer derives nothing: issue #178 was the REST layer
@@ -307,14 +314,12 @@ public interface ChartSearchService {
 		 * belongs on the answer because the answer is what a chart mode produced; anything that
 		 * re-reads a global property afterwards can disagree with the read that built the chart.
 		 *
-		 * @return the mode, never null — {@code ChartSearchAiConstants.SEARCH_MODE_UNKNOWN} when the
+		 * @return the mode, never null — {@link ChartSearchAiConstants#SEARCH_MODE_UNKNOWN} when the
 		 *         producer stated none, so a caller writing a NOT NULL column has a value and no
 		 *         caller has to invent one
 		 */
 		public String getSearchMode() {
-			return searchMode == null
-					? org.openmrs.module.chartsearchai.ChartSearchAiConstants.SEARCH_MODE_UNKNOWN
-					: searchMode;
+			return searchMode == null ? ChartSearchAiConstants.SEARCH_MODE_UNKNOWN : searchMode;
 		}
 	}
 

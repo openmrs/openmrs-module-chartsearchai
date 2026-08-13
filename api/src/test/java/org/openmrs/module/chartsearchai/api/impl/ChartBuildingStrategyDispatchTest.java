@@ -100,7 +100,7 @@ public class ChartBuildingStrategyDispatchTest {
 	}
 
 	@Test
-	public void searchModeLabel_shouldNameTheModeTheDispatchChose_onTheChartBuildChartReturned() {
+	public void searchModeLabel_shouldNameTheModeTheDispatchChose_onTheChartReturnedByBuildChart() {
 		// Issue #178: the audit row's mode is read off the chart's stamps, so buildChart has to hand
 		// the builder's chart back untouched. It does today — but this class exists precisely because
 		// a change here (a defensive copy, a rewrap) would pass every other test and only surface in
@@ -109,17 +109,20 @@ public class ChartBuildingStrategyDispatchTest {
 		CountingBuilder scopedBuilder = new CountingBuilder();
 		TestableStrategy scoped = new TestableStrategy(scopedBuilder, true);
 		assertEquals(ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED,
-				scoped.searchModeLabel(scoped.buildChart(patient(), "any allergies?")));
+				scoped.searchModeLabel(scoped.buildChart(patient(), "any allergies?")),
+				"a scoped dispatch must label the row scoped");
 
 		CountingBuilder plainBuilder = new CountingBuilder();
 		TestableStrategy plain = new TestableStrategy(plainBuilder, false);
 		assertEquals(ChartSearchAiConstants.SEARCH_MODE_FULL_CHART,
-				plain.searchModeLabel(plain.buildChart(patient(), "any allergies?")));
+				plain.searchModeLabel(plain.buildChart(patient(), "any allergies?")),
+				"a fullChart dispatch with no focus hint must label the row full-chart");
 
 		CountingBuilder hintedBuilder = new CountingBuilder();
 		hintedBuilder.preFilter = true;
 		TestableStrategy hinted = new TestableStrategy(hintedBuilder, false);
 		assertEquals(ChartSearchAiConstants.SEARCH_MODE_PRE_FILTER,
-				hinted.searchModeLabel(hinted.buildChart(patient(), "any allergies?")));
+				hinted.searchModeLabel(hinted.buildChart(patient(), "any allergies?")),
+				"a fullChart dispatch carrying a focus hint must label the row pre-filter");
 	}
 }

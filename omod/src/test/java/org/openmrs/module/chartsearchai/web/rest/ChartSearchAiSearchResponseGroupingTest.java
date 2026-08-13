@@ -13,9 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -27,12 +24,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
-import org.openmrs.User;
-import org.openmrs.api.AdministrationService;
-import org.openmrs.api.PatientService;
-import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ServiceContext;
-import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -57,13 +48,9 @@ import org.springframework.http.ResponseEntity;
  */
 public class ChartSearchAiSearchResponseGroupingTest {
 
-	private static final String PATIENT_UUID = "uuid-7";
-
 	private ChartSearchAiRestController controller;
 
-	private PatientService priorPatientService;
-
-	private AdministrationService priorAdministrationService;
+	private final RestControllerContext openmrsContext = new RestControllerContext();
 
 	@BeforeEach
 	public void setUp() {
@@ -74,95 +61,17 @@ public class ChartSearchAiSearchResponseGroupingTest {
 		// reaches the serialization step under test.
 		controller.setPatientAccessCheck((user, patient) -> true);
 
-		priorPatientService = currentService(PatientService.class);
-		priorAdministrationService = currentService(AdministrationService.class);
-		ServiceContext.getInstance().setPatientService(patientServiceReturning(patient()));
-		ServiceContext.getInstance().setAdministrationService(administrationServiceWithNoOverrides());
-
-		Context.setUserContext(new UserContext(null) {
-
-			@Override
-			public boolean hasPrivilege(String privilege) {
-				return true;
-			}
-
-			@Override
-			public User getAuthenticatedUser() {
-				return new User(3);
-			}
-
-			@Override
-			public boolean isAuthenticated() {
-				return true;
-			}
-		});
+		openmrsContext.install();
 	}
 
 	@AfterEach
 	public void restoreContext() {
-		ServiceContext.getInstance().setPatientService(priorPatientService);
-		ServiceContext.getInstance().setAdministrationService(priorAdministrationService);
-		Context.clearUserContext();
-	}
-
-	/** Whatever service was installed before this test, or null if none/unavailable. */
-	private static <T> T currentService(Class<T> type) {
-		try {
-			return type.cast(ServiceContext.getInstance().getService(type));
-		}
-		catch (RuntimeException e) {
-			return null;
-		}
-	}
-
-	private static Patient patient() {
-		Patient p = new Patient();
-		p.setPatientId(7);
-		p.setUuid(PATIENT_UUID);
-		return p;
-	}
-
-	/** Answers {@code getPatientByUuid} for the fixture patient; every other call returns null. */
-	private static PatientService patientServiceReturning(final Patient patient) {
-		return proxy(PatientService.class, new InvocationHandler() {
-
-			@Override
-			public Object invoke(Object p, Method method, Object[] args) {
-				if ("getPatientByUuid".equals(method.getName())
-						&& args != null && PATIENT_UUID.equals(args[0])) {
-					return patient;
-				}
-				return null;
-			}
-		});
-	}
-
-	/**
-	 * Answers global-property reads the way an unconfigured installation does: the two-arg form
-	 * returns the caller's own default (returning null there would break {@code preFilter.trim()}),
-	 * and the one-arg form returns null so the rate limiter falls back to its compiled default —
-	 * which the stub audit log's zero recent-query count then passes.
-	 */
-	private static AdministrationService administrationServiceWithNoOverrides() {
-		return proxy(AdministrationService.class, new InvocationHandler() {
-
-			@Override
-			public Object invoke(Object p, Method method, Object[] args) {
-				if ("getGlobalProperty".equals(method.getName()) && args != null && args.length == 2) {
-					return args[1];
-				}
-				return null;
-			}
-		});
-	}
-
-	private static <T> T proxy(Class<T> type, InvocationHandler handler) {
-		return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] { type }, handler));
+		openmrsContext.restore();
 	}
 
 	private List<Map<String, Object>> searchReferences() {
 		Map<String, String> body = new HashMap<String, String>();
-		body.put("patient", PATIENT_UUID);
+		body.put("patient", RestControllerContext.PATIENT_UUID);
 		body.put("question", "Is it safe to give her aspirin?");
 
 		ResponseEntity<Object> response = controller.search(body);

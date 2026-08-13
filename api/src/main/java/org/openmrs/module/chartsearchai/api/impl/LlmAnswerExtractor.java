@@ -127,23 +127,14 @@ final class LlmAnswerExtractor {
 			if (answerNode != null && answerNode.isTextual()) {
 				List<Integer> citations = new ArrayList<>();
 				JsonNode citationsNode = root.get("citations");
-				if (citationsNode != null && citationsNode.isArray()) {
-					int coerced = 0;
-					List<String> unusable = new ArrayList<>();
-					for (JsonNode n : citationsNode) {
-						Integer index = citationIndex(n);
-						if (index == null) {
-							unusable.add(abbreviate(n.toString()));
-						} else {
-							if (!n.isIntegralNumber()) {
-								coerced++;
-							}
-							citations.add(index);
-						}
+				// An absent field and an explicit null say the same thing — no citations — and
+				// neither is reported at any level, deliberately: see readNonArrayCitations (#221).
+				if (citationsNode != null && !citationsNode.isNull()) {
+					if (citationsNode.isArray()) {
+						readCitationsArray(citationsNode, citations);
+					} else {
+						readNonArrayCitations(citationsNode, citations);
 					}
-					reportNonConformantCitations(coerced, unusable);
-				} else if (citationsNode != null && !citationsNode.isNull()) {
-					readNonArrayCitations(citationsNode, citations);
 				}
 				String answer = normalizeSlashCitations(answerNode.asText().trim(), citations);
 				return new LlmResponse(answer, citations);
@@ -205,10 +196,10 @@ final class LlmAnswerExtractor {
 	}
 
 	/**
-	 * The record index a {@code citations} entry names, or {@code null} when it names none. Since
-	 * issue #221 this also reads the whole {@code citations} value when it is not an array, so the
-	 * container and its entries admit exactly the same JSON types — see
-	 * {@link #readNonArrayCitations}.
+	 * The record index a {@code citations} entry names, or {@code null} when it names none. Unchanged
+	 * by issue #221, which merely ALSO applies it to the whole {@code citations} value when that is
+	 * not an array (see {@link #readNonArrayCitations}) — so the container and its entries admit
+	 * exactly the same JSON types, and cannot come to differ.
 	 *
 	 * <p><b>Why a string counts (issue #219).</b> The module asks for a strict json_schema whose
 	 * citation items are {@code "type":"integer"}, but that schema is enforced by the SERVER, not
@@ -257,6 +248,31 @@ final class LlmAnswerExtractor {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Reads the conformant shape — a {@code citations} ARRAY — appending each index its entries name.
+	 * Entry typing is issue #219/#220's subject: a numeric string is coerced through
+	 * {@link #citationIndex} and the coercion is reported, an entry naming no index is dropped and
+	 * reported. Extracted so the three container shapes read as one flat decision at the call site,
+	 * with the "an explicit null says nothing" rule stated once rather than buried in a compound
+	 * condition — that rule is half of what #221 decided, and it is easy to delete by accident.
+	 */
+	private static void readCitationsArray(JsonNode citationsNode, List<Integer> citations) {
+		int coerced = 0;
+		List<String> unusable = new ArrayList<>();
+		for (JsonNode n : citationsNode) {
+			Integer index = citationIndex(n);
+			if (index == null) {
+				unusable.add(abbreviate(n.toString()));
+			} else {
+				if (!n.isIntegralNumber()) {
+					coerced++;
+				}
+				citations.add(index);
+			}
+		}
+		reportNonConformantCitations(coerced, unusable);
 	}
 
 	/**

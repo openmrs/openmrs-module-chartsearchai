@@ -91,7 +91,12 @@ public class ChartSearchAiConstants {
 	public static final String CHART_MODE_DEFAULT = CHART_MODE_QUERY_SCOPED;
 
 	/**
-	 * The vocabulary of the audit log's {@code search_mode} column — how the prompt's chart context
+	 * A full chart carrying the similarity focus hint {@code chartsearchai.embedding.preFilter}
+	 * turns on — and the anchor for the whole {@code SEARCH_MODE_*} family, documented here because
+	 * the family has no {@code GP_} declaration of its own to hang from the way {@code CHART_MODE_*}
+	 * hangs from {@link #GP_CHART_MODE}.
+	 *
+	 * <p>The vocabulary of the audit log's {@code search_mode} column — how the prompt's chart context
 	 * was assembled for the query that row records. Resolved once per request by
 	 * {@code ChartBuildingStrategy.searchModeLabel} and carried on the answer; the REST layer writes
 	 * it and derives nothing, because deriving it there is what issue #178 was: both audit-write
@@ -108,10 +113,11 @@ public class ChartSearchAiConstants {
 	 */
 	public static final String SEARCH_MODE_PRE_FILTER = "pre-filter";
 
-	/** Full chart, no focus hint. See {@link #SEARCH_MODE_PRE_FILTER} for the vocabulary. */
+	/** A full chart with no focus hint. See {@link #SEARCH_MODE_PRE_FILTER} for the family. */
 	public static final String SEARCH_MODE_FULL_CHART = "full-chart";
 
-	/** A query-scoped slice — the same token {@link #GP_CHART_MODE} takes, by construction. */
+	/** A query-scoped slice — the same token {@link #GP_CHART_MODE} takes, by construction.
+	 *  See {@link #SEARCH_MODE_PRE_FILTER} for the family. */
 	public static final String SEARCH_MODE_QUERY_SCOPED = CHART_MODE_QUERY_SCOPED;
 
 	/**

@@ -144,7 +144,7 @@ public class LlmInferenceServiceQueryScopedTest {
 				"the scoped answer already starts after a small prefill — a preview pass would "
 				+ "only occupy the single llama-server slot");
 		assertEquals(1, provider.searchStreamingCalls, "exactly one LLM pass in scoped mode");
-		assertEquals("SCOPED-ANSWER [8]", answer.getAnswer());
+		assertEquals(StubProvider.STUB_ANSWER, answer.getAnswer());
 	}
 
 	@Test
@@ -287,9 +287,9 @@ public class LlmInferenceServiceQueryScopedTest {
 		// The column is NOT NULL, so an answer built by something that states no mode still has to
 		// write a value. It must not be one of the three real modes: defaulting to full-chart is
 		// precisely the defect #178 fixed, a wrong signal being indistinguishable from a right one.
-		ChartAnswer stated = new ChartAnswer("A [1].", Collections.<RecordReference> emptyList());
+		ChartAnswer unlabelled = new ChartAnswer("A [1].", Collections.<RecordReference> emptyList());
 
-		assertEquals(ChartSearchAiConstants.SEARCH_MODE_UNKNOWN, stated.getSearchMode());
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_UNKNOWN, unlabelled.getSearchMode());
 	}
 
 	/** Context-free service: GP-backed resolvers overridden so no OpenMRS Context is needed. */
@@ -380,6 +380,11 @@ public class LlmInferenceServiceQueryScopedTest {
 
 	private final class StubProvider extends LlmProvider {
 
+		/** The one answer both inference entry points return, so an assertion written against
+		 *  either keeps describing the other. Its name predates the label cases, which drive it
+		 *  in fullChart and pre-filter too — the text is arbitrary and only its identity matters. */
+		private static final String STUB_ANSWER = "SCOPED-ANSWER [8]";
+
 		int searchStreamingCalls = 0;
 
 		boolean warmupCalled = false;
@@ -400,7 +405,7 @@ public class LlmInferenceServiceQueryScopedTest {
 				return new LlmResponse("PREVIEW-DISCARDED", Arrays.asList(1));
 			}
 			scopes.add(cacheScope);
-			return new LlmResponse("SCOPED-ANSWER [8]", Arrays.asList(8));
+			return new LlmResponse(STUB_ANSWER, Arrays.asList(8));
 		}
 
 		private boolean buildFocusedWasPreview() {
@@ -425,7 +430,7 @@ public class LlmInferenceServiceQueryScopedTest {
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
 				String question) {
-			return new LlmResponse("SCOPED-ANSWER [8]", Arrays.asList(8));
+			return new LlmResponse(STUB_ANSWER, Arrays.asList(8));
 		}
 
 		@Override

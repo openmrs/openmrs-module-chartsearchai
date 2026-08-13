@@ -205,6 +205,42 @@ public class AtcCrossReactivityLicensingTest {
 				DrugReferenceTestSupport.details(warnings).toString());
 	}
 
+	@Test
+	public void theTwoArmsMayNameDifferentClassesForOnePairAndBothAreTrue() throws IOException {
+		// The composition this settlement makes possible, pinned because it looks like issue #171
+		// returning and is not. #171 was two independent scans that could disagree about which of the
+		// SAME candidates to prefer; here the preference is one method and the CANDIDATE SETS differ.
+		// Miconazole and clotrimazole share A01AB (purpose-named, and first alphabetically), D01AC and
+		// G01AF (both imidazole-derivative subgroups). Both sentences are true of the pair and neither
+		// would be true under the other's class: they are duplicate therapy because both are
+		// antiinfectives given for local oral treatment, and they cross-react because both are
+		// imidazoles. Naming them alike would make one of the two false.
+		//
+		// Rare: 4 of the 3693 shipped-KB pairs that chip on both arms, measured at
+		// DrugSafetyValidator.sharedClass. Reachable together only for a patient allergic to a drug
+		// they are already on, which is the arm issue #143 added.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
+		assertEquals("[A01AB, D01AC, G01AF]", shared(service, "Miconazole", "Clotrimazole"),
+				"the pair must share a purpose-named subgroup AND a chemically named one, with the "
+						+ "purpose-named one sorting first, or this case cannot discriminate");
+
+		assertEquals("[Clotrimazole is in the same ATC class (D01AC) as the patient's allergy to"
+				+ " Miconazole — possible cross-reactivity]",
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.validator(service).validate(
+						"", "Is it safe to give clotrimazole?", DrugReferenceTestSupport.ctx(60, null,
+								null, null, DrugReferenceTestSupport.set("Miconazole"), null)))
+						.toString(),
+				"the cross-reactivity claim has to be justified by the chemistry");
+
+		assertEquals("[Clotrimazole is in the same ATC class (A01AB) as active order"
+				+ " Miconazole — possible duplicate therapy]",
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.validator(service).validate(
+						"", "Is it safe to give clotrimazole?",
+						DrugReferenceTestSupport.ctx(60, null, null, null, null, null,
+								Collections.singletonList(order(service, "Miconazole"))))).toString(),
+				"while the duplicate-therapy claim keeps the purpose-named class it is actually about");
+	}
+
 	// ---------------------------------------------------------------- the two predicates' contract
 
 	@Test

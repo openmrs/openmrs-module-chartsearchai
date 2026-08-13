@@ -2,7 +2,7 @@
     "metadata": {
         "schema_version": "1.0",
         "title": "Test fixture: what an ATC subgroup's own published NAME licenses (issues #183, #184)",
-        "note": "Rows copied field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, in KB order, with interactions emptied so every assertion here is about contraindication chip TEXT. One pair per limb of the criterion: Chloramphenicol/Gentamicin share only purpose-headed subgroups (S01AA Antibiotics, S02AA/S03AA Antiinfectives) and no chemistry; Rifampicin/Capreomycin share only J04AB Antibiotics, which is purpose-headed and NOT inside a locally applied group; Eliglustat/Givosiran and Miglustat/Eliglustat share only A16AX, a residue whose ancestry is residue all the way to the anatomical main group. The controls: Ampicillin/Amoxicillin share J01CA (Penicillins with extended spectrum), Gentamicin/Tobramycin share J01GB (Other aminoglycosides, a residue under a chemically named parent), Loratadine/Ketotifen share R06AX (a residue under ANTIHISTAMINES FOR SYSTEMIC USE, a mechanism), and Fluorometholone/Dexamethasone share S01BA/C05AA (Corticosteroids) inside locally applied groups - all four name chemistry or a molecular target and keep their claim."
+        "note": "Rows copied field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, in KB order, with interactions emptied so every assertion here is about contraindication chip TEXT. One pair per limb of the criterion: Chloramphenicol/Gentamicin share only purpose-headed subgroups (S01AA Antibiotics, S02AA/S03AA Antiinfectives) and no chemistry; Rifampicin/Capreomycin share only J04AB Antibiotics, which is purpose-headed and NOT inside a locally applied group; Eliglustat/Givosiran and Miglustat/Eliglustat share only A16AX, a residue whose ancestry is residue all the way to the anatomical main group. The controls: Ampicillin/Amoxicillin share J01CA (Penicillins with extended spectrum), Gentamicin/Tobramycin share J01GB (Other aminoglycosides, a residue under a chemically named parent), Loratadine/Ketotifen share R06AX (a residue under ANTIHISTAMINES FOR SYSTEMIC USE, a mechanism), and Fluorometholone/Dexamethasone share S01BA/C05AA (Corticosteroids) inside locally applied groups - all four name chemistry or a molecular target and keep their claim. Miconazole/Clotrimazole share A01AB (purpose-named, sorts first), D01AC and G01AF (both imidazole-derivative subgroups): the one pair shape where the two arms name DIFFERENT classes, because their candidate sets differ while the preference between candidates does not."
     },
     "mechanisms": {},
     "drugs": [
@@ -522,6 +522,97 @@
                     "code": "74615",
                     "uuid": "74615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "name": "Dexamethasone trimethyl acetate"
+                }
+            ]
+        },
+        {
+            "id": "DDInter1209",
+            "name": "Miconazole",
+            "rxcui": "6932",
+            "rxnorm_name": "miconazole",
+            "drugbank_id": "DB01110",
+            "atc": [
+                "A01AB09",
+                "A07AC01",
+                "D01AC02",
+                "G01AF04",
+                "J02AB01",
+                "S02AA13"
+            ],
+            "ciel": [
+                {
+                    "code": "104674",
+                    "uuid": "104674AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Fluprednidene / miconazole"
+                },
+                {
+                    "code": "104860",
+                    "uuid": "104860AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Hydrocortisone / miconazole"
+                },
+                {
+                    "code": "105071",
+                    "uuid": "105071AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Miconazole / petrolatum, white / zinc oxide"
+                },
+                {
+                    "code": "105072",
+                    "uuid": "105072AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Miconazole / zinc oxide"
+                },
+                {
+                    "code": "167993",
+                    "uuid": "ae475f76-b094-4a4b-8f93-29a4c911865f",
+                    "name": "Metronidazole / miconazole"
+                },
+                {
+                    "code": "79831",
+                    "uuid": "79831AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Miconazole"
+                },
+                {
+                    "code": "79833",
+                    "uuid": "79833AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Miconazole nitrate"
+                }
+            ]
+        },
+        {
+            "id": "DDInter416",
+            "name": "Clotrimazole",
+            "rxcui": "2623",
+            "rxnorm_name": "clotrimazole",
+            "drugbank_id": "DB00257",
+            "atc": [
+                "A01AB18",
+                "D01AC01",
+                "G01AF02"
+            ],
+            "ciel": [
+                {
+                    "code": "103904",
+                    "uuid": "103904AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Betamethasone / clotrimazole"
+                },
+                {
+                    "code": "104340",
+                    "uuid": "104340AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Clotrimazole / hydrocortisone"
+                },
+                {
+                    "code": "167994",
+                    "uuid": "8c253b52-9bca-4f01-908d-89e3149e8ebe",
+                    "name": "Clotrimazole / metronidazole"
+                },
+                {
+                    "code": "170030",
+                    "uuid": "0b9b9edc-1add-4cd2-ac95-69870f1c8ab2",
+                    "name": "Clotrimazole / lidocaine"
+                },
+                {
+                    "code": "73624",
+                    "uuid": "73624AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "name": "Clotrimazole"
                 }
             ]
         }

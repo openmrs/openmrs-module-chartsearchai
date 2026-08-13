@@ -4193,8 +4193,20 @@ public class DrugSafetyValidator {
 	 * <p><b>And how strong an assertion each ARM needs</b> (issues #183/#184). {@code crossReactivity}
 	 * decides only that, and nothing else: the preference between the surviving candidates — systemic
 	 * over locally applied, and sorted so the answer is a function of the two code SETS — is the same
-	 * either way and stays here, so it cannot come to differ between the arms. That was issue #171's
-	 * defect and it is not being re-introduced by the back door.
+	 * either way and stays here, in one method, which is what issue #171 asked for and is why the arm
+	 * is a parameter rather than a second scan.
+	 *
+	 * <p><b>But the two arms CAN now name different classes for one pair, and that is not #171
+	 * returning.</b> #171 was two independent scans that could disagree about which of the same
+	 * candidates to prefer. Here the preference is identical and the CANDIDATE SETS differ, because
+	 * the arms are making different claims: where a pair shares a purpose-named subgroup and a
+	 * chemically named one, "duplicate therapy" is honestly about the first and "cross-reactivity"
+	 * honestly about the second, so naming them alike would make one of the two sentences false.
+	 * Measured over the shipped KB by calling this method both ways on each of the 5550 substance
+	 * pairs it relates (2026-08-13; re-measure before relying on a figure): 3693 pairs chip on both
+	 * arms and 4 of them name different classes — {@code A01AB} against {@code D01AC}/{@code G01AF}
+	 * for the imidazoles, {@code B05XA} against {@code G04BA}. Reachable together only for a patient
+	 * ALLERGIC TO A DRUG THEY ARE ON, which is the arm issue #143 added.
 	 *
 	 * <p>A subgroup may justify a claim only as strong as what its own published name asserts. Naming
 	 * a purpose is enough to say two drugs duplicate one another and is not enough to say they

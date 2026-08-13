@@ -539,7 +539,12 @@ public class DrugReference {
 	 *         it ends: since issue #167 the safety checks additionally discard a shared subgroup that
 	 *         {@link #isUnclassifyingAtcCode} recognises, and the injector's relevance scoping
 	 *         deliberately does not — it is deciding what to put in front of the model, where an extra
-	 *         record is noise, not what to assert to a clinician.
+	 *         record is noise, not what to assert to a clinician. Since issues #183/#184 that discard
+	 *         is no longer uniform across the safety checks either: the CROSS-REACTIVITY arm discards
+	 *         strictly more, everything {@link #isPurposeOnlyAtcCode} recognises, because a shared
+	 *         purpose is enough to call two drugs duplicate therapy and not enough to call them
+	 *         chemically related. So there are three widths of the same intersection here, and which
+	 *         one a caller wants is decided by what it is about to assert.
 	 *
 	 *         <p>Issue #151 widened the injector's candidate set from ATC-mapped orders to every order
 	 *         the reference data resolves, so that divergence is reached far more often and its cost was

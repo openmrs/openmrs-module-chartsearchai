@@ -103,7 +103,12 @@ import org.springframework.stereotype.Service;
  * reasoning stays data-driven end to end. A shared subgroup is necessary but not sufficient since
  * issue #167: one that classifies neither the substances nor a therapy is skipped, and the pair falls
  * through to the curated groups as though nothing were shared — see
- * {@link DrugReference#isUnclassifyingAtcCode}. See ADR Decision 24.
+ * {@link DrugReference#isUnclassifyingAtcCode}. Since issues #183/#184 how much a subgroup must
+ * assert depends on WHICH claim is being made: naming a purpose ("Antibiotics") is enough to call two
+ * drugs duplicate therapy and not enough to call them cross-reacting, so the contraindication arm
+ * additionally skips everything {@link DrugReference#isPurposeOnlyAtcCode} recognises. The two arms
+ * therefore no longer see the same "same class"; {@link #sharedClass} is where that single difference
+ * lives. See ADR Decision 24.
  *
  * <p>One contraindication check is neither rule-based nor class-based: a recorded allergy to the very
  * drug in play is IDENTITY, and needs no rule, no ATC code and no curated group. It is therefore not

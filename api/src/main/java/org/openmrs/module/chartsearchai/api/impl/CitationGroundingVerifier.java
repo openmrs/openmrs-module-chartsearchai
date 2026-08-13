@@ -277,8 +277,8 @@ public class CitationGroundingVerifier {
 				// from the same classification, so a type left out HERE no longer reaches a client as
 				// grounded=true — but do not read that as cover. Two consequences are still this set's
 				// alone and neither is visible downstream: the omitted type spends Tier-2 cap slots
-				// meant for chart claims, and it publishes an entailment verdict internally (and in the
-				// grounding logs) that the judge cannot competently give on recited prose. Nor is the
+				// meant for chart claims, and it records an entailment verdict on its RecordReference
+				// that the judge cannot competently give on recited prose. Nor is the
 				// wire a reason to relax it on the assumption that a client re-filters by group —
 				// `group` is a provenance DISCLOSURE, not a second gate, which is why the withholding
 				// is stated server-side in README's reference contract.

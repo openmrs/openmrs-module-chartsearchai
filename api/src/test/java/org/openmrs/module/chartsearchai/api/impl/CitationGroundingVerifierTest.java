@@ -993,6 +993,13 @@ public class CitationGroundingVerifierTest {
 		// removed the passing verdict. Exempting entirely would discard it, and (since drug_reference
 		// keeps its flag) could only be done for safety_finding alone — a per-type branch in the very
 		// registry this issue exists to stop keying off type names.
+		//
+		// Issue #201 stopped PUBLISHING this verdict — the wire serializes null for every
+		// reference-group citation — and that is not a reason to stop computing it. Grading is what
+		// keeps these citations out of the Tier-2 entailment cap; only the client-facing value went
+		// away, because no client could tell "this citation is not about that record" from "this
+		// claim is unsupported". So this assertion is now about the verdict the MODULE holds, which
+		// is what getGrounded() returns and what the wire deliberately no longer echoes.
 		RecordMapping finding = realSafetyFinding();
 		String sentence = "The patient's blood pressure is well controlled [" + finding.getIndex() + "].";
 		embeddings.register(sentence, AXIS_A);

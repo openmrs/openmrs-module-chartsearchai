@@ -603,9 +603,15 @@ public class ChartSearchAiConstants {
 	 * this patient has no subject roles to swap, so a passing verdict is real assurance) — "the module
 	 * injected it" is a different question from this group.
 	 *
-	 * <p>A client must still read {@code grounded} per reference rather than infer it from
-	 * {@code group}: this group only rules {@code true} out, and both {@code false} (an off-topic
-	 * citation, still worth flagging) and {@code null} (unverified) remain.
+	 * <p>Since issue #201 the group decides the wire value outright: a citation in this group
+	 * serializes {@code grounded: null} whatever the pass concluded. Demote-only had already ruled
+	 * {@code true} out; what remained was a Tier-1 {@code false} meaning "this citation is not about
+	 * that record", which is not what a chart citation's {@code false} means and which no client
+	 * distinguished — so it is withheld too, in
+	 * {@code ChartSearchAiRestController.groundedForWire}. The key stays present and null, which is
+	 * this field's existing "unverified" value. Adding a type to this group therefore stops its
+	 * citations being VERIFIED (they are still graded, demote-only) AND stops any verdict of theirs
+	 * reaching a client.
 	 */
 	public static final String REFERENCE_GROUP_REFERENCE = "reference";
 

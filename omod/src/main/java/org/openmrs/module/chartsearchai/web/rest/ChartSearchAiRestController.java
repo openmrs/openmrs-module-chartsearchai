@@ -1018,17 +1018,18 @@ public class ChartSearchAiRestController {
 	 * That surviving {@code false} was kept on the wire because it carries information — it says the
 	 * citation is not about the record — and it is that value issue #201 removes.
 	 *
-	 * <p>The reason is that no client has a correct reading of it. The verdict's meaning here is
+	 * <p>The reason is that no client had a correct reading of it. The verdict's meaning here is
 	 * "off-topic citation", not "unsupported claim", and distinguishing the two requires reading
-	 * {@code group}; the reference frontend classifies by {@code resourceType} instead, so a
-	 * {@code safety_finding} falls through to its grounding branch and renders <em>"Unsupported —
-	 * The cited record may not support this statement"</em>, in red, on this module's own
-	 * deterministic Major-interaction finding. Both settlements offered on #201 would fix that; the
-	 * one taken is this, because a field that must not be interpreted is a trap, and it holds for
-	 * every client rather than for the one that is patched. The signal is not lost — the verifier
-	 * still computes it, and it is still what
-	 * {@code CitationGroundingVerifier}'s demote-only rule and its logs are about — it stops being
-	 * PUBLISHED.
+	 * {@code group}. The reference frontend classified by {@code resourceType} instead (measured on
+	 * #201 against {@code openmrs-esm-chartsearchai} at {@code 3003cd2}, which does not declare
+	 * {@code group} on its reference type at all), so a {@code safety_finding} fell through to its
+	 * grounding branch and rendered <em>"Unsupported — The cited record may not support this
+	 * statement"</em>, in red, on this module's own deterministic Major-interaction finding. Both
+	 * settlements offered on #201 would fix that one client; the one taken is this, because a field
+	 * that must not be interpreted is a trap and withholding it holds for every client rather than
+	 * for the one that is patched. The signal is not lost, it stops being PUBLISHED: the verifier
+	 * still computes it, {@code RecordReference.getGrounded()} still carries it, and it is still
+	 * what keeps these citations out of Tier-2 and its per-answer cap.
 	 *
 	 * <p>{@code null} rather than an omitted key: {@code null} is already this field's documented
 	 * value for "grounding disabled or could not run", clients are already instructed to render it

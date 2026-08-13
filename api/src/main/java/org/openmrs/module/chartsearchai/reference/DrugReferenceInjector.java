@@ -1127,10 +1127,24 @@ public class DrugReferenceInjector {
 			// Omitted entirely when the context is null, which is "nothing known" and not "nothing
 			// recorded": a record that cannot see the chart must not report an absence.
 			if (context != null) {
-				sb.append(" Of the contraindications below, this patient's chart records: ")
-						.append(contraindications.recorded.isEmpty() ? "none"
-								: String.join("; ", contraindications.recorded))
-						.append(".");
+				// BOTH halves named, each by its own clauses, and neither left to be inferred from the
+				// other. Two weaker forms were tried live on the 3.7.1 standalone 2026-08-13 and BOTH were
+				// measured failing on the model this module ships against:
+				//   * positive half only ("…this patient's chart records: documented ibuprofen allergy.")
+				//     — "List all contraindications to ibuprofen for this patient" was then answered
+				//     "…for this patient include: documented ibuprofen allergy, active gastrointestinal
+				//     bleeding, active peptic ulcer disease", which is WORSE than no marking at all: the
+				//     unmarked record had been answered "the GENERAL contraindications listed in the drug
+				//     reference include …", the distinction drawn by the model itself.
+				//   * a bare "records: none" for an entry nothing matched — a question about amoxicillin
+				//     for a patient with no penicillin allergy was answered "the patient has a documented
+				//     amoxicillin allergy", quoting a clause of the list beside that very sentence.
+				// Both failures are the same shape: a sentence that names some clauses and expects the
+				// reader to infer the rest. So each clause is named on the side it is actually on. The two
+				// halves partition the list, so at least one sentence is always emitted and a clause is
+				// never in neither.
+				appendClauseReading(sb, " Recorded for this patient: ", contraindications.recorded);
+				appendClauseReading(sb, " Not recorded for this patient: ", contraindications.notRecorded);
 			}
 			sb.append(" Contraindicated with: ").append(String.join("; ", contraindications.clauses))
 					.append(".");
@@ -1213,20 +1227,34 @@ public class DrugReferenceInjector {
 		return new RenderedReference(sb.toString(), source != null ? source.trim() : null, withheld);
 	}
 
-	/** The contraindication half of a rendered record: every rule the entry publishes, and the subset
-	 *  of those clauses the patient's own chart records. One value rather than two calls because the
-	 *  two are computed in ONE walk of the rules — the subset is a selection FROM the clauses, keyed on
-	 *  the same collapsed rule, so recomputing it beside them is how a record comes to mark a clause it
-	 *  does not carry (or carry one it cannot mark). */
+	/** Appends {@code lead} and {@code clauses} as one sentence, or nothing at all when that half of
+	 *  the split is empty — an empty "Recorded for this patient: ." states nothing and costs prompt
+	 *  budget to do it. */
+	private static void appendClauseReading(StringBuilder sb, String lead, Collection<String> clauses) {
+		if (!clauses.isEmpty()) {
+			sb.append(lead).append(String.join("; ", clauses)).append(".");
+		}
+	}
+
+	/** The contraindication half of a rendered record: every rule the entry publishes, and that list
+	 *  split by what the patient's own chart records. One value rather than three calls because all
+	 *  three are computed in ONE walk of the rules — the two halves are selections FROM the clauses,
+	 *  keyed on the same collapsed rule, so recomputing either beside them is how a record comes to
+	 *  mark a clause it does not carry (or carry one it cannot mark). {@code recorded} and
+	 *  {@code notRecorded} partition {@code clauses} exactly, each in clause order. */
 	private static final class ContraindicationSections {
 
 		private final Collection<String> clauses;
 
 		private final Collection<String> recorded;
 
-		ContraindicationSections(Collection<String> clauses, Collection<String> recorded) {
+		private final Collection<String> notRecorded;
+
+		ContraindicationSections(Collection<String> clauses, Collection<String> recorded,
+				Collection<String> notRecorded) {
 			this.clauses = clauses;
 			this.recorded = recorded;
+			this.notRecorded = notRecorded;
 		}
 	}
 
@@ -1314,15 +1342,15 @@ public class DrugReferenceInjector {
 			}
 		}
 		List<String> recorded = new ArrayList<String>();
+		List<String> notRecorded = new ArrayList<String>();
 		// Walked in CLAUSE order, not in the order the matches were found: a rule authored twice can be
 		// matched by its second spelling while its clause sits at the first's position, and a reading
-		// that listed those out of order would be a subset a reader cannot line up against the list.
+		// that listed those out of order would be a half a reader cannot line up against the list. One
+		// loop for both halves, so they partition the clauses by construction rather than by agreement.
 		for (Map.Entry<Object, String> clause : byRule.entrySet()) {
-			if (recordedRules.contains(clause.getKey())) {
-				recorded.add(clause.getValue());
-			}
+			(recordedRules.contains(clause.getKey()) ? recorded : notRecorded).add(clause.getValue());
 		}
-		return new ContraindicationSections(byRule.values(), recorded);
+		return new ContraindicationSections(byRule.values(), recorded, notRecorded);
 	}
 
 	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the

@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -74,15 +75,42 @@ public class InjectedContraindicationPatientReadingTest {
 				+ DrugReferenceTestSupport.referenceTexts(chart));
 	}
 
-	/** The clause the record states the patient's chart records, read off the rendered text rather than
-	 *  recomputed — what a model reads is what the string says. */
-	private static String recordedReading(String record) {
-		String marker = " Of the contraindications below, this patient's chart records: ";
+	/** The rendering's own section lead for the drug's whole list, so a case asserting the list is
+	 *  unchanged reads it where a model reads it. */
+	private static final String RULE_LIST_MARKER = " Contraindicated with: ";
+
+	private static final String RECORDED_MARKER = " Recorded for this patient: ";
+
+	private static final String NOT_RECORDED_MARKER = " Not recorded for this patient: ";
+
+	/** The text between {@code marker} and the sentence's own full stop, read off the rendered record
+	 *  rather than recomputed — what a model reads is what the string says. */
+	private static String sentenceAfter(String record, String marker) {
 		int start = record.indexOf(marker);
-		assertTrue(start >= 0, "the record must state the patient-specific reading, was: " + record);
-		int end = record.indexOf(". Contraindicated with: ", start);
-		assertTrue(end > start, "and state it immediately before the list it qualifies, was: " + record);
+		if (start < 0) {
+			return null;
+		}
+		int end = record.indexOf(".", start + marker.length());
+		assertTrue(end > start, "an unterminated sentence, was: " + record);
 		return record.substring(start + marker.length(), end);
+	}
+
+	/** The clauses the record states the patient's chart records. */
+	private static String recordedReading(String record) {
+		String reading = sentenceAfter(record, RECORDED_MARKER);
+		assertNotNull(reading, "the record must state the patient-specific reading, was: " + record);
+		assertTrue(record.indexOf(RECORDED_MARKER) < record.indexOf(" Contraindicated with: "),
+				"and state it before the list it qualifies, was: " + record);
+		return reading;
+	}
+
+	/** The clauses the record states the patient's chart does NOT record. */
+	private static String notRecordedReading(String record) {
+		String reading = sentenceAfter(record, NOT_RECORDED_MARKER);
+		assertNotNull(reading, "the record must name the unrecorded half too, was: " + record);
+		assertTrue(record.indexOf(NOT_RECORDED_MARKER) < record.indexOf(" Contraindicated with: "),
+				"before the list as well, was: " + record);
+		return reading;
 	}
 
 	private static List<String> contraindicationChips(List<SafetyWarning> warnings) {
@@ -96,10 +124,15 @@ public class InjectedContraindicationPatientReadingTest {
 	}
 
 	@Test
-	public void aChartRecordingNoneOfThemSaysNoneOfThem() throws Exception {
+	public void aChartRecordingNoneOfThemNamesEveryOneOfThemAsUnrecorded() throws Exception {
 		// Issue #208's live case, re-derived here over the shipped seed: no allergy and no condition on
 		// record, so none of ibuprofen's four rules can match, and before this fix the record listed all
 		// four with nothing to distinguish them from the patient's own findings.
+		//
+		// Named one by one rather than summarised, because the summary was measured failing. Live on the
+		// 3.7.1 standalone 2026-08-13, with the record saying "…this patient's chart records: none.", a
+		// question about amoxicillin for a patient with no penicillin allergy was answered "the patient
+		// has a documented amoxicillin allergy" — a clause of the list beside that very sentence.
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null, null, null);
 		assertTrue(contraindicationChips(DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.bundledService()).validate("", QUESTION, context))
@@ -108,12 +141,12 @@ public class InjectedContraindicationPatientReadingTest {
 
 		String record = ibuprofenRecord(context);
 
-		assertEquals("none", recordedReading(record),
-				"the record must say the chart records none of them, was: " + record);
-		for (String rule : SHIPPED_IBUPROFEN_RULES) {
-			assertTrue(record.contains(rule),
-					"and must still list " + rule + " — marked, not filtered, was: " + record);
-		}
+		assertEquals(String.join("; ", SHIPPED_IBUPROFEN_RULES), notRecordedReading(record),
+				"every clause named on the side it is on, was: " + record);
+		assertNull(sentenceAfter(record, RECORDED_MARKER),
+				"and no empty positive half, which would state nothing and cost budget: " + record);
+		assertTrue(record.contains(RULE_LIST_MARKER + String.join("; ", SHIPPED_IBUPROFEN_RULES) + "."),
+				"and the drug's own list is unchanged — marked, not filtered, was: " + record);
 	}
 
 	@Test
@@ -128,9 +161,17 @@ public class InjectedContraindicationPatientReadingTest {
 
 		assertEquals("documented ibuprofen allergy", recordedReading(record),
 				"exactly the rule the chart matches, was: " + record);
-		for (String rule : SHIPPED_IBUPROFEN_RULES) {
-			assertTrue(record.contains(rule), "and all four still listed, was: " + record);
-		}
+		assertTrue(record.contains(RULE_LIST_MARKER + String.join("; ", SHIPPED_IBUPROFEN_RULES) + "."),
+				"and all four still listed, in dataset order, was: " + record);
+		// The negative half, named rather than left to be inferred. Measured live 2026-08-13: with the
+		// positive half alone the model answered "the contraindications for this patient include:
+		// documented ibuprofen allergy, active gastrointestinal bleeding, active peptic ulcer disease",
+		// i.e. it read the list under the sentence's patient framing. The two halves must partition the
+		// list exactly, which is what this asserts against SHIPPED_IBUPROFEN_RULES rather than against a
+		// literal — a clause in neither half is a contraindication the record says nothing about.
+		assertEquals("NSAID hypersensitivity; active gastrointestinal bleeding; active peptic ulcer disease",
+				sentenceAfter(record, NOT_RECORDED_MARKER),
+				"the other three named as NOT this patient's, was: " + record);
 	}
 
 	@Test
@@ -146,6 +187,9 @@ public class InjectedContraindicationPatientReadingTest {
 
 		assertEquals("active peptic ulcer disease", recordedReading(record),
 				"the condition rule the chart matches, and only it, was: " + record);
+		assertEquals("NSAID hypersensitivity; documented ibuprofen allergy; active gastrointestinal bleeding",
+				notRecordedReading(record),
+				"and the allergy rules stay on the unrecorded side, was: " + record);
 	}
 
 	@Test
@@ -164,6 +208,9 @@ public class InjectedContraindicationPatientReadingTest {
 		assertEquals(2, chips.size(), "precondition: two rules match, so two chips, was: " + chips);
 		assertEquals("documented ibuprofen allergy; active gastrointestinal bleeding", reading,
 				"both, in dataset order, was: " + reading);
+		assertEquals("NSAID hypersensitivity; active peptic ulcer disease",
+				sentenceAfter(ibuprofenRecord(context), NOT_RECORDED_MARKER),
+				"and the two halves partition the list, in clause order");
 		for (String clause : reading.split("; ")) {
 			boolean asserted = false;
 			for (String chip : chips) {
@@ -188,7 +235,9 @@ public class InjectedContraindicationPatientReadingTest {
 		assertNotNull(record, "precondition: a ddinter record must be injected");
 		assertFalse(record.contains("Contraindicated with:"),
 				"precondition: the ddinter source publishes no contraindications, was: " + record);
-		assertFalse(record.contains("this patient's chart records"),
+		assertNull(sentenceAfter(record, RECORDED_MARKER),
 				"so there is nothing to state a patient-specific reading of, was: " + record);
+		assertNull(sentenceAfter(record, NOT_RECORDED_MARKER),
+				"on either side, was: " + record);
 	}
 }

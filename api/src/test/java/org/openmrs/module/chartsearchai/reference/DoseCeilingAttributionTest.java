@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -73,16 +74,18 @@ public class DoseCeilingAttributionTest {
 	private static final String PER_KG_SIBLING_FIXTURE =
 			"chartsearchai-test/drug-reference-sibling-per-kg-ceiling.json";
 
+	/** The pass's one dose warning. Exactly one, asserted rather than assumed: one substance and one
+	 *  stated dose is one warning ({@code OverdoseSubstanceCollapseTest}), and a second would mean this
+	 *  case is asserting the wording of whichever arrived first. */
 	private static SafetyWarning onlyOverdose(List<SafetyWarning> warnings) {
-		SafetyWarning found = null;
+		List<SafetyWarning> found = new ArrayList<SafetyWarning>();
 		for (SafetyWarning warning : warnings) {
 			if (SafetyWarning.TYPE_OVERDOSE.equals(warning.getType())) {
-				assertNotNull(warning.getDetail(), "a dose warning must carry a sentence");
-				found = found == null ? warning : found;
+				found.add(warning);
 			}
 		}
-		assertNotNull(found, "precondition: the dose arm must warn, was: " + warnings);
-		return found;
+		assertEquals(1, found.size(), "precondition: exactly one dose warning, was: " + warnings);
+		return found.get(0);
 	}
 
 	@Test

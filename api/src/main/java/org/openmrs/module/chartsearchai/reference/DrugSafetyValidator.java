@@ -128,7 +128,7 @@ import org.springframework.stereotype.Service;
  * <p>Conservative by design: overdose is flagged only when a value can be computed AND it
  * exceeds a published maximum — a daily total over {@code maxDailyDoseMg}, or (only with a
  * fresh recorded weight) a per-administration dose over {@code mgPerKgMax} × weight; class-based
- * interactions skip an active order that is the <em>same</em> drug (restating existing therapy
+ * interactions skip an active order that is the <em>same substance</em> (restating existing therapy
  * is not a duplicate). A question or answer that names no reference drug produces no warnings
  * (the no-false-positive case) unless the patient's own chart supplies the subject — the two
  * deliberate exceptions above, both still no-false-positive checks. The interaction screen reports
@@ -2561,9 +2561,24 @@ public class DrugSafetyValidator {
 	 *         mapped to the codes of two interacting entries witnessed the pair between them from one
 	 *         order.
 	 *
-	 *         <p>Sharing an exact ATC code means being the same substance (level 5 is per-substance;
-	 *         class relatedness is {@link DrugReference#atcSubgroups()}'s business, not this one's), so
-	 *         the code leg cannot mistake a different drug's order for the subject's own.
+	 *         <p><b>Sharing an exact ATC code is not the same as being one substance.</b> Level 5 is
+	 *         per-substance in the ATC standard, and this paragraph used to say so flatly and conclude
+	 *         that the code leg cannot mistake another drug's order for the subject's own. That is
+	 *         false of THIS knowledge base, which files two substances under one level-5 code — the
+	 *         premise issue #185 turned on. The counterexample is pinned as a fixture premise rather
+	 *         than restated as a number here: see
+	 *         {@code DuplicateTherapySelfChipTest.theFixtureReallyFilesOmeprazoleUnderEsomeprazolesCode},
+	 *         which asserts the two rows publish one code and are two substances. (Class relatedness
+	 *         is still {@link DrugReference#atcSubgroups()}'s business and not this one's.)
+	 *
+	 *         <p>So the code leg CAN count a different substance's order as the subject's own, and is
+	 *         kept anyway, because its residue runs the same safe direction as the name leg's below:
+	 *         an over-wide answer withholds a partner, which misses a pair and can never invent one.
+	 *         That reasoning is this predicate's alone and does not transfer.
+	 *         {@link #classRelationships}'s restating-existing-therapy skip keeps its own exact-code
+	 *         test beside a substance-identity one for the opposite reason — there the code is all a
+	 *         context carrying no order has to go on, and dropping the leg raises a chip that arm has
+	 *         never raised.
 	 *
 	 *         <p>Since issue #209 the name leg is a strict SUPERSET of what
 	 *         {@link DrugReferenceService#findImpliedByDrugName} would admit from the same order, because
@@ -2996,14 +3011,48 @@ public class DrugSafetyValidator {
 	 * Class-based interaction reasoning: warns when the drug {@code ref} being checked shares
 	 * an ATC level-4 subgroup with one of the patient's active orders (additive effects / duplicate
 	 * therapy) or — failing that — a curated {@link CrossReactivityGroup} (a cross-branch family
-	 * overlap, e.g. ibuprofen recommended over an active aspirin order). An order that is the
-	 * <em>same</em> drug as {@code ref} (a shared exact ATC code) is skipped — restating existing
-	 * therapy is not a duplicate. Active orders carry ATC codes (the builder maps them), so this
+	 * overlap, e.g. ibuprofen recommended over an active aspirin order). A co-medication that IS
+	 * {@code ref}'s own substance is skipped — restating existing therapy is not a duplicate — and
+	 * only that co-medication: a class sibling the patient also happens to be on is exactly the
+	 * finding this arm exists to make, so the question is asked per PARTNER. Where the dataset cannot
+	 * name a co-medication and the ORDER names it, what the order names is what it IS, so a
+	 * fixed-dose combination counts as each of its constituents. Active orders carry ATC codes (the builder maps them), so this
 	 * matches on codes directly and names the order by the ladder {@link #orderPartners} documents —
 	 * the dataset's name for the substance, else the order's own display name, else the code (issue
 	 * #155). The most specific match wins, so a subgroup + group double-match warns once — except
 	 * where the shared subgroup is one {@link DrugReference#isUnclassifyingAtcCode} vetoes, which is
 	 * not a match at all and lets the group answer (issue #167).
+	 *
+	 * <p><b>What "is the same drug" means, and why it takes two legs (issue #185).</b> Neither
+	 * subsumes the other.
+	 * <ul>
+	 *   <li>{@link DrugReference#substanceGroupKey()} against the substances the partner's ORDER is
+	 *       recorded as naming (see {@link OrderPartner#substances}). This is the question the skip is
+	 *       actually asking, and it
+	 *       is the one the code comparison cannot answer, because the code a co-medication carries and
+	 *       the code the reference row publishes can be different codes of ONE substance. The shipped
+	 *       KB's {@code Omeprazole} row publishes only {@code A02BC05} — esomeprazole's, alongside
+	 *       {@code rxnorm_name} "esomeprazole" — while an omeprazole order on a dictionary that maps
+	 *       the concept correctly carries {@code A02BC01}, which appears nowhere in that KB. Disjoint
+	 *       code sets, one shared subgroup, and the chip read {@code Omeprazole is in the same ATC
+	 *       class (A02BC) as active order Omeprazole 20mg}. Deciding identity by the substance key
+	 *       rather than by something a row happens to publish is the correction issues #164/#187 made
+	 *       for the two cross-reactivity routes to that same symptom; this is the third route.</li>
+	 *   <li>A shared exact ATC code, which identity does not replace. Where the context carries only
+	 *       the flattened code set (issue #118's fallback) no order names the partner, so the partner
+	 *       is whichever row {@link #entryForAtcCode} picks for the code — and that row's substance
+	 *       need not be the queried one. An order known only as {@code A02BC05} resolves to
+	 *       {@code Omeprazole}, the earlier row, so dropping this leg would newly raise a chip about
+	 *       {@code Esomeprazole} against it, which this arm has never raised.
+	 *       <p>Not because a level-5 code cannot be shared by two substances — in THIS knowledge base
+	 *       it can, and the pair just named is the counterexample: {@code Omeprazole} and
+	 *       {@code Esomeprazole} publish one {@code A02BC05} and differ in {@code drugbank_id}. (The
+	 *       unqualified "sharing an exact ATC code means being the same substance" on
+	 *       {@link #resolvesFrom} is a claim about ATC the standard, and is false of this KB.) So the
+	 *       leg CAN over-skip, and does exactly there — deliberately, because what it skips is a
+	 *       partner the dataset can only name as {@code Omeprazole} anyway. Keeping it is a choice
+	 *       between two imperfect answers, made the way it already was before this issue.</li>
+	 * </ul>
 	 *
 	 * <p>Returns the sentences rather than adding the chips, because whether a relationship gets a chip
 	 * of its own is no longer decidable from this arm alone: a pair the rule arm also raises folds into
@@ -3055,11 +3104,14 @@ public class DrugSafetyValidator {
 			return out;
 		}
 		Set<String> refCodes = ref.normalizedAtcCodes();
+		Object refSubstance = ref.substanceGroupKey();
 		for (OrderPartner partner : orderPartners(context)) {
-			if (!Collections.disjoint(partner.codes, refCodes)) {
-				// Restating existing therapy is not a duplicate — per PARTNER, because a substance is
-				// the same substance under every code it is filed under, so sharing ONE exact code
-				// already says the order and the drug asked about are one drug.
+			if (partner.substances.contains(refSubstance)
+					|| !Collections.disjoint(partner.codes, refCodes)) {
+				// Restating existing therapy is not a duplicate. Identity first because it is the
+				// question; the exact-code leg second because it answers where no order names the
+				// partner. See this method's javadoc for why both are needed and why the code leg's
+				// one over-skip is deliberate.
 				continue;
 			}
 			String shared = sharedClass(refClasses, DrugReference.atcSubgroups(partner.codes));
@@ -3080,7 +3132,7 @@ public class DrugSafetyValidator {
 
 	/**
 	 * One co-medication the class arm reasons about: the ATC codes of the patient's active orders that
-	 * identify it, and the name a chip calls it by.
+	 * identify it, the substances it is known to contain, and the name a chip calls it by.
 	 *
 	 * <p>Identity, not text: two rows of one substance, or one order's several codes, are one partner
 	 * however the chip words them — the rule both the contraindication ledger and
@@ -3095,6 +3147,51 @@ public class DrugSafetyValidator {
 		private boolean namedByOrder;
 
 		private final Set<String> codes = new LinkedHashSet<String>();
+
+		/**
+		 * The substances this co-medication is known to contain, as
+		 * {@link DrugReference#substanceGroupKey()} values: what the ORDER's own recorded names imply
+		 * ({@link DrugSafetyValidator#substancesNamedBy}). Read only by
+		 * {@link DrugSafetyValidator#classRelationships}'s restating-existing-therapy skip; nothing
+		 * here is rendered, so a partner may be named one thing and known to contain several.
+		 *
+		 * <p><b>Added only where {@link #nameByOrder} is</b>, and that is the whole of the scoping
+		 * rule. A partner the DATASET named stands for one substance; a partner named after an order
+		 * stands for that order, so what the order names is what it holds. Attaching the order's whole
+		 * set to every partner it produced instead silences a real finding: one order whose two codes
+		 * both resolve is TWO partners, and a question about the first constituent would then skip the
+		 * second — {@code Metronidazole and secnidazole} losing "Metronidazole is in the same ATC
+		 * class (P01AB) as active order Secnidazole".
+		 *
+		 * <p><b>The names, and not also the entry the ladder resolved.</b> That entry's substance is
+		 * already what the skip's exact-code leg answers, and equivalently so: a row of it publishes
+		 * the code that resolved it, and every row of one substance in the shipped KB publishes the
+		 * same codes — the DATA invariant {@link DrugSafetyValidator#addInteractionWarnings} already
+		 * rests on and already asks to be re-measured on a KB refresh. Adding it here would be a
+		 * second, unreachable expression of one rule.
+		 *
+		 * <p><b>The names are needed because the codes cannot answer for a combination.</b> A
+		 * fixed-dose combination resolves an entry for one constituent while its name names the
+		 * other, and its combination code is typically absent from the KB. The 3.7.1 demo
+		 * dictionary's {@code Isoniazid / Rifapentine} concept is exactly that — {@code J04AB05}
+		 * resolves Rifapentine and {@code J04AC51} resolves nothing, which merges both codes onto ONE
+		 * partner and renames it after the order — so a skip reading only what the codes resolve
+		 * reports the isoniazid in the tablet as duplicating the tablet.
+		 *
+		 * <p>A SET rather than one key, because a combination names several and because a partner can be
+		 * reached by more than one order. What it holds is what EVERY order carrying an unnameable code
+		 * of this partner names — not what every order merged into the partner names: two orders of one
+		 * substance that merged through their COVERED codes contribute nothing here, and need not,
+		 * because the exact-code leg already answers for a code the dataset could name.
+		 *
+		 * <p><b>The bound this scoping leaves.</b> A combination order whose combination code the KB
+		 * DOES carry never reaches this rung at all, so a question about one of its constituents still
+		 * gets the self-chip. That is not closable from here — reading the order's names for a covered
+		 * code is exactly the over-skip above — and it is unreachable on the shipped KB, which carries
+		 * no row for any of the combination codes the 3.7.1 demo dictionary maps. Closing it needs the
+		 * KB to say which substances a combination row contains, which it does not publish.
+		 */
+		private final Set<Object> substances = new LinkedHashSet<Object>();
 
 		private OrderPartner(String label, boolean namedByOrder) {
 			this.label = label;
@@ -3147,7 +3244,9 @@ public class DrugSafetyValidator {
 	 * the dataset's name speaks only for the codes it covers (see {@link OrderPartner#nameByOrder}).
 	 *
 	 * <p>Grouping by the order OUTRIGHT would have been wrong in both directions, which is why the
-	 * order is consulted only for the codes the dataset cannot speak for. It would split a substance
+	 * order is consulted only for the codes the dataset cannot speak for. What the order NAMES is a
+	 * different question (issue #185) but is read on that same rung and under that same condition —
+	 * see {@link OrderPartner#substances}. It would split a substance
 	 * the patient holds TWO orders of into two partners, which this ladder deliberately merges; and
 	 * it would merge a fixed-dose COMBINATION — one order whose concept maps to the codes of two
 	 * different substances — into one, dropping a real duplicate-therapy chip. A combination is
@@ -3165,6 +3264,14 @@ public class DrugSafetyValidator {
 	 * display in {@link PatientClinicalContextBuilder} so it reaches the list at all, which is that
 	 * gap's own fix and has its own consequences for the injected record.
 	 *
+	 * <p><b>What each partner is known to CONTAIN is a separate answer</b> (issue #185), collected on
+	 * the same rung the ladder takes the order's NAME from and under the same condition:
+	 * {@link OrderPartner#substances} holds what the order's own recorded names imply
+	 * ({@link #substancesNamedBy}), added exactly where {@link OrderPartner#nameByOrder} is applied.
+	 * The two answers are deliberately not the same thing: the ladder picks ONE identity so the
+	 * clinician sees one partner named one way, while the skip that reads this has to know about
+	 * every substance in the tablet.
+	 *
 	 * <p><b>The label follows the same ladder</b> (issue #155). It used to be the entry's label or,
 	 * failing that, the bare CODE — so on the default {@code sourceFormat=json}, whose four-entry
 	 * curated seed carries no aspirin, Agnes Adams' chip read "… as active order N02BA01". A clinician
@@ -3178,22 +3285,35 @@ public class DrugSafetyValidator {
 	 * substance and calls this each time, and {@link #ruleAbout} re-runs {@link #entryForAtcCode}
 	 * itself rather than reading the resolution carried here. They agree because that scan is a
 	 * function of {@code getAll()} alone, which is loaded once — a property of the service, not
-	 * something this method enforces. The memo below is per CALL and does not change that; widening it
-	 * to the whole {@code validate} pass would, and would cut the repeated full scans, but it must
-	 * then be a local threaded through the pass and NEVER a field: a memoised {@link DrugReference}
-	 * outliving a {@code getAll()} reload fails the reference comparisons the contraindication arms
-	 * make (issue #172), which silently re-opens issue #145.
+	 * something this method enforces. The memos below are per CALL and do not change that; widening
+	 * them to the whole {@code validate} pass would, and would cut the repeated full scans, but they
+	 * must then be locals threaded through the pass and NEVER fields: a memoised
+	 * {@link DrugReference} outliving a {@code getAll()} reload fails the reference comparisons the
+	 * contraindication arms make (issue #172), which silently re-opens issue #145.
+	 *
+	 * <p>Issue #185 added a second sweep to this loop, and bounded it rather than paying for it
+	 * everywhere: {@link #substancesNamedBy} runs only for a code the dataset cannot name, and is
+	 * memoised per order. Timed interleaved against the pre-change code over the shipped 19 MB KB with
+	 * a 30-order, 60-name context, the two were indistinguishable within this machine's run-to-run
+	 * spread — which is the reason no figure is quoted here, and the reason the per-pass memo stays
+	 * unbuilt. Measure it the same way, interleaved and more than once, before treating the repeat as
+	 * free at a larger order count.
 	 */
 	private List<OrderPartner> orderPartners(PatientClinicalContext context) {
 		Map<Object, OrderPartner> byIdentity = new LinkedHashMap<Object, OrderPartner>();
-		// Per-CALL memos, never fields: entryForAtcCode is a full scan of getAll() and the rung added
-		// by issue #186 asks it once per code of an order as well as once per code of the context, so
-		// without them a partly-covered order rescans the dataset for every code it carries. A field
-		// would be issue #172's trap — a memoised DrugReference outliving a getAll() hot-reload fails
-		// the reference comparisons the contraindication arms make, silently re-opening issue #145.
+		// Per-CALL memos, never fields. Each covers a dataset sweep this loop would otherwise repeat:
+		// entryForAtcCode is a full scan of getAll() and the rung added by issue #186 asks it once per
+		// code of an order as well as once per code of the context, so without the first two a
+		// partly-covered order rescans the dataset for every code it carries; substancesNamedBy is a
+		// resolution of every name of an order and issue #185 asks it once per UNNAMEABLE code. A
+		// field would be issue #172's trap — a memoised DrugReference outliving a getAll() hot-reload
+		// fails the reference comparisons the contraindication arms make, silently re-opening issue
+		// #145 — and the third memo holds substanceGroupKey() values, which can BE a DrugReference.
 		Map<String, DrugReference> entryByCode = new LinkedHashMap<String, DrugReference>();
 		Map<PatientClinicalContext.ActiveDrugOrder, DrugReference> substanceByOrder =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, DrugReference>();
+		Map<PatientClinicalContext.ActiveDrugOrder, Set<Object>> substancesByOrderName =
+				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, Set<Object>>();
 		for (String orderCode : context.getActiveDrugAtcCodes()) {
 			DrugReference entry = entryForAtcCode(orderCode, entryByCode);
 			PatientClinicalContext.ActiveDrugOrder order = null;
@@ -3228,10 +3348,82 @@ public class DrugSafetyValidator {
 				// This partner holds a code the dataset cannot name, so the dataset's name for its
 				// other codes does not speak for the whole of it — see OrderPartner.nameByOrder.
 				partner.nameByOrder(ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode));
+				// And, for the same reason and under the same condition, what the orders carrying this
+				// code NAME is what this partner is known to contain (issue #185). Inside this branch
+				// and not beside it: the condition is exactly "the dataset could not name this code,
+				// and an order carries it", so what is read here belongs to this code. Reading the
+				// partner's namedByOrder flag instead would let a LATER code of a DIFFERENT order pass
+				// and attribute that order's constituents here. EVERY carrier and not just the one the
+				// label came from, for the mirror reason — see ordersCarrying. Both are the same
+				// hazard: a suppression that depends on the sequence OrderService returned the
+				// prescriptions in.
+				for (PatientClinicalContext.ActiveDrugOrder carrier : ordersCarrying(orderCode, context)) {
+					partner.substances.addAll(substancesNamedBy(carrier, substancesByOrderName));
+				}
 			}
 			partner.codes.add(orderCode);
 		}
 		return new ArrayList<OrderPartner>(byIdentity.values());
+	}
+
+	/**
+	 * @return the substances {@code order}'s own recorded names imply, as
+	 *         {@link DrugReference#substanceGroupKey()} values — what a co-medication is known to
+	 *         contain where its ATC codes do not say, or do not say all of it (issue #185). Empty when
+	 *         the loaded dataset carries none of its names, which is the normal answer for an order
+	 *         the reference data does not cover.
+	 *
+	 *         <p>Through {@link DrugReferenceService#findImpliedByDrugName}, the ranked accessor for a
+	 *         recorded drug NAME, and never the unranked matcher underneath it. This decides which
+	 *         chips are SILENCED, and the unranked form admits a strict superset: Sarah Taylor's
+	 *         {@code Hydrocortisone Injection vial 100mg} reaches {@code Hydrocortisone butyrate}
+	 *         there (issue #209), a genuinely different substance whose duplicate-therapy chip against
+	 *         that order has to survive. {@link #resolvesFrom} is deliberately that superset and
+	 *         answers a different question — which order is a SUBJECT's own, where admitting too much
+	 *         costs a pair rather than a suppression.
+	 *
+	 *         <p>Two shapes reach this through the ranked accessor UNRANKED, and both are that
+	 *         accessor's own documented behaviour rather than anything decided here: a name matching
+	 *         exactly one row (nothing to rank), and the {@code rowsOf} fallback for a dataset whose
+	 *         entries omit their own names. That fallback over-reports by design, which for a
+	 *         candidate set is the safe direction and for a SUPPRESSION is not. Measured there as
+	 *         never firing on any shipped dataset; if that stops being true it costs chips here first.
+	 *
+	 *         <p><b>The residual hazard, and what bounds it.</b> An order name that merely CONTAINS
+	 *         another substance's whole name resolves it — the phrase-nesting shape
+	 *         {@link #identifies} records at its own site — and here that silences rather than
+	 *         fabricates, which is the worse direction. Measured 2026-08-13 rather than argued: over
+	 *         every one of the 3.7.1 demo dictionary's 116 {@code WHOATC}-mapped orderable names,
+	 *         asked about every substance the shipped 19 MB KB files in a level-4 subgroup that order
+	 *         carries — 606 questions — this change removes 5 chips and adds none, and all 5 are the
+	 *         self-chip issue #185 is about. Re-measure that way rather than reasoning about it: the
+	 *         population that matters is order names a dictionary actually publishes.
+	 *
+	 *         <p>Asked of EVERY order carrying the unnameable code ({@link #ordersCarrying}), not of
+	 *         the one {@link #orderCarrying} names the partner after. The label may take the first
+	 *         carrier — that is a presentation choice — but a suppression may not, or two orders
+	 *         sharing one unnameable code make the skip a function of the sequence
+	 *         {@code OrderService} returned the prescriptions in.
+	 *
+	 *         <p>Memoised through {@code cache} for the duration of one {@link #orderPartners} call:
+	 *         this is a dataset sweep per name, and an order with several unnameable codes asks it
+	 *         once per such code — see there for why the memo may not be a field. An empty set is a
+	 *         real answer and is cached as one.
+	 */
+	private Set<Object> substancesNamedBy(PatientClinicalContext.ActiveDrugOrder order,
+			Map<PatientClinicalContext.ActiveDrugOrder, Set<Object>> cache) {
+		Set<Object> cached = cache.get(order);
+		if (cached != null) {
+			return cached;
+		}
+		Set<Object> substances = new LinkedHashSet<Object>();
+		for (String name : order.getNames()) {
+			for (DrugReference row : drugReferenceService.findImpliedByDrugName(name)) {
+				substances.add(row.substanceGroupKey());
+			}
+		}
+		cache.put(order, substances);
+		return substances;
 	}
 
 	/**
@@ -3297,12 +3489,34 @@ public class DrugSafetyValidator {
 	 */
 	private static PatientClinicalContext.ActiveDrugOrder orderCarrying(String upperCode,
 			PatientClinicalContext context) {
+		List<PatientClinicalContext.ActiveDrugOrder> carriers = ordersCarrying(upperCode, context);
+		return carriers.isEmpty() ? null : carriers.get(0);
+	}
+
+	/**
+	 * @return EVERY active order whose own concept maps to {@code upperCode}, in the order the context
+	 *         lists them; empty where {@link #orderCarrying} answers null.
+	 *
+	 *         <p>The set form, because a SKIP may not depend on which carrier came back first. The
+	 *         identity/label ladder takes {@link #orderCarrying}'s single answer and always has —
+	 *         a partner is named after one order, and naming it after the first is a presentation
+	 *         choice. What the partner is known to CONTAIN is not: with two orders carrying one code
+	 *         the dataset cannot name, reading only the first one's names made
+	 *         {@code classRelationships}'s restating-existing-therapy skip a function of the sequence
+	 *         {@code OrderService} returned the prescriptions in — the same patient told two different
+	 *         things (issue #185). Every carrier of the code that reached this partner contributes,
+	 *         which is order-independent because the result is a union.
+	 */
+	private static List<PatientClinicalContext.ActiveDrugOrder> ordersCarrying(String upperCode,
+			PatientClinicalContext context) {
+		List<PatientClinicalContext.ActiveDrugOrder> out =
+				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			if (order.getAtcCodes().contains(upperCode)) {
-				return order;
+				out.add(order);
 			}
 		}
-		return null;
+		return out;
 	}
 
 	/**

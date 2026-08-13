@@ -361,6 +361,16 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 * that is what merges {@code Thallous Chloride}/{@code Thallous chloride tl-201} and
 	 * {@code Typhoid vaccine (live)}/{@code Typhoid vaccine live}.
 	 *
+	 * <p><b>The first case also merges one pair it should not, and the loader says so.</b> A row
+	 * carrying no id takes the family's whichever it is, so a DERIVATIVE filed under its parent's
+	 * {@code rxnorm_name} is merged into the parent on the strength of a claim nothing checked:
+	 * {@code Fluoroestradiol f-18} publishes {@code rxnorm_name: estradiol} and no id, so a PET imaging
+	 * tracer takes {@code DB00783}. Nothing here can tell that from the two shapes above — a second
+	 * NAME for one substance and a derivative of it are the same row to this method — so it is not
+	 * repaired here; {@link DrugReferenceValidity#DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE} reports
+	 * it at load instead, keyed on the relationship the display name states. Issue #196 item 4, and the
+	 * one row in the shipped KB it fires on.
+	 *
 	 * <p>Measured over the shipped 19 MB KB (2283 rows; re-measure before relying on the figures): 142
 	 * substance names are shared by more than one row, 19 of them naming two or more DrugBank
 	 * substances and 123 naming at most one. No group the resulting key produces holds two DrugBank

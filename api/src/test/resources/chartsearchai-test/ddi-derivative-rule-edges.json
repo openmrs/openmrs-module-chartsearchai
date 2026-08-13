@@ -1,0 +1,144 @@
+{
+  "metadata": {
+    "note": "HAND-AUTHORED, unlike its sibling ddi-derivative-merged-into-one-substance.json, and deliberately so: measured 2026-08-13 over the shipped 19 MB knowledge base, ZERO of its 2283 rows carry a non-ASCII character in `name` or `rxnorm_name`, so no verbatim slice can exercise the diacritic fold this rule performs. The shape is a real deployment one — a ddinter-format build whose display names are localized while `rxnorm_name` stays RxNorm's ASCII English, the same asymmetry drug-reference-accented-tokens.json covers for the curated format. Here `Fluoroestradiól f-18` carries `estradiol` neither as a bounded word nor as a raw substring; it carries it only once both sides are folded, which is what makes this file the test of the fold rather than of the rule. Ospemifene is the partner that gives every row a rule, so the load is not the parses-to-nothing-in-silence shape issue #242 records. Every field of those three rows except the accented display name and the ids is the shipped value, so the one invention is the one the case is about. THE OTHER END OF THE SAME FOLD, and the one shape that can make the rule's two tests disagree: Marcaine and Sensorcaine share an rxnorm_name of nothing but a combining acute accent. It is non-blank, so it survives normalizeName and keys them as one substance, but it folds to EMPTY — and an empty token is one containsWord refuses while String.contains accepts from every stem, so without the namesAnything gate BOTH rows are reported as derivatives of it. Malformed data, deliberately: this is the only way found to make the halves read different alphabets, and it fails open. THIRD SHAPE, the one that decides what 'merged' means: Ketoconazole (DB01026) and Levoketoconazole (DB05667) are shipped rows verbatim, and Levoketoconazole (oral) is invented beside them. The family names two DrugBank substances, so the id is withheld and the keys fall back to display stems - which puts the TWO Levoketoconazole rows in one family with no parent in it. Nothing was merged there: the module separated the derivative from Ketoconazole exactly as designed, and these are two route variants of the derivative itself. The rule must therefore require a NON-derivative row in the family, or it reports a merge that never happened, twice, for any derivative that has a route variant.",
+    "warning": "Not a slice of the shipped dataset. Do not copy rows from here into a fixture that claims to be verbatim."
+  },
+  "mechanisms": {
+    "6939": {
+      "text": "Coadministration of the radioactive diagnostic agent fluoroestradiol F 18 with drugs that block the estrogen receptor (ER), such as tamoxifen and fulvestrant, may reduce the uptake of fluoroestradiol F 18 into ER-positive tumors.",
+      "categories": [
+        "distribution"
+      ]
+    },
+    "1985": {
+      "text": "The concurrent use of ospemifene with estrogens or other estrogen agonists/antagonists has not been evaluated. Safety and efficacy of this combination are unknown.",
+      "categories": [
+        "others"
+      ]
+    }
+  },
+  "drugs": [
+    {
+      "id": "LOCALE2152",
+      "name": "Fluoroestradiól f-18",
+      "rxcui": "4083",
+      "rxnorm_name": "estradiol",
+      "drugbank_id": null,
+      "atc": [
+        "G03CA03"
+      ],
+      "ciel": []
+    },
+    {
+      "id": "LOCALE679",
+      "name": "Estradiol",
+      "rxcui": "4083",
+      "rxnorm_name": "estradiol",
+      "drugbank_id": "DB00783",
+      "atc": [
+        "G03CA03"
+      ],
+      "ciel": []
+    },
+    {
+      "id": "LOCALE1353",
+      "name": "Ospemifene",
+      "rxcui": "1370971",
+      "rxnorm_name": "ospemifene",
+      "drugbank_id": "DB04938",
+      "atc": [
+        "G03XC05"
+      ],
+      "ciel": []
+    },
+    {
+      "id": "DDInter1008",
+      "name": "Ketoconazole",
+      "rxcui": "6135",
+      "rxnorm_name": "ketoconazole",
+      "drugbank_id": "DB01026",
+      "atc": ["D01AC08", "G01AF11", "H02CA03", "J02AB02"],
+      "ciel": []
+    },
+    {
+      "id": "DDInter2007",
+      "name": "Levoketoconazole",
+      "rxcui": "6135",
+      "rxnorm_name": "ketoconazole",
+      "drugbank_id": "DB05667",
+      "atc": ["D01AC08", "G01AF11", "H02CA03", "J02AB02"],
+      "ciel": []
+    },
+    {
+      "id": "LEVOKETO-ORAL",
+      "name": "Levoketoconazole (oral)",
+      "rxcui": "6135",
+      "rxnorm_name": "ketoconazole",
+      "drugbank_id": null,
+      "atc": ["D01AC08", "G01AF11", "H02CA03", "J02AB02"],
+      "ciel": []
+    },
+    {
+      "id": "MARKS1",
+      "name": "Marcaine",
+      "rxcui": "1000001",
+      "rxnorm_name": "́",
+      "drugbank_id": null,
+      "atc": [],
+      "ciel": []
+    },
+    {
+      "id": "MARKS2",
+      "name": "Sensorcaine",
+      "rxcui": "1000001",
+      "rxnorm_name": "́",
+      "drugbank_id": null,
+      "atc": [],
+      "ciel": []
+    }
+  ],
+  "interactions": [
+    [
+      "LOCALE1353",
+      "LOCALE2152",
+      "Major",
+      "6939"
+    ],
+    [
+      "LOCALE1353",
+      "LOCALE679",
+      "Moderate",
+      "1985"
+    ],
+    [
+      "LOCALE1353",
+      "MARKS1",
+      "Moderate",
+      "1985"
+    ],
+    [
+      "LOCALE1353",
+      "MARKS2",
+      "Moderate",
+      "1985"
+    ],
+    [
+      "LOCALE1353",
+      "DDInter1008",
+      "Moderate",
+      "1985"
+    ],
+    [
+      "LOCALE1353",
+      "DDInter2007",
+      "Moderate",
+      "1985"
+    ],
+    [
+      "LOCALE1353",
+      "LEVOKETO-ORAL",
+      "Moderate",
+      "1985"
+    ]
+  ]
+}

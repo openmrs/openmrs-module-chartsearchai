@@ -63,6 +63,9 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	private static final String DERIVATIVE_MERGED_FIXTURE =
 			"chartsearchai-test/ddi-derivative-merged-into-one-substance.json";
 
+	private static final String DERIVATIVE_RULE_EDGES_FIXTURE =
+			"chartsearchai-test/ddi-derivative-rule-edges.json";
+
 	private final List<File> created = new ArrayList<File>();
 
 	@AfterEach
@@ -107,19 +110,6 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		}
 		throw new AssertionError("no finding for rule '" + rule + "' — findings were: "
 				+ status.getFindings());
-	}
-
-	/** @return the loaded row with exactly this display name — for a case that has to compare two named
-	 *          rows of one fixture, which no production accessor answers (they all resolve a string to a
-	 *          SET of rows, which is the question being asked ABOUT here). */
-	private static DrugReference rowNamed(DrugReferenceService service, String name) {
-		for (DrugReference entry : service.getAll()) {
-			if (name.equals(entry.getName())) {
-				return entry;
-			}
-		}
-		throw new AssertionError("no loaded row named '" + name + "' — loaded: "
-				+ DrugReferenceTestSupport.names(service.getAll()));
 	}
 
 	private static List<String> rulesOf(DrugReferenceLoad status) {
@@ -380,7 +370,11 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		DrugReferenceLoad status;
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			status = service.getLoadStatus();
-			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+			// Asked of THIS rule's line, not of any WARN: the slice deliberately fires the sibling rule
+			// too (asserted below), and logTo logs every finding, so hasEventAtOrAbove(WARN) is
+			// satisfied by that line alone and stays green with this rule deleted outright.
+			assertTrue(capture.messagesAt(Level.WARN).stream().anyMatch(
+					m -> m.contains(DrugReferenceValidity.DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE)),
 					"a PET tracer and a therapeutic oestrogen keyed as one substance is exactly the "
 							+ "content defect this check exists to be loud about. Captured: "
 							+ capture.describeAll());
@@ -392,10 +386,12 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertEquals(1, found.getOccurrences(),
 				"exactly the one merge in this slice, and not the five controls beside it. Detail was: "
 						+ found.getDetail());
-		assertTrue(found.getDetail().contains("Fluoroestradiol f-18")
-				&& found.getDetail().contains("estradiol"),
-				"item 4: the tracer, and the substance it was merged into. Detail was: "
-						+ found.getDetail());
+		// One string, not two `contains` calls: "estradiol" is a substring of "Fluoroestradiol f-18", so
+		// a second conjunct asking for it separately is true whenever the first is and asserts nothing.
+		assertTrue(found.getDetail().contains("Fluoroestradiol f-18 is filed as 'estradiol' beside "
+				+ "[Estradiol, Estradiol (topical)]"),
+				"item 4: the tracer, the substance it was merged into, and the rows it was merged with. "
+						+ "Detail was: " + found.getDetail());
 		assertFalse(found.getDetail().contains("Beclomethasone dipropionate (nasal) is filed as"),
 				"the closest control there is — a row with no drugbank_id of its own inheriting its "
 						+ "family's, exactly as the tracer does, but whose name extends the substance "
@@ -420,8 +416,8 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 						+ found.getDetail());
 
 		assertEquals(11, service.getAll().size(), "every row is still loaded; nothing was dropped");
-		assertEquals(rowNamed(service, "Estradiol").substanceGroupKey(),
-				rowNamed(service, "Fluoroestradiol f-18").substanceGroupKey(),
+		assertEquals(DrugReferenceTestSupport.row(service.getAll(), "Estradiol").substanceGroupKey(),
+				DrugReferenceTestSupport.row(service.getAll(), "Fluoroestradiol f-18").substanceGroupKey(),
 				"and nothing was repaired: the two rows are still one substance, because deciding they "
 						+ "are two would be inventing a fact the data does not carry");
 
@@ -429,6 +425,60 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 				"the sibling rule still fires on this slice — Levoketoconazole publishes 'ketoconazole' "
 						+ "— which is what shows the two rules answer different questions about the same "
 						+ "row. Rules were: " + rulesOf(status));
+	}
+
+	/**
+	 * The three edges of that rule the shipped file cannot reach, in one hand-authored dataset. Each is
+	 * a decision the shipped case leaves untested, and each fails in a direction the other cases would
+	 * not show.
+	 * <ul>
+	 *   <li><b>The fold.</b> Both conditions have to read one alphabet, so the substring test folds
+	 *       diacritics exactly as {@link DrugReference#containsWord} already does. Unfolded,
+	 *       {@code Fluoroestradiól f-18} carries {@code estradiol} neither as a bounded word nor as a
+	 *       raw substring, so a localized dataset would be quieter about a real merge than an ASCII
+	 *       one. Measured over the shipped 19 MB KB: none of its 2283 rows carries a non-ASCII
+	 *       character in {@code name} or {@code rxnorm_name}, so this decision has no verbatim witness
+	 *       and the file says it is hand-authored.</li>
+	 *   <li><b>The one input the two halves can disagree about.</b> A substance name of nothing but
+	 *       combining marks is non-blank to {@code normalizeName} and folds to EMPTY, which
+	 *       {@code containsWord} refuses and {@code contains} accepts from every stem — so both rows of
+	 *       that family would be reported. It fails OPEN, which is why the gate is a guard and not a
+	 *       nicety.</li>
+	 *   <li><b>What "merged" means.</b> A derivative that the module has correctly kept APART from its
+	 *       parent, but which has a route variant of its own, is a family of two derivatives with no
+	 *       parent in it. Reporting those states a merge that never happened — so the rule requires a
+	 *       row that is not a derivative, and a size check alone is not that.</li>
+	 * </ul>
+	 */
+	@Test
+	public void theRuleHoldsAtItsThreeEdges() throws IOException {
+		DrugReferenceService service = loading(DERIVATIVE_RULE_EDGES_FIXTURE, "h196-item4-edges.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(capture.messagesAt(Level.WARN).stream().anyMatch(
+					m -> m.contains(DrugReferenceValidity.DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE)),
+					"a localized dataset is not a quieter one. Captured: " + capture.describeAll());
+		}
+		assertEquals(8, service.getAll().size(), "a ddi document that parses to nothing does so in "
+				+ "silence (issue #242), and every assertion below would then pass vacuously");
+
+		DrugReferenceValidity.Finding found = finding(status,
+				DrugReferenceValidity.DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE);
+		assertEquals(1, found.getOccurrences(), "the localized derivative, and only it — not the two "
+				+ "rows whose substance name folds to nothing, and not the two route variants of a "
+				+ "derivative that has no parent in its family. Detail was: " + found.getDetail());
+		assertTrue(found.getDetail().contains("Fluoroestradiól f-18 is filed as"),
+				"the accented display name is the row reported. Detail was: " + found.getDetail());
+		assertFalse(found.getDetail().contains("Marcaine") || found.getDetail().contains("Sensorcaine"),
+				"a substance name that folds to nothing names nothing, so no row derives from it. "
+						+ "Detail was: " + found.getDetail());
+		assertFalse(found.getDetail().contains("Levoketoconazole"),
+				"the module kept this derivative apart from Ketoconazole exactly as designed; its two "
+						+ "rows are route variants of the derivative itself, and nothing was merged. "
+						+ "Detail was: " + found.getDetail());
 	}
 
 	// ------------------------------------------------------------------

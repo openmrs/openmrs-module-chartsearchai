@@ -2561,9 +2561,24 @@ public class DrugSafetyValidator {
 	 *         mapped to the codes of two interacting entries witnessed the pair between them from one
 	 *         order.
 	 *
-	 *         <p>Sharing an exact ATC code means being the same substance (level 5 is per-substance;
-	 *         class relatedness is {@link DrugReference#atcSubgroups()}'s business, not this one's), so
-	 *         the code leg cannot mistake a different drug's order for the subject's own.
+	 *         <p><b>Sharing an exact ATC code is not the same as being one substance.</b> Level 5 is
+	 *         per-substance in the ATC standard, and this paragraph used to say so flatly and conclude
+	 *         that the code leg cannot mistake another drug's order for the subject's own. That is
+	 *         false of THIS knowledge base, which files two substances under one level-5 code — the
+	 *         premise issue #185 turned on. The counterexample is pinned as a fixture premise rather
+	 *         than restated as a number here: see
+	 *         {@code DuplicateTherapySelfChipTest.theFixtureReallyFilesOmeprazoleUnderEsomeprazolesCode},
+	 *         which asserts the two rows publish one code and are two substances. (Class relatedness
+	 *         is still {@link DrugReference#atcSubgroups()}'s business and not this one's.)
+	 *
+	 *         <p>So the code leg CAN count a different substance's order as the subject's own, and is
+	 *         kept anyway, because its residue runs the same safe direction as the name leg's below:
+	 *         an over-wide answer withholds a partner, which misses a pair and can never invent one.
+	 *         That reasoning is this predicate's alone and does not transfer.
+	 *         {@link #classRelationships}'s restating-existing-therapy skip keeps its own exact-code
+	 *         test beside a substance-identity one for the opposite reason — there the code is all a
+	 *         context carrying no order has to go on, and dropping the leg raises a chip that arm has
+	 *         never raised.
 	 *
 	 *         <p>Since issue #209 the name leg is a strict SUPERSET of what
 	 *         {@link DrugReferenceService#findImpliedByDrugName} would admit from the same order, because

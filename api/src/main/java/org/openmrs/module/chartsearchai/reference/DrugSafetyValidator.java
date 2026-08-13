@@ -987,12 +987,14 @@ public class DrugSafetyValidator {
 			// merge different sets of rows. Its javadoc is where the two key spaces are justified. It is
 			// what keeps issue #206's resolved subject a RENAME: every row of one substance answers this
 			// alike, so choosing a different row of the group to name the chip after cannot move its key.
-			// Keying on the row's IDENTITY instead happens to partition the chips the same way today
-			// (measured — the whole suite stays green), but only while every subject reaching here is one
-			// object per substance, which the identity branch of addAllergyContraindications already does
-			// not guarantee: it passes the ALLERGEN row on purpose. So this form is a requirement and not
-			// a preference. What actually duplicates chips is passing the RAISING row here while naming
-			// the chip from the resolved one (also measured: 4 chips where 2 are correct — see
+			// Keying on the row's IDENTITY instead is NOT the same partition, and the difference is the
+			// identity branch of addAllergyContraindications: it hands this the ALLERGEN row on purpose,
+			// so two allergy RECORDS resolving two rows of one substance would key apart. Measured — that
+			// mutation fails
+			// AllergenExactNameResolutionTest.twoRecordedAllergiesToOneSubstanceStillRaiseOneChipPerSubject
+			// — so this form is a requirement and not a statement of intent. What duplicates chips the
+			// other way is passing the RAISING row here while naming the chip from the resolved one (also
+			// measured: 4 chips where 2 are correct — see
 			// ContraindicationSubjectLabelTest.twoFindingsAboutOneSubjectStayTwoChips).
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);

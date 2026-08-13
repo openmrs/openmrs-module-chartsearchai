@@ -114,11 +114,13 @@ public class ContraindicationSubjectLabelTest {
 		// duplicating the chips rather than renaming them, which is what "a more precise resolver without
 		// a matching ledger key" costs.
 		//
-		// Keying the ledger on the resolved subject ROW alone is NOT that mutation and changes nothing —
-		// also measured, all 1124 tests green — because the resolver answers with one row per substance,
-		// so row identity and substanceGroupKey partition the chips identically once the subject is
-		// resolved. substanceGroupKey is kept because it says which partition is intended without
-		// depending on that.
+		// Keying the ledger on the resolved subject ROW alone is NOT that mutation. While every subject
+		// reaching the ledger came from the resolver it was an EQUIVALENT one — measured green — because
+		// the resolver answers with one row per substance. It stopped being equivalent when the identity
+		// branch began handing the ledger the ALLERGEN row on purpose: re-measured, it now fails
+		// AllergenExactNameResolutionTest.twoRecordedAllergiesToOneSubstanceStillRaiseOneChipPerSubject,
+		// because two allergy records resolving two rows of one substance then key apart. So
+		// substanceGroupKey is a requirement, not a statement of intent — see ContraindicationChips.add.
 		List<SafetyWarning> warnings = fixtureValidator().validate("", QUESTION,
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Procaine", "Tetracaine"), null));

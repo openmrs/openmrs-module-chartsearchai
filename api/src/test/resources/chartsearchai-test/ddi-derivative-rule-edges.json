@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "note": "HAND-AUTHORED, unlike its sibling ddi-derivative-merged-into-one-substance.json, and deliberately so: measured 2026-08-13 over the shipped 19 MB knowledge base, ZERO of its 2283 rows carry a non-ASCII character in `name` or `rxnorm_name`, so no verbatim slice can exercise the diacritic fold this rule performs. The shape is a real deployment one — a ddinter-format build whose display names are localized while `rxnorm_name` stays RxNorm's ASCII English, the same asymmetry drug-reference-accented-tokens.json covers for the curated format. Here `Fluoroestradiól f-18` carries `estradiol` neither as a bounded word nor as a raw substring; it carries it only once both sides are folded, which is what makes this file the test of the fold rather than of the rule. Ospemifene is the partner that gives every row a rule, so the load is not the parses-to-nothing-in-silence shape issue #242 records. Every field of those three rows except the accented display name and the ids is the shipped value, so the one invention is the one the case is about. THE OTHER END OF THE SAME FOLD, and the one shape that can make the rule's two tests disagree: Marcaine and Sensorcaine share an rxnorm_name of nothing but a combining acute accent. It is non-blank, so it survives normalizeName and keys them as one substance, but it folds to EMPTY — and an empty token is one containsWord refuses while String.contains accepts from every stem, so without the namesAnything gate BOTH rows are reported as derivatives of it. Malformed data, deliberately: this is the only way found to make the halves read different alphabets, and it fails open. THIRD SHAPE, the one that decides what 'merged' means: Ketoconazole (DB01026) and Levoketoconazole (DB05667) are shipped rows verbatim, and Levoketoconazole (oral) is invented beside them. The family names two DrugBank substances, so the id is withheld and the keys fall back to display stems - which puts the TWO Levoketoconazole rows in one family with no parent in it. Nothing was merged there: the module separated the derivative from Ketoconazole exactly as designed, and these are two route variants of the derivative itself. The rule must therefore require a NON-derivative row in the family, or it reports a merge that never happened, twice, for any derivative that has a route variant.",
+    "note": "HAND-AUTHORED, unlike its sibling ddi-derivative-merged-into-one-substance.json, and deliberately so: measured 2026-08-13 over the shipped 19 MB knowledge base, ZERO of its 2283 rows carry a non-ASCII character in `name` or `rxnorm_name`, so no verbatim slice can exercise the diacritic fold this rule performs. The shape is a real deployment one — a ddinter-format build whose display names are localized while `rxnorm_name` stays RxNorm's ASCII English, the same asymmetry drug-reference-accented-tokens.json covers for the curated format. Here `Fluoroestradiól f-18` carries `estradiol` neither as a bounded word nor as a raw substring; it carries it only once both sides are folded, which is what makes this file the test of the fold rather than of the rule. Ospemifene is the partner that gives every row a rule, so the load is not the parses-to-nothing-in-silence shape issue #242 records. Every field of those three rows except the accented display name and the ids is the shipped value, so the one invention is the one the case is about. THE OTHER END OF THE SAME FOLD, and the one input on which the rule's two tests disagree: Bupivacaine hcl-2 and Marcaine share an rxnorm_name of a bare hyphen. It is non-blank, so it survives normalizeName and keys them as one substance, and it names nothing - and containsWord refuses a token with no letter or digit while String.contains happily finds '-' inside 'bupivacaine hcl-2' and not inside 'marcaine'. So without the namesAnything gate the family holds a parent (Marcaine) and a 'derivative' (Bupivacaine hcl-2), and the row is reported as deriving from '-'. Malformed data, deliberately, and it fails OPEN. A substance name of nothing but combining marks does NOT witness this: it folds to empty, contains(\"\") is true of every stem, so every row derives, and the parent gate silences the family before the guard matters. THIRD SHAPE, the one that decides what 'merged' means: Ketoconazole (DB01026) and Levoketoconazole (DB05667) are shipped rows verbatim, and Levoketoconazole (oral) is invented beside them. The family names two DrugBank substances, so the id is withheld and the keys fall back to display stems - which puts the TWO Levoketoconazole rows in one family with no parent in it. Nothing was merged there: the module separated the derivative from Ketoconazole exactly as designed, and these are two route variants of the derivative itself. The rule must therefore require a NON-derivative row in the family, or it reports a merge that never happened, twice, for any derivative that has a route variant.",
     "warning": "Not a slice of the shipped dataset. Do not copy rows from here into a fixture that claims to be verbatim."
   },
   "mechanisms": {
@@ -57,7 +57,12 @@
       "rxcui": "6135",
       "rxnorm_name": "ketoconazole",
       "drugbank_id": "DB01026",
-      "atc": ["D01AC08", "G01AF11", "H02CA03", "J02AB02"],
+      "atc": [
+        "D01AC08",
+        "G01AF11",
+        "H02CA03",
+        "J02AB02"
+      ],
       "ciel": []
     },
     {
@@ -66,7 +71,12 @@
       "rxcui": "6135",
       "rxnorm_name": "ketoconazole",
       "drugbank_id": "DB05667",
-      "atc": ["D01AC08", "G01AF11", "H02CA03", "J02AB02"],
+      "atc": [
+        "D01AC08",
+        "G01AF11",
+        "H02CA03",
+        "J02AB02"
+      ],
       "ciel": []
     },
     {
@@ -75,23 +85,28 @@
       "rxcui": "6135",
       "rxnorm_name": "ketoconazole",
       "drugbank_id": null,
-      "atc": ["D01AC08", "G01AF11", "H02CA03", "J02AB02"],
+      "atc": [
+        "D01AC08",
+        "G01AF11",
+        "H02CA03",
+        "J02AB02"
+      ],
       "ciel": []
     },
     {
-      "id": "MARKS1",
-      "name": "Marcaine",
+      "id": "NAMELESS1",
+      "name": "Bupivacaine hcl-2",
       "rxcui": "1000001",
-      "rxnorm_name": "́",
+      "rxnorm_name": "-",
       "drugbank_id": null,
       "atc": [],
       "ciel": []
     },
     {
-      "id": "MARKS2",
-      "name": "Sensorcaine",
+      "id": "NAMELESS2",
+      "name": "Marcaine",
       "rxcui": "1000001",
-      "rxnorm_name": "́",
+      "rxnorm_name": "-",
       "drugbank_id": null,
       "atc": [],
       "ciel": []
@@ -112,18 +127,6 @@
     ],
     [
       "LOCALE1353",
-      "MARKS1",
-      "Moderate",
-      "1985"
-    ],
-    [
-      "LOCALE1353",
-      "MARKS2",
-      "Moderate",
-      "1985"
-    ],
-    [
-      "LOCALE1353",
       "DDInter1008",
       "Moderate",
       "1985"
@@ -137,6 +140,18 @@
     [
       "LOCALE1353",
       "LEVOKETO-ORAL",
+      "Moderate",
+      "1985"
+    ],
+    [
+      "LOCALE1353",
+      "NAMELESS1",
+      "Moderate",
+      "1985"
+    ],
+    [
+      "LOCALE1353",
+      "NAMELESS2",
       "Moderate",
       "1985"
     ]

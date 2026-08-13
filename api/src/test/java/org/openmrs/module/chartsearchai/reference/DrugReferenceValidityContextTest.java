@@ -399,8 +399,8 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 						+ "KB are silent for that reason. Detail was: " + found.getDetail());
 		// Asked as "not the SUBJECT of an occurrence" rather than "absent", because this control is a row
 		// of the offending row's own family and the detail names those deliberately — an operator needs
-		// to know what the derivative was merged WITH. The three controls below are each their own
-		// single-row family, so they cannot appear in any position, and absence is the stricter claim.
+		// to know what the derivative was merged WITH. Daxibotulinumtoxina is in a two-row family of its
+		// own and can appear the same way; Levoketoconazole and Ospemifene are singletons and cannot.
 		assertFalse(found.getDetail().contains("Estradiol (topical) is filed as"),
 				"the control a route variant is: its stem IS the substance name, so it is a "
 						+ "presentation rather than a derivative. Detail was: " + found.getDetail());
@@ -416,10 +416,23 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 						+ found.getDetail());
 
 		assertEquals(11, service.getAll().size(), "every row is still loaded; nothing was dropped");
-		assertEquals(DrugReferenceTestSupport.row(service.getAll(), "Estradiol").substanceGroupKey(),
-				DrugReferenceTestSupport.row(service.getAll(), "Fluoroestradiol f-18").substanceGroupKey(),
+		List<DrugReference> all = service.getAll();
+		assertEquals(DrugReferenceTestSupport.row(all, "Estradiol").substanceGroupKey(),
+				DrugReferenceTestSupport.row(all, "Fluoroestradiol f-18").substanceGroupKey(),
 				"and nothing was repaired: the two rows are still one substance, because deciding they "
 						+ "are two would be inventing a fact the data does not carry");
+		// The two controls that need an identity, asserted rather than narrated: an assertFalse on a
+		// detail string cannot tell a control that is present and correctly silent from one that was
+		// removed from the fixture.
+		assertEquals(DrugReferenceTestSupport.row(all, "Botulinum toxin type A").substanceGroupKey(),
+				DrugReferenceTestSupport.row(all, "Daxibotulinumtoxina").substanceGroupKey(),
+				"the #164 merge this rule must not report is only a control while it IS a merge");
+		assertEquals(
+				DrugReferenceTestSupport.row(all, "Beclomethasone dipropionate").substanceGroupKey(),
+				DrugReferenceTestSupport.row(all, "Beclomethasone dipropionate (nasal)")
+						.substanceGroupKey(),
+				"and the ester control only isolates containsWord while the two rows are one substance "
+						+ "— the (nasal) row carries no drugbank_id of its own and inherits DB00394");
 
 		assertTrue(rulesOf(status).contains(DrugReferenceValidity.ALIAS_NAMES_ANOTHER_SUBSTANCE),
 				"the sibling rule still fires on this slice — Levoketoconazole publishes 'ketoconazole' "
@@ -439,11 +452,13 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 *       one. Measured over the shipped 19 MB KB: none of its 2283 rows carries a non-ASCII
 	 *       character in {@code name} or {@code rxnorm_name}, so this decision has no verbatim witness
 	 *       and the file says it is hand-authored.</li>
-	 *   <li><b>The one input the two halves can disagree about.</b> A substance name of nothing but
-	 *       combining marks is non-blank to {@code normalizeName} and folds to EMPTY, which
-	 *       {@code containsWord} refuses and {@code contains} accepts from every stem — so both rows of
-	 *       that family would be reported. It fails OPEN, which is why the gate is a guard and not a
-	 *       nicety.</li>
+	 *   <li><b>The one input the two halves can disagree about.</b> A substance name with no letter or
+	 *       digit is non-blank to {@code normalizeName}, and {@code containsWord} refuses it while
+	 *       {@code String.contains} finds it in whichever stems carry the character — so an
+	 *       {@code rxnorm_name} of {@code "-"} makes {@code Bupivacaine hcl-2} a "derivative" of
+	 *       {@code "-"} beside {@code Marcaine}. It fails OPEN, which is why the gate is a guard and
+	 *       not a nicety. A marks-only token is not this witness: it folds to empty, every row of the
+	 *       family then derives, and the parent gate silences it first.</li>
 	 *   <li><b>What "merged" means.</b> A derivative that the module has correctly kept APART from its
 	 *       parent, but which has a route variant of its own, is a family of two derivatives with no
 	 *       parent in it. Reporting those states a merge that never happened — so the rule requires a
@@ -467,13 +482,13 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 
 		DrugReferenceValidity.Finding found = finding(status,
 				DrugReferenceValidity.DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE);
-		assertEquals(1, found.getOccurrences(), "the localized derivative, and only it — not the two "
-				+ "rows whose substance name folds to nothing, and not the two route variants of a "
-				+ "derivative that has no parent in its family. Detail was: " + found.getDetail());
-		assertTrue(found.getDetail().contains("Fluoroestradiól f-18 is filed as"),
+		assertEquals(1, found.getOccurrences(), "the localized derivative, and only it — not the row "
+				+ "whose substance name names nothing, and not the two route variants of a derivative "
+				+ "that has no parent in its family. Detail was: " + found.getDetail());
+		assertTrue(found.getDetail().contains("Fluoroestradiól f-18 is filed as '"),
 				"the accented display name is the row reported. Detail was: " + found.getDetail());
-		assertFalse(found.getDetail().contains("Marcaine") || found.getDetail().contains("Sensorcaine"),
-				"a substance name that folds to nothing names nothing, so no row derives from it. "
+		assertFalse(found.getDetail().contains("Bupivacaine hcl-2"),
+				"a substance name with no letter or digit names nothing, so no row derives from it. "
 						+ "Detail was: " + found.getDetail());
 		assertFalse(found.getDetail().contains("Levoketoconazole"),
 				"the module kept this derivative apart from Ketoconazole exactly as designed; its two "

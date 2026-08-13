@@ -615,32 +615,29 @@ public final class DrugReferenceValidity {
 	 *       shape issue #196 records as undetectable from inside the file, and a derivative the module
 	 *       has correctly kept APART from its parent that has route variants of its OWN;</li>
 	 *   <li>the name must carry the substance's own name as a bounded WORD to be excluded, so every
-	 *       presentation, salt and ester stays silent — and so does every second NAME for one
-	 *       substance, which carries it neither as a word nor as a substring. That exclusion is the
-	 *       load-bearing half: measured over the shipped KB, <b>12</b> rows are silent only because of
-	 *       it, every one inspected an ester, a salt or a preparation
+	 *       presentation, salt and ester is read as what it is rather than as a derivative. That is not
+	 *       a rare shape: 12 rows of the shipped KB carry their substance's name as a bounded word
 	 *       ({@code Beclomethasone dipropionate} under {@code beclomethasone},
 	 *       {@code Estrone sulfate} under {@code estrone}, the four
-	 *       {@code Human immunoglobulin G} routes under {@code immunoglobulin g}), so without it this
-	 *       rule would report 13 rows of which 12 are correct data.</li>
+	 *       {@code Human immunoglobulin G} routes under {@code immunoglobulin g}), measured through
+	 *       {@link DrugReference#displayStem}/{@link DrugReference#containsWord} over the file.</li>
 	 * </ul>
 	 * Folded through {@link DrugReference#foldDiacritics} before the substring half so that half and
 	 * {@link DrugReference#containsWord} read the same alphabet; unfolded, a localized dataset would be
 	 * quieter about a real merge than an ASCII one. No shipped row can witness that — measured
 	 * 2026-08-13, none of the 2283 carries a non-ASCII character in {@code name} or {@code rxnorm_name}
-	 * — so {@code ddi-derivative-localized-name.json} is hand-authored and says so.
+	 * — so {@code ddi-derivative-rule-edges.json} is hand-authored and says so.
 	 *
-	 * <p><b>Which datasets this can fire on at all.</b> It needs a family of more than one row to hold a
-	 * derivative, so it needs {@link DrugReference#substanceKey()} to be non-null and shared, and what
-	 * supplies that differs per format. The {@code atc} adapter publishes no substance name, so every
-	 * row is its own family and the rule is vacuous there. The {@code ddinter} adapter publishes the
-	 * registry that keys a derivative WITH ITS PARENT, which is the shipped case. A curated
-	 * {@code json} file falls back to the display STEM — so it cannot key a derivative with its parent,
-	 * whose stem differs by construction, but it can key one with its own qualifier variant
-	 * ({@code Fluoroestradiol f-18} and {@code Fluoroestradiol f-18 (suspension)} both declaring
-	 * {@code substanceName: estradiol}), which is the shape {@code drug-reference-charted-substance-row}
-	 * already ships for {@code Amoxicillin}. So the rule is not {@code ddinter}-only; what is
-	 * {@code ddinter}-only is the derivative-and-parent merge it was written for.
+	 * <p><b>Which datasets this can fire on at all, and why it is one.</b> Reporting needs a family
+	 * holding both a derivative row and a row that is not one, so it needs
+	 * {@link DrugReference#substanceKey()} to be shared by rows whose display STEMS differ. Only a
+	 * resolved substance registry id can do that: where the key falls back to the stem — the curated
+	 * {@code json} schema, which publishes no registry — every row of a family has the same stem AND
+	 * the same substance name, so {@link #derivesFromItsOwnSubstance} is constant across it and the
+	 * family is either wholly derivative (no parent, skipped) or wholly not (nothing to report). The
+	 * {@code atc} adapter publishes no substance name at all, so every row is its own family. Today
+	 * that leaves the {@code ddinter} adapter, and this is a derivation from the two gates rather than
+	 * a list of formats to maintain.
 	 *
 	 * <p><b>REPORTED.</b> Splitting the rows would be inventing the fact the data is missing — the
 	 * loader cannot tell a derivative that is a different substance from one the registry would confirm
@@ -724,28 +721,6 @@ public final class DrugReferenceValidity {
 	}
 
 	/**
-	 * @return whether this row's display stem names a DERIVATIVE of the substance the data filed it
-	 *         under: it carries that substance's name, and not as a bounded word. Two conditions
-	 *         because there are three answers, and {@link DrugReference#containsWord} rules out two of
-	 *         them at once — the stem that IS the substance name (a row of it, {@code Estradiol}) and
-	 *         the stem that carries it as a WORD (a presentation, salt or ester of it,
-	 *         {@code Beclomethasone dipropionate} under {@code beclomethasone}). What the substring test
-	 *         then rules out is the third: a stem not carrying the name at all is a second NAME for the
-	 *         substance, which issue #164 measured as one substance ({@code Daxibotulinumtoxina}). It is
-	 *         also what keeps the total key {@link DrugReference#displayStem} is documented to return
-	 *         silent — the empty stem carries nothing — which the first test would not, since
-	 *         {@link DrugReference#containsWord} is false there and false is this predicate's REPORTING
-	 *         direction. Only what survives both is a derivative.
-	 *
-	 *         <p>Gated on the substance name being a name at all, through this class's own
-	 *         {@link #namesAnything}: a token of nothing but combining marks is non-blank to
-	 *         {@link DrugReference#normalizeName} and folds to EMPTY, and the two tests then disagree
-	 *         about it — {@code containsWord} refuses an empty token while {@code contains("")} accepts
-	 *         every stem — so every row of such a family would be reported. That is the one way these
-	 *         two halves can read different alphabets, and it fails OPEN, which is the direction this
-	 *         class does not accept.
-	 */
-	/**
 	 * @return whether {@code rows} holds a row the derivatives among them could have been merged WITH:
 	 *         one that is not itself a derivative of the substance they all claim. This is the family
 	 *         gate, and a size check is not it — a derivative the module has correctly kept APART from
@@ -756,6 +731,10 @@ public final class DrugReferenceValidity {
 	 *         family with no parent in it, and without this gate both are reported, each naming the
 	 *         other. Measured through this rule on {@code ddi-derivative-rule-edges.json}: 3
 	 *         occurrences without the gate, 1 with it.
+	 *
+	 *         <p>Strictly narrower than the size check it replaced, which is why it can only remove
+	 *         findings: a reported row derives, this needs one that does not, and the two cannot be the
+	 *         same row.
 	 */
 	private static boolean holdsAParent(List<DrugReference> rows) {
 		for (DrugReference row : rows) {
@@ -766,6 +745,28 @@ public final class DrugReferenceValidity {
 		return false;
 	}
 
+	/**
+	 * @return whether this row's display stem names a DERIVATIVE of the substance the data filed it
+	 *         under: it carries that substance's name, and not as a bounded word. Two conditions
+	 *         because there are three answers, and {@link DrugReference#containsWord} rules out two of
+	 *         them at once — the stem that IS the substance name (a row of it, {@code Estradiol}) and
+	 *         the stem that carries it as a WORD (a presentation, salt or ester of it,
+	 *         {@code Beclomethasone dipropionate} under {@code beclomethasone}). What the substring test
+	 *         then rules out is the third: a stem not carrying the name at all is a second NAME for the
+	 *         substance, which issue #164 measured as one substance ({@code Daxibotulinumtoxina}). Only
+	 *         what survives both is a derivative.
+	 *
+	 *         <p>Gated on the substance name being a name at all, through this class's own
+	 *         {@link #namesAnything}, because that is where the two tests can disagree: a token with no
+	 *         letter or digit is non-blank to {@link DrugReference#normalizeName}, and
+	 *         {@code containsWord} refuses it while {@code String.contains} finds it in whichever stems
+	 *         happen to carry the character. An {@code rxnorm_name} of {@code "-"} shared by
+	 *         {@code Bupivacaine hcl-2} and {@code Marcaine} therefore reports the first as deriving
+	 *         from {@code "-"} — it fails OPEN, which is the direction this class does not accept.
+	 *         A token of nothing but combining marks is NOT that witness, though it looks like one: it
+	 *         folds to empty, {@code contains("")} is true of every stem, so every row of the family
+	 *         derives and {@link #holdsAParent} silences it before this gate is reached.
+	 */
 	private static boolean derivesFromItsOwnSubstance(DrugReference row) {
 		String substance = DrugReference.normalizeName(row.getSubstanceName());
 		if (substance == null || !namesAnything(substance)) {

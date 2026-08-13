@@ -73,21 +73,48 @@ public class CrossReactivityGroup {
 
 	/** @return true when the given normalized (upper-cased) ATC code falls under any of this group's prefixes. */
 	public boolean containsCode(String normalizedAtcCode) {
-		if (normalizedAtcCode == null || normalizedAtcCode.isEmpty()) {
+		return fallsUnder(normalizedAtcCode, normalizedAtcPrefixes());
+	}
+
+	/**
+	 * @return true when any of the given normalized ATC codes falls under any of this group's
+	 *         prefixes.
+	 *
+	 *         <p>Normalizes this group's prefixes ONCE per call rather than once per code:
+	 *         {@link #normalizedAtcPrefixes()} rebuilds the set every time it is asked, and this
+	 *         runs inside {@code DrugSafetyValidator}'s per-pair screening across the candidate
+	 *         set, so asking per code cost one normalization per (group, code) pair (issue #230).
+	 *         Nothing measurable on the shipped one-group file — it ships a 2-prefix NSAID group —
+	 *         so this is about not carrying a shape that scales with (groups × codes) into a
+	 *         deployment that expands the curated groups, which is what that path is for (#183).
+	 *
+	 *         <p>The normalized set is held in a LOCAL and never in a field. The groups file is
+	 *         reloadable and {@link #setAtcPrefixes} is the write path the loader and Jackson go
+	 *         through, so a set cached on the instance would keep answering with the prefixes the
+	 *         group used to carry — silently, because every test loads once and never asks twice
+	 *         (the constraint issue #172 records; pinned by
+	 *         {@code CrossReactivityGroupsTest#replacedPrefixesAreSeenOnTheNextQuestion_soTheNormalizationIsNeverCachedOnTheInstance}).
+	 */
+	public boolean containsAnyCode(Set<String> normalizedAtcCodes) {
+		if (normalizedAtcCodes.isEmpty()) {
 			return false;
 		}
-		for (String prefix : normalizedAtcPrefixes()) {
-			if (normalizedAtcCode.startsWith(prefix)) {
+		Set<String> prefixes = normalizedAtcPrefixes();
+		for (String code : normalizedAtcCodes) {
+			if (fallsUnder(code, prefixes)) {
 				return true;
 			}
 		}
 		return false;
 	}
 
-	/** @return true when any of the given normalized ATC codes falls under any of this group's prefixes. */
-	public boolean containsAnyCode(Set<String> normalizedAtcCodes) {
-		for (String code : normalizedAtcCodes) {
-			if (containsCode(code)) {
+	/** The one membership rule both accessors above answer with, so the two cannot drift apart. */
+	private static boolean fallsUnder(String normalizedAtcCode, Set<String> normalizedPrefixes) {
+		if (normalizedAtcCode == null || normalizedAtcCode.isEmpty()) {
+			return false;
+		}
+		for (String prefix : normalizedPrefixes) {
+			if (normalizedAtcCode.startsWith(prefix)) {
 				return true;
 			}
 		}

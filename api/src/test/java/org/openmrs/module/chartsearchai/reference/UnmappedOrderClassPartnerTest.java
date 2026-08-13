@@ -51,8 +51,8 @@ import org.junit.jupiter.api.Test;
 public class UnmappedOrderClassPartnerTest {
 
 	/** Verbatim KB rows. Dexamethasone {@code H02AB02} and Hydrocortisone {@code H02AB09} are the
-	 *  issue's own measured pair, and both carry a route-variant family, so the partner label is a
-	 *  {@code canonicalRow} choice rather than a single row's name. */
+	 *  issue's own measured pair, and hydrocortisone is filed as four rows spanning two substances, so
+	 *  naming its partner is a real choice among rows rather than reading one row's name. */
 	private static final String FIXTURE = DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS;
 
 	/** The nitroimidazole fixture issue #186's grouping cases use, reached here through its
@@ -214,6 +214,41 @@ public class UnmappedOrderClassPartnerTest {
 		assertEquals("Dexamethasone is in the same ATC class (H02AB) as active order"
 				+ " Hydrocortisone (topical) — possible duplicate therapy",
 				warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void anUnmappedOrderDoesNotRENAMEACoMedicationTheDictionaryAlreadyAttributed() throws IOException {
+		// The other half of "a substance the code walk already reached is left alone": not merely that
+		// it stays ONE co-medication, but that the partner keeps the attribution the code walk gave it.
+		//
+		// The mapped order here is issue #186's partly-covered shape — the dataset covers P01AB01 and
+		// not J01XD01, so the partner is renamed after the ORDER, because the dataset's name speaks only
+		// for the codes it covers. A second, unmapped order of the same substance must not quietly
+		// replace that partner with a dataset-named one: same count, different sentence, and the count
+		// is the half that cannot see it.
+		//
+		// Both halves of the sentence move under that replacement, which is what makes the assertion
+		// worth writing out in full. The class named is J01XD — the order's UNCOVERED code, which the
+		// dataset's Metronidazole row does not publish — so a replacement swaps the ORDER's codes for
+		// the row's and the chip states P01AB instead, beside the row's name.
+		Set<String> mappedNames = DrugReferenceTestSupport.set("Metronidazole 500mg");
+		Set<String> unmappedNames = DrugReferenceTestSupport.set("Metronidazole gel");
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Metronidazole 500mg", "Metronidazole gel"),
+				DrugReferenceTestSupport.set("P01AB01", "J01XD01"), null, null,
+				Arrays.asList(
+						DrugReferenceTestSupport.activeOrder("order-228-g", "Metronidazole 500mg",
+								mappedNames, DrugReferenceTestSupport.set("P01AB01", "J01XD01")),
+						DrugReferenceTestSupport.activeOrder("order-228-h", "Metronidazole gel",
+								unmappedNames, null)));
+
+		List<String> chips = classChipDetails(
+				nitroimidazoleChips("Is it safe to give tinidazole?", context));
+
+		assertEquals(1, chips.size(), "two orders of one substance are one co-medication, was: " + chips);
+		assertEquals("Tinidazole is in the same ATC class (J01XD) as active order Metronidazole 500mg"
+				+ " — possible duplicate therapy", chips.get(0),
+				"and it keeps the codes and the name the code walk gave it, not the dataset's");
 	}
 
 	@Test

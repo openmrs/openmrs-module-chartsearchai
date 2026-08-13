@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -1428,6 +1429,14 @@ public class DrugSafetyValidator {
 	 *         duplicate-therapy relationship twice.
 	 */
 	private SubjectRule ruleAbout(Set<String> orderCodes, List<SubjectRule> rules) {
+		if (rules.isEmpty()) {
+			// Both tests below are inside the rule loop, so with no rules the answer is null whatever
+			// the codes are — and resolving them is a full dataset scan per code. That is the ORDINARY
+			// outcome of this arm: a class-only chip is one this method answered null for, and issue
+			// #228 made both sides of the product larger (more partners, and a name-reached partner
+			// carries the reference row's whole code list rather than one dictionary's).
+			return null;
+		}
 		for (String orderCode : new TreeSet<String>(orderCodes)) {
 			DrugReference orderEntry = entryForAtcCode(orderCode);
 			for (SubjectRule rule : rules) {
@@ -3130,9 +3139,10 @@ public class DrugSafetyValidator {
 					|| (!partner.codesFromDataset
 							&& !Collections.disjoint(partner.codes, refCodes))) {
 				// Restating existing therapy is not a duplicate. Identity first because it is the
-				// question; the exact-code leg second because it answers where no order names the
-				// partner — and ONLY there, which is what the guard says. See this method's javadoc
-				// for why both are needed and why the code leg's one over-skip is deliberate.
+				// question; the exact-code leg second because it answers where the dataset cannot name
+				// the partner — and only where the partner's codes are the CHART's, which is what the
+				// guard says. See this method's javadoc for why both are needed and why the code leg's
+				// one over-skip is deliberate.
 				continue;
 			}
 			String shared = sharedClass(refClasses, DrugReference.atcSubgroups(partner.codes));
@@ -3377,15 +3387,16 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>Issue #228 gave that resolution a second caller, and it is the one that raises the bound:
 	 * {@link #addPartnersForUnmappedOrders} asks it once per DICTIONARY-UNMAPPED order rather than once
-	 * per unnameable code, through the same per-call memo, so the work is one dataset sweep per name of
-	 * each such order per call — and this method is called once per in-play substance. Counted rather
-	 * than estimated, by delegating through the real service: over the 3.7.1 standalone's whole order
-	 * list, one {@code validate} with three substances in play makes <b>162</b>
-	 * {@link DrugReferenceService#findImpliedByDrugName} calls (27 unmapped orders × 2 names × 3
-	 * substances) where the pre-change code made none for those orders, and
-	 * {@link DrugReferenceInjector#injectRecords} runs {@code validate} twice per query. No TIME is
-	 * claimed for that; the sentence above says how to measure one, and the per-pass memo stays unbuilt
-	 * for the reason stated there rather than because the repeat is free.
+	 * per unnameable code, through the same per-call memo, so the work is one dataset sweep per NAME of
+	 * each such order, per call — and this method is called once per in-play substance, while
+	 * {@code validate} itself runs twice per query (pre-answer through
+	 * {@link DrugReferenceInjector#preAnswerFindings}, post-answer through {@code LlmInferenceService}).
+	 * That is a repeat the pre-change code did not make at all for an order carrying no codes, and on
+	 * the 3.7.1 standalone it is 27 of 43 orders' worth of names for every substance a question puts in
+	 * play. What that per-order memo cannot save is a name REPEATED across orders, which is a separate
+	 * cache and is threaded as one; the per-PASS memo stays unbuilt for the reason stated above rather
+	 * than because the repeat is free. No TIME is claimed for any of it — the sentence above says how
+	 * to measure one.
 	 */
 	private List<OrderPartner> orderPartners(PatientClinicalContext context) {
 		Map<Object, OrderPartner> byIdentity = new LinkedHashMap<Object, OrderPartner>();
@@ -3397,12 +3408,19 @@ public class DrugSafetyValidator {
 		// issue #228's leg asks it once per unmapped order. A
 		// field would be issue #172's trap — a memoised DrugReference outliving a getAll() hot-reload
 		// fails the reference comparisons the contraindication arms make, silently re-opening issue
-		// #145 — and the third memo holds substanceGroupKey() values, which can BE a DrugReference.
+		// #145 — and the third memo holds DrugReference rows and substanceGroupKey() values, which can
+		// themselves BE a DrugReference.
 		Map<String, DrugReference> entryByCode = new LinkedHashMap<String, DrugReference>();
 		Map<PatientClinicalContext.ActiveDrugOrder, DrugReference> substanceByOrder =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, DrugReference>();
-		Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> substancesByOrderName =
+		Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> rowsByOrderName =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>>();
+		// The fourth, and the one keyed on a NAME rather than on an order: what the third cannot save is
+		// the same name asked twice from two different orders, which is the common shape (a family's
+		// orders share aliases). Handed to the service's own cache-taking overload, which is where that
+		// sharing is defined — see findImpliedByDrugName(String, Map). A local for the same reason as
+		// the others.
+		Map<Object, Set<Object>> impliedByName = new HashMap<Object, Set<Object>>();
 		for (String orderCode : context.getActiveDrugAtcCodes()) {
 			DrugReference entry = entryForAtcCode(orderCode, entryByCode);
 			PatientClinicalContext.ActiveDrugOrder order = null;
@@ -3447,12 +3465,12 @@ public class DrugSafetyValidator {
 				// hazard: a suppression that depends on the sequence OrderService returned the
 				// prescriptions in.
 				for (PatientClinicalContext.ActiveDrugOrder carrier : ordersCarrying(orderCode, context)) {
-					partner.substances.addAll(substancesNamedBy(carrier, substancesByOrderName));
+					partner.substances.addAll(substancesNamedBy(carrier, rowsByOrderName, impliedByName));
 				}
 			}
 			partner.codes.add(orderCode);
 		}
-		addPartnersForUnmappedOrders(byIdentity, context, substancesByOrderName);
+		addPartnersForUnmappedOrders(byIdentity, context, rowsByOrderName, impliedByName);
 		return new ArrayList<OrderPartner>(byIdentity.values());
 	}
 
@@ -3573,13 +3591,14 @@ public class DrugSafetyValidator {
 	 */
 	private void addPartnersForUnmappedOrders(Map<Object, OrderPartner> byIdentity,
 			PatientClinicalContext context,
-			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> namedRows) {
+			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache,
+			Map<Object, Set<Object>> impliedByName) {
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			if (!Collections.disjoint(order.getAtcCodes(), context.getActiveDrugAtcCodes())) {
 				continue;
 			}
 			for (Map.Entry<Object, List<DrugReference>> named
-					: substanceRowsNamedBy(order, namedRows).entrySet()) {
+					: substanceRowsNamedBy(order, cache, impliedByName).entrySet()) {
 				if (alreadyACoMedication(byIdentity, named.getKey())) {
 					continue;
 				}
@@ -3602,34 +3621,11 @@ public class DrugSafetyValidator {
 	 *         the loaded dataset carries none of its names, which is the normal answer for an order
 	 *         the reference data does not cover.
 	 *
-	 *         <p>Through {@link DrugReferenceService#findImpliedByDrugName}, the ranked accessor for a
-	 *         recorded drug NAME, and never the unranked matcher underneath it. This decides which
-	 *         chips are SILENCED, and the unranked form admits a strict superset: Sarah Taylor's
-	 *         {@code Hydrocortisone Injection vial 100mg} reaches {@code Hydrocortisone butyrate}
-	 *         there (issue #209), a genuinely different substance whose duplicate-therapy chip against
-	 *         that order has to survive. {@link #resolvesFrom} is deliberately that superset and
-	 *         answers a different question — which order is a SUBJECT's own, where admitting too much
-	 *         costs a pair rather than a suppression.
-	 *
-	 *         <p>Two shapes reach this through the ranked accessor UNRANKED, and both are that
-	 *         accessor's own documented behaviour rather than anything decided here: a name matching
-	 *         exactly one row (nothing to rank), and the {@code rowsOf} fallback for a dataset whose
-	 *         entries omit their own names. That fallback over-reports by design, which for a
-	 *         candidate set is the safe direction and for a SUPPRESSION is not. Measured there as
-	 *         never firing on any shipped dataset; if that stops being true it costs chips here first —
-	 *         and since issue #228 it costs them in BOTH directions, because this same resolution now
-	 *         also CREATES co-medications ({@link #addPartnersForUnmappedOrders}), where an over-report
-	 *         is a chip naming a drug the patient is not on.
-	 *
-	 *         <p><b>The residual hazard, and what bounds it.</b> An order name that merely CONTAINS
-	 *         another substance's whole name resolves it — the phrase-nesting shape
-	 *         {@link #identifies} records at its own site — and here that silences rather than
-	 *         fabricates, which is the worse direction. Measured 2026-08-13 rather than argued: over
-	 *         every one of the 3.7.1 demo dictionary's 116 {@code WHOATC}-mapped orderable names,
-	 *         asked about every substance the shipped 19 MB KB files in a level-4 subgroup that order
-	 *         carries — 606 questions — this change removes 5 chips and adds none, and all 5 are the
-	 *         self-chip issue #185 is about. Re-measure that way rather than reasoning about it: the
-	 *         population that matters is order names a dictionary actually publishes.
+	 *         <p><b>Which accessor resolves the name, and the residual hazard it leaves</b>, are stated once at
+	 *         {@link #substanceRowsNamedBy} — they bind this caller and issue #228's leg alike, and for
+	 *         opposite reasons, which is why neither of them owns that paragraph. {@link #resolvesFrom} is
+	 *         deliberately the unranked superset and answers a different question — which order is a
+	 *         SUBJECT's own, where admitting too much costs a pair rather than a suppression.
 	 *
 	 *         <p>Asked of EVERY order carrying the unnameable code ({@link #ordersCarrying}), not of
 	 *         the one {@link #orderCarrying} names the partner after. The label may take the first
@@ -3643,8 +3639,9 @@ public class DrugSafetyValidator {
 	 *         to warn about.
 	 */
 	private Set<Object> substancesNamedBy(PatientClinicalContext.ActiveDrugOrder order,
-			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache) {
-		return substanceRowsNamedBy(order, cache).keySet();
+			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache,
+			Map<Object, Set<Object>> impliedByName) {
+		return substanceRowsNamedBy(order, cache, impliedByName).keySet();
 	}
 
 	/**
@@ -3688,36 +3685,56 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>ONE resolution behind both views rather than a second walk of the same names for the
 	 *         second view — the rule issue #151 settled one layer over, where two derivations of "which
-	 *         orders does this patient have" disagreed silently and in one direction. Everything
-	 *         {@link #substancesNamedBy}'s accessor choice decides therefore binds both callers by
-	 *         construction.
+	 *         orders does this patient have" disagreed silently and in one direction.
+	 *
+	 *         <p><b>Through {@link DrugReferenceService#findImpliedByDrugName}</b>, the ranked accessor
+	 *         for a recorded drug NAME, and never the unranked matcher underneath it. Both callers need
+	 *         that and for OPPOSITE reasons, which is the reason to say it once here rather than at
+	 *         either of them: for issue #185's skip an over-report SILENCES a chip, and for issue #228's
+	 *         leg it FABRICATES a co-medication. Sarah Taylor's {@code Hydrocortisone Injection vial
+	 *         100mg} is the measured case of both — unranked it reaches {@code Hydrocortisone butyrate}
+	 *         (issue #209), a genuinely different substance, which as a suppression loses that ester's
+	 *         own duplicate-therapy chip and as a partner reports her as being on a drug she is not.
+	 *
+	 *         <p>Two shapes reach this through the ranked accessor UNRANKED, and both are that
+	 *         accessor's own documented behaviour rather than anything decided here: a name matching
+	 *         exactly one row (nothing to rank), and the {@code rowsOf} fallback for a dataset whose
+	 *         entries omit their own names — measured there as never firing on any shipped dataset.
+	 *
+	 *         <p><b>The residual hazard, and what bounds it.</b> An order name that merely CONTAINS
+	 *         another substance's whole name resolves it — the phrase-nesting shape
+	 *         {@link #identifies} records at its own site — and it costs the two callers different
+	 *         things, in the directions above. Measured 2026-08-13 rather than argued: over every one of
+	 *         the 3.7.1 demo dictionary's 116 {@code WHOATC}-mapped orderable names, asked about every
+	 *         substance the shipped 19 MB KB files in a level-4 subgroup that order carries — 606
+	 *         questions — the ranked accessor removes 5 chips and adds none, and all 5 are the self-chip
+	 *         issue #185 is about. Re-measure that way rather than reasoning about it, and note the
+	 *         population that matters differs per caller: mapped order names for the skip, and the
+	 *         orders a dictionary mapped to NOTHING for issue #228's leg.
 	 *
 	 *         <p>Memoised through {@code cache} for the duration of one {@link #orderPartners} call:
 	 *         this is a dataset sweep per name, and an order with several unnameable codes asks it
 	 *         once per such code — see there for why the memo may not be a field. An empty answer is a
-	 *         real one and is cached as such.
+	 *         real one and is cached as such. The per-NAME resolution cache is a different one and is
+	 *         threaded separately, because names repeat ACROSS orders where this memo cannot help.
 	 */
 	private Map<Object, List<DrugReference>> substanceRowsNamedBy(
 			PatientClinicalContext.ActiveDrugOrder order,
-			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache) {
+			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache,
+			Map<Object, Set<Object>> impliedByName) {
 		Map<Object, List<DrugReference>> cached = cache.get(order);
 		if (cached != null) {
 			return cached;
 		}
-		Map<Object, List<DrugReference>> rows = new LinkedHashMap<Object, List<DrugReference>>();
+		// A LinkedHashSet, then the shared grouping — not a grouping written out here. The dedup is
+		// identity (DrugReference defines no equals, and every row comes from the service's shared
+		// getAll() cache), which is what makes the set the right collector: an order's two names
+		// resolve overlapping row sets, and a row is one row.
+		Set<DrugReference> matched = new LinkedHashSet<DrugReference>();
 		for (String name : order.getNames()) {
-			for (DrugReference row : drugReferenceService.findImpliedByDrugName(name)) {
-				List<DrugReference> group = rows.get(row.substanceGroupKey());
-				if (group == null) {
-					group = new ArrayList<DrugReference>();
-					rows.put(row.substanceGroupKey(), group);
-				}
-				if (!group.contains(row)) {
-					// Two names of one order resolve overlapping row sets; a row is one row.
-					group.add(row);
-				}
-			}
+			matched.addAll(drugReferenceService.findImpliedByDrugName(name, impliedByName));
 		}
+		Map<Object, List<DrugReference>> rows = substanceRows(matched);
 		cache.put(order, rows);
 		return rows;
 	}

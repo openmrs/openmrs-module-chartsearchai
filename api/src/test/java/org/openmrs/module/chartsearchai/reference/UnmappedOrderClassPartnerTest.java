@@ -58,7 +58,7 @@ public class UnmappedOrderClassPartnerTest {
 	/** The nitroimidazole fixture issue #186's grouping cases use, reached here through its
 	 *  never-mapped shape: the combination assertions below are the SAME assertions that file makes
 	 *  about a mapped combination order, so the two rungs cannot come to disagree. */
-	private static final String NITROIMIDAZOLES = "chartsearchai-test/drug-reference-partial-order-coverage.json";
+	private static final String NITROIMIDAZOLES = DrugReferenceTestSupport.PARTIAL_ORDER_COVERAGE;
 
 	private static final String HYDROCORTISONE_QUESTION = "Is it safe to give hydrocortisone?";
 
@@ -218,42 +218,30 @@ public class UnmappedOrderClassPartnerTest {
 
 	@Test
 	public void aDifferentSubstanceSharingTheRESOLVEDRowsCodeStillRaisesTheChip() throws IOException {
-		// The skip that must NOT reach a partner reached by name. Issue #185's exact-code leg is a proxy
-		// for identity, kept for the case identity cannot reach — a context carrying only codes, where
-		// nothing names the co-medication. A partner reached by NAME is the opposite case: its substance
-		// is known exactly, and its codes are the DATASET's, so the leg would be comparing one reference
-		// row against another. This KB says that is not identity — that is why substanceKey exists — and
-		// {@code Omeprazole} and {@code Esomeprazole} are its counterexample, two substances publishing
-		// one A02BC05 between them.
+		// The skip that must NOT reach a partner reached by name, and its pair — one context, because
+		// the two halves only mean something together.
 		//
-		// So without the scoping, the code leg silences exactly the chip this issue exists to add: the
-		// patient is on omeprazole, is asked about a genuinely different PPI, and hears nothing.
-		Set<String> names = DrugReferenceTestSupport.set("Omeprazole 20mg");
-		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, names, null, null, null,
-				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-228-i", "Omeprazole 20mg",
-						names, null)));
+		// Issue #185's exact-code leg is a proxy for identity, kept for the case identity cannot reach:
+		// a context carrying only codes, where nothing names the co-medication. A partner reached by
+		// NAME is the opposite case — its substance is known exactly and its codes are the DATASET's,
+		// so the leg would be comparing one reference row against another. This KB says that is not
+		// identity — that is why substanceKey exists — and Omeprazole and Esomeprazole are its
+		// counterexample, two substances publishing one A02BC05 between them.
+		//
+		// So without the scoping the code leg silences exactly the chip this issue exists to add: the
+		// patient is on omeprazole, is asked about a genuinely different PPI, and hears nothing. And
+		// with the leg out of the way, the ONLY thing left between her and a chip saying she duplicates
+		// her own prescription is the substance key the partner carries.
+		PatientClinicalContext context = unmappedOmeprazoleOrder();
 
 		List<SafetyWarning> warnings = chips("Is it safe to give esomeprazole?", context);
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
 		assertEquals("Esomeprazole is in the same ATC class (A02BC) as active order Omeprazole"
 				+ " — possible duplicate therapy", warnings.get(0).getDetail());
-	}
-
-	@Test
-	public void andTheSubstanceThatOrderISIsStillSkipped() throws IOException {
-		// The other half, and what keeps the case above from being a licence: with the code leg out of
-		// the way for such a partner, the ONLY thing standing between the patient and a chip saying she
-		// duplicates her own prescription is the substance key the partner carries. Issue #185's
-		// headline, on the rung this issue adds and on the rung's own resolution path.
-		Set<String> names = DrugReferenceTestSupport.set("Omeprazole 20mg");
-		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, names, null, null, null,
-				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-228-j", "Omeprazole 20mg",
-						names, null)));
-
 		assertEquals(Collections.<String> emptyList(),
 				DrugReferenceTestSupport.details(chips("Is it safe to give omeprazole?", context)),
-				"a drug the patient is already prescribed does not duplicate itself");
+				"…while the substance that order IS does not duplicate it");
 	}
 
 	@Test
@@ -312,7 +300,7 @@ public class UnmappedOrderClassPartnerTest {
 						DrugReferenceTestSupport.activeOrder("order-228-h", "Metronidazole gel",
 								unmappedNames, null)));
 
-		List<String> chips = classChipDetails(
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(
 				nitroimidazoleChips("Is it safe to give tinidazole?", context));
 
 		assertEquals(1, chips.size(), "two orders of one substance are one co-medication, was: " + chips);
@@ -327,7 +315,7 @@ public class UnmappedOrderClassPartnerTest {
 		// two substances the dataset carries really is two co-medications in one tablet, and the
 		// assertion is the same one PartialOrderCoveragePartnerTest makes about the MAPPED form of
 		// this order — the two rungs must answer alike.
-		List<String> chips = classChipDetails(
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(
 				nitroimidazoleChips("Is it safe to give tinidazole?", unmappedCombination()));
 
 		assertEquals(2, chips.size(),
@@ -345,7 +333,7 @@ public class UnmappedOrderClassPartnerTest {
 		// secnidazole half — a different nitroimidazole in the same subgroup — is a real duplicate and
 		// must survive. Attaching the whole tablet's contents to both partners loses this chip, which
 		// is the inverse of the defect issue #185 fixed.
-		List<String> chips = classChipDetails(
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(
 				nitroimidazoleChips("Is it safe to give metronidazole?", unmappedCombination()));
 
 		assertEquals(1, chips.size(),
@@ -367,19 +355,22 @@ public class UnmappedOrderClassPartnerTest {
 						names, codes)));
 	}
 
+	/** An unmapped order for omeprazole. Its substance's only KB row publishes ESOMEPRAZOLE's
+	 *  {@code A02BC05} and omeprazole's own code appears nowhere, which is what makes the pair above a
+	 *  test of the skip rather than of the class comparison. */
+	private static PatientClinicalContext unmappedOmeprazoleOrder() {
+		Set<String> names = DrugReferenceTestSupport.set("Omeprazole 20mg");
+		return DrugReferenceTestSupport.ctx(60, null, names, null, null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-228-i", "Omeprazole 20mg",
+						names, null)));
+	}
+
 	/** ONE order naming two substances the nitroimidazole fixture carries, mapped to nothing. */
 	private static PatientClinicalContext unmappedCombination() {
 		Set<String> names = DrugReferenceTestSupport.set("Metronidazole and secnidazole");
 		return DrugReferenceTestSupport.ctx(60, null, names, null, null, null,
 				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-228-d",
 						"Metronidazole and secnidazole", names, null)));
-	}
-
-	/** The class-relationship chips, which is all the rule-less nitroimidazole fixture can raise — so
-	 *  a count here is a count of co-medications the arm decided about. */
-	private static List<String> classChipDetails(List<SafetyWarning> warnings) {
-		return warnings.stream().filter(w -> SafetyWarning.TYPE_INTERACTION.equals(w.getType()))
-				.map(SafetyWarning::getDetail).collect(java.util.stream.Collectors.toList());
 	}
 
 	private static List<SafetyWarning> chips(String question, PatientClinicalContext context)

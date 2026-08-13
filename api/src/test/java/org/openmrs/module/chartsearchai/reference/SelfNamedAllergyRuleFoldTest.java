@@ -339,6 +339,13 @@ public class SelfNamedAllergyRuleFoldTest {
 		// chips and (at least) one identity chip — and the answer is one, because both collapses key
 		// through the same ledger on the same substanceGroupKey. Two dedups that merely stacked would
 		// leave the rule chips beside the identity one, or one rule chip per row.
+		//
+		// WHAT MOVED (issue #206): this expected `Ibuprofen (tablets)`, the row the surviving rule is
+		// authored on. What a chip CALLS its subject is no longer the raising row's business — it is the
+		// row the response names that substance by, which the interaction and dose arms already used —
+		// so the note is still the first rule-bearing row's and the name is now the substance's own. The
+		// collapse this case is about is untouched: it is still ONE chip, and the surviving chip still
+		// carries the note rather than the identity sentence.
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
 				.fixtureEntries(SUBSTANCE_DECLARED));
 		List<DrugReference> rows = service.findByQuery("Is it safe to give her ibuprofen?");
@@ -358,9 +365,10 @@ public class SelfNamedAllergyRuleFoldTest {
 		assertEquals(1, warnings.size(),
 				"one substance, one allergy, one chip — however many rows carry the rule, was: "
 						+ warnings);
-		assertEquals("Ibuprofen (tablets) is contraindicated by an active allergy: documented ibuprofen "
+		assertEquals("Ibuprofen is contraindicated by an active allergy: documented ibuprofen "
 				+ "allergy", warnings.get(0).getDetail(),
-				"and it is the first rule-bearing row's chip, carrying the note, was: " + warnings);
+				"and it is the first rule-bearing row's NOTE, under the substance's own name, was: "
+						+ warnings);
 	}
 
 	@Test
@@ -372,6 +380,12 @@ public class SelfNamedAllergyRuleFoldTest {
 		// reshuffle. Nothing else in the suite exercises that branch for this rank pair, and a fold that
 		// only ever declined newcomers would report the module's stock sentence and drop the note for
 		// every dataset whose rule happens to sit on a later row.
+		//
+		// WHAT MOVED (issue #206): this expected `Ibuprofen (tablets)`. The REPLACEMENT is the property
+		// here and it is unchanged — the curated note still displaces the identity sentence in place —
+		// but the chip is no longer named after the row that raised it, so the qualifier is gone. This
+		// case was the one ContraindicationChips' javadoc cited as the residue reaching its key; the
+		// residue is what #206 removed.
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
 				.fixtureEntries(RULE_ON_A_LATER_ROW));
 		List<DrugReference> rows = service.findByQuery("Is it safe to give her ibuprofen?");
@@ -384,7 +398,7 @@ public class SelfNamedAllergyRuleFoldTest {
 						DrugReferenceTestSupport.set("ibuprofen"), null));
 
 		assertEquals(1, warnings.size(), "still one chip, was: " + warnings);
-		assertEquals("Ibuprofen (tablets) is contraindicated by an active allergy: documented ibuprofen "
+		assertEquals("Ibuprofen is contraindicated by an active allergy: documented ibuprofen "
 				+ "allergy", warnings.get(0).getDetail(),
 				"and the note survives however late its row is, was: " + warnings);
 	}

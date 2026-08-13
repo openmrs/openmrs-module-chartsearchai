@@ -351,7 +351,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 * driving {@link DrugReferenceService#getLoadStatus()} over it: {@code alias-names-another-substance}
 	 * fires 18 times and {@code Fluoroestradiol f-18} is in none of them.
 	 *
-	 * <p>The five controls are the point of the case. A rule keyed on "one substance, unlike names"
+	 * <p>The six controls are the point of the case. A rule keyed on "one substance, unlike names"
 	 * would report {@code Daxibotulinumtoxina} — a merge issue #164 measured as CORRECT — so this one is
 	 * keyed on the derivative relationship the row's OWN name states, and
 	 * {@code Beclomethasone dipropionate (nasal)} is the control that separates the two: same inherited
@@ -384,7 +384,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 				DrugReferenceValidity.DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE);
 		assertEquals(DrugReferenceValidity.Remedy.REPORTED, found.getRemedy());
 		assertEquals(1, found.getOccurrences(),
-				"exactly the one merge in this slice, and not the five controls beside it. Detail was: "
+				"exactly the one merge in this slice, and not the six controls beside it. Detail was: "
 						+ found.getDetail());
 		// One string, not two `contains` calls: "estradiol" is a substring of "Fluoroestradiol f-18", so
 		// a second conjunct asking for it separately is true whenever the first is and asserts nothing.
@@ -395,8 +395,15 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertFalse(found.getDetail().contains("Beclomethasone dipropionate (nasal) is filed as"),
 				"the closest control there is — a row with no drugbank_id of its own inheriting its "
 						+ "family's, exactly as the tracer does, but whose name extends the substance "
-						+ "name by a WORD. Only containsWord keeps it silent, and 12 rows of the shipped "
-						+ "KB are silent for that reason. Detail was: " + found.getDetail());
+						+ "name by a WORD. Detail was: " + found.getDetail());
+		// The control that isolates containsWord ON ITS OWN, and the only one that can: the two
+		// Beclomethasone rows share a display stem, so they answer the predicate alike and the parent
+		// gate silences that family whatever the word test does. Sodium oxybate's family has rows that
+		// carry `oxybate` as a word and rows that do not carry it at all, so it has a parent — and
+		// weakening containsWord to bare equality reports it.
+		assertFalse(found.getDetail().contains("Sodium oxybate is filed as"),
+				"a salt whose own name extends the substance name by a word is a salt, not a "
+						+ "derivative. Detail was: " + found.getDetail());
 		// Asked as "not the SUBJECT of an occurrence" rather than "absent", because this control is a row
 		// of the offending row's own family and the detail names those deliberately — an operator needs
 		// to know what the derivative was merged WITH. Daxibotulinumtoxina is in a two-row family of its
@@ -411,11 +418,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertFalse(found.getDetail().contains("Daxibotulinumtoxina"),
 				"the control that makes this rule narrower than 'one substance, unlike names': issue "
 						+ "#164 measured that merge as correct. Detail was: " + found.getDetail());
-		assertFalse(found.getDetail().contains("Ospemifene"),
-				"an unrelated partner is not a derivative of anything here. Detail was: "
-						+ found.getDetail());
-
-		assertEquals(11, service.getAll().size(), "every row is still loaded; nothing was dropped");
+		assertEquals(14, service.getAll().size(), "every row is still loaded; nothing was dropped");
 		List<DrugReference> all = service.getAll();
 		assertEquals(DrugReferenceTestSupport.row(all, "Estradiol").substanceGroupKey(),
 				DrugReferenceTestSupport.row(all, "Fluoroestradiol f-18").substanceGroupKey(),

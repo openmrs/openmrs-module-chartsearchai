@@ -695,6 +695,11 @@ public class DrugSafetyValidator {
 		 *         this pass grouped no rows for it, which is the answer every arm gave before there was a
 		 *         group to choose from and keeps a caller holding an ungrouped row honest rather than
 		 *         null.
+		 *
+		 *         <p>{@code null} is the memo's MISS sentinel rather than a stored answer, which is sound
+		 *         only because neither branch can produce one: {@link #interactionSubject} answers null
+		 *         only for an empty group ({@link #strongestClaimants}), and an empty group takes the
+		 *         fallback. A stored null would be re-derived on every call and then dereferenced.
 		 */
 		DrugReference of(DrugReference row) {
 			Object substance = row.substanceGroupKey();

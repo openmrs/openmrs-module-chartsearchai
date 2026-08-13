@@ -4442,17 +4442,20 @@ public class DrugSafetyValidator {
 	 *         leaves the sentence a fact about the DATASET, which is what it is: the row is where the
 	 *         number was filed, not something known about this patient.
 	 *
-	 *         <p>Silent when the two rows publish the same label as well as when they are the same row.
-	 *         The dataset is operator-editable, and two rows may carry one display name — for which
-	 *         "publishes for X, not for X" is not a provenance but a contradiction.
+	 *         <p>Silent unless it has something to say: when the two rows are one row, when they publish
+	 *         the SAME label — the dataset is operator-editable and two rows may carry one display name,
+	 *         for which "publishes for X, not for X" is a contradiction rather than a provenance — and
+	 *         when either label is blank, which the same operator-editable boundary demands of every
+	 *         section this module renders rather than emitting a literal {@code null}.
 	 */
 	private static String ceilingAttribution(DrugReference subject, DrugReference ref) {
-		if (ref == subject || subject.displayLabel() == null
-				|| subject.displayLabel().equals(ref.displayLabel())) {
+		String published = ref.displayLabel();
+		String named = subject.displayLabel();
+		if (ref == subject || ChartSearchAiUtils.isBlank(published) || ChartSearchAiUtils.isBlank(named)
+				|| published.equals(named)) {
 			return "";
 		}
-		return " — a ceiling this dataset publishes for " + ref.displayLabel() + ", not for "
-				+ subject.displayLabel();
+		return " — a ceiling this dataset publishes for " + published + ", not for " + named;
 	}
 
 	/**

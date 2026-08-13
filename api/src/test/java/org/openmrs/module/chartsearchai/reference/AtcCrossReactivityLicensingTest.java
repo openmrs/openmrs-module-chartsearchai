@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -36,8 +37,9 @@ import org.junit.jupiter.api.Test;
  *       claim about purpose, and not CROSS-REACTIVITY, which is a claim about chemistry
  *       ({@link DrugReference#isPurposeOnlyAtcCode}, issue #183);</li>
  *   <li>a name that asserts nothing at any level — a residue whose ancestry is residue up to a bare
- *       anatomical or therapeutic tier — licenses NEITHER
- *       ({@link DrugReference#isUnclassifyingAtcCode}, issue #184).</li>
+ *       LEVEL-1 anatomical main group, a body system — licenses NEITHER
+ *       ({@link DrugReference#isUnclassifyingAtcCode}, issue #184). Level 2 is ATC's therapeutic
+ *       tier and does assert a purpose, so a residue inheriting one falls under the bullet above.</li>
  * </ul>
  *
  * <p><b>Why the split is by ARM and not by one list.</b> The owner's standing hypothesis was that
@@ -249,23 +251,28 @@ public class AtcCrossReactivityLicensingTest {
 		// at all cannot license a purpose claim either, so the cross-reactivity predicate must SUBSUME
 		// the both-arms one. Without this a subgroup could be refused for duplicate therapy and
 		// admitted for cross-reactivity, which is backwards.
-		for (String code : new String[] { "A01AD", "V03AB", "S01XA", "D11AX", "A16AX", "N07XX",
-				"L01XX", "J01XX", "V04CX", "R07AX", "M09AX", "G02CX" }) {
+		// The both-arms case: every one of these resolves, through its residue chain, either to
+		// nothing at all or to a bare LEVEL-1 anatomical main group.
+		for (String code : new String[] { "A01AD", "V03AB", "S01XA", "D11AX", "A16AX", "B06AX",
+				"G02CX", "M09AX", "N07XX", "R07AX" }) {
 			assertTrue(DrugReference.isUnclassifyingAtcCode(code),
 					code + " must assert nothing at all");
 			assertTrue(DrugReference.isPurposeOnlyAtcCode(code),
 					code + " asserts nothing, so it certainly asserts no chemistry");
 		}
+		// The cross-arm-only case, and the line the criterion draws at ATC's own level 2: a residue
+		// inheriting a THERAPEUTIC tier name ("ANTINEOPLASTIC AGENTS", "ANTIBACTERIALS FOR SYSTEMIC
+		// USE", "DIAGNOSTIC AGENTS") asserts a purpose, so it belongs here and not above.
 		for (String code : new String[] { "S01AA", "A07AA", "S02AA", "J04AB", "N06AX", "N03AX",
-				"B05XA", "G04BD", "M02AA" }) {
+				"B05XA", "G04BD", "M02AA", "L01XX", "J01XX", "V04CX", "B03XA", "C01EB" }) {
 			assertTrue(DrugReference.isPurposeOnlyAtcCode(code),
 					code + " states a purpose and no chemistry");
-			assertTrue(!DrugReference.isUnclassifyingAtcCode(code),
+			assertFalse(DrugReference.isUnclassifyingAtcCode(code),
 					code + " does assert a purpose, so it is not the both-arms case");
 		}
 		for (String code : new String[] { "J01CA", "J01GB", "R06AX", "N02AX", "M01AE", "N05BA",
 				"C10AA", "N01BB", "S01BA", "D07AC", "D01AC", "S01HA", "L01EX", "L01FX" }) {
-			assertTrue(!DrugReference.isPurposeOnlyAtcCode(code),
+			assertFalse(DrugReference.isPurposeOnlyAtcCode(code),
 					code + " names a chemical family or a molecular target and licenses both");
 		}
 	}

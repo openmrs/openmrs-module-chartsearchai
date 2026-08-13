@@ -4202,11 +4202,14 @@ public class DrugSafetyValidator {
 	 * the arms are making different claims: where a pair shares a purpose-named subgroup and a
 	 * chemically named one, "duplicate therapy" is honestly about the first and "cross-reactivity"
 	 * honestly about the second, so naming them alike would make one of the two sentences false.
-	 * Measured over the shipped KB by calling this method both ways on each of the 5550 substance
-	 * pairs it relates (2026-08-13; re-measure before relying on a figure): 3693 pairs chip on both
-	 * arms and 4 of them name different classes — {@code A01AB} against {@code D01AC}/{@code G01AF}
-	 * for the imidazoles, {@code B05XA} against {@code G04BA}. Reachable together only for a patient
-	 * ALLERGIC TO A DRUG THEY ARE ON, which is the arm issue #143 added.
+	 * Measured over the shipped KB by calling THIS METHOD both ways on each of the 5550 substance
+	 * pairs it relates — a pair base, not the claim base the two lists' own figures use, which counts
+	 * what {@code validate} emits and so differs by the handful of claims a question's extra
+	 * resolutions add (2026-08-13; re-measure before relying on a figure): 3693 pairs get an answer on
+	 * both arms and 4 of them differ — {@code A01AB} against {@code D01AC}/{@code G01AF} for the
+	 * imidazoles, {@code B05XA} against {@code G04BA}. Both chips are reachable in one response for a
+	 * patient allergic to a drug they are also on; both take the drug being CHECKED as their subject,
+	 * so this is the two in-play joins disagreeing, not the order-driven arm.
 	 *
 	 * <p>A subgroup may justify a claim only as strong as what its own published name asserts. Naming
 	 * a purpose is enough to say two drugs duplicate one another and is not enough to say they

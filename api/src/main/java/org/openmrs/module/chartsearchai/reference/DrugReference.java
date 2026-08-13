@@ -552,7 +552,9 @@ public class DrugReference {
 	 *         well would remove 6 of the 491 records injected across a 24-patient x 21-question sweep of
 	 *         the 3.7.1 demo instance's real active orders against the 19 MB knowledge base (measured
 	 *         2026-08-13 by running the real {@code DrugReferenceInjector.injectRecords} with and without
-	 *         the veto), and 0 of the records that were injected before #151. Two of the six are the
+	 *         the veto), and 0 of the records that were injected before #151. That figure was taken while
+	 *         {@link #isUnclassifyingAtcCode} held 30 groups; issues #183/#184 took it to 36 and added a
+	 *         second, wider predicate, so re-measure it before quoting it for either. Two of the six are the
 	 *         noise the veto is for (neomycin beside a ciprofloxacin question, related only through
 	 *         "both are also sold as ear drops"); four are pairs a clinician wants — diclofenac beside an
 	 *         ibuprofen question, budesonide beside a prednisolone one — that the veto would drop because
@@ -758,11 +760,21 @@ public class DrugReference {
 	 * <p>Enumerated the same way as the first family — every level-4 subgroup in the WHO ATC index
 	 * whose own name begins "Other"/"Various", which contributes no term its ancestors' names do not
 	 * already carry, and whose assertion, followed upward through further residues, resolves to nothing
-	 * at all or to a level-1/level-2 name (ATC's anatomical main group and therapeutic subgroup tiers,
-	 * neither of which states chemistry or a mechanism). 23 are new here; the rest ({@code D11AX},
-	 * {@code R03BX}, {@code S01XA}, and {@code V03AX}/{@code V07AY} under their group entries) were
-	 * already vetoed by the families above. It contains all six subgroups issue #184 reports and nothing
-	 * hand-picked from them.
+	 * at all or to a bare LEVEL-1 name: ATC's anatomical main group, a body system, which asserts no
+	 * shared purpose either. Six are new here — {@code A16AX}, {@code B06AX}, {@code G02CX},
+	 * {@code M09AX}, {@code N07XX}, {@code R07AX} — and {@code D11AX}, {@code R03BX}, {@code S01XA} and
+	 * {@code V03AX}/{@code V07AY} were already vetoed by the families above.
+	 *
+	 * <p><b>Level 1 and not level 2, which is where this rule was first drawn and was wrong.</b> ATC's
+	 * level 2 is its THERAPEUTIC tier, so a residue inheriting one does assert something — "ANTIBACTERIALS
+	 * FOR SYSTEMIC USE" for {@code J01XX}, "ANTINEOPLASTIC AGENTS" for {@code L01XX}, "DIAGNOSTIC AGENTS"
+	 * for {@code V04CX}. Two drugs sharing it are not chemically related and ARE duplicate therapy, so
+	 * they belong in {@link #PURPOSE_ONLY_ATC_GROUPS} below, not here. Stopping at level 1 instead cost
+	 * this list 17 of the 23 members it briefly had, and with them 381 of the 538 duplicate-therapy
+	 * claims it would otherwise have withdrawn — among them two erythropoiesis-stimulating agents
+	 * ({@code B03XA}) and every pair of systemic antibacterials ATC files as "other" ({@code J01XX}).
+	 * Issue #184 reports {@code V04CX} as one of its six; the criterion puts it in the other list, and
+	 * the criterion decides.
 	 *
 	 * <p>The "contributes no term of its own" clause is what stops the walk eating a residue that does
 	 * classify: {@code J01DI} "Other cephalosporins and penems" sits under "OTHER BETA-LACTAM
@@ -776,8 +788,8 @@ public class DrugReference {
 	 * eliglustat are genuine pairs that lose their claim, because no rule over ATC's words can tell
 	 * them from eliglustat × givosiran, which is not one. Measured over the shipped KB by driving
 	 * {@link DrugSafetyValidator#validate} over each of the 5550 substance pairs the KB relates by a
-	 * level-4 subgroup (2026-08-13; re-measure before relying on a figure): these 23 remove 538 of the
-	 * 5271 duplicate-therapy claims, 83 of them for a pair DDInter also rates. Unlike issue #183's
+	 * level-4 subgroup (2026-08-13; re-measure before relying on a figure): these six remove 157 of the
+	 * 5271 duplicate-therapy claims, 14 of them for a pair DDInter also rates. Unlike issue #183's
 	 * family below, the duplicate-therapy claim goes too — that is the whole difference between
 	 * "asserts nothing" and "asserts a purpose".
 	 *
@@ -807,11 +819,9 @@ public class DrugReference {
 					"G01AX", "M02AX", "P03AX", "R01AX", "R02AX", "R03BX", "S01AX", "S01EX", "S01GX",
 					"S01JX", "S01KX", "S01XA", "S02DC", "V03A", "V07A",
 					// issue #184: a residue that adds no term of its own and whose assertion, followed up
-					// through further residues, resolves to nothing at all or to an anatomical or
-					// therapeutic tier name
-					"A07XA", "A10XX", "A11HA", "A16AX", "B03XA", "B06AX", "C01EB", "C02KN", "C05XX",
-					"C09XX", "G02CX", "G03XX", "J01XX", "L01XX", "M09AX", "N02BG", "N04CX", "N07XX",
-					"R03DX", "R07AX", "V04CX", "V09XX", "V10XX"));
+					// through further residues, resolves to nothing at all or to a bare LEVEL-1 anatomical
+					// main group -- a body system, which asserts no shared purpose either
+					"A16AX", "B06AX", "G02CX", "M09AX", "N07XX", "R07AX"));
 
 	/**
 	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized as
@@ -819,9 +829,10 @@ public class DrugReference {
 	 *         {@link #UNCLASSIFYING_ATC_GROUPS}, i.e. whether it is a residual bucket that tells a
 	 *         reader nothing about the substances in it. Null and blank are not: nothing is known about
 	 *         them at all, which is a different answer from "known to mean nothing".
-	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.sharedClass}) for the
-	 *         same reason as its sibling: it is a rule about ATC's own group names, not a fact about a
-	 *         substance.
+	 *         <p>Package-private for the same reason as its siblings: it is a rule about ATC's own
+	 *         group names, not a fact about a substance. Two callers since issue #183 —
+	 *         {@code DrugSafetyValidator.licensesClaim} for the duplicate-therapy arm, and
+	 *         {@link #isPurposeOnlyAtcCode}, which subsumes it for the cross-reactivity one.
 	 */
 	static boolean isUnclassifyingAtcCode(String code) {
 		String normalized = normalizeAtcToken(code);
@@ -852,7 +863,7 @@ public class DrugReference {
 	 * <p><b>Enumerated from the index, not from the reported cases.</b> Every level-4 subgroup in the
 	 * WHO ATC index was read: the subgroup's own name where it names anything, and — for a residue that
 	 * adds no term of its own, following issue #182's rule — the name of the nearest ancestor that
-	 * does. 100 subgroups state a purpose and no chemistry without already being vetoed outright by
+	 * does. 117 subgroups state a purpose and no chemistry without already being vetoed outright by
 	 * {@link #UNCLASSIFYING_ATC_GROUPS}, and they are the list below. Deriving it from the index rather
 	 * than from the three subgroups issue #183 names is the point: issue #161's list was hand-picked
 	 * and its hardening found it incomplete in a way that reproduced the defect it was fixing.
@@ -871,20 +882,25 @@ public class DrugReference {
 	 * times the rate it removes false claims, so it is not what shipped. This list and the one above
 	 * remove the 1565 between them, keep the 3701, and rename 4; 586 of the 1565 are for a pair
 	 * DDInter also rates, so for those the interaction chip survives and only the class claim goes.
+	 * The largest contributors are {@code L01XX} "Other antineoplastic agents" (276 claims),
+	 * {@code N06AX} "Other antidepressants" (132), {@code S01AA} "Antibiotics" (118), {@code N03AX}
+	 * "Other antiepileptics" (91) and {@code B05XA} "Electrolyte solutions" (73).
 	 */
 	private static final List<String> PURPOSE_ONLY_ATC_GROUPS = Collections
-			.unmodifiableList(Arrays.asList("A01AB", "A02BX", "A03AX", "A03CC", "A03DC", "A03EA",
-					"A03ED", "A04AD", "A05AB", "A05AX", "A06AB", "A06AG", "A06AX", "A07AA", "A07DA",
-					"A07EB", "B01AX", "B02BX", "B05BA", "B05BB", "B05BC", "B05CA", "B05CB", "B05XA",
-					"B06AC", "C02KX", "C02LX", "C05AB", "C05AE", "D01AA", "D01BA", "D05BX", "D06BB",
-					"D09AA", "D10AB", "D10AF", "D11AA", "D11AH", "G01AA", "G01BA", "G01BD", "G03AD",
-					"G04BD", "G04BE", "G04CX", "J02AA", "J02AX", "J04AB", "J04AK", "J04BA", "J05AP",
-					"J05AR", "L01XU", "M01AX", "M02AA", "M02AC", "M03AX", "M03BX", "M04AA", "M04AB",
-					"M04AC", "M05BX", "N03AX", "N05AX", "N05CM", "N05CX", "N06AX", "N06CA", "N07BA",
-					"N07BB", "N07BC", "N07CA", "P01AX", "P01CX", "R01AC", "R02AA", "R02AB", "R03BC",
-					"R05CA", "R05DB", "R05FB", "S01AA", "S01AD", "S01BC", "S01CC", "S01LA", "S02AA",
-					"S03AA", "V04CA", "V04CB", "V04CC", "V04CD", "V04CE", "V04CG", "V04CH", "V04CJ",
-					"V04CK", "V04CL", "V04CM", "V10AX"));
+			.unmodifiableList(Arrays.asList(
+					"A01AB", "A02BX", "A03AX", "A03CC", "A03DC", "A03EA", "A03ED", "A04AD", "A05AB",
+					"A05AX", "A06AB", "A06AG", "A06AX", "A07AA", "A07DA", "A07EB", "A07XA", "A10XX",
+					"A11HA", "B01AX", "B02BX", "B03XA", "B05BA", "B05BB", "B05BC", "B05CA", "B05CB",
+					"B05XA", "B06AC", "C01EB", "C02KN", "C02KX", "C02LX", "C05AB", "C05AE", "C05XX",
+					"C09XX", "D01AA", "D01BA", "D05BX", "D06BB", "D09AA", "D10AB", "D10AF", "D11AA",
+					"D11AH", "G01AA", "G01BA", "G01BD", "G03AD", "G03XX", "G04BD", "G04BE", "G04CX",
+					"J01XX", "J02AA", "J02AX", "J04AB", "J04AK", "J04BA", "J05AP", "J05AR", "L01XU",
+					"L01XX", "M01AX", "M02AA", "M02AC", "M03AX", "M03BX", "M04AA", "M04AB", "M04AC",
+					"M05BX", "N02BG", "N03AX", "N04CX", "N05AX", "N05CM", "N05CX", "N06AX", "N06CA",
+					"N07BA", "N07BB", "N07BC", "N07CA", "P01AX", "P01CX", "R01AC", "R02AA", "R02AB",
+					"R03BC", "R03DX", "R05CA", "R05DB", "R05FB", "S01AA", "S01AD", "S01BC", "S01CC",
+					"S01LA", "S02AA", "S03AA", "V04CA", "V04CB", "V04CC", "V04CD", "V04CE", "V04CG",
+					"V04CH", "V04CJ", "V04CK", "V04CL", "V04CM", "V04CX", "V09XX", "V10AX", "V10XX"));
 
 	/**
 	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized as
@@ -896,8 +912,8 @@ public class DrugReference {
 	 *         nothing cannot assert a purpose either, so refusing it for duplicate therapy while
 	 *         admitting it for cross-reactivity would have the two arms disagree about which claim is
 	 *         the stronger one. {@code AtcCrossReactivityLicensingTest} pins that ordering.
-	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.sharedClass}) for the same
-	 *         reason as its siblings: it is a rule about ATC's own group names, not a fact about a
+	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.licensesClaim}) for the
+	 *         same reason as its siblings: it is a rule about ATC's own group names, not a fact about a
 	 *         substance.
 	 */
 	static boolean isPurposeOnlyAtcCode(String code) {

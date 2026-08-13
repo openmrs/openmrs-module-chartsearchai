@@ -390,6 +390,13 @@ public interface ChartSearchService {
 		 * reference (e.g. the record carried no text to compare against). A
 		 * {@code null} verdict must be rendered as "unverified", never as
 		 * "verified".
+		 *
+		 * <p>This is the verdict the pipeline holds, which is not always the one
+		 * a client sees: for a {@code reference}-group citation the REST layer
+		 * publishes {@code null} whatever this returns (issue #201, see
+		 * {@code ChartSearchAiRestController.groundedForWire}). Read this to
+		 * reason about grounding inside the module; read the wire to reason
+		 * about what a client renders.
 		 */
 		public Boolean getGrounded() {
 			return grounded;

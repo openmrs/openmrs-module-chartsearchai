@@ -945,7 +945,8 @@ public class ChartSearchAiRestController {
 	 * path. One implementation so a field added here cannot reach some clients and not others.
 	 *
 	 * <p>{@code grounded} is null when grounding is disabled or could not run — clients must render
-	 * null as "unverified", never as "verified".
+	 * null as "unverified", never as "verified". It is ALSO null, unconditionally, for a
+	 * {@code reference}-group citation: see {@link #groundedForWire}.
 	 *
 	 * <p>{@code group} classifies each reference as chart evidence or module-supplied reference
 	 * prose (see {@link ChartSearchAiUtils#referenceGroup}), and the list is ordered so the groups
@@ -992,7 +993,7 @@ public class ChartSearchAiRestController {
 			refMap.put("resourceType", ref.getResourceType());
 			refMap.put("resourceUuid", ref.getResourceUuid());
 			refMap.put("date", formatDate(ref.getDate()));
-			refMap.put("grounded", ref.getGrounded());
+			refMap.put("grounded", groundedForWire(ref));
 			refMap.put("group", ChartSearchAiUtils.referenceGroup(ref.getResourceType()));
 			// Citation metadata, for rendering beside the chip: where the cited record came from,
 			// and how many of its interaction partners the cited record does not name (usually because
@@ -1005,6 +1006,45 @@ public class ChartSearchAiRestController {
 			refs.add(refMap);
 		}
 		return refs;
+	}
+
+	/**
+	 * The grounding verdict this citation may publish: the pipeline's verdict for chart evidence,
+	 * and nothing at all — always {@code null} — for module-supplied reference material.
+	 *
+	 * <p>Grounding treats reference material as DEMOTE-ONLY: a pass is withheld as {@code null}
+	 * because a recitation of module-rendered prose embeds near-identically to its source even when
+	 * it swaps subject roles (#106), while a Tier-1 off-topic citation still yields {@code false}.
+	 * That surviving {@code false} was kept on the wire because it carries information — it says the
+	 * citation is not about the record — and it is that value issue #201 removes.
+	 *
+	 * <p>The reason is that no client has a correct reading of it. The verdict's meaning here is
+	 * "off-topic citation", not "unsupported claim", and distinguishing the two requires reading
+	 * {@code group}; the reference frontend classifies by {@code resourceType} instead, so a
+	 * {@code safety_finding} falls through to its grounding branch and renders <em>"Unsupported —
+	 * The cited record may not support this statement"</em>, in red, on this module's own
+	 * deterministic Major-interaction finding. Both settlements offered on #201 would fix that; the
+	 * one taken is this, because a field that must not be interpreted is a trap, and it holds for
+	 * every client rather than for the one that is patched. The signal is not lost — the verifier
+	 * still computes it, and it is still what
+	 * {@code CitationGroundingVerifier}'s demote-only rule and its logs are about — it stops being
+	 * PUBLISHED.
+	 *
+	 * <p>{@code null} rather than an omitted key: {@code null} is already this field's documented
+	 * value for "grounding disabled or could not run", clients are already instructed to render it
+	 * as unverified and never as verified, and the key's unconditional presence is a property
+	 * clients rely on. Omitting it would invent a third state and break more for no gain.
+	 *
+	 * <p>Derived through {@link ChartSearchAiUtils#isGroundingDemoteOnly}, never from a list of
+	 * type names — the enumerated form is what left {@code safety_finding} out of the grounding
+	 * carve-out for two releases (#122), and it is what the frontend of #201 is doing. So the group
+	 * this withholding is keyed on is the same one the {@code group} field publishes, and a
+	 * reference type added later is withheld without anyone remembering this method.
+	 */
+	private static Boolean groundedForWire(RecordReference ref) {
+		return ChartSearchAiUtils.isGroundingDemoteOnly(ref.getResourceType())
+				? null
+				: ref.getGrounded();
 	}
 
 	/**

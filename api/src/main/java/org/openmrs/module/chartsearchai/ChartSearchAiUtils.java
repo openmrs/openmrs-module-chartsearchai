@@ -123,6 +123,14 @@ public class ChartSearchAiUtils {
 	 * is a named view of {@link #referenceGroup}, not a second classification, so there is no list of
 	 * type names here to fall out of step with that one.
 	 *
+	 * <p><strong>This is the grading rule, not the wire.</strong> Since issue #201 the REST layer
+	 * publishes no verdict at all for reference material — {@code grounded} serializes as
+	 * {@code null} for a {@code reference}-group citation whatever this pass concluded, at every
+	 * emission site (see {@code ChartSearchAiRestController.groundedForWire}). The surviving
+	 * {@code false} below is therefore an internal signal and a log line; it stops at the module
+	 * boundary, because its meaning is "off-topic citation" and reading it as anything else renders
+	 * the module's own deterministic finding as unsupported.
+	 *
 	 * <p><strong>Why module-supplied material cannot be verified.</strong> An answer sentence citing
 	 * module-rendered reference prose is typically a recitation of it, and a recitation embeds
 	 * near-identically to its source whether or not it swaps subject roles ("erythromycin decreases X"

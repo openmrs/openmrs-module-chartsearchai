@@ -350,7 +350,7 @@ public class DrugReference {
 	 *         representative row here, and a fold written once per surface is one chance per surface for
 	 *         them to iterate in an order the others do not. Grep the callers rather than trusting a count
 	 *         here — every issue that finds another surface adds one. Since #206 the CHIP subjects share
-	 *         one per-request lookup ({@code DrugSafetyValidator.SubstanceSubjects}) that ranks the
+	 *         one per-{@code validate} lookup ({@code DrugSafetyValidator.SubstanceSubjects}) that ranks the
 	 *         patient's recorded names before folding; a caller with no recorded name to rank by asks this
 	 *         directly.
 	 */

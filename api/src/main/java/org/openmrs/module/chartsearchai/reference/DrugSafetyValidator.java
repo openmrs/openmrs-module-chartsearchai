@@ -1349,15 +1349,22 @@ public class DrugSafetyValidator {
 	 * rule falls back to "keep the incumbent", which is only "the dataset's first such row" while the
 	 * group is in dataset order.
 	 *
-	 * <p>The order BETWEEN groups is not, and it is worth saying so rather than leaving a
-	 * {@link LinkedHashMap} looking like a guarantee. Nothing EMITS from an iteration of this map: the
-	 * caller walks {@code entries} itself and drains a key set as it reaches each group's first row, so
-	 * what keeps a substance's chips in the position that row's chips had is the CALLER's iteration.
-	 * Since issue #206 the key set is seeded from {@code keySet()}, which is an iteration — but only of
-	 * the keys, into an unordered {@link java.util.HashSet}, so it cannot carry an order to anything.
-	 * Replacing this with a {@code HashMap} would change no output (measured: the whole api suite passes
-	 * with one). Keyed insertion order is kept only so a debug dump of this map reads in dataset order.
-	 * Move the emit site into an iteration of this map and that positional promise moves with it.
+	 * <p>The order BETWEEN groups is load-bearing for ONE of the four callers, and it is worth naming
+	 * which rather than leaving a {@link LinkedHashMap} looking like a blanket guarantee.
+	 * {@link #substanceRowsNamedBy} feeds {@link #addPartnersForUnmappedOrders}, which walks this map's
+	 * {@code entrySet()} and appends a partner per group, and {@link #classRelationships} emits a class
+	 * sentence per partner in that order — so for an order whose names imply two substances (issue #228's
+	 * shape) this map's iteration IS the chip order.
+	 *
+	 * <p>The other three do not iterate it for emission: {@link #resolvedSubstanceRows}'s caller walks
+	 * {@code inPlay} itself and drains a key set as it reaches each group's first row (the key set is
+	 * seeded from {@code keySet()}, but into an unordered {@link java.util.HashSet}, so it carries no
+	 * order anywhere); {@link #addActiveOrderPairInteractions} drains by {@code remove()} while walking
+	 * its own list; and {@link #canonicalSubjects} iterates only to build a lookup. For those three what
+	 * keeps a substance's chips in the position that row's chips had is the CALLER's iteration, and
+	 * replacing this with a {@code HashMap} would change no output there (measured before the fourth
+	 * caller existed: the whole api suite passed with one). Move an emit site into an iteration of this
+	 * map and that positional promise moves with it — which is what the fourth caller did.
 	 */
 	private static Map<Object, List<DrugReference>> substanceRows(Collection<DrugReference> entries) {
 		Map<Object, List<DrugReference>> out = new LinkedHashMap<Object, List<DrugReference>>();
@@ -1424,7 +1431,7 @@ public class DrugSafetyValidator {
 	 *         <p>Kept as a named method over the shared fold rather than inlined at its call sites,
 	 *         because "what a chip calls its subject" is the decision issue #162 made, #174 site 3
 	 *         extended to the screening arm, #194 anchored on the chart and #206 gave one answer per
-	 *         substance per request — the name is where that decision is DEFINED. Where a chip arm looks
+	 *         substance per validate PASS — the name is where that decision is DEFINED. Where a chip arm looks
 	 *         it UP is {@link SubstanceSubjects}, and a new chip-subject site belongs there rather than
 	 *         here: calling this directly is how an arm ends up folding a narrower row group than its
 	 *         siblings, which is exactly what #206 was.

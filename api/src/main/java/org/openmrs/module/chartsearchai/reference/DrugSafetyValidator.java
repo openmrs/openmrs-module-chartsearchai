@@ -346,8 +346,8 @@ public class DrugSafetyValidator {
 		// Per-validate locals, never fields: a memoised DrugReference outliving a getAll() hot-reload
 		// fails the reference comparisons the contraindication arms make against the same objects
 		// (issue #172), which would silently re-open #145 with no test failing.
-		Map<Object, List<DrugReference>> substanceRows = resolvedSubstanceRows(inPlay, orderEntries);
-		SubstanceSubjects subjects = new SubstanceSubjects(substanceRows, recordedDrugNames(context));
+		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
+		SubstanceSubjects subjects = new SubstanceSubjects(resolvedRows, recordedDrugNames(context));
 
 		// One ledger for every contraindication chip this pass raises, across BOTH arms and both of
 		// their call sites (the drug-in-play loop below and the order-driven arm after it) — see
@@ -363,11 +363,12 @@ public class DrugSafetyValidator {
 		// are now shared: two maps of the same groups was two chances for the two arms to be handed
 		// different row sets, and a narrower set for either would let one response call one substance two
 		// things. Gated on their own toggles, so switching interactions off does not silently switch the
-		// dose grouping off with it.
+		// dose grouping off with it — an empty set's remove() is a no-op returning false, which is the
+		// same idiom the two drained maps this replaces relied on.
 		Set<Object> interactionsPending = warnInteractions
-				? new HashSet<Object>(substanceRows.keySet()) : Collections.<Object> emptySet();
+				? new HashSet<Object>(resolvedRows.keySet()) : Collections.<Object> emptySet();
 		Set<Object> dosePending = warnDose
-				? new HashSet<Object>(substanceRows.keySet()) : Collections.<Object> emptySet();
+				? new HashSet<Object>(resolvedRows.keySet()) : Collections.<Object> emptySet();
 
 		// One ledger of the (substance, partner) pairs an interaction chip has been raised for, spanning
 		// the drug-in-play arm below and the screening arm at the end — see InteractionPairs. Like the
@@ -397,11 +398,11 @@ public class DrugSafetyValidator {
 				// One call, not one per arm: the rule arm and the class arm can both raise a chip about
 				// the same active order, so the decision of how many chips that pair gets belongs to a
 				// method that sees both (issue #88).
-				addInteractionWarnings(warnings, substanceRows.get(ref.substanceGroupKey()), subjects,
+				addInteractionWarnings(warnings, resolvedRows.get(ref.substanceGroupKey()), subjects,
 						context, severityFloor, orderEntries, interactionPairs);
 			}
 			if (dosePending.remove(ref.substanceGroupKey())) {
-				addOverdose(warnings, substanceRows.get(ref.substanceGroupKey()), subjects, context, lower,
+				addOverdose(warnings, resolvedRows.get(ref.substanceGroupKey()), subjects, context, lower,
 						all);
 			}
 		}
@@ -940,6 +941,12 @@ public class DrugSafetyValidator {
 			// merge different sets of rows. Its javadoc is where the two key spaces are justified. It is
 			// what keeps issue #206's resolved subject a RENAME: every row of one substance answers this
 			// alike, so choosing a different row of the group to name the chip after cannot move its key.
+			// Since the subject handed here is resolved, keying on the row's IDENTITY instead would in
+			// fact partition the chips the same way (measured — the whole suite stays green); this form is
+			// kept because it says which partition is intended rather than inheriting it from the
+			// resolver, and because what actually duplicates chips is passing the RAISING row here while
+			// naming the chip from the resolved one (also measured: 4 chips where 2 are correct — see
+			// ContraindicationSubjectLabelTest.twoFindingsAboutOneSubjectStayTwoChips).
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
 			if (already == null) {
@@ -1053,8 +1060,8 @@ public class DrugSafetyValidator {
 	 * row's mechanism prose. So it was not a duplicate to drop but a choice to make, and both halves of
 	 * the choice are decided elsewhere and deliberately: which rule row survives by
 	 * {@link #outranks}, and what the chip calls the subject by {@link #interactionSubject}. The caller
-	 * groups the rows ({@code substanceRows}) and hands them here at the group's first row, so a
-	 * substance's chips keep the position they have always had.
+	 * groups the rows ({@link #resolvedSubstanceRows}) and hands them here at the group's first row, so
+	 * a substance's chips keep the position they have always had.
 	 *
 	 * <p><b>The defect.</b> A co-medication that is BOTH an explicit interaction partner AND
 	 * class-related raised TWO {@code TYPE_INTERACTION} chips for one clinical fact, because neither
@@ -1142,8 +1149,8 @@ public class DrugSafetyValidator {
 		// partner reached by ATC code, and since issue #228 the row the ORDER records for a partner
 		// reached by name — and that is lossless only
 		// while every row of a substance publishes the same ATC list — which the shipped KB does, across
-		// all 129 of its multi-row families, and which is the same premise ContraindicationChips'
-		// positional tie-break rests on. It is a DATA invariant, not a code-gated one: a KB refresh that
+		// all 129 of its multi-row families, and which is the same premise ContraindicationChips' KEY
+		// merge rests on. It is a DATA invariant, not a code-gated one: a KB refresh that
 		// gave one route variant a code its siblings lack would silently drop a duplicate-therapy chip
 		// this arm used to raise, so re-measure it on a refresh as well as before widening substanceKey.
 		// (Re-measured for issue #164's widening: still 0 divergent, at 129 families rather than 121.)
@@ -4062,7 +4069,7 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * At most ONE dose warning for the substance {@code subjects} are the reference rows of, named
+	 * At most ONE dose warning for the substance {@code rows} are the reference rows of, named
 	 * after the row that names the substance.
 	 *
 	 * <p><b>Issue #174 site 4 — the fourth per-row site, and the one that was latent.</b> This ran
@@ -4106,9 +4113,10 @@ public class DrugSafetyValidator {
 	/**
 	 * The dose check for ONE reference row, reported under {@code subject}'s name.
 	 *
-	 * @param subject the row the warning NAMES — the substance's canonical row, so a chip never
-	 *        asserts a formulation the chart does not record (the same judgement
-	 *        {@link #interactionSubject} makes for the interaction chips)
+	 * @param subject the row the warning NAMES — {@link SubstanceSubjects}' answer, i.e. the row the
+	 *        chart records where it records one and the canonical row otherwise, so a chip never asserts
+	 *        a formulation the chart does not record (the same answer every other arm gets, which since
+	 *        issue #206 includes the contraindication chips)
 	 * @param ref the row whose published {@code ageBands} and aliases the check READS
 	 * @return whether a warning was raised, so the caller can stop at the first row that trips
 	 */

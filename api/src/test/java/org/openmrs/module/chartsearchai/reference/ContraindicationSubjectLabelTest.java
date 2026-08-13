@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
  * interaction chip calling it {@code Chloroprocaine} beside a contraindication chip calling it
  * {@code Chloroprocaine (ophthalmic)} — one substance, two names, in one response.
  *
- * <p>Issue #205 widened that: before it, the two arms disagreed only for the shipped families whose
+ * <p>Issue #194 widened that: before it, the two arms disagreed only for the shipped families whose
  * unqualified row is not the dataset's first; after it, they disagree wherever the CHART names a row
  * that is neither, which is a property of the patient's data rather than of the knowledge base.
  *

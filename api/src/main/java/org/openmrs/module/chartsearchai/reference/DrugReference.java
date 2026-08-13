@@ -345,15 +345,14 @@ public class DrugReference {
 	 *         the whole group rather than accumulating it as it scans. {@code null} for an empty
 	 *         {@code rows}, which is the only way this can answer nothing.
 	 *
-	 *         <p>Shared rather than written out at each site for the reason the pairwise form exists
-	 *         at all: five surfaces now choose a substance's representative row — the interaction
-	 *         chip's subject (issue #162), the injected record (#163), the class chip's partner
-	 *         (#174 site 1), the dose warning's subject (#174 site 4) and the contraindication chip's
-	 *         subject (#206) — and a fold written five times is five chances for one of them to iterate
-	 *         in an order the others do not. The three CHIP subjects reach it through one per-request
-	 *         lookup since #206 ({@code DrugSafetyValidator.SubstanceSubjects}), so what varies between
-	 *         them is nothing at all; the other two ask this directly, having no recorded name to rank
-	 *         by first.
+	 *         <p>Shared rather than written out at each site for the reason the pairwise form exists at
+	 *         all: every surface that must describe one substance to one clinician chooses its
+	 *         representative row here, and a fold written once per surface is one chance per surface for
+	 *         them to iterate in an order the others do not. Grep the callers rather than trusting a count
+	 *         here — every issue that finds another surface adds one. Since #206 the CHIP subjects share
+	 *         one per-request lookup ({@code DrugSafetyValidator.SubstanceSubjects}) that ranks the
+	 *         patient's recorded names before folding; a caller with no recorded name to rank by asks this
+	 *         directly.
 	 */
 	static DrugReference canonicalRow(Iterable<DrugReference> rows) {
 		DrugReference canonical = null;

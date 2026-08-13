@@ -362,8 +362,9 @@ public class DrugSafetyValidator {
 		// promise ContraindicationChips makes. A key set apiece rather than a map apiece, because the ROWS
 		// are now shared: two maps of the same groups was two chances for the two arms to be handed
 		// different row sets, and a narrower set for either would let one response call one substance two
-		// things. Gated on their own toggles, so switching interactions off does not silently switch the
-		// dose grouping off with it — an empty set owes nobody a call, which is the whole of that gate.
+		// things. One set per arm and one toggle per set, which is the whole of that gate: an empty set
+		// owes nobody a call. (Nothing pins the interactions-off branch — no test in the suite sets that
+		// GP — so it is stated as what the code is, not as a property something checks.)
 		//
 		// A real empty HashSet rather than Collections.emptySet(): remove() on the latter happens to be a
 		// no-op returning false, but that is AbstractCollection's behaviour and not a contract — Set.of()
@@ -398,11 +399,12 @@ public class DrugSafetyValidator {
 				addAllergyContraindications(contraindications, ref, recordedAllergens);
 			}
 			// The rows this pass resolved for ref's substance, and the null/empty check the two-map form
-			// used to get for free from remove(). It cannot fire — the pending sets are seeded FROM this
-			// map's keys and resolvedSubstanceRows only ever adds a non-empty list — and it is kept
-			// because of what the alternative costs: validate() answers a RuntimeException with an empty
-			// warning list, so one absent group would drop every chip on the request rather than one
-			// arm's, which is the failure mode RaisedChip's own javadoc says this class is shaped around.
+			// used to get for free from remove(). It cannot fire: the map is seeded by substanceRows(inPlay)
+			// and ref is FROM inPlay, so its key is present, and every group is non-empty by the time
+			// resolvedSubstanceRows returns. It is kept because of what the alternative costs — validate()
+			// answers a RuntimeException with an empty warning list, so one absent group would drop every
+			// chip on the request rather than one arm's, which is the failure mode RaisedChip's own
+			// javadoc says this class is shaped around.
 			List<DrugReference> rows = resolvedRows.get(ref.substanceGroupKey());
 			if (rows == null || rows.isEmpty()) {
 				continue;
@@ -692,10 +694,12 @@ public class DrugSafetyValidator {
 	 * <p><b>The two arms that do NOT read it, stated rather than implied.</b>
 	 * {@link #addQuestionPairInteractions} and {@link #addActiveOrderPairInteractions} still resolve
 	 * their own subject through {@link #canonicalSubjects}, over that arm's OWN rows — the question's
-	 * drugs and the order-resolved entries respectively — and since issue #175 those are strictly
-	 * narrower than the group here, which also carries the rows the CHART resolved. So a substance the
+	 * drugs and the order-resolved entries respectively — and since issue #175 those are never WIDER than
+	 * the group here, which also carries the rows the CHART resolved. So a substance the
 	 * question names, the chart prescribes as a route-qualified row, and a pair arm also chips can still
-	 * be named two ways in one response. That residue is #174 site 3's and #189's territory rather than
+	 * be named two ways in one response. The screening arm is gated on the QUESTION naming no drug, so
+	 * its two groups coincide unless the ANSWER named a row of an ordered substance; the question-pair
+	 * arm is where they differ by construction. That residue is #174 site 3's and #189's territory rather than
 	 * this issue's, it is bounded by the pair arms' own gates (a question naming two drugs, or an
 	 * interaction screen with no question drug at all), and closing it means handing those arms this
 	 * lookup and deleting {@code canonicalSubjects}. Do not read the paragraph above as saying no two
@@ -992,9 +996,14 @@ public class DrugSafetyValidator {
 			// so two allergy RECORDS resolving two rows of one substance would key apart. Measured — that
 			// mutation fails
 			// AllergenExactNameResolutionTest.twoRecordedAllergiesToOneSubstanceStillRaiseOneChipPerSubject
-			// — so this form is a requirement and not a statement of intent. What duplicates chips the
-			// other way is passing the RAISING row here while naming the chip from the resolved one (also
-			// measured: 4 chips where 2 are correct — see
+			// — so this KEY FORM is a requirement and not a statement of intent.
+			//
+			// Which row a caller hands over is a separate matter and, with this key form, cannot change
+			// the partition at all: every row of one substance answers substanceGroupKey alike. It is a
+			// contract rather than a mechanism — pass the row the chip's own sentence names, so the two
+			// cannot come apart if the key form is ever revisited. The two together are what a more
+			// precise resolver needs: resolving the LABEL while keying per raising row gives 4 chips
+			// where 2 are correct (measured — see
 			// ContraindicationSubjectLabelTest.twoFindingsAboutOneSubjectStayTwoChips).
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
@@ -1033,7 +1042,6 @@ public class DrugSafetyValidator {
 		// inside this arm. What is left for a deployment authoring a genuinely route-specific rule is to
 		// file that presentation as its own substance, which is what a row publishing no substanceName
 		// already does.
-		DrugReference subject = chips.subjectOf(ref);
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			boolean allergy = "allergy".equalsIgnoreCase(c.getType())
 					&& context.hasAllergyToken(c.getToken());
@@ -1042,6 +1050,11 @@ public class DrugSafetyValidator {
 			if (!allergy && !condition) {
 				continue;
 			}
+			// Resolved after the match rather than above the loop: the shipped ddinter source emits no
+			// contraindications at all, so hoisting would fold a substance's rows for every drug in play of
+			// every request, for a loop that then does nothing. SubstanceSubjects memoises per substance, so
+			// asking it once per MATCHED rule costs no more than asking it once.
+			DrugReference subject = chips.subjectOf(ref);
 			// Reaching here means the rule MATCHED, so a self-named allergy rule is necessarily one whose
 			// allergy leg matched: the two booleans are exclusive, and a rule whose type is "allergy" and
 			// whose token no allergy token contains has already been skipped above.
@@ -2420,7 +2433,8 @@ public class DrugSafetyValidator {
 		//
 		// remove(), so a substance's rows are handed to the arm ONCE — at the first of them, keeping the
 		// position that row's chips have always had — and the map itself is the already-done ledger. The
-		// same idiom validate() uses for the drug-in-play and dose arms.
+		// same drain-once-per-substance idiom validate() uses for the drug-in-play and dose arms, which
+		// since issue #206 drains a key set beside a shared row map rather than a map of its own.
 		Map<Object, List<DrugReference>> substances = substanceRows(orderDrugs);
 		for (DrugReference ref : orderDrugs) {
 			List<DrugReference> substance = substances.remove(ref.substanceGroupKey());
@@ -3003,6 +3017,16 @@ public class DrugSafetyValidator {
 		// CLASS comparisons below assert something about the drug being checked and so must call it what
 		// every other arm calls it; the identity chip does not and is exempt, for the reason recorded at
 		// its own branch.
+		//
+		// So those two sentences now READ their evidence from ref (refClasses, refGroups above) and NAME
+		// a different row of the same substance. "X is in the same ATC class (C) as …" is therefore true
+		// of the row it names only while every row of a substance publishes the same ATC codes — the data
+		// invariant ContraindicationChips' javadoc measures (0 of 129 multi-row families divergent,
+		// 2026-08-08) for the ledger key and the class arm's one-row read. Since issue #206 that
+		// invariant also underwrites the CHIP'S OWN CLAIM, which is a sharper consequence than a dropped
+		// chip: a refresh giving one route variant a subgroup its siblings lack would make this sentence
+		// name a drug that publishes no such code. Re-measure it on a refresh — the instruction lives with
+		// the measurement, and this is one more thing that now depends on it.
 		DrugReference subject = chips.subjectOf(ref);
 		for (List<DrugReference> allergen : recordedAllergens) {
 			// Identity FIRST, over every substance the recorded name implies, and only then the class
@@ -3020,11 +3044,13 @@ public class DrugSafetyValidator {
 				// the same kind of evidence and simply on different records of it: the class chips below
 				// assert something about the drug being CHECKED, this one quotes a record.
 				//
-				// The LEDGER is handed sameSubstance for the same reason, not the resolved subject: the two
-				// key alike (firstOfSameSubstance returns a row of ref's own substance, so their
-				// substanceGroupKey is refSubstance either way), and passing the row this chip actually
-				// names keeps the exempt chip independent of the resolver — which is what add()'s contract
-				// says and what stops a later change to SubstanceSubjects reaching a chip it must not.
+				// The LEDGER is handed sameSubstance for the same reason, not the resolved subject. It is a
+				// contract and NOT a mechanism, and nothing can pin it: the two key alike
+				// (firstOfSameSubstance returns a row of ref's own substance, so their substanceGroupKey is
+				// refSubstance either way), so no test can tell them apart. What it buys is that the exempt
+				// chip does not read the resolver at all, so a later change to SubstanceSubjects cannot
+				// reach a chip that must not move — which is #187, and #187 is not a thing to leave resting
+				// on two expressions happening to be equal.
 				chips.add(sameSubstance, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION,
 								sameSubstance.displayLabel(), "The patient has a recorded allergy to "

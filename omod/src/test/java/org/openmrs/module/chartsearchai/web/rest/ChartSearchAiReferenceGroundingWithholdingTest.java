@@ -15,11 +15,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -74,8 +75,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@code FALSE} — and the expectation for each is derived by asking
  * {@link ChartSearchAiUtils#isGroundingDemoteOnly}. No type name appears in the expectation, so a
  * newly declared reference-group constant is swept automatically, and a serializer that agreed with
- * today's two names would fail the moment one is added. This is the same forcing function
- * {@code ChartSearchAiReferenceGroupTest} applies to the classification itself.</li>
+ * today's two names would fail the moment one is added.
+ * <p>The cost of deriving rather than enumerating, stated so it is not mistaken for coverage this
+ * class does not have: both halves ask the same classifier production asks, so if
+ * {@code referenceGroup} itself regressed — classifying {@code drug_reference} as chart — every
+ * test here would still pass while the wire republished the verdict, which is #201 again. The
+ * load-bearing anchor to real type names is {@code ChartSearchAiReferenceGroupTest}'s hand-recorded
+ * group table in the api module, not this class. That is the right division (one place records the
+ * decision; everything else derives from it), but it means this class is only as good as that
+ * one.</li>
  * <li><em>Structurally, so the hardcode fails TODAY.</em>
  * {@link #theWireSerializerMustNotNameAReferenceGroupResourceType()} reads the controller's own
  * compiled class file and asserts it contains no reference-group type name. Those constants are
@@ -224,9 +232,19 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 	 * <p>No behavioural test can catch that regression today: with exactly two reference-group types,
 	 * a hardcoded pair agrees with the classifier on every input that exists. So this asserts the
 	 * property directly. {@code RESOURCE_TYPE_*} are compile-time {@code String} constants, so javac
-	 * inlines the VALUE into the constant pool of any class that mentions one — by the constant or by
-	 * a bare literal, either way. The controller therefore names a resource type if and only if these
-	 * bytes contain its wire value.
+	 * inlines the VALUE into the constant pool of any class that mentions one — whether written as
+	 * the constant, as a bare literal, or as a folded concatenation. Scanning every class file the
+	 * controller compiles to therefore answers "does this class name a resource type".
+	 *
+	 * <p>Two limits of the mechanism, stated so nobody has to rediscover them. It is a raw byte
+	 * scan, so a wire value that happened to be a SUBSTRING of an unrelated literal would redden
+	 * this on an unrelated change — today's values are safe (the pool already holds
+	 * {@code reference} and {@code chart} inside {@code "references"}, {@code "chartsearchai"} and
+	 * {@code "referenceCount"}, and neither {@code drug_reference} nor {@code safety_finding} occurs
+	 * that way), but a future single-word type name would want word-delimited matching rather than
+	 * this being deleted. And a name computed at runtime would evade it; that is not a plausible
+	 * accidental regression, and the shape this exists to catch — {@code type.equals(CONSTANT)} — is
+	 * not evadable.
 	 *
 	 * <p>The controller has no other business naming one: it serializes a wire shape and asks
 	 * {@code ChartSearchAiUtils} for every classification decision in it. If a future change needs a
@@ -234,28 +252,33 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 	 */
 	@Test
 	public void theWireSerializerMustNotNameAReferenceGroupResourceType() throws Exception {
-		byte[] compiled = compiledControllerClass();
+		Map<String, byte[]> compiled = compiledControllerClasses();
+		byte[] outer = compiled.get(ChartSearchAiRestController.class.getSimpleName() + ".class");
 
-		// Positive controls first: a failed or empty read would otherwise satisfy every assertion
-		// below by containing nothing at all, and report a guard that guarded nothing.
-		assertTrue(contains(compiled, "grounded"),
+		// Positive controls first, on the class that writes the wire map: a failed or truncated read
+		// would otherwise satisfy every assertion below by containing nothing at all, and report a
+		// guard that guarded nothing.
+		assertTrue(contains(outer, "grounded"),
 				"sanity: the controller's class file must contain the wire key it writes — the read "
-						+ "returned " + compiled.length + " bytes and the assertions below would be vacuous");
-		assertTrue(contains(compiled, "withheldInteractions"),
+						+ "returned " + outer.length + " bytes and the assertions below would be vacuous");
+		assertTrue(contains(outer, "withheldInteractions"),
 				"sanity: the controller's class file must contain the other wire keys it writes");
 
 		List<String> referenceGroupTypes = referenceGroupResourceTypes();
 		assertFalse(referenceGroupTypes.isEmpty(),
 				"sanity: no declared resource type classifies as reference material, so this guard "
 						+ "would forbid nothing");
-		for (String type : referenceGroupTypes) {
-			assertFalse(contains(compiled, type),
-					"ChartSearchAiRestController names the resource type \"" + type + "\". The wire's "
-							+ "grounding withholding and its group discriminator must both be derived from "
-							+ "ChartSearchAiUtils.isGroundingDemoteOnly / referenceGroup, never from a list "
-							+ "of type names: an enumerated list is what left safety_finding out of the "
-							+ "grounding carve-out for two releases (#122), and the suite cannot see that "
-							+ "mistake behaviourally until a third reference-group type exists.");
+		for (Map.Entry<String, byte[]> compiledClass : compiled.entrySet()) {
+			for (String type : referenceGroupTypes) {
+				assertFalse(contains(compiledClass.getValue(), type),
+						compiledClass.getKey() + " names the resource type \"" + type + "\". The wire's "
+								+ "grounding withholding and its group discriminator must both be derived from "
+								+ "ChartSearchAiUtils.isGroundingDemoteOnly / referenceGroup, never from a list "
+								+ "of type names: an enumerated list is what left safety_finding out of the "
+								+ "grounding carve-out for two releases (#122), and the suite cannot see that "
+								+ "mistake behaviourally until a third reference-group type exists. Scanned "
+								+ compiled.keySet());
+			}
 		}
 	}
 
@@ -377,23 +400,46 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 		return types;
 	}
 
-	/** The controller's own compiled class file, read off the classpath it was loaded from. */
-	private static byte[] compiledControllerClass() throws IOException {
-		String name = ChartSearchAiRestController.class.getSimpleName() + ".class";
-		InputStream in = ChartSearchAiRestController.class.getResourceAsStream(name);
-		assertNotNull(in, "could not open " + name + " on the classpath");
-		try {
-			ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-			byte[] chunk = new byte[8192];
-			int read;
-			while ((read = in.read(chunk)) > 0) {
-				bytes.write(chunk, 0, read);
+	/**
+	 * EVERY class file the controller compiles to, as file name → bytes: the outer class and each
+	 * nested or anonymous {@code ChartSearchAiRestController$*}. The outer class alone is not
+	 * enough — {@code PatientResolution} is a real nested class today, so scanning only
+	 * {@code ChartSearchAiRestController.class} would let a type name hardcoded inside a nested
+	 * class through, and the guard would report a coverage it does not have.
+	 *
+	 * <p>Read as files rather than through {@code getResourceAsStream} so the sibling class files
+	 * can be enumerated at all, and read with {@link Files#readAllBytes} so there is no hand-rolled
+	 * copy loop to truncate: a loop written {@code while (read = in.read(buf) > 0)} ends early on a
+	 * legal zero-length read, and a truncated buffer satisfies every "does not contain" assertion —
+	 * a silent PASS, which is the exact failure this whole guard exists to prevent.
+	 *
+	 * <p>The file-URL assumption is asserted rather than assumed: loaded from a jar this method
+	 * would see one entry and quietly stop covering the nested classes, so it fails loudly instead.
+	 */
+	private static Map<String, byte[]> compiledControllerClasses() throws Exception {
+		String simpleName = ChartSearchAiRestController.class.getSimpleName();
+		URL url = ChartSearchAiRestController.class.getResource(simpleName + ".class");
+		assertNotNull(url, "could not locate " + simpleName + ".class on the classpath");
+		assertEquals("file", url.getProtocol(),
+				"this guard enumerates the controller's compiled class files as siblings in a "
+						+ "directory; it was loaded from a \"" + url.getProtocol() + "\" URL, where that "
+						+ "enumeration would silently cover only the outer class");
+
+		File dir = new File(url.toURI()).getParentFile();
+		File[] siblings = dir.listFiles();
+		assertNotNull(siblings, "could not list " + dir);
+		Map<String, byte[]> classes = new LinkedHashMap<String, byte[]>();
+		for (File file : siblings) {
+			String name = file.getName();
+			boolean belongs = name.equals(simpleName + ".class")
+					|| (name.startsWith(simpleName + "$") && name.endsWith(".class"));
+			if (belongs) {
+				classes.put(name, Files.readAllBytes(file.toPath()));
 			}
-			return bytes.toByteArray();
 		}
-		finally {
-			in.close();
-		}
+		assertTrue(classes.containsKey(simpleName + ".class"),
+				"the controller's own class file was not among " + dir + "'s entries");
+		return classes;
 	}
 
 	/** Whether the class file's bytes contain {@code text} — i.e. whether the class names it. */

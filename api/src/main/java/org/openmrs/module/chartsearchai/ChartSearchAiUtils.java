@@ -127,11 +127,11 @@ public class ChartSearchAiUtils {
 	 * publishes no verdict at all for reference material — {@code grounded} serializes as
 	 * {@code null} for a {@code reference}-group citation whatever this pass concluded, at every
 	 * emission site (see {@code ChartSearchAiRestController.groundedForWire}). The surviving
-	 * {@code false} below is therefore module-internal — it is still computed, still returned on
-	 * {@code RecordReference.getGrounded()}, and still what keeps these citations out of Tier-2 and
-	 * its per-answer cap — but it stops at the module boundary, because its meaning is "off-topic
-	 * citation" and reading it as anything else renders the module's own deterministic finding as
-	 * unsupported.
+	 * {@code false} below is therefore module-internal: still computed, still returned on
+	 * {@code RecordReference.getGrounded()}, and no longer published — because its meaning is
+	 * "off-topic citation" and reading it as anything else renders the module's own deterministic
+	 * finding as unsupported. Note that the Tier-2 exclusion and the {@code TRUE}-to-{@code null}
+	 * demotion are both driven by THIS predicate, not by that verdict.
 	 *
 	 * <p><strong>Why module-supplied material cannot be verified.</strong> An answer sentence citing
 	 * module-rendered reference prose is typically a recitation of it, and a recitation embeds

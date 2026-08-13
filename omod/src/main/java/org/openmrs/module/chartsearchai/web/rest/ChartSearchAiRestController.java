@@ -1027,9 +1027,9 @@ public class ChartSearchAiRestController {
 	 * statement"</em>, in red, on this module's own deterministic Major-interaction finding. Both
 	 * settlements offered on #201 would fix that one client; the one taken is this, because a field
 	 * that must not be interpreted is a trap and withholding it holds for every client rather than
-	 * for the one that is patched. The signal is not lost, it stops being PUBLISHED: the verifier
-	 * still computes it, {@code RecordReference.getGrounded()} still carries it, and it is still
-	 * what keeps these citations out of Tier-2 and its per-answer cap.
+	 * for the one that is patched. Nothing about the grounding pass changes: the verifier still
+	 * computes the verdict and {@code RecordReference.getGrounded()} still carries it. Only its
+	 * publication stops here.
 	 *
 	 * <p>{@code null} rather than an omitted key: {@code null} is already this field's documented
 	 * value for "grounding disabled or could not run", clients are already instructed to render it
@@ -1038,9 +1038,12 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>Derived through {@link ChartSearchAiUtils#isGroundingDemoteOnly}, never from a list of
 	 * type names — the enumerated form is what left {@code safety_finding} out of the grounding
-	 * carve-out for two releases (#122), and it is what the frontend of #201 is doing. So the group
-	 * this withholding is keyed on is the same one the {@code group} field publishes, and a
-	 * reference type added later is withheld without anyone remembering this method.
+	 * carve-out for two releases (#122), and it is the same mistake the client above made. So the
+	 * group this withholding is keyed on is the same one the {@code group} field publishes, and a
+	 * reference type added later is withheld without anyone remembering this method. A hardcoded
+	 * pair would agree with the classifier on every type that exists today, so it is
+	 * {@code ChartSearchAiReferenceGroundingWithholdingTest}'s compiled-class guard, not its
+	 * behavioural sweep, that would catch it.
 	 */
 	private static Boolean groundedForWire(RecordReference ref) {
 		return ChartSearchAiUtils.isGroundingDemoteOnly(ref.getResourceType())

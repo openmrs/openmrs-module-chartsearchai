@@ -995,11 +995,11 @@ public class CitationGroundingVerifierTest {
 		// registry this issue exists to stop keying off type names.
 		//
 		// Issue #201 stopped PUBLISHING this verdict — the wire serializes null for every
-		// reference-group citation — and that is not a reason to stop computing it. Grading is what
-		// keeps these citations out of the Tier-2 entailment cap; only the client-facing value went
-		// away, because no client could tell "this citation is not about that record" from "this
-		// claim is unsupported". So this assertion is now about the verdict the MODULE holds, which
-		// is what getGrounded() returns and what the wire deliberately no longer echoes.
+		// reference-group citation, because no client could tell "this citation is not about that
+		// record" from "this claim is unsupported". That did not change the pass, and this assertion
+		// is unchanged with it: it is about the verdict the MODULE holds, which is what getGrounded()
+		// returns. Choosing "exempt entirely" instead would still be the per-type branch this
+		// registry exists to avoid, and it would also drop the drug_reference flag with it.
 		RecordMapping finding = realSafetyFinding();
 		String sentence = "The patient's blood pressure is well controlled [" + finding.getIndex() + "].";
 		embeddings.register(sentence, AXIS_A);

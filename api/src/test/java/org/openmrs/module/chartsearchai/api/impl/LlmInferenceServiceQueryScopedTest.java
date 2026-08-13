@@ -247,7 +247,14 @@ public class LlmInferenceServiceQueryScopedTest {
 		// the chart said queryScoped, a later re-read says fullChart. An audit row exists to
 		// reconstruct what the clinician was actually shown, so it must follow the CHART. Deriving
 		// the label from a GP re-read is what #178 was, one layer up.
+		//
+		// BOTH mode seams are set to disagree with the chart on purpose. Overriding only the
+		// service's leaves the strategy's falling through to the real GP reader, whose fail-safe
+		// default is queryScoped — so a searchModeLabel rewritten to consult the mode instead of the
+		// chart would return the right answer here for the wrong reason, and this case would pass
+		// while claiming to rule that out.
 		service.queryScoped = false;
+		strategy.queryScopedMode = false;
 		strategy.returnScopedChart = true;
 
 		assertEquals(ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED,
@@ -331,6 +338,12 @@ public class LlmInferenceServiceQueryScopedTest {
 		 *  every test written before #178 sees exactly the behaviour it was written against. */
 		boolean returnPreFilteredChart = false;
 
+		/** What the STRATEGY's own chartMode gate reports. Overridden (rather than left falling
+		 *  through to the real GP reader, whose fail-safe default is queryScoped) so a case can put
+		 *  the gate and the built chart in deliberate disagreement and have the disagreement be the
+		 *  thing under test. */
+		boolean queryScopedMode = false;
+
 		@Override
 		PatientChart buildChart(Patient patient, String question) {
 			buildChartCalled = true;
@@ -352,6 +365,11 @@ public class LlmInferenceServiceQueryScopedTest {
 			List<RecordMapping> mappings = Collections.singletonList(
 					new RecordMapping(1, "condition", "00000000-0000-0000-0000-000000000008", null));
 			return new PatientChart("1. Focused record", mappings, Collections.<Integer>emptyList());
+		}
+
+		@Override
+		boolean queryScopedMode() {
+			return queryScopedMode;
 		}
 
 		@Override

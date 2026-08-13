@@ -32,8 +32,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  *
  * <p>Matching keys:
  * <ul>
- *   <li>{@link #getAliases()} — lowercase free-text names for question-driven matching.</li>
- *   <li>{@link #getAtcCodes()} — ATC codes for order-driven matching against active orders.</li>
+ *   <li>{@link #getAliases()} — lowercase free-text names, for question-driven matching and (through
+ *       {@link #matchesDrugName}) for resolving an active order's own display name.</li>
+ *   <li>{@link #getAtcCodes()} — ATC codes for order-driven matching against an active order's concept
+ *       mappings. One of those two keys since issue #151, not the only one — see
+ *       {@link DrugReferenceService#findForActiveOrders}.</li>
  * </ul>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -531,6 +534,20 @@ public class DrugReference {
 	 *         {@link #isUnclassifyingAtcCode} recognises, and the injector's relevance scoping
 	 *         deliberately does not — it is deciding what to put in front of the model, where an extra
 	 *         record is noise, not what to assert to a clinician.
+	 *
+	 *         <p>Issue #151 widened the injector's candidate set from ATC-mapped orders to every order
+	 *         the reference data resolves, so that divergence is reached far more often and its cost was
+	 *         measured rather than left as a judgement. Applying the #167 veto to the injector's gate as
+	 *         well would remove 6 of the 491 records injected across a 24-patient x 21-question sweep of
+	 *         the 3.7.1 demo instance's real active orders against the 19 MB knowledge base (measured
+	 *         2026-08-13 by running the real {@code DrugReferenceInjector.injectRecords} with and without
+	 *         the veto), and 0 of the records that were injected before #151. Two of the six are the
+	 *         noise the veto is for (neomycin beside a ciprofloxacin question, related only through
+	 *         "both are also sold as ear drops"); four are pairs a clinician wants — diclofenac beside an
+	 *         ibuprofen question, budesonide beside a prednisolone one — that the veto would drop because
+	 *         every subgroup they share is one it vetoes, the class relation they really have being one
+	 *         this knowledge base does not otherwise express. That trade is a
+	 *         question about the relevance rule and belongs to its own issue, not to #151.
 	 */
 	public Set<String> atcSubgroups() {
 		return atcSubgroups(normalizedAtcCodes());

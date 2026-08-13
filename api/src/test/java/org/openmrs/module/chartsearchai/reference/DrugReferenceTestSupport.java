@@ -61,7 +61,8 @@ public final class DrugReferenceTestSupport {
 	 * <p>The one matcher for "the injected reference", so the reference-shaped filter cannot drift
 	 * between the test files that need it. {@code DrugReferenceInjectorTest.referenceMappingFor} is
 	 * deliberately separate: it selects by the drug the rendering names, which is a different
-	 * question once more than one entry is injected.
+	 * question once more than one entry is injected — the loose, mapping-returning form of
+	 * {@link #namesDrug} below.
 	 */
 	static RecordMapping injectedReference(PatientChart chart) {
 		return injectedReferences(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
@@ -79,6 +80,52 @@ public final class DrugReferenceTestSupport {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType()))
 				.collect(Collectors.toList());
+	}
+
+	/**
+	 * The injected {@code drug_reference} records' full rendered text, in injection order — the
+	 * text-shaped view of {@link #injectedReferences}, owned here for the same reason that filter is:
+	 * two files had grown their own copy of it.
+	 *
+	 * <p>Whole texts rather than extracted names, deliberately. A rendered record is
+	 * {@code "Drug reference — <name>"} followed by {@code " (<class>; ATC …)"} only when the entry
+	 * publishes one of those, then a full stop — so a name-extraction rule that splits on {@code " ("}
+	 * both loses an unclassified entry's name entirely AND merges a bare name with a route-qualified
+	 * sibling of it ({@code Iron} with {@code Iron (bisglycinate)}). Comparing whole texts has neither
+	 * problem and is the stricter assertion.
+	 */
+	static List<String> referenceTexts(PatientChart chart) {
+		List<String> out = new ArrayList<String>();
+		for (RecordMapping mapping : injectedReferences(chart)) {
+			out.add(mapping.getText());
+		}
+		return out;
+	}
+
+	/**
+	 * @return whether one of {@code texts} is the record rendered for the entry NAMED {@code name} —
+	 *         the strict counterpart of {@code DrugReferenceInjectorTest.referenceMappingFor}, which
+	 *         asks the looser {@code getText().contains(drug)} and answers with the mapping.
+	 *
+	 *         <p>BOTH terminators have to be accepted, and that is the whole reason this rule lives in
+	 *         one place: an entry the loaded dataset classifies nowhere renders as
+	 *         {@code "Drug reference — Iron."} with no parenthesis at all, so a check written against
+	 *         {@code " ("} alone is blind to exactly the entries an ATC-keyed candidate set could never
+	 *         have contained (found by mutation while hardening issue #151 — the assertion stayed green
+	 *         with the gate deliberately broken).
+	 *
+	 *         <p>Residual bound: it cannot tell a bare name from a route-qualified sibling, because the
+	 *         qualifier and the class parenthesis open with the same two characters. Pin the record
+	 *         COUNT beside it wherever an ABSENCE is the claim.
+	 */
+	static boolean namesDrug(List<String> texts, String name) {
+		for (String text : texts) {
+			if (text.startsWith("Drug reference — " + name + " (")
+					|| text.startsWith("Drug reference — " + name + ".")) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -147,11 +194,8 @@ public final class DrugReferenceTestSupport {
 	 *         cannot silently assert nothing
 	 */
 	public static RecordMapping injectedSafetyFinding(String question, String activeDrug, String atcCode) {
-		DrugReferenceService service = ddinterService();
-		service.setCrossReactivityGroups(bundledGroups());
-		DrugReferenceInjector injector = injector(service);
-		injector.setDrugSafetyValidator(validator(service));
-		PatientChart chart = injector.injectRecords(oneRecordChart(),
+		DrugReferenceService service = ddinterServiceWithGroups();
+		PatientChart chart = injectorWithSafety(service).injectRecords(oneRecordChart(),
 				ctx(60, null, set(activeDrug), set(atcCode), null, null), question);
 		return injectedFindings(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
 				"no safety-finding record was injected for question: " + question));
@@ -312,9 +356,25 @@ public final class DrugReferenceTestSupport {
 		return new DrugReferenceService();
 	}
 
-	/** A service over the real bundled DDInter sample, parsed by the real {@link DdiDrugReferenceSource}. */
+	/** A service over the real bundled DDInter sample, parsed by the real {@link DdiDrugReferenceSource}.
+	 *  Cross-reactivity groups are pinned EMPTY by the {@code setEntries} seam underneath — use
+	 *  {@link #ddinterServiceWithGroups} when a case depends on a curated group. */
 	static DrugReferenceService ddinterService() {
 		return serviceWith(new DdiDrugReferenceSource().load());
+	}
+
+	/**
+	 * As {@link #ddinterService}, carrying the real curated cross-reactivity groups — the bundled-sample
+	 * counterpart of {@link #ddiFixtureService}, and here for the same reason that one is: the two steps
+	 * have to stay together, because {@link #serviceWith} pins the groups EMPTY through its
+	 * {@code setEntries} seam and a service built without the second call silently cannot raise a
+	 * curated-group chip or admit a group-related active order. Silently: nothing fails, the case just
+	 * stops testing what it says it tests.
+	 */
+	static DrugReferenceService ddinterServiceWithGroups() {
+		DrugReferenceService service = ddinterService();
+		service.setCrossReactivityGroups(bundledGroups());
+		return service;
 	}
 
 	/** A service pinned to the given entries (groups pinned empty by the {@code setEntries} seam). */
@@ -436,6 +496,16 @@ public final class DrugReferenceTestSupport {
 	static DrugReferenceInjector injector(DrugReferenceService service) {
 		DrugReferenceInjector injector = new DrugReferenceInjector();
 		injector.setDrugReferenceService(service);
+		return injector;
+	}
+
+	/** The real injector with the real validator behind it over ONE service — the arrangement
+	 *  {@code preAnswerFindings} needs before a chip can become a citable safety-finding record, and the
+	 *  one production wires by autowiring. Both halves must share the service: two services would load
+	 *  the dataset twice and break the identity comparisons the safety arms make (issue #172). */
+	static DrugReferenceInjector injectorWithSafety(DrugReferenceService service) {
+		DrugReferenceInjector injector = injector(service);
+		injector.setDrugSafetyValidator(validator(service));
 		return injector;
 	}
 

@@ -371,10 +371,21 @@ public class DrugReferenceService {
 	 * Patient-driven matching: entries whose ATC codes match an active drug order
 	 * on the patient's chart, regardless of whether the question mentions the drug.
 	 *
+	 * <p>The PRIMITIVE and not the answer, as {@link #findByQuery} and {@link #findByDrugName} are —
+	 * though it errs the other way. Those two answer a WIDER question than their callers ask; this one
+	 * answers a narrower: it reports only the entries reached from the orders a DICTIONARY happened to
+	 * map to ATC, which is a subset of what {@link #findForActiveOrders} answers and empty on a
+	 * dictionary that maps none. That method is the answer — "which reference entries are this
+	 * patient's active orders" — and nothing else may build a candidate set from this one.
+	 * That admission was issue #151: {@code DrugReferenceInjector.matchingEntries}
+	 * resolved its order-driven leg here while {@code DrugSafetyValidator} screened the union, so the
+	 * two layers disagreed about which orders the patient had, and reference material about a drug she
+	 * was on stayed out of the prompt behind the chip that named it.
+	 *
 	 * @param context the patient's clinical context (active-order ATC codes)
 	 * @return matching entries, in dataset order, deduplicated
 	 */
-	public List<DrugReference> findByActiveOrders(PatientClinicalContext context) {
+	List<DrugReference> findByActiveOrders(PatientClinicalContext context) {
 		if (context == null || context.getActiveDrugAtcCodes().isEmpty()) {
 			return Collections.emptyList();
 		}
@@ -636,11 +647,17 @@ public class DrugReferenceService {
 	 * The reference entries the patient's active orders resolve to — the subjects
 	 * {@code DrugSafetyValidator.addActiveOrderPairInteractions} screens against each other, the
 	 * subjects {@code addActiveOrderContraindications} checks against the patient's own allergy and
-	 * condition records, and the source of the names {@link #withReferenceNames} attaches. The union of
-	 * the documented order-driven matcher ({@link #findByActiveOrders}, which keys on ATC codes) and a
-	 * name resolution of each active order's own display name ({@link #findImpliedByDrugName}). One
-	 * definition, so those consumers cannot come to disagree about which of the patient's
-	 * prescriptions the reference data covers.
+	 * condition records, the candidate set {@code DrugReferenceInjector.matchingEntries} scopes
+	 * order-driven injection over (issue #151), and the source of the names {@link #withReferenceNames}
+	 * attaches. The union of the documented order-driven matcher ({@link #findByActiveOrders}, which
+	 * keys on ATC codes) and a name resolution of each active order's own display name
+	 * ({@link #findImpliedByDrugName}). One definition, so those consumers cannot come to disagree
+	 * about which of the patient's prescriptions the reference data covers.
+	 *
+	 * <p>That last consumer joined late and at a cost, which is why this list is worth keeping literal:
+	 * the injector resolved the ATC-only primitive for itself from the moment this union was
+	 * introduced, so the chips and the prompt behind them were computed over different sets of orders.
+	 * It now takes the list its caller already resolved rather than calling this a second time.
 	 *
 	 * <p>Both keys are needed because {@link PatientClinicalContext#hasActiveDrug} — the join that
 	 * decides whether a rule concerns this patient — matches on name OR ATC, so a subject set resolved

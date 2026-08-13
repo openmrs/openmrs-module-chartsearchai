@@ -71,12 +71,10 @@ public class ActiveOrderReconciliationContextTest extends BaseModuleContextSensi
 	public void setUp() {
 		Context.getAdministrationService()
 				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
-		DrugReferenceService service = DrugReferenceTestSupport.ddinterService();
-		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
-		injector = DrugReferenceTestSupport.injector(service);
 		// Wired as production wires it, so a finding record would surface here too — a medication-list
 		// question names no drug, so the only records injected must be the active orders.
-		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
+		injector = DrugReferenceTestSupport
+				.injectorWithSafety(DrugReferenceTestSupport.ddinterServiceWithGroups());
 		patient = Context.getPatientService().getPatient(2);
 	}
 

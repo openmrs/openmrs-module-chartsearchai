@@ -85,8 +85,7 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * The injected {@code drug_reference} records' full rendered text, in injection order — the
 	 * text-shaped view of {@link #injectedReferences}, owned here for the same reason that filter is:
-	 * two files had grown their own copy of it ({@code SubstanceCandidateSetTest}'s inline loop is
-	 * deliberately left as one — it reads a single record, not a set).
+	 * two files had grown their own copy of it.
 	 *
 	 * <p>Whole texts rather than extracted names, deliberately. A rendered record is
 	 * {@code "Drug reference — <name>"} followed by {@code " (<class>; ATC …)"} only when the entry
@@ -115,9 +114,9 @@ public final class DrugReferenceTestSupport {
 	 *         have contained (found by mutation while hardening issue #151 — the assertion stayed green
 	 *         with the gate deliberately broken).
 	 *
-	 *         <p>Residual bound: it cannot tell a bare name from a route-qualified sibling when neither
-	 *         publishes a class or a code, because the qualifier and the class parenthesis are the same
-	 *         two characters. Pin the record COUNT beside it wherever an ABSENCE is the claim.
+	 *         <p>Residual bound: it cannot tell a bare name from a route-qualified sibling, because the
+	 *         qualifier and the class parenthesis open with the same two characters. Pin the record
+	 *         COUNT beside it wherever an ABSENCE is the claim.
 	 */
 	static boolean namesDrug(List<String> texts, String name) {
 		for (String text : texts) {

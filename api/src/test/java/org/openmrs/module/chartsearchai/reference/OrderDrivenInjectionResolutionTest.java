@@ -242,7 +242,8 @@ public class OrderDrivenInjectionResolutionTest {
 		// which passes both keys and so, since this change, no longer isolates the ATC one.
 		DrugReferenceService service = DrugReferenceTestSupport
 				.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
-		List<String> injected = DrugReferenceTestSupport.referenceTexts(DrugReferenceTestSupport.injector(service).injectRecords(
+		List<String> injected = DrugReferenceTestSupport.referenceTexts(
+				DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
 				DrugReferenceTestSupport.oneRecordChart(), byName("Dexamethasone 4mg"),
 				"Is it safe to give dexamethasone?"));
 

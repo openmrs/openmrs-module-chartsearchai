@@ -545,8 +545,8 @@ public class DrugReference {
 	 *         noise the veto is for (neomycin beside a ciprofloxacin question, related only through
 	 *         "both are also sold as ear drops"); four are pairs a clinician wants — diclofenac beside an
 	 *         ibuprofen question, budesonide beside a prednisolone one — that the veto would drop because
-	 *         the only subgroup they share is a topical or local-intestinal one, the class relation they
-	 *         really have being one this knowledge base does not otherwise express. That trade is a
+	 *         every subgroup they share is one it vetoes, the class relation they really have being one
+	 *         this knowledge base does not otherwise express. That trade is a
 	 *         question about the relevance rule and belongs to its own issue, not to #151.
 	 */
 	public Set<String> atcSubgroups() {

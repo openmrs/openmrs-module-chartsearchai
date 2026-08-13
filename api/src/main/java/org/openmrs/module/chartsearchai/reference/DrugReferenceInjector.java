@@ -647,8 +647,9 @@ public class DrugReferenceInjector {
 	 *          the KB classifies nowhere (in the full 19 MB DDInter KB, {@code Tiotropium} and
 	 *          {@code Ipratropium} both publish no ATC code at all — measured 2026-08-13 through
 	 *          {@link DrugReference#normalizedAtcCodes}). Such an order is silent here, exactly as an
-	 *          unrelated one is; if a deployment wants those families related, the curated
-	 *          {@link CrossReactivityGroup} file is where it says so. */
+	 *          unrelated one is, and the curated {@link CrossReactivityGroup} file cannot rescue it
+	 *          either — {@link CrossReactivityGroup#groupsOf} answers nothing for an entry with no
+	 *          codes, since a group is defined by ATC prefixes. Only the entry's own data can. */
 	private static boolean relatedToAny(DrugReference order, List<DrugReference> questionDrugs,
 			List<CrossReactivityGroup> groups) {
 		Set<String> orderSubgroups = order.atcSubgroups();

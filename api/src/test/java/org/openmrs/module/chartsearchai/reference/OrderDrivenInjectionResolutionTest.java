@@ -97,17 +97,29 @@ public class OrderDrivenInjectionResolutionTest {
 				null);
 	}
 
-	/** The injected {@code drug_reference} records' rendered names, in injection order — the record set
-	 *  is what this issue is about, and the REST response cannot show it (only CITED references come
-	 *  back). */
-	private static List<String> injectedReferenceNames(PatientChart chart) {
+	/** The injected {@code drug_reference} records' full rendered text, in injection order — the record
+	 *  set is what this issue is about, and the REST response cannot show it (only CITED references come
+	 *  back). Whole texts rather than extracted names: a name is a prefix of a route-qualified sibling's
+	 *  ({@code Lidocaine} of {@code Lidocaine (topical)}), so any name-extraction rule silently merges
+	 *  the two, and comparing whole texts is both unambiguous and the stricter assertion. */
+	private static List<String> referenceTexts(PatientChart chart) {
 		List<String> out = new ArrayList<String>();
 		for (RecordMapping mapping : DrugReferenceTestSupport.injectedReferences(chart)) {
-			String text = mapping.getText();
-			int stop = text.indexOf(" (");
-			out.add(stop < 0 ? text : text.substring(0, stop));
+			out.add(mapping.getText());
 		}
 		return out;
+	}
+
+	/** @return whether one of {@code texts} is the record rendered for the entry NAMED {@code name} —
+	 *          {@code render} writes {@code "Drug reference — <name> (<class>; ATC …)."}, so the name
+	 *          followed by the opening parenthesis is where the name provably ends. */
+	private static boolean namesDrug(List<String> texts, String name) {
+		for (String text : texts) {
+			if (text.startsWith("Drug reference — " + name + " (")) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	@Test
@@ -142,10 +154,10 @@ public class OrderDrivenInjectionResolutionTest {
 		// on the partner, because it screens the union.
 		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
 				"precondition: the deterministic layer must raise a finding about this pair");
-		List<String> injected = injectedReferenceNames(chart);
-		assertTrue(injected.contains("Drug reference — Ibuprofen"),
+		List<String> injected = referenceTexts(chart);
+		assertTrue(namesDrug(injected, "Ibuprofen"),
 				"the question's own drug is injected, as it always was, was: " + injected);
-		assertTrue(injected.contains("Drug reference — Acetylsalicylic acid"),
+		assertTrue(namesDrug(injected, "Acetylsalicylic acid"),
 				"and so is the active order the question's drug shares a cross-reactivity family with — "
 						+ "the record the injector's own relevance rule entitles this question to, and "
 						+ "which an ATC-only candidate set could never supply for an order whose concept "
@@ -157,10 +169,10 @@ public class OrderDrivenInjectionResolutionTest {
 		// The parity statement, and the sharpest form of the fix: which of the two keys a deployment's
 		// dictionary happens to supply for an order must not decide whether the reference material for
 		// that order reaches the prompt. Same drug, same question, two contexts differing only in the key.
-		List<String> byName = injectedReferenceNames(inject(byName(ASPIRIN_ORDER), IBUPROFEN_QUESTION));
-		List<String> byAtc = injectedReferenceNames(inject(byAtc("N02BA01"), IBUPROFEN_QUESTION));
+		List<String> byName = referenceTexts(inject(byName(ASPIRIN_ORDER), IBUPROFEN_QUESTION));
+		List<String> byAtc = referenceTexts(inject(byAtc("N02BA01"), IBUPROFEN_QUESTION));
 
-		assertTrue(byAtc.contains("Drug reference — Acetylsalicylic acid"),
+		assertTrue(namesDrug(byAtc, "Acetylsalicylic acid"),
 				"precondition: the ATC-keyed context has always injected it, was: " + byAtc);
 		assertEquals(byAtc, byName,
 				"and the name-keyed context must inject the same records — the chip layer resolves both "
@@ -180,9 +192,9 @@ public class OrderDrivenInjectionResolutionTest {
 		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
 				"precondition: this pair really does raise a finding, so the absence below is the gate's "
 						+ "doing and not an empty pass");
-		List<String> injected = injectedReferenceNames(chart);
-		assertTrue(injected.contains("Drug reference — Ibuprofen"), "was: " + injected);
-		assertFalse(injected.contains("Drug reference — Warfarin"),
+		List<String> injected = referenceTexts(chart);
+		assertTrue(namesDrug(injected, "Ibuprofen"), "was: " + injected);
+		assertFalse(namesDrug(injected, "Warfarin"),
 				"an active order sharing no family with the question's drug stays out of the prompt "
 						+ "however it resolved, was: " + injected);
 	}
@@ -196,6 +208,6 @@ public class OrderDrivenInjectionResolutionTest {
 
 		assertEquals(0, DrugReferenceTestSupport.injectedReferences(chart).size(),
 				"a question naming no drug injects no reference record from the order leg, was: "
-						+ injectedReferenceNames(chart));
+						+ referenceTexts(chart));
 	}
 }

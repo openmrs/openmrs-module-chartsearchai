@@ -285,6 +285,12 @@ public class DrugReferenceInjector {
 		if (chart.isQueryScoped()) {
 			injected.markQueryScoped();
 		}
+		// And the preFilter stamp, for the same reason one level along: the audit row's search mode
+		// is derived from these two flags, so a rebuild that dropped this one would file a
+		// focus-hinted prompt as a plain full chart — the wrong-signal failure issue #178 is about.
+		if (chart.isPreFiltered()) {
+			injected.markPreFiltered();
+		}
 		// Same reasoning for the completeness stamp: it is what tells a consumer whether a record's
 		// ABSENCE from this chart is meaningful, and a fresh PatientChart declares nothing. Dropping
 		// it would silently turn the rebuilt slice into one whose absences look uninformative.

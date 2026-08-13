@@ -129,7 +129,7 @@ class QueryStoreChartBuilder {
 			log.warn(QUERYSTORE_UNAVAILABLE_MSG);
 			log.info("[timing] querystoreBuild patient={} mode={} hits=0 focusHits=0 rpcMs=0 serializeMs=0 totalMs={} outcome=unavailable",
 					patient.getPatientId(), mode, System.currentTimeMillis() - buildStart);
-			return emptyChart(patient);
+			return markPreFilter(emptyChart(patient), usePreFilter);
 		}
 
 		// Full chart first — this is what the LLM sees and what determines the KV-cache
@@ -146,7 +146,7 @@ class QueryStoreChartBuilder {
 			log.info("[timing] querystoreBuild patient={} mode={} hits=0 focusHits=0 rpcMs={} serializeMs=0 totalMs={} outcome=error errorClass={}",
 					patient.getPatientId(), mode, failMs, System.currentTimeMillis() - buildStart,
 					e.getClass().getSimpleName());
-			return emptyChart(patient);
+			return markPreFilter(emptyChart(patient), usePreFilter);
 		}
 
 		// Focus hint: only in preFilter mode, only with a non-blank question (searchByPatient
@@ -170,6 +170,24 @@ class QueryStoreChartBuilder {
 		long totalMs = System.currentTimeMillis() - buildStart;
 		log.info("[timing] querystoreBuild patient={} mode={} hits={} focusHits={} rpcMs={} serializeMs={} totalMs={} outcome=ok",
 				patient.getPatientId(), mode, records.size(), focusHits, rpcMs, serializeMs, totalMs);
+		return markPreFilter(chart, usePreFilter);
+	}
+
+	/**
+	 * Stamps a full chart with the preFilter dispatch that produced it — every {@link #build} return
+	 * that got as far as resolving it, degraded empties included, so the audit row names the mode
+	 * that was in force even when the chart came back empty.
+	 *
+	 * <p>Taken from the {@code usePreFilter} this method already dispatched on, not a second read,
+	 * so the stamp and the {@code mode=} label above can only ever say the same thing. The
+	 * null-patient guard returns before that resolution — the case this class labels
+	 * {@link #MODE_UNKNOWN} — and so leaves the chart unstamped; that chart reaches no audit row,
+	 * because the REST layer resolves the patient before it can call the pipeline at all.
+	 */
+	private static PatientChart markPreFilter(PatientChart chart, boolean usePreFilter) {
+		if (usePreFilter) {
+			chart.markPreFiltered();
+		}
 		return chart;
 	}
 

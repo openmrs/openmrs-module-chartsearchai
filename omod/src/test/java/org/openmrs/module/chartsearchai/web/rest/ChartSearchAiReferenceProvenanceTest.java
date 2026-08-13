@@ -88,7 +88,7 @@ public class ChartSearchAiReferenceProvenanceTest {
 	@Test
 	public void doneEvent_carriesProvenanceAndWithheldCountForAnInjectedReference() throws Exception {
 		controller.streamAnswer(out, patient(), "can I prescribe erythromycin for this patient?",
-				new User(3), "full-chart", false);
+				new User(3), false);
 
 		// Chart evidence sorts first, so the reference record is last (see serializeReferences).
 		JsonNode drugRef = referencesOf("done").get(1);
@@ -111,7 +111,7 @@ public class ChartSearchAiReferenceProvenanceTest {
 		// The other half of the contract: a chart record's provenance is the patient's own record, so
 		// both keys must be present and empty rather than absent — a client reads them unconditionally.
 		controller.streamAnswer(out, patient(), "can I prescribe erythromycin for this patient?",
-				new User(3), "full-chart", false);
+				new User(3), false);
 
 		JsonNode chartRef = referencesOf("done").get(0);
 		assertEquals("allergy", chartRef.get("resourceType").asText(),
@@ -125,7 +125,7 @@ public class ChartSearchAiReferenceProvenanceTest {
 	@Test
 	public void referencesEvent_carriesTheSameCitationMetadataAsDone() throws Exception {
 		controller.streamAnswer(out, patient(), "can I prescribe erythromycin for this patient?",
-				new User(3), "full-chart", false);
+				new User(3), false);
 
 		// The early event is the one a client renders while Tier-2 verification is still running, so
 		// a citation chip that shows provenance only after the answer completes would flicker its
@@ -143,7 +143,7 @@ public class ChartSearchAiReferenceProvenanceTest {
 		// literals rather than a comparison, because "identical to done" would also be satisfied by
 		// both sites dropping the keys together.
 		controller.streamAnswer(out, patient(), "can I prescribe erythromycin for this patient?",
-				new User(3), "full-chart", true);
+				new User(3), true);
 
 		assertEquals(Arrays.asList("12:null:0", "75:" + DDINTER + ":824"), metadataOf("grounded"),
 				"the trailing grounded event must publish provenance and the withheld count as well");

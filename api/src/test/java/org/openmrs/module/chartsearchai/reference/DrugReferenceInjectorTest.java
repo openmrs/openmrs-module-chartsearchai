@@ -121,6 +121,39 @@ public class DrugReferenceInjectorTest {
 	}
 
 	@Test
+	public void injectionPreservesThePreFilterStamp() {
+		// Same rebuild, the other stamp (issue #178). ChartBuildingStrategy.searchModeLabel reads
+		// this flag to tell the two full-chart shapes apart in the audit log, so an injection that
+		// dropped it would file a focus-hinted prompt as a plain full chart — a wrong signal, which
+		// is the failure class #178 is about rather than a missing one.
+		PatientChart preFiltered = oneRecordChart();
+		preFiltered.markPreFiltered();
+
+		PatientChart result = injector().injectRecords(preFiltered,
+				context(5, null), "what is the safe dose of ibuprofen?");
+
+		assertTrue(result.getMappings().size() > preFiltered.getMappings().size(),
+				"precondition: a reference record must actually be injected, else the rebuild path is not exercised");
+		assertTrue(result.isPreFiltered(),
+				"the injected chart must carry forward the preFilter stamp");
+	}
+
+	@Test
+	public void injectionLeavesAPlainFullChartUnPreFiltered() {
+		// The mirror guard: injection must never ADD the stamp, which would file a plain full chart
+		// as a focus-hinted one.
+		PatientChart full = oneRecordChart();
+
+		PatientChart result = injector().injectRecords(full,
+				context(5, null), "what is the safe dose of ibuprofen?");
+
+		assertTrue(result.getMappings().size() > full.getMappings().size(),
+				"precondition: a reference record must actually be injected");
+		assertFalse(result.isPreFiltered(),
+				"a plain full chart must never acquire the preFilter stamp through injection");
+	}
+
+	@Test
 	public void aDeterministicSafetyFindingIsInjectedAsItsOwnCitableRecord() {
 		// The module computes the safety join correctly and deterministically — DrugSafetyValidator
 		// raises the right chip every time — but it runs AFTER the answer, so the LLM is asked to

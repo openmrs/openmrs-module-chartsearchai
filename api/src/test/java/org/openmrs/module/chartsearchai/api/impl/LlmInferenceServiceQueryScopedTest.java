@@ -22,7 +22,9 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
@@ -197,6 +199,86 @@ public class LlmInferenceServiceQueryScopedTest {
 				"the engine must do no disk KV I/O for question-dependent slice prompts");
 	}
 
+	@Test
+	public void search_shouldLabelTheAnswerWithTheModeThatBuiltItsChart() {
+		// Issue #178. The audit row's searchMode was derived at the REST layer from the preFilter GP
+		// alone, so queryScoped — the shipped default — could never appear in it: every row on a
+		// default install said full-chart while the prompt carried a slice. The label now comes off
+		// the answer the pipeline produced, so there is nothing at the REST layer left to derive.
+		service.queryScoped = true;
+		strategy.returnScopedChart = true;
+
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED,
+				service.search(patient(), "any infections?").getSearchMode());
+	}
+
+	@Test
+	public void search_shouldLabelTheAnswerFullChart_whenTheChartIsWholeAndUnranked() {
+		service.queryScoped = false;
+		strategy.returnScopedChart = false;
+		strategy.returnPreFilteredChart = false;
+
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_FULL_CHART,
+				service.search(patient(), "any infections?").getSearchMode());
+	}
+
+	@Test
+	public void search_shouldLabelTheAnswerPreFilter_whenTheFullChartCarriesAFocusHint() {
+		// The two labels that existed before #178 keep their exact meanings and their exact
+		// spellings — an audit row is read by things outside this repo, so the fix ADDS a third
+		// value rather than re-spelling the two.
+		service.queryScoped = false;
+		strategy.returnScopedChart = false;
+		strategy.returnPreFilteredChart = true;
+
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_PRE_FILTER,
+				service.search(patient(), "any infections?").getSearchMode());
+	}
+
+	@Test
+	public void search_shouldLabelFromTheBuiltChart_evenWhenTheModeReReadDisagrees() {
+		// Same race the KV-scope guard above exists for, applied to the label: the read that built
+		// the chart said queryScoped, a later re-read says fullChart. An audit row exists to
+		// reconstruct what the clinician was actually shown, so it must follow the CHART. Deriving
+		// the label from a GP re-read is what #178 was, one layer up.
+		service.queryScoped = false;
+		strategy.returnScopedChart = true;
+
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED,
+				service.search(patient(), "any infections?").getSearchMode(),
+				"a scoped chart must label the row scoped whatever a later GP read says");
+	}
+
+	@Test
+	public void searchStreaming_shouldLabelTheUngroundedAndFinalAnswersIdentically() {
+		// The streaming path persists ONE audit row from ONE of two ChartAnswers, depending on
+		// whether async grounding is active — the ungrounded one handed to the consumer, or the
+		// returned one. Two audit-write sites disagreeing is half of what #178 was, so the two
+		// answers must carry the same label by construction, not by two matching derivations.
+		service.queryScoped = true;
+		service.progressiveEnabled = false;
+		strategy.returnScopedChart = true;
+		final List<String> ungroundedModes = new java.util.ArrayList<String>();
+
+		ChartAnswer answer = service.searchStreaming(patient(), "any infections?",
+				token -> { }, reasoning -> { }, citations -> { },
+				ungrounded -> ungroundedModes.add(ungrounded.getSearchMode()));
+
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED, answer.getSearchMode());
+		assertEquals(Arrays.asList(ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED), ungroundedModes,
+				"the early-done audit row and the classic one must name the same mode");
+	}
+
+	@Test
+	public void chartAnswer_shouldSayUnknownRatherThanGuess_whenNoModeWasStated() {
+		// The column is NOT NULL, so an answer built by something that states no mode still has to
+		// write a value. It must not be one of the three real modes: defaulting to full-chart is
+		// precisely the defect #178 fixed, a wrong signal being indistinguishable from a right one.
+		ChartAnswer stated = new ChartAnswer("A [1].", Collections.<RecordReference> emptyList());
+
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_UNKNOWN, stated.getSearchMode());
+	}
+
 	/** Context-free service: GP-backed resolvers overridden so no OpenMRS Context is needed. */
 	private final class TestableService extends LlmInferenceService {
 
@@ -238,6 +320,11 @@ public class LlmInferenceServiceQueryScopedTest {
 		 *  disagreement the chart-derived KV guard exists for. */
 		boolean returnScopedChart = false;
 
+		/** When true, the returned chart is stamped preFiltered — simulating what build() does on
+		 *  the {@code embedding.preFilter} dispatch. Defaults to false, the shipped default, so
+		 *  every test written before #178 sees exactly the behaviour it was written against. */
+		boolean returnPreFilteredChart = false;
+
 		@Override
 		PatientChart buildChart(Patient patient, String question) {
 			buildChartCalled = true;
@@ -246,6 +333,9 @@ public class LlmInferenceServiceQueryScopedTest {
 			PatientChart chart = new PatientChart("1. Scoped record", mappings, Collections.<Integer>emptyList());
 			if (returnScopedChart) {
 				chart.markQueryScoped();
+			}
+			if (returnPreFilteredChart) {
+				chart.markPreFiltered();
 			}
 			return chart;
 		}
@@ -306,6 +396,12 @@ public class LlmInferenceServiceQueryScopedTest {
 		@Override
 		public void warmup(String numberedRecords) {
 			warmupCalled = true;
+		}
+
+		@Override
+		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
+				String question) {
+			return new LlmResponse("SCOPED-ANSWER [8]", Arrays.asList(8));
 		}
 
 		@Override

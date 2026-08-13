@@ -142,6 +142,8 @@ final class LlmAnswerExtractor {
 						}
 					}
 					reportNonConformantCitations(coerced, unusable);
+				} else if (citationsNode != null && !citationsNode.isNull()) {
+					readNonArrayCitations(citationsNode, citations);
 				}
 				String answer = normalizeSlashCitations(answerNode.asText().trim(), citations);
 				return new LlmResponse(answer, citations);
@@ -252,6 +254,44 @@ final class LlmAnswerExtractor {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Reads a {@code citations} value that is not an array, appending to {@code citations} the one
+	 * index it names — if it names one.
+	 *
+	 * <p><b>Why this exists (issue #221).</b> #219/#220 fixed how an ENTRY may be typed; the
+	 * {@code isArray()} guard above is the same defect one level out. The schema the module sends
+	 * declares {@code citations} an array, but the SERVER enforces that, so a remote that
+	 * approximates the schema can send a bare value — and the guard discarded the whole field in
+	 * silence, exactly as {@code isInt()} discarded string entries.
+	 *
+	 * <p><b>The split, and why it is not uniform.</b> A scalar {@code 8} has exactly one reading: an
+	 * array of one. That is the same test #219 applied to {@code "9"}, so it is coerced and reported,
+	 * and it is coerced through {@link #citationIndex} rather than a second rule — the container and
+	 * its entries admit the same JSON types, and cannot drift apart. Anything with no single reading
+	 * (an object, a non-numeric string, {@code 9.7}, a boolean) is left alone: there is nothing to
+	 * recover, and picking a reading would widen which VALUES name a record, which is the line
+	 * #219/#220 drew and this does not cross. It is logged at DEBUG so the skip stops being
+	 * invisible, but not at WARN — nothing recoverable was lost, and no instance of these shapes has
+	 * been observed, so a warning would be the noise-that-gets-filtered #217 argued against.
+	 *
+	 * <p>An explicit {@code null} never reaches here (the caller's guard). It is unambiguous, it
+	 * already means what this code does with it — no citations — and it is the same statement as an
+	 * absent field, so it stays silent at every level: a channel that fires on a provider behaving
+	 * correctly is worth less than no channel.
+	 */
+	private static void readNonArrayCitations(JsonNode citationsNode, List<Integer> citations) {
+		Integer index = citationIndex(citationsNode);
+		if (index == null) {
+			log.debug("Ignoring a citations value that is neither an array nor a single index: {}",
+					abbreviate(citationsNode.toString()));
+			return;
+		}
+		citations.add(index);
+		log.warn("The LLM's citations field was a single value rather than the array the request's "
+				+ "schema asked for; read as the one index it names: {}",
+				abbreviate(citationsNode.toString()));
 	}
 
 	/**

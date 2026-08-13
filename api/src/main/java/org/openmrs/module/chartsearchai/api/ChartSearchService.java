@@ -211,6 +211,8 @@ public interface ChartSearchService {
 
 		private final List<SafetyWarning> safetyWarnings;
 
+		private final String searchMode;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -229,6 +231,12 @@ public interface ChartSearchService {
 		public ChartAnswer(String answer, List<RecordReference> references,
 				int inputTokens, int outputTokens, int cachedTokens,
 				List<SafetyWarning> safetyWarnings) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, null);
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -238,6 +246,7 @@ public interface ChartSearchService {
 			this.safetyWarnings = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(safetyWarnings == null
 							? java.util.Collections.<SafetyWarning> emptyList() : safetyWarnings));
+			this.searchMode = searchMode;
 		}
 
 		/**
@@ -285,6 +294,27 @@ public interface ChartSearchService {
 		 */
 		public List<SafetyWarning> getSafetyWarnings() {
 			return safetyWarnings;
+		}
+
+		/**
+		 * How the prompt's chart context was assembled for this answer — one of the
+		 * {@code ChartSearchAiConstants.SEARCH_MODE_*} values, and what the audit log's
+		 * {@code search_mode} column records.
+		 *
+		 * <p>The producer states it, so the consumer derives nothing: issue #178 was the REST layer
+		 * branching on the preFilter global property at both of its audit-write sites, which left
+		 * {@code queryScoped} — the shipped default — unable to appear in the column at all. It
+		 * belongs on the answer because the answer is what a chart mode produced; anything that
+		 * re-reads a global property afterwards can disagree with the read that built the chart.
+		 *
+		 * @return the mode, never null — {@code ChartSearchAiConstants.SEARCH_MODE_UNKNOWN} when the
+		 *         producer stated none, so a caller writing a NOT NULL column has a value and no
+		 *         caller has to invent one
+		 */
+		public String getSearchMode() {
+			return searchMode == null
+					? org.openmrs.module.chartsearchai.ChartSearchAiConstants.SEARCH_MODE_UNKNOWN
+					: searchMode;
 		}
 	}
 

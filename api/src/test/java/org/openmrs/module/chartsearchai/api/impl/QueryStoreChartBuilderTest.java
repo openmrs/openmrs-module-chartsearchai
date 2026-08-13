@@ -583,6 +583,46 @@ public class QueryStoreChartBuilderTest {
 	}
 
 	@Test
+	public void build_shouldStampTheChartWithThePreFilterDispatchItActuallyTook() {
+		// Issue #178: the audit row's search mode is read off the chart's own stamps rather than a
+		// later GP read, so this is where the two full-chart shapes become distinguishable at all.
+		// Taken from the same boolean the dispatch and the [timing] mode= label use, so the row and
+		// the log line cannot disagree about which one ran.
+		builder.usePreFilter = true;
+		assertTrue(builder.build(patient(1), "any allergies?").isPreFiltered(),
+				"a focus-hint build must say so on the chart it returns");
+
+		builder.usePreFilter = false;
+		assertFalse(builder.build(patient(1), "any allergies?").isPreFiltered(),
+				"a plain full chart must not claim a focus hint");
+	}
+
+	@Test
+	public void build_shouldStampDegradedChartsToo_soAFailedBuildStillNamesItsMode() {
+		// An empty chart from an unreachable querystore is still a chart assembled in preFilter
+		// mode, and its audit row has to say which mode was in force — a request that degraded is
+		// exactly the one a maintainer will come back to read.
+		builder.usePreFilter = true;
+		builder.queryStoreUnavailable = true;
+
+		PatientChart chart = builder.build(patient(1), "any allergies?");
+
+		assertEquals(0, chart.getMappings().size(), "the degraded path must have been taken");
+		assertTrue(chart.isPreFiltered(),
+				"a degraded build must not lose the mode it was dispatched in");
+	}
+
+	@Test
+	public void buildScoped_shouldNeverClaimAFocusHint() {
+		// The slice IS the scope and renders no focus hint, so the two stamps are mutually
+		// exclusive in practice — which is what lets searchModeLabel answer queryScoped first.
+		builder.usePreFilter = true;
+
+		assertFalse(builder.buildScoped(patient(1), "any allergies?").isPreFiltered(),
+				"a scoped slice carries no focus hint whatever the preFilter GP says");
+	}
+
+	@Test
 	public void buildFocused_shouldReturnEmptyChart_whenSearchByPatientThrows() {
 		// A focus-RPC failure must degrade to an empty focused chart (the caller treats that as
 		// "no preview") and NEVER propagate — the authoritative full-chart answer must not be
@@ -613,6 +653,10 @@ public class QueryStoreChartBuilderTest {
 
 		boolean usePreFilter = true;
 
+		/** Makes {@code resolveQueryStoreService} answer null, which is how the builder's
+		 *  querystore-unavailable degradation is reached without a live module registry. */
+		boolean queryStoreUnavailable = false;
+
 		boolean dedupGroupLabels = false;
 
 		int progressiveTopK = 5;
@@ -623,7 +667,7 @@ public class QueryStoreChartBuilderTest {
 
 		@Override
 		protected QueryStoreService resolveQueryStoreService() {
-			return stub;
+			return queryStoreUnavailable ? null : stub;
 		}
 
 		@Override

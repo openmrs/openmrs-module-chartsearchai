@@ -87,21 +87,22 @@ public class SafetyWarning {
 	 * generic synonym when the dataset's display name diverges from it, e.g.
 	 * {@code "Acetylsalicylic acid (aspirin)"} (see {@link DrugReference#displayLabel()}).
 	 *
-	 * <p>Since issue #206 this is the name THIS RESPONSE gives that substance: resolved once per
-	 * validation pass by {@code DrugSafetyValidator}'s {@code SubstanceSubjects} and deliberately
-	 * shared by every chip that asserts something about it, so one substance is never named two ways
-	 * in one response. It therefore identifies a SUBSTANCE, not a finding — several warnings about
-	 * one substance carry the same string by construction, and issue #238 records a live patient
-	 * with seven hydrocortisone chips that all do.
+	 * <p>Since issue #206 this names a SUBSTANCE, not a finding, and not the dataset row an arm
+	 * happened to match. Several warnings about one substance therefore carry the same string by
+	 * construction: issue #238 records a live patient with seven hydrocortisone chips that all do.
 	 *
 	 * <p><b>So it is not a deduplication key.</b> A client collapsing on {@code (type, drug)} would
-	 * discard six of those seven distinct findings — and #238 exists because the javadoc here used
-	 * to invite exactly that, saying the field was for "grouping/sorting/deduping". What
-	 * distinguishes one warning from another is {@link #getDetail()}: the one field that varies
-	 * between warnings about a single substance, because it names the interacting order, the
-	 * allergen or the ceiling that particular finding is about. A renderer wanting a per-substance
-	 * heading may group on this field; anything needing per-finding identity must key on the detail,
-	 * or on the whole warning.
+	 * discard six of those seven distinct findings — #238's second item exists because this class's
+	 * javadoc invited exactly that, saying the field was for "grouping/sorting/deduping" (it said so
+	 * on {@link #getDetail()}, where a reader is least likely to look). Nor is it a stable substance
+	 * name to group on: which arms share one subject and which resolve their own is
+	 * {@code DrugSafetyValidator}'s to state, and {@code SubstanceSubjects}' javadoc states it,
+	 * exemptions and residues included. Do not re-derive that list here — it has moved.
+	 *
+	 * <p>What distinguishes one warning from another is {@link #getDetail()}: of the three fields a
+	 * client receives, it is the one that varies between warnings about a single substance, because it
+	 * names the interacting order, the allergen or the ceiling that particular finding is about. Key
+	 * per-finding identity on {@code detail}, or on the whole warning.
 	 */
 	public String getDrug() {
 		return drug;

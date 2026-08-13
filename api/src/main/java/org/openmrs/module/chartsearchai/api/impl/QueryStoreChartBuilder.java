@@ -68,8 +68,9 @@ class QueryStoreChartBuilder {
 	// distinguish the two dispatch shapes. preFilter mode does the extra searchByPatient
 	// call for the focus hint; fullChart skips it.
 	//
-	// These VALUES are a consumer contract: a dashboard or saved log query greps mode=fullChart, so
-	// a re-spelling breaks it silently — as a metric that quietly goes to zero. Being constants does
+	// These VALUES are a consumer contract: anything grepping mode=fullChart out of the logs — a
+	// dashboard, a saved log query, an eval instrument — breaks silently on a re-spelling, showing
+	// up as a metric that quietly goes to zero rather than as an error. Being constants does
 	// not protect that, and issue #232 is this comment having claimed it did: a misspelled IDENTIFIER
 	// on a future log line fails to compile, but the value is what the consumer reads and changing it
 	// compiles fine. Measured by mutation: renaming MODE_FULL_CHART's value to "TYPO_fullChart" fails
@@ -79,6 +80,12 @@ class QueryStoreChartBuilder {
 	// Deliberately NOT the audit column's vocabulary (ChartSearchAiConstants.SEARCH_MODE_*, which
 	// spells the same two shapes full-chart/pre-filter). Two contracts, two audiences; unifying
 	// them was considered and declined during #178.
+	//
+	// Spellings do collide across those contracts, and each collision is a coincidence rather than
+	// one definition: "fullChart" here is also CHART_MODE_FULL_CHART, the chartsearchai.chartMode GP
+	// token an operator sets, and "unknown" below is also SEARCH_MODE_UNKNOWN in the audit column.
+	// Both are what a grep lands on and what a "unify these" pass would trip over. Do not make one
+	// constant of any of them; the literals are pinned separately on each side on purpose.
 	static final String MODE_PRE_FILTER = "preFilter";
 
 	static final String MODE_FULL_CHART = "fullChart";

@@ -34,10 +34,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * linkage is carried as data in {@code cross-reactivity-groups.json} and consumed
  * alongside <em>any</em> drug-reference source.
  *
- * <p>Tests run the real {@link DrugSafetyValidator}/{@link DrugReferenceInjector}
- * over the real WHO ATC sample (parsed by the real {@link AtcDrugReferenceSource})
- * with the real bundled groups file (loaded by the real
- * {@link CrossReactivityGroupsLoader} production path). The existing ADR-24 boundary
+ * <p>The validator and injector tests below run the real {@link DrugSafetyValidator}/{@link
+ * DrugReferenceInjector} over the real WHO ATC sample (parsed by the real
+ * {@link AtcDrugReferenceSource}) with the real bundled groups file (loaded by the real
+ * {@link CrossReactivityGroupsLoader} production path). The dataset and membership-mechanics tests
+ * above them sit one level lower on purpose — the real loader and the real
+ * {@link CrossReactivityGroup} entry points, with no validator in the loop — because what they
+ * assert is a property of the data mechanism itself. The existing ADR-24 boundary
  * tests in {@link DrugSafetyValidatorTest} stay true because {@code setEntries} pins a
  * hermetic dataset with NO groups — this class asserts both sides: without the groups
  * data the branches stay unlinked; with it, they link.
@@ -123,6 +126,8 @@ public class CrossReactivityGroupsTest {
 		return new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
 	}
 
+	// --- Membership questions: what one costs, and what it re-reads ---
+
 	@Test
 	public void aMembershipQuestionNormalizesEachGroupsPrefixesOnce_notOncePerCode() {
 		// Issue #230. containsCode() rebuilds the group's normalized prefix set every time it is
@@ -146,7 +151,10 @@ public class CrossReactivityGroupsTest {
 
 		Set<String> orderCodes = set("N02BE01", "J01CA04", "J01GB03");
 		assertNull(CrossReactivityGroup.sharedGroupForCodes(counted, orderCodes),
-				"paracetamol/amoxicillin/gentamicin are in no curated group — the answer is unchanged");
+				"paracetamol/amoxicillin/gentamicin must be in no curated group — that is what makes "
+						+ "every code get scanned. If a curated group is ever added that claims one of "
+						+ "them, replace them with three the shipped file does not claim rather than "
+						+ "relaxing this: a matching set returns early and counts nothing.");
 
 		for (CrossReactivityGroup group : counted) {
 			assertEquals(1, ((CountingGroup) group).normalizations,
@@ -158,12 +166,15 @@ public class CrossReactivityGroupsTest {
 	@Test
 	public void replacedPrefixesAreSeenOnTheNextQuestion_soTheNormalizationIsNeverCachedOnTheInstance()
 			throws IOException {
-		// The constraint issue #172 records, and the one thing the hoist above must not be
-		// "improved" into: a field. setAtcPrefixes is the write path the reloadable groups file goes
-		// through (Jackson calls it; CrossReactivityGroupsLoader.parse is how a deployment's own file
-		// arrives), so it has to stay authoritative AFTER a membership question has been asked. A
-		// normalized set cached on the instance would keep answering with the prefixes the group used
-		// to carry, and nothing would fail: every other test here loads once and asks once.
+		// The one thing the hoist above must not be "improved" into: a field. setAtcPrefixes is the
+		// write path a group's prefixes arrive by — Jackson calls it, which is how
+		// CrossReactivityGroupsLoader.parse builds a deployment's own file — so it has to stay
+		// authoritative AFTER a membership question has been asked. A normalized set cached on the
+		// instance would go on answering with the prefixes the group used to carry, and nothing would
+		// fail: no other test here REPLACES a prefix list after asking. (Being asked twice is not the
+		// trigger and is entirely ordinary — the loader asks every group it keeps for its normalized
+		// prefixes once, as its own drop filter, before any caller does.) Same rule as issue #172's
+		// "in a local, never in a field".
 		List<CrossReactivityGroup> groups = CrossReactivityGroupsLoader.parse(stream(
 				"{\"groups\":[{\"name\":\"NSAID\",\"atcPrefixes\":[\"M01AE\"]}]}"));
 		assertNotNull(CrossReactivityGroup.sharedGroupForCodes(groups, set("M01AE01")),

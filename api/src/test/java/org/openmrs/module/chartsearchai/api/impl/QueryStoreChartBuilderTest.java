@@ -644,8 +644,10 @@ public class QueryStoreChartBuilderTest {
 		// the whole of what the consumer sees, since a dashboard or saved log query greps
 		// `mode=fullChart` out of the [timing] querystoreBuild lines. Measured by mutation: renaming
 		// MODE_FULL_CHART's value to "TYPO_fullChart" makes THIS the only failing test in the api
-		// module, and omod references neither the constants nor their literals — so before this
-		// assertion existed the re-spelling shipped green, as a metric going quietly to zero.
+		// module; omod cannot see these package-private constants and no omod test asserts on the
+		// labels (the "fullChart" in omod's config.xml is the chartsearchai.chartMode GP token, a
+		// different contract). So before this assertion existed the re-spelling shipped green, as a
+		// metric going quietly to zero.
 		//
 		// Literals, deliberately — the same shape as ChartSearchAiAuditSearchModeTest's
 		// theColumnsVocabularyIsAWireContract_soItsSpellingsArePinnedAsLiterals, and allowed to be

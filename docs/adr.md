@@ -2169,7 +2169,7 @@ Decision 33 said separating meaningful groups from meaningless ones is "a per-gr
 
 ### What it costs, and why that is accepted
 
-1565 cross-reactivity claims go, 586 of them for a pair DDInter also rates, so for those the interaction chip survives and only the class claim does; 157 duplicate-therapy claims go with them, 14 rated. The residue family costs real relationships too — `G02CX` bremelanotide × flibanserin, `M09AX` onasemnogene × risdiplam, `A16AX` miglustat × eliglustat are genuine pairs — because no rule over ATC's words can tell them from eliglustat × givosiran, which is not one.
+1565 cross-reactivity claims go, 586 of them for a pair DDInter also rates, so for those the interaction chip survives and only the class claim goes; 157 duplicate-therapy claims go with them, 14 rated. The residue family costs real relationships too — `G02CX` bremelanotide × flibanserin, `M09AX` onasemnogene × risdiplam, `A16AX` miglustat × eliglustat are genuine pairs — because no rule over ATC's words can tell them from eliglustat × givosiran, which is not one.
 
 ### Rejected
 

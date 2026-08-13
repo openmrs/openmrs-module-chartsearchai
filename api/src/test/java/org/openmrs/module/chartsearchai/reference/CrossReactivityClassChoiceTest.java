@@ -304,7 +304,6 @@ public class CrossReactivityClassChoiceTest {
 				"the same chip the ascending fixture produces");
 	}
 
-
 	/** The subgroups {@code question}'s entry shares with {@code allergen}, sorted, through the
 	 *  production resolver and the production accessor the arm compares with. A set intersection
 	 *  rather than a scan, deliberately: the scan is what {@code sharedClass} does, and a hand copy of

@@ -277,7 +277,6 @@ public class AtcCrossReactivityLicensingTest {
 		}
 	}
 
-
 	/** The subgroups two fixture rows share, sorted, through the production resolver and the
 	 *  production accessor the arms compare with. */
 	private static String shared(DrugReferenceService service, String a, String b) {

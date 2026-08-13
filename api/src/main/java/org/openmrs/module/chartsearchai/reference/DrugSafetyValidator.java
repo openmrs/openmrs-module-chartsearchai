@@ -3361,9 +3361,12 @@ public class DrugSafetyValidator {
 	 * to fold them into, so one clinical fact reached the clinician three times. The codes are
 	 * therefore grouped by the co-medication they identify ({@link #orderPartners}) before anything is
 	 * worded, and WHICH class the one sentence names is {@link #sharedClass}'s decision over the whole
-	 * shared set — the same decision the allergy arm makes, so the two arms can no longer describe one
-	 * pair through different subgroups, and neither depends on the order a dictionary published its
-	 * mappings in.
+	 * shared set — the same decision the allergy arm makes, so neither depends on the order a
+	 * dictionary published its mappings in. That decision is one method and not two, which is what
+	 * issue #171 asked for; since issues #183/#184 it also takes the ARM as a parameter, so the two
+	 * arms share the preference and NOT the candidate set, and may name different subgroups for one
+	 * pair where each claim is honestly about a different one. See {@link #sharedClass}, which
+	 * measures how often.
 	 *
 	 * @return the class relationship sentence for each active-order partner that has one, keyed by that
 	 *         partner, in partner FIRST-APPEARANCE order over the context's codes and then over the

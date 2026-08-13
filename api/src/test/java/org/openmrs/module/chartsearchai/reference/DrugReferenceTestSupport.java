@@ -359,10 +359,17 @@ public final class DrugReferenceTestSupport {
 
 	/**
 	 * One active drug order for the named entry of {@code service}, carrying the ATC codes that entry
-	 * publishes — the shape {@link PatientClinicalContextBuilder} builds for a MAPPED concept, and the
-	 * only shape the duplicate-therapy arm reads. Codes are read off the loaded dataset through the
-	 * production accessor rather than copied into the case, so an order and the entry it stands for
-	 * cannot come to disagree when a fixture is edited.
+	 * publishes, read off the loaded dataset through the production accessor rather than copied into
+	 * the case so the two cannot come to disagree when a fixture is edited.
+	 *
+	 * <p><b>Which leg of the duplicate-therapy arm this reaches, which is not the obvious one.</b> The
+	 * canonical {@link #ctx} overload does not union an order's codes into
+	 * {@code PatientClinicalContext.getActiveDrugAtcCodes()}, so {@code orderPartners}' walk over those
+	 * codes finds none and the partner is resolved by {@code addPartnersForUnmappedOrders} — issue
+	 * #228's by-NAME leg, which sets the partner's codes from the reference ROW it resolves and
+	 * discards the order's own. Chips are byte-identical either way (measured over all five call
+	 * sites), so this is a statement about what is being exercised, not about the answer: a case that
+	 * needs the MAPPED-concept leg must also pass those codes as {@code ctx}'s {@code atc} argument.
 	 */
 	static PatientClinicalContext.ActiveDrugOrder activeOrderFor(DrugReferenceService service,
 			String name) {

@@ -4303,6 +4303,18 @@ public class DrugSafetyValidator {
 	 * clinician can act on: nothing here knows which formulation is in play (see
 	 * {@link DrugReference#namesNoRoute()}), so a second ceiling is a second guess, not a second
 	 * fact.
+	 *
+	 * <p><b>Issue #208 item 1 — and the quoted ceiling therefore SAYS which row published it.</b> The
+	 * two halves above are independent choices (the name is the subject's, the number is the tripping
+	 * row's) and where they land on different rows the sentence read as though the number were the
+	 * named row's: a patient on {@code Amoxicillin (suspension)}, whose own published ceiling is 2000
+	 * mg/day, was told a stated 4000 mg/day exceeded "the 3000 mg/day maximum" — the unqualified
+	 * sibling's number. Preferring the subject's own band instead would drop the warning wherever it
+	 * publishes none, which is the direction the paragraph above rules out, so the number stays and
+	 * {@link #ceilingAttribution} states its provenance. Note what that does NOT change: which row is
+	 * chosen, and what the chip CALLS the substance ({@link SubstanceSubjects}, issue #206) — the
+	 * attribution names a second row inside one sentence, and it is worded as a contrast precisely so
+	 * that it cannot be read as a second claim about the patient.
 	 */
 	private void addOverdose(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, String lowerAnswer,
@@ -4348,6 +4360,9 @@ public class DrugSafetyValidator {
 		// One attribution walk feeds whichever arms apply.
 		List<AttributedDose> doses = attributedDoses(lowerAnswer, ref, allEntries);
 		String label = subject.displayLabel();
+		// Whose ceiling this is, said once for both arms — a mismatch is a property of the ROW PAIR, not
+		// of which arm noticed it, so wording it per arm is how one arm keeps the defect.
+		String ceilingSource = ceilingAttribution(subject, ref);
 		if (dailyArm) {
 			Double dailyMg = parseDailyDoseMg(doses);
 			if (dailyMg != null && dailyMg > band.getMaxDailyDoseMg()) {
@@ -4355,7 +4370,7 @@ public class DrugSafetyValidator {
 						"The stated " + label + " dose ~" + DrugReference.formatNumber(dailyMg)
 								+ " mg/day exceeds the "
 								+ DrugReference.formatNumber(band.getMaxDailyDoseMg()) + " mg/day maximum for ages "
-								+ band.getMinYears() + "-" + band.getMaxYears()));
+								+ band.getMinYears() + "-" + band.getMaxYears() + ceilingSource));
 				// One warning per drug: the published daily ceiling is the stronger statement,
 				// so the per-dose arm below is not stacked on top of it.
 				return true;
@@ -4373,10 +4388,36 @@ public class DrugSafetyValidator {
 							+ DrugReference.formatNumber(band.getMgPerKgMax()) + " mg/kg per-dose maximum (~"
 							+ DrugReference.formatNumber(perDoseLimitMg) + " mg) for the patient's weight "
 							+ DrugReference.formatNumber(weightKg) + " kg (ages " + band.getMinYears() + "-"
-							+ band.getMaxYears() + ")"));
+							+ band.getMaxYears() + ")" + ceilingSource));
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * @return the clause that says whose published ceiling a dose warning just quoted, or the empty
+	 *         string when it is the named row's own — which is every warning any BUNDLED dataset can
+	 *         raise, since none of them files a substance as more than one row carrying age bands.
+	 *
+	 *         <p>Worded as a CONTRAST rather than as a bare second name, and that is the whole care in
+	 *         it. This sentence is the one place a chip names a row other than its subject, and a chip's
+	 *         subject is the row the patient's own chart records (issues #187, #194, #206) — so a bare
+	 *         "published for Amoxicillin" beside a warning about {@code Amoxicillin (suspension)} reads
+	 *         as a second formulation in play. Naming both and saying which claim attaches to which
+	 *         leaves the sentence a fact about the DATASET, which is what it is: the row is where the
+	 *         number was filed, not something known about this patient.
+	 *
+	 *         <p>Silent when the two rows publish the same label as well as when they are the same row.
+	 *         The dataset is operator-editable, and two rows may carry one display name — for which
+	 *         "publishes for X, not for X" is not a provenance but a contradiction.
+	 */
+	private static String ceilingAttribution(DrugReference subject, DrugReference ref) {
+		if (ref == subject || subject.displayLabel() == null
+				|| subject.displayLabel().equals(ref.displayLabel())) {
+			return "";
+		}
+		return " — a ceiling this dataset publishes for " + ref.displayLabel() + ", not for "
+				+ subject.displayLabel();
 	}
 
 	/**

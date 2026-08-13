@@ -32,10 +32,19 @@ import org.openmrs.api.context.UserContext;
  * read</em> — which is the premise of the tests that use this, so a stale copy would keep passing
  * while describing an install nobody has.
  *
- * <p>Restoring matters as much as installing: surefire runs this module in a single reused JVM, so a
- * leaked service or user context silently alters the other classes in this package rather than
- * failing where it was left. {@link #restore()} puts back whatever was installed before, including
- * nothing.
+ * <p>Restoring matters as much as installing: surefire runs this module in a single reused JVM with
+ * no configured {@code runOrder}, so a leaked service silently alters whichever classes happen to
+ * run afterwards. What it would cost here is specific — three classes in this package
+ * ({@code ChartSearchAiStreamEventOrderTest}, {@code ChartSearchAiReferenceGroupingTest},
+ * {@code ChartSearchAiReferenceProvenanceTest}) drive {@code streamAnswer} with NO context at all,
+ * and that is the only thing enforcing its "free of {@code Context} reads" contract: a re-added
+ * global-property read throws because nothing is installed. A leaked stub answers instead of
+ * throwing, and those three go green over exactly the drift issue #178 removed.
+ *
+ * <p>{@link #restore()} cannot simply put back "nothing", because {@code ServiceContext} has no
+ * removal API and its {@code setService} returns silently when handed a null. So when there was no
+ * prior service, restore installs a {@link #refusing} stand-in whose every method throws — which is
+ * what an absent service behaves like, and keeps that contract enforced rather than merely claimed.
  */
 final class RestControllerContext {
 
@@ -85,11 +94,39 @@ final class RestControllerContext {
 		});
 	}
 
-	/** Puts back every service this fixture replaced, and clears the user context. */
+	/**
+	 * Puts back every service this fixture replaced, and clears the user context. Where there was no
+	 * prior service — the usual case, since these are the only classes in the package that install
+	 * any — a {@link #refusing} stand-in goes back instead of null, because null would leave this
+	 * fixture's own stubs in place for the rest of the JVM. See the class javadoc for what that
+	 * costs.
+	 */
 	void restore() {
-		ServiceContext.getInstance().setPatientService(priorPatientService);
-		ServiceContext.getInstance().setAdministrationService(priorAdministrationService);
+		ServiceContext.getInstance().setPatientService(
+				priorPatientService != null ? priorPatientService : refusing(PatientService.class));
+		ServiceContext.getInstance().setAdministrationService(
+				priorAdministrationService != null ? priorAdministrationService
+						: refusing(AdministrationService.class));
 		Context.clearUserContext();
+	}
+
+	/**
+	 * A stand-in for "no service is installed": every method throws. {@code ServiceContext} has no
+	 * way to un-set a service, so this is how the absence is put back — and it has to behave like an
+	 * absence, not like an empty implementation, or a test that reads a service it never installed
+	 * passes on a null instead of failing.
+	 */
+	private static <T> T refusing(final Class<T> type) {
+		return proxy(type, new InvocationHandler() {
+
+			@Override
+			public Object invoke(Object p, Method method, Object[] args) {
+				throw new IllegalStateException("No " + type.getSimpleName()
+						+ " is installed. A test that reaches one must install it itself — this "
+						+ "stand-in exists so that reaching for it fails here rather than silently "
+						+ "answering with another test's fixture.");
+			}
+		});
 	}
 
 	/** Whatever service was installed before this fixture, or null if none/unavailable. */
@@ -122,10 +159,13 @@ final class RestControllerContext {
 	 * returns the caller's own default, and the one-arg form returns null so the rate limiter falls
 	 * back to its compiled default — which the stub audit log's zero recent-query count then passes.
 	 *
-	 * <p>This is the configuration on which issue #178's two-way branch resolved to
-	 * {@code full-chart}, which is what a default install has and what made every row on one wrong —
-	 * so {@code ChartSearchAiAuditSearchModeTest} depends on this answering as an unconfigured
-	 * install and not merely as some install.
+	 * <p>Only the ONE-arg form is reached on the paths these classes drive: it is the rate limiter's
+	 * read, and the null keeps it on its compiled default. The two-arg branch is a leftover of what
+	 * this fixture had to answer BEFORE issue #178 — the controller's preFilter read, which the fix
+	 * deleted — and is kept because a handler that starts reading a global property again should get
+	 * an unconfigured install's answer rather than an NPE. Nothing in
+	 * {@code ChartSearchAiAuditSearchModeTest} depends on it: every mode it asserts comes from the
+	 * answer the stub service returns, which is the point of that change.
 	 */
 	private static AdministrationService administrationServiceWithNoOverrides() {
 		return proxy(AdministrationService.class, new InvocationHandler() {

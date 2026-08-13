@@ -124,7 +124,8 @@ public class ChartSearchAiAuditSearchModeTest {
 		// The two answers are deliberately given DIFFERENT labels here, which no real pipeline
 		// produces: with the same label on both, this case passes whichever object the controller
 		// reads, and could not fail for the reason its name gives. The value asserted is the
-		// ungrounded one, so reading the returned answer instead reddens it.
+		// ungrounded one; its mirror below asserts the returned one for the classic shape, and the
+		// pair is what pins which object each shape audits.
 		controller.setChartSearchService(new StubService(
 				ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED, ChartSearchAiConstants.SEARCH_MODE_FULL_CHART));
 
@@ -222,10 +223,14 @@ public class ChartSearchAiAuditSearchModeTest {
 	}
 
 	/**
-	 * Returns answers labelled with one mode, on every path. It fires the ungrounded-answer consumer
-	 * with a SEPARATE answer object carrying the same label, exactly as {@code LlmInferenceService}
-	 * does — the async audit site reads that one, so a stub that reused the returned object would
-	 * hide the very divergence this class is about.
+	 * The service the controller is driven against. It hands the ungrounded-answer consumer a SEPARATE
+	 * answer object from the one it returns, exactly as {@code LlmInferenceService} does — the async
+	 * audit site reads that one, so a stub that reused a single object could not tell the two sites
+	 * apart at all.
+	 *
+	 * <p>The two objects normally carry the same mode, which is what a real pipeline produces. The
+	 * two-argument constructor lets a case give them DIFFERENT modes, which no pipeline produces and
+	 * which is the only way to assert WHICH of the two a given audit shape read.
 	 */
 	private static final class StubService implements ChartSearchService {
 
@@ -263,8 +268,10 @@ public class ChartSearchAiAuditSearchModeTest {
 			return answer(returnedMode);
 		}
 
-		// The 4-, 5- and 7-arg overloads are `default` and delegate here; the controller calls the
-		// 7-arg, so leaving them alone keeps that delegation on the path under test.
+		// The 7-arg overload is `default` and delegates to this one, and the 7-arg is what the
+		// controller calls — so not overriding it keeps that delegation on the path under test. (The
+		// 4- and 5-arg defaults delegate DOWNWARD to the 3-arg instead and never reach a consumer;
+		// nothing here drives them.)
 		@Override
 		public ChartAnswer searchStreaming(Patient patient, String question,
 				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,

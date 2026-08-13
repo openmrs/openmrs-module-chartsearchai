@@ -671,7 +671,9 @@ public class LlmProviderTest {
 	public void extractResponse_shouldLeaveACitationsContainerWithNoSingleReadingAloneButNotInSilence() {
 		// A container that is neither an array nor a scalar naming an index has no ONE reading, so
 		// there is nothing to coerce and inventing one would be widening a VALUE. The behaviour is
-		// unchanged — no citations — but it stops being invisible. DEBUG rather than WARN because
+		// unchanged — no citations — but it becomes explainable to an operator who turns DEBUG on.
+		// (Not a signal that arrives unasked: the default org.openmrs.* level is WARN, which is why
+		// this case has to raise the level to see the line at all.) DEBUG rather than WARN because
 		// nothing has been dropped that this parser could have recovered, and because these shapes
 		// have never been observed: a WARN on an unobserved shape is the noise #217 argued against.
 		for (String value : new String[] { "{\"index\": 9}", "\"eight\"", "9.7", "true" }) {

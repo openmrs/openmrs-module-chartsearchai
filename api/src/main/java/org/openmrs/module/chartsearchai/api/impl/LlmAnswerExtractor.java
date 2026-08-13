@@ -292,9 +292,17 @@ final class LlmAnswerExtractor {
 	 * its entries admit the same JSON types, and cannot drift apart. Anything with no single reading
 	 * (an object, a non-numeric string, {@code 9.7}, a boolean) is left alone: there is nothing to
 	 * recover, and picking a reading would widen which VALUES name a record, which is the line
-	 * #219/#220 drew and this does not cross. It is logged at DEBUG so the skip stops being
-	 * invisible, but not at WARN — nothing recoverable was lost, and no instance of these shapes has
-	 * been observed, so a warning would be the noise-that-gets-filtered #217 argued against.
+	 * #219/#220 drew and this does not cross.
+	 *
+	 * <p>That skip is logged at DEBUG rather than WARN, because nothing recoverable was lost and no
+	 * instance of these shapes has been observed — a warning on an unobserved shape is the
+	 * noise-that-gets-filtered #217 argued against. Be precise about what DEBUG buys, though: the
+	 * default {@code org.openmrs.*} level is WARN (see {@code QueryStoreChartBuilder}, which records
+	 * that premise), so this line is reachable evidence for an operator who goes looking, NOT a
+	 * signal that arrives on its own. The honest summary is that the skip stops being unexplainable,
+	 * not that it stops being quiet. The tension with {@link #reportNonConformantCitations}, which
+	 * WARNs when an ARRAY's entries name no index — the same information loss by the same cause — is
+	 * real and deliberate: the container case has no observed instance and the entry case did.
 	 *
 	 * <p>An explicit {@code null} never reaches here (the caller's guard). It is unambiguous, it
 	 * already means what this code does with it — no citations — and it is the same statement as an

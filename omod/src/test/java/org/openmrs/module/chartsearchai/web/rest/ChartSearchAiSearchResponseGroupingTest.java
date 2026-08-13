@@ -39,12 +39,10 @@ import org.springframework.http.ResponseEntity;
  * not that this endpoint calls it.
  *
  * <p>Driving {@code search()} needs more of the OpenMRS static context than the SSE path: a
- * privileged {@link UserContext}, plus {@link PatientService} and {@link AdministrationService}
- * in the {@link ServiceContext}. Those are installed here as reflective stand-ins answering only
- * the two methods this path actually calls, and every one of them — including whatever was
- * installed before — is restored in {@link #restoreContext()}. That matters: surefire runs this
- * module in a single reused JVM, so a leaked service or user context would silently alter the
- * other test classes in this package rather than failing here.
+ * privileged user context plus two services. That fixture is {@link RestControllerContext}, shared
+ * with {@code ChartSearchAiAuditSearchModeTest} since issue #178 gave this package a second class
+ * that needs it — including the part that is not obvious, which is why restoring it cannot simply
+ * put null back.
  */
 public class ChartSearchAiSearchResponseGroupingTest {
 

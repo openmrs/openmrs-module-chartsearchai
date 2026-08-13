@@ -356,7 +356,9 @@ public class DrugSafetyValidator {
 		// collapse living inside one arm would still let the other emit the siblings.
 		ContraindicationChips contraindications = new ContraindicationChips(warnings, subjects);
 
-		// Which substances still owe the interaction arm and the dose arm their one call. Drained as the
+		// Which substances may still owe the interaction arm and the dose arm their one call — "may",
+		// because since the widening these also carry the substances only the ORDERS resolved, which owe
+		// neither arm anything and are simply never looked up. Drained as the
 		// loop below reaches each group's first row, so a substance's chips land where its first row's
 		// chips have always landed and no client sees the chip sequence reshuffle — the same positional
 		// promise ContraindicationChips makes. A key set apiece rather than a map apiece, because the ROWS
@@ -405,20 +407,21 @@ public class DrugSafetyValidator {
 			// answers a RuntimeException with an empty warning list, so one absent group would drop every
 			// chip on the request rather than one arm's, which is the failure mode RaisedChip's own
 			// javadoc says this class is shaped around.
-			List<DrugReference> rows = resolvedRows.get(ref.substanceGroupKey());
+			Object substance = ref.substanceGroupKey();
+			List<DrugReference> rows = resolvedRows.get(substance);
 			if (rows == null || rows.isEmpty()) {
 				continue;
 			}
 			// remove(), so a substance's rows are handed to each arm ONCE — at the first of them — and the
 			// pending key set is itself the already-done ledger.
-			if (interactionsPending.remove(ref.substanceGroupKey())) {
+			if (interactionsPending.remove(substance)) {
 				// One call, not one per arm: the rule arm and the class arm can both raise a chip about
 				// the same active order, so the decision of how many chips that pair gets belongs to a
 				// method that sees both (issue #88).
 				addInteractionWarnings(warnings, rows, subjects, context, severityFloor, orderEntries,
 						interactionPairs);
 			}
-			if (dosePending.remove(ref.substanceGroupKey())) {
+			if (dosePending.remove(substance)) {
 				addOverdose(warnings, rows, subjects, context, lower, all);
 			}
 		}
@@ -705,19 +708,39 @@ public class DrugSafetyValidator {
 	 * lookup and deleting {@code canonicalSubjects}. Do not read the paragraph above as saying no two
 	 * arms can disagree; it says the three that read this cannot.
 	 *
+	 * <p><b>And that is per PASS, not per request.</b> {@code validate} runs twice for one {@code /search}
+	 * — the pre-answer findings pass through {@code DrugReferenceInjector.injectRecords}, then the chips
+	 * pass — and the group differs between them by exactly one input, the rows the ANSWER put in play
+	 * (issue #175 admits them deliberately; the orders and the recorded names are read from the same
+	 * context both times). Where the answer resolves a row of an in-play substance that the question did
+	 * not, the group grows and this can answer differently, so the injected {@code safety_finding} the
+	 * model READ can name a substance one way and the chip beside the answer another. The
+	 * contraindication arm's old positional rule happened to be pass-stable, since {@code inPlay} seeds
+	 * from the question first; the interaction and dose arms have had this since #175/#194.
+	 *
+	 * <p>Not designed around, and the alternative is worse: naming from a pass-invariant set while RULING
+	 * from the whole group is the two-row-sets shape this class exists to remove, one level up. Closing
+	 * it properly means deciding a substance's subject once per REQUEST rather than once per pass, which
+	 * is the injector's and the inference service's business rather than this class's. Narrow in
+	 * practice — it needs a family whose rows publish DIFFERENT alias sets, so that a question and an
+	 * answer using different aliases resolve different rows ({@code Estrone sulfate (topical)} publishes
+	 * {@code estrone} and nothing spelled {@code estrone sulfate}; see
+	 * {@link DrugReferenceService#findImpliedByQuery}) — and reasoned rather than measured.
+	 *
 	 * <p>Memoised for the pass and not beyond it — a {@link DrugReference} outliving a {@code getAll()}
 	 * hot-reload fails the identity comparisons the contraindication arms make (issue #172).
 	 */
 	private static final class SubstanceSubjects {
 
-		private final Map<Object, List<DrugReference>> rows;
+		private final Map<Object, List<DrugReference>> groups;
 
 		private final Collection<String> recordedNames;
 
-		private final Map<Object, DrugReference> named = new HashMap<Object, DrugReference>();
+		private final Map<Object, DrugReference> subjectBySubstance =
+				new HashMap<Object, DrugReference>();
 
-		SubstanceSubjects(Map<Object, List<DrugReference>> rows, Collection<String> recordedNames) {
-			this.rows = rows;
+		SubstanceSubjects(Map<Object, List<DrugReference>> groups, Collection<String> recordedNames) {
+			this.groups = groups;
 			this.recordedNames = recordedNames;
 		}
 
@@ -739,18 +762,18 @@ public class DrugSafetyValidator {
 		 *         answers null only for an empty group ({@link #strongestClaimants}), and an empty group
 		 *         takes the un-memoised fallback.
 		 */
-		DrugReference of(DrugReference row) {
+		DrugReference subjectOf(DrugReference row) {
 			Object substance = row.substanceGroupKey();
-			DrugReference subject = named.get(substance);
+			DrugReference subject = subjectBySubstance.get(substance);
 			if (subject != null) {
 				return subject;
 			}
-			List<DrugReference> group = rows.get(substance);
+			List<DrugReference> group = groups.get(substance);
 			if (group == null || group.isEmpty()) {
 				return row;
 			}
 			subject = interactionSubject(group, recordedNames);
-			named.put(substance, subject);
+			subjectBySubstance.put(substance, subject);
 			return subject;
 		}
 	}
@@ -972,7 +995,7 @@ public class DrugSafetyValidator {
 		 *         chips instead of renaming them.
 		 */
 		DrugReference subjectOf(DrugReference row) {
-			return subjects.of(row);
+			return subjects.subjectOf(row);
 		}
 
 		/**
@@ -1211,7 +1234,7 @@ public class DrugSafetyValidator {
 		if (context == null) {
 			return;
 		}
-		DrugReference ref = subjects.of(rows.get(0));
+		DrugReference ref = subjects.subjectOf(rows.get(0));
 		List<SubjectRule> rules = new ArrayList<SubjectRule>(
 				bestRulePerPartner(rows, context, severityFloor, orderEntries));
 		// Which rule row carries which class sentence, decided before anything is emitted: the class
@@ -1268,24 +1291,6 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The reference rows of {@code entries}, grouped by the substance each stands for
-	 * ({@link DrugReference#substanceGroupKey()}), each group in first-appearance order.
-	 *
-	 * <p>The order WITHIN a group is the load-bearing one, because {@link #bestRulePerPartner}'s survivor
-	 * rule falls back to "keep the incumbent", which is only "the dataset's first such row" while the
-	 * group is in dataset order.
-	 *
-	 * <p>The order BETWEEN groups is not, and it is worth saying so rather than leaving a
-	 * {@link LinkedHashMap} looking like a guarantee. Nothing EMITS from an iteration of this map: the
-	 * caller walks {@code entries} itself and drains a key set as it reaches each group's first row, so
-	 * what keeps a substance's chips in the position that row's chips had is the CALLER's iteration.
-	 * Since issue #206 the key set is seeded from {@code keySet()}, which is an iteration — but only of
-	 * the keys, into an unordered {@link java.util.HashSet}, so it cannot carry an order to anything.
-	 * Replacing this with a {@code HashMap} would change no output (measured: the whole api suite passes
-	 * with one). Keyed insertion order is kept only so a debug dump of this map reads in dataset order.
-	 * Move the emit site into an iteration of this map and that positional promise moves with it.
-	 */
-	/**
 	 * The subject groups the drug-in-play and dose arms work over: {@link #substanceRows} over
 	 * {@code inPlay}, each group additionally carrying the rows of that same substance the patient's own
 	 * ACTIVE ORDERS resolved — i.e. every row of an in-play substance that THIS REQUEST resolved, from
@@ -1326,11 +1331,7 @@ public class DrugSafetyValidator {
 			Collection<DrugReference> inPlay, List<DrugReference> orderEntries) {
 		Map<Object, List<DrugReference>> groups = substanceRows(inPlay);
 		for (DrugReference ordered : orderEntries) {
-			List<DrugReference> rows = groups.get(ordered.substanceGroupKey());
-			if (rows == null) {
-				rows = new ArrayList<DrugReference>();
-				groups.put(ordered.substanceGroupKey(), rows);
-			}
+			List<DrugReference> rows = groupFor(groups, ordered);
 			// contains() is identity here — DrugReference defines no equals, and both sets are resolved
 			// against DrugReferenceService's shared getAll() cache, so one row is one object.
 			if (!rows.contains(ordered)) {
@@ -1340,18 +1341,43 @@ public class DrugSafetyValidator {
 		return groups;
 	}
 
+	/**
+	 * The reference rows of {@code entries}, grouped by the substance each stands for
+	 * ({@link DrugReference#substanceGroupKey()}), each group in first-appearance order.
+	 *
+	 * <p>The order WITHIN a group is the load-bearing one, because {@link #bestRulePerPartner}'s survivor
+	 * rule falls back to "keep the incumbent", which is only "the dataset's first such row" while the
+	 * group is in dataset order.
+	 *
+	 * <p>The order BETWEEN groups is not, and it is worth saying so rather than leaving a
+	 * {@link LinkedHashMap} looking like a guarantee. Nothing EMITS from an iteration of this map: the
+	 * caller walks {@code entries} itself and drains a key set as it reaches each group's first row, so
+	 * what keeps a substance's chips in the position that row's chips had is the CALLER's iteration.
+	 * Since issue #206 the key set is seeded from {@code keySet()}, which is an iteration — but only of
+	 * the keys, into an unordered {@link java.util.HashSet}, so it cannot carry an order to anything.
+	 * Replacing this with a {@code HashMap} would change no output (measured: the whole api suite passes
+	 * with one). Keyed insertion order is kept only so a debug dump of this map reads in dataset order.
+	 * Move the emit site into an iteration of this map and that positional promise moves with it.
+	 */
 	private static Map<Object, List<DrugReference>> substanceRows(Collection<DrugReference> entries) {
 		Map<Object, List<DrugReference>> out = new LinkedHashMap<Object, List<DrugReference>>();
 		for (DrugReference entry : entries) {
-			Object key = entry.substanceGroupKey();
-			List<DrugReference> rows = out.get(key);
-			if (rows == null) {
-				rows = new ArrayList<DrugReference>();
-				out.put(key, rows);
-			}
-			rows.add(entry);
+			groupFor(out, entry).add(entry);
 		}
 		return out;
+	}
+
+	/** @return {@code row}'s substance's group in {@code groups}, created empty if this is its first row —
+	 *          the get-or-create both builders of this map need, written once so they cannot come to key
+	 *          it differently. */
+	private static List<DrugReference> groupFor(Map<Object, List<DrugReference>> groups, DrugReference row) {
+		Object key = row.substanceGroupKey();
+		List<DrugReference> rows = groups.get(key);
+		if (rows == null) {
+			rows = new ArrayList<DrugReference>();
+			groups.put(key, rows);
+		}
+		return rows;
 	}
 
 	/**
@@ -1418,23 +1444,30 @@ public class DrugSafetyValidator {
 	 *        the names of the ONE order that partner is; empty is normal and means the fold alone
 	 *        decides
 	 */
-	private static DrugReference interactionSubject(List<DrugReference> subjects,
+	private static DrugReference interactionSubject(List<DrugReference> rows,
 			Collection<String> recordedNames) {
-		return DrugReference.canonicalRow(strongestClaimants(subjects, recordedNames));
+		if (rows.size() == 1) {
+			// The fold and the ranking both answer "that row" for a group of one, so this is provably the
+			// same answer and not an approximation of it. It is here because issue #206 gave this method a
+			// far larger population: the order-driven contraindication arm asks it about every substance the
+			// patient's own orders resolve, and most substances the KB files as ONE row.
+			return rows.get(0);
+		}
+		return DrugReference.canonicalRow(strongestClaimants(rows, recordedNames));
 	}
 
 	/**
-	 * @return the rows of {@code subjects} tied at the strongest claim any of {@code recordedNames}
+	 * @return the rows of {@code rows} tied at the strongest claim any of {@code recordedNames}
 	 *         gives them, in their original order — every row when none of them is named at all, since
 	 *         {@link DrugReference#NAME_NO_MATCH} is then the shared maximum. Never empty for a
-	 *         non-empty {@code subjects}, so {@link DrugReference#canonicalRow} keeps its
+	 *         non-empty {@code rows}, so {@link DrugReference#canonicalRow} keeps its
 	 *         "null only for an empty group" contract.
 	 */
-	private static List<DrugReference> strongestClaimants(List<DrugReference> subjects,
+	private static List<DrugReference> strongestClaimants(List<DrugReference> rows,
 			Collection<String> recordedNames) {
 		List<DrugReference> strongest = new ArrayList<DrugReference>();
 		int best = DrugReference.NAME_NO_MATCH;
-		for (DrugReference row : subjects) {
+		for (DrugReference row : rows) {
 			int claim = DrugReference.NAME_NO_MATCH;
 			for (String recorded : recordedNames) {
 				claim = Math.max(claim, row.nameMatchStrength(recorded));
@@ -4204,7 +4237,7 @@ public class DrugSafetyValidator {
 		// #206): a dose warning, an interaction chip and a contraindication chip about ONE substance in
 		// ONE response must not call it three things, which is exactly the divergence anchoring only some
 		// of them would have created.
-		DrugReference subject = subjects.of(rows.get(0));
+		DrugReference subject = subjects.subjectOf(rows.get(0));
 		if (addOverdose(warnings, subject, subject, context, lowerAnswer, allEntries)) {
 			return;
 		}

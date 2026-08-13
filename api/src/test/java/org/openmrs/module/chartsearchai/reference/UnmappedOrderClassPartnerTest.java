@@ -217,6 +217,76 @@ public class UnmappedOrderClassPartnerTest {
 	}
 
 	@Test
+	public void aDifferentSubstanceSharingTheRESOLVEDRowsCodeStillRaisesTheChip() throws IOException {
+		// The skip that must NOT reach a partner reached by name. Issue #185's exact-code leg is a proxy
+		// for identity, kept for the case identity cannot reach — a context carrying only codes, where
+		// nothing names the co-medication. A partner reached by NAME is the opposite case: its substance
+		// is known exactly, and its codes are the DATASET's, so the leg would be comparing one reference
+		// row against another. This KB says that is not identity — that is why substanceKey exists — and
+		// {@code Omeprazole} and {@code Esomeprazole} are its counterexample, two substances publishing
+		// one A02BC05 between them.
+		//
+		// So without the scoping, the code leg silences exactly the chip this issue exists to add: the
+		// patient is on omeprazole, is asked about a genuinely different PPI, and hears nothing.
+		Set<String> names = DrugReferenceTestSupport.set("Omeprazole 20mg");
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, names, null, null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-228-i", "Omeprazole 20mg",
+						names, null)));
+
+		List<SafetyWarning> warnings = chips("Is it safe to give esomeprazole?", context);
+
+		assertEquals(1, warnings.size(), "was: " + warnings);
+		assertEquals("Esomeprazole is in the same ATC class (A02BC) as active order Omeprazole"
+				+ " — possible duplicate therapy", warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void andTheSubstanceThatOrderISIsStillSkipped() throws IOException {
+		// The other half, and what keeps the case above from being a licence: with the code leg out of
+		// the way for such a partner, the ONLY thing standing between the patient and a chip saying she
+		// duplicates her own prescription is the substance key the partner carries. Issue #185's
+		// headline, on the rung this issue adds and on the rung's own resolution path.
+		Set<String> names = DrugReferenceTestSupport.set("Omeprazole 20mg");
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, names, null, null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-228-j", "Omeprazole 20mg",
+						names, null)));
+
+		assertEquals(Collections.<String> emptyList(),
+				DrugReferenceTestSupport.details(chips("Is it safe to give omeprazole?", context)),
+				"a drug the patient is already prescribed does not duplicate itself");
+	}
+
+	@Test
+	public void anUnmappedOrderIsNotASECONDCoMedicationBesideAnOrderTheWalkCouldNotNAME() throws IOException {
+		// One substance, two orders, and the co-medication the code walk keyed on the ORDER rather than
+		// on a substance — the rung issue #155/#186 leave an order on when the dataset can name none of
+		// its codes. A dedup that compares only substance keys cannot see that partner, so the same drug
+		// is reported twice under two names: once as the order, once as the dataset's row.
+		//
+		// The mapped order carries omeprazole's own A02BC01, which this KB does not publish anywhere, so
+		// it lands on that rung; the second order is unmapped and resolves by name to the same substance.
+		Set<String> mappedNames = DrugReferenceTestSupport.set("Omeprazole 20mg");
+		Set<String> unmappedNames = DrugReferenceTestSupport.set("Omeprazole capsule");
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Omeprazole 20mg", "Omeprazole capsule"),
+				DrugReferenceTestSupport.set("A02BC01"), null, null,
+				Arrays.asList(
+						DrugReferenceTestSupport.activeOrder("order-228-k", "Omeprazole 20mg",
+								mappedNames, DrugReferenceTestSupport.set("A02BC01")),
+						DrugReferenceTestSupport.activeOrder("order-228-l", "Omeprazole capsule",
+								unmappedNames, null)));
+
+		List<SafetyWarning> warnings = chips("Is it safe to give pantoprazole?", context);
+
+		assertEquals(1, warnings.size(),
+				"two orders of one substance are one co-medication however each resolved, was: "
+						+ warnings);
+		assertEquals("Pantoprazole is in the same ATC class (A02BC) as active order Omeprazole 20mg"
+				+ " — possible duplicate therapy", warnings.get(0).getDetail(),
+				"and it keeps the name the code walk gave it");
+	}
+
+	@Test
 	public void anUnmappedOrderDoesNotRENAMEACoMedicationTheDictionaryAlreadyAttributed() throws IOException {
 		// The other half of "a substance the code walk already reached is left alone": not merely that
 		// it stays ONE co-medication, but that the partner keeps the attribution the code walk gave it.

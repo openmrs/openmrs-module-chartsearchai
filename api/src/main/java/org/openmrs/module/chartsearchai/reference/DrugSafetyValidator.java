@@ -2591,7 +2591,9 @@ public class DrugSafetyValidator {
 	 *         {@link #classRelationships}'s restating-existing-therapy skip keeps its own exact-code
 	 *         test beside a substance-identity one for the opposite reason — there the code is all a
 	 *         context carrying no order has to go on, and dropping the leg raises a chip that arm has
-	 *         never raised.
+	 *         never raised. That skip's leg is scoped to exactly that case since issue #228
+	 *         ({@link OrderPartner#codesFromDataset}); this predicate's is not, and the two scopes are
+	 *         not each other's business.
 	 *
 	 *         <p>Since issue #209 the name leg is a strict SUPERSET of what
 	 *         {@link DrugReferenceService#findImpliedByDrugName} would admit from the same order, because
@@ -3053,7 +3055,9 @@ public class DrugSafetyValidator {
 	 *       class (A02BC) as active order Omeprazole 20mg}. Deciding identity by the substance key
 	 *       rather than by something a row happens to publish is the correction issues #164/#187 made
 	 *       for the two cross-reactivity routes to that same symptom; this is the third route.</li>
-	 *   <li>A shared exact ATC code, which identity does not replace. Where the context carries only
+	 *   <li>A shared exact ATC code, which identity does not replace <b>where the partner's codes are
+	 *       the CHART's</b> — see {@link OrderPartner#codesFromDataset} for the scoping issue #228 had
+	 *       to add, and why the leg is wrong on a partner reached by name. Where the context carries only
 	 *       the flattened code set (issue #118's fallback) no order names the partner, so the partner
 	 *       is whichever row {@link #entryForAtcCode} picks for the code — and that row's substance
 	 *       need not be the queried one. An order known only as {@code A02BC05} resolves to
@@ -3123,11 +3127,12 @@ public class DrugSafetyValidator {
 		Object refSubstance = ref.substanceGroupKey();
 		for (OrderPartner partner : orderPartners(context)) {
 			if (partner.substances.contains(refSubstance)
-					|| !Collections.disjoint(partner.codes, refCodes)) {
+					|| (!partner.codesFromDataset
+							&& !Collections.disjoint(partner.codes, refCodes))) {
 				// Restating existing therapy is not a duplicate. Identity first because it is the
 				// question; the exact-code leg second because it answers where no order names the
-				// partner. See this method's javadoc for why both are needed and why the code leg's
-				// one over-skip is deliberate.
+				// partner — and ONLY there, which is what the guard says. See this method's javadoc
+				// for why both are needed and why the code leg's one over-skip is deliberate.
 				continue;
 			}
 			String shared = sharedClass(refClasses, DrugReference.atcSubgroups(partner.codes));
@@ -3170,6 +3175,28 @@ public class DrugSafetyValidator {
 		private final Set<String> codes = new LinkedHashSet<String>();
 
 		/**
+		 * Whether {@link #codes} came from the loaded DATASET rather than from the patient's own
+		 * orders — true only for a partner reached by an order's NAME (issue #228,
+		 * {@link DrugSafetyValidator#addPartnersForUnmappedOrders}), where the order published no
+		 * code and the reference row's are the only classification there is.
+		 *
+		 * <p>Read by ONE thing: {@link DrugSafetyValidator#classRelationships}'s
+		 * restating-existing-therapy skip, to scope its exact-code leg out. That leg is a PROXY for
+		 * identity, kept for the case identity cannot reach — a context carrying only codes, where
+		 * nothing names the co-medication (issue #185). Here identity is known exactly and the codes
+		 * on both sides are reference rows', so the proxy would be asking whether two KB rows share a
+		 * code — which this knowledge base says is not identity, and is the reason
+		 * {@link DrugReference#substanceKey()} exists: {@code Omeprazole} and {@code Esomeprazole}
+		 * publish one {@code A02BC05} between them and are two substances. Unscoped it silences
+		 * exactly the chip issue #228 exists to add, measured on the shipped rows for that pair.
+		 *
+		 * <p>Not read by the CLASS comparison, which wants these codes whatever their provenance —
+		 * they are what the reference data says the substance is, and without them the arm cannot
+		 * reach an unmapped order at all.
+		 */
+		private boolean codesFromDataset;
+
+		/**
 		 * The substances this co-medication is known to contain, as
 		 * {@link DrugReference#substanceGroupKey()} values: what the ORDER's own recorded names imply
 		 * ({@link DrugSafetyValidator#substancesNamedBy}). Read only by
@@ -3190,17 +3217,17 @@ public class DrugSafetyValidator {
 		 * the tablet, or a question about one constituent of an unmapped combination would lose the chip
 		 * naming the other, which is the loss the paragraph above describes.
 		 *
-		 * <p><b>The suite does not catch the removal of that one key, and this says so rather than
-		 * implying otherwise.</b> Measured 2026-08-13: deleting it leaves every api test green. The
-		 * exact-code leg answers the same question wherever a leg-#228 partner can raise a chip at all,
-		 * because its codes come from a row of the substance being asked about and every row of one
-		 * substance in the shipped KB publishes the same ATC list — the DATA invariant recorded at
-		 * {@link DrugSafetyValidator#addInteractionWarnings}, which that method already asks to be
-		 * re-measured on a KB refresh. It is held anyway because identity is what the skip is ASKING
-		 * (issue #185, where deciding it by codes reported a drug as duplicating the patient's own order
-		 * of it), and because the invariant is a property of today's data rather than of this arm: a
-		 * refresh giving one route variant a code its siblings lack re-opens #185 here, silently, in the
-		 * one direction this feature exists to prevent.
+		 * <p>On that rung it is the WHOLE of the skip, not a second opinion beside the exact-code leg:
+		 * that leg is scoped out there ({@link #codesFromDataset}), because with the partner's codes
+		 * taken from the dataset it would be asking whether two reference rows share a code, which this
+		 * knowledge base says is not identity. So deleting this one line raises the self-chip issue #185
+		 * exists to prevent — measured 2026-08-13, three cases redden.
+		 *
+		 * <p>Worth recording that it was not always so: while the code leg still applied here, deleting
+		 * this line left every api test green, because the leg answered the same question wherever such
+		 * a partner could raise a chip at all. That was a guard protected by nothing, and scoping the
+		 * leg to the case it was kept for is what made it load-bearing rather than a second expression
+		 * of the same rule.
 		 *
 		 * <p><b>The names, and not also the entry the ladder resolved.</b> That entry's substance is
 		 * already what the skip's exact-code leg answers, and equivalently so: a row of it publishes
@@ -3351,10 +3378,14 @@ public class DrugSafetyValidator {
 	 * <p>Issue #228 gave that resolution a second caller, and it is the one that raises the bound:
 	 * {@link #addPartnersForUnmappedOrders} asks it once per DICTIONARY-UNMAPPED order rather than once
 	 * per unnameable code, through the same per-call memo, so the work is one dataset sweep per name of
-	 * each such order per call — and this method is called once per in-play substance. That was not
-	 * separately timed and no figure is claimed for it; the sentence above says how to measure it, and
-	 * the order count that makes it matter is the one a real medication list reaches, not the demo
-	 * corpus's largest (8).
+	 * each such order per call — and this method is called once per in-play substance. Counted rather
+	 * than estimated, by delegating through the real service: over the 3.7.1 standalone's whole order
+	 * list, one {@code validate} with three substances in play makes <b>162</b>
+	 * {@link DrugReferenceService#findImpliedByDrugName} calls (27 unmapped orders × 2 names × 3
+	 * substances) where the pre-change code made none for those orders, and
+	 * {@link DrugReferenceInjector#injectRecords} runs {@code validate} twice per query. No TIME is
+	 * claimed for that; the sentence above says how to measure one, and the per-pass memo stays unbuilt
+	 * for the reason stated there rather than because the repeat is free.
 	 */
 	private List<OrderPartner> orderPartners(PatientClinicalContext context) {
 		Map<Object, OrderPartner> byIdentity = new LinkedHashMap<Object, OrderPartner>();
@@ -3500,18 +3531,32 @@ public class DrugSafetyValidator {
 	 * rather than a code set only while the rows agree about their codes; where they would not, which
 	 * order came back first could decide whether a chip fires at all.
 	 *
-	 * <p>The codes being the DATASET's is an ASYMMETRY with the loop above, and it is worth stating
-	 * rather than discovering: a partner the dictionary mapped is compared on the codes the DICTIONARY
-	 * published for it, which can be a proper subset of the substance's, while a partner reached here is
-	 * compared on every code the dataset files it under. So a partly-mapped order can still be blind to a
-	 * subgroup an unmapped one would see. Widening the first to match would change chips this issue is
-	 * not about, and is the narrower gap left open deliberately.
+	 * <p>The codes being the DATASET's is an ASYMMETRY with the loop above, and it runs BOTH ways. A
+	 * partner the dictionary mapped is compared on the codes the DICTIONARY published for it, which can
+	 * be a proper subset of the substance's, while a partner reached here is compared on every code the
+	 * dataset files it under.
+	 * <ul>
+	 *   <li>So a partly-mapped order can be blind to a subgroup an unmapped one would see. Widening the
+	 *       first to match would change chips this issue is not about, and is left open deliberately.</li>
+	 *   <li>And an unmapped order can be named in a chip stating a class its own PRESENTATION does not
+	 *       belong to — an unmapped {@code Hydrocortisone cream 1%} is classified by every code the
+	 *       hydrocortisone row carries, {@link #sharedClass} prefers the systemic one, and the chip says
+	 *       {@code H02AB} where the same order mapped to {@code D07AA02} alone would say nothing. This
+	 *       is the over-claiming direction, and it is the one a clinician sees.</li>
+	 * </ul>
+	 * Neither is closable here, and for one reason: the ROUTE is not available to this arm at all —
+	 * {@link PatientClinicalContextBuilder} never reads {@code DrugOrder.getRoute()}, which is the same
+	 * bound {@link #sharedClass} records for its own class preference. What the order publishes is a
+	 * name; what the dataset publishes for that name is every route it markets. Given only those two,
+	 * naming the substance's classes is the honest reading, and narrowing it would need a route the
+	 * module does not carry.
 	 *
 	 * <p><b>Appended after the code walk</b>, so every chip this arm already raised keeps its position and
 	 * a newly-reachable co-medication sorts after the ones a dictionary classified. A substance the walk
-	 * already produced a partner for is skipped outright: two orders of one substance are ONE
-	 * co-medication (issue #186) whether they resolved by code or by name, and the partner that exists
-	 * already carries the dictionary's own attribution.
+	 * already reached is skipped outright: two orders of one substance are ONE co-medication (issue #186)
+	 * whether they resolved by code or by name, and the partner that exists already carries the
+	 * dictionary's own attribution. "Already reached" is {@link #alreadyACoMedication} and not a map
+	 * lookup, because the walk keys some partners on the ORDER rather than on a substance.
 	 *
 	 * <p><b>The bound this leaves at the cross-arm fold.</b> {@link #ruleAbout} correlates a partner to a
 	 * rule through {@link #entryForAtcCode}, which answers with the CANONICAL row publishing a code — and
@@ -3535,13 +3580,15 @@ public class DrugSafetyValidator {
 			}
 			for (Map.Entry<Object, List<DrugReference>> named
 					: substanceRowsNamedBy(order, namedRows).entrySet()) {
-				if (byIdentity.containsKey(named.getKey())) {
+				if (alreadyACoMedication(byIdentity, named.getKey())) {
 					continue;
 				}
 				DrugReference row = interactionSubject(named.getValue(), order.getNames());
 				OrderPartner partner = new OrderPartner(row.displayLabel(), false);
 				partner.codes.addAll(row.normalizedAtcCodes());
-				// This partner IS this substance, so restating it is not duplicating it.
+				partner.codesFromDataset = true;
+				// This partner IS this substance, so restating it is not duplicating it — and with the
+				// exact-code leg scoped out above, this is the WHOLE of that skip here.
 				partner.substances.add(named.getKey());
 				byIdentity.put(named.getKey(), partner);
 			}
@@ -3569,7 +3616,10 @@ public class DrugSafetyValidator {
 	 *         exactly one row (nothing to rank), and the {@code rowsOf} fallback for a dataset whose
 	 *         entries omit their own names. That fallback over-reports by design, which for a
 	 *         candidate set is the safe direction and for a SUPPRESSION is not. Measured there as
-	 *         never firing on any shipped dataset; if that stops being true it costs chips here first.
+	 *         never firing on any shipped dataset; if that stops being true it costs chips here first —
+	 *         and since issue #228 it costs them in BOTH directions, because this same resolution now
+	 *         also CREATES co-medications ({@link #addPartnersForUnmappedOrders}), where an over-report
+	 *         is a chip naming a drug the patient is not on.
 	 *
 	 *         <p><b>The residual hazard, and what bounds it.</b> An order name that merely CONTAINS
 	 *         another substance's whole name resolves it — the phrase-nesting shape
@@ -3595,6 +3645,36 @@ public class DrugSafetyValidator {
 	private Set<Object> substancesNamedBy(PatientClinicalContext.ActiveDrugOrder order,
 			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache) {
 		return substanceRowsNamedBy(order, cache).keySet();
+	}
+
+	/**
+	 * @return whether {@code byIdentity} already holds a co-medication that IS the substance
+	 *         {@code substance}, by its identity or by what it is known to contain.
+	 *
+	 *         <p>The second half is what makes this more than a map lookup, and issue #186's promise
+	 *         depends on it: the code walk keys a partner on the ORDER, not on a substance, whenever
+	 *         the dataset can name none of that order's codes — and on that same rung it records what
+	 *         the order NAMES ({@link OrderPartner#substances}). So a lookup by substance key alone
+	 *         cannot see such a partner, and a second, dictionary-unmapped order of the same drug
+	 *         becomes a second co-medication: one clinical fact reported twice, once as
+	 *         {@code active order Omeprazole 20mg} and once as {@code active order Omeprazole}. Two
+	 *         orders of one substance are ONE co-medication however each of them resolved.
+	 *
+	 *         <p>What it cannot see is a partner keyed on a bare CODE — the context has no order
+	 *         there, so nothing says which substance it is. That needs a code the flattened set holds
+	 *         and no listed order carries, which {@link PatientClinicalContextBuilder} produces only
+	 *         through its KNOWN GAP (a nameless order) and a hand-built context can produce at will.
+	 */
+	private static boolean alreadyACoMedication(Map<Object, OrderPartner> byIdentity, Object substance) {
+		if (byIdentity.containsKey(substance)) {
+			return true;
+		}
+		for (OrderPartner partner : byIdentity.values()) {
+			if (partner.substances.contains(substance)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

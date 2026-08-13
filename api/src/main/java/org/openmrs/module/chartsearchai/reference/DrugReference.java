@@ -555,11 +555,13 @@ public class DrugReference {
 
 	/**
 	 * @return the level-4 subgroups of already-normalized {@code codes} — the same reduction
-	 *         {@link #atcSubgroups()} applies to an entry's own codes, for the codes an ACTIVE ORDER's
-	 *         concept maps to, which belong to no entry ({@code DrugSafetyValidator.classRelationships}
-	 *         compares those directly, because the loaded dataset need not carry the substance they
-	 *         identify). One definition, so an order and an entry cannot come to be in "the same ATC
-	 *         class" by two different reductions.
+	 *         {@link #atcSubgroups()} applies to an entry's own codes, for a caller holding a bare code
+	 *         SET. That caller is {@code DrugSafetyValidator.classRelationships}, whose co-medications
+	 *         carry the codes an ACTIVE ORDER's concept maps to, which may belong to no entry (the
+	 *         loaded dataset need not carry the substance they identify) — and, since issue #228, the
+	 *         codes of the reference row an unmapped order's NAME resolves, which belong to exactly one.
+	 *         One definition either way, so a co-medication and an entry cannot come to be in "the same
+	 *         ATC class" by two different reductions.
 	 */
 	static Set<String> atcSubgroups(Set<String> codes) {
 		Set<String> out = new LinkedHashSet<String>();

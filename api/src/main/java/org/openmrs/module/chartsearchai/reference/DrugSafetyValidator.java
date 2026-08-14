@@ -1703,13 +1703,21 @@ public class DrugSafetyValidator {
 	 *         subject up through {@link SubstanceSubjects} rather than calling this directly — binds arms
 	 *         that RAISE chips inside one {@code validate} pass, and the injector raises none.
 	 *
-	 *         <p>It asks over its OWN per-substance rows, which is the group this pass resolved: for a
-	 *         substance the question names, {@code findImpliedByQuery} answers every row of it (the rows
-	 *         of one substance publish the same aliases), and for one an order resolves,
-	 *         {@code findForActiveOrders} does the same. The injector runs inside the pre-answer pass, so
-	 *         the recorded names are the same read. What it cannot see is the rows the ANSWER puts in
-	 *         play, which is the per-pass residue {@link SubstanceSubjects}' javadoc already records and
-	 *         bounds.
+	 *         <p>It asks over the union of {@code findImpliedByQuery}'s rows and every row the patient's
+	 *         orders resolve — deliberately NOT the narrower set it decides to INJECT, which is that
+	 *         union filtered by the {@code injectFromQuery}/{@code injectFromOrders} toggles and by the
+	 *         relevance gate. Those decide what reaches the prompt; what a substance is CALLED may not
+	 *         depend on them, and building the group from the injected rows was measured to lose the
+	 *         charted row exactly when the clause is needed.
+	 *
+	 *         <p>Two things that union does not guarantee, stated rather than assumed. A question word
+	 *         does not always resolve every row of the substance it names — the rows of one substance
+	 *         USUALLY publish the same aliases, and {@code drug-reference-charted-substance-row.json} is
+	 *         a fixture where they deliberately do not — so a substance reached by the question alone can
+	 *         still be grouped short. And the injector cannot see the rows the ANSWER puts in play, which
+	 *         is the per-pass residue {@link SubstanceSubjects}' javadoc already records and bounds. In
+	 *         both cases the group is narrower, the fold decides, and the injector's caller stays silent
+	 *         rather than guessing — see {@code DrugReferenceInjector.chartAnchoredSubject}.
 	 */
 	static DrugReference interactionSubject(List<DrugReference> rows, PatientClinicalContext context) {
 		return interactionSubject(rows, recordedDrugNames(context));

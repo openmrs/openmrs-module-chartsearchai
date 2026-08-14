@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -236,9 +237,19 @@ public class ReferenceRecordRowAttributionTest {
 		assertEquals(300.0, first.bandForAge(30).getMaxDailyDoseMg(), 0.0,
 				"precondition: whose two rows publish different ceilings, so a clause would have content");
 		assertEquals(150.0, second.bandForAge(30).getMaxDailyDoseMg(), 0.0, "precondition: 150 against 300");
+		// THE premise, and the reason the chart names `zantac` rather than `ranitidine` below. The two
+		// rows must not TIE on the recorded name: if they do, interactionSubject returns the very row
+		// canonicalRow picks, chartAnchoredSubject answers null, and this case is silenced by "the chart
+		// named no row in particular" — never reaching the shared label guard it exists to test. Only the
+		// second row publishes `zantac`, so it strictly out-claims its sibling and the subject really is
+		// a DIFFERENT object from the rendered row, whose name happens to fold to the same string.
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, second.nameMatchStrength("zantac"),
+				"precondition: the charted name must name the SECOND row");
+		assertEquals(DrugReference.NAME_NO_MATCH, first.nameMatchStrength("zantac"),
+				"precondition: and must not reach the first, or the two tie and the fold decides");
 
 		String record = DrugReferenceTestSupport.referenceTextNaming(
-				inject(service, chartNaming(service, 30, 70.0, "ranitidine"), "What dose of ranitidine?"),
+				inject(service, chartNaming(service, 30, 70.0, "zantac"), "What dose of ranitidine?"),
 				"Ranitidine");
 
 		assertNotNull(record, "precondition: the record must still be injected");
@@ -362,6 +373,88 @@ public class ReferenceRecordRowAttributionTest {
 				"the clause names the rows as the record's own header names them, was: " + record);
 		assertFalse(record.contains("(aspirin)"),
 				"and the synonym-augmented chip label never enters prompt text, was: " + record);
+	}
+
+	@Test
+	public void theSubjectIsChosenAmongEveryRowThePassResolvedNotOnlyTheInjectedOnes() throws IOException {
+		// The clause must not depend on the INJECTION gates. matchingEntries decides what reaches the
+		// prompt through injectFromQuery/injectFromOrders and the relevance rule; what a substance is
+		// CALLED is a different question, and answering it over the injected rows alone loses the charted
+		// row in exactly the case this feature exists for — the record then falls silent under a
+		// non-default configuration, which is #259 reachable by config, the thing rowAttribution's own
+		// javadoc argues must not happen.
+		//
+		// The arrangement makes the two sets genuinely different: the nasal row does not publish the bare
+		// alias, so the question injects the unqualified row ALONE, while the patient's order resolves the
+		// nasal row into the pass. Neither row carries ATC codes, so the relevance gate cannot inject the
+		// nasal row and silently make the sets equal again.
+		DrugReferenceService service =
+				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(CEILINGS));
+		String charted = "Mupirocin (nasal)";
+		String question = "What dose of mupirocin?";
+
+		assertEquals("[Mupirocin]", DrugReferenceTestSupport
+				.names(service.findImpliedByQuery(question)).toString(),
+				"precondition: the question must resolve ONLY the unqualified row, or the injected set "
+						+ "already contains the charted one and the widening is untested");
+		PatientClinicalContext context = chartNaming(service, 30, 70.0, charted);
+		assertTrue(DrugReferenceTestSupport.names(service.findForActiveOrders(context)).contains(charted),
+				"precondition: while the patient's own order resolves the charted row, so the two sets "
+						+ "really do differ — was: "
+						+ DrugReferenceTestSupport.names(service.findForActiveOrders(context)));
+
+		String record = DrugReferenceTestSupport
+				.referenceTextNaming(inject(service, context, question), "Mupirocin");
+
+		assertNotNull(record, "precondition: the unqualified row's record must be injected");
+		assertTrue(record.contains(ATTRIBUTION_LEAD + " Mupirocin, not for Mupirocin (nasal) — the row "
+				+ "this patient's record names, filed separately for the same substance."),
+				"the subject comes from every row the pass resolved, not just the injected ones, was: "
+						+ record);
+	}
+
+	@Test
+	public void aSubjectTheFoldMovedRatherThanTheChartIsAttributedToNobody() throws IOException {
+		// The sentence says "the row this patient's record names", so it may only be printed where a
+		// recorded name actually out-claimed the other rows. `interactionSubject` composes two rankings
+		// and always answers, so its answer alone cannot say which step decided — and once the subject
+		// group is widened to every row the pass resolved (which it must be, or the clause becomes
+		// dependent on injectFromOrders), the FOLD alone can move the subject off the rendered row.
+		//
+		// The arrangement: `clobex` is published only by the topical row, so the question injects that
+		// row alone; the order display `Clobetasol 0.05%` ties BOTH rows on nameMatchStrength and
+		// resolves both, so the group is wider than the injected set and canonicalRow moves the subject
+		// to the unqualified row. The chart named no row in particular, so the record must say nothing.
+		DrugReferenceService service =
+				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(CEILINGS));
+		List<DrugReference> rows = service.getAll();
+		DrugReference unqualified = DrugReferenceTestSupport.row(rows, "Clobetasol");
+		DrugReference topical = DrugReferenceTestSupport.row(rows, "Clobetasol (topical)");
+
+		// Every premise through a production accessor, because all four have to hold for this case to
+		// exercise the guard rather than pass for some other reason.
+		assertEquals(unqualified.substanceGroupKey(), topical.substanceGroupKey(),
+				"precondition: one substance");
+		assertEquals("[Clobetasol (topical)]", DrugReferenceTestSupport
+				.names(service.findImpliedByQuery("What dose of clobex?")).toString(),
+				"precondition: the question must resolve ONLY the topical row, so the record is rendered "
+						+ "from it and the unqualified row can only arrive through the order leg");
+		assertEquals(unqualified.nameMatchStrength("Clobetasol 0.05%"),
+				topical.nameMatchStrength("Clobetasol 0.05%"),
+				"precondition: and the charted name must TIE them, so nothing the chart says picks a row "
+						+ "and only canonicalRow can move the subject");
+		assertSame(unqualified, DrugReference.canonicalRow(Arrays.asList(topical, unqualified)),
+				"precondition: which it does — the fold prefers the route-unspecified row");
+
+		String record = DrugReferenceTestSupport.referenceTextNaming(
+				inject(service, chartNaming(service, 30, 70.0, "Clobetasol 0.05%"),
+						"What dose of clobex?"), "Clobetasol (topical)");
+
+		assertNotNull(record, "precondition: the topical row's record must be injected, so the case is "
+				+ "about what that record SAYS rather than about whether it exists");
+		assertFalse(record.contains(ATTRIBUTION_LEAD),
+				"a subject the FOLD moved is not a row the chart named, and the record may not say it "
+						+ "was, was: " + record);
 	}
 
 	@Test

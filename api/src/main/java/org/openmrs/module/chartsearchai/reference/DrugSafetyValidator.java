@@ -4458,10 +4458,12 @@ public class DrugSafetyValidator {
 		// family before the answer is scanned rather than after. That ordering is load-bearing rather
 		// than tidy: the walk below is the only thing in this arm that costs anything, since
 		// substanceOwnsDose compares against every entry in the knowledge base per stated dose, and
-		// while it sat behind the per-row guard it never ran at all on a dataset publishing no bands —
-		// which is every ddinter deployment, i.e. the shipped configuration. Hoisting it out of the loop
-		// (below) without hoisting the guard with it would have made that configuration pay, on every
-		// request, for a check its data can never answer.
+		// while it sat behind the per-row guard it never ran at all on a dataset publishing no bands.
+		// That is not the shipped DEFAULT — config.xml defaults sourceFormat to json and the bundled
+		// curated seed does publish bands — but it is exactly the ddinter and atc deployments, where no
+		// entry carries a band at all and the largest knowledge bases are. Hoisting the walk out of the
+		// loop below without hoisting the guard with it would have made those deployments pay, on every
+		// request, for a check their data can never answer.
 		if (!anyActionableBand(rows, context)) {
 			return;
 		}
@@ -4726,14 +4728,23 @@ public class DrugSafetyValidator {
 	 *         DIFFERENT substance's alias sitting strictly closer means the dose belongs to that drug,
 	 *         not this one.
 	 *
-	 *         <p>Compared per SUBSTANCE rather than per row since issue #245, on both sides of the
-	 *         comparison and necessarily so: a sibling row is not a rival claimant for its own
-	 *         substance's dose, so its alias both counts toward the near side and is excluded from the
-	 *         veto — the old per-row form let {@code Amoxicillin} sit closer to a dose than
-	 *         {@code Amoxicillin (suspension)} and so take it away from a row of the same drug. Both
-	 *         edits move in the same direction (a smaller {@code mine}, a shorter veto list), so this
-	 *         predicate is a superset of the per-row one for every row of a substance and cannot cost a
-	 *         warning that fires today. Between substances nothing changes at all.
+	 *         <p>Compared per SUBSTANCE rather than per row since issue #245: a sibling row is not a
+	 *         rival claimant for its own substance's dose, so its alias counts toward the near side
+	 *         ({@code mine} is the minimum over {@code rows}) and same-substance rows are excluded from
+	 *         the veto. Both edits move in the same direction — a smaller {@code mine}, a shorter veto
+	 *         list — so this predicate is a superset of the per-row one for every row of a substance and
+	 *         cannot cost a warning that fires today. Between substances nothing changes at all.
+	 *
+	 *         <p><b>The two edits do not cover the same case, and it is worth being exact about which
+	 *         does the work.</b> The defect issue #245 was filed for — {@code Amoxicillin} sitting
+	 *         closer to a dose than {@code Amoxicillin (suspension)} and taking it from a row of the
+	 *         same drug — is repaired entirely by {@code mine}: every row of {@code rows} is at distance
+	 *         at least {@code mine} by construction, so the veto could never have fired for one of them
+	 *         anyway. The exclusion below covers only a row of this substance that this pass did NOT
+	 *         resolve (neither in play nor named by an active order) whose alias happens to land nearer
+	 *         the dose. That is a narrower case and no bundled fixture poses it, so nothing here pins the
+	 *         exclusion — it stays because it is the same defect one step out, not because a test reaches
+	 *         it, and trimming it to what the tests happen to reach would reintroduce that defect.
 	 *
 	 *         <p>Identity is {@link DrugReference#substanceGroupKey()}, the module's one answer to "are
 	 *         these rows one substance?", so this arm cannot merge a set of rows that the chip's subject
@@ -4749,12 +4760,15 @@ public class DrugSafetyValidator {
 		}
 		Object substance = rows.get(0).substanceGroupKey();
 		for (DrugReference other : allEntries) {
-			// Distance first, identity second, and not the order the per-row form used: that one led with
-			// a pointer comparison because it was the cheap half, whereas asking whether two rows are one
-			// substance rebuilds a key from normalized strings on every call. Nearly every entry in a
-			// knowledge base has no alias in this clause at all, so the distance test answers
-			// Integer.MAX_VALUE immediately and the key is built only for the handful of entries actually
-			// named near the dose. Both halves are pure, so the order is free to be the fast one.
+			// Distance first, identity second, and not the order the per-row form used — that one led
+			// with a pointer comparison because it was genuinely the cheap half, and the identity test
+			// here is not: substanceGroupKey() rebuilds a key from normalized strings on every call.
+			// Distance is not cheap either (nearestAliasDistance has no early-out; it scans the clause
+			// once per alias before it can answer Integer.MAX_VALUE), so this is not "fast test first".
+			// It is that the distance test is UNCONDITIONAL either way, while ordering it first makes
+			// the key conditional — built only for the handful of entries whose alias actually lands
+			// nearer the dose, instead of for every entry in the knowledge base. Both halves are pure,
+			// so the order is free to be chosen on that.
 			if (nearestAliasDistance(clause, dosePos, other) < mine
 					&& !substance.equals(other.substanceGroupKey())) {
 				return false;

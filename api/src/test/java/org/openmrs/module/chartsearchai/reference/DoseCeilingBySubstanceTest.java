@@ -226,14 +226,23 @@ public class DoseCeilingBySubstanceTest {
 	@Test
 	public void aDoseStatedForAnotherDrugIsStillNotChargedToThisSubstance() throws Exception {
 		// The other bound, and the one the widening could plausibly have broken: the nearest-alias guard
-		// still separates SUBSTANCES, it merely stopped separating rows of one substance. Warfarin's own
-		// stated dose sits in its own clause and must not be read as an amoxicillin dose — 5000 mg/day
-		// would exceed both published amoxicillin ceilings if it were.
+		// still separates SUBSTANCES, it merely stopped separating rows of one substance.
+		//
+		// Both drugs sit in ONE clause deliberately, and that is the whole point of the case rather than
+		// a detail of phrasing. Split across two sentences this reads as a bound and tests nothing:
+		// CLAUSE_DELIMITER cuts at the full stop, the warfarin clause names no amoxicillin alias so the
+		// clause gate rejects it before any dose is read, and the amoxicillin clause carries no `mg` at
+		// all — so substanceOwnsDose is never reached. Mutation-verified: with the drugs in separate
+		// clauses, replacing the whole body of substanceOwnsDose with `return true` leaves every test in
+		// this package green, i.e. the only thing standing between one drug's stated dose and another
+		// drug's ceiling could be deleted silently. In one clause the guard is genuinely exercised —
+		// warfarin's alias sits adjacent to the dose and amoxicillin's is ~30 characters further off, so
+		// the veto is what keeps 2500 mg/day (which exceeds BOTH published amoxicillin ceilings) off this
+		// substance.
 		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(CHARTED_ROW_FIXTURE);
 
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service(entries)).validate(
-				"Give warfarin 2500 mg twice daily. Amoxicillin is reasonable here.", QUESTION,
-				onTheSuspension());
+				"Give warfarin 2500 mg twice daily with amoxicillin.", QUESTION, onTheSuspension());
 
 		assertEquals(0, DrugReferenceTestSupport.overdoseCount(warnings, "Amoxicillin (suspension)"),
 				"another drug's dose is not this substance's, was: " + warnings);

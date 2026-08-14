@@ -625,10 +625,9 @@ public class DrugReference {
 	 * moved onto one by this rule itself rather than merely left there (measured 2026-08-06). ROW
 	 * pairs: that base and the substance-pair one, and the conversion between them, are defined at
 	 * {@code DrugSafetyValidator.sharedClass}, which also carries this 1090's substance-pair
-	 * counterpart (issue #243).
-	 * {@code CrossReactivityClassChoiceTest} pins one case per group, save {@code B02BC}: its only
-	 * shipped-KB pairs are epinephrine route variants, which issue #160 collapses to an identity chip
-	 * before this arm can name a class at all.
+	 * counterpart (issue #243). {@code CrossReactivityClassChoiceTest} pins one case per group, save
+	 * {@code B02BC}: its only shipped-KB pairs are epinephrine route variants, which issue #160
+	 * collapses to an identity chip before this arm can name a class at all.
 	 */
 	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections
 			.unmodifiableList(Arrays.asList("A01", "A07A", "A07E", "B02BC", "B05C", "C05A", "C05B",

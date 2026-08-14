@@ -4296,10 +4296,11 @@ public class DrugSafetyValidator {
 	 * On the same count 70 row pairs — 21 substance pairs — leave the systemic tier holding more than
 	 * one candidate; once each arm has refused what its claim does not license that is 69 row / 20
 	 * substance pairs for duplicate therapy and 64 / 16 for cross-reactivity, whose stronger
-	 * requirement removes four more (issue #168 was filed against a pre-correction count of 87). The 16
-	 * are a subset of the 20, so those are 20 distinct pairs; driving {@link #validate} over all 36
-	 * pair-and-arm combinations of them, every one names the alphabetically smallest surviving
-	 * candidate and none fails to raise a class chip, so the tie-break really is what decides them.
+	 * requirement removes four more of the substance pairs and five more of the row ones (issue #168
+	 * was filed against a pre-correction count of 87). The 16 are a subset of the 20, so those are 20
+	 * distinct pairs; driving {@link #validate} over all 36 pair-and-arm combinations of them, every
+	 * one names the alphabetically smallest surviving candidate and none fails to raise a class chip,
+	 * so the tie-break really is what decides them.
 	 * What ATC's own words support does not break those ties. Three of the 20 hold candidates whose
 	 * published names are IDENTICAL — {@code G03AC}/{@code L02AB} "Progestogens",
 	 * {@code N01AF}/{@code N05CA} "Barbiturates, plain", {@code L01EG}/{@code L04AH} "Mammalian target

@@ -22,6 +22,10 @@ import org.openmrs.module.chartsearchai.LogCapture;
  * Exercises the real {@link JsonDrugReferenceSource#load()} path. With no OpenMRS
  * context available it falls back to the bundled {@code /chartsearchai/drug-reference.json}
  * — the production default — so this runs the real load path against the real dataset.
+ *
+ * <p>One case does not, and says so in its own javadoc: the issue #242 case feeds the real
+ * {@link JsonDrugReferenceSource#parse} a fixture of ANOTHER format, because what it is about is the
+ * document this parser cannot read rather than the dataset it can.
  */
 public class JsonDrugReferenceSourceTest {
 

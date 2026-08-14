@@ -865,7 +865,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 * <p>The one deliberate exception is asserted rather than skipped, so the exception cannot rot into a
 	 * hole: {@link #DELIBERATELY_MIS_SHAPED} is the subject of the rule and MUST fire it.
 	 *
-	 * <p>The fixture count is asserted too, per corpus. An enumeration that finds nothing passes every
+	 * <p>The JSON fixture count is asserted too. An enumeration that finds nothing passes every
 	 * assertion inside its own loop, which is the same failure shape one level up.
 	 */
 	@Test
@@ -912,6 +912,12 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertNotNull(atcFixtures, "the ATC fixture directory should be on the test classpath: " + atc);
 		List<String> atcChecked = new ArrayList<String>();
 		for (File fixture : atcFixtures) {
+			// Extension-filtered like the leg above: a subdirectory here would reach FileInputStream and
+			// throw rather than fail as a finding, and a file of another format placed here would be
+			// reported by a message that names the DDInter exemption and so points away from the cause.
+			if (!fixture.getName().endsWith(".tsv")) {
+				continue;
+			}
 			atcChecked.add(fixture.getName());
 			try (InputStream in = new FileInputStream(fixture)) {
 				if (AtcDrugReferenceSource.parse(in).isEmpty()) {
@@ -926,8 +932,11 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertTrue(checked.size() > 40,
 				"the enumeration has to find the fixtures, or every check inside it is vacuous — found "
 						+ checked.size() + ": " + checked);
+		// Weaker than its JSON counterpart and worth saying so: `atc` is derived from ATC_SAMPLE's own
+		// URL, so that file is in the listing by construction. What can actually fall here is the
+		// extension filter above drifting off the corpus, which is the whole of what this buys.
 		assertFalse(atcChecked.isEmpty(),
-				"and the ATC corpus has to be found too, or its leg is vacuous: " + atc);
+				"the .tsv filter no longer matches anything in " + atc);
 		assertEquals("[]", wrong.toString(),
 				"every fixture must parse to entries under the parser its name selects, and only "
 						+ DELIBERATELY_MIS_SHAPED + " must not");

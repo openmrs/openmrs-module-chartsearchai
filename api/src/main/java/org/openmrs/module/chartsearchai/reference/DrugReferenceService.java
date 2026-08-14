@@ -907,13 +907,9 @@ public class DrugReferenceService {
 	 *
 	 *         <p>The fall-through returns the curated format's NAME rather than "whatever the default
 	 *         is", which are equal today and are not the same fact. It is paired with
-	 *         {@link #sourceFor(String)}'s own fall-through, and that one is unconditionally
-	 *         {@link JsonDrugReferenceSource} — so were the default moved to a name {@code sourceFor}
-	 *         does not recognise, this would report the new name while the curated parser ran, and
-	 *         {@link DrugReferenceLoad#getSourceFormat()}, the inert WARN's "parser in use" and
-	 *         {@link DrugReferenceValidity#configuredSourceFormatNotUsed} would each name a parser that
-	 *         did not read the file — contradicting, within the one load, the format that parser files
-	 *         its own findings under.
+	 *         {@link #sourceFor(String)}'s own fall-through, which is unconditionally
+	 *         {@link JsonDrugReferenceSource}, so the name has to be the one that parser answers to
+	 *         however the default moves.
 	 */
 	private static String effectiveFormat(String configuredFormat) {
 		if (ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC.equalsIgnoreCase(configuredFormat)) {

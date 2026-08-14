@@ -21,7 +21,6 @@ import java.util.regex.Pattern;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
-import org.openmrs.module.chartsearchai.reference.DrugReference;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,18 +84,25 @@ import org.slf4j.LoggerFactory;
  *   <li>it compares WHOLE tokens, in both directions — a code the record does not state as a token
  *       is unsupported even when it is a prefix of one that it does ({@code A02B} against
  *       {@code A02BC}), and a code stated beside the true one is still unsupported;</li>
- *   <li>but a cited record's level-5 substance code supports the level-4 class the module itself
- *       would derive from it ({@code DrugReference.atcSubgroups}, the one reduction — see
- *       {@link #supportedBy}). Naming the class of a substance a cited record states is the
- *       module's own sentence, not a fabrication;</li>
+ *   <li>and it does NOT accept a level-4 class rolled up from a cited level-5 code, though that
+ *       roll-up is the module's own ({@code DrugReference.atcSubgroups}) and an answer making it is
+ *       usually right. It was written, then removed: pooling support across cited records, the
+ *       roll-up silences #142's own headline capture whenever the chart cites a reference record
+ *       for a drug in the WRONGLY named class — a patient on ciprofloxacin and amoxicillin, records
+ *       stating {@code J01MA} and {@code J01CA04}, and "same ATC class (J01CA)" becomes supported.
+ *       Reporting an answer that generalises correctly costs a log line a maintainer dismisses;
+ *       failing to report the fabrication this check exists for costs the check its purpose;</li>
  *   <li>it abstains for the whole answer — not per citation, as the grounding verifier does — when
  *       any cited record carries no readable text, since a record we could not read may be the one
  *       that states the code. That is the same "cannot verify" treatment
  *       {@link CitationGroundingVerifier} gives a null/blank record text, applied at a coarser
  *       grain because one unread record is enough to make the whole comparison unsound;</li>
  *   <li>it matches only upper-case tokens whose first letter is one of ATC's fourteen main groups,
- *       so no lower-case word and no {@code Q12H}-shaped frequency can be mistaken for a code. A
- *       lower-cased code in prose is a silent pass, deliberately.</li>
+ *       so no lower-case word and no {@code Q12H}-shaped frequency can be mistaken for a code. One
+ *       pattern reads both sides, so that cuts both ways: a lower-cased code in an answer is a
+ *       silent pass, and a lower-cased code in a chart NOTE supports nothing. Both are accepted —
+ *       every code this module renders is upper-cased ({@code DrugReference.normalizeAtcToken}),
+ *       and case-folding one side would make the two sides disagree about what a code is.</li>
  * </ul>
  */
 final class ClassCodeFidelityCheck {
@@ -111,12 +117,15 @@ final class ClassCodeFidelityCheck {
 	 * index does add to — so this constrains the shape without a table that can go stale into
 	 * silence.
 	 *
-	 * <p>It is what keeps ordinary clinical prose out of the check: {@code Q12H}, {@code Q24H} and
-	 * {@code Q48H} are dosing frequencies of exactly the ATC level-4 shape, and {@code Q} is not an
-	 * ATC main group. What it does not exclude is a token under a real main-group letter whose level
-	 * 2 does not exist — {@code D50W} for 50% dextrose, {@code G12C} and {@code H63D} for variant
-	 * nomenclature. Those are held out by the second gate instead: an answer that mentions them
-	 * cites records that state no class code at all, and the check then says nothing.
+	 * <p>It is what keeps the commonest clinical shapes out of the check: {@code Q12H},
+	 * {@code Q24H} and {@code Q48H} are dosing frequencies of exactly the ATC level-4 shape, and
+	 * {@code Q} is not an ATC main group. What it does not exclude is a token under a real
+	 * main-group letter whose level 2 does not exist — {@code D50W} for 50% dextrose, {@code G12C}
+	 * and {@code H63D} for variant nomenclature. In an answer that states no real class code the
+	 * "nothing to copy" gate holds those out too; in an answer that states one, they are reported,
+	 * and that is this check's residual false-alarm shape. It is left un-narrowed on purpose: the
+	 * table that would exclude them is ATC's level-2 groups, which the index does add to, and a
+	 * stale copy of it would stop detecting real miscopies in silence.
 	 */
 	private static final String MAIN_GROUPS = "ABCDGHJLMNPRSV";
 
@@ -172,20 +181,14 @@ final class ClassCodeFidelityCheck {
 	 * cites contains.
 	 *
 	 * @param answer the answer prose, unchanged by this method
+	 * @param question the clinician's own question — its codes count as support, see the body
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences} — the union of the inline
 	 *            {@code [N]} markers and the structured citations array, index-validated. Taking
 	 *            the accessor's own output rather than re-deriving it from the prose is what keeps
-	 *            "which records were cited" a single answer: it is also what the clinician can
-	 *            click, so a code traceable to none of them is traceable to nothing the reader can
-	 *            check. An answer that cites nothing therefore supports no code — the one case
-	 *            where a code that happens to be CORRECT is still reported, because nothing the
-	 *            reader can open licenses it. Measured before choosing it: of the 340 live answers
-	 *            captured by this project's probe sweeps (August 2026), 33 state a code and every
-	 *            one of them cites at least one record, so the noise this admits was nil on that
-	 *            corpus. The alternative — stay silent when the answer cites nothing — narrows the
-	 *            check to "when it cites, it must copy", and would also have caught every #142
-	 *            capture.
+	 *            "which records were cited" a single answer, and it is also what the clinician can
+	 *            click. An answer that cites nothing cites no code-bearing record either, so it
+	 *            takes the "nothing to copy" exit above like any other.
 	 * @param mappings the chart's records, cited or not — the carrier of the cited records' text.
 	 *            Support is pooled across the cited records rather than matched per citation: an
 	 *            answer citing [3] and [7] may state any code either of them carries, because the
@@ -193,10 +196,13 @@ final class ClassCodeFidelityCheck {
 	 *            (that is grounding's question, and {@code grounding.clauseScoped} is where it is
 	 *            answered).
 	 */
-	static void reportUnsupportedClassCodes(Patient patient, String answer,
+	static void reportUnsupportedClassCodes(Patient patient, String question, String answer,
 			List<RecordReference> cited, List<RecordMapping> mappings) {
-		Integer patientId = patient == null ? null : patient.getPatientId();
+		Integer patientId = null;
 		try {
+			// Inside the guard, not above it: reading a detached patient proxy is the one line here
+			// that could throw, and the promise this catch makes is structural or it is nothing.
+			patientId = patient == null ? null : patient.getPatientId();
 			Set<String> stated = classCodesIn(answer);
 			if (stated.isEmpty()) {
 				return;
@@ -237,7 +243,11 @@ final class ClassCodeFidelityCheck {
 				return;
 			}
 			List<String> unsupported = new ArrayList<String>();
-			Set<String> supported = supportedBy(recordCodes);
+			// The question's own codes count as support: a code the reader typed and the answer
+			// echoed is not a code the model invented, and this module already treats a
+			// question-named drug as in play wherever it decides what an answer may say.
+			Set<String> supported = new LinkedHashSet<String>(recordCodes);
+			supported.addAll(classCodesIn(question));
 			for (String code : stated) {
 				if (!supported.contains(code)) {
 					unsupported.add(code);
@@ -264,20 +274,4 @@ final class ClassCodeFidelityCheck {
 		}
 	}
 
-	/**
-	 * @return the codes a set of record-stated codes supports: the codes themselves, plus the
-	 *         level-4 subgroup of each, by {@link DrugReference#atcSubgroups(Set)} — the module's one
-	 *         reduction from a substance code to the class it belongs to, so an answer naming the
-	 *         class of a substance a cited record states is reading the record the same way the
-	 *         chips do rather than fabricating. It widens only DOWNWARD in specificity: a level-4
-	 *         code supports no level-5 one, because which substance is meant is exactly what the
-	 *         record did not say — that is the {@code (H02AB)}→{@code (H02AB, H02AB02)} capture. And
-	 *         a level-3 group is not a subgroup of anything, so the {@code (A02BC)}→{@code (A02B)}
-	 *         capture stays reported.
-	 */
-	private static Set<String> supportedBy(Set<String> recordCodes) {
-		Set<String> supported = new LinkedHashSet<String>(recordCodes);
-		supported.addAll(DrugReference.atcSubgroups(recordCodes));
-		return supported;
-	}
 }

@@ -99,7 +99,7 @@ public class ClassCodeFidelityTest {
 		// One arrangement, read twice: the chart production would hand the model, and the
 		// safety-finding record inside it whose citation index the canned answers cite.
 		chart = DrugReferenceTestSupport.injectedSafetyFindingChart(QUESTION, ACTIVE_DRUG, ACTIVE_ATC);
-		finding = DrugReferenceTestSupport.injectedSafetyFinding(QUESTION, ACTIVE_DRUG, ACTIVE_ATC);
+		finding = DrugReferenceTestSupport.safetyFindingIn(chart);
 		assertTrue(finding.getText().contains("(" + TRUE_CODE + ")"),
 				"the premise: the real injected finding states the class code the answer must copy. Was: "
 						+ finding.getText());
@@ -228,7 +228,28 @@ public class ClassCodeFidelityTest {
 	}
 
 	@Test
-	public void anAnswerWhoseCitationsStateNoClassCodeIsNotChecked() {
+	public void aCitedRecordThatStatesNoClassCodeLeavesNothingToHaveCopied() {
+		// The gate on its own terms: a real citation of a real record that simply carries no class
+		// code — the shape behind "Ceftriaxone 1g IV Q12H [2]". Distinct from the no-citation case
+		// below, which reaches the same branch through a different production rule (#76's
+		// abstention-dump guard) that this change does not own.
+		PatientChart codeless = chartRecordStating("Antibiotic course: ceftriaxone 1 g IV completed");
+		TestableService onCodeless = newService(codeless);
+		onCodeless.setLlmProvider(answering("She had ceftriaxone, ATC class " + MISCOPIED_CODE
+				+ " [1]."));
+		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
+			onCodeless.search(patient(), QUESTION);
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"with no code in what it cites, nothing was copied. Captured: "
+							+ capture.describeAll());
+			assertTrue(debugStating(capture, "no cited record states a class code"),
+					"the gate that declined has to be identifiable — two different DEBUG lines can "
+							+ "produce this silence. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void anAnswerThatCitesNothingIsNotChecked() {
 		// The first gate. This answer anchors no citation at all, so the pipeline surfaces no
 		// reference (the abstention-dump guard) and no cited record states a code — there was
 		// nothing to copy, so there is no copy to be unfaithful to. Reporting here would mean
@@ -242,9 +263,9 @@ public class ClassCodeFidelityTest {
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"with nothing cited there is nothing to have copied. Captured: "
 							+ capture.describeAll());
-			assertFalse(capture.messagesAt(Level.DEBUG).isEmpty(),
-					"the check ran and declined; that has to be traceable. Captured: "
-							+ capture.describeAll());
+			assertTrue(debugStating(capture, "no cited record states a class code"),
+					"the check ran and declined, and which gate declined has to be identifiable. "
+							+ "Captured: " + capture.describeAll());
 		}
 	}
 
@@ -257,34 +278,58 @@ public class ClassCodeFidelityTest {
 		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
 				+ ") as the patient's active order; give 500 mg PO Q12H ["
 				+ finding.getIndex() + "]."));
-		try (LogCapture capture = LogCapture.on(CHECK)) {
+		// On the PACKAGE, because on this path the check logs nothing at all — not even the DEBUG
+		// line the two gates emit — so a capture scoped to the check alone would be empty and the
+		// assertion would pass whether or not the check ran.
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
 			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"a dosing frequency is not an ATC code. Captured: " + capture.describeAll());
 		}
 	}
 
 	@Test
-	public void aCitedSubstanceCodeSupportsTheClassTheModuleWouldDeriveFromIt() {
-		// The injected drug-reference record states ciprofloxacin's level-5 codes (ATC J01MA02, …).
-		// An answer citing THAT record and naming the level-4 class is reading it exactly as the
-		// chips do — DrugReference.atcSubgroups is the one reduction — so it is not a fabrication.
+	public void generalisingACitedSubstanceCodeToItsClassIsReported() {
+		// The accepted false alarm, pinned so it cannot be "fixed" without reading why. The injected
+		// drug-reference record states ciprofloxacin's level-5 codes (ATC J01MA02, …); an answer
+		// citing it and naming the level-4 class is usually right, and the module has the reduction
+		// to prove it (DrugReference.atcSubgroups). Accepting it was written and then removed:
+		// because support is pooled across the cited records, a roll-up silences #142's own headline
+		// capture on any chart citing a reference record for a drug in the wrongly named class —
+		// records stating J01MA and J01CA04, and "same ATC class (J01CA)" becomes supported. A log
+		// line a maintainer dismisses is the cheaper error.
 		RecordMapping reference = referenceRecord();
+		assertFalse(ClassCodeFidelityCheck.classCodesIn(reference.getText()).contains(TRUE_CODE),
+				"the premise: the reference record states the SUBSTANCE codes, not the class. Was: "
+						+ reference.getText());
+		assertTrue(ClassCodeFidelityCheck.classCodesIn(reference.getText()).contains(TRUE_CODE + "02"),
+				"the premise: it states a level-5 code under that class. Was: " + reference.getText());
 		service.setLlmProvider(answering("Ciprofloxacin belongs to ATC class " + TRUE_CODE + " ["
 				+ reference.getIndex() + "]."));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			service.search(patient(), QUESTION);
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
-					"the class of a substance code the cited record states is the module's own "
-							+ "sentence. Captured: " + capture.describeAll());
+			assertTrue(warnStating(capture, "[" + TRUE_CODE + "]"),
+					"a class no cited record states as a token is reported, correct or not. Captured: "
+							+ capture.describeAll());
 		}
-		// And the pair that makes that readable: the same record, a different class.
-		service.setLlmProvider(answering("Ciprofloxacin belongs to ATC class " + MISCOPIED_CODE + " ["
-				+ reference.getIndex() + "]."));
-		try (LogCapture capture = LogCapture.on(CHECK)) {
-			service.search(patient(), QUESTION);
-			assertTrue(warnStating(capture, "[" + MISCOPIED_CODE + "]"),
-					"a class no cited code belongs to is still reported. Captured: "
+	}
+
+	@Test
+	public void aCodeTheQUESTIONStatesIsNotAFabrication() {
+		// A clinician who types a code and gets it back has been echoed, not misled — the same
+		// reading this module already applies to a question-named drug. Without it the check accuses
+		// the answer of inventing the reader's own words.
+		String questionNamingACode = "is ciprofloxacin (" + MISCOPIED_CODE + ") safe here?";
+		service.setLlmProvider(answering("You asked about " + MISCOPIED_CODE + "; the patient is on a "
+				+ "drug in the same ATC class (" + TRUE_CODE + ") [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), questionNamingACode);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a code the question itself states is not one the model invented. Captured: "
 							+ capture.describeAll());
 		}
 	}
@@ -303,7 +348,8 @@ public class ClassCodeFidelityTest {
 		// deleting the abstention reddened nothing.)
 		PatientChart withUnreadable = new PatientChart(chart.getText(),
 				Arrays.asList(finding,
-						new RecordMapping(99, "obs", "00000000-0000-0000-0000-000000000099", null)),
+						new RecordMapping(99, ChartSearchAiConstants.RESOURCE_TYPE_OBS,
+								"00000000-0000-0000-0000-000000000099", null)),
 				Collections.<Integer> emptyList());
 		TestableService onUnreadable = newService(withUnreadable);
 		onUnreadable.setLlmProvider(answering("It is the same ATC class " + MISCOPIED_CODE + " ["
@@ -337,6 +383,17 @@ public class ClassCodeFidelityTest {
 	private String sentenceStating(String code) {
 		return "Ciprofloxacin is in the same ATC class (" + code + ") as the patient's active order"
 				+ " — possible duplicate therapy [" + finding.getIndex() + "].";
+	}
+
+	/** @return whether one DEBUG line carries {@code needle} — the two gates and the abstention all
+	 *  produce silence, and a case that claims one of them has to say which. */
+	private static boolean debugStating(LogCapture capture, String needle) {
+		for (String message : capture.messagesAt(Level.DEBUG)) {
+			if (message.contains(needle)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** @return whether one WARN carries every one of {@code required} */

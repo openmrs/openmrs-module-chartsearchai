@@ -204,10 +204,13 @@ public final class DrugReferenceTestSupport {
 	 * behind both, so the finding's citation index means the same thing in a test that takes the
 	 * record and a test that takes the chart it sits in.
 	 *
-	 * <p>Exposed whole for the inference tests, which need what production hands the model rather
-	 * than one record of it: the class-code fidelity check (issue #142) compares an answer against
-	 * EVERY cited record, so a test that served it only the finding would not be able to fail if the
-	 * check ignored the rest of the chart.
+	 * <p>The FOURTH cross-package accessor, and the first for the inference tests rather than the
+	 * grounding ones: they need what production hands the model rather than one record of it,
+	 * because the class-code fidelity check (issue #142) compares an answer against EVERY cited
+	 * record, and a test served only the finding could not fail if the check ignored the rest of the
+	 * chart. Pair it with {@link #safetyFindingIn} rather than with {@link #injectedSafetyFinding},
+	 * which builds its own chart: two runs of one arrangement agree, but only the pair gives the
+	 * test a record that IS an element of the chart it serves.
 	 */
 	public static PatientChart injectedSafetyFindingChart(String question, String activeDrug,
 			String atcCode) {
@@ -223,6 +226,17 @@ public final class DrugReferenceTestSupport {
 	 * the list rather than the first, because that count is the assertion in every caller but
 	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
 	 */
+	/**
+	 * The first injected {@code safety_finding} in a chart a caller already holds — {@link
+	 * #injectedFindings}' single-record form, public for the same cross-package reason
+	 * {@link #injectedSafetyFindingChart} is: a test that serves a chart and cites a record out of
+	 * it needs the record to BE an element of that chart, not an equal one from a second run.
+	 */
+	public static RecordMapping safetyFindingIn(PatientChart chart) {
+		return injectedFindings(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
+				"no safety-finding record in the chart: " + chart.getText()));
+	}
+
 	static List<RecordMapping> injectedFindings(PatientChart chart) {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))

@@ -545,9 +545,11 @@ public class DrugReferenceInjector {
 	 * @param question the clinician's query, which drives the question leg and scopes the order leg
 	 */
 	List<DrugReference> matchingEntries(List<DrugReference> orderEntries, String question) {
-		// One record per SUBSTANCE, not per reference row (issue #163). A per-call local, never a field:
-		// a memoised DrugReference outliving a getAll() hot-reload breaks the reference comparisons the
-		// safety arms make against the same objects (issue #172).
+		// One record per SUBSTANCE, not per reference row (issue #163). A per-call local, never a field —
+		// issue #172's rule, for the reasons DrugReferenceService's class javadoc gives, NOT the
+		// getAll() hot-reload this used to cite, which does not exist. The one that applies here is the
+		// first: this bean is a Spring singleton, so a field memo would be one unsynchronized map shared
+		// by every concurrent request.
 		Map<Object, DrugReference> bySubstance = new LinkedHashMap<Object, DrugReference>();
 
 		// The reference drugs the question itself names — drives question-driven injection AND scopes

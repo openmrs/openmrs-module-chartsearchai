@@ -54,7 +54,10 @@ public class JsonDrugReferenceSourceTest {
 							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
 					"the WARN must name the rule, and the table this parser needed. Captured: "
 							+ capture.describeAll());
-			assertTrue(capture.messagesAt(Level.WARN).toString().contains("entries"),
+			// The BRACKETED list, not the bare word: "entries" also occurs in every finding's shared
+			// boilerplate ("parsed to no entries at all"), so the bare form passes even when the parser
+			// names the wrong table — which is the defect this line claims to exclude.
+			assertTrue(capture.messagesAt(Level.WARN).toString().contains("[entries]"),
 					"named for what THIS parser requires, not for the format it was handed. Captured: "
 							+ capture.describeAll());
 		}

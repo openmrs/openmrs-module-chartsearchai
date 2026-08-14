@@ -833,7 +833,9 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 				DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE);
 		assertEquals(DrugReferenceValidity.Remedy.REPORTED, found.getRemedy());
 		assertEquals(1, found.getOccurrences());
-		assertTrue(found.getDetail().contains("entries"),
+		// Bracketed, for the reason JsonDrugReferenceSourceTest gives: the bare word is in the shared
+		// boilerplate, so it would pass on a finding that named the wrong table.
+		assertTrue(found.getDetail().contains("[entries]"),
 				"named for what THIS parser requires. Detail was: " + found.getDetail());
 	}
 
@@ -854,12 +856,17 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 * <p>It drives the real parser over every dataset fixture on the test classpath and requires each to
 	 * declare the tables its own parser needs and to produce at least one entry, so a fixture authored
 	 * into that shape reddens here instead of quietly disarming whatever test is written against it.
+	 * <b>All THREE parsers</b>, which is why the ATC sample is swept from its own directory rather than
+	 * left out as the corpus's quiet second exception: it is a dataset fixture with a real parser and
+	 * real dependants ({@code DrugReferenceTestSupport.atcService}), and one that parsed to nothing
+	 * would disarm them in exactly the way this sweep exists to prevent. Its parser takes no collector —
+	 * a line-based dataset has no table to omit — so for it the emptiness IS the whole check.
 	 *
 	 * <p>The one deliberate exception is asserted rather than skipped, so the exception cannot rot into a
 	 * hole: {@link #DELIBERATELY_MIS_SHAPED} is the subject of the rule and MUST fire it.
 	 *
-	 * <p>The fixture count is asserted too. An enumeration that finds nothing passes every assertion
-	 * inside its own loop, which is the same failure shape one level up.
+	 * <p>The fixture count is asserted too, per corpus. An enumeration that finds nothing passes every
+	 * assertion inside its own loop, which is the same failure shape one level up.
 	 */
 	@Test
 	public void everyDatasetFixtureOnTheTestClasspathParsesToEntriesUnderItsOwnParser() throws Exception {
@@ -898,12 +905,29 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 			}
 		}
 
+		// The third parser's corpus, which lives in its own directory and takes no collector.
+		File atc = new File(getClass().getClassLoader()
+				.getResource(DrugReferenceTestSupport.ATC_SAMPLE).toURI()).getParentFile();
+		File[] atcFixtures = atc.listFiles();
+		assertNotNull(atcFixtures, "the ATC fixture directory should be on the test classpath: " + atc);
+		List<String> atcChecked = new ArrayList<String>();
+		for (File fixture : atcFixtures) {
+			atcChecked.add(fixture.getName());
+			try (InputStream in = new FileInputStream(fixture)) {
+				if (AtcDrugReferenceSource.parse(in).isEmpty()) {
+					wrong.add(fixture.getName() + " -> 0 entries (ATC)");
+				}
+			}
+		}
+
 		assertEquals("[]", unrecognized.toString(),
 				"a fixture whose name selects no parser is not swept, so teach this sweep which parser "
 						+ "reads it rather than leaving it unchecked");
 		assertTrue(checked.size() > 40,
 				"the enumeration has to find the fixtures, or every check inside it is vacuous — found "
 						+ checked.size() + ": " + checked);
+		assertFalse(atcChecked.isEmpty(),
+				"and the ATC corpus has to be found too, or its leg is vacuous: " + atc);
 		assertEquals("[]", wrong.toString(),
 				"every fixture must parse to entries under the parser its name selects, and only "
 						+ DELIBERATELY_MIS_SHAPED + " must not");

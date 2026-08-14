@@ -151,10 +151,12 @@ final class ReferenceDataFiles {
 			try {
 				String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath, pathGlobalProperty);
 				// One collector spans this attempt and the fallback below, and a parser now writes to it,
-				// so in principle a finding raised against the operator's file could be carried into a
-				// classpath-origin load. It cannot in practice: the only route that runs both parses is
-				// parse() throwing, and both parsers report strictly after their single read and then
-				// return, so a reported finding is always followed by the return two lines down.
+				// so a finding raised against the operator's file could in principle be carried into a
+				// classpath-origin load. Both parsers report strictly after their single read and then
+				// return, so parse() itself cannot report-then-throw. What is left is the close() of the
+				// stream below throwing after a reported parse — remote for a local file, and it would
+				// misattribute rather than duplicate. Not guarded, because a fresh collector per attempt
+				// would cost configuredDataFileNotRead its place in the same load's findings.
 				try (InputStream in = new FileInputStream(new File(resolved))) {
 					List<T> loaded = parser.parse(in, validity);
 					log.info("Loaded {} {} from {}", loaded.size(), datasetLabel, resolved);

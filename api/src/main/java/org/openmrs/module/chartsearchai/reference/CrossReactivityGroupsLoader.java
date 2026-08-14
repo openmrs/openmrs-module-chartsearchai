@@ -58,13 +58,13 @@ public class CrossReactivityGroupsLoader {
 		ReferenceDataFiles.Loaded<CrossReactivityGroup> loaded = ReferenceDataFiles.loadWithClasspathFallback(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH,
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, CLASSPATH_DEFAULT,
-				// Nothing is reported to the collector from inside this parse, deliberately. Issue #242's
-				// rule is worth having wherever a finding can reach BOTH channels, and here it can reach
-				// only one: as the javadoc above says, these groups have no retained status object, so a
-				// document declaring no `groups` would produce a WARN that nothing can be asked about
-				// afterwards. That is the gap issue #156's second case records, and half-closing it one
-				// rule at a time is what would leave the loader answering "what is valid?" one way for
-				// the entry dataset and another for this one.
+				// Nothing is reported to the collector from inside this parse, deliberately — and the
+				// criterion is "do not WIDEN the one-channel gap", not "no rule reports here". One
+				// already does: configuredDataFileNotRead fires for this dataset too, and line 69 sends
+				// it to the log alone, because these groups have no retained status object (see the
+				// javadoc above). That rule predates the gap being named; issue #242's is new, so
+				// adding it here would enlarge a known gap rather than inherit it — and issue #156's
+				// second case records closing the gap, not populating it further.
 				"cross-reactivity groups", (in, notWrittenToHere) -> parse(in));
 		loaded.getValidity().logTo(log);
 		return loaded.getItems();

@@ -141,10 +141,11 @@ public class ClassCodeFidelityTest {
 			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
 					"an ATC class the cited record does not state is a fabricated classification claim "
 							+ "and must be reported. Captured: " + capture.describeAll());
-			assertTrue(warnStating(capture, "[" + MISCOPIED_CODE + "]", TRUE_CODE),
-					"the WARN has to carry BOTH the code the answer states and the codes its cited "
-							+ "records state, or a maintainer reading logs cannot reconstruct the "
-							+ "miscopy. Captured: " + capture.describeAll());
+			assertTrue(warnStating(capture, "[" + MISCOPIED_CODE + "]", TRUE_CODE, "patient=1"),
+					"the WARN has to carry the code the answer states, the codes its cited records "
+							+ "state AND the patient, or a maintainer reading a log with concurrent "
+							+ "requests in it cannot reconstruct the miscopy. Captured: "
+							+ capture.describeAll());
 		}
 	}
 

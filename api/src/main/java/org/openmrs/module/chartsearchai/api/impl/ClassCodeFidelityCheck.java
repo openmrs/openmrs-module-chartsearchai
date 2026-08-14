@@ -181,8 +181,8 @@ final class ClassCodeFidelityCheck {
 	 * cites contains.
 	 *
 	 * @param patient whose answer it is — logged so a line is attributable under concurrent requests
-	 * @param answer the answer prose, unchanged by this method
 	 * @param question the clinician's own question — its codes count as support, see the body
+	 * @param answer the answer prose, unchanged by this method
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences} — the union of the inline
 	 *            {@code [N]} markers and the structured citations array, index-validated. Taking

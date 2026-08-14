@@ -139,12 +139,55 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	}
 
 	/**
-	 * Parse the normalized DDI knowledge base into drug-centric {@link DrugReference} entries.
-	 * Package-private and static so tests exercise the real parser against a real dataset.
+	 * The form for a caller that wants only the entries — package-private and static so tests exercise
+	 * the real parser against a real dataset. Delegates; see {@link #parse(InputStream,
+	 * DrugReferenceValidity)} for what parsing this dataset means.
+	 *
+	 * <p>What the parser found wrong with the DOCUMENT still reaches the log, so a mis-shaped fixture is
+	 * loud wherever it is read from — the half of issue #242 that bites inside a test run rather than on
+	 * a deployment. It cannot reach {@link DrugReferenceService#getLoadStatus()}, which describes a LOAD
+	 * and not a parse; {@link #load()} takes the two-argument form for that.
 	 */
 	static List<DrugReference> parse(InputStream in) throws IOException {
+		DrugReferenceValidity validity = new DrugReferenceValidity();
+		List<DrugReference> parsed = parse(in, validity);
+		validity.logTo(log);
+		return parsed;
+	}
+
+	/**
+	 * Parse the normalized DDI knowledge base into drug-centric {@link DrugReference} entries, reporting
+	 * what only this parser can see about the document to {@code validity} — the
+	 * {@link ReferenceDataFiles.DatasetParser} form, and the one the load takes, which is how a finding
+	 * reaches both the log and {@link DrugReferenceLoad#getFindings()}.
+	 *
+	 * <p>The two tables are checked together and BOTH are named, rather than short-circuiting on the
+	 * first: a curated document handed to this parser is missing both, and an operator told only about
+	 * {@code drugs} would add one and be told about the other on the next restart. Which of them is
+	 * missing is also the whole diagnosis — {@code drugs} absent means the file is not a DDInter
+	 * document, while {@code interactions} absent means it is one whose rows were discarded, and the
+	 * row count carries that distinction (issue #242).
+	 *
+	 * <p>What is asked of each table is that it be DECLARED, not that it be usable, and that is the
+	 * rule's boundary rather than an oversight. A document declaring {@code "interactions": []} has said
+	 * what it has and loads its drugs, which is why issue #242's remedy is a report rather than a
+	 * refusal; a document declaring {@code "drugs": []} has likewise said so, and loading nothing from it
+	 * is {@link DrugReferenceLoad#isInert()}'s subject, not this rule's. What stays uncovered is a table
+	 * declared with the wrong TYPE ({@code "drugs": {}}) — no export produces that shape, and widening
+	 * {@code hasNonNull} to an array test to catch it would be a rule nothing measured.
+	 */
+	static List<DrugReference> parse(InputStream in, DrugReferenceValidity validity) throws IOException {
 		JsonNode root = MAPPER.readTree(in);
-		if (root == null || !root.hasNonNull("drugs") || !root.hasNonNull("interactions")) {
+		List<String> missing = new ArrayList<String>(2);
+		if (root == null || !root.hasNonNull("drugs")) {
+			missing.add("drugs");
+		}
+		if (root == null || !root.hasNonNull("interactions")) {
+			missing.add("interactions");
+		}
+		if (!missing.isEmpty()) {
+			validity.datasetMissingARequiredTable(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER,
+					missing, root == null ? 0 : root.path("drugs").size());
 			return Collections.emptyList();
 		}
 

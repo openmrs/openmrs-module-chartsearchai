@@ -1,0 +1,71 @@
+{
+ "metadata": {
+  "note": "DELIBERATELY MIS-SHAPED, and it is the subject rather than the setting - do not 'fix' it by adding an `interactions` key. Issue #242: a ddinter document carrying `drugs` and NO top-level `interactions` parsed to zero entries in silence, so an operator's file with real content loaded as `loaded=true, entryCount=0`. The three drug rows below are what such a file discards. Its twin `ddi-empty-interactions-table.json` carries these same three rows and declares the table, and loads all three - so between them the presence of the key is the only thing that varies, which is what makes the silence assertion on the twin able to fail. Verbatim DDInter 2.0 rows, unedited."
+ },
+ "mechanisms": {
+  "1105": {
+   "text": "Coadministration of two or more drugs that can cause bleeding may increase the risk of hemorrhage.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1926",
+   "name": "Warfarin",
+   "rxcui": "11289",
+   "rxnorm_name": "warfarin",
+   "drugbank_id": "DB00682",
+   "atc": [
+    "B01AA03"
+   ],
+   "ciel": [
+    {
+     "code": "85354",
+     "uuid": "85354AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter150",
+   "name": "Aspirin",
+   "rxcui": "1191",
+   "rxnorm_name": "aspirin",
+   "drugbank_id": "DB00945",
+   "atc": [
+    "A01AD05",
+    "B01AC06",
+    "N02BA01"
+   ],
+   "ciel": [
+    {
+     "code": "71617",
+     "uuid": "71617AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter962",
+   "name": "Ibuprofen",
+   "rxcui": "5640",
+   "rxnorm_name": "ibuprofen",
+   "drugbank_id": "DB01050",
+   "atc": [
+    "C01EB16",
+    "G02CC01",
+    "M01AE01",
+    "M02AA13"
+   ],
+   "ciel": [
+    {
+     "code": "78280",
+     "uuid": "78280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen"
+    }
+   ]
+  }
+ ]
+}

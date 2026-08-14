@@ -302,6 +302,25 @@ public final class DrugReferenceTestSupport {
 	 *  sibling pairs that share a display stem and must NOT be merged with them (issue #195). */
 	static final String DDI_PRESENTATION_MOIETY = "chartsearchai-test/ddi-presentation-moiety.json";
 
+	/**
+	 * Issue #242's pair: three drug rows without an {@code interactions} table, and the same three rows
+	 * with one declared empty. The only fixture here that is DELIBERATELY mis-shaped and the only one
+	 * that must not be "fixed" — it is the subject of the rule rather than a setting for one.
+	 *
+	 * <p>Owned here for a reason sharper than the shared-fixture rule above. The corpus sweep in
+	 * {@code DrugReferenceValidityContextTest} exempts exactly one file by NAME, and that exemption has
+	 * to denote the same file the rule cases load; spelled twice, the two are under no compiler
+	 * obligation to agree, and the sweep's one hole could drift onto a healthy fixture while the rule
+	 * case still passed. So the sweep derives both its directory and its exempt name from this constant.
+	 */
+	static final String DDI_NO_INTERACTIONS_TABLE = "chartsearchai-test/ddi-no-interactions-table.json";
+
+	/** The well-shaped twin of {@link #DDI_NO_INTERACTIONS_TABLE} — same three drug rows, plus an empty
+	 *  {@code interactions} table. Also the curated parser's "handed a document of another format"
+	 *  slice, which is why it is shared rather than local. */
+	static final String DDI_EMPTY_INTERACTIONS_TABLE =
+			"chartsearchai-test/ddi-empty-interactions-table.json";
+
 	/** Three nitroimidazoles, curated ({@link JsonDrugReferenceSource}) rather than DDInter-shaped: the
 	 *  class arm's co-medication GROUPING slice, where one order's codes are covered only in part
 	 *  (issue #186) and the same order shapes are asked of the name rung (issue #228). */

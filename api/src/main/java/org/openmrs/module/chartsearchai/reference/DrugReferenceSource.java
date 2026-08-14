@@ -59,11 +59,20 @@ public interface DrugReferenceSource {
 	}
 
 	/**
-	 * @return what the validity check found while {@link #load()} resolved its dataset — the
-	 *         configuration rules, which only the resolution can see (see
-	 *         {@link DrugReferenceValidity#configuredDataFileNotRead}). Empty when the implementation
-	 *         runs none (the test seam, and {@link AtcDrugReferenceSource}, which resolves its own file
+	 * @return what the validity check found while {@link #load()} resolved AND parsed its dataset — the
+	 *         two kinds of rule that only this implementation can see. The configuration rules, which
+	 *         only the resolution knows (see {@link DrugReferenceValidity#configuredDataFileNotRead}),
+	 *         and the document rules, which only the PARSER knows because they are about the file's
+	 *         shape rather than the entries (see
+	 *         {@link DrugReferenceValidity#datasetMissingARequiredTable}). Empty when the implementation
+	 *         runs neither (the test seam, and {@link AtcDrugReferenceSource}, which resolves its own file
 	 *         and has no fallback to be silently taken).
+	 *
+	 *         <p><b>A new source format's parser reports here.</b> Worth stating plainly, because the
+	 *         alternative is issue #242 one format over: a parser that returns no entries for a document
+	 *         it cannot read is the whole defect that issue records, and by the time
+	 *         {@link DrugReferenceService} sees the result, the document is gone and only a count of zero
+	 *         is left — which cannot tell an empty file from one whose content was discarded.
 	 *
 	 *         <p>Read immediately after {@code load()} on the same instance and retained beside the
 	 *         entries, for the same reason as {@link #lastLoadOrigin()}: the load is lazy, so a log line

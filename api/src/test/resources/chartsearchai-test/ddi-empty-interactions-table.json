@@ -1,0 +1,72 @@
+{
+ "metadata": {
+  "note": "The well-shaped twin of `ddi-no-interactions-table.json`: the same three drug rows, plus the `interactions` key below - which is EMPTY on purpose, so the pair isolates the presence of the key rather than confusing it with the table having rows. A drug catalogue declaring no interactions is a coherent document and loads all three rows here, which is why issue #242's remedy is REPORTED rather than a refusal. It is also what makes the twin's silence assertion able to fail: this load's entry count is asserted equal to the number of rows the twin's finding says were discarded, so a fixture edited on one side and not the other reddens. Verbatim DDInter 2.0 rows, unedited."
+ },
+ "mechanisms": {
+  "1105": {
+   "text": "Coadministration of two or more drugs that can cause bleeding may increase the risk of hemorrhage.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1926",
+   "name": "Warfarin",
+   "rxcui": "11289",
+   "rxnorm_name": "warfarin",
+   "drugbank_id": "DB00682",
+   "atc": [
+    "B01AA03"
+   ],
+   "ciel": [
+    {
+     "code": "85354",
+     "uuid": "85354AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter150",
+   "name": "Aspirin",
+   "rxcui": "1191",
+   "rxnorm_name": "aspirin",
+   "drugbank_id": "DB00945",
+   "atc": [
+    "A01AD05",
+    "B01AC06",
+    "N02BA01"
+   ],
+   "ciel": [
+    {
+     "code": "71617",
+     "uuid": "71617AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter962",
+   "name": "Ibuprofen",
+   "rxcui": "5640",
+   "rxnorm_name": "ibuprofen",
+   "drugbank_id": "DB01050",
+   "atc": [
+    "C01EB16",
+    "G02CC01",
+    "M01AE01",
+    "M02AA13"
+   ],
+   "ciel": [
+    {
+     "code": "78280",
+     "uuid": "78280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ibuprofen"
+    }
+   ]
+  }
+ ],
+ "interactions": []
+}

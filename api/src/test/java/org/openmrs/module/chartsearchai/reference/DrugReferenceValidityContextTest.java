@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -36,11 +37,17 @@ import org.openmrs.util.OpenmrsUtil;
  * The load-time validity check: what the loader does when the dataset it was pointed at violates an
  * assumption the loader's own code makes (issues #150, #156, #211, and the check decided on #196).
  *
- * <p>Every case here drives the REAL load — a file in the application data directory, the real global
- * properties, {@link DrugReferenceService#getAll()} / {@link DrugReferenceService#getLoadStatus()} — for
- * the reason CLAUDE.md gives and for one specific to this feature: the validity check runs where the
- * dataset is loaded, and the {@code setEntries} test seam deliberately bypasses all dataset loading, so
- * a case built through that seam would assert nothing about it.
+ * <p>Every RULE case here drives the REAL load — a file in the application data directory, the real
+ * global properties, {@link DrugReferenceService#getAll()} / {@link DrugReferenceService#getLoadStatus()}
+ * — for the reason CLAUDE.md gives and for one specific to this feature: the validity check runs where
+ * the dataset is loaded, and the {@code setEntries} test seam deliberately bypasses all dataset loading,
+ * so a case built through that seam would assert nothing about it.
+ *
+ * <p>One case is not about a rule and so does not:
+ * {@link #everyDatasetFixtureOnTheTestClasspathParsesToEntriesUnderItsOwnParser} sweeps the FIXTURE
+ * CORPUS through the real parsers directly, because what it asks — can a test written against this
+ * fixture fail at all? — is a question about the files rather than about a load, and copying every one
+ * of them into the application data directory to ask it would answer the same question more slowly.
  *
  * <p>Each case asserts THREE things, and needs all three: what the loader did to the data (or declined
  * to do), that it said so at WARN, and that {@link DrugReferenceLoad#getFindings()} names the rule after
@@ -65,6 +72,21 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 
 	private static final String DERIVATIVE_RULE_EDGES_FIXTURE =
 			"chartsearchai-test/ddi-derivative-rule-edges.json";
+
+	/**
+	 * The corpus the sweep enumerates, and the one file in it that is deliberately in the shape issue
+	 * #242 reports — both DERIVED from the shared constant rather than spelled again.
+	 *
+	 * <p>Not tidiness. The sweep exempts exactly one file by name, and that exemption has to denote the
+	 * same file the rule cases load; as two literals they are under no compiler obligation to agree, so
+	 * the sweep's single hole could drift onto a healthy fixture while the rule cases went on passing —
+	 * which is the "exception rots into a hole" failure the sweep's own javadoc claims to have avoided.
+	 */
+	private static final String FIXTURE_DIR = DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE
+			.substring(0, DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE.lastIndexOf('/'));
+
+	private static final String DELIBERATELY_MIS_SHAPED = DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE
+			.substring(DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE.lastIndexOf('/') + 1);
 
 	private final List<File> created = new ArrayList<File>();
 
@@ -645,6 +667,270 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 							+ service.getLoadStatus().getFindings());
 			deleteCopiedDatasets();
 		}
+	}
+
+	// ------------------------------------------------------------------
+	// #242 — a document omits a table its own parser requires
+	// ------------------------------------------------------------------
+
+	/**
+	 * Issue #242, the headline case. A {@code ddinter} document carrying {@code drugs} and no top-level
+	 * {@code interactions} produced {@code Collections.emptyList()} and said nothing about it, so an
+	 * operator's file with real content in it loaded as {@code loaded=true, entryCount=0} — reaching
+	 * {@link DrugReferenceLoad#isInert()} and, through it, issue #149's WARN, which can only GUESS at the
+	 * cause ("the usual cause is a format/path mismatch"). The findings channel — the one an operator can
+	 * poll after a lazy load — was empty.
+	 *
+	 * <p>So the assertions here are about which channel says WHAT. The inert WARN is not the fix and was
+	 * never missing; a finding naming the table, the parser and the rows that were discarded is.
+	 */
+	@Test
+	public void aDdinterDocumentWithNoInteractionsTableIsReportedRatherThanParsedToNothingInSilence()
+			throws IOException {
+		DrugReferenceService service = loading(DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE,
+				"h242-no-table.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			// Naming the RULE, not merely "some WARN was logged". That weaker form passes on main: this
+			// load is inert, so issue #149's WARN satisfies it on its own, and it would go on passing if
+			// this rule never reached the log channel at all.
+			assertTrue(
+					capture.messagesAt(Level.WARN).toString()
+							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
+					"a document whose content the parser discarded must be reported, not accepted in "
+							+ "silence. Captured: " + capture.describeAll());
+		}
+
+		assertEquals(0, status.getEntryCount(),
+				"REPORTED, not repaired: the loader does not synthesize the table the file omits, so the "
+						+ "count still says plainly that nothing loaded");
+		assertTrue(status.isInert(), "and the load is inert, which is what #149's WARN already said");
+
+		DrugReferenceValidity.Finding found = finding(status,
+				DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE);
+		assertEquals(DrugReferenceValidity.Remedy.REPORTED, found.getRemedy());
+		assertEquals(1, found.getOccurrences(), "one table is missing, so the rule fires once");
+		assertTrue(found.getDetail().contains("interactions"),
+				"the finding must name the table an operator has to add. Detail was: " + found.getDetail());
+		assertTrue(found.getDetail().contains("3 row"),
+				"and how much content was discarded — three drug rows were read and thrown away, which is "
+						+ "what separates this from an empty file. Detail was: " + found.getDetail());
+
+		// The wire form, which is the only channel an operator can ask after a lazy load. A finding that
+		// reached the log and not this would be the mirror of the state issues #149 and #154 settled.
+		Object serialized = status.toMap().get("findings");
+		assertEquals("[{rule=dataset-missing-a-required-table, remedy=reported, occurrences=1}]",
+				keyedSummary(status),
+				"the status must carry the rule, the remedy and the count");
+		assertTrue(String.valueOf(serialized).contains("interactions"),
+				"and the detail, which is what names the table to add. Was: " + serialized);
+	}
+
+	/**
+	 * The twin, and the reason the remedy is REPORTED rather than a refusal: a drug catalogue declaring
+	 * no interactions is a coherent document, and it loads. The fixture carries the same three drug rows
+	 * as the one above and declares the table those rows were discarded for want of; nothing else about
+	 * the two differs, so what this isolates is the presence of the key rather than the content.
+	 *
+	 * <p>The entry count is asserted EQUAL to the number of rows the case above says were discarded, and
+	 * that is deliberate rather than tidy. An absence assertion over a mis-shaped fixture is exactly the
+	 * blind check issue #242 records, so the silence asserted here is anchored to a load that
+	 * demonstrably produced the rows. Break either fixture and this reddens instead of passing vacuously
+	 * — measured, by removing the {@code interactions} key from the twin.
+	 */
+	@Test
+	public void theSameDocumentDeclaringAnEmptyInteractionsTableLoadsItsDrugsAndSaysNothing()
+			throws IOException {
+		DrugReferenceService service = loading(DrugReferenceTestSupport.DDI_EMPTY_INTERACTIONS_TABLE,
+				"h242-empty-table.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a declared-but-empty table is a coherent document and must be silent. Captured: "
+							+ capture.describeAll());
+		}
+
+		assertEquals(3, status.getEntryCount(),
+				"the three rows the twin discards load here, which is what makes the silence above a "
+						+ "measurement rather than a fixture that could not have produced anything");
+		assertEquals("[Warfarin, Aspirin, Ibuprofen]",
+				DrugReferenceTestSupport.names(service.getAll()).toString(),
+				"and they are the rows themselves, not merely a count");
+		assertTrue(status.getFindings().isEmpty(),
+				"no rule fires on it. Findings were: " + status.getFindings());
+	}
+
+	/**
+	 * The same rule from the other side, and the more reachable misconfiguration of the two: the
+	 * operator's file is fine and the parser reading it is not. A curated document handed to the
+	 * {@code ddinter} parser omits BOTH tables that parser requires, so the rule counts what it found
+	 * rather than stopping at the first.
+	 *
+	 * <p>Issue #156 already reports a {@code sourceFormat} matching no adapter. This is the case that one
+	 * cannot see: {@code ddinter} IS an adapter, so nothing was overridden and #156 is correctly silent —
+	 * the mismatch is between the format and the FILE, which only the parser can observe.
+	 */
+	@Test
+	public void aCuratedDocumentReadByTheDdinterParserNamesBothTablesItOmits() throws IOException {
+		DrugReferenceService service = loading(SUBSTANCE_DECLARED_FIXTURE, "h242-wrong-parser.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(
+					capture.messagesAt(Level.WARN).toString()
+							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
+					"the log leg, named rather than merely present: this load is inert, so issue #149's "
+							+ "WARN would satisfy a bare 'something warned'. Captured: "
+							+ capture.describeAll());
+		}
+
+		assertEquals(0, status.getEntryCount(), "the curated file is unreadable to the DDInter parser");
+		assertFalse(rulesOf(status).contains(DrugReferenceValidity.CONFIGURED_SOURCE_FORMAT_NOT_USED),
+				"and #156 is silent, correctly: 'ddinter' names a real adapter, so nothing was "
+						+ "overridden. Findings were: " + status.getFindings());
+
+		DrugReferenceValidity.Finding found = finding(status,
+				DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE);
+		assertEquals(2, found.getOccurrences(), "both required tables are missing, and both are counted");
+		assertTrue(found.getDetail().contains("drugs") && found.getDetail().contains("interactions"),
+				"the finding names both. Detail was: " + found.getDetail());
+	}
+
+	/**
+	 * And the mirror, which is the likeliest of all: {@code sourceFormat} left at its default while
+	 * {@code dataFilePath} points at a DDInter export. The curated parser requires {@code entries}, finds
+	 * none, and used to return empty in the same silence — one loader, one answer, so the rule is stated
+	 * over "a table this parser requires" rather than over the DDInter schema.
+	 */
+	@Test
+	public void aDdinterDocumentReadByTheCuratedParserIsReportedTheSameWay() throws IOException {
+		DrugReferenceService service = loading(DrugReferenceTestSupport.DDI_EMPTY_INTERACTIONS_TABLE,
+				"h242-curated-parser.json",
+				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(
+					capture.messagesAt(Level.WARN).toString()
+							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
+					"same log leg, and it matters more here: this is the default format, so an operator "
+							+ "hitting it has changed nothing but the path. Captured: "
+							+ capture.describeAll());
+		}
+
+		assertEquals(0, status.getEntryCount(), "the DDInter file is unreadable to the curated parser");
+
+		DrugReferenceValidity.Finding found = finding(status,
+				DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE);
+		assertEquals(DrugReferenceValidity.Remedy.REPORTED, found.getRemedy());
+		assertEquals(1, found.getOccurrences());
+		// Bracketed, for the reason JsonDrugReferenceSourceTest gives: the bare word is in the shared
+		// boilerplate, so it would pass on a finding that named the wrong table.
+		assertTrue(found.getDetail().contains("[entries]"),
+				"named for what THIS parser requires. Detail was: " + found.getDetail());
+	}
+
+	/**
+	 * The blind check issue #242 is really about, closed for the whole fixture corpus. A {@code ddinter}
+	 * fixture omitting {@code interactions} parses to nothing, so every absence assertion built on it
+	 * passes whatever the production code does. Issue #242 records two tests of issue #183's measurement
+	 * pass as having been in that state, and says plainly that it relayed the finding rather than
+	 * re-deriving it.
+	 *
+	 * <p><b>This sweep is a guard, not a repair</b>, and that is measured rather than assumed: of every
+	 * version of every {@code ddi-} fixture in this repository's history, exactly one is mis-shaped, and
+	 * it is {@link #DELIBERATELY_MIS_SHAPED} — added by this change. So no committed fixture was ever in
+	 * that state, and #183's was never merged. Worth stating because a guard that has never fired reads
+	 * like one that cannot: the mutation that shows this one can is removing the twin fixture's
+	 * {@code interactions} key, which reddens it.
+	 *
+	 * <p>It drives the real parser over every dataset fixture on the test classpath and requires each to
+	 * declare the tables its own parser needs and to produce at least one entry, so a fixture authored
+	 * into that shape reddens here instead of quietly disarming whatever test is written against it.
+	 * <b>All THREE parsers</b>, which is why the ATC sample is swept from its own directory rather than
+	 * left out as the corpus's quiet second exception: it is a dataset fixture with a real parser and
+	 * real dependants ({@code DrugReferenceTestSupport.atcService}), and one that parsed to nothing
+	 * would disarm them in exactly the way this sweep exists to prevent. Its parser takes no collector —
+	 * a line-based dataset has no table to omit — so for it the emptiness IS the whole check.
+	 *
+	 * <p>The one deliberate exception is asserted rather than skipped, so the exception cannot rot into a
+	 * hole: {@link #DELIBERATELY_MIS_SHAPED} is the subject of the rule and MUST fire it.
+	 *
+	 * <p>The fixture count is asserted too, per corpus. An enumeration that finds nothing passes every
+	 * assertion inside its own loop, which is the same failure shape one level up.
+	 */
+	@Test
+	public void everyDatasetFixtureOnTheTestClasspathParsesToEntriesUnderItsOwnParser() throws Exception {
+		File dir = new File(getClass().getClassLoader().getResource(FIXTURE_DIR).toURI());
+		File[] fixtures = dir.listFiles();
+		assertNotNull(fixtures, "the fixture directory should be on the test classpath: " + dir);
+
+		List<String> checked = new ArrayList<String>();
+		List<String> unrecognized = new ArrayList<String>();
+		List<String> wrong = new ArrayList<String>();
+		for (File fixture : fixtures) {
+			if (!fixture.getName().endsWith(".json")) {
+				continue;
+			}
+			// Which parser reads it has to be DECIDED rather than defaulted: a fixture of a third kind
+			// (a cross-reactivity groups file, say) would otherwise be handed to the curated parser and
+			// reported below as mis-shaped, which is a false alarm and the sort that gets a sweep
+			// weakened rather than taught.
+			boolean ddi = fixture.getName().startsWith("ddi-");
+			if (!ddi && !fixture.getName().startsWith("drug-reference-")) {
+				unrecognized.add(fixture.getName());
+				continue;
+			}
+			checked.add(fixture.getName());
+			DrugReferenceValidity validity = new DrugReferenceValidity();
+			List<DrugReference> parsed;
+			try (InputStream in = new FileInputStream(fixture)) {
+				// The parser its NAME selects, which is the parser every test using it reaches through
+				// DrugReferenceTestSupport — so this asks the question those tests silently assume.
+				parsed = ddi ? DdiDrugReferenceSource.parse(in, validity)
+						: JsonDrugReferenceSource.parse(in, validity);
+			}
+			boolean unusable = parsed.isEmpty() || !validity.getFindings().isEmpty();
+			if (unusable != DELIBERATELY_MIS_SHAPED.equals(fixture.getName())) {
+				wrong.add(fixture.getName() + " -> " + parsed.size() + " entries " + validity.getFindings());
+			}
+		}
+
+		// The third parser's corpus, which lives in its own directory and takes no collector.
+		File atc = new File(getClass().getClassLoader()
+				.getResource(DrugReferenceTestSupport.ATC_SAMPLE).toURI()).getParentFile();
+		File[] atcFixtures = atc.listFiles();
+		assertNotNull(atcFixtures, "the ATC fixture directory should be on the test classpath: " + atc);
+		List<String> atcChecked = new ArrayList<String>();
+		for (File fixture : atcFixtures) {
+			atcChecked.add(fixture.getName());
+			try (InputStream in = new FileInputStream(fixture)) {
+				if (AtcDrugReferenceSource.parse(in).isEmpty()) {
+					wrong.add(fixture.getName() + " -> 0 entries (ATC)");
+				}
+			}
+		}
+
+		assertEquals("[]", unrecognized.toString(),
+				"a fixture whose name selects no parser is not swept, so teach this sweep which parser "
+						+ "reads it rather than leaving it unchecked");
+		assertTrue(checked.size() > 40,
+				"the enumeration has to find the fixtures, or every check inside it is vacuous — found "
+						+ checked.size() + ": " + checked);
+		assertFalse(atcChecked.isEmpty(),
+				"and the ATC corpus has to be found too, or its leg is vacuous: " + atc);
+		assertEquals("[]", wrong.toString(),
+				"every fixture must parse to entries under the parser its name selects, and only "
+						+ DELIBERATELY_MIS_SHAPED + " must not");
 	}
 
 	// ------------------------------------------------------------------

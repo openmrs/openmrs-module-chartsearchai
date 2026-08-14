@@ -413,7 +413,17 @@ public class ChartSearchAiConstants {
 	 *  (consume a WHO ATC classification export by pointing dataFilePath at it). See ADR Decision 24. */
 	public static final String GP_DRUG_REFERENCE_SOURCE_FORMAT = "chartsearchai.drugReference.sourceFormat";
 
-	public static final String DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT = "json";
+	/**
+	 * Value of {@link #GP_DRUG_REFERENCE_SOURCE_FORMAT} that selects the curated source — the NAME of a
+	 * format, which is a different fact from {@link #DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT}'s "and it is
+	 * the one in force when nobody chose". They have been one constant, and the two uses only look alike
+	 * while the default happens to be {@code json}: anything naming the curated format through the
+	 * default would start naming whatever the default became. Its sibling formats each have their own
+	 * name constant; this is the one that was missing.
+	 */
+	public static final String DRUG_REFERENCE_SOURCE_JSON = "json";
+
+	public static final String DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT = DRUG_REFERENCE_SOURCE_JSON;
 
 	/** Value of {@link #GP_DRUG_REFERENCE_SOURCE_FORMAT} that selects the ATC classification source. */
 	public static final String DRUG_REFERENCE_SOURCE_ATC = "atc";

@@ -58,7 +58,14 @@ public class CrossReactivityGroupsLoader {
 		ReferenceDataFiles.Loaded<CrossReactivityGroup> loaded = ReferenceDataFiles.loadWithClasspathFallback(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH,
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, CLASSPATH_DEFAULT,
-				"cross-reactivity groups", CrossReactivityGroupsLoader::parse);
+				// Nothing is reported to the collector from inside this parse, deliberately — and the
+				// criterion is "do not WIDEN the one-channel gap", not "no rule reports here". One
+				// already does: configuredDataFileNotRead fires for this dataset too, and line 69 sends
+				// it to the log alone, because these groups have no retained status object (see the
+				// javadoc above). That rule predates the gap being named; issue #242's is new, so
+				// adding it here would enlarge a known gap rather than inherit it — and issue #156's
+				// second case records closing the gap, not populating it further.
+				"cross-reactivity groups", (in, notWrittenToHere) -> parse(in));
 		loaded.getValidity().logTo(log);
 		return loaded.getItems();
 	}

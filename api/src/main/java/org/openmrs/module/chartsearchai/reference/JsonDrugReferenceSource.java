@@ -71,15 +71,41 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 	}
 
 	/**
-	 * Parse a dataset stream into reference entries. Entries with a blank {@code id} or
-	 * {@code name} are dropped (with a warning): a name-less entry would render
-	 * {@code "Drug reference — null"} into the citable record and a {@code null} drug into the
-	 * safety warnings, and an id-less one has no stable citation {@code resourceUuid}.
-	 * Package-private and static so tests can exercise the real parser against the real dataset.
+	 * The form for a caller that wants only the entries — package-private and static so tests can
+	 * exercise the real parser against the real dataset. Delegates; see {@link #parse(InputStream,
+	 * DrugReferenceValidity)} for what parsing this dataset means, and
+	 * {@link DdiDrugReferenceSource#parse(InputStream)} for why what the parser found wrong with the
+	 * DOCUMENT still reaches the log from here.
 	 */
 	static List<DrugReference> parse(InputStream in) throws IOException {
+		DrugReferenceValidity validity = new DrugReferenceValidity();
+		List<DrugReference> parsed = parse(in, validity);
+		validity.logTo(log);
+		return parsed;
+	}
+
+	/**
+	 * Parse a dataset stream into reference entries, reporting what only this parser can see about the
+	 * document to {@code validity} — the {@link ReferenceDataFiles.DatasetParser} form, and the one the
+	 * load takes. Entries with a blank {@code id} or {@code name} are dropped (with a warning): a
+	 * name-less entry would render {@code "Drug reference — null"} into the citable record and a
+	 * {@code null} drug into the safety warnings, and an id-less one has no stable citation
+	 * {@code resourceUuid}.
+	 *
+	 * <p>The curated schema is the DEFAULT format, so the document this parser is likeliest to be handed
+	 * by mistake is one of another format — a DDInter export named by {@code dataFilePath} while
+	 * {@code sourceFormat} was left alone. That declares no {@code entries}, and used to load as zero in
+	 * the same silence issue #242 records on the DDInter side. Nothing is counted as discarded: a
+	 * document with no {@code entries} carries nothing this parser can read, which is what tells an
+	 * operator it is a file of another format rather than a mis-shaped one of this.
+	 */
+	static List<DrugReference> parse(InputStream in, DrugReferenceValidity validity) throws IOException {
 		Dataset dataset = MAPPER.readValue(in, Dataset.class);
 		if (dataset == null || dataset.entries == null) {
+			// The format's NAME, not "whatever the default is" — those are equal today and mean
+			// different things, and only one of them stays right if the default moves.
+			validity.datasetMissingARequiredTable(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON,
+					Collections.singletonList("entries"), 0);
 			return Collections.emptyList();
 		}
 		List<DrugReference> usable = new ArrayList<DrugReference>();

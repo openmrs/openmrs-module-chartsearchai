@@ -59,7 +59,13 @@ final class ReferenceDataFiles {
 	@FunctionalInterface
 	interface DatasetParser<T> {
 
-		List<T> parse(InputStream in) throws IOException;
+		/**
+		 * @param validity this load's collector, carrying what only the parser can see — what the
+		 *        DOCUMENT is missing, as against what the loaded entries say (issue #242). A parser that
+		 *        returns nothing has to say so here: downstream all that survives is the count, and a
+		 *        count of zero cannot distinguish an empty file from one whose content was discarded.
+		 */
+		List<T> parse(InputStream in, DrugReferenceValidity validity) throws IOException;
 	}
 
 	/**
@@ -95,9 +101,11 @@ final class ReferenceDataFiles {
 		}
 
 		/**
-		 * @return the validity check this load ran — which here means the configuration rules only (see
-		 *         {@link DrugReferenceValidity#configuredDataFileNotRead}), since the content rules need
-		 *         the loaded model rather than a stream and run once for every format in
+		 * @return the validity check this load ran — which here means the configuration rules (see
+		 *         {@link DrugReferenceValidity#configuredDataFileNotRead}) and whatever the parser
+		 *         reported about the DOCUMENT it was handed (see
+		 *         {@link DrugReferenceValidity#datasetMissingARequiredTable}), since the content rules
+		 *         need the loaded model rather than a stream and run once for every format in
 		 *         {@link DrugReferenceService}. Never null.
 		 */
 		DrugReferenceValidity getValidity() {
@@ -140,7 +148,7 @@ final class ReferenceDataFiles {
 			try {
 				String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath, pathGlobalProperty);
 				try (InputStream in = new FileInputStream(new File(resolved))) {
-					List<T> loaded = parser.parse(in);
+					List<T> loaded = parser.parse(in, validity);
 					log.info("Loaded {} {} from {}", loaded.size(), datasetLabel, resolved);
 					return new Loaded<T>(loaded, APPDATA_ORIGIN_PREFIX + configuredPath, validity);
 				}
@@ -168,7 +176,7 @@ final class ReferenceDataFiles {
 						datasetLabel, classpathDefault);
 				return Loaded.nothing(validity);
 			}
-			List<T> loaded = parser.parse(in);
+			List<T> loaded = parser.parse(in, validity);
 			log.info("Loaded {} {} from bundled default {}", loaded.size(), datasetLabel, classpathDefault);
 			return new Loaded<T>(loaded, CLASSPATH_ORIGIN_PREFIX + classpathDefault, validity);
 		}

@@ -76,10 +76,35 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 	 * {@code "Drug reference — null"} into the citable record and a {@code null} drug into the
 	 * safety warnings, and an id-less one has no stable citation {@code resourceUuid}.
 	 * Package-private and static so tests can exercise the real parser against the real dataset.
+	 *
+	 * <p>The form for a caller that wants only the entries; what the parser found wrong with the
+	 * DOCUMENT still reaches the log. See {@link DdiDrugReferenceSource#parse(InputStream)}, which says
+	 * the same thing about the same pair of forms.
 	 */
 	static List<DrugReference> parse(InputStream in) throws IOException {
+		DrugReferenceValidity validity = new DrugReferenceValidity();
+		List<DrugReference> parsed = parse(in, validity);
+		validity.logTo(log);
+		return parsed;
+	}
+
+	/**
+	 * Parse, reporting what only this parser can see about the document to {@code validity} — the
+	 * {@link ReferenceDataFiles.DatasetParser} form.
+	 *
+	 * <p>The curated schema is the DEFAULT format, so the document this parser is likeliest to be handed
+	 * by mistake is one of another format — a DDInter export named by {@code dataFilePath} while
+	 * {@code sourceFormat} was left alone. That declares no {@code entries}, and used to load as zero in
+	 * the same silence issue #242 records on the DDInter side. Nothing is counted as discarded: a
+	 * document with no {@code entries} carries nothing this parser can read, which is what tells an
+	 * operator it is a file of another format rather than a mis-shaped one of this.
+	 */
+	static List<DrugReference> parse(InputStream in, DrugReferenceValidity validity) throws IOException {
 		Dataset dataset = MAPPER.readValue(in, Dataset.class);
 		if (dataset == null || dataset.entries == null) {
+			validity.datasetMissingARequiredTable(
+					ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT,
+					Collections.singletonList("entries"), 0);
 			return Collections.emptyList();
 		}
 		List<DrugReference> usable = new ArrayList<DrugReference>();

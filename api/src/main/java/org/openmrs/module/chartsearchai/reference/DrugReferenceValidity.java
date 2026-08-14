@@ -34,7 +34,10 @@ import org.slf4j.Logger;
  * principle applied one layer deeper, to the CONTENT: a dataset can load a plausible number of entries
  * and still violate an assumption that silently changes every safety decision taken from it (#150), drop
  * every rule-bearing row of a substance (#211), be a different dataset than the one configured (#156),
- * publish one substance's name on another, or key two substances as one (#196).
+ * publish one substance's name on another, or key two substances as one (#196). One rule is a layer
+ * ABOVE instead, over the document rather than the entries, and for the same reason from the other
+ * direction: a file can carry content and load none of it, because it omits a table the parser reading
+ * it requires (#242) — an empty PARSE of a non-empty file, where #149 made an empty LOAD loud.
  *
  * <p><b>Why the remedies differ per rule, deliberately.</b> Making them uniform would be a decision taken
  * by default. Each rule below records which of the three it takes and why:
@@ -46,8 +49,9 @@ import org.slf4j.Logger;
  *       assumes without asserting anything the data does not already say — which, in the one case it
  *       applies to, is what the other two parsers do as they build their alias lists.</li>
  *   <li>{@link Remedy#REPORTED} where fixing it would mean inventing a fact: which rows are one
- *       substance, or which of two colliding names is right. The data is left exactly as loaded and the
- *       operator (or the upstream project) is told what to fix.</li>
+ *       substance, which of two colliding names is right, or what a table the document never declared
+ *       would have held. The data is left exactly as loaded and the operator (or the upstream project)
+ *       is told what to fix.</li>
  * </ul>
  * No rule REFUSES a file. The drug-reference feature is an additive net that must never break the answer
  * path ({@link ReferenceDataFiles}), and refusing a dataset over a content defect would turn a
@@ -99,6 +103,10 @@ public final class DrugReferenceValidity {
 	 *  #196 item 4. */
 	public static final String DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE =
 			"derivative-merged-with-its-parent-substance";
+
+	/** A document that omits a table the parser reading it requires, so content it does carry is
+	 *  discarded — issue #242. */
+	public static final String DATASET_MISSING_A_REQUIRED_TABLE = "dataset-missing-a-required-table";
 
 	/** An explicitly configured dataset file that could not be read, so a different dataset is in
 	 *  force — issue #156, case 1. */
@@ -231,6 +239,60 @@ public final class DrugReferenceValidity {
 		for (Finding found : findings) {
 			log.warn("Drug-reference data validity — {}", found);
 		}
+	}
+
+	// ------------------------------------------------------------------
+	// Document rules, over the file a parser read (issue #242)
+	// ------------------------------------------------------------------
+
+	/**
+	 * Issue #242: the document omits a table the parser reading it requires, so that parser produced no
+	 * entries from a file that is not empty.
+	 *
+	 * <p><b>Why the existing loud thing does not cover it.</b> {@link DrugReferenceLoad#isInert()} sees
+	 * the OUTCOME — a source was selected and produced zero entries — and issue #149's WARN fires on it.
+	 * What neither can do is say why, because by then the document is gone: that WARN offers a
+	 * format/path mismatch as the usual cause, which is a guess, and the findings channel an operator can
+	 * poll after a lazy load (#154) said nothing at all. Only the parser knows the file declared drug
+	 * rows and no interaction table, and that is the difference between "your file is empty" and "your
+	 * file's content was discarded".
+	 *
+	 * <p><b>REPORTED, and not either of the other two remedies.</b> Repairing it means reading a table
+	 * the document never declared as an empty one, which is the single thing the loader cannot know here:
+	 * a catalogue that carries no interactions and an export truncated before it wrote them are the same
+	 * document to this parser, and loading the second as the first would put a plausible entry count on a
+	 * file missing most of itself — {@link #CONFIGURED_DATA_FILE_NOT_READ}'s shape, arrived at from the
+	 * other side. So the count stays 0, which says plainly that nothing loaded, and the finding says what
+	 * to add. Refusing the file is not available either, for the reason no rule here refuses one.
+	 *
+	 * <p>Stated over "a table THIS parser requires" rather than over one schema, because the same silence
+	 * exists in both directions and the other one is likelier: {@code sourceFormat} left at its default
+	 * while {@code dataFilePath} names a DDInter export is a curated document carrying no {@code entries}.
+	 * Issue #156's rule is correctly silent there — {@code json} and {@code ddinter} both name real
+	 * adapters, so nothing was overridden — and the mismatch is between the format and the FILE, which
+	 * only the parser can observe.
+	 *
+	 * @param format the source format whose parser read the document, in the vocabulary of
+	 *        {@code chartsearchai.drugReference.sourceFormat}
+	 * @param missing the required tables the document does not declare, named as that format names them;
+	 *        nothing is reported when it is empty
+	 * @param rowsCarried how many rows the document did carry and the parser therefore discarded, or 0
+	 *        where it carried nothing this parser could count — which is itself the distinction between a
+	 *        mis-shaped file of this format and a file of another one
+	 */
+	void datasetMissingARequiredTable(String format, List<String> missing, int rowsCarried) {
+		if (missing == null || missing.isEmpty()) {
+			return;
+		}
+		report(DATASET_MISSING_A_REQUIRED_TABLE, Remedy.REPORTED, missing.size(),
+				"a '" + format + "' document must declare " + missing + "; this one does not, so it "
+						+ "parsed to no entries at all"
+						+ (rowsCarried > 0 ? ", discarding the " + rowsCarried + " row(s) it does carry."
+								: ".")
+						+ " The data is left as loaded — the fix is in the file: either it is not a "
+						+ "document of the format in force, or, where a catalogue carrying no rules is "
+						+ "intended, the missing table has to be declared empty. Reading it as empty here "
+						+ "would load an export truncated before it wrote that table as a complete one.");
 	}
 
 	// ------------------------------------------------------------------

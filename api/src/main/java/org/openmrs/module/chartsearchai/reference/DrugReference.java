@@ -1243,8 +1243,23 @@ public class DrugReference {
 	 *         not its right one — see there for why one matcher cannot serve both.
 	 */
 	static boolean containsWord(String text, String word) {
-		return containsBoundedToken(text, word, 0);
+		return containsBoundedToken(text, word, PROSE_TRAILING_LETTERS);
 	}
+
+	/**
+	 * How many trailing letters PROSE may carry past a matched drug token before the token stops naming
+	 * that drug. None: prose is words, so the boundary is symmetric — the "symmetric boundary" row of
+	 * {@link #matchesOrderName}'s measured table, which is the rule a question, an answer or a rendered
+	 * record gets.
+	 *
+	 * <p>A constant rather than a literal for the same reason {@link #MAX_ORDER_NAME_INFLECTION_LETTERS}
+	 * is one, and since issue #260 for a sharper one: prose is now asked as a boolean
+	 * ({@link #containsWord}) and as a position ({@link #wordIndex}), and two literals would be two
+	 * decisions about which of the two boundary rules prose gets — the drift #260 was, one level up.
+	 * {@link #nearestNameDistance} also depends on it arithmetically: its {@code end} is
+	 * {@code idx + w.length()}, which is the whole match only while this is zero.
+	 */
+	private static final int PROSE_TRAILING_LETTERS = 0;
 
 	/**
 	 * How many trailing letters an active-order display name may carry past a matched drug token
@@ -1353,9 +1368,12 @@ public class DrugReference {
 	}
 
 	/**
-	 * The one boundary-aware containment scan, shared by prose matching ({@link #containsWord}) and
-	 * order-name matching ({@link #matchesOrderName}) so the boundary rule cannot drift between
-	 * them. A match needs {@code token} to start at a word boundary in {@code text} and to end at
+	 * Whether {@code text} carries {@code token} under the boundary rule: the boolean view of
+	 * {@link #boundedTokenIndex}, which is the one scan and has three sharers — prose matching
+	 * ({@link #containsWord}) and order-name matching ({@link #matchesOrderName}) through here, and
+	 * {@link #nearestNameDistance} through {@link #wordIndex}, because since issue #260 the dose arm
+	 * needs the POSITION rather than the answer. So the boundary rule cannot drift between them.
+	 * A match needs {@code token} to start at a word boundary in {@code text} and to end at
 	 * one, give or take up to {@code maxTrailingLetters} letters. Letters only: a digit is never an
 	 * inflection, so a digit sitting against the token is neither stepped over nor treated as the
 	 * end of the name, and a display name that glues its strength straight onto the drug name
@@ -1365,12 +1383,16 @@ public class DrugReference {
 	 * treating a digit as the end of the name instead scores identically over that corpus (829
 	 * either way), so the two are indistinguishable on real data and this is the conservative one.
 	 * Case-insensitive; a null or empty token never matches. Whitespace-only is the caller's
-	 * business, deliberately not this method's: {@link PatientClinicalContext#hasActiveDrug} trims
-	 * its token, and the {@code ddinter} and {@code atc} sources drop blank aliases at parse. A
-	 * hand-authored {@code json} KB is NOT sanitized, so a blank alias there is scanned like any other
-	 * token and can match — measured, and wider under the tail allowance than under the symmetric rule,
-	 * so #147 giving allergens the tail allowance widened it. Pre-existing, still not this method's to
-	 * decide, and an authoring guard belongs in that parser; reported separately.
+	 * business, deliberately not this method's: {@link PatientClinicalContext#hasActiveDrug} trims its
+	 * token, and since issue #150 EVERY format's load drops an alias that names nothing —
+	 * {@link DrugReferenceValidity#checkEntries} runs {@code sanitizeAliases} on the parsed entries
+	 * whatever parsed them, so such a token no longer reaches this scan from a loaded dataset. (This
+	 * paragraph used to say a hand-authored {@code json} KB was unsanitized and that the guard belonged
+	 * in that parser. Both were true before #150 and neither is now: the guard is one shared load-time
+	 * rule, which is the arrangement CLAUDE.md's validity bullet requires.) It still matters that the
+	 * scan itself would match one, because the {@code setEntries} seam bypasses the load — and it is
+	 * wider under the tail allowance than under the symmetric rule, so #147 giving allergens the tail
+	 * allowance widened it.
 	 *
 	 * <p>Diacritic-insensitive on BOTH sides (issue #129), which is why the fold lives here rather
 	 * than in either named matcher: the same accented order name reaches both of them — as the
@@ -1390,19 +1412,72 @@ public class DrugReference {
 	 * combining mark, and no two tokens fold together. It is there because a hand-authored
 	 * {@code json} KB may carry an accented alias, and a one-sided fold would then silently stop
 	 * matching the accented order name it was written for.
+	 *
+	 * <p>Since issue #260 one caller does its own folding — {@link #nearestNameDistance} folds its needle
+	 * and takes its haystack already folded, because it returns a POSITION and the fold is not
+	 * length-preserving. That is a deliberate exception to "the fold lives here" and not a second copy of
+	 * the rule: both go through {@link #foldedLower}, so there is still exactly one expression of what
+	 * this scan's operands must be.
 	 */
 	private static boolean containsBoundedToken(String text, String token, int maxTrailingLetters) {
 		if (text == null || token == null) {
 			return false;
 		}
-		String t = foldDiacritics(text.toLowerCase(Locale.ROOT));
-		String w = foldDiacritics(token.toLowerCase(Locale.ROOT));
+		return boundedTokenIndex(foldedLower(text), foldedLower(token), maxTrailingLetters, 0) >= 0;
+	}
+
+	/**
+	 * @return {@code value} lowercased ({@link Locale#ROOT}) and then {@link #foldDiacritics}-folded —
+	 *         the form both operands of {@link #boundedTokenIndex} must be in, named once so that a
+	 *         caller preparing them itself cannot apply half of it or apply the two in the other order.
+	 *
+	 *         <p><b>{@code toLowerCase} is idempotent, and that alone is what lets a caller holding an
+	 *         already-lowercased string pass it straight in</b> ({@code DrugSafetyValidator.attributedDoses}
+	 *         does). <b>The composition is NOT.</b> Measured 2026-08-14 through this method: the sequence
+	 *         {@code a}, U+1D16D, U+0E31, U+1D165 folds to {@code a}, U+1D16D, U+1D165 and folding THAT
+	 *         gives {@code a}, U+1D165, U+1D16D — stripping a combining mark of canonical class 0 from
+	 *         between two of higher class merges two canonical-ordering runs, and the next NFD reorders
+	 *         them. No reference or chart string reaches that shape, but do not build an argument on
+	 *         re-folding being free; {@code DrugSafetyValidator.substanceOwnsDose} records what it still
+	 *         costs at the one place a string is folded twice.
+	 */
+	static String foldedLower(String value) {
+		return foldDiacritics(value.toLowerCase(Locale.ROOT));
+	}
+
+	/**
+	 * The boundary rule above, as a POSITION rather than a boolean.
+	 *
+	 * <p>Split out so that a caller needing to know WHERE one of these names sits shares the rule with
+	 * every caller needing only whether it occurs, instead of re-expressing the boundary conditions
+	 * beside it. That was issue #260: {@code DrugSafetyValidator}'s dose arm gated a clause on
+	 * {@link #matchesText} and then located the name in that same clause with {@link String#indexOf}, so
+	 * the two disagreed in both directions — a name the prose rule does not find ({@code penicillin}
+	 * inside {@code penicillins}) was located anyway and vetoed a real dose, and a name it does find
+	 * ({@code paracetamol} written {@code paracétamol}) was not located and the subject could not claim
+	 * its own dose. Both silently, which is the direction the dose arm exists to prevent.
+	 *
+	 * <p><b>Operands pre-folded and pre-lowercased, and that is a contract rather than an economy.</b>
+	 * Neither transform preserves length — the fold decomposes and drops combining marks, and
+	 * {@code toLowerCase} turns the single character {@code İ} into two — so an index into the
+	 * transformed string is not an index into the string it came from, and doing either transform HERE
+	 * would silently shift every index this returns. A caller comparing this index against any other
+	 * position must have produced that position in the SAME transformed text — which is why
+	 * {@link DrugSafetyValidator} folds a clause once and reads every position out of that one string.
+	 *
+	 * @param t the haystack, already lowercased and {@link #foldDiacritics}-folded
+	 * @param w the needle, likewise
+	 * @return the index of the first occurrence of {@code w} in {@code t} at or after {@code from} that
+	 *         satisfies the rule, or -1 when there is none
+	 */
+	private static int boundedTokenIndex(String t, String w, int maxTrailingLetters, int from) {
 		if (w.isEmpty()) {
-			// After the fold, not before: a token of nothing but combining marks folds to empty, and
-			// the empty token matches almost anything below.
-			return false;
+			// The FOLDED form, which is what the contract above delivers and why the check reads well
+			// here even though nothing here folds: a token of nothing but combining marks folds to
+			// empty, and the empty token matches almost anything below.
+			return -1;
 		}
-		int idx = t.indexOf(w);
+		int idx = t.indexOf(w, from);
 		while (idx >= 0) {
 			if (idx == 0 || !Character.isLetterOrDigit(t.charAt(idx - 1))) {
 				int end = idx + w.length();
@@ -1413,13 +1488,77 @@ public class DrugReference {
 						break;
 					}
 					if (at >= t.length() || !Character.isLetterOrDigit(t.charAt(at))) {
-						return true;
+						return idx;
 					}
 				}
 			}
 			idx = t.indexOf(w, idx + 1);
 		}
-		return false;
+		return -1;
+	}
+
+	/**
+	 * @return the character distance from {@code pos} to the nearest occurrence of one of this entry's
+	 *         names in {@code foldedLowerText}, or {@link Integer#MAX_VALUE} when none of them occurs —
+	 *         how near this entry is NAMED to a position, answered by the same rule
+	 *         {@link #matchesText} answers whether it is named at all. Zero when {@code pos} falls
+	 *         inside such an occurrence.
+	 *
+	 *         <p><b>The PROSE rule</b>, through {@link #wordIndex}, which is the same binding of
+	 *         {@link #boundedTokenIndex} that {@link #containsWord} is — so this shares the rule by
+	 *         construction rather than by both spelling the same allowance. Prose gets symmetric word
+	 *         boundaries and a clinician-entered drug NAME gets {@link #matchesOrderName}'s left boundary
+	 *         plus a short tail, and widening one to serve the other was issues #86, #128, #147 and #209.
+	 *         Its caller has already gated the clause on {@link #matchesText}, so answering the WHERE by
+	 *         a different rule than the WHETHER is the same mistake one level down — which is what issue
+	 *         #260 was.
+	 *
+	 *         <p>{@code foldedLowerText} must be in {@link #foldedLower} form and {@code pos} an index
+	 *         into THAT string; see {@link #boundedTokenIndex} for why positions from the two forms may
+	 *         not be mixed. The names read are this entry's {@code aliases} — the same list
+	 *         {@link #matchesText} reads.
+	 *
+	 *         <p>The metric is asymmetric by one, and always was: {@code end} is exclusive and the test
+	 *         is {@code pos > end}, so a name ending immediately before {@code pos} scores 0 while one
+	 *         starting immediately after it scores 1, and a tie therefore goes to the earlier name. Not
+	 *         reachable from the dose arm — {@code DOSE_MG} starts on a digit, and a digit at {@code end}
+	 *         fails the right-boundary test, so no accepted occurrence ends exactly at the dose.
+	 *
+	 *         <p>Here rather than in the caller because this is a question about the entry's own names,
+	 *         and because keeping it beside them is what lets it share the boundary rule instead of
+	 *         restating it — the whole of the defect it closes.
+	 */
+	int nearestNameDistance(String foldedLowerText, int pos) {
+		if (foldedLowerText == null) {
+			return Integer.MAX_VALUE;
+		}
+		int best = Integer.MAX_VALUE;
+		for (String alias : aliases) {
+			if (alias == null) {
+				continue;
+			}
+			String w = foldedLower(alias);
+			int idx = wordIndex(foldedLowerText, w, 0);
+			while (idx >= 0) {
+				// w.length() is the whole match only because the prose rule allows no trailing letters;
+				// under matchesOrderName's allowance the match can run past it and every distance on the
+				// right-hand side would be overstated. wordIndex is what keeps that true.
+				int end = idx + w.length();
+				int distance = pos < idx ? idx - pos : (pos > end ? pos - end : 0);
+				if (distance < best) {
+					best = distance;
+				}
+				idx = wordIndex(foldedLowerText, w, idx + 1);
+			}
+		}
+		return best;
+	}
+
+	/** @return {@link #containsWord}'s rule as a POSITION — {@link #boundedTokenIndex} with the prose
+	 *          allowance bound once, so the boolean and the index cannot come to disagree about which of
+	 *          the two boundary rules prose gets. Operands in {@link #foldedLower} form. */
+	private static int wordIndex(String foldedLowerText, String foldedLowerWord, int from) {
+		return boundedTokenIndex(foldedLowerText, foldedLowerWord, PROSE_TRAILING_LETTERS, from);
 	}
 
 	/** Unicode non-spacing marks — the combining accents an NFD decomposition separates out. */
@@ -1428,8 +1567,11 @@ public class DrugReference {
 	/**
 	 * @return {@code value} with its diacritics folded away — canonically decomposed (NFD) and
 	 *         stripped of combining non-spacing marks, so {@code budésonide} compares as
-	 *         {@code budesonide}. The one definition, used on both operands of
-	 *         {@link #containsBoundedToken}; never call {@link Normalizer} for this elsewhere.
+	 *         {@code budesonide}. The one definition; never call {@link Normalizer} for this elsewhere.
+	 *
+	 *         <p><b>Not length-preserving</b>, so an index into the folded string is not an index into
+	 *         the string it was folded from. Anything reading POSITIONS out of folded text has to fold
+	 *         once and take every position from that one form — see {@link #boundedTokenIndex}.
 	 *
 	 *         <p>Decompose-and-strip rather than a hand-rolled character map: a map has to be
 	 *         maintained per language and silently stops folding the first accent nobody listed
@@ -1449,8 +1591,8 @@ public class DrugReference {
 	 *         identically, so matching within those scripts is unchanged.
 	 *
 	 *         <p>ASCII returns unchanged without normalizing: every reference token is ASCII and so
-	 *         is most order-name text, and this runs once per (rule token, order name) pair — up to a
-	 *         few hundred rules per question — so the common path must not allocate.
+	 *         is most order-name text, and this runs on hot paths — once per (rule token, order name)
+	 *         pair, up to a few hundred rules per question — so the common path must not allocate.
 	 */
 	static String foldDiacritics(String value) {
 		for (int i = 0; i < value.length(); i++) {

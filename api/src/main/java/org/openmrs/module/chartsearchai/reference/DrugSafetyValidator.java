@@ -4258,13 +4258,21 @@ public class DrugSafetyValidator {
 	 * their rows, and counts in addition the pairs that are two rows of ONE substance, which have no
 	 * substance-pair counterpart at all — so over the shipped KB (2283 rows, 2114 substances) 7783 row
 	 * pairs share at least one level-4 subgroup against 5550 substance pairs, and 1090 against 319
-	 * share more than one, of which 128 are two rows of one substance. A chip names a substance, so the
-	 * substance base is the one that counts what a clinician can see; the row figures are kept because
-	 * they are what the decisions recorded here were taken on. Every count in this paragraph and the
-	 * three below was measured 2026-08-14 for issue #243 by driving those four methods over the shipped
-	 * KB — save the superseded 87 that issue #168 was filed against; re-measure before relying on one.
-	 * Every row of a substance there publishes the same ATC list (0 of the 129 multi-row families
-	 * disagree), which is what makes a substance's subgroups well-defined at all.
+	 * share more than one, 128 of that 1090 being two rows of one substance. A chip names a substance,
+	 * so the substance base is the one that counts what a clinician can see; the row figures are kept
+	 * because they are what the decisions recorded here were taken on. Every row of a substance in that
+	 * KB publishes the same {@link DrugReference#normalizedAtcCodes()} — 0 of the 129 multi-row
+	 * families disagree — which is what makes a substance's subgroups well-defined at all.
+	 *
+	 * <p>Every count in the paragraph above and the three below, save the superseded 87 that issue #168
+	 * was filed against, was measured 2026-08-14 for issue #243 over the shipped KB by driving
+	 * {@link DdiDrugReferenceSource#parse} for the load, {@link DrugReference#substanceGroupKey} and
+	 * {@link DrugReference#canonicalRow} for the substance base,
+	 * {@link DrugReference#normalizedAtcCodes()} and {@link DrugReference#atcSubgroups()} for the
+	 * intersections, {@link DrugReference#isLocallyAppliedAtcCode},
+	 * {@link DrugReference#isUnclassifyingAtcCode} and {@link DrugReference#isPurposeOnlyAtcCode} for
+	 * the tiers, and — where the text says so — {@link #validate} itself. Re-measure before relying on
+	 * one.
 	 *
 	 * <p><b>And why not report the shared level-3 group instead</b>, which the issue offers as the
 	 * answer that is coarser but never false: of the 1090 ROW pairs that share more than one level-4
@@ -4286,18 +4294,20 @@ public class DrugSafetyValidator {
 	 * On the same count 70 row pairs — 21 substance pairs — leave the systemic tier holding more than
 	 * one candidate; once each arm has refused what its claim does not license that is 69 row / 20
 	 * substance pairs for duplicate therapy and 64 / 16 for cross-reactivity, whose stronger
-	 * requirement removes the rest (issue #168 was filed against a pre-correction count of 87).
-	 * Corroborated by driving {@link #validate} over all 36 substance-pair ties: every one names the
-	 * alphabetically smallest surviving candidate, so the tie-break really is what decides them.
-	 * Nothing in ATC's own words breaks them. Three of the 20 hold candidates whose published names are
-	 * IDENTICAL — {@code G03AC}/{@code L02AB} "Progestogens", {@code N01AF}/{@code N05CA}
+	 * requirement removes the rest (issue #168 was filed against a pre-correction count of 87). The 16
+	 * are a subset of the 20, so those are 20 distinct pairs; driving {@link #validate} over all 36
+	 * pair-and-arm combinations of them, every one names the alphabetically smallest surviving
+	 * candidate and none fails to raise a class chip, so the tie-break really is what decides them.
+	 * Nothing in ATC's own words breaks those ties. Three of the 20 hold candidates whose published
+	 * names are IDENTICAL — {@code G03AC}/{@code L02AB} "Progestogens", {@code N01AF}/{@code N05CA}
 	 * "Barbiturates, plain", {@code L01EG}/{@code L04AH} "Mammalian target of rapamycin (mTOR) kinase
 	 * inhibitors" — so for those there is no aptness to rank, only a code. And the two ranks this
 	 * module already derives from those names move almost nothing: preferring the candidate that
-	 * asserts more ({@link DrugReference#isPurposeOnlyAtcCode}) moves one pair, {@code Calcium chloride}
-	 * against {@code Ammonium chloride}, from {@code B05XA} "Electrolyte solutions" to {@code G04BA}
-	 * "Acidifiers", and preferring a non-residue name (issue #182's rule) moves none. Neither reaches
-	 * issue #168's own example, because {@code H02CA} "Anticorticosteroids" and {@code J02AB}
+	 * asserts more ({@link DrugReference#isPurposeOnlyAtcCode}) moves one of the 20, {@code Calcium
+	 * chloride} against {@code Ammonium chloride}, from {@code B05XA} "Electrolyte solutions" to
+	 * {@code G04BA} "Acidifiers", and none of the 16; preferring a non-residue name (issue #182's rule)
+	 * moves none of either. Neither reaches issue #168's own example, because
+	 * {@code H02CA} "Anticorticosteroids" and {@code J02AB}
 	 * "Imidazole derivatives" sit in the same tier of both — the first names a target and the second a
 	 * structural family, and issue #183 read every level-4 name in the WHO ATC index and put target and
 	 * structure on the same side of its one hard line deliberately. A rule preferring {@code J02AB}

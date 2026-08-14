@@ -228,7 +228,15 @@ public class DrugReferenceInjector {
 		// narrower key — see matchingEntries.
 		List<DrugReference> orderEntries = drugReferenceService.findForActiveOrders(rawContext);
 		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext, orderEntries);
-		List<DrugReference> matched = matchingEntries(orderEntries, question);
+		// The resolved context, which is what every other consumer in this method is handed. It is the
+		// SAME answer rawContext would give for this particular reader, and that is worth stating rather
+		// than leaving to be discovered: which row this response names a substance by is ranked off
+		// getActiveDrugNames() — the orders' own display names — while withReferenceNames adds only
+		// getActiveDrugReferenceNames() and copies the rest through. So passing rawContext here is
+		// currently indistinguishable (measured by mutation, 2026-08-14: the whole suite stays green),
+		// and the reason to pass this one is that a later change to what the ranking reads must not have
+		// to notice that the injector was feeding it a different context from everything else.
+		Map<DrugReference, DrugReference> matched = matchingEntries(orderEntries, question, context);
 		List<SafetyWarning> findings = preAnswerFindings(context, question);
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
 		if (matched.isEmpty() && findings.isEmpty() && unrepresented.isEmpty()) {
@@ -256,8 +264,10 @@ public class DrugReferenceInjector {
 		// LlmInferenceService gives for trusting the chart over a re-read — a flag that flips mid-loop
 		// would leave record [7] carrying a patient-specific reading and record [8] not.
 		boolean patientReading = statesTheChartsContraindicationReading(context);
-		for (DrugReference ref : matched) {
-			RenderedReference rendered = render(ref, age, context, orderEntries, patientReading);
+		for (Map.Entry<DrugReference, DrugReference> match : matched.entrySet()) {
+			DrugReference ref = match.getKey();
+			RenderedReference rendered =
+					render(ref, age, context, orderEntries, patientReading, match.getValue());
 			// The rendering's own bookkeeping rides on the mapping, not in the line — see
 			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
 			// grounding verifier still compares against exactly what the model read.
@@ -485,6 +495,15 @@ public class DrugReferenceInjector {
 	 * Deduplicated union of question-driven and patient-driven matches, query matches first — <b>one
 	 * entry per SUBSTANCE</b>, not one per reference row (issue #163, see {@code collect}).
 	 *
+	 * <p><b>@return the row each record RENDERS mapped to the row this response NAMES that substance
+	 * by</b> — {@link DrugReference#canonicalRow} and {@link DrugSafetyValidator#interactionSubject}
+	 * respectively, which are the same row for every one-row substance and for every substance the
+	 * chart says nothing about. The two are carried together rather than the second being re-derived at
+	 * the render site, because they are answers about the same GROUP and the group is gone by then: a
+	 * renderer handed only the surviving row could not tell a substance filed as one row from a
+	 * substance filed as four whose siblings the chart never named. See {@link #rowAttribution} for what
+	 * the second is used for, and for why it is not used to change the first.
+	 *
 	 * <p>Order-driven injection is <em>relevance-scoped</em>: an active-order reference is injected only
 	 * when the question is about a specific drug clinically related to that order (sharing an ATC
 	 * chemical subgroup or a curated cross-reactivity group — a real duplicate-therapy /
@@ -524,8 +543,15 @@ public class DrugReferenceInjector {
 	 *       route-qualified row can now be represented by the route-unspecified one — a different
 	 *       {@code resourceId} on the wire and a different row's rules rendered. The direction is
 	 *       monotone and is the one issue #163 asks for ({@link DrugReference#canonicalRow} only ever
-	 *       moves toward {@link DrugReference#namesNoRoute()}), and it makes this record agree with the
-	 *       chip layer's subject rather than diverge from it.</li>
+	 *       moves toward {@link DrugReference#namesNoRoute()}).
+	 *       <p>This used to add "and it makes this record agree with the chip layer's subject rather
+	 *       than diverge from it". That was true when written and is <b>not</b> true now, which is
+	 *       issues #237/#259: since issue #194 anchored a chip's subject on the CHART and issue #206
+	 *       gave every arm one answer, the chip layer's subject is {@code interactionSubject}'s and
+	 *       moving toward {@code namesNoRoute()} moves this record AWAY from it wherever the patient's
+	 *       own record names a qualified row. What reconciles them is {@link #rowAttribution}, which
+	 *       says which row this record is — deliberately rather than changing which row it renders,
+	 *       for the coverage reason recorded there.</p></li>
 	 *   <li>An order that IS the question's drug shares every subgroup with itself, so the order leg
 	 *       collects it. Under the default configuration that is invisible — the question leg collected
 	 *       it first — but with {@code injectFromQuery=false} the order leg is now what supplies it on a
@@ -543,14 +569,28 @@ public class DrugReferenceInjector {
 	 *        instead ({@code OrderDrivenInjectionResolutionTest
 	 *        .aNullClinicalContextStillInjectsTheQuestionsOwnDrug})
 	 * @param question the clinician's query, which drives the question leg and scopes the order leg
+	 * @param context the patient's clinical context AFTER
+	 *        {@link DrugReferenceService#withReferenceNames}, whose active-order NAMES anchor which row
+	 *        this response names each substance by. May be null — "nothing known about the patient",
+	 *        which ranks no row above another and so leaves {@link DrugReference#canonicalRow} deciding
+	 *        exactly as it did before issues #237/#259; it is the same latitude
+	 *        {@code orderEntries} has, and {@code ReferenceRecordRowAttributionTest
+	 *        .aNullContextStatesNoAttributionAtAll} pins it
 	 */
-	List<DrugReference> matchingEntries(List<DrugReference> orderEntries, String question) {
+	Map<DrugReference, DrugReference> matchingEntries(List<DrugReference> orderEntries, String question,
+			PatientClinicalContext context) {
 		// One record per SUBSTANCE, not per reference row (issue #163). A per-call local, never a field —
 		// issue #172's rule, for the reasons DrugReferenceService's class javadoc gives, NOT the
 		// getAll() hot-reload this used to cite, which does not exist. The one that applies here is the
 		// first: this bean is a Spring singleton, so a field memo would be one unsynchronized map shared
 		// by every concurrent request.
-		Map<Object, DrugReference> bySubstance = new LinkedHashMap<Object, DrugReference>();
+		//
+		// The substance's ROWS are kept rather than folded as they arrive (issues #237/#259): the row
+		// this record RENDERS is still canonicalRow's, but which row this RESPONSE names the substance by
+		// is DrugSafetyValidator.interactionSubject's answer over the whole group, and a pairwise fold
+		// cannot produce it — that ranking takes a maximum over the group, so folding it two rows at a
+		// time is a local variant of a decision CLAUDE.md says has exactly one definition.
+		Map<Object, List<DrugReference>> bySubstance = new LinkedHashMap<Object, List<DrugReference>>();
 
 		// The reference drugs the question itself names — drives question-driven injection AND scopes
 		// the order-driven injection below, so it is computed regardless of the injectFromQuery toggle.
@@ -586,12 +626,30 @@ public class DrugReferenceInjector {
 			}
 		}
 
-		return new ArrayList<DrugReference>(bySubstance.values());
+		// The row each record renders, mapped to the row this response NAMES its substance by. A
+		// LinkedHashMap so the record order is the collection order the two legs produced, which is what
+		// every citation index in this chart depends on. Keyed on the rendered row — DrugReference
+		// defines no equals, so this is identity, and one substance contributes exactly one rendered row.
+		Map<DrugReference, DrugReference> subjects =
+				new LinkedHashMap<DrugReference, DrugReference>();
+		for (List<DrugReference> rows : bySubstance.values()) {
+			subjects.put(DrugReference.canonicalRow(rows),
+					DrugSafetyValidator.interactionSubject(rows, context));
+		}
+		return subjects;
 	}
 
 	/**
-	 * Record {@code ref} as the entry to inject for its substance, keeping the row that best represents
-	 * it ({@link DrugReference#canonicalRow}) when the substance is filed as several.
+	 * Record {@code ref} among the rows of its substance, from which the caller picks the one this
+	 * record renders ({@link DrugReference#canonicalRow}) and the one this response names the substance
+	 * by ({@link DrugSafetyValidator#interactionSubject}).
+	 *
+	 * <p>The rows are KEPT rather than folded as they arrive (issues #237/#259). Both choices were a
+	 * pairwise fold here until the second was needed, and only the first can be made that way:
+	 * {@code canonicalRow} is associative over pairs, while the subject ranking takes a MAXIMUM over the
+	 * group's claims and then folds among the rows tied on it, which two rows at a time cannot compute.
+	 * Approximating it pairwise would be a local variant of a decision CLAUDE.md gives exactly one
+	 * definition, and it is the variant that answers differently on precisely the families this is for.
 	 *
 	 * <p><b>Why the key is the substance (issue #163).</b> This map was keyed on {@code ref.getId()}, and
 	 * route/formulation variants of one substance deliberately carry DISTINCT ids — the {@code ddinter}
@@ -644,10 +702,33 @@ public class DrugReferenceInjector {
 	 * assembled from several rows would have to choose one and then cite prose the chosen row does not
 	 * carry.
 	 */
-	private static void collect(Map<Object, DrugReference> bySubstance, DrugReference ref) {
+	private static void collect(Map<Object, List<DrugReference>> bySubstance, DrugReference ref) {
 		Object substance = ref.substanceKey();
 		Object key = substance != null ? substance : ref.getId();
-		bySubstance.put(key, DrugReference.canonicalRow(bySubstance.get(key), ref));
+		List<DrugReference> rows = bySubstance.get(key);
+		if (rows == null) {
+			bySubstance.put(key, rows = new ArrayList<DrugReference>());
+		}
+		// Both legs can reach one row (a question naming a drug the patient is also on), and a row
+		// listed twice would make it its own sibling — a substance whose rows all fold to one name, which
+		// is exactly the shape rowAttribution must stay silent on. Identity, not equals: DrugReference
+		// defines none, and these are the same objects from the same parsed dataset either way.
+		if (!containsSame(rows, ref)) {
+			rows.add(ref);
+		}
+	}
+
+	/** @return whether {@code rows} already holds THIS object. {@link DrugReference} defines no
+	 *          {@code equals}, so {@code contains} would answer this anyway — written out because the
+	 *          answer being identity is the point rather than an accident of the class, and a later
+	 *          {@code equals} on {@link DrugReference} must not silently merge two rows here. */
+	private static boolean containsSame(List<DrugReference> rows, DrugReference ref) {
+		for (DrugReference row : rows) {
+			if (row == ref) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** @return true when {@code order} shares an ATC level-4 subgroup — or, failing that, a curated
@@ -1088,6 +1169,13 @@ public class DrugReferenceInjector {
 	 * the chart must not report an absence. {@code orderEntries} is passed straight through to the
 	 * interactions method, which groups a partner the patient is on by the entry it resolves to (issue
 	 * #190 item 2).
+	 *
+	 * <p>{@code subject} is the row THIS RESPONSE names {@code ref}'s substance by — the caller's
+	 * {@link #matchingEntries} answer, not something re-derived here, because it is a fact about the
+	 * substance's whole row GROUP and this method holds one row of it. It is read by
+	 * {@link #rowAttribution} alone and changes nothing else in the rendering: where it is {@code ref}
+	 * itself, which is every one-row substance and every substance the chart says nothing about, this
+	 * method's output is byte-identical to what it produced before issues #237/#259.
 	 */
 	/**
 	 * @return whether an injected record may state what THIS patient's chart records of a drug's
@@ -1113,7 +1201,7 @@ public class DrugReferenceInjector {
 	}
 
 	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context,
-			List<DrugReference> orderEntries, boolean patientReading) {
+			List<DrugReference> orderEntries, boolean patientReading, DrugReference subject) {
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
 		StringBuilder paren = new StringBuilder();
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {
@@ -1132,6 +1220,12 @@ public class DrugReferenceInjector {
 			sb.append(" (").append(paren).append(")");
 		}
 		sb.append(".");
+
+		// BEFORE everything it qualifies, which is the whole record — the same reason issue #208 item 2
+		// puts the contraindication reading in front of the list rather than after it: a model reading
+		// forward has the qualifier before the content, and the numbers below are the first content it
+		// reaches.
+		sb.append(rowAttribution(ref, subject));
 
 		DrugReference.AgeBand band = ref.bandForAge(age);
 		if (band != null) {
@@ -1262,6 +1356,79 @@ public class DrugReferenceInjector {
 		// sections above are — the dataset is operator-editable.
 		String source = ChartSearchAiUtils.firstNonBlank(ref.getSource());
 		return new RenderedReference(sb.toString(), source != null ? source.trim() : null, withheld);
+	}
+
+	/**
+	 * @return the clause saying which row of a substance this record describes, or the empty string when
+	 *         this response names that substance by the very row being rendered — which is every record
+	 *         of a one-row substance, and so every record any BUNDLED CURATED dataset can produce.
+	 *
+	 *         <p><b>Issues #237 and #259.</b> The row a record renders is {@link DrugReference#canonicalRow}'s,
+	 *         a fold over the dataset that cannot see the chart; the row every CHIP names is
+	 *         {@link DrugSafetyValidator#interactionSubject}'s, which ranks the patient's own record
+	 *         first (issues #187, #194, #206). So wherever the chart names a non-canonical row, one
+	 *         response called one substance two things, in two citable records:
+	 *         <pre>
+	 *         [4] Drug reference — Dexamethasone (ATC …)
+	 *         [5] Safety finding — Dexamethasone (ophthalmic): … interacts with active order phenytoin
+	 *         </pre>
+	 *         Measured 2026-08-14 over the shipped 19 MB KB through the real {@code injectRecords} and
+	 *         the real {@code validate}: 104 of its 129 multi-row substances, being every one that could
+	 *         be posed with both a record and a chip. Re-measure before relying on the figure.
+	 *
+	 *         <p><b>#259 is the same split reaching a NUMBER</b>, and a number is worse: the record
+	 *         renders the canonical row's age band, so a clinician reading the cited record sees
+	 *         {@code maximum 3000 mg/day} beside a chip that warned at the charted row's 2000, with
+	 *         nothing saying whose 3000 that is. This clause is what says it — the record's ceiling stays
+	 *         its own row's, exactly as issue #244 kept the chip's.
+	 *
+	 *         <p><b>Rendering the CHARTED row instead was measured and declined.</b> Over the same KB,
+	 *         drawing the patient's partner from the canonical row, a record rendered from the charted
+	 *         row fails to name that partner in <b>74 of 129</b> families against 0 for the canonical row
+	 *         — the route-unspecified row is the one carrying the breadth, which is why
+	 *         {@code canonicalRow} was the right choice for issue #163 and still is. Swapping the row
+	 *         would trade a naming fix for a coverage loss, and would move every citation's
+	 *         {@code resourceId} besides. So this changes no row's turn to be rendered; what it changes
+	 *         is that the record SAYS which row it is.
+	 *
+	 *         <p><b>Worded as a CONTRAST</b>, and the wording is issue #244's rather than a new one —
+	 *         {@link DrugSafetyValidator#ceilingAttribution} solved this exact problem for the chip and
+	 *         its reasoning transfers whole: a bare second name reads as a second formulation in play,
+	 *         while naming both rows and saying which claim attaches to which leaves the sentence a fact
+	 *         about the DATASET, which is what it is. The guard is literally shared
+	 *         ({@link DrugSafetyValidator#worthNamingApart}) rather than restated, because the case it
+	 *         exists for is the same one: an operator-editable file may put two rows under ONE display
+	 *         name, for which "for X, not for X" is a contradiction shown to a clinician.
+	 *
+	 *         <p><b>A null CONTEXT is silent without needing a branch</b>, which is worth stating because
+	 *         the contraindication reading beside it does need one. "Nothing known about the patient" is
+	 *         an empty recorded-name set, every row then ties at {@link DrugReference#NAME_NO_MATCH}, and
+	 *         {@link DrugSafetyValidator#interactionSubject} answers the fold's row — the very row being
+	 *         rendered. So the record claims nothing about a chart it could not see because there is
+	 *         nothing to claim, not because a guard suppressed it. The null {@code subject} check below
+	 *         is for a caller that supplied none at all and is defensive only:
+	 *         {@code interactionSubject} answers null solely for an empty group, which a rendered record
+	 *         cannot come from.
+	 */
+	private static String rowAttribution(DrugReference ref, DrugReference subject) {
+		if (subject == null) {
+			return "";
+		}
+		// getName(), NEVER displayLabel(): the synonym-augmented label is a chip-display concern and is
+		// documented on DrugReference.displayLabel as never entering prompt text, which
+		// DrugSafetyQuestionPairInteractionTest's sibling
+		// DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText pins for the rest of
+		// this record. This clause is prompt text like the rest of it, and it must name the rows the way
+		// the header above names them or the sentence would contrast a name the record never uses.
+		// (That is why worthNamingApart takes two strings rather than two rows: the chip supplies its
+		// display vocabulary and the record its prompt vocabulary, and only the comparison is shared.)
+		String rendered = ref.getName();
+		String named = subject.getName();
+		if (!DrugSafetyValidator.worthNamingApart(rendered, named)) {
+			return "";
+		}
+		return " Published for " + rendered + ", not for " + named + " — the row this patient's record "
+				+ "names, filed separately for the same substance.";
 	}
 
 	/** Appends one section of a rendered record — {@code lead}, the items joined by the {@code "; "}

@@ -1668,7 +1668,7 @@ public class DrugSafetyValidator {
 	 *        the names of the ONE order that partner is; empty is normal and means the fold alone
 	 *        decides
 	 */
-	private static DrugReference interactionSubject(List<DrugReference> rows,
+	static DrugReference interactionSubject(List<DrugReference> rows,
 			Collection<String> recordedNames) {
 		if (rows.size() == 1) {
 			// The fold and the ranking both answer "that row" for a group of one, so this is provably the
@@ -1678,6 +1678,41 @@ public class DrugSafetyValidator {
 			return rows.get(0);
 		}
 		return DrugReference.canonicalRow(strongestClaimants(rows, recordedNames));
+	}
+
+	/**
+	 * @return {@link #interactionSubject}'s answer for a caller holding a context rather than a name set
+	 *         — the row {@code rows}' substance is NAMED by in this response. One method with two
+	 *         arities, never a second definition: {@code recordedDrugNames} is the only thing added, and
+	 *         it is the same null-safe read {@code validate} makes before building {@link
+	 *         SubstanceSubjects}.
+	 *
+	 *         <p><b>Why there is a caller outside this class (issues #237, #259).</b>
+	 *         {@code DrugReferenceInjector} renders one citable record per substance from
+	 *         {@link DrugReference#canonicalRow}, which is a fold over the dataset and cannot see the
+	 *         chart. Every chip names its subject through this method, which anchors on the chart first.
+	 *         So wherever the patient's own record names a non-canonical row, the record and the chips
+	 *         beside it called one substance two things — measured 2026-08-14 over the shipped 19 MB KB
+	 *         through the real {@code injectRecords} and the real {@code validate}: 104 of the 129
+	 *         multi-row substances, every one that could be posed with both surfaces.
+	 *
+	 *         <p>The injector reads this to decide whether it has something to SAY, not to choose the row
+	 *         it renders — see {@code DrugReferenceInjector.rowAttribution} for why the row itself does
+	 *         not move. That is what keeps this a widening of readers rather than a new chip-subject
+	 *         site: the rule in {@link #interactionSubject}'s own javadoc — that a chip arm looks its
+	 *         subject up through {@link SubstanceSubjects} rather than calling this directly — binds arms
+	 *         that RAISE chips inside one {@code validate} pass, and the injector raises none.
+	 *
+	 *         <p>It asks over its OWN per-substance rows, which is the group this pass resolved: for a
+	 *         substance the question names, {@code findImpliedByQuery} answers every row of it (the rows
+	 *         of one substance publish the same aliases), and for one an order resolves,
+	 *         {@code findForActiveOrders} does the same. The injector runs inside the pre-answer pass, so
+	 *         the recorded names are the same read. What it cannot see is the rows the ANSWER puts in
+	 *         play, which is the per-pass residue {@link SubstanceSubjects}' javadoc already records and
+	 *         bounds.
+	 */
+	static DrugReference interactionSubject(List<DrugReference> rows, PatientClinicalContext context) {
+		return interactionSubject(rows, recordedDrugNames(context));
 	}
 
 	/**
@@ -4758,11 +4793,34 @@ public class DrugSafetyValidator {
 	 */
 	private static String ceilingAttribution(String named, DrugReference ref) {
 		String published = ref.displayLabel();
-		if (ChartSearchAiUtils.isBlank(published) || ChartSearchAiUtils.isBlank(named)
-				|| DrugReference.normalizeName(published).equals(DrugReference.normalizeName(named))) {
+		if (!worthNamingApart(published, named)) {
 			return "";
 		}
 		return " — a ceiling this dataset publishes for " + published + ", not for " + named;
+	}
+
+	/**
+	 * @return whether a sentence contrasting the rows labelled {@code published} and {@code named} would
+	 *         say anything — false when either label is blank, and false when the two are ONE name.
+	 *
+	 *         <p>The shared half of {@link #ceilingAttribution} and of
+	 *         {@code DrugReferenceInjector.rowAttribution}, which are the same question asked of a chip
+	 *         and of the injected record: "this claim is filed under a row other than the one this
+	 *         response names — say which". Shared rather than restated because a second copy is how the
+	 *         two surfaces come to disagree about when they may speak, and the guard is the load-bearing
+	 *         half: an operator-editable dataset may file two rows under ONE display name (the parse
+	 *         drops an entry only for a blank id or name), for which "for X, not for X" is a
+	 *         contradiction shown to a clinician rather than a provenance.
+	 *
+	 *         <p>{@link DrugReference#normalizeName} and not {@code equals}, because that is this
+	 *         module's identity rule between two REFERENCE strings (CLAUDE.md's three-shapes rule) and
+	 *         {@code Ranitidine} and {@code ranitidine} are one name. The blank half is the same
+	 *         degradation every rendered section takes: the dataset is operator-editable, so a missing
+	 *         label skips its element rather than emitting a literal {@code null}.
+	 */
+	static boolean worthNamingApart(String published, String named) {
+		return !ChartSearchAiUtils.isBlank(published) && !ChartSearchAiUtils.isBlank(named)
+				&& !DrugReference.normalizeName(published).equals(DrugReference.normalizeName(named));
 	}
 
 	/**

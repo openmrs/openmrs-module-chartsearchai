@@ -1,0 +1,85 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #259 — not shipped data",
+  "description": "One substance filed as two rows publishing DIFFERENT daily ceilings, which is what separates this from drug-reference-substance-dosing-rows.json (whose two Amoxicillin rows publish the same 3000 and are that file's same-row control). Here the route-unspecified row publishes 3000 and the suspension 2000, so a patient whose chart names the suspension gets a dose chip quoting 2000 beside an injected reference record rendered from the 3000 row — the two numbers issue #259 reports. `Ranitidine`/`ranitidine` are two rows of one substance carrying ONE display name, publishing different ceilings, so the attribution clause would read \"for Ranitidine, not for Ranitidine\": the guard case, borrowed in shape from DoseCeilingAttributionTest.twoRowsPublishingOneNameAreAttributedToNobodyEither. `Cefadroxil` is a single-row substance, the control that must gain no clause. No entry carries contraindications, so every chip here is the dose arm's own.",
+  "entries": [
+    {
+      "id": "amoxicillin-suspension",
+      "name": "Amoxicillin (suspension)",
+      "substanceName": "amoxicillin",
+      "aliases": ["amoxicillin"],
+      "atcCodes": ["J01CA04"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 15, "mgPerKgMax": 30, "maxDailyDoseMg": 2000 }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "amoxicillin",
+      "name": "Amoxicillin",
+      "substanceName": "amoxicillin",
+      "aliases": ["amoxicillin"],
+      "atcCodes": ["J01CA04"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 15, "mgPerKgMax": 30, "maxDailyDoseMg": 3000 }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ranitidine-first",
+      "name": "Ranitidine",
+      "substanceName": "ranitidine",
+      "aliases": ["ranitidine"],
+      "atcCodes": ["A02BA02"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 2, "mgPerKgMax": 4, "maxDailyDoseMg": 300 }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ranitidine-second",
+      "name": "ranitidine",
+      "substanceName": "ranitidine",
+      "aliases": ["ranitidine"],
+      "atcCodes": ["A02BA02"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 2, "mgPerKgMax": 4, "maxDailyDoseMg": 150 }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "acetylsalicylic-acid",
+      "name": "Acetylsalicylic acid",
+      "genericName": "aspirin",
+      "substanceName": "acetylsalicylic acid",
+      "aliases": ["acetylsalicylic acid", "aspirin"],
+      "atcCodes": ["B01AC06"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 1, "mgPerKgMax": 2, "maxDailyDoseMg": 4000 }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "acetylsalicylic-acid-ec",
+      "name": "Acetylsalicylic acid (enteric-coated)",
+      "genericName": "aspirin",
+      "substanceName": "acetylsalicylic acid",
+      "aliases": ["acetylsalicylic acid", "aspirin"],
+      "atcCodes": ["B01AC06"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 1, "mgPerKgMax": 2, "maxDailyDoseMg": 300 }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "cefadroxil",
+      "name": "Cefadroxil",
+      "aliases": ["cefadroxil"],
+      "atcCodes": ["J01DB05"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 15, "mgPerKgMax": 30, "maxDailyDoseMg": 2000 }
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

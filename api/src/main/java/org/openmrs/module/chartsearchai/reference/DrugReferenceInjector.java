@@ -641,8 +641,22 @@ public class DrugReferenceInjector {
 		// record falls silent in exactly the case issues #237/#259 are about. That is the "narrowed row
 		// group" hazard DrugSafetyValidator.interactionSubject's own javadoc names, and it would have
 		// made the clause configuration-dependent — the thing rowAttribution's javadoc argues must not
-		// happen. So the group is questionDrugs plus every order-resolved row, ungated: the same rows
+		// happen. So the group is questionDrugs plus every order-resolved row, ungated: the same INPUTS
 		// DrugSafetyValidator.resolvedSubstanceRows folds for the chips in this same pre-answer pass.
+		//
+		// The inputs, not the grouping — the two key differently and saying otherwise would mislead the
+		// next reader who widens this. `collect` falls back to getId() where a source publishes no
+		// substance name, while `groupFor` falls back to substanceGroupKey()'s row identity, so two rows
+		// sharing an id are ONE group here and TWO there. Nothing downstream can act on the difference:
+		// rowAttribution refuses to speak at all when substanceKey() is null, which is exactly that case.
+		//
+		// Built only when something is being injected: its sole consumer is the loop below, so with no
+		// matched substance it would walk every active order into a map nobody reads.
+		Map<DrugReference, DrugReference> subjects =
+				new LinkedHashMap<DrugReference, DrugReference>();
+		if (bySubstance.isEmpty()) {
+			return subjects;
+		}
 		Map<Object, List<DrugReference>> subjectRows = new LinkedHashMap<Object, List<DrugReference>>();
 		for (DrugReference ref : questionDrugs) {
 			collect(subjectRows, ref);
@@ -651,8 +665,6 @@ public class DrugReferenceInjector {
 			collect(subjectRows, ref);
 		}
 
-		Map<DrugReference, DrugReference> subjects =
-				new LinkedHashMap<DrugReference, DrugReference>();
 		for (Map.Entry<Object, List<DrugReference>> substance : bySubstance.entrySet()) {
 			List<DrugReference> injected = substance.getValue();
 			// The substance's rows as the whole pass resolved them, falling back to the injected ones for
@@ -687,6 +699,23 @@ public class DrugReferenceInjector {
 	 *         route-qualified row while the patient is on an order whose display name ties every row, for
 	 *         instance — and calling that "the row this patient's record names" is a claim about a chart
 	 *         that said no such thing.
+	 *
+	 *         <p><b>KNOWN RESIDUE, stated rather than discovered.</b> Answering null here is silence, not
+	 *         agreement. The comparison is against the fold over the SUBJECT group, while the row the
+	 *         record renders is the fold over the narrower INJECTED set, and once those differ the two
+	 *         surfaces can still diverge with nothing saying so: a question resolving only a qualified
+	 *         row renders that row's record, while the chip layer — whose group is the same union — names
+	 *         the substance by the unqualified row. That is issue #237's shape surviving in the one case
+	 *         this method deliberately stays quiet about, and
+	 *         {@code ReferenceRecordRowAttributionTest.aSubjectTheFoldMovedRatherThanTheChartIsAttributed
+	 *         ToNobody} pins the silence rather than blessing the divergence.
+	 *
+	 *         <p>Closing it needs a SECOND sentence rather than a wider guard: the existing one would be
+	 *         false there, because no recorded name chose the row, so the choice is between a differently
+	 *         worded clause for the fold-moved case and leaving it. That is a wording decision with no
+	 *         measurement behind it yet, and this module does not invent clinician-facing vocabulary on a
+	 *         guess — see {@code DrugSafetyValidator.ceilingAttribution}, whose wording was settled by
+	 *         issue #244 against measured alternatives.
 	 */
 	private static DrugReference chartAnchoredSubject(List<DrugReference> rows,
 			PatientClinicalContext context) {

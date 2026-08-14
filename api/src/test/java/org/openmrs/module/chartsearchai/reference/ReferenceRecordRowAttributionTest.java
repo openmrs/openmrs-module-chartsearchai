@@ -445,6 +445,13 @@ public class ReferenceRecordRowAttributionTest {
 						+ "and only canonicalRow can move the subject");
 		assertSame(unqualified, DrugReference.canonicalRow(Arrays.asList(topical, unqualified)),
 				"precondition: which it does — the fold prefers the route-unspecified row");
+		// The premise its sibling asserts and this one used to omit: the order must actually bring the
+		// UNQUALIFIED row into the pass, because that is the only thing making the subject group wider
+		// than the injected set. Without it the group is one row, interactionSubject takes its short cut,
+		// and the assertFalse below passes with the guard never reached.
+		assertTrue(DrugReferenceTestSupport.names(service.findForActiveOrders(
+				chartNaming(service, 30, 70.0, "Clobetasol 0.05%"))).contains("Clobetasol"),
+				"precondition: the order must resolve the unqualified row into the pass");
 
 		String record = DrugReferenceTestSupport.referenceTextNaming(
 				inject(service, chartNaming(service, 30, 70.0, "Clobetasol 0.05%"),
@@ -455,6 +462,16 @@ public class ReferenceRecordRowAttributionTest {
 		assertFalse(record.contains(ATTRIBUTION_LEAD),
 				"a subject the FOLD moved is not a row the chart named, and the record may not say it "
 						+ "was, was: " + record);
+		// What this case does NOT claim, so it is not read as blessing the arrangement. Silence here is
+		// the conservative half of a KNOWN RESIDUE, not agreement between the surfaces: the record is
+		// headed "Clobetasol (topical)" while a chip about this substance would name it "Clobetasol",
+		// because the chip layer folds the same union this method's guard folds. That is issue #237's
+		// shape surviving in the one case chartAnchoredSubject deliberately stays quiet about, and
+		// closing it needs a differently worded second clause — see chartAnchoredSubject's javadoc,
+		// which records why that wording is not guessed here.
+		assertEquals("Clobetasol (topical)", DrugReference.canonicalRow(Collections.singletonList(topical))
+				.getName(), "the record really is headed by the qualified row, which is what makes the "
+						+ "residue above a residue rather than a hypothetical");
 	}
 
 	@Test

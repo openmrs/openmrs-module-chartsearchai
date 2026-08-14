@@ -143,6 +143,11 @@ import org.springframework.stereotype.Service;
  * exempt from the severity floor, not filtered by it, so unrated pairs are screened too). The
  * active-order contraindication arm reports only a drug the patient is ON whose own allergy or
  * condition records contraindicate it, and stands down entirely when neither is recorded.
+ *
+ * <p><b>Every memo of anything derived from {@code DrugReferenceService.getAll()} is a per-call LOCAL
+ * of the pass that made it, never a field of this bean</b> — issue #172's rule, stated with its reasons
+ * in {@code DrugReferenceService}'s class javadoc. Said here because this class holds most of the sites
+ * it binds, and a reader adding one is in this file rather than that one.
  */
 @Service("chartSearchAi.drugSafetyValidator")
 public class DrugSafetyValidator {
@@ -349,9 +354,9 @@ public class DrugSafetyValidator {
 		// went through interactionSubject.
 		//
 		// Per-validate locals, never fields — issue #172's rule, for the reasons DrugReferenceService's
-		// class javadoc gives and not the getAll() hot-reload these comments used to cite: there is none
-		// (measured 2026-08-14, statically and on a running server). This bean is a Spring singleton, so
-		// a field memo is one unsynchronized structure shared by every concurrent request.
+		// class javadoc gives, NOT the getAll() hot-reload these comments used to cite, which does not
+		// exist. This bean is a Spring singleton, so a field memo is one unsynchronized structure shared
+		// by every concurrent request.
 		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
 		SubstanceSubjects subjects = new SubstanceSubjects(resolvedRows, recordedDrugNames(context));
 
@@ -386,8 +391,10 @@ public class DrugSafetyValidator {
 
 		// One ledger of the (substance, partner) pairs an interaction chip has been raised for, spanning
 		// the drug-in-play arm below and the screening arm at the end — see InteractionPairs. Like the
-		// contraindication ledger above it is a per-validate local, and for the same reason: it is a memo
-		// of getAll()-derived keys, and this bean is a singleton (issue #172, see above).
+		// contraindication ledger above it is a per-validate local, and for a sharper version of the same
+		// reason (issue #172, see above): a ledger records what THIS pass already raised, so on a
+		// singleton bean a field would go on suppressing chips for every later patient — not a stale
+		// answer but a missing one.
 		InteractionPairs interactionPairs = new InteractionPairs();
 
 		// The patient's recorded allergies resolved to the SUBSTANCES they name, ONE resolution per pass
@@ -398,8 +405,10 @@ public class DrugSafetyValidator {
 		// repeat is several dataset sweeps rather than one. Same shape as orderEntries above (issue #136),
 		// and a per-validate local for the same reason as the two ledgers (issue #172, see above) — plus
 		// one of its own, since this memo has no key: it is a function of THIS patient's allergy tokens,
-		// so a field would answer for whoever asked first. RecordedAllergenMemoScopeTest is the case that
-		// pins the rule at this site; before it, nothing did.
+		// so a field would answer for whoever asked first. RecordedAllergenMemoScopeTest pins the shape
+		// of that a functional case can see — a memo outliving the entries it was resolved from — and
+		// before it nothing pinned even that. Reassigning a FIELD here once per pass stays green on it;
+		// see that test's javadoc, which names what it does not cover.
 		List<List<DrugReference>> recordedAllergens = warnContra
 				? recordedAllergens(context) : Collections.<List<DrugReference>> emptyList();
 
@@ -735,9 +744,11 @@ public class DrugSafetyValidator {
 	 * {@code estrone} and nothing spelled {@code estrone sulfate}; see
 	 * {@link DrugReferenceService#findImpliedByQuery}) — and reasoned rather than measured.
 	 *
-	 * <p>Memoised for the pass and not beyond it — issue #172's rule, for the reasons
-	 * {@link DrugReferenceService}'s class javadoc gives and not the {@code getAll()} hot-reload this
-	 * used to cite: there is none (measured 2026-08-14).
+	 * <p>Memoised for the pass and not beyond it. The memo below IS a field, of an object {@code validate}
+	 * constructs per pass — which is the shape issue #172's rule asks for, and the rule binds the step
+	 * this must never take: hoisting it onto the VALIDATOR, where {@link DrugReferenceService}'s class
+	 * javadoc gives the reasons. Not the {@code getAll()} hot-reload this used to cite, which does not
+	 * exist.
 	 */
 	private static final class SubstanceSubjects {
 
@@ -1418,8 +1429,8 @@ public class DrugSafetyValidator {
 	 * <p>In-play rows come FIRST and order rows after, so a full tie on {@link #outranks} keeps a row
 	 * the text actually named. It is still a per-{@code validate} local for issue #172's reason — which
 	 * lives in {@link DrugReferenceService}'s class javadoc and not on the issue, whose own statement of
-	 * it was measured false — and the lists are the ones {@link #substanceRows} just built, so appending
-	 * to them mutates nothing shared.
+	 * it is false — and the lists are the ones {@link #substanceRows} just built, so appending to them
+	 * mutates nothing shared.
 	 */
 	private static Map<Object, List<DrugReference>> resolvedSubstanceRows(
 			Collection<DrugReference> inPlay, List<DrugReference> orderEntries) {
@@ -2692,8 +2703,8 @@ public class DrugSafetyValidator {
 	 *         {@link #bestRulePerPartner} / {@link #outranks} instead.
 	 *
 	 *         <p>A per-{@code validate} local map, never a field — issue #172's rule, for the reasons
-	 *         {@link DrugReferenceService}'s class javadoc gives and not the {@code getAll()} hot-reload
-	 *         this used to cite: there is none (measured 2026-08-14).
+	 *         {@link DrugReferenceService}'s class javadoc gives, NOT the {@code getAll()} hot-reload
+	 *         this used to cite, which does not exist.
 	 *
 	 * @param recordedNames passed through to {@link #interactionSubject}, so the screening arm anchors a
 	 *        substance's representative row on the patient's own order names exactly as the drug-in-play
@@ -3753,11 +3764,12 @@ public class DrugSafetyValidator {
 		// partly-covered order rescans the dataset for every code it carries; substanceRowsNamedBy is a
 		// resolution of every name of an order and issue #185 asks it once per UNNAMEABLE code while
 		// issue #228's leg asks it once per unmapped order. A
-		// field would be issue #172's trap, for the reasons DrugReferenceService's class javadoc gives
-		// and not the getAll() hot-reload this used to cite — there is none (measured 2026-08-14). Both
-		// of those reasons bite hardest here: this bean is a singleton, and two of the four memos are
-		// keyed on an ActiveDrugOrder, which is a per-request object, so a field would grow for the life
-		// of the JVM. (The fourth is bounded by the dataset — see findImpliedByDrugName(String, Map).)
+		// field would be issue #172's trap, for the reasons DrugReferenceService's class javadoc gives,
+		// NOT the getAll() hot-reload this used to cite, which does not exist. Both of those reasons
+		// bite hardest here: this bean is a singleton, and TWO of the four memos are keyed on an
+		// ActiveDrugOrder, which is a per-request object, so a field would grow for the life of the JVM.
+		// The other two are bounded and take only the singleton reason — entryByCode by the ATC code
+		// space, impliedByName by the dataset's own aliases (see findImpliedByDrugName(String, Map)).
 		Map<String, DrugReference> entryByCode = new LinkedHashMap<String, DrugReference>();
 		Map<PatientClinicalContext.ActiveDrugOrder, DrugReference> substanceByOrder =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, DrugReference>();

@@ -52,36 +52,55 @@ import org.springframework.stereotype.Service;
  *
  * <p><b>Memoising anything derived from {@link #getAll()}: in a per-call LOCAL, never in a field.</b>
  * Issue #172's rule, and it binds every site that caches a resolution — here, in
- * {@link DrugSafetyValidator} and in {@link DrugReferenceInjector}. Nine comments across those three
+ * {@code DrugSafetyValidator} and in {@code DrugReferenceInjector}. Nine comments across those three
  * classes used to justify it by a {@code getAll()} hot-reload, and <b>issue #172's own text still
  * does</b> — which is why the reason is stated HERE, and why a {@code #172} pointer elsewhere in this
- * package that carries no reason of its own means this paragraph and not the issue.
- * ({@link CrossReactivityGroup#containsAnyCode} carries its own, and #248 measured it separately.)
+ * package that carries no reason of its own means this paragraph and not the issue. Two sites take the
+ * same RULE for a reason of their own rather than for these — {@link DrugReferenceValidity} and the
+ * local that builds one in {@code ensureLoaded} are per-LOAD collectors, not {@code getAll()} memos,
+ * and each says so where it stands.
  *
  * <p>There is no such reload. Measured 2026-08-14, two ways: statically, {@code dataset} is written
  * only by {@code ensureLoaded()} when it is null and by the package-private {@code setEntries} test
- * seam, which has no production caller — the module
- * registers no {@code GlobalPropertyListener} and exposes no reload endpoint; and live, flipping
+ * seam, which has no production caller — the module registers no {@code GlobalPropertyListener} and
+ * exposes no reload endpoint — a property
+ * {@code DrugReferenceLoadContextTest.loadStatusDoesNotDriftFromTheCachedEntriesWhenTheGlobalPropertiesChange}
+ * has pinned in-suite all along, by flipping both global properties after a load and asserting that
+ * neither {@link #getLoadStatus()} nor {@link #getAll()} moves; and live, flipping
  * {@code chartsearchai.drugReference.sourceFormat} from {@code ddinter} to {@code atc} on a running
  * server left {@code GET /chartsearchai/drugreferencestatus} reporting the DDInter entries it already
  * had and a {@code /search} still raising its chip, where a reload would have re-parsed the DDInter
- * file with the ATC parser, loaded nothing and dropped it. Issue #248 measured the same for
- * {@link #getCrossReactivityGroups()}. The "held for the life of the bean" paragraph above is the
- * accurate statement and always was: it has been there since {@code d15719cf}, the commit that added
- * this class, and so predates every one of those nine comments — the earliest of which arrived with
- * issue #173.
+ * file with the ATC parser, loaded nothing and dropped it. The "held for the life of the bean"
+ * paragraph above is the accurate statement and always was: it has been there since {@code d15719cf},
+ * the commit that added this class, and so predates every one of those nine comments — the earliest of
+ * which arrived with issue #173.
  *
- * <p>Three reasons survive that correction, and together they are why the rule is worth keeping rather
- * than a habit. These are Spring singletons, so a memo held in a field is one unsynchronized map shared
- * by every concurrent request — lost updates always, and a torn internal structure possible. What those
- * memos hold is patient-derived: {@code DrugSafetyValidator.orderPartners}' are keyed on per-request
- * {@code PatientClinicalContext.ActiveDrugOrder} objects and on ATC codes read off the patient's own
- * orders, and {@code validate}'s recorded-allergen list has no key at all, so a field version of it
- * would have to key on the allergy tokens — patient free text. As fields they grow for the life of the
- * JVM, or answer for whoever asked first. And a module whose memos are all per call is one a reload
- * path can be ADDED to later without re-auditing every one of them — the honest version of the reload
- * reason, and the one that cannot rot. {@code RecordedAllergenMemoScopeTest} is what pins it; before
- * that test nothing did.
+ * <p><b>The group LIST is the same shape; one group's PREFIXES are not, and the two must not be read
+ * as one fact.</b> {@link #getCrossReactivityGroups()} is written once by its own lazy guard and
+ * otherwise only by test seams, so it does not reload either. But
+ * {@link CrossReactivityGroup#setAtcPrefixes} is a PRODUCTION write path — the loader's and Jackson's —
+ * and it stays authoritative after a membership question has been asked, which is why
+ * {@link CrossReactivityGroup#containsAnyCode} keeps the reason issue #248 measured for it rather than
+ * this one. Same rule, different mechanism.
+ *
+ * <p>Two reasons hold today, and a third is why the discipline is worth keeping rather than merely
+ * defensible. These are Spring singletons, so a memo held in a field is one unsynchronized map shared
+ * by every concurrent request — stale reads and lost updates possible, and a torn internal structure
+ * possible. And some of these memos are keyed on something UNBOUNDED, which is what makes a field one
+ * that grows for the life of the JVM: two of {@code DrugSafetyValidator.orderPartners}' four are keyed
+ * on a per-request {@code PatientClinicalContext.ActiveDrugOrder} object, and {@code validate}'s
+ * recorded-allergen list has no key at all, so a field version of it would have to key on the allergy
+ * tokens — patient free text, and it would answer for whoever asked first. The other two are bounded
+ * and only the singleton reason binds them: one by the dataset's own aliases (see
+ * {@link #findImpliedByDrugName(String, Map)}) and one by the ATC code space. And a module whose memos are all per call is one a reload path can be ADDED
+ * to later without re-auditing every one of them — the honest version of the reload reason, and the one
+ * that cannot rot.
+ *
+ * <p>{@code RecordedAllergenMemoScopeTest} pins ONE shape of this — a memo outliving the entries it was
+ * resolved from — and before it nothing pinned even that. It does not pin the first reason above: a
+ * single-threaded case cannot observe a structure being shared, and a field REASSIGNED once per pass
+ * stays green on it. See that test's javadoc, which says so rather than leaving the rule looking better
+ * defended than it is.
  */
 @Service("chartSearchAi.drugReferenceService")
 public class DrugReferenceService {
@@ -126,6 +145,11 @@ public class DrugReferenceService {
 
 	/**
 	 * @return all loaded reference entries (never null; empty when nothing could be loaded).
+	 *
+	 *         <p><b>Memoise anything derived from this in a per-call LOCAL, never in a field</b> — issue
+	 *         #172's rule, stated with its reasons in this class's javadoc. Restated here because this
+	 *         is where a reader arrives: the reasons are four paragraphs up a comment that opens on
+	 *         something else.
 	 */
 	public List<DrugReference> getAll() {
 		return ensureLoaded().entries;
@@ -305,8 +329,8 @@ public class DrugReferenceService {
 	 * and those repeat across the names of one order and across orders of one family.
 	 *
 	 * <p>The cache is a per-call LOCAL of the outermost caller, never a field — issue #172's rule, for
-	 * the reasons this class's javadoc gives and not the {@link #getAll()} hot-reload this comment used
-	 * to cite: there is none (measured 2026-08-14). The reason that applies here is the first one there —
+	 * the reasons this class's javadoc gives — NOT the {@link #getAll()} hot-reload this comment used to
+	 * cite, which does not exist. The reason that applies here is the first one there —
 	 * this is a singleton bean, so a field memo would be one unsynchronized map shared by every
 	 * concurrent request. Not the second: these keys are normalized aliases of the LOADED entries, so
 	 * the map is bounded by the dataset rather than by patient free text. Package-private for that second
@@ -834,7 +858,9 @@ public class DrugReferenceService {
 			// The load-time validity check (issues #150, #156, #196, #211): the configuration rules the
 			// resolution ran, plus the content rules, which are applied HERE — once, for every format —
 			// so an operator's file gets the same checks whichever parser read it. A per-load local, never
-			// a field (issue #172 — this class's javadoc has the reason; the issue's own is measured false).
+			// a field — issue #172's rule, taken here for DrugReferenceValidity's own reason (a collector
+			// describes the ONE load that built it) rather than for the getAll()-memo reasons in this
+			// class's javadoc: this local is built before `dataset` is assigned below.
 			DrugReferenceValidity validity = new DrugReferenceValidity();
 			validity.addAll(active.lastLoadFindings());
 			validity.configuredSourceFormatNotUsed(configuredFormat, effectiveFormat);

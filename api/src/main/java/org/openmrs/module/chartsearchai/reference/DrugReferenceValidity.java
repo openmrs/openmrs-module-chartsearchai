@@ -70,11 +70,14 @@ import org.slf4j.Logger;
  * load makes a log line unable to answer.
  *
  * <p>An instance is a per-load collector, created where the load happens and discarded with it — never a
- * field, and never shared between loads (issue #172's rule for anything cached around this data; its
- * reason is stated in {@link DrugReferenceService}'s class javadoc and not on the issue, whose own
- * statement of it was measured false). Not
- * thread-safe, and does not need to be: it is built inside {@code DrugReferenceService.ensureLoaded}'s
- * monitor and is immutable in practice by the time anything else can see it.
+ * field, and never shared between loads. That is issue #172's rule taken for a reason of this class's
+ * own rather than for the ones {@link DrugReferenceService}'s class javadoc gives: those are about
+ * memos derived from {@code getAll()} on a singleton, and this is a per-LOAD collector, whose findings
+ * describe the one load that built it and would be reported against a different dataset if it outlived
+ * that load. (Do not follow the issue for a reason either; its own statement of one is false — see that
+ * class javadoc.) Not thread-safe, and does not need to be: it is built inside
+ * {@code DrugReferenceService.ensureLoaded}'s monitor and is immutable in practice by the time anything
+ * else can see it.
  */
 public final class DrugReferenceValidity {
 

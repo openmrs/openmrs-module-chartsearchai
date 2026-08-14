@@ -270,6 +270,12 @@ public final class DrugReferenceTestSupport {
 	 */
 	static final String DDI_ROUTE_VARIANTS = "chartsearchai-test/ddi-route-variants.json";
 
+	/** {@code Ledipasvir} and {@code Leucovorin}, two of the DDInter entries carrying no ATC code at all,
+	 *  plus {@code Ciprofloxacin}/{@code Levofloxacin} as a real classified pair — issue #135's slice.
+	 *  Shared with {@code RecordedAllergenMemoScopeTest}, which needs only that it names no drug
+	 *  {@link #DDI_ROUTE_VARIANTS} names. */
+	static final String DDI_UNCLASSIFIED_ALLERGEN = "chartsearchai-test/ddi-unclassified-allergen.json";
+
 	/** Several route variants of one drug sharing a RxCUI — the id/label collision slice. */
 	static final String DDI_RXCUI_COLLISION = "chartsearchai-test/ddi-rxcui-collision.json";
 
@@ -622,8 +628,11 @@ public final class DrugReferenceTestSupport {
 
 	/** The real injector with the real validator behind it over ONE service — the arrangement
 	 *  {@code preAnswerFindings} needs before a chip can become a citable safety-finding record, and the
-	 *  one production wires by autowiring. Both halves must share the service: two services would load
-	 *  the dataset twice and break the identity comparisons the safety arms make (issue #172). */
+	 *  one production wires by autowiring. Both halves must share the service: two services would PARSE
+	 *  the dataset twice, so the injector and the validator would hold different DrugReference objects
+	 *  for the same row and the safety arms' identity comparisons would miss. That is about two services,
+	 *  NOT about a reload — there is none; see DrugReferenceService's class javadoc, which retires the
+	 *  reload reading of this same sentence at nine other sites. */
 	static DrugReferenceInjector injectorWithSafety(DrugReferenceService service) {
 		DrugReferenceInjector injector = injector(service);
 		injector.setDrugSafetyValidator(validator(service));

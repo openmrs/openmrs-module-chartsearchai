@@ -65,7 +65,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class DirectAllergyContraindicationTest {
 
-	private static final String FIXTURE = "chartsearchai-test/ddi-unclassified-allergen.json";
+	private static final String FIXTURE = DrugReferenceTestSupport.DDI_UNCLASSIFIED_ALLERGEN;
 
 	/** The ATC-less entry the patient is allergic to; {@code Leucovorin} is the second one. */
 	private static final String UNCLASSIFIED = "Ledipasvir";

@@ -38,8 +38,8 @@ import org.junit.jupiter.api.Test;
  *       form, and neither is about this rule.</li>
  * </ul>
  * So nine comments across three classes told the next author not to do it, and the only shape they
- * would plausibly have done it in was caught by nothing — HARDEN-BRIEF §11's shape, a decision everyone
- * believes is protected and protected by nothing.
+ * would plausibly have done it in was caught by nothing: a decision everyone believed was protected,
+ * protected by nothing.
  *
  * <p><b>And the reason those comments gave was false.</b> They said {@code getAll()} is hot-reloadable
  * and that a memoised {@link DrugReference} outliving a reload fails the identity comparisons the
@@ -58,9 +58,9 @@ import org.junit.jupiter.api.Test;
  * <p><b>So this case pins one shape of the rule, through the one seam that can replace the entries
  * after a read.</b> {@code setEntries} is that seam. The counterpart below is
  * {@code CrossReactivityGroupsTest#replacedPrefixesAreSeenOnTheNextQuestion_soTheNormalizationIsNeverCachedOnTheInstance}
- * (issue #248), and the analogy is one of SHAPE only: {@code setAtcPrefixes} is a production write path
- * — Jackson's and the loader's — while {@code setEntries} has no production caller at all, which is why
- * that case is about a reachable staleness and this one is only about where the memo lives. A local
+ * (issue #248), and the analogy is one of SHAPE only: {@code setAtcPrefixes} is public API that Jackson
+ * writes through, while {@code setEntries} is package-private with no caller outside tests. Neither
+ * staleness is reachable from production today; both cases exist to fix where the memo LIVES. A local
  * cannot outlive the call that made it, so an assertion about the SECOND {@code validate} is the only
  * observation that separates the two.
  *

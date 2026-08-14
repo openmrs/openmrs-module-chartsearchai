@@ -63,10 +63,10 @@ import org.springframework.stereotype.Service;
  * <p>There is no such reload. Measured 2026-08-14, two ways: statically, {@code dataset} is written
  * only by {@code ensureLoaded()} when it is null and by the package-private {@code setEntries} test
  * seam, which has no production caller — the module registers no {@code GlobalPropertyListener} and
- * exposes no reload endpoint — a property
+ * exposes no reload endpoint. That half is pinned in-suite, and has been since issue #154, by
  * {@code DrugReferenceLoadContextTest.loadStatusDoesNotDriftFromTheCachedEntriesWhenTheGlobalPropertiesChange}
- * has pinned in-suite all along, by flipping both global properties after a load and asserting that
- * neither {@link #getLoadStatus()} nor {@link #getAll()} moves; and live, flipping
+ * — read it rather than re-measuring by hand, and rather than trusting a paraphrase of it here. Live,
+ * flipping
  * {@code chartsearchai.drugReference.sourceFormat} from {@code ddinter} to {@code atc} on a running
  * server left {@code GET /chartsearchai/drugreferencestatus} reporting the DDInter entries it already
  * had and a {@code /search} still raising its chip, where a reload would have re-parsed the DDInter
@@ -78,10 +78,11 @@ import org.springframework.stereotype.Service;
  * <p><b>The group LIST is the same shape; one group's PREFIXES are not, and the two must not be read
  * as one fact.</b> {@link #getCrossReactivityGroups()} is written once by its own lazy guard and
  * otherwise only by test seams, so it does not reload either. But
- * {@link CrossReactivityGroup#setAtcPrefixes} is a PRODUCTION write path — the loader's and Jackson's —
- * and it stays authoritative after a membership question has been asked, which is why
- * {@link CrossReactivityGroup#containsAnyCode} keeps the reason issue #248 measured for it rather than
- * this one. Same rule, different mechanism.
+ * {@link CrossReactivityGroup#setAtcPrefixes} is public API Jackson writes through, and it has to stay
+ * authoritative after a membership question has been asked — so
+ * {@link CrossReactivityGroup#containsAnyCode} keeps the reason stated in its own javadoc, not this
+ * one. Same rule, different mechanism. (Issue #248's own statement of that reason opens with the same
+ * reload error this paragraph retires; only its write-path half survives.)
  *
  * <p>Two reasons hold today, and a third is why the discipline is worth keeping rather than merely
  * defensible. These are Spring singletons, so a memo held in a field is one unsynchronized map shared
@@ -92,9 +93,11 @@ import org.springframework.stereotype.Service;
  * recorded-allergen list has no key at all, so a field version of it would have to key on the allergy
  * tokens — patient free text, and it would answer for whoever asked first. The other two are bounded
  * and only the singleton reason binds them: one by the dataset's own aliases (see
- * {@link #findImpliedByDrugName(String, Map)}) and one by the ATC code space. And a module whose memos are all per call is one a reload path can be ADDED
- * to later without re-auditing every one of them — the honest version of the reload reason, and the one
- * that cannot rot.
+ * {@link #findImpliedByDrugName(String, Map)}) and one by the ATC code space.
+ *
+ * <p>And a module whose memos are all per call is one a reload path can be ADDED to later without
+ * re-auditing every one of them — the honest version of the reload reason, and the one that cannot
+ * rot.
  *
  * <p>{@code RecordedAllergenMemoScopeTest} pins ONE shape of this — a memo outliving the entries it was
  * resolved from — and before it nothing pinned even that. It does not pin the first reason above: a
@@ -147,9 +150,9 @@ public class DrugReferenceService {
 	 * @return all loaded reference entries (never null; empty when nothing could be loaded).
 	 *
 	 *         <p><b>Memoise anything derived from this in a per-call LOCAL, never in a field</b> — issue
-	 *         #172's rule, stated with its reasons in this class's javadoc. Restated here because this
-	 *         is where a reader arrives: the reasons are four paragraphs up a comment that opens on
-	 *         something else.
+	 *         #172's rule, stated with its reasons in this class's javadoc, under "Two reasons hold
+	 *         today". Restated here because this is where a reader arrives, while that comment opens on
+	 *         something else entirely.
 	 */
 	public List<DrugReference> getAll() {
 		return ensureLoaded().entries;

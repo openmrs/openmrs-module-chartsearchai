@@ -392,9 +392,10 @@ public class DrugSafetyValidator {
 		// One ledger of the (substance, partner) pairs an interaction chip has been raised for, spanning
 		// the drug-in-play arm below and the screening arm at the end — see InteractionPairs. Like the
 		// contraindication ledger above it is a per-validate local, and for a sharper version of the same
-		// reason (issue #172, see above): a ledger records what THIS pass already raised, so on a
-		// singleton bean a field would go on suppressing chips for every later patient — not a stale
-		// answer but a missing one.
+		// reason (issue #172, see above): a ledger records what THIS pass already raised, so a field
+		// would go on suppressing every pair it had ever seen — first the second validate pass of the
+		// same request, then any later patient carrying one of those pairs. Not a stale answer, a
+		// missing one.
 		InteractionPairs interactionPairs = new InteractionPairs();
 
 		// The patient's recorded allergies resolved to the SUBSTANCES they name, ONE resolution per pass

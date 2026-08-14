@@ -294,9 +294,43 @@ public class PatientClinicalContext {
 		return normalizedAtc != null && activeDrugAtcCodes.contains(normalizedAtc);
 	}
 
-	/** @return true when any allergy token contains the given (lowercased) contraindication token. */
+	/** @return true when any allergy token contains the given (lowercased) contraindication token — see
+	 *          {@link #containsToken}, which is where the bare-containment rule and the measurement
+	 *          behind it live, and {@link #allergensMatching} for WHICH tokens it matched. */
 	boolean hasAllergyToken(String token) {
 		return containsToken(allergyTokens, token);
+	}
+
+	/**
+	 * @return WHICH recorded allergens {@link #hasAllergyToken} matched — its witnesses, in the order
+	 *         the chart lists them, empty exactly when that returns false. The allergy list's
+	 *         counterpart of {@link DrugReference#aliasesIn} / {@link DrugReference#aliasesNaming}, and
+	 *         here for the same reason those are (issue #223): the boolean says a curated token reached
+	 *         the allergy list, and it does not say by WHICH record — which is what decides whether the
+	 *         rule reports the allergen arm's fact, because the token may have reached a record about a
+	 *         different drug entirely ({@code opium} inside an allergen recorded as {@code Tiotropium}).
+	 *         Only the record actually matched can be put to the drug.
+	 *
+	 *         <p>Shares {@link #containsToken}'s own primitives rather than re-expressing the scan, so
+	 *         the witnesses and the boolean cannot drift — the rule CLAUDE.md states for
+	 *         {@code matchesDrugName}/{@code aliasesNaming}. Read by
+	 *         {@code DrugSafetyValidator.contraindicationRank}, which pairs each witness with
+	 *         {@link DrugReference#matchesDrugName}: the entry side of that question is about the
+	 *         reference dataset, which this value object deliberately knows nothing about, so it is asked
+	 *         there and not here.
+	 */
+	List<String> allergensMatching(String token) {
+		if (!matchableToken(token)) {
+			return Collections.emptyList();
+		}
+		String folded = foldedToken(token);
+		List<String> out = new ArrayList<String>();
+		for (String allergen : allergyTokens) {
+			if (containsFolded(allergen, folded)) {
+				out.add(allergen);
+			}
+		}
+		return Collections.unmodifiableList(out);
 	}
 
 	/** @return true when any condition token contains the given (lowercased) contraindication token. */
@@ -312,8 +346,7 @@ public class PatientClinicalContext {
 	 *         second). Both emptiness checks live here, including the post-fold one {@link #containsToken} documents.
 	 */
 	static boolean matchableToken(String token) {
-		return token != null && !token.trim().isEmpty()
-				&& !DrugReference.foldDiacritics(token.trim().toLowerCase(Locale.ROOT)).isEmpty();
+		return token != null && !token.trim().isEmpty() && !foldedToken(token).isEmpty();
 	}
 
 	/**
@@ -322,8 +355,25 @@ public class PatientClinicalContext {
 	 * curated rule is meant to match a fragment ({@code nsaid} inside "NSAIDs", {@code peptic ulcer}
 	 * inside "history of peptic ulcer disease"), so the word-start rule would silently stop matching
 	 * the rules that exist. The nesting risk is the same in principle ({@code opium} against an
-	 * allergen recorded as "Tiotropium") and wants its own measurement over real allergy and condition
-	 * text, not the order-name corpus that settled #86. Exposure today is confined to hand-authored
+	 * allergen recorded as "Tiotropium") and this javadoc used to ask for its own measurement over
+	 * allergy text rather than the order-name corpus that settled #86.
+	 *
+	 * <p><b>That measurement was made (issue #223)</b>, and it is why this stayed as it is. Over the
+	 * shipped 19 MB KB's 5169 published names as the allergen corpus, of the ten rules the bundled
+	 * curated file publishes, moving this match to the drug-NAME rule loses 5 real allergen names and
+	 * every one is on the CLASS token {@code penicillin} ({@code benzylpenicillin},
+	 * {@code phenoxymethylpenicillin}, {@code procaine benzylpenicillin} …); the three tokens that name
+	 * their own entry lose nothing. So the token shapes really do want different rules, and what moved
+	 * instead is the one decision the nesting risk had made dangerous — see
+	 * {@link #allergensMatching} and {@code DrugSafetyValidator.contraindicationRank}.
+	 *
+	 * <p>What that corpus bounds, stated rather than implied: published reference NAMES, the shape a
+	 * coded allergen carries. It is not the localized dictionary {@link PatientClinicalContextBuilder}
+	 * actually reads a coded allergen's name out of (unreachable when this was measured), and not free
+	 * text at all, which is what a {@code nonCodedAllergen} is. It bounds the CLASS-token loss, which is
+	 * what the decision turned on; re-measure on the dictionary before reopening it.
+	 *
+	 * <p>Exposure today is confined to hand-authored
 	 * contraindication rules: neither the {@code ddinter} nor the {@code atc} source emits any, and the
 	 * allergy contraindication arm ({@code DrugSafetyValidator.addAllergyContraindications}) resolves
 	 * allergens through {@link DrugReferenceService#findImpliedSubstances}, and so through
@@ -363,13 +413,27 @@ public class PatientClinicalContext {
 			// empty string is contained in everything, so both emptiness checks live in matchableToken.
 			return false;
 		}
-		String t = DrugReference.foldDiacritics(token.trim().toLowerCase(Locale.ROOT));
+		String folded = foldedToken(token);
 		for (String value : haystack) {
-			if (DrugReference.foldDiacritics(value).contains(t)) {
+			if (containsFolded(value, folded)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/** The needle {@link #containsToken} scans for, folded once — shared with
+	 *  {@link #allergensMatching} so the boolean and its witnesses fold alike, and with
+	 *  {@link #matchableToken}, whose whole subject is whether this expression comes out empty. */
+	private static String foldedToken(String token) {
+		return DrugReference.foldDiacritics(token.trim().toLowerCase(Locale.ROOT));
+	}
+
+	/** The one comparison behind both {@link #containsToken} and {@link #allergensMatching}: a recorded
+	 *  value contains an already-folded token. Extracted rather than written twice, so the witnesses
+	 *  cannot come to disagree with the boolean about what matched. */
+	private static boolean containsFolded(String value, String foldedToken) {
+		return DrugReference.foldDiacritics(value).contains(foldedToken);
 	}
 
 	/**

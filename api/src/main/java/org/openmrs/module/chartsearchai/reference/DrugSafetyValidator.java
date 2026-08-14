@@ -4399,11 +4399,13 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>Every row is still tried, and that is the point of the shape.</b> A collapse that
 	 * simply read the canonical row would DROP a warning whenever the band sits on a sibling — the
-	 * one direction a non-blocking advisory must never take. So the rows are tried in
-	 * canonical-first order and the first warning found is the one raised, which also keeps the
-	 * quoted band the substance's own wherever it publishes one. What the collapse gives up is the
-	 * ability to report two different published ceilings for one substance, which is not a thing a
-	 * clinician can act on: nothing here knows which formulation is in play (see
+	 * one direction a non-blocking advisory must never take. So the SUBJECT row is tried first and the
+	 * rest after it, and the first warning found is the one raised — which keeps the quoted band the
+	 * named row's own wherever that row's own ceiling is the one exceeded. (Subject-first, not
+	 * canonical-first: this paragraph predates issue #206, which made every arm name the row the chart
+	 * records, and the row tried first has followed that choice ever since.) What the collapse gives up
+	 * is the ability to report two different published ceilings for one substance, which is not a thing
+	 * a clinician can act on: nothing here knows which formulation is in play (see
 	 * {@link DrugReference#namesNoRoute()}), so a second ceiling is a second guess, not a second
 	 * fact.
 	 *
@@ -4451,6 +4453,18 @@ public class DrugSafetyValidator {
 		// ONE response must not call it three things, which is exactly the divergence anchoring only some
 		// of them would have created.
 		DrugReference subject = subjects.subjectOf(rows.get(0));
+		// Nothing to read a dose FOR unless some row of this substance publishes a band this patient's
+		// age and weight make actionable — the same guard each row applies to itself, asked of the
+		// family before the answer is scanned rather than after. That ordering is load-bearing rather
+		// than tidy: the walk below is the only thing in this arm that costs anything, since
+		// substanceOwnsDose compares against every entry in the knowledge base per stated dose, and
+		// while it sat behind the per-row guard it never ran at all on a dataset publishing no bands —
+		// which is every ddinter deployment, i.e. the shipped configuration. Hoisting it out of the loop
+		// (below) without hoisting the guard with it would have made that configuration pay, on every
+		// request, for a check its data can never answer.
+		if (!anyActionableBand(rows, context)) {
+			return;
+		}
 		// ONE reading of the answer for the whole substance (issue #245), before any row is consulted —
 		// the dose a clinician stated is a fact about the drug, not about the row that happens to publish
 		// the band it is about to be compared against.
@@ -4463,6 +4477,40 @@ public class DrugSafetyValidator {
 				return;
 			}
 		}
+	}
+
+	/** @return whether any row of one substance publishes a band this check could act on, i.e. whether
+	 *          reading a dose out of the answer could lead anywhere. */
+	private static boolean anyActionableBand(List<DrugReference> rows, PatientClinicalContext context) {
+		for (DrugReference row : rows) {
+			if (actionableBand(row, context) != null) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @return the band {@code ref} publishes for this patient's age that this check can actually use —
+	 *         one carrying a daily ceiling, or a per-kg ceiling for a patient whose weight is known —
+	 *         else null.
+	 *
+	 *         <p>One definition, asked twice: once of the family before the answer is read, and once of
+	 *         each row as it is checked. Two copies of "is there anything to compare against" is how the
+	 *         family-level skip and the per-row skip would come to disagree, and a disagreement in the
+	 *         permissive direction costs a knowledge-base-wide scan per request while one in the
+	 *         restrictive direction costs a warning.
+	 */
+	private static DrugReference.AgeBand actionableBand(DrugReference ref,
+			PatientClinicalContext context) {
+		DrugReference.AgeBand band = ref.bandForAge(context != null ? context.getAgeYears() : null);
+		if (band == null) {
+			return null;
+		}
+		Double weightKg = context != null ? context.getWeightKg() : null;
+		boolean dailyArm = band.getMaxDailyDoseMg() > 0;
+		boolean weightArm = weightKg != null && weightKg > 0 && band.getMgPerKgMax() > 0;
+		return dailyArm || weightArm ? band : null;
 	}
 
 	/**
@@ -4482,17 +4530,13 @@ public class DrugSafetyValidator {
 	 */
 	private boolean addOverdose(List<SafetyWarning> warnings, DrugReference subject, DrugReference ref,
 			List<AttributedDose> doses, PatientClinicalContext context) {
-		Integer age = context != null ? context.getAgeYears() : null;
-		DrugReference.AgeBand band = ref.bandForAge(age);
+		DrugReference.AgeBand band = actionableBand(ref, context);
 		if (band == null) {
 			return false;
 		}
 		Double weightKg = context != null ? context.getWeightKg() : null;
 		boolean dailyArm = band.getMaxDailyDoseMg() > 0;
 		boolean weightArm = weightKg != null && weightKg > 0 && band.getMgPerKgMax() > 0;
-		if (!dailyArm && !weightArm) {
-			return false;
-		}
 		String label = subject.displayLabel();
 		// Whose ceiling this is, said once for both arms — a mismatch is a property of the ROW PAIR, not
 		// of which arm noticed it, so wording it per arm is how one arm keeps the defect.
@@ -4705,8 +4749,14 @@ public class DrugSafetyValidator {
 		}
 		Object substance = rows.get(0).substanceGroupKey();
 		for (DrugReference other : allEntries) {
-			if (!substance.equals(other.substanceGroupKey())
-					&& nearestAliasDistance(clause, dosePos, other) < mine) {
+			// Distance first, identity second, and not the order the per-row form used: that one led with
+			// a pointer comparison because it was the cheap half, whereas asking whether two rows are one
+			// substance rebuilds a key from normalized strings on every call. Nearly every entry in a
+			// knowledge base has no alias in this clause at all, so the distance test answers
+			// Integer.MAX_VALUE immediately and the key is built only for the handful of entries actually
+			// named near the dose. Both halves are pure, so the order is free to be the fast one.
+			if (nearestAliasDistance(clause, dosePos, other) < mine
+					&& !substance.equals(other.substanceGroupKey())) {
 				return false;
 			}
 		}

@@ -623,8 +623,9 @@ public class DrugReference {
 	 * Without them, 46 of the shipped KB's 1090 multi-subgroup ROW pairs named one of the four — among
 	 * them ibuprofen/naproxen reading {@code G02CC} instead of {@code M01AE} — and 21 of the 46 had been
 	 * moved onto one by this rule itself rather than merely left there (measured 2026-08-06). ROW
-	 * pairs, the base {@code DrugSafetyValidator.sharedClass} defines beside the substance-pair one on
-	 * which this 1090 is 319 (issue #243).
+	 * pairs: that base and the substance-pair one, and the conversion between them, are defined at
+	 * {@code DrugSafetyValidator.sharedClass}, which also carries this 1090's substance-pair
+	 * counterpart (issue #243).
 	 * {@code CrossReactivityClassChoiceTest} pins one case per group, save {@code B02BC}: its only
 	 * shipped-KB pairs are epinephrine route variants, which issue #160 collapses to an identity chip
 	 * before this arm can name a class at all.
@@ -646,15 +647,14 @@ public class DrugReference {
 	 * named for systemic use — {@code D01BA}, {@code D02BB}, {@code D05BA}, {@code D05BB},
 	 * {@code D10BA}, {@code R01BA}, either in their own name or their level-3 parent's — all six covered
 	 * by the five prefixes here (measured 2026-08-06). Only {@code D05B} changes any pair in that KB:
-	 * three ROW pairs, all psoralens — two of them across methoxsalen and trioxsalen, which is the one
-	 * substance pair, and one between methoxsalen's own two rows, which issue #160 collapses to an
-	 * identity chip before this arm can name a class (re-measured 2026-08-14 for issue #243; the two
-	 * bases are defined at {@code DrugSafetyValidator.sharedClass}). Methoxsalen and trioxsalen share
-	 * {@code D05AD} (topical) and {@code D05BA} (systemic) and would be reported as sharing the
-	 * topical one. The other four change none and are here on the criterion rather than on measured
-	 * impact; removing
-	 * them breaks no test, which is exactly why the criterion and not the test suite has to decide
-	 * membership.
+	 * three ROW pairs, all psoralens, since methoxsalen and trioxsalen share {@code D05AD} (topical)
+	 * and {@code D05BA} (systemic) and would be reported as sharing the topical one. Two of the three
+	 * are across those substances and collapse to the ONE substance pair; the third is methoxsalen
+	 * against its own second row, which issue #160 collapses to an identity chip before this arm can
+	 * name a class (re-measured 2026-08-14 for issue #243; the two bases are defined at
+	 * {@code DrugSafetyValidator.sharedClass}). The other four change none and are here on the
+	 * criterion rather than on measured impact; removing them breaks no test, which is exactly why the
+	 * criterion and not the test suite has to decide membership.
 	 *
 	 * <p>An exception list here, while R03's systemic halves are handled by leaving {@code R03C} and
 	 * {@code R03D} out of the list above, because the shapes differ: under D and R01 the locally

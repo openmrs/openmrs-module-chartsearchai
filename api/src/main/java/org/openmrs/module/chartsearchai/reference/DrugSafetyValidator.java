@@ -4248,31 +4248,30 @@ public class DrugSafetyValidator {
 	 * mapping the module does not have — and it would still leave the question-driven half of this
 	 * arm choosing by some other rule.
 	 *
-	 * <p><b>WHICH PAIRS THE FIGURES BELOW COUNT (issue #243).</b> Two PAIR bases — the CLAIM base a
-	 * paragraph further down names is a third thing, counting what {@link #validate} emits rather than
-	 * what the KB relates — and every figure here says which of the two it is over, because the same
-	 * question over the same KB answers 1090 on one and 319 on the other. A count that does not say is
-	 * ambiguous in exactly the dimension this code path keeps getting wrong (#145, #162, #163, #174,
-	 * #185, #186). A ROW PAIR is an unordered pair of the entries
-	 * {@link DdiDrugReferenceSource#parse} loads; a SUBSTANCE PAIR is an unordered pair of the
-	 * {@link DrugReference#substanceGroupKey} families those entries fall into, each represented by its
-	 * {@link DrugReference#canonicalRow}. The row base counts a substance pair once per combination of
-	 * their rows, and counts in addition the pairs that are two rows of ONE substance, which have no
-	 * substance-pair counterpart at all — so over the shipped KB (2283 rows, 2114 substances) 7783 row
-	 * pairs share at least one level-4 subgroup against 5550 substance pairs, and 1090 against 319
-	 * share more than one, 128 of that 1090 being two rows of one substance. A chip names a substance,
-	 * so the substance base is the one that counts what a clinician can see; the row figures are kept
-	 * because they are what the decisions recorded here were taken on. What makes a substance's
-	 * subgroups well-defined at all is the DATA invariant recorded at {@link #addInteractionWarnings} —
-	 * every row of a substance in that KB publishes the same ATC list — which owns its own count and
-	 * its own instruction to re-measure it on a KB refresh.
+	 * <p><b>WHICH PAIRS THE FIGURES BELOW COUNT (issue #243).</b> Two PAIR bases — the CLAIM base named
+	 * in the paragraph below headed "But the two arms CAN now name different classes" is a third thing,
+	 * counting what {@link #validate} emits rather than what the KB relates — and every figure here
+	 * says which of the two it is over, because the same question over the same KB answers 1090 on one
+	 * and 319 on the other. A count that does not say is ambiguous in exactly the dimension this code
+	 * path keeps getting wrong (#145, #162, #163, #174, #185, #186). A ROW PAIR is an unordered pair of
+	 * the entries {@link DdiDrugReferenceSource#parse} loads; a SUBSTANCE PAIR is an unordered pair of
+	 * the {@link DrugReference#substanceGroupKey()} families those entries fall into, each represented
+	 * by its {@link DrugReference#canonicalRow}. The row base counts a substance pair once per
+	 * combination of their rows, and counts in addition the pairs that are two rows of ONE substance,
+	 * which have no substance-pair counterpart at all — so over the shipped KB (2283 rows, 2114
+	 * substances) 7783 row pairs share at least one level-4 subgroup against 5550 substance pairs, and
+	 * 1090 against 319 share more than one, 128 of that 1090 being two rows of one substance. A chip
+	 * names a substance, so the substance base is the one that counts what a clinician can see; the row
+	 * figures are kept because they are what the decisions recorded here were taken on. What makes a
+	 * substance's subgroups well-defined at all is the DATA invariant recorded at
+	 * {@link #addInteractionWarnings} — every row of a substance in that KB publishes the same ATC
+	 * list — which owns its own count and its own instruction to re-measure it on a KB refresh.
 	 *
 	 * <p>Every count in the paragraph above and in those that follow down to and including the issue
 	 * #168 one, save the superseded 87 that issue #168 was itself filed against, was measured
-	 * 2026-08-14 for issue #243 over the shipped KB by driving
-	 * {@link DdiDrugReferenceSource#parse} for the load, {@link DrugReference#substanceGroupKey} and
-	 * {@link DrugReference#canonicalRow} for the substance base,
-	 * {@link DrugReference#atcSubgroups()} for the intersections,
+	 * 2026-08-14 for issue #243 over the shipped KB by driving {@link DdiDrugReferenceSource#parse} for
+	 * the load, {@link DrugReference#substanceGroupKey()} and {@link DrugReference#canonicalRow} for
+	 * the substance base, {@link DrugReference#atcSubgroups()} for the intersections,
 	 * {@link DrugReference#isLocallyAppliedAtcCode}, {@link DrugReference#isUnclassifyingAtcCode} and
 	 * {@link DrugReference#isPurposeOnlyAtcCode} for the tiers, and — where the text says so —
 	 * {@link #validate} itself. Re-measure before relying on one.

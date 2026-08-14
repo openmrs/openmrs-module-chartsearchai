@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "note": "DELIBERATELY MIS-SHAPED, and it is the subject rather than the setting - do not 'fix' it by adding an `interactions` key. Issue #242: a ddinter document carrying `drugs` and NO top-level `interactions` parsed to zero entries in silence, so an operator's file with real content loaded as `loaded=true, entryCount=0`. The three drug rows below are what such a file discards. Its twin `ddi-empty-interactions-table.json` is byte-identical except for a trailing `\"interactions\": []`, and loads all three - so the pair isolates the presence of the key as the only difference, which is what makes the silence assertion on the twin able to fail. Verbatim DDInter 2.0 rows, unedited."
+  "note": "DELIBERATELY MIS-SHAPED, and it is the subject rather than the setting - do not 'fix' it by adding an `interactions` key. Issue #242: a ddinter document carrying `drugs` and NO top-level `interactions` parsed to zero entries in silence, so an operator's file with real content loaded as `loaded=true, entryCount=0`. The three drug rows below are what such a file discards. Its twin `ddi-empty-interactions-table.json` carries these same three rows and declares the table, and loads all three - so between them the presence of the key is the only thing that varies, which is what makes the silence assertion on the twin able to fail. Verbatim DDInter 2.0 rows, unedited."
  },
  "mechanisms": {
   "1105": {

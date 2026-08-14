@@ -18,7 +18,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -45,6 +47,10 @@ public class DdiDrugReferenceSourceTest {
 	private static final String SEVERITY = "Major Moderate Minor Unknown";
 
 	private static final String MARKER_FIXTURE = "chartsearchai-test/ddi-field-marker-mechanism.json";
+
+	/** Deliberately mis-shaped — carries drugs and no `interactions` table (issue #242). */
+	private static final String NO_INTERACTIONS_TABLE_FIXTURE =
+			"chartsearchai-test/ddi-no-interactions-table.json";
 
 	/** The real mechanism text of KB group 2248, verbatim minus the {@code INTERVAL:} marker. */
 	private static final String DOLUTEGRAVIR_MECHANISM = "Coadministration with medications containing "
@@ -208,6 +214,33 @@ public class DdiDrugReferenceSourceTest {
 	}
 	private static List<DrugReference> markerFixtureEntries() throws Exception {
 		return DrugReferenceTestSupport.ddiFixtureEntries(MARKER_FIXTURE);
+	}
+
+	/**
+	 * Issue #242's other half — the same silence inside a test run rather than on a deployment. A fixture
+	 * omitting {@code interactions} parses to nothing, so every assertion written against it holds
+	 * whatever the production code does. Issue #242 records two tests of issue #183's measurement pass as
+	 * having been in that state, relayed rather than re-derived; no such fixture was ever committed here,
+	 * which is why this is a guard rather than a repair.
+	 *
+	 * <p>{@link DrugReferenceTestSupport#ddiFixtureEntries} is the path every fixture test here takes, and
+	 * it reaches the one-argument {@link DdiDrugReferenceSource#parse} form — which has no load status to
+	 * report a finding into, and so is exactly where a report could have been dropped for want of a
+	 * channel. It is loud instead.
+	 */
+	@Test
+	public void aFixtureOmittingItsInteractionsTableIsLoudWithNoLoadStatusToReportInto() throws Exception {
+		List<DrugReference> parsed;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			parsed = DrugReferenceTestSupport.ddiFixtureEntries(NO_INTERACTIONS_TABLE_FIXTURE);
+			assertTrue(
+					capture.messagesAt(Level.WARN).toString()
+							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
+					"the WARN must name the rule rather than merely be some warning. Captured: "
+							+ capture.describeAll());
+		}
+		assertTrue(parsed.isEmpty(),
+				"and the parse still returns nothing: issue #242's remedy is a report, not a repair");
 	}
 
 	private static DrugReference.Interaction interaction(List<DrugReference> entries, String drug, String token) {

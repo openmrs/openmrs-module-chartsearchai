@@ -82,6 +82,12 @@ import org.slf4j.Logger;
  * class javadoc.) Not thread-safe, and does not need to be: it is built inside
  * {@code DrugReferenceService.ensureLoaded}'s monitor and is immutable in practice by the time anything
  * else can see it.
+ *
+ * <p>Two instances live for a PARSE rather than a load — the ones the parsers' one-argument
+ * {@code parse} forms build for themselves. Same rule at a shorter scope, and safe for the same reason
+ * twice over: each is a local of the call that made it, and each is handed no load to describe, so what
+ * it collects reaches {@link #logTo} and stops there rather than reaching a status that would then be
+ * describing a parse.
  */
 public final class DrugReferenceValidity {
 
@@ -230,10 +236,11 @@ public final class DrugReferenceValidity {
 	}
 
 	/**
-	 * Reports every finding at WARN, one line each. Owned here so the two loads that run these rules
-	 * — the entry dataset through {@link DrugReferenceService} and the cross-reactivity groups through
-	 * {@link CrossReactivityGroupsLoader}, which has no status object to be read from — cannot come to
-	 * report them differently.
+	 * Reports every finding at WARN, one line each. Owned here so no caller can come to report them
+	 * differently: the entry dataset through {@link DrugReferenceService}, the cross-reactivity groups
+	 * through {@link CrossReactivityGroupsLoader} (which has no status object to be read from), and the
+	 * two parsers' one-argument {@code parse} forms, which have no load to report into at all and so
+	 * would otherwise be the place a document rule went quiet.
 	 */
 	void logTo(Logger log) {
 		for (Finding found : findings) {
@@ -271,6 +278,14 @@ public final class DrugReferenceValidity {
 	 * Issue #156's rule is correctly silent there — {@code json} and {@code ddinter} both name real
 	 * adapters, so nothing was overridden — and the mismatch is between the format and the FILE, which
 	 * only the parser can observe.
+	 *
+	 * <p><b>The residual, named rather than left to be rediscovered.</b> The {@code atc} format is not
+	 * covered and cannot be by this rule: its dataset is line-based, so there is no table to declare or
+	 * omit, and a file of another format read by it yields nothing for a different reason — no line
+	 * matched an ATC code. That is a rule of its own to state, and it would have to be reported through a
+	 * channel {@link AtcDrugReferenceSource} does not have either: it resolves its file itself rather
+	 * than through {@link ReferenceDataFiles}, so no collector reaches it. Such a load is still loud, via
+	 * {@link DrugReferenceLoad#isInert()}; what it lacks is the diagnosis.
 	 *
 	 * @param format the source format whose parser read the document, in the vocabulary of
 	 *        {@code chartsearchai.drugReference.sourceFormat}

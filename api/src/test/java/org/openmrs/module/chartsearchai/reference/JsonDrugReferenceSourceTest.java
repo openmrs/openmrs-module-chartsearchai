@@ -14,7 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.LogCapture;
 
 /**
  * Exercises the real {@link JsonDrugReferenceSource#load()} path. With no OpenMRS
@@ -23,12 +25,43 @@ import org.junit.jupiter.api.Test;
  */
 public class JsonDrugReferenceSourceTest {
 
+	/** A well-shaped document of the OTHER format — the mistake this parser is likeliest to be handed,
+	 *  and well-shaped on purpose so what it witnesses is the format mismatch and nothing else. */
+	private static final String A_DDINTER_DOCUMENT = "chartsearchai-test/ddi-empty-interactions-table.json";
+
 	@Test
 	public void loadsBundledDatasetViaClasspathFallback() {
 		List<DrugReference> all = new JsonDrugReferenceSource().load();
 		assertFalse(all.isEmpty(), "bundled dataset should load via the classpath fallback");
 		assertTrue(all.stream().anyMatch(r -> "ibuprofen".equals(r.getId())),
 				"dataset should contain the ibuprofen entry");
+	}
+
+	/**
+	 * Issue #242 from the curated side, which is the likelier of the two directions: this is the DEFAULT
+	 * format, so the document this parser is most often handed by mistake is one of another format. A
+	 * DDInter export declares no {@code entries} and used to read as zero in the same silence.
+	 *
+	 * <p>Through {@link DrugReferenceTestSupport#fixtureEntries}, the helper every curated fixture test
+	 * takes, so what is asserted is the path a test would actually travel — and it reaches the
+	 * one-argument {@code parse} form, which has no load status to report a finding into and is therefore
+	 * where a report could have been dropped for want of a channel.
+	 */
+	@Test
+	public void aDocumentOfAnotherFormatIsLoudRatherThanReadingAsZeroQuietly() throws Exception {
+		List<DrugReference> parsed;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			parsed = DrugReferenceTestSupport.fixtureEntries(A_DDINTER_DOCUMENT);
+			assertTrue(
+					capture.messagesAt(Level.WARN).toString()
+							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
+					"the WARN must name the rule, and the table this parser needed. Captured: "
+							+ capture.describeAll());
+			assertTrue(capture.messagesAt(Level.WARN).toString().contains("entries"),
+					"named for what THIS parser requires, not for the format it was handed. Captured: "
+							+ capture.describeAll());
+		}
+		assertTrue(parsed.isEmpty(), "and it still reads nothing from a document of another format");
 	}
 
 	@Test

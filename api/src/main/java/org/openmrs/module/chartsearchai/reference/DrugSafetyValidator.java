@@ -4248,31 +4248,77 @@ public class DrugSafetyValidator {
 	 * mapping the module does not have — and it would still leave the question-driven half of this
 	 * arm choosing by some other rule.
 	 *
+	 * <p><b>WHICH PAIRS THE FIGURES BELOW COUNT (issue #243).</b> Two PAIR bases — the CLAIM base named
+	 * in the paragraph below headed "But the two arms CAN now name different classes" is a third thing,
+	 * counting what {@link #validate} emits rather than what the KB relates — and every figure here
+	 * says which of the two it is over, because the same question over the same KB answers 1090 on one
+	 * and 319 on the other. A count that does not say is ambiguous in exactly the dimension this code
+	 * path keeps getting wrong (#145, #162, #163, #174, #185, #186). A ROW PAIR is an unordered pair of
+	 * the entries {@link DdiDrugReferenceSource#parse} loads; a SUBSTANCE PAIR is an unordered pair of
+	 * the {@link DrugReference#substanceGroupKey()} families those entries fall into, each represented
+	 * by its {@link DrugReference#canonicalRow}. The row base counts a substance pair once per
+	 * combination of their rows, and counts in addition the pairs that are two rows of ONE substance,
+	 * which have no substance-pair counterpart at all — so over the shipped KB (2283 rows, 2114
+	 * substances) 7783 row pairs share at least one level-4 subgroup against 5550 substance pairs, and
+	 * 1090 against 319 share more than one, 128 of that 1090 being two rows of one substance. A chip
+	 * names a substance, so the substance base is the one that counts what a clinician can see; the row
+	 * figures are kept because they are what the decisions recorded here were taken on. What makes a
+	 * substance's subgroups well-defined at all is the DATA invariant recorded at
+	 * {@link #addInteractionWarnings} — every row of a substance in that KB publishes the same ATC
+	 * list — which owns its own count and its own instruction to re-measure it on a KB refresh.
+	 *
+	 * <p>Every count in the paragraph above and in those that follow down to and including the issue
+	 * #168 one, save the superseded 87 that issue #168 was itself filed against, was measured
+	 * 2026-08-14 for issue #243 over the shipped KB by driving {@link DdiDrugReferenceSource#parse} for
+	 * the load, {@link DrugReference#substanceGroupKey()} and {@link DrugReference#canonicalRow} for
+	 * the substance base, {@link DrugReference#atcSubgroups()} for the intersections,
+	 * {@link DrugReference#isLocallyAppliedAtcCode}, {@link DrugReference#isUnclassifyingAtcCode} and
+	 * {@link DrugReference#isPurposeOnlyAtcCode} for the tiers, and — where the text says so —
+	 * {@link #validate} itself. Re-measure before relying on one.
+	 *
 	 * <p><b>And why not report the shared level-3 group instead</b>, which the issue offers as the
-	 * answer that is coarser but never false. Measured over the shipped KB (2026-08-06; re-measure
-	 * before relying on any figure here): of the 1090 drug pairs that share more than one level-4
-	 * subgroup, <b>1041 still share more than one level-3 group</b>.
+	 * answer that is coarser but never false: of the 1090 ROW pairs that share more than one level-4
+	 * subgroup, <b>1041 still share more than one level-3 group</b> — 309 of the 319 substance pairs.
 	 * Dexamethasone and hydrocortisone share six subgroups spanning six different level-3 groups, so
 	 * the collapse removes the chemical subgroup — the part that carries the cross-reactivity claim —
 	 * without removing the choice it was supposed to settle.
 	 *
-	 * <p><b>A preference, never a filter.</b> The 1090 pairs partition into 263 whose class this
-	 * changes, 587 that share no systemic subgroup at all — two topical azoles, two ophthalmic
-	 * preparations, two local anaesthetic formulations, for which the locally-applied class IS the
-	 * honest answer and is kept — and 240 that were already naming a systemic one. A filter rather than
-	 * a preference would have to drop or fabricate a class for the 587, the largest of the three
-	 * groups. In 70 pairs the systemic tier itself holds more than one candidate and the tie-break
-	 * between them is still alphabetical (issue #168, filed against the pre-correction count of 87);
-	 * both are true statements about the substance, so that is a choice between honest answers rather
-	 * than the defect above. Issues #183/#184 narrow that population without closing it: counted over
-	 * SUBSTANCE pairs rather than the row pairs the figures above use — the two bases have not been
-	 * reconciled, so do not read one against the other — 20 pairs leave more than one candidate in the
-	 * systemic tier for the duplicate-therapy arm and 16 for the cross-reactivity arm, whose stronger
-	 * requirement removes four of them (measured 2026-08-13 by calling
-	 * {@link DrugReference#isLocallyAppliedAtcCode}, {@link DrugReference#isUnclassifyingAtcCode} and
-	 * {@link DrugReference#isPurposeOnlyAtcCode} over the shipped KB). Nothing in ATC's words breaks
-	 * the remainder: {@code H02CA} "Anticorticosteroids" and {@code J02AB} "Imidazole derivatives"
-	 * both name a class, so preferring one would be the unmeasured preference issue #161 refused.
+	 * <p><b>A preference, never a filter.</b> Counting the locally-applied preference on its own, which
+	 * is what it was introduced as — the claim filters described below sit in front of it and are
+	 * measured on their own lists — the 1090 ROW pairs partition into 263 whose class this changes, 587
+	 * that share no systemic subgroup at all — two topical azoles, two ophthalmic preparations, two
+	 * local anaesthetic formulations, for which the locally-applied class IS the honest answer and is
+	 * kept — and 240 that were already naming a systemic one; over substance pairs those three are 62,
+	 * 165 and 92 in that order, so the 587 is 165. A filter rather than a preference would have to drop
+	 * or fabricate a class for the 587, the largest of the three groups.
+	 *
+	 * <p><b>And why the tie inside the systemic tier is still broken alphabetically (issue #168).</b>
+	 * On the same count 70 row pairs — 21 substance pairs — leave the systemic tier holding more than
+	 * one candidate; once each arm has refused what its claim does not license that is 69 row / 20
+	 * substance pairs for duplicate therapy and 64 / 16 for cross-reactivity, whose stronger
+	 * requirement removes four more of the substance pairs and five more of the row ones (issue #168
+	 * was filed against a pre-correction count of 87). The 16 are a subset of the 20, so those are 20
+	 * distinct pairs; driving {@link #validate} over all 36 pair-and-arm combinations of them, every
+	 * one names the alphabetically smallest surviving candidate and none fails to raise a class chip,
+	 * so the tie-break really is what decides them.
+	 * What ATC's own words support does not break those ties. Three of the 20 hold candidates whose
+	 * published names are IDENTICAL — {@code G03AC}/{@code L02AB} "Progestogens",
+	 * {@code N01AF}/{@code N05CA} "Barbiturates, plain", {@code L01EG}/{@code L04AH} "Mammalian target
+	 * of rapamycin (mTOR) kinase inhibitors" — so for those there is no aptness to rank, only a code.
+	 * For the rest, the two ranks this module already derives from those names move almost nothing:
+	 * preferring the candidate that asserts more ({@link DrugReference#isPurposeOnlyAtcCode}) moves one
+	 * of the 20, {@code Calcium chloride} against {@code Ammonium chloride}, from {@code B05XA}
+	 * "Electrolyte solutions" to {@code G04BA} "Acidifiers", and none of the 16; preferring a subgroup
+	 * whose own published name does not begin "Other"/"Various" — the name test issue #182's first
+	 * family applies as one conjunct rather than as a rule of its own — moves none of either. Neither
+	 * reaches issue #168's own example, because {@code H02CA} "Anticorticosteroids" and {@code J02AB}
+	 * "Imidazole derivatives" sit in the same tier of both — the first names a target and the second a
+	 * structural family, and issue #183 read every level-4 name in the WHO ATC index and put target and
+	 * structure on the same side of its one hard line deliberately. A rule preferring {@code J02AB}
+	 * would therefore be a new distinction drawn inside a tier and hand-picked from the reported case:
+	 * the unmeasured preference issue #161 refused, and the shape whose hardening found issue #161's
+	 * own list reproducing the defect it was fixing. Both candidates are true of the pair, so this is a
+	 * choice between honest answers and not the defect above.
 	 *
 	 * <p>Sorted rather than in the allergen's array order so the result is a function of the two code
 	 * SETS and not of the position a dataset happened to write a code in — what keeps a KB refresh that

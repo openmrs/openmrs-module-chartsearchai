@@ -620,12 +620,14 @@ public class DrugReference {
 	 * takes the first shared subgroup this method does not veto.
 	 *
 	 * <p>That is how {@code A07A}, {@code B02BC}, {@code B05C} and {@code G02CC} came to be here.
-	 * Without them, 46 of the shipped KB's 1090 multi-subgroup pairs named one of the four — among them
-	 * ibuprofen/naproxen reading {@code G02CC} instead of {@code M01AE} — and 21 of the 46 had been
-	 * moved onto one by this rule itself rather than merely left there (measured 2026-08-06).
-	 * {@code CrossReactivityClassChoiceTest} pins one case per group, save {@code B02BC}: its only
-	 * shipped-KB pairs are epinephrine route variants, which issue #160 collapses to an identity chip
-	 * before this arm can name a class at all.
+	 * Without them, 46 of the shipped KB's 1090 multi-subgroup ROW pairs named one of the four — among
+	 * them ibuprofen/naproxen reading {@code G02CC} instead of {@code M01AE} — and 21 of the 46 had been
+	 * moved onto one by this rule itself rather than merely left there (measured 2026-08-06). ROW
+	 * pairs: that base and the substance-pair one, and the conversion between them, are defined at
+	 * {@code DrugSafetyValidator.sharedClass}, which also carries this 1090's substance-pair
+	 * counterpart (issue #243). {@code CrossReactivityClassChoiceTest} pins one case per group, save
+	 * {@code B02BC}: its only shipped-KB pairs are epinephrine route variants, which issue #160
+	 * collapses to an identity chip before this arm can name a class at all.
 	 */
 	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections
 			.unmodifiableList(Arrays.asList("A01", "A07A", "A07E", "B02BC", "B05C", "C05A", "C05B",
@@ -644,10 +646,14 @@ public class DrugReference {
 	 * named for systemic use — {@code D01BA}, {@code D02BB}, {@code D05BA}, {@code D05BB},
 	 * {@code D10BA}, {@code R01BA}, either in their own name or their level-3 parent's — all six covered
 	 * by the five prefixes here (measured 2026-08-06). Only {@code D05B} changes any pair in that KB:
-	 * three, all psoralens, since methoxsalen and trioxsalen share {@code D05AD} (topical) and
-	 * {@code D05BA} (systemic) and would be reported as sharing the topical one. The other four change
-	 * none and are here on the criterion rather than on measured impact; removing them breaks no test,
-	 * which is exactly why the criterion and not the test suite has to decide membership.
+	 * three ROW pairs, all psoralens, since methoxsalen and trioxsalen share {@code D05AD} (topical)
+	 * and {@code D05BA} (systemic) and would be reported as sharing the topical one. Two of the three
+	 * are across those substances and collapse to the ONE substance pair; the third is methoxsalen
+	 * against its own second row, which issue #160 collapses to an identity chip before this arm can
+	 * name a class (re-measured 2026-08-14 for issue #243; the two bases are defined at
+	 * {@code DrugSafetyValidator.sharedClass}). The other four change none and are here on the
+	 * criterion rather than on measured impact; removing them breaks no test, which is exactly why the
+	 * criterion and not the test suite has to decide membership.
 	 *
 	 * <p>An exception list here, while R03's systemic halves are handled by leaving {@code R03C} and
 	 * {@code R03D} out of the list above, because the shapes differ: under D and R01 the locally
@@ -693,7 +699,9 @@ public class DrugReference {
 	 * duplicate therapy for the other. Same for {@code J01GB} "Other aminoglycosides" (already pinned
 	 * by {@code CrossReactivityClassChoiceTest}), {@code N06AX} antidepressants, {@code N03AX}
 	 * antiepileptics, {@code N02AX} opioids. Vetoing every residue would have dropped a class claim
-	 * from 1974 of the KB's 7783 pairs that share a subgroup; 1488 of those keep it here.
+	 * from 1974 of the KB's 7783 ROW pairs that share a subgroup; 1488 of those keep it here. ROW
+	 * pairs, not the SUBSTANCE pairs the 5550 below counts: the two bases, and the conversion between
+	 * them, are defined at {@code DrugSafetyValidator.sharedClass} (issue #243).
 	 *
 	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
 	 * <ul>
@@ -794,9 +802,9 @@ public class DrugReference {
 	 * "asserts nothing" and "asserts a purpose".
 	 *
 	 * <p>Measured over the shipped KB for the 30 groups this list held at issue #182 (2026-08-06,
-	 * re-measured independently 2026-08-07; re-measure before relying on a figure): of the 7783 pairs
-	 * sharing at least one level-4 subgroup, 486 lose their class claim entirely, 54 keep one and name a
-	 * subgroup that does classify the substances instead, and 7243 are untouched. The largest
+	 * re-measured independently 2026-08-07; re-measure before relying on a figure): of the 7783 ROW
+	 * pairs sharing at least one level-4 subgroup, 486 lose their class claim entirely, 54 keep one and
+	 * name a subgroup that does classify the substances instead, and 7243 are untouched. The largest
 	 * contributors are {@code V03AB} (135 pairs), {@code D11AX} "Other dermatologicals" (130),
 	 * {@code S01XA} "Other ophthalmologicals" (99) and {@code D06AX} "Other antibiotics for topical
 	 * use" (68).

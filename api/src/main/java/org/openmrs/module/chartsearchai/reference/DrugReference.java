@@ -1395,14 +1395,40 @@ public class DrugReference {
 		if (text == null || token == null) {
 			return false;
 		}
-		String t = foldDiacritics(text.toLowerCase(Locale.ROOT));
-		String w = foldDiacritics(token.toLowerCase(Locale.ROOT));
+		return boundedTokenIndex(foldDiacritics(text.toLowerCase(Locale.ROOT)),
+				foldDiacritics(token.toLowerCase(Locale.ROOT)), maxTrailingLetters, 0) >= 0;
+	}
+
+	/**
+	 * The boundary rule above, as a POSITION rather than a boolean.
+	 *
+	 * <p>Split out so that a caller needing to know WHERE one of these names sits shares the rule with
+	 * every caller needing only whether it occurs, instead of re-expressing the boundary conditions
+	 * beside it. That was issue #260: {@code DrugSafetyValidator}'s dose arm gated a clause on
+	 * {@link #matchesText} and then located the name in that same clause with {@link String#indexOf}, so
+	 * the two disagreed in both directions — a name the prose rule does not find ({@code penicillin}
+	 * inside {@code penicillins}) was located anyway and vetoed a real dose, and a name it does find
+	 * ({@code paracetamol} written {@code paracétamol}) was not located and the subject could not claim
+	 * its own dose. Both silently, which is the direction the dose arm exists to prevent.
+	 *
+	 * <p><b>Operands pre-folded, and that is a contract rather than an economy.</b> The fold decomposes
+	 * and drops combining marks, so it is not length-preserving and an index into a folded string is not
+	 * an index into the string it was folded from. A caller comparing this index against any other
+	 * position must have produced that position in the SAME folded text — which is why
+	 * {@link DrugSafetyValidator} folds a clause once and reads every position out of that one string.
+	 *
+	 * @param t the haystack, already lowercased and {@link #foldDiacritics}-folded
+	 * @param w the needle, likewise
+	 * @return the index of the first occurrence of {@code w} in {@code t} at or after {@code from} that
+	 *         satisfies the rule, or -1 when there is none
+	 */
+	private static int boundedTokenIndex(String t, String w, int maxTrailingLetters, int from) {
 		if (w.isEmpty()) {
 			// After the fold, not before: a token of nothing but combining marks folds to empty, and
 			// the empty token matches almost anything below.
-			return false;
+			return -1;
 		}
-		int idx = t.indexOf(w);
+		int idx = t.indexOf(w, from);
 		while (idx >= 0) {
 			if (idx == 0 || !Character.isLetterOrDigit(t.charAt(idx - 1))) {
 				int end = idx + w.length();
@@ -1413,13 +1439,59 @@ public class DrugReference {
 						break;
 					}
 					if (at >= t.length() || !Character.isLetterOrDigit(t.charAt(at))) {
-						return true;
+						return idx;
 					}
 				}
 			}
 			idx = t.indexOf(w, idx + 1);
 		}
-		return false;
+		return -1;
+	}
+
+	/**
+	 * @return the character distance from {@code pos} to the nearest occurrence of one of this entry's
+	 *         names in {@code foldedLowerText}, or {@link Integer#MAX_VALUE} when none of them occurs —
+	 *         how near this entry is NAMED to a position, answered by the same rule
+	 *         {@link #matchesText} answers whether it is named at all. Zero when {@code pos} falls
+	 *         inside such an occurrence.
+	 *
+	 *         <p><b>The PROSE rule</b> ({@link #containsWord}, no inflection allowance), because the
+	 *         text this reads is an answer. That is the shape rule stated once for this module: prose
+	 *         gets symmetric word boundaries and a clinician-entered drug NAME gets
+	 *         {@link #matchesOrderName}'s left boundary plus a short tail, and widening one to serve the
+	 *         other was issues #86, #128, #147 and #209. Its caller has already gated the clause on
+	 *         {@link #matchesText}, so answering the WHERE by a different rule than the WHETHER is the
+	 *         same mistake one level down — which is what issue #260 was.
+	 *
+	 *         <p>{@code foldedLowerText} must already be lowercased and {@link #foldDiacritics}-folded,
+	 *         and {@code pos} must be an index into THAT string; see {@link #boundedTokenIndex} for why
+	 *         positions from the two forms may not be mixed.
+	 *
+	 *         <p>Here rather than in the caller because this is a question about the entry's own names,
+	 *         and because keeping it beside them is what lets it share the boundary rule instead of
+	 *         restating it — the whole of the defect it closes.
+	 */
+	int nearestNameDistance(String foldedLowerText, int pos) {
+		if (foldedLowerText == null) {
+			return Integer.MAX_VALUE;
+		}
+		int best = Integer.MAX_VALUE;
+		for (String alias : aliases) {
+			if (alias == null) {
+				continue;
+			}
+			String w = foldDiacritics(alias.toLowerCase(Locale.ROOT));
+			int idx = boundedTokenIndex(foldedLowerText, w, 0, 0);
+			while (idx >= 0) {
+				int end = idx + w.length();
+				int distance = pos < idx ? idx - pos : (pos > end ? pos - end : 0);
+				if (distance < best) {
+					best = distance;
+				}
+				idx = boundedTokenIndex(foldedLowerText, w, 0, idx + 1);
+			}
+		}
+		return best;
 	}
 
 	/** Unicode non-spacing marks — the combining accents an NFD decomposition separates out. */

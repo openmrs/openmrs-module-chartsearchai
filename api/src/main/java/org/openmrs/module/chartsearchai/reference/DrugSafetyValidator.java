@@ -4782,14 +4782,37 @@ public class DrugSafetyValidator {
 	 * publish one substance's dosing; which of them a clinician's sentence happened to name is not
 	 * information about the dose.
 	 *
+	 * <p><b>One rule for what a clause names, at both steps (issue #260).</b> The gate and the
+	 * nearest-name comparison now ask {@link DrugReference} the same question — the PROSE rule, symmetric
+	 * word boundaries over a diacritic fold — where the comparison used to search for a raw substring.
+	 * The two disagreed in both directions and both were silent: {@code penicillin} inside the plural
+	 * {@code penicillins} located a rival the gate says the clause does not name, which vetoed a real
+	 * dose, and {@code paracetamol} written {@code paracétamol} located nothing at all, so a subject the
+	 * gate had just accepted could not claim its own.
+	 *
 	 * <p>Known limitation (v1): only the literal unit {@code mg} is recognised; doses written in
 	 * grams ("1 g"), "mgs", or "milligrams" are not parsed and will not be flagged. That is the
 	 * conservative (miss, never false-positive) direction.
+	 *
+	 * <p>Known limitation, and NOT what issue #260 turned out to be: where two substances' published
+	 * names nest and the dose precedes both ({@code 2.5 mg of estrone sulfate}), the two names start at
+	 * the same index, so neither is strictly nearer and BOTH claim the dose — the shorter substance
+	 * warning about a number stated for the longer one. The boundary rule does not touch it, because
+	 * {@code estrone} is a whole word inside {@code estrone sulfate} and the prose rule finds it exactly
+	 * where a substring search does. Measured, reported separately, and left alone here: its remedy
+	 * removes an attribution where this issue's adds one.
 	 */
 	private static List<AttributedDose> attributedDoses(String lowerAnswer, List<DrugReference> rows,
 			List<DrugReference> allEntries) {
 		List<AttributedDose> out = new ArrayList<AttributedDose>();
-		for (String clause : CLAUSE_DELIMITER.split(lowerAnswer)) {
+		for (String sentence : CLAUSE_DELIMITER.split(lowerAnswer)) {
+			// ONE coordinate system per clause, established here (issue #260). Everything below is about
+			// POSITIONS in this clause — where the dose sits, where a limit cue sits, how near each
+			// substance is named — and the module's matching rule folds diacritics, so a clause left
+			// unfolded would have the gate reading one string and the locator another. Folded once at the
+			// top rather than inside the locator because the fold is not length-preserving: DOSE_MG's own
+			// index has to be an index into the same string the names are found in.
+			String clause = DrugReference.foldDiacritics(sentence);
 			if (!namesSubstance(clause, rows)) {
 				continue;
 			}
@@ -4906,6 +4929,13 @@ public class DrugSafetyValidator {
 	 *         chooser and the contraindication ledger would split. For a dataset publishing no substance
 	 *         name that key is the row itself, which reproduces the per-row behaviour exactly — the case
 	 *         every bundled dataset is in.
+	 *
+	 *         <p><b>"Named" here means what it means everywhere else</b>
+	 *         ({@link DrugReference#nearestNameDistance}, the prose rule), which it did not until issue
+	 *         #260: the veto scanned for a raw substring, so it ran over EVERY entry in the knowledge
+	 *         base asking a question the clause gate above would have answered no to. An entry the
+	 *         clause does not name could therefore take a dose away from one it does — and, the same
+	 *         disagreement reversed, a subject the gate had just accepted could fail to locate itself.
 	 */
 	private static boolean substanceOwnsDose(String clause, int dosePos, List<DrugReference> rows,
 			List<DrugReference> allEntries) {
@@ -4918,13 +4948,13 @@ public class DrugSafetyValidator {
 			// Distance first, identity second, and not the order the per-row form used — that one led
 			// with a pointer comparison because it was genuinely the cheap half, and the identity test
 			// here is not: substanceGroupKey() rebuilds a key from normalized strings on every call.
-			// Distance is not cheap either (nearestAliasDistance has no early-out; it scans the clause
-			// once per alias before it can answer Integer.MAX_VALUE), so this is not "fast test first".
+			// Distance is not cheap either (nearestNameDistance has no early-out; it scans the clause
+			// once per name before it can answer Integer.MAX_VALUE), so this is not "fast test first".
 			// It is that the distance test is UNCONDITIONAL either way, while ordering it first makes
-			// the key conditional — built only for the handful of entries whose alias actually lands
+			// the key conditional — built only for the handful of entries whose name actually lands
 			// nearer the dose, instead of for every entry in the knowledge base. Both halves are pure,
 			// so the order is free to be chosen on that.
-			if (nearestAliasDistance(clause, dosePos, other) < mine
+			if (other.nearestNameDistance(clause, dosePos) < mine
 					&& !substance.equals(other.substanceGroupKey())) {
 				return false;
 			}
@@ -4932,37 +4962,16 @@ public class DrugSafetyValidator {
 		return true;
 	}
 
-	/** @return the nearest {@link #nearestAliasDistance} over every row of one substance, i.e. how close
-	 *          the substance is named to {@code pos} by whichever of its rows publishes the alias the
-	 *          text used. */
+	/** @return the nearest {@link DrugReference#nearestNameDistance} over every row of one substance,
+	 *          i.e. how close the substance is named to {@code pos} by whichever of its rows publishes
+	 *          the name the text used. {@code text} is the folded clause {@link #attributedDoses}
+	 *          established, and {@code pos} an index into it. */
 	private static int nearestAliasDistance(String text, int pos, List<DrugReference> rows) {
 		int best = Integer.MAX_VALUE;
 		for (DrugReference row : rows) {
-			int distance = nearestAliasDistance(text, pos, row);
+			int distance = row.nearestNameDistance(text, pos);
 			if (distance < best) {
 				best = distance;
-			}
-		}
-		return best;
-	}
-
-	/** @return character distance from {@code pos} to the nearest occurrence of any of {@code ref}'s
-	 *          aliases in {@code text}, or {@link Integer#MAX_VALUE} when none occur. */
-	private static int nearestAliasDistance(String text, int pos, DrugReference ref) {
-		int best = Integer.MAX_VALUE;
-		for (String alias : ref.getAliases()) {
-			if (alias == null || alias.isEmpty()) {
-				continue;
-			}
-			String a = alias.toLowerCase(Locale.ROOT);
-			int idx = text.indexOf(a);
-			while (idx >= 0) {
-				int end = idx + a.length();
-				int dist = pos < idx ? idx - pos : (pos > end ? pos - end : 0);
-				if (dist < best) {
-					best = dist;
-				}
-				idx = text.indexOf(a, idx + 1);
 			}
 		}
 		return best;

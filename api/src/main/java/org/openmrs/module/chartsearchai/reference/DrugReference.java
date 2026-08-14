@@ -646,10 +646,13 @@ public class DrugReference {
 	 * named for systemic use — {@code D01BA}, {@code D02BB}, {@code D05BA}, {@code D05BB},
 	 * {@code D10BA}, {@code R01BA}, either in their own name or their level-3 parent's — all six covered
 	 * by the five prefixes here (measured 2026-08-06). Only {@code D05B} changes any pair in that KB:
-	 * three ROW pairs, one substance pair (re-measured 2026-08-14 for issue #243, which is where those
-	 * two bases are defined), all psoralens, since methoxsalen and trioxsalen share {@code D05AD}
-	 * (topical) and {@code D05BA} (systemic) and would be reported as sharing the topical one. The
-	 * other four change none and are here on the criterion rather than on measured impact; removing
+	 * three ROW pairs, all psoralens — two of them across methoxsalen and trioxsalen, which is the one
+	 * substance pair, and one between methoxsalen's own two rows, which issue #160 collapses to an
+	 * identity chip before this arm can name a class (re-measured 2026-08-14 for issue #243; the two
+	 * bases are defined at {@code DrugSafetyValidator.sharedClass}). Methoxsalen and trioxsalen share
+	 * {@code D05AD} (topical) and {@code D05BA} (systemic) and would be reported as sharing the
+	 * topical one. The other four change none and are here on the criterion rather than on measured
+	 * impact; removing
 	 * them breaks no test, which is exactly why the criterion and not the test suite has to decide
 	 * membership.
 	 *
@@ -698,9 +701,8 @@ public class DrugReference {
 	 * by {@code CrossReactivityClassChoiceTest}), {@code N06AX} antidepressants, {@code N03AX}
 	 * antiepileptics, {@code N02AX} opioids. Vetoing every residue would have dropped a class claim
 	 * from 1974 of the KB's 7783 ROW pairs that share a subgroup; 1488 of those keep it here. ROW
-	 * pairs, where the 5550 named below are SUBSTANCE pairs — the same relation counted on the two
-	 * bases {@code DrugSafetyValidator.sharedClass} defines, so neither may be read against the other
-	 * without going through it (issue #243).
+	 * pairs, not the SUBSTANCE pairs the 5550 below counts: the two bases, and the conversion between
+	 * them, are defined at {@code DrugSafetyValidator.sharedClass} (issue #243).
 	 *
 	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
 	 * <ul>

@@ -4248,11 +4248,13 @@ public class DrugSafetyValidator {
 	 * mapping the module does not have — and it would still leave the question-driven half of this
 	 * arm choosing by some other rule.
 	 *
-	 * <p><b>WHICH PAIRS THE FIGURES BELOW COUNT (issue #243).</b> Two bases, and every figure here says
-	 * which it is over, because the same predicate over the same KB answers 1090 on one and 319 on the
-	 * other — a count that does not say is ambiguous in exactly the dimension this code path keeps
-	 * getting wrong (#145, #162, #163, #174, #185, #186). A ROW PAIR is an unordered pair of the
-	 * entries {@link DdiDrugReferenceSource#parse} loads; a SUBSTANCE PAIR is an unordered pair of the
+	 * <p><b>WHICH PAIRS THE FIGURES BELOW COUNT (issue #243).</b> Two PAIR bases — the CLAIM base a
+	 * paragraph further down names is a third thing, counting what {@link #validate} emits rather than
+	 * what the KB relates — and every figure here says which of the two it is over, because the same
+	 * question over the same KB answers 1090 on one and 319 on the other. A count that does not say is
+	 * ambiguous in exactly the dimension this code path keeps getting wrong (#145, #162, #163, #174,
+	 * #185, #186). A ROW PAIR is an unordered pair of the entries
+	 * {@link DdiDrugReferenceSource#parse} loads; a SUBSTANCE PAIR is an unordered pair of the
 	 * {@link DrugReference#substanceGroupKey} families those entries fall into, each represented by its
 	 * {@link DrugReference#canonicalRow}. The row base counts a substance pair once per combination of
 	 * their rows, and counts in addition the pairs that are two rows of ONE substance, which have no
@@ -4287,9 +4289,9 @@ public class DrugSafetyValidator {
 	 * measured on their own lists — the 1090 ROW pairs partition into 263 whose class this changes, 587
 	 * that share no systemic subgroup at all — two topical azoles, two ophthalmic preparations, two
 	 * local anaesthetic formulations, for which the locally-applied class IS the honest answer and is
-	 * kept — and 240 that were already naming a systemic one; 62, 165 and 92 over substance pairs. A
-	 * filter rather than a preference would have to drop or fabricate a class for the 587, the largest
-	 * of the three groups.
+	 * kept — and 240 that were already naming a systemic one; over substance pairs those three are 62,
+	 * 165 and 92 in that order, so the 587 is 165. A filter rather than a preference would have to drop
+	 * or fabricate a class for the 587, the largest of the three groups.
 	 *
 	 * <p><b>And why the tie inside the systemic tier is still broken alphabetically (issue #168).</b>
 	 * On the same count 70 row pairs — 21 substance pairs — leave the systemic tier holding more than
@@ -4299,16 +4301,18 @@ public class DrugSafetyValidator {
 	 * are a subset of the 20, so those are 20 distinct pairs; driving {@link #validate} over all 36
 	 * pair-and-arm combinations of them, every one names the alphabetically smallest surviving
 	 * candidate and none fails to raise a class chip, so the tie-break really is what decides them.
-	 * Nothing in ATC's own words breaks those ties. Three of the 20 hold candidates whose published
-	 * names are IDENTICAL — {@code G03AC}/{@code L02AB} "Progestogens", {@code N01AF}/{@code N05CA}
-	 * "Barbiturates, plain", {@code L01EG}/{@code L04AH} "Mammalian target of rapamycin (mTOR) kinase
-	 * inhibitors" — so for those there is no aptness to rank, only a code. And the two ranks this
-	 * module already derives from those names move almost nothing: preferring the candidate that
-	 * asserts more ({@link DrugReference#isPurposeOnlyAtcCode}) moves one of the 20, {@code Calcium
-	 * chloride} against {@code Ammonium chloride}, from {@code B05XA} "Electrolyte solutions" to
-	 * {@code G04BA} "Acidifiers", and none of the 16; preferring a non-residue name (issue #182's rule)
-	 * moves none of either. Neither reaches issue #168's own example, because {@code H02CA}
-	 * "Anticorticosteroids" and {@code J02AB} "Imidazole derivatives" sit in the same tier of both —
+	 * What ATC's own words support does not break those ties. Three of the 20 hold candidates whose
+	 * published names are IDENTICAL — {@code G03AC}/{@code L02AB} "Progestogens",
+	 * {@code N01AF}/{@code N05CA} "Barbiturates, plain", {@code L01EG}/{@code L04AH} "Mammalian target
+	 * of rapamycin (mTOR) kinase inhibitors" — so for those there is no aptness to rank, only a code.
+	 * For the rest, the two ranks this module already derives from those names move almost nothing:
+	 * preferring the candidate that asserts more ({@link DrugReference#isPurposeOnlyAtcCode}) moves one
+	 * of the 20, {@code Calcium chloride} against {@code Ammonium chloride}, from {@code B05XA}
+	 * "Electrolyte solutions" to {@code G04BA} "Acidifiers", and none of the 16; preferring a subgroup
+	 * whose own published name does not begin "Other"/"Various" — the name test issue #182's first
+	 * family applies as one conjunct rather than as a rule of its own — moves none of either. Neither
+	 * reaches issue #168's own example, because {@code H02CA} "Anticorticosteroids" and
+	 * {@code J02AB} "Imidazole derivatives" sit in the same tier of both —
 	 * the first names a target and the second a structural family, and issue #183 read every level-4
 	 * name in the WHO ATC index and put target and structure on the same side of its one hard line
 	 * deliberately. A rule preferring {@code J02AB} would therefore be a new distinction drawn inside a

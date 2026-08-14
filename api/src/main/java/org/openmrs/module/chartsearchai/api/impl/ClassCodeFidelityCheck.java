@@ -18,8 +18,10 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.reference.DrugReference;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,12 +47,15 @@ import org.slf4j.LoggerFactory;
  * chips the answer was expected to report, which is a different question with a different failure
  * mode (a chip the model deliberately did not repeat is not an error).
  *
- * <p><b>Why the existing passes cannot catch it.</b> {@link CitationGroundingVerifier}'s Tier-1 is
- * cosine similarity over the cited record's text, and a two-character edit inside an alphanumeric
- * token moves an embedding almost not at all; its Tier-2 entailment is paraphrase-tolerant, which
- * is exactly the wrong tolerance for a code substitution. Index validation passes too, because the
- * citation really does point at the record. So this check is not more grounding: it is an exact
- * token comparison, which is the only thing that separates {@code J01CA} from {@code J01MA}.
+ * <p><b>Why the existing passes cannot catch it.</b> For the citation #142 was measured on — an
+ * injected {@code safety_finding} — {@link CitationGroundingVerifier}'s Tier-2 entailment never runs
+ * at all: reference-group citations are demote-only and skip it (issue #106/#122), so the only pass
+ * that sees them is Tier-1 cosine over the record's text, which a two-character edit inside an
+ * alphanumeric token moves almost not at all. Where Tier-2 does run — a cited CHART record — it is
+ * paraphrase-tolerant, which is exactly the wrong tolerance for a code substitution. Index
+ * validation passes either way, because the citation really does point at the record. So this check
+ * is not more grounding: it is an exact token comparison, which is the only thing that separates
+ * {@code J01CA} from {@code J01MA}.
  *
  * <p><b>What it does and does not do.</b> It reports; it never rewrites. Editing a
  * clinician-facing sentence to remove a token is a larger decision than this check is licensed to
@@ -66,22 +71,32 @@ import org.slf4j.LoggerFactory;
  * progressive-reasoning preview: that pass discards its answer, streams only reasoning from a
  * focused top-K chart, and resolves no citations at all, so every code in it would be reported and
  * the signal would be noise within a day. A cached answer ({@code ChartSearchServiceRouter}) is not
- * re-checked either — it was checked when it was produced.
+ * re-checked either — it was checked when it was produced. Nor is the model's REASONING, which the
+ * streaming endpoint surfaces as its own {@code thinking} event: reasoning cites nothing, so every
+ * code in it would be reported. That is a real gap in what a clinician can read, and a narrower
+ * rule than this one would be needed to close it.
  *
  * <p><b>Conservative by construction</b>, because a check that cries wolf is worse than no check:
  * <ul>
+ *   <li>it says nothing at all unless a record the answer CITES states a class code. With nothing
+ *       to copy there is no copy to be unfaithful to, and this is what keeps ordinary prose out of
+ *       the check: an answer about dosing frequencies cites drug-order records, which carry no
+ *       codes;</li>
  *   <li>it compares WHOLE tokens, in both directions — a code the record does not state as a token
  *       is unsupported even when it is a prefix of one that it does ({@code A02B} against
  *       {@code A02BC}), and a code stated beside the true one is still unsupported;</li>
- *   <li>it abstains for the whole answer when any cited record carries no readable text, since a
- *       record we could not read may be the one that states the code — the same "cannot verify"
- *       treatment {@link CitationGroundingVerifier} gives a null/blank record text;</li>
- *   <li>it matches only upper-case tokens, the form the WHO ATC index publishes and the form
- *       {@code DrugReference.normalizeAtcToken} renders, so no lower-case word can be mistaken for
- *       a code. A lower-cased code in prose is therefore a silent pass, deliberately — and one that
- *       costs nothing measured: over the 340 answers captured from this pipeline's live probe
- *       sweeps (2026-08-14), reading the same shape case-insensitively matched not one further
- *       token.</li>
+ *   <li>but a cited record's level-5 substance code supports the level-4 class the module itself
+ *       would derive from it ({@code DrugReference.atcSubgroups}, the one reduction — see
+ *       {@link #supportedBy}). Naming the class of a substance a cited record states is the
+ *       module's own sentence, not a fabrication;</li>
+ *   <li>it abstains for the whole answer — not per citation, as the grounding verifier does — when
+ *       any cited record carries no readable text, since a record we could not read may be the one
+ *       that states the code. That is the same "cannot verify" treatment
+ *       {@link CitationGroundingVerifier} gives a null/blank record text, applied at a coarser
+ *       grain because one unread record is enough to make the whole comparison unsound;</li>
+ *   <li>it matches only upper-case tokens whose first letter is one of ATC's fourteen main groups,
+ *       so no lower-case word and no {@code Q12H}-shaped frequency can be mistaken for a code. A
+ *       lower-cased code in prose is a silent pass, deliberately.</li>
  * </ul>
  */
 final class ClassCodeFidelityCheck {
@@ -89,10 +104,28 @@ final class ClassCodeFidelityCheck {
 	private static final Logger log = LoggerFactory.getLogger(ClassCodeFidelityCheck.class);
 
 	/**
+	 * ATC's fourteen anatomical/pharmacological main groups — the letter every ATC code, at every
+	 * level, begins with. Derived rather than recalled: taken from the WHO ATC index itself, where
+	 * the level-1 entries are exactly these and no code at any level starts with another letter.
+	 * A closed set at the top of the classification, unlike the level-2 groups beneath it, which the
+	 * index does add to — so this constrains the shape without a table that can go stale into
+	 * silence.
+	 *
+	 * <p>It is what keeps ordinary clinical prose out of the check: {@code Q12H}, {@code Q24H} and
+	 * {@code Q48H} are dosing frequencies of exactly the ATC level-4 shape, and {@code Q} is not an
+	 * ATC main group. What it does not exclude is a token under a real main-group letter whose level
+	 * 2 does not exist — {@code D50W} for 50% dextrose, {@code G12C} and {@code H63D} for variant
+	 * nomenclature. Those are held out by the second gate instead: an answer that mentions them
+	 * cites records that state no class code at all, and the check then says nothing.
+	 */
+	private static final String MAIN_GROUPS = "ABCDGHJLMNPRSV";
+
+	/**
 	 * An ATC classification code as it occurs in prose: a level-3 group ({@code J01M}), a level-4
 	 * subgroup ({@code J01MA}) or a level-5 substance code ({@code J01MA02}). Level 1 (a single
 	 * letter) and level 2 ({@code J01}) are deliberately out: they are too short to tell from
-	 * ordinary text, and no chip or record states them.
+	 * ordinary text, and nothing the shipped datasets render states them — a chip names a level-4
+	 * class and a reference record renders the entry's own codes.
 	 *
 	 * <p><b>Not {@link ChartSearchAiUtils#INLINE_CITATION}, and never to be merged with it.</b>
 	 * That pattern parses citation MARKERS and is deliberately single-index because a bracketed
@@ -107,7 +140,7 @@ final class ClassCodeFidelityCheck {
 	 * is not a code the model copied but a fragment of something else.
 	 */
 	static final Pattern ATC_CLASS_CODE = Pattern.compile(
-			"(?<![A-Za-z0-9])[A-Z]\\d{2}[A-Z](?:[A-Z](?:\\d{2})?)?(?![A-Za-z0-9])");
+			"(?<![A-Za-z0-9])[" + MAIN_GROUPS + "]\\d{2}[A-Z](?:[A-Z](?:\\d{2})?)?(?![A-Za-z0-9])");
 
 	private ClassCodeFidelityCheck() {
 	}
@@ -116,6 +149,11 @@ final class ClassCodeFidelityCheck {
 	 * @return every ATC-shaped code token in {@code text}, in first-appearance order; empty for
 	 *         null text. Used for both sides of the comparison — what the answer states and what a
 	 *         record states — so the two can never be read by different rules.
+	 *
+	 *         <p>Package-private rather than private on purpose: this is the predicate a measurement
+	 *         over captured answers has to CALL rather than re-express (CLAUDE.md's rule for any
+	 *         figure that ends up in javadoc, a PR body or an issue), and a same-package throwaway
+	 *         case cannot call a private one.
 	 */
 	static Set<String> classCodesIn(String text) {
 		Set<String> codes = new LinkedHashSet<String>();
@@ -140,51 +178,106 @@ final class ClassCodeFidelityCheck {
 	 *            the accessor's own output rather than re-deriving it from the prose is what keeps
 	 *            "which records were cited" a single answer: it is also what the clinician can
 	 *            click, so a code traceable to none of them is traceable to nothing the reader can
-	 *            check. An answer that cites nothing therefore supports no code.
-	 * @param mappings the chart's records, cited or not — the carrier of the cited records' text
+	 *            check. An answer that cites nothing therefore supports no code — the one case
+	 *            where a code that happens to be CORRECT is still reported, because nothing the
+	 *            reader can open licenses it. Measured before choosing it: of the 340 live answers
+	 *            captured by this project's probe sweeps (August 2026), 33 state a code and every
+	 *            one of them cites at least one record, so the noise this admits was nil on that
+	 *            corpus. The alternative — stay silent when the answer cites nothing — narrows the
+	 *            check to "when it cites, it must copy", and would also have caught every #142
+	 *            capture.
+	 * @param mappings the chart's records, cited or not — the carrier of the cited records' text.
+	 *            Support is pooled across the cited records rather than matched per citation: an
+	 *            answer citing [3] and [7] may state any code either of them carries, because the
+	 *            question here is where a code came from, not which sentence carries which marker
+	 *            (that is grounding's question, and {@code grounding.clauseScoped} is where it is
+	 *            answered).
 	 */
-	static void reportUnsupportedClassCodes(String answer, List<RecordReference> cited,
-			List<RecordMapping> mappings) {
-		Set<String> stated = classCodesIn(answer);
-		if (stated.isEmpty()) {
-			return;
-		}
-		Map<Integer, String> textByIndex = new HashMap<Integer, String>();
-		if (mappings != null) {
-			for (RecordMapping mapping : mappings) {
-				textByIndex.put(Integer.valueOf(mapping.getIndex()), mapping.getText());
+	static void reportUnsupportedClassCodes(Patient patient, String answer,
+			List<RecordReference> cited, List<RecordMapping> mappings) {
+		Integer patientId = patient == null ? null : patient.getPatientId();
+		try {
+			Set<String> stated = classCodesIn(answer);
+			if (stated.isEmpty()) {
+				return;
 			}
-		}
-		List<Integer> citedIndexes = new ArrayList<Integer>();
-		Set<String> supported = new LinkedHashSet<String>();
-		if (cited != null) {
-			for (RecordReference reference : cited) {
-				Integer index = Integer.valueOf(reference.getIndex());
-				String text = textByIndex.get(index);
-				if (ChartSearchAiUtils.isBlank(text)) {
-					// Abstain for the whole answer: an unreadable cited record may be the one that
-					// states the code, and accusing the prose of a code we could not look for is
-					// exactly the false alarm this check must not raise.
-					log.debug("Class-code check skipped: cited record [{}] carries no text", index);
-					return;
+			Map<Integer, String> textByIndex = new HashMap<Integer, String>();
+			if (mappings != null) {
+				for (RecordMapping mapping : mappings) {
+					textByIndex.put(Integer.valueOf(mapping.getIndex()), mapping.getText());
 				}
-				citedIndexes.add(index);
-				supported.addAll(classCodesIn(text));
+			}
+			List<Integer> citedIndexes = new ArrayList<Integer>();
+			Set<String> recordCodes = new LinkedHashSet<String>();
+			if (cited != null) {
+				for (RecordReference reference : cited) {
+					Integer index = Integer.valueOf(reference.getIndex());
+					// A cited index always has a mapping — the reference list is built from the
+					// mappings — so a null here is only ever a mapping carrying no text.
+					String text = textByIndex.get(index);
+					if (ChartSearchAiUtils.isBlank(text)) {
+						// Abstain for the whole answer: an unreadable cited record may be the one
+						// that states the code, and accusing the prose of a code we could not look
+						// for is exactly the false alarm this check must not raise.
+						log.debug("Class-code check skipped for patient={}: cited record [{}] "
+								+ "carries no text", patientId, index);
+						return;
+					}
+					citedIndexes.add(index);
+					recordCodes.addAll(classCodesIn(text));
+				}
+			}
+			if (recordCodes.isEmpty()) {
+				// The first gate: nothing the answer cites states a class code, so the answer copied
+				// none and there is no copy to be unfaithful to. Everything code-SHAPED in an answer
+				// like that — a dosing frequency, a dextrose strength — would be reported on a
+				// resemblance, which is the failure this check exists to avoid.
+				log.debug("Class-code check skipped for patient={}: no cited record states a class "
+						+ "code", patientId);
+				return;
+			}
+			List<String> unsupported = new ArrayList<String>();
+			Set<String> supported = supportedBy(recordCodes);
+			for (String code : stated) {
+				if (!supported.contains(code)) {
+					unsupported.add(code);
+				}
+			}
+			if (!unsupported.isEmpty()) {
+				// Both halves are needed to reconstruct it from logs: the code the model wrote, and
+				// the codes it could have copied — the ones the records literally state, not the
+				// derived set, so the line says what a maintainer would read in the record. Neither
+				// the answer nor the record text is logged: they carry patient data, and the codes
+				// with the patient identify the claim.
+				log.warn("Answer for patient={} states ATC class code(s) {} that no cited record "
+						+ "contains; cited record(s) {} state {}. The answer prose is left unchanged "
+						+ "(issue #142).", patientId, unsupported, citedIndexes, recordCodes);
 			}
 		}
-		List<String> unsupported = new ArrayList<String>();
-		for (String code : stated) {
-			if (!supported.contains(code)) {
-				unsupported.add(code);
-			}
+		catch (RuntimeException e) {
+			// A diagnostic must never break a clinical answer. Nothing here does I/O and every line
+			// is traceably total, so this is the same promise CitationGroundingVerifier makes in its
+			// javadoc, made structurally rather than by inspection — and loudly, so the failure of
+			// the check is not itself silent.
+			log.warn("Class-code check failed for patient={}; the answer is unaffected: {}",
+					patientId, e.toString());
 		}
-		if (!unsupported.isEmpty()) {
-			// Both halves are needed to reconstruct it from logs: the code the model wrote, and the
-			// codes it could have copied. Neither the answer nor the record text is logged — they
-			// carry patient data, and the codes alone identify the claim.
-			log.warn("Answer states ATC class code(s) {} that no cited record contains; cited "
-					+ "record(s) {} state {}. The answer prose is left unchanged (issue #142).",
-					unsupported, citedIndexes, supported);
-		}
+	}
+
+	/**
+	 * @return the codes a set of record-stated codes supports: the codes themselves, plus the
+	 *         level-4 subgroup of each, by {@link DrugReference#atcSubgroups(Set)} — the module's one
+	 *         reduction from a substance code to the class it belongs to, so an answer naming the
+	 *         class of a substance a cited record states is reading the record the same way the
+	 *         chips do rather than fabricating. It widens only DOWNWARD in specificity: a level-4
+	 *         code supports no level-5 one, because which substance is meant is exactly what the
+	 *         record did not say — that is the {@code (H02AB)}→{@code (H02AB, H02AB02)} capture. And
+	 *         a level-3 group is not a subgroup of anything, so the {@code (A02BC)}→{@code (A02B)}
+	 *         capture stays reported.
+	 */
+	private static Set<String> supportedBy(Set<String> recordCodes) {
+		Set<String> supported = new LinkedHashSet<String>(recordCodes);
+		supported.addAll(DrugReference.atcSubgroups(recordCodes));
+		return supported;
 	}
 }

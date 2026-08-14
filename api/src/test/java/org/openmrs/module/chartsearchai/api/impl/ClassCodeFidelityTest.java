@@ -21,6 +21,7 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
@@ -38,15 +39,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@code J01CA} (penicillins) — two drug families, one character apart, in a sentence a clinician
  * reads as a classification claim.
  *
- * <p>Nothing in the pipeline could see it. Tier-1 grounding is cosine similarity, and a
- * two-character edit inside an alphanumeric token barely moves an embedding; Tier-2 entailment is
- * paraphrase-tolerant, which is exactly the wrong tolerance for a code substitution; and the
- * citation itself is valid, so index validation passes. The chip is right, the record is right,
- * the citation is right, and the sentence is wrong.
+ * <p>Nothing in the pipeline could see it. A citation of an injected finding never enters Tier-2
+ * entailment at all (reference-group citations are demote-only), so the only pass that sees it is
+ * Tier-1 cosine, which a two-character edit inside an alphanumeric token barely moves; where Tier-2
+ * does run, on a chart record, it is paraphrase-tolerant, which is the wrong tolerance for a code
+ * substitution. The citation itself is valid, so index validation passes. The chip is right, the
+ * record is right, the citation is right, and the sentence is wrong.
  *
- * <p>What this file pins is the deterministic check that closes it: every ATC-shaped token in the
- * answer must appear in a record the answer CITES, and one that does not is reported at WARN
- * carrying both the code the answer states and the codes its cited records state. The answer prose
+ * <p>What this file pins is the deterministic check that closes it: when the records an answer
+ * cites state class codes, every ATC-shaped token in the answer must be one of them (or the level-4
+ * class the module itself derives from one), and one that is not is reported at WARN carrying both
+ * the code the answer states and the codes its cited records state. When they state none, there was
+ * nothing to copy and the check says nothing. The answer prose
  * is never rewritten — a silent edit of a clinician-facing sentence is a larger decision than this
  * check, and a visible flag is worth more than a quiet repair.
  *
@@ -132,7 +136,7 @@ public class ClassCodeFidelityTest {
 			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
 					"an ATC class the cited record does not state is a fabricated classification claim "
 							+ "and must be reported. Captured: " + capture.describeAll());
-			assertTrue(warnStating(capture, MISCOPIED_CODE, TRUE_CODE),
+			assertTrue(warnStating(capture, "[" + MISCOPIED_CODE + "]", TRUE_CODE),
 					"the WARN has to carry BOTH the code the answer states and the codes its cited "
 							+ "records state, or a maintainer reading logs cannot reconstruct the "
 							+ "miscopy. Captured: " + capture.describeAll());
@@ -162,7 +166,7 @@ public class ClassCodeFidelityTest {
 		service.setLlmProvider(answering(sentenceStating(MISCOPIED_CODE)));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			service.searchStreaming(patient(), QUESTION, token -> { });
-			assertTrue(warnStating(capture, MISCOPIED_CODE, TRUE_CODE),
+			assertTrue(warnStating(capture, "[" + MISCOPIED_CODE + "]", TRUE_CODE),
 					"the streaming path must run the same check. Captured: " + capture.describeAll());
 		}
 	}
@@ -217,9 +221,71 @@ public class ClassCodeFidelityTest {
 		onCharted.setLlmProvider(answering("The chart documents ATC class " + MISCOPIED_CODE + " [1]."));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			onCharted.search(patient(), QUESTION);
-			assertTrue(warnStating(capture, MISCOPIED_CODE, TRUE_CODE),
+			assertTrue(warnStating(capture, "[" + MISCOPIED_CODE + "]", TRUE_CODE),
 					"the chart record was read: a code it does not state must still be reported. "
 							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void anAnswerWhoseCitationsStateNoClassCodeIsNotChecked() {
+		// The first gate. This answer anchors no citation at all, so the pipeline surfaces no
+		// reference (the abstention-dump guard) and no cited record states a code — there was
+		// nothing to copy, so there is no copy to be unfaithful to. Reporting here would mean
+		// reporting on a resemblance: it is what turns every Q12H-shaped token in ordinary prose
+		// into a WARN. Asserted at DEBUG on the check's own logger, so the case pins that the check
+		// RAN and declined rather than that it was never reached.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + MISCOPIED_CODE
+				+ ") as the patient's active order."));
+		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"with nothing cited there is nothing to have copied. Captured: "
+							+ capture.describeAll());
+			assertFalse(capture.messagesAt(Level.DEBUG).isEmpty(),
+					"the check ran and declined; that has to be traceable. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aDosingFrequencyIsNotAClassCode() {
+		// Q12H has exactly the level-4 shape and is ordinary prescribing prose. Q is not one of
+		// ATC's fourteen main groups, so it is not a code; the answer beside it is faithful, and the
+		// check must be silent about both. Without the main-group restriction this is a WARN on
+		// "Ceftriaxone 1g IV Q12H".
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				+ ") as the patient's active order; give 500 mg PO Q12H ["
+				+ finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a dosing frequency is not an ATC code. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aCitedSubstanceCodeSupportsTheClassTheModuleWouldDeriveFromIt() {
+		// The injected drug-reference record states ciprofloxacin's level-5 codes (ATC J01MA02, …).
+		// An answer citing THAT record and naming the level-4 class is reading it exactly as the
+		// chips do — DrugReference.atcSubgroups is the one reduction — so it is not a fabrication.
+		RecordMapping reference = referenceRecord();
+		service.setLlmProvider(answering("Ciprofloxacin belongs to ATC class " + TRUE_CODE + " ["
+				+ reference.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the class of a substance code the cited record states is the module's own "
+							+ "sentence. Captured: " + capture.describeAll());
+		}
+		// And the pair that makes that readable: the same record, a different class.
+		service.setLlmProvider(answering("Ciprofloxacin belongs to ATC class " + MISCOPIED_CODE + " ["
+				+ reference.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "[" + MISCOPIED_CODE + "]"),
+					"a class no cited code belongs to is still reported. Captured: "
+							+ capture.describeAll());
 		}
 	}
 
@@ -229,16 +295,24 @@ public class ClassCodeFidelityTest {
 		// (its 4-arg constructor). We cannot know which codes such a record states, so we cannot
 		// call anything fabricated: claiming one would be the check crying wolf on a record it
 		// never read.
-		PatientChart textless = new PatientChart("[1] a record whose text was not carried",
-				Arrays.asList(new RecordMapping(1, "obs", "00000000-0000-0000-0000-000000000001", null)),
+		//
+		// The arrangement has to pair the unreadable record with a readable one that DOES state a
+		// code — the real injected finding — or the case is blind: with only the unreadable record
+		// cited, no cited record states a code and the "nothing to copy" gate would produce the same
+		// silence for a different reason. (Measured by mutation: with a lone textless record,
+		// deleting the abstention reddened nothing.)
+		PatientChart withUnreadable = new PatientChart(chart.getText(),
+				Arrays.asList(finding,
+						new RecordMapping(99, "obs", "00000000-0000-0000-0000-000000000099", null)),
 				Collections.<Integer> emptyList());
-		TestableService onTextless = newService(textless);
-		onTextless.setLlmProvider(answering("It is the same ATC class " + MISCOPIED_CODE + " [1]."));
+		TestableService onUnreadable = newService(withUnreadable);
+		onUnreadable.setLlmProvider(answering("It is the same ATC class " + MISCOPIED_CODE + " ["
+				+ finding.getIndex() + "], [99]."));
 		// Captured on the CHECK at DEBUG, not on the package: the abstention has its own line, so
 		// this case can assert that the check RAN and declined — "no WARN" alone would also pass if
 		// the check were never reached at all.
 		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
-			onTextless.search(patient(), QUESTION);
+			onUnreadable.search(patient(), QUESTION);
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"the check must abstain on a cited record it cannot read, not accuse it. Captured: "
 							+ capture.describeAll());
@@ -246,6 +320,17 @@ public class ClassCodeFidelityTest {
 					"the abstention must be traceable: the check ran, read a textless cited record and "
 							+ "declined. Captured: " + capture.describeAll());
 		}
+	}
+
+	/** The injected drug-reference record in the same chart — the one carrying ciprofloxacin's own
+	 *  level-5 codes, as the real renderer writes them. */
+	private RecordMapping referenceRecord() {
+		for (RecordMapping mapping : chart.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())) {
+				return mapping;
+			}
+		}
+		throw new IllegalStateException("no drug-reference record was injected: " + chart.getText());
 	}
 
 	/** An answer sentence of the shape the model really produces, citing the finding record. */

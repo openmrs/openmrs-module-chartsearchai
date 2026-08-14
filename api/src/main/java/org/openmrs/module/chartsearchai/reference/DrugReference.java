@@ -575,8 +575,14 @@ public class DrugReference {
 	 *         codes of the reference row an unmapped order's NAME resolves, which belong to exactly one.
 	 *         One definition either way, so a co-medication and an entry cannot come to be in "the same
 	 *         ATC class" by two different reductions.
+	 *
+	 *         <p>Public since issue #142, for a third caller outside this package:
+	 *         {@code ClassCodeFidelityCheck} reads the codes a cited record states and has to decide
+	 *         whether an answer naming a level-4 class is copying that record or fabricating. That is
+	 *         the same reduction, so it must not be a second one — a local {@code substring} there
+	 *         would be exactly the divergence this javadoc's last sentence rules out.
 	 */
-	static Set<String> atcSubgroups(Set<String> codes) {
+	public static Set<String> atcSubgroups(Set<String> codes) {
 		Set<String> out = new LinkedHashSet<String>();
 		for (String code : codes) {
 			if (code.length() >= ATC_SUBGROUP_PREFIX_LENGTH) {

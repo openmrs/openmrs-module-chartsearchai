@@ -4399,11 +4399,13 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>Every row is still tried, and that is the point of the shape.</b> A collapse that
 	 * simply read the canonical row would DROP a warning whenever the band sits on a sibling — the
-	 * one direction a non-blocking advisory must never take. So the rows are tried in
-	 * canonical-first order and the first warning found is the one raised, which also keeps the
-	 * quoted band the substance's own wherever it publishes one. What the collapse gives up is the
-	 * ability to report two different published ceilings for one substance, which is not a thing a
-	 * clinician can act on: nothing here knows which formulation is in play (see
+	 * one direction a non-blocking advisory must never take. So the SUBJECT row is tried first and the
+	 * rest after it, and the first warning found is the one raised — which keeps the quoted band the
+	 * named row's own wherever that row's own ceiling is the one exceeded. (Subject-first, not
+	 * canonical-first: this paragraph predates issue #206, which made every arm name the row the chart
+	 * records, and the row tried first has followed that choice ever since.) What the collapse gives up
+	 * is the ability to report two different published ceilings for one substance, which is not a thing
+	 * a clinician can act on: nothing here knows which formulation is in play (see
 	 * {@link DrugReference#namesNoRoute()}), so a second ceiling is a second guess, not a second
 	 * fact.
 	 *
@@ -4418,6 +4420,30 @@ public class DrugSafetyValidator {
 	 * chosen, and what the chip CALLS the substance ({@link SubstanceSubjects}, issue #206) — the
 	 * attribution names a second row inside one sentence, and it is worded as a contrast precisely so
 	 * that it cannot be read as a second claim about the patient.
+	 *
+	 * <p><b>Issue #245 — and the dose is read for the SUBSTANCE, which is what makes the stricter
+	 * sibling ceiling reachable at all.</b> The walk above tries every row, but it used to re-READ the
+	 * answer once per row, and the read was gated on that row's own aliases
+	 * ({@link #attributedDoses}). So a row whose alias the answer's wording did not happen to use was
+	 * handed no dose to compare, and its band — however strict — could not trip: over those same two
+	 * rows, a stated 2500 mg/day was attributed to the unqualified row alone, cleared its 3000 ceiling,
+	 * and raised NOTHING, though the presentation the patient is actually on publishes 2000. That is
+	 * this layer's one forbidden direction (a missing warning) reached through the same row/subject
+	 * split #208 reported as a mis-naming, and it leaves no trace at all — no chip, no log line,
+	 * nothing separating "within the ceiling" from "compared against the wrong ceiling".
+	 *
+	 * <p>The read is therefore hoisted out of the loop and scoped to the substance: rows of one
+	 * substance are not competitors for a dose, they are one drug, so "which row's alias sits nearest"
+	 * was never the question. One answer, read once, compared against every row's band. Note what that
+	 * does and does not settle about WHICH ceiling gets quoted — the order is unchanged and still
+	 * first-to-trip, not strictest: the subject is tried first and now genuinely has a dose to compare,
+	 * so its own ceiling is quoted wherever the stated dose EXCEEDS it, while a dose that clears the
+	 * subject's band and exceeds a sibling's is reported against the sibling's, with
+	 * {@link #ceilingAttribution} saying whose it is (#208). That fallback is the whole reason #208
+	 * rejected "prefer the subject's band" outright, and it is what keeps a band published only by a
+	 * sibling from becoming a lost warning. What this cannot do is warn where the data does not: the
+	 * widening is over the rows of ONE substance, and {@link #substanceOwnsDose} still lets any OTHER
+	 * substance's nearer alias take the dose away.
 	 */
 	private void addOverdose(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, String lowerAnswer,
@@ -4427,14 +4453,66 @@ public class DrugSafetyValidator {
 		// ONE response must not call it three things, which is exactly the divergence anchoring only some
 		// of them would have created.
 		DrugReference subject = subjects.subjectOf(rows.get(0));
-		if (addOverdose(warnings, subject, subject, context, lowerAnswer, allEntries)) {
+		// Nothing to read a dose FOR unless some row of this substance publishes a band this patient's
+		// age and weight make actionable — the same guard each row applies to itself, asked of the
+		// family before the answer is scanned rather than after. That ordering is load-bearing rather
+		// than tidy: the walk below is the only thing in this arm that costs anything, since
+		// substanceOwnsDose compares against every entry in the knowledge base per stated dose, and
+		// while it sat behind the per-row guard it never ran at all on a dataset publishing no bands.
+		// That is not the shipped DEFAULT — config.xml defaults sourceFormat to json and the bundled
+		// curated seed does publish bands — but it is exactly the ddinter and atc deployments, where no
+		// entry carries a band at all and the largest knowledge bases are. Hoisting the walk out of the
+		// loop below without hoisting the guard with it would have made those deployments pay, on every
+		// request, for a check their data can never answer.
+		if (!anyActionableBand(rows, context)) {
+			return;
+		}
+		// ONE reading of the answer for the whole substance (issue #245), before any row is consulted —
+		// the dose a clinician stated is a fact about the drug, not about the row that happens to publish
+		// the band it is about to be compared against.
+		List<AttributedDose> doses = attributedDoses(lowerAnswer, rows, allEntries);
+		if (addOverdose(warnings, subject, subject, doses, context)) {
 			return;
 		}
 		for (DrugReference row : rows) {
-			if (row != subject && addOverdose(warnings, subject, row, context, lowerAnswer, allEntries)) {
+			if (row != subject && addOverdose(warnings, subject, row, doses, context)) {
 				return;
 			}
 		}
+	}
+
+	/** @return whether any row of one substance publishes a band this check could act on, i.e. whether
+	 *          reading a dose out of the answer could lead anywhere. */
+	private static boolean anyActionableBand(List<DrugReference> rows, PatientClinicalContext context) {
+		for (DrugReference row : rows) {
+			if (actionableBand(row, context) != null) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @return the band {@code ref} publishes for this patient's age that this check can actually use —
+	 *         one carrying a daily ceiling, or a per-kg ceiling for a patient whose weight is known —
+	 *         else null.
+	 *
+	 *         <p>One definition, asked twice: once of the family before the answer is read, and once of
+	 *         each row as it is checked. Two copies of "is there anything to compare against" is how the
+	 *         family-level skip and the per-row skip would come to disagree, and a disagreement in the
+	 *         permissive direction costs a knowledge-base-wide scan per request while one in the
+	 *         restrictive direction costs a warning.
+	 */
+	private static DrugReference.AgeBand actionableBand(DrugReference ref,
+			PatientClinicalContext context) {
+		DrugReference.AgeBand band = ref.bandForAge(context != null ? context.getAgeYears() : null);
+		if (band == null) {
+			return null;
+		}
+		Double weightKg = context != null ? context.getWeightKg() : null;
+		boolean dailyArm = band.getMaxDailyDoseMg() > 0;
+		boolean weightArm = weightKg != null && weightKg > 0 && band.getMgPerKgMax() > 0;
+		return dailyArm || weightArm ? band : null;
 	}
 
 	/**
@@ -4444,24 +4522,23 @@ public class DrugSafetyValidator {
 	 *        chart records where it records one and the canonical row otherwise, so a chip never asserts
 	 *        a formulation the chart does not record (the same answer every other arm gets, which since
 	 *        issue #206 includes the contraindication chips)
-	 * @param ref the row whose published {@code ageBands} and aliases the check READS
+	 * @param ref the row whose published {@code ageBands} the check READS — its ALIASES no longer come
+	 *        into it, which is issue #245: the doses were read for the substance before this was called,
+	 *        so a row is now consulted for the band it publishes and nothing else
+	 * @param doses the substance's stated doses, read once by the caller and shared by every row and by
+	 *        both arms below — so a dose counts for the daily and the per-dose check, and for the
+	 *        subject row and its siblings, under exactly the same conditions
 	 * @return whether a warning was raised, so the caller can stop at the first row that trips
 	 */
 	private boolean addOverdose(List<SafetyWarning> warnings, DrugReference subject, DrugReference ref,
-			PatientClinicalContext context, String lowerAnswer, List<DrugReference> allEntries) {
-		Integer age = context != null ? context.getAgeYears() : null;
-		DrugReference.AgeBand band = ref.bandForAge(age);
+			List<AttributedDose> doses, PatientClinicalContext context) {
+		DrugReference.AgeBand band = actionableBand(ref, context);
 		if (band == null) {
 			return false;
 		}
 		Double weightKg = context != null ? context.getWeightKg() : null;
 		boolean dailyArm = band.getMaxDailyDoseMg() > 0;
 		boolean weightArm = weightKg != null && weightKg > 0 && band.getMgPerKgMax() > 0;
-		if (!dailyArm && !weightArm) {
-			return false;
-		}
-		// One attribution walk feeds whichever arms apply.
-		List<AttributedDose> doses = attributedDoses(lowerAnswer, ref, allEntries);
 		String label = subject.displayLabel();
 		// Whose ceiling this is, said once for both arms — a mismatch is a property of the ROW PAIR, not
 		// of which arm noticed it, so wording it per arm is how one arm keeps the defect.
@@ -4532,30 +4609,40 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The one clause-scoped, alias-anchored attribution walk both overdose arms consume, so a dose
-	 * counts for the daily and the per-dose check under exactly the same conditions. One drug is
-	 * never charged with another's dose: the answer is split into clauses, and within each clause
-	 * that names {@code ref} a {@code N mg} value counts only when (a) it is not introduced by a
-	 * limit cue — "maximum", "up to", … make it a ceiling, not a prescribed dose — and (b)
-	 * {@code ref}'s alias is the nearest drug name to it (no other entry's alias sits strictly
-	 * closer). The frequency is read from the same clause, so a frequency stated for a different
-	 * drug in a neighbouring sentence is never applied.
+	 * The one clause-scoped, alias-anchored attribution walk every row of a substance and both overdose
+	 * arms consume, so a dose counts for the daily and the per-dose check, and against the subject row's
+	 * band and its siblings', under exactly the same conditions. One drug is never charged with
+	 * another's dose: the answer is split into clauses, and within each clause that names the substance
+	 * {@code rows} are the rows of, a {@code N mg} value counts only when (a) it is not introduced by a
+	 * limit cue — "maximum", "up to", … make it a ceiling, not a prescribed dose — and (b) one of that
+	 * substance's aliases is the nearest drug name to it (no OTHER substance's alias sits strictly
+	 * closer). The frequency is read from the same clause, so a frequency stated for a different drug in
+	 * a neighbouring sentence is never applied.
+	 *
+	 * <p><b>Scoped to the substance, not to the row (issue #245).</b> This took a single {@code ref} and
+	 * gated on {@code ref.matchesText}, so a substance filed as several rows was read once per row and
+	 * each read saw only the wording that used THAT row's aliases. A stated dose therefore reached
+	 * whichever row the answer's phrasing happened to name and no other, and a sibling publishing a
+	 * stricter ceiling was never compared against — a missing warning, silently. Rows of one substance
+	 * publish one substance's dosing; which of them a clinician's sentence happened to name is not
+	 * information about the dose.
 	 *
 	 * <p>Known limitation (v1): only the literal unit {@code mg} is recognised; doses written in
 	 * grams ("1 g"), "mgs", or "milligrams" are not parsed and will not be flagged. That is the
 	 * conservative (miss, never false-positive) direction.
 	 */
-	private static List<AttributedDose> attributedDoses(String lowerAnswer, DrugReference ref,
+	private static List<AttributedDose> attributedDoses(String lowerAnswer, List<DrugReference> rows,
 			List<DrugReference> allEntries) {
 		List<AttributedDose> out = new ArrayList<AttributedDose>();
 		for (String clause : CLAUSE_DELIMITER.split(lowerAnswer)) {
-			if (!ref.matchesText(clause)) {
+			if (!namesSubstance(clause, rows)) {
 				continue;
 			}
 			Matcher m = DOSE_MG.matcher(clause);
 			while (m.find()) {
 				int dosePos = m.start();
-				if (precededByLimitCue(clause, dosePos) || !aliasOwnsDose(clause, dosePos, ref, allEntries)) {
+				if (precededByLimitCue(clause, dosePos)
+						|| !substanceOwnsDose(clause, dosePos, rows, allEntries)) {
 					continue;
 				}
 				double perDose;
@@ -4622,21 +4709,86 @@ public class DrugSafetyValidator {
 		return LIMIT_CUE.matcher(clause.substring(from, dosePos)).find();
 	}
 
-	/** @return true when {@code ref}'s alias is the nearest drug name to the dose at {@code dosePos}
-	 *          within {@code clause} (and within {@link #MAX_ALIAS_TO_DOSE_DISTANCE}). A different
-	 *          entry's alias sitting strictly closer means the dose belongs to that drug, not this. */
-	private static boolean aliasOwnsDose(String clause, int dosePos, DrugReference ref,
+	/** @return whether any row of the substance {@code rows} are the rows of names the clause — the
+	 *          clause-level gate {@link DrugReference#matchesText} used to answer for ONE row, widened to
+	 *          the substance for issue #245's reason: a clause naming the drug names it whichever of its
+	 *          rows publishes the alias the wording used. */
+	private static boolean namesSubstance(String clause, List<DrugReference> rows) {
+		for (DrugReference row : rows) {
+			if (row.matchesText(clause)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @return true when one of the substance's own aliases is the nearest drug name to the dose at
+	 *         {@code dosePos} within {@code clause} (and within {@link #MAX_ALIAS_TO_DOSE_DISTANCE}). A
+	 *         DIFFERENT substance's alias sitting strictly closer means the dose belongs to that drug,
+	 *         not this one.
+	 *
+	 *         <p>Compared per SUBSTANCE rather than per row since issue #245: a sibling row is not a
+	 *         rival claimant for its own substance's dose, so its alias counts toward the near side
+	 *         ({@code mine} is the minimum over {@code rows}) and same-substance rows are excluded from
+	 *         the veto. Both edits move in the same direction — a smaller {@code mine}, a shorter veto
+	 *         list — so this predicate is a superset of the per-row one for every row of a substance and
+	 *         cannot cost a warning that fires today. Between substances nothing changes at all.
+	 *
+	 *         <p><b>The two edits do not cover the same case, and it is worth being exact about which
+	 *         does the work.</b> The defect issue #245 was filed for — {@code Amoxicillin} sitting
+	 *         closer to a dose than {@code Amoxicillin (suspension)} and taking it from a row of the
+	 *         same drug — is repaired entirely by {@code mine}: every row of {@code rows} is at distance
+	 *         at least {@code mine} by construction, so the veto could never have fired for one of them
+	 *         anyway. The exclusion below covers only a row of this substance that this pass did NOT
+	 *         resolve (neither in play nor named by an active order) whose alias happens to land nearer
+	 *         the dose. That is a narrower case and no bundled fixture poses it, so nothing here pins the
+	 *         exclusion — it stays because it is the same defect one step out, not because a test reaches
+	 *         it, and trimming it to what the tests happen to reach would reintroduce that defect.
+	 *
+	 *         <p>Identity is {@link DrugReference#substanceGroupKey()}, the module's one answer to "are
+	 *         these rows one substance?", so this arm cannot merge a set of rows that the chip's subject
+	 *         chooser and the contraindication ledger would split. For a dataset publishing no substance
+	 *         name that key is the row itself, which reproduces the per-row behaviour exactly — the case
+	 *         every bundled dataset is in.
+	 */
+	private static boolean substanceOwnsDose(String clause, int dosePos, List<DrugReference> rows,
 			List<DrugReference> allEntries) {
-		int mine = nearestAliasDistance(clause, dosePos, ref);
+		int mine = nearestAliasDistance(clause, dosePos, rows);
 		if (mine == Integer.MAX_VALUE || mine > MAX_ALIAS_TO_DOSE_DISTANCE) {
 			return false;
 		}
+		Object substance = rows.get(0).substanceGroupKey();
 		for (DrugReference other : allEntries) {
-			if (other != ref && nearestAliasDistance(clause, dosePos, other) < mine) {
+			// Distance first, identity second, and not the order the per-row form used — that one led
+			// with a pointer comparison because it was genuinely the cheap half, and the identity test
+			// here is not: substanceGroupKey() rebuilds a key from normalized strings on every call.
+			// Distance is not cheap either (nearestAliasDistance has no early-out; it scans the clause
+			// once per alias before it can answer Integer.MAX_VALUE), so this is not "fast test first".
+			// It is that the distance test is UNCONDITIONAL either way, while ordering it first makes
+			// the key conditional — built only for the handful of entries whose alias actually lands
+			// nearer the dose, instead of for every entry in the knowledge base. Both halves are pure,
+			// so the order is free to be chosen on that.
+			if (nearestAliasDistance(clause, dosePos, other) < mine
+					&& !substance.equals(other.substanceGroupKey())) {
 				return false;
 			}
 		}
 		return true;
+	}
+
+	/** @return the nearest {@link #nearestAliasDistance} over every row of one substance, i.e. how close
+	 *          the substance is named to {@code pos} by whichever of its rows publishes the alias the
+	 *          text used. */
+	private static int nearestAliasDistance(String text, int pos, List<DrugReference> rows) {
+		int best = Integer.MAX_VALUE;
+		for (DrugReference row : rows) {
+			int distance = nearestAliasDistance(text, pos, row);
+			if (distance < best) {
+				best = distance;
+			}
+		}
+		return best;
 	}
 
 	/** @return character distance from {@code pos} to the nearest occurrence of any of {@code ref}'s

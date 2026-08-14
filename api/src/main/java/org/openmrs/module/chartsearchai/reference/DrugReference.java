@@ -624,7 +624,7 @@ public class DrugReference {
 	 * them ibuprofen/naproxen reading {@code G02CC} instead of {@code M01AE} — and 21 of the 46 had been
 	 * moved onto one by this rule itself rather than merely left there (measured 2026-08-06). ROW
 	 * pairs, the base {@code DrugSafetyValidator.sharedClass} defines beside the substance-pair one on
-	 * which this 1090 is 319; issue #243 is what a pair figure costs when it names neither.
+	 * which this 1090 is 319 (issue #243).
 	 * {@code CrossReactivityClassChoiceTest} pins one case per group, save {@code B02BC}: its only
 	 * shipped-KB pairs are epinephrine route variants, which issue #160 collapses to an identity chip
 	 * before this arm can name a class at all.
@@ -698,9 +698,9 @@ public class DrugReference {
 	 * by {@code CrossReactivityClassChoiceTest}), {@code N06AX} antidepressants, {@code N03AX}
 	 * antiepileptics, {@code N02AX} opioids. Vetoing every residue would have dropped a class claim
 	 * from 1974 of the KB's 7783 ROW pairs that share a subgroup; 1488 of those keep it here. ROW
-	 * pairs, where the 5550 named below are SUBSTANCE pairs — the same relation over the same KB,
-	 * counted on the two bases {@code DrugSafetyValidator.sharedClass} defines, which is why neither may
-	 * be read against the other without going through that definition (issue #243).
+	 * pairs, where the 5550 named below are SUBSTANCE pairs — the same relation counted on the two
+	 * bases {@code DrugSafetyValidator.sharedClass} defines, so neither may be read against the other
+	 * without going through it (issue #243).
 	 *
 	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
 	 * <ul>

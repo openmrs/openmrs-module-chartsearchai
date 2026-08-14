@@ -4794,13 +4794,13 @@ public class DrugSafetyValidator {
 	 * grams ("1 g"), "mgs", or "milligrams" are not parsed and will not be flagged. That is the
 	 * conservative (miss, never false-positive) direction.
 	 *
-	 * <p>Known limitation, and NOT what issue #260 turned out to be: where two substances' published
-	 * names nest and the dose precedes both ({@code 2.5 mg of estrone sulfate}), the two names start at
-	 * the same index, so neither is strictly nearer and BOTH claim the dose — the shorter substance
-	 * warning about a number stated for the longer one. The boundary rule does not touch it, because
-	 * {@code estrone} is a whole word inside {@code estrone sulfate} and the prose rule finds it exactly
-	 * where a substring search does. Measured, reported separately, and left alone here: its remedy
-	 * removes an attribution where this issue's adds one.
+	 * <p>Known limitation, and NOT what issue #260 turned out to be (issue #270): where two substances'
+	 * published names nest and the dose precedes both ({@code 2.5 mg of estrone sulfate}), the two names
+	 * start at the same index, so neither is strictly nearer and BOTH claim the dose — the shorter
+	 * substance warning about a number stated for the longer one. The boundary rule does not touch it,
+	 * because {@code estrone} is a whole word inside {@code estrone sulfate} and the prose rule finds it
+	 * exactly where a substring search does. Measured through {@code validate} on a two-entry fixture,
+	 * and left alone here: its remedy removes an attribution where this issue's adds one.
 	 */
 	private static List<AttributedDose> attributedDoses(String lowerAnswer, List<DrugReference> rows,
 			List<DrugReference> allEntries) {

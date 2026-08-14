@@ -43,7 +43,13 @@ import org.junit.jupiter.api.Test;
  * the example. That example is not this defect: {@code estrone} is a whole word inside {@code estrone
  * sulfate}, so the prose rule finds it exactly where {@code indexOf} does and the boundary rule changes
  * nothing about it. The blocking direction above is the one the raw locator actually produces, and it is
- * what these cases pin.
+ * what these cases pin. The nested-name shape is real for a different reason and is issue #270.
+ *
+ * <p><b>And one case here is not about the boundary at all.</b>
+ * {@link #aSubstanceNamedTwiceInOneClauseIsLocatedByItsNearestMention} pins the scan over an alias's
+ * LATER occurrences — the thing the shared rule's {@code from} parameter exists for. It is here because
+ * that parameter arrived with this fix, and because a mutation run during hardening found the scan pinned
+ * by nothing: stopping at the first occurrence left the whole api suite green.
  *
  * <p>Hand-authored fixture, and not for convenience: a dose warning needs {@code ageBands} and the
  * grouping needs {@code substanceName}, and no bundled dataset carries both — which
@@ -74,6 +80,25 @@ public class DoseAliasBoundaryTest {
 
 	private static final String ACCENTED_NAME =
 			"Paracétamol is a reasonable choice given her history, so 1500 mg four times daily is appropriate.";
+
+	/** The subject named TWICE in one clause: once at the head, 168 characters from the dose and so
+	 *  outside {@code DrugSafetyValidator.MAX_ALIAS_TO_DOSE_DISTANCE}, and once immediately before it.
+	 *  Commas only, so this really is one clause — {@code CLAUSE_DELIMITER} splits on {@code . ; ! ? \n}
+	 *  and nothing else. */
+	private static final String NAMED_TWICE =
+			"Paracetamol is generally the first choice for her because it is gentler on the stomach than "
+					+ "the alternatives and does not interact with any of her other medicines, so paracetamol "
+					+ "1500 mg four times daily is appropriate.";
+
+	/** The same clause with the near mention removed, so the head mention (156 characters out) is the only
+	 *  one. It is what keeps the case above from going vacuous: the pair discriminates only while the head
+	 *  mention is OUTSIDE the attribution window, and that window is a private constant a test cannot read.
+	 *  Widen it past this distance and this case reddens, which is the notice that the pair needs
+	 *  re-tuning — rather than the case above quietly passing for the wrong reason. */
+	private static final String FAR_MENTION_ONLY =
+			"Paracetamol is generally the first choice for her because it is gentler on the stomach than "
+					+ "the alternatives and does not interact with any of her other medicines, so "
+					+ "1500 mg four times daily is appropriate.";
 
 	private static List<SafetyWarning> validate(String answer) throws Exception {
 		DrugReferenceService service = DrugReferenceTestSupport
@@ -136,6 +161,25 @@ public class DoseAliasBoundaryTest {
 		// for that reason: without it, deleting the veto outright turns the case above green.
 		assertEquals(0, DrugReferenceTestSupport.overdoseCount(validate(RIVAL_AS_A_WORD), "Paracetamol"),
 				"a rival the clause really does name, sitting closer to the dose, still takes it");
+	}
+
+	@Test
+	public void aSubstanceNamedTwiceInOneClauseIsLocatedByItsNearestMention() throws Exception {
+		// The scan over an alias's LATER occurrences, which nothing else reaches. Measured 2026-08-14 by
+		// mutation: making the locator stop at the first occurrence left all 1199 api tests green, so this
+		// arm's "nearest" was a promise no case collected on — and it is a promise the boundary rule makes
+		// more load-bearing, not less, because the rule that decides an occurrence counts is now the same
+		// rule that decides the clause names the drug at all. Here the head mention sits 168 characters
+		// from the "1500 mg", past the 120-character attribution window, and the second sits against it:
+		// first-occurrence-only reads the substance as too far away and drops a 6000 mg/day statement in
+		// silence.
+		assertEquals(0,
+				DrugReferenceTestSupport.overdoseCount(validate(FAR_MENTION_ONLY), "Paracetamol"),
+				"premise, through the production path rather than by arithmetic: the head mention alone is "
+						+ "too far from the dose to attribute it, which is what makes the next assertion a "
+						+ "statement about the SECOND mention");
+		assertEquals(1, DrugReferenceTestSupport.overdoseCount(validate(NAMED_TWICE), "Paracetamol"),
+				"the nearest mention of the drug's own name is the one that locates it");
 	}
 
 	@Test

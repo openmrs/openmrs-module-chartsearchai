@@ -1353,9 +1353,12 @@ public class DrugReference {
 	}
 
 	/**
-	 * The one boundary-aware containment scan, shared by prose matching ({@link #containsWord}) and
-	 * order-name matching ({@link #matchesOrderName}) so the boundary rule cannot drift between
-	 * them. A match needs {@code token} to start at a word boundary in {@code text} and to end at
+	 * Whether {@code text} carries {@code token} under the boundary rule: the boolean view of
+	 * {@link #boundedTokenIndex}, which is the one scan and has three sharers — prose matching
+	 * ({@link #containsWord}) and order-name matching ({@link #matchesOrderName}) through here, and
+	 * {@link #nearestNameDistance} directly, because since issue #260 the dose arm needs the POSITION
+	 * rather than the answer. So the boundary rule cannot drift between them.
+	 * A match needs {@code token} to start at a word boundary in {@code text} and to end at
 	 * one, give or take up to {@code maxTrailingLetters} letters. Letters only: a digit is never an
 	 * inflection, so a digit sitting against the token is neither stepped over nor treated as the
 	 * end of the name, and a display name that glues its strength straight onto the drug name
@@ -1411,10 +1414,12 @@ public class DrugReference {
 	 * ({@code paracetamol} written {@code paracétamol}) was not located and the subject could not claim
 	 * its own dose. Both silently, which is the direction the dose arm exists to prevent.
 	 *
-	 * <p><b>Operands pre-folded, and that is a contract rather than an economy.</b> The fold decomposes
-	 * and drops combining marks, so it is not length-preserving and an index into a folded string is not
-	 * an index into the string it was folded from. A caller comparing this index against any other
-	 * position must have produced that position in the SAME folded text — which is why
+	 * <p><b>Operands pre-folded and pre-lowercased, and that is a contract rather than an economy.</b>
+	 * Neither transform preserves length — the fold decomposes and drops combining marks, and
+	 * {@code toLowerCase} turns the single character {@code İ} into two — so an index into the
+	 * transformed string is not an index into the string it came from, and doing either transform HERE
+	 * would silently shift every index this returns. A caller comparing this index against any other
+	 * position must have produced that position in the SAME transformed text — which is why
 	 * {@link DrugSafetyValidator} folds a clause once and reads every position out of that one string.
 	 *
 	 * @param t the haystack, already lowercased and {@link #foldDiacritics}-folded
@@ -1500,8 +1505,11 @@ public class DrugReference {
 	/**
 	 * @return {@code value} with its diacritics folded away — canonically decomposed (NFD) and
 	 *         stripped of combining non-spacing marks, so {@code budésonide} compares as
-	 *         {@code budesonide}. The one definition, used on both operands of
-	 *         {@link #containsBoundedToken}; never call {@link Normalizer} for this elsewhere.
+	 *         {@code budesonide}. The one definition; never call {@link Normalizer} for this elsewhere.
+	 *
+	 *         <p><b>Not length-preserving</b>, so an index into the folded string is not an index into
+	 *         the string it was folded from. Anything reading POSITIONS out of folded text has to fold
+	 *         once and take every position from that one form — see {@link #boundedTokenIndex}.
 	 *
 	 *         <p>Decompose-and-strip rather than a hand-rolled character map: a map has to be
 	 *         maintained per language and silently stops folding the first accent nobody listed
@@ -1521,8 +1529,8 @@ public class DrugReference {
 	 *         identically, so matching within those scripts is unchanged.
 	 *
 	 *         <p>ASCII returns unchanged without normalizing: every reference token is ASCII and so
-	 *         is most order-name text, and this runs once per (rule token, order name) pair — up to a
-	 *         few hundred rules per question — so the common path must not allocate.
+	 *         is most order-name text, and this runs on hot paths — once per (rule token, order name)
+	 *         pair, up to a few hundred rules per question — so the common path must not allocate.
 	 */
 	static String foldDiacritics(String value) {
 		for (int i = 0; i < value.length(); i++) {

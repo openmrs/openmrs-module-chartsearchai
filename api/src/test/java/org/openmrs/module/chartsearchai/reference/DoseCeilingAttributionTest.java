@@ -21,20 +21,29 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Issue #208 item 1 — the dose warning NAMES the row {@link DrugSafetyValidator}'s shared subject
- * chooser picks (issue #206) while READING the age band of whichever row the answer's own wording
- * attributed the dose to (issue #174 site 4, "every row is still tried", so that a band published only
- * by a sibling is never a lost warning). Where those are different rows the sentence quoted a ceiling
- * that is not the named row's, as if it were: a patient on {@code Amoxicillin (suspension)} — whose own
+ * chooser picks (issue #206) while READING the age band of whichever row supplied the ceiling that the
+ * stated dose exceeded (issue #174 site 4, "every row is still tried", so that a band published only by
+ * a sibling is never a lost warning). Where those are different rows the sentence quoted a ceiling that
+ * is not the named row's, as if it were: a patient on {@code Amoxicillin (suspension)} — whose own
  * published ceiling is 2000 mg/day — was told a stated 4000 mg/day "exceeds the 3000 mg/day maximum",
  * 3000 being the unqualified sibling row's number.
  *
  * <p><b>What was decided, and what deliberately was not.</b> Preferring the subject row's OWN band
  * would drop the warning entirely wherever that row publishes none, and under-warning is the failure
  * mode this layer exists to prevent — {@code OverdoseSubstanceCollapseTest
- * .aBandOnlyASiblingRowPublishesStillWarns} pins that direction. So which row supplies the ceiling is
- * unchanged; what changes is that the sentence SAYS which row published it, and says it by contrast
- * ("for X, not for Y") so that neither the clinician nor a model reading the injected
+ * .aBandOnlyASiblingRowPublishesStillWarns} pins that direction. So this issue changed no row's turn to
+ * supply the ceiling; what it changed is that the sentence SAYS which row published it, and says it by
+ * contrast ("for X, not for Y") so that neither the clinician nor a model reading the injected
  * {@code safety_finding} record can take the number for the named row's own.
+ *
+ * <p><b>Which row supplies it did move later, and this file is where that shows.</b> Issue #245 made the
+ * stated dose be read for the SUBSTANCE rather than for whichever row's alias the answer's wording used,
+ * so a subject row that publishes a band now genuinely has a dose to compare and its own ceiling is
+ * quoted whenever that ceiling is the one exceeded. The clause below is therefore what the FALLBACK
+ * narrates — the case where the named row publishes no usable band and a sibling's is the only one there
+ * is — which is why the daily case is posed on {@code Cefalexin}, whose route-unspecified row publishes
+ * no band at all, rather than on the two {@code Amoxicillin} rows it used to use, where the named row's
+ * own 2000 mg/day is now correctly the number quoted and there is nothing left to attribute.
  *
  * <p><b>Why the contrast rather than the sibling's name alone.</b> A bare second name in this sentence
  * is a formulation the chart does not record, standing in a chip whose whole point since issue #194 is
@@ -54,16 +63,11 @@ import org.junit.jupiter.api.Test;
  */
 public class DoseCeilingAttributionTest {
 
-	/** Shared with {@code OrderedSubjectRowTest}: two {@code Amoxicillin} rows that are ONE substance
-	 *  and publish DIFFERENT daily ceilings (3000 against 2000), only the unqualified one of which the
-	 *  bare word resolves — so the row the chart names and the row the answer's dose is attributed to
-	 *  are genuinely different, which is what makes the quoted ceiling a sibling's. */
-	private static final String CHARTED_ROW_FIXTURE =
-			"chartsearchai-test/drug-reference-charted-substance-row.json";
-
-	/** Shared with {@code OverdoseSubstanceCollapseTest}: two {@code Amoxicillin} rows publishing the
-	 *  SAME ceiling, which is the control below — the named row's own band is the one quoted, so there
-	 *  is nothing to attribute. */
+	/** Shared with {@code OverdoseSubstanceCollapseTest}, and carrying both shapes this file needs: two
+	 *  {@code Amoxicillin} rows publishing the SAME ceiling, which is the control — the named row's own
+	 *  band is the one quoted, so there is nothing to attribute — and a {@code Cefalexin} whose
+	 *  route-unspecified row publishes no band at all, so only its paediatric sibling can supply one and
+	 *  the daily arm has to say whose it is. */
 	private static final String DOSING_ROWS_FIXTURE =
 			"chartsearchai-test/drug-reference-substance-dosing-rows.json";
 
@@ -88,35 +92,33 @@ public class DoseCeilingAttributionTest {
 
 	@Test
 	public void theDailyCeilingSaysWhichRowPublishedItAndWhichRowItIsNot() throws Exception {
-		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(CHARTED_ROW_FIXTURE);
+		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(DOSING_ROWS_FIXTURE);
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(entries);
-		DrugReference suspension = DrugReferenceTestSupport.row(entries, "Amoxicillin (suspension)");
-		DrugReference unqualified = DrugReferenceTestSupport.row(entries, "Amoxicillin");
+		DrugReference named = DrugReferenceTestSupport.row(entries, "Cefalexin");
+		DrugReference paediatric = DrugReferenceTestSupport.row(entries, "Cefalexin (paediatric)");
 
-		// The premise, through the production accessors: the two rows are one substance publishing two
-		// different ceilings, so "the maximum" is ambiguous by construction and the sentence has to say
-		// which one it means. Without this the case could pass on a fixture whose rows agree, where the
-		// attribution would be true but vacuous.
-		assertEquals(suspension.substanceGroupKey(), unqualified.substanceGroupKey(),
+		// The premise, through the production accessors: the row the warning is NAMED after publishes no
+		// band this patient's age reaches, so the ceiling can only come from its sibling and "the maximum"
+		// is a number about a row the sentence is not otherwise about. Without this the case could pass on
+		// a fixture where the named row's own band is the one quoted, and the attribution would be true
+		// but vacuous.
+		assertEquals(named.substanceGroupKey(), paediatric.substanceGroupKey(),
 				"precondition: the two rows must be ONE substance");
-		assertEquals(2000.0, suspension.bandForAge(30).getMaxDailyDoseMg(), 0.0,
-				"precondition: the charted row publishes its own ceiling");
-		assertEquals(3000.0, unqualified.bandForAge(30).getMaxDailyDoseMg(), 0.0,
-				"precondition: and the sibling a different one");
+		assertNull(named.bandForAge(6),
+				"precondition: the row the warning is named after publishes no band");
+		assertEquals(1000.0, paediatric.bandForAge(6).getMaxDailyDoseMg(), 0.0,
+				"precondition: while its sibling publishes the daily ceiling this sentence will quote");
 
-		PatientClinicalContext context = DrugReferenceTestSupport.ctx(30, 70.0,
-				DrugReferenceTestSupport.set("Amoxicillin (suspension)", "Warfarin 5mg"), null, null,
-				null);
-		// Asked for by the CHARTED row's name (issue #206), which is also the assertion that the warning
-		// is named after it: overdoseSentence answers "" for a drug no dose warning names.
+		// 400 mg three times daily is 1200 mg/day. No weight is given, so the weight arm cannot run and
+		// the DAILY arm is unambiguously the one that trips — which is what this case is for; the weight
+		// arm's own copy of the clause is thePerKilogramCeilingSaysItToo below.
 		String overdose = overdoseSentence(DrugReferenceTestSupport.validator(service).validate(
-				"Give amoxicillin 2000 mg twice daily.", "Is amoxicillin safe for her?", context),
-				"Amoxicillin (suspension)");
+				"Give cefalexin 400 mg three times daily.", "What dose of cefalexin?",
+				DrugReferenceTestSupport.ctx(6, null, null, null, null, null)), "Cefalexin");
 
-		assertEquals("The stated Amoxicillin (suspension) dose ~4000 mg/day exceeds the 3000 mg/day "
-				+ "maximum for ages 0-120 — a ceiling this dataset publishes for Amoxicillin, not for "
-				+ "Amoxicillin (suspension)", overdose,
-				"the quoted ceiling must be attributed to the row that published it");
+		assertEquals("The stated Cefalexin dose ~1200 mg/day exceeds the 1000 mg/day maximum for ages "
+				+ "0-11 — a ceiling this dataset publishes for Cefalexin (paediatric), not for Cefalexin",
+				overdose, "the quoted ceiling must be attributed to the row that published it");
 	}
 
 	@Test

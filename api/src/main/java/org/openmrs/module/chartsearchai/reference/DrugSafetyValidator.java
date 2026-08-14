@@ -4310,15 +4310,14 @@ public class DrugSafetyValidator {
 	 * "Electrolyte solutions" to {@code G04BA} "Acidifiers", and none of the 16; preferring a subgroup
 	 * whose own published name does not begin "Other"/"Various" — the name test issue #182's first
 	 * family applies as one conjunct rather than as a rule of its own — moves none of either. Neither
-	 * reaches issue #168's own example, because {@code H02CA} "Anticorticosteroids" and
-	 * {@code J02AB} "Imidazole derivatives" sit in the same tier of both —
-	 * the first names a target and the second a structural family, and issue #183 read every level-4
-	 * name in the WHO ATC index and put target and structure on the same side of its one hard line
-	 * deliberately. A rule preferring {@code J02AB} would therefore be a new distinction drawn inside a
-	 * tier and hand-picked from the reported case: the unmeasured preference issue #161 refused, and
-	 * the shape whose hardening found issue #161's own list reproducing the defect it was fixing. Both
-	 * candidates are true of the pair, so this is a choice between honest answers and not the defect
-	 * above.
+	 * reaches issue #168's own example, because {@code H02CA} "Anticorticosteroids" and {@code J02AB}
+	 * "Imidazole derivatives" sit in the same tier of both — the first names a target and the second a
+	 * structural family, and issue #183 read every level-4 name in the WHO ATC index and put target and
+	 * structure on the same side of its one hard line deliberately. A rule preferring {@code J02AB}
+	 * would therefore be a new distinction drawn inside a tier and hand-picked from the reported case:
+	 * the unmeasured preference issue #161 refused, and the shape whose hardening found issue #161's
+	 * own list reproducing the defect it was fixing. Both candidates are true of the pair, so this is a
+	 * choice between honest answers and not the defect above.
 	 *
 	 * <p>Sorted rather than in the allergen's array order so the result is a function of the two code
 	 * SETS and not of the position a dataset happened to write a code in — what keeps a KB refresh that

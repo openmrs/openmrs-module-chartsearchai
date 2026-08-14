@@ -220,23 +220,24 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
-	 * Every injected {@code safety_finding} mapping in {@code chart}, in injection order — the
-	 * finding-shaped counterpart of {@link #injectedReference}, and the one matcher for it, so the
-	 * filter cannot drift between the test files that assert HOW MANY records a chip yields. Returns
-	 * the list rather than the first, because that count is the assertion in every caller but
-	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
-	 */
-	/**
 	 * The first injected {@code safety_finding} in a chart a caller already holds — {@link
 	 * #injectedFindings}' single-record form, public for the same cross-package reason
 	 * {@link #injectedSafetyFindingChart} is: a test that serves a chart and cites a record out of
-	 * it needs the record to BE an element of that chart, not an equal one from a second run.
+	 * it needs the record to BE an element of that chart, not an equal one from a second run. The
+	 * FIFTH cross-package accessor, and the second for the inference tests.
 	 */
 	public static RecordMapping safetyFindingIn(PatientChart chart) {
 		return injectedFindings(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
 				"no safety-finding record in the chart: " + chart.getText()));
 	}
 
+	/**
+	 * Every injected {@code safety_finding} mapping in {@code chart}, in injection order — the
+	 * finding-shaped counterpart of {@link #injectedReference}, and the one matcher for it, so the
+	 * filter cannot drift between the test files that assert HOW MANY records a chip yields. Returns
+	 * the list rather than the first, because that count is the assertion in every caller but
+	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
+	 */
 	static List<RecordMapping> injectedFindings(PatientChart chart) {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))

@@ -47,10 +47,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * record is right, the citation is right, and the sentence is wrong.
  *
  * <p>What this file pins is the deterministic check that closes it: when the records an answer
- * cites state class codes, every ATC-shaped token in the answer must be one of them (or the level-4
- * class the module itself derives from one), and one that is not is reported at WARN carrying both
- * the code the answer states and the codes its cited records state. When they state none, there was
- * nothing to copy and the check says nothing. The answer prose
+ * cites state class codes, every ATC-shaped token in the answer must be one of them — or one the
+ * QUESTION states, which is the reader's own word and not a fabrication — and one that is not is
+ * reported at WARN carrying both the code the answer states and the codes its cited records state.
+ * When they state none, there was nothing to copy and the check says nothing. There is deliberately
+ * no roll-up from a cited substance code to its class: correct as such an answer usually is,
+ * accepting it silences this issue's own headline capture, and `generalisingACitedSubstanceCodeToIts
+ * ClassIsReported` pins that with the reason. The answer prose
  * is never rewritten — a silent edit of a clinician-facing sentence is a larger decision than this
  * check, and a visible flag is worth more than a quiet repair.
  *
@@ -100,8 +103,9 @@ public class ClassCodeFidelityTest {
 		// safety-finding record inside it whose citation index the canned answers cite.
 		chart = DrugReferenceTestSupport.injectedSafetyFindingChart(QUESTION, ACTIVE_DRUG, ACTIVE_ATC);
 		finding = DrugReferenceTestSupport.safetyFindingIn(chart);
-		assertTrue(finding.getText().contains("(" + TRUE_CODE + ")"),
-				"the premise: the real injected finding states the class code the answer must copy. Was: "
+		assertTrue(ClassCodeFidelityCheck.classCodesIn(finding.getText()).contains(TRUE_CODE),
+				"the premise: the real injected finding states the class code the answer must copy — "
+						+ "read by the production predicate, not by a rendering detail. Was: "
 						+ finding.getText());
 		service = newService(chart);
 	}
@@ -362,9 +366,9 @@ public class ClassCodeFidelityTest {
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"the check must abstain on a cited record it cannot read, not accuse it. Captured: "
 							+ capture.describeAll());
-			assertFalse(capture.messagesAt(Level.DEBUG).isEmpty(),
-					"the abstention must be traceable: the check ran, read a textless cited record and "
-							+ "declined. Captured: " + capture.describeAll());
+			assertTrue(debugStating(capture, "carries no text"),
+					"the abstention must be traceable, and WHICH abstention: this arrangement can fall "
+							+ "silent for the other gate's reason too. Captured: " + capture.describeAll());
 		}
 	}
 

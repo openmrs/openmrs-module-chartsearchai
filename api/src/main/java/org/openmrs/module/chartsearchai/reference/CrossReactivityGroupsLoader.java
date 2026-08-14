@@ -65,7 +65,7 @@ public class CrossReactivityGroupsLoader {
 				// afterwards. That is the gap issue #156's second case records, and half-closing it one
 				// rule at a time is what would leave the loader answering "what is valid?" one way for
 				// the entry dataset and another for this one.
-				"cross-reactivity groups", (in, unreported) -> parse(in));
+				"cross-reactivity groups", (in, notWrittenToHere) -> parse(in));
 		loaded.getValidity().logTo(log);
 		return loaded.getItems();
 	}

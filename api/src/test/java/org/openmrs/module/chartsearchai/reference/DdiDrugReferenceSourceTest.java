@@ -48,10 +48,6 @@ public class DdiDrugReferenceSourceTest {
 
 	private static final String MARKER_FIXTURE = "chartsearchai-test/ddi-field-marker-mechanism.json";
 
-	/** Deliberately mis-shaped — carries drugs and no `interactions` table (issue #242). */
-	private static final String NO_INTERACTIONS_TABLE_FIXTURE =
-			"chartsearchai-test/ddi-no-interactions-table.json";
-
 	/** The real mechanism text of KB group 2248, verbatim minus the {@code INTERVAL:} marker. */
 	private static final String DOLUTEGRAVIR_MECHANISM = "Coadministration with medications containing "
 			+ "polyvalent cations such as aluminum, calcium, iron, or magnesium may decrease the oral "
@@ -232,7 +228,8 @@ public class DdiDrugReferenceSourceTest {
 	public void aFixtureOmittingItsInteractionsTableIsLoudWithNoLoadStatusToReportInto() throws Exception {
 		List<DrugReference> parsed;
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
-			parsed = DrugReferenceTestSupport.ddiFixtureEntries(NO_INTERACTIONS_TABLE_FIXTURE);
+			parsed = DrugReferenceTestSupport.ddiFixtureEntries(
+					DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE);
 			assertTrue(
 					capture.messagesAt(Level.WARN).toString()
 							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),

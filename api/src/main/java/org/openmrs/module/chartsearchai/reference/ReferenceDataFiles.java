@@ -62,8 +62,11 @@ final class ReferenceDataFiles {
 		/**
 		 * @param validity this load's collector, carrying what only the parser can see — what the
 		 *        DOCUMENT is missing, as against what the loaded entries say (issue #242). A parser that
-		 *        returns nothing has to say so here: downstream all that survives is the count, and a
+		 *        returns nothing should say so here: downstream all that survives is the count, and a
 		 *        count of zero cannot distinguish an empty file from one whose content was discarded.
+		 *        {@link CrossReactivityGroupsLoader} deliberately writes nothing to it and its call site
+		 *        says why — that dataset has no retained status object, so a finding could reach only
+		 *        one of the two channels every rule here is required to reach.
 		 */
 		List<T> parse(InputStream in, DrugReferenceValidity validity) throws IOException;
 	}
@@ -147,6 +150,11 @@ final class ReferenceDataFiles {
 		if (!configuredPath.isEmpty()) {
 			try {
 				String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath, pathGlobalProperty);
+				// One collector spans this attempt and the fallback below, and a parser now writes to it,
+				// so in principle a finding raised against the operator's file could be carried into a
+				// classpath-origin load. It cannot in practice: the only route that runs both parses is
+				// parse() throwing, and both parsers report strictly after their single read and then
+				// return, so a reported finding is always followed by the return two lines down.
 				try (InputStream in = new FileInputStream(new File(resolved))) {
 					List<T> loaded = parser.parse(in, validity);
 					log.info("Loaded {} {} from {}", loaded.size(), datasetLabel, resolved);

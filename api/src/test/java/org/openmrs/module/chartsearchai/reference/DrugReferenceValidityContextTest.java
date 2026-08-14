@@ -73,17 +73,20 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	private static final String DERIVATIVE_RULE_EDGES_FIXTURE =
 			"chartsearchai-test/ddi-derivative-rule-edges.json";
 
-	private static final String FIXTURE_DIR = "chartsearchai-test";
+	/**
+	 * The corpus the sweep enumerates, and the one file in it that is deliberately in the shape issue
+	 * #242 reports — both DERIVED from the shared constant rather than spelled again.
+	 *
+	 * <p>Not tidiness. The sweep exempts exactly one file by name, and that exemption has to denote the
+	 * same file the rule cases load; as two literals they are under no compiler obligation to agree, so
+	 * the sweep's single hole could drift onto a healthy fixture while the rule cases went on passing —
+	 * which is the "exception rots into a hole" failure the sweep's own javadoc claims to have avoided.
+	 */
+	private static final String FIXTURE_DIR = DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE
+			.substring(0, DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE.lastIndexOf('/'));
 
-	private static final String NO_INTERACTIONS_TABLE_FIXTURE =
-			FIXTURE_DIR + "/ddi-no-interactions-table.json";
-
-	private static final String EMPTY_INTERACTIONS_TABLE_FIXTURE =
-			FIXTURE_DIR + "/ddi-empty-interactions-table.json";
-
-	/** The one fixture on the test classpath that is deliberately in the shape issue #242 reports,
-	 *  because it is the SUBJECT of the rule rather than a setting for one — see its metadata note. */
-	private static final String DELIBERATELY_MIS_SHAPED = "ddi-no-interactions-table.json";
+	private static final String DELIBERATELY_MIS_SHAPED = DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE
+			.substring(DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE.lastIndexOf('/') + 1);
 
 	private final List<File> created = new ArrayList<File>();
 
@@ -684,13 +687,19 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	@Test
 	public void aDdinterDocumentWithNoInteractionsTableIsReportedRatherThanParsedToNothingInSilence()
 			throws IOException {
-		DrugReferenceService service = loading(NO_INTERACTIONS_TABLE_FIXTURE, "h242-no-table.json",
+		DrugReferenceService service = loading(DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE,
+				"h242-no-table.json",
 				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
 
 		DrugReferenceLoad status;
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			status = service.getLoadStatus();
-			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+			// Naming the RULE, not merely "some WARN was logged". That weaker form passes on main: this
+			// load is inert, so issue #149's WARN satisfies it on its own, and it would go on passing if
+			// this rule never reached the log channel at all.
+			assertTrue(
+					capture.messagesAt(Level.WARN).toString()
+							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
 					"a document whose content the parser discarded must be reported, not accepted in "
 							+ "silence. Captured: " + capture.describeAll());
 		}
@@ -712,12 +721,12 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 
 		// The wire form, which is the only channel an operator can ask after a lazy load. A finding that
 		// reached the log and not this would be the mirror of the state issues #149 and #154 settled.
+		Object serialized = status.toMap().get("findings");
 		assertEquals("[{rule=dataset-missing-a-required-table, remedy=reported, occurrences=1}]",
 				keyedSummary(status),
 				"the status must carry the rule, the remedy and the count");
-		assertTrue(String.valueOf(status.toMap().get("findings")).contains("interactions"),
-				"and the detail, which is what names the table to add. Was: "
-						+ status.toMap().get("findings"));
+		assertTrue(String.valueOf(serialized).contains("interactions"),
+				"and the detail, which is what names the table to add. Was: " + serialized);
 	}
 
 	/**
@@ -735,7 +744,8 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	@Test
 	public void theSameDocumentDeclaringAnEmptyInteractionsTableLoadsItsDrugsAndSaysNothing()
 			throws IOException {
-		DrugReferenceService service = loading(EMPTY_INTERACTIONS_TABLE_FIXTURE, "h242-empty-table.json",
+		DrugReferenceService service = loading(DrugReferenceTestSupport.DDI_EMPTY_INTERACTIONS_TABLE,
+				"h242-empty-table.json",
 				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
 
 		DrugReferenceLoad status;
@@ -771,7 +781,17 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		DrugReferenceService service = loading(SUBSTANCE_DECLARED_FIXTURE, "h242-wrong-parser.json",
 				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
 
-		DrugReferenceLoad status = service.getLoadStatus();
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(
+					capture.messagesAt(Level.WARN).toString()
+							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
+					"the log leg, named rather than merely present: this load is inert, so issue #149's "
+							+ "WARN would satisfy a bare 'something warned'. Captured: "
+							+ capture.describeAll());
+		}
+
 		assertEquals(0, status.getEntryCount(), "the curated file is unreadable to the DDInter parser");
 		assertFalse(rulesOf(status).contains(DrugReferenceValidity.CONFIGURED_SOURCE_FORMAT_NOT_USED),
 				"and #156 is silent, correctly: 'ddinter' names a real adapter, so nothing was "
@@ -792,10 +812,21 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 */
 	@Test
 	public void aDdinterDocumentReadByTheCuratedParserIsReportedTheSameWay() throws IOException {
-		DrugReferenceService service = loading(EMPTY_INTERACTIONS_TABLE_FIXTURE, "h242-curated-parser.json",
+		DrugReferenceService service = loading(DrugReferenceTestSupport.DDI_EMPTY_INTERACTIONS_TABLE,
+				"h242-curated-parser.json",
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
 
-		DrugReferenceLoad status = service.getLoadStatus();
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(
+					capture.messagesAt(Level.WARN).toString()
+							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
+					"same log leg, and it matters more here: this is the default format, so an operator "
+							+ "hitting it has changed nothing but the path. Captured: "
+							+ capture.describeAll());
+		}
+
 		assertEquals(0, status.getEntryCount(), "the DDInter file is unreadable to the curated parser");
 
 		DrugReferenceValidity.Finding found = finding(status,

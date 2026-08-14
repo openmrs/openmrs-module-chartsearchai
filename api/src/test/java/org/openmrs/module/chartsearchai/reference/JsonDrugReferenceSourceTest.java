@@ -25,10 +25,6 @@ import org.openmrs.module.chartsearchai.LogCapture;
  */
 public class JsonDrugReferenceSourceTest {
 
-	/** A well-shaped document of the OTHER format — the mistake this parser is likeliest to be handed,
-	 *  and well-shaped on purpose so what it witnesses is the format mismatch and nothing else. */
-	private static final String A_DDINTER_DOCUMENT = "chartsearchai-test/ddi-empty-interactions-table.json";
-
 	@Test
 	public void loadsBundledDatasetViaClasspathFallback() {
 		List<DrugReference> all = new JsonDrugReferenceSource().load();
@@ -51,7 +47,8 @@ public class JsonDrugReferenceSourceTest {
 	public void aDocumentOfAnotherFormatIsLoudRatherThanReadingAsZeroQuietly() throws Exception {
 		List<DrugReference> parsed;
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
-			parsed = DrugReferenceTestSupport.fixtureEntries(A_DDINTER_DOCUMENT);
+			parsed = DrugReferenceTestSupport.fixtureEntries(
+					DrugReferenceTestSupport.DDI_EMPTY_INTERACTIONS_TABLE);
 			assertTrue(
 					capture.messagesAt(Level.WARN).toString()
 							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),

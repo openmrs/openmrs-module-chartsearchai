@@ -102,8 +102,9 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 	static List<DrugReference> parse(InputStream in, DrugReferenceValidity validity) throws IOException {
 		Dataset dataset = MAPPER.readValue(in, Dataset.class);
 		if (dataset == null || dataset.entries == null) {
-			validity.datasetMissingARequiredTable(
-					ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT,
+			// The format's NAME, not "whatever the default is" — those are equal today and mean
+			// different things, and only one of them stays right if the default moves.
+			validity.datasetMissingARequiredTable(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON,
 					Collections.singletonList("entries"), 0);
 			return Collections.emptyList();
 		}

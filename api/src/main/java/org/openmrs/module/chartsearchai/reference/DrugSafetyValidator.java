@@ -4260,19 +4260,20 @@ public class DrugSafetyValidator {
 	 * pairs share at least one level-4 subgroup against 5550 substance pairs, and 1090 against 319
 	 * share more than one, 128 of that 1090 being two rows of one substance. A chip names a substance,
 	 * so the substance base is the one that counts what a clinician can see; the row figures are kept
-	 * because they are what the decisions recorded here were taken on. Every row of a substance in that
-	 * KB publishes the same {@link DrugReference#normalizedAtcCodes()} — 0 of the 129 multi-row
-	 * families disagree — which is what makes a substance's subgroups well-defined at all.
+	 * because they are what the decisions recorded here were taken on. What makes a substance's
+	 * subgroups well-defined at all is the DATA invariant recorded at {@link #addInteractionWarnings} —
+	 * every row of a substance in that KB publishes the same ATC list — which owns its own count and
+	 * its own instruction to re-measure it on a KB refresh.
 	 *
-	 * <p>Every count in the paragraph above and the three below, save the superseded 87 that issue #168
-	 * was filed against, was measured 2026-08-14 for issue #243 over the shipped KB by driving
+	 * <p>Every count in the paragraph above and in those that follow down to and including the issue
+	 * #168 one, save the superseded 87 that issue #168 was itself filed against, was measured
+	 * 2026-08-14 for issue #243 over the shipped KB by driving
 	 * {@link DdiDrugReferenceSource#parse} for the load, {@link DrugReference#substanceGroupKey} and
 	 * {@link DrugReference#canonicalRow} for the substance base,
-	 * {@link DrugReference#normalizedAtcCodes()} and {@link DrugReference#atcSubgroups()} for the
-	 * intersections, {@link DrugReference#isLocallyAppliedAtcCode},
-	 * {@link DrugReference#isUnclassifyingAtcCode} and {@link DrugReference#isPurposeOnlyAtcCode} for
-	 * the tiers, and — where the text says so — {@link #validate} itself. Re-measure before relying on
-	 * one.
+	 * {@link DrugReference#atcSubgroups()} for the intersections,
+	 * {@link DrugReference#isLocallyAppliedAtcCode}, {@link DrugReference#isUnclassifyingAtcCode} and
+	 * {@link DrugReference#isPurposeOnlyAtcCode} for the tiers, and — where the text says so —
+	 * {@link #validate} itself. Re-measure before relying on one.
 	 *
 	 * <p><b>And why not report the shared level-3 group instead</b>, which the issue offers as the
 	 * answer that is coarser but never false: of the 1090 ROW pairs that share more than one level-4
@@ -4294,7 +4295,7 @@ public class DrugSafetyValidator {
 	 * On the same count 70 row pairs — 21 substance pairs — leave the systemic tier holding more than
 	 * one candidate; once each arm has refused what its claim does not license that is 69 row / 20
 	 * substance pairs for duplicate therapy and 64 / 16 for cross-reactivity, whose stronger
-	 * requirement removes the rest (issue #168 was filed against a pre-correction count of 87). The 16
+	 * requirement removes four more (issue #168 was filed against a pre-correction count of 87). The 16
 	 * are a subset of the 20, so those are 20 distinct pairs; driving {@link #validate} over all 36
 	 * pair-and-arm combinations of them, every one names the alphabetically smallest surviving
 	 * candidate and none fails to raise a class chip, so the tie-break really is what decides them.
@@ -4306,15 +4307,15 @@ public class DrugSafetyValidator {
 	 * asserts more ({@link DrugReference#isPurposeOnlyAtcCode}) moves one of the 20, {@code Calcium
 	 * chloride} against {@code Ammonium chloride}, from {@code B05XA} "Electrolyte solutions" to
 	 * {@code G04BA} "Acidifiers", and none of the 16; preferring a non-residue name (issue #182's rule)
-	 * moves none of either. Neither reaches issue #168's own example, because
-	 * {@code H02CA} "Anticorticosteroids" and {@code J02AB}
-	 * "Imidazole derivatives" sit in the same tier of both — the first names a target and the second a
-	 * structural family, and issue #183 read every level-4 name in the WHO ATC index and put target and
-	 * structure on the same side of its one hard line deliberately. A rule preferring {@code J02AB}
-	 * would therefore be a new distinction drawn inside a tier and hand-picked from the reported case:
-	 * the unmeasured preference issue #161 refused, and the shape whose hardening found issue #161's
-	 * own list reproducing the defect it was fixing. Both candidates are true of the pair, so this is a
-	 * choice between honest answers and not the defect above.
+	 * moves none of either. Neither reaches issue #168's own example, because {@code H02CA}
+	 * "Anticorticosteroids" and {@code J02AB} "Imidazole derivatives" sit in the same tier of both —
+	 * the first names a target and the second a structural family, and issue #183 read every level-4
+	 * name in the WHO ATC index and put target and structure on the same side of its one hard line
+	 * deliberately. A rule preferring {@code J02AB} would therefore be a new distinction drawn inside a
+	 * tier and hand-picked from the reported case: the unmeasured preference issue #161 refused, and
+	 * the shape whose hardening found issue #161's own list reproducing the defect it was fixing. Both
+	 * candidates are true of the pair, so this is a choice between honest answers and not the defect
+	 * above.
 	 *
 	 * <p>Sorted rather than in the allergen's array order so the result is a function of the two code
 	 * SETS and not of the position a dataset happened to write a code in — what keeps a KB refresh that

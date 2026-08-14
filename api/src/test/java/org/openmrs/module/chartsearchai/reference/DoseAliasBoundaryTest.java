@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 
@@ -51,10 +52,20 @@ import org.junit.jupiter.api.Test;
  * that parameter arrived with this fix, and because a mutation run during hardening found the scan pinned
  * by nothing: stopping at the first occurrence left the whole api suite green.
  *
- * <p>Hand-authored fixture, and not for convenience: a dose warning needs {@code ageBands} and the
- * grouping needs {@code substanceName}, and no bundled dataset carries both — which
- * {@code DoseCeilingAttributionTest.noShippedConfigurationCanReachTheAttributionAtAll} asserts over the
- * seed rather than argues. Every case runs the REAL production path: the fixture parsed by the real
+ * <p><b>Hand-authored fixture, and the reason is the RIVAL and nothing else.</b> The shipped curated seed
+ * would carry four of these six cases unchanged — it publishes Paracetamol with the same 4000 mg/day adult
+ * ceiling, and {@code DoseCeilingAttributionTest.noShippedConfigurationCanReachTheAttributionAtAll} shows
+ * the dose arm running on it. What the seed cannot pose is a SECOND substance whose published name a
+ * clinical answer would naturally write in a form that nests it: its twelve aliases are
+ * {@code ibuprofen/brufen/nurofen/advil}, {@code paracetamol/acetaminophen/panadol/tylenol/calpol},
+ * {@code amoxicillin/amoxil} and {@code gentamicin}, and no answer writes "ibuprofens" or "gentamicins"
+ * the way it writes "penicillins". (An earlier version of this paragraph said the fixture was needed
+ * because no bundled dataset carries both {@code ageBands} and {@code substanceName}. That is not a
+ * requirement — {@code substanceGroupKey} falls back to the row itself, so a seed entry is already its own
+ * substance. {@code substanceName} is set here only so the cases run the substance-keyed path a
+ * {@code ddinter} deployment would.)
+ *
+ * <p>Every case runs the REAL production path: the fixture parsed by the real
  * {@link JsonDrugReferenceSource}, the real {@code validate} entry point, real question and answer strings.
  */
 public class DoseAliasBoundaryTest {
@@ -119,12 +130,12 @@ public class DoseAliasBoundaryTest {
 		assertFalse(paracetamol.substanceGroupKey().equals(penicillin.substanceGroupKey()),
 				"precondition: the two rows must be different SUBSTANCES, or the veto excludes the rival "
 						+ "as a sibling and the wording decides nothing");
-		assertFalse(penicillin.matchesText(RIVAL_AS_A_SUBSTRING.toLowerCase()),
+		assertFalse(penicillin.matchesText(RIVAL_AS_A_SUBSTRING.toLowerCase(Locale.ROOT)),
 				"precondition: the module's prose rule must say this clause does NOT name the rival — the "
 						+ "plural is the whole point, and a rule that reached it would make the case vacuous");
-		assertTrue(penicillin.matchesText(RIVAL_AS_A_WORD.toLowerCase()),
+		assertTrue(penicillin.matchesText(RIVAL_AS_A_WORD.toLowerCase(Locale.ROOT)),
 				"precondition: and that it DOES name it in the singular, which is the bound below");
-		assertTrue(paracetamol.matchesText(ACCENTED_NAME.toLowerCase()),
+		assertTrue(paracetamol.matchesText(ACCENTED_NAME.toLowerCase(Locale.ROOT)),
 				"precondition: the prose rule folds diacritics, so it says the accented clause names the "
 						+ "subject — the locator disagreeing with that is the second half of this issue");
 	}

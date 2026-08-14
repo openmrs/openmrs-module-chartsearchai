@@ -182,7 +182,9 @@ public class DrugSafetyValidator {
 	private static final Pattern CLAUSE_DELIMITER = Pattern.compile("[;!?\\n]+|\\.(?!\\d)");
 
 	/** How far before/after a dose a drug alias may sit and still own that dose; bounds attribution
-	 *  so a dose far from any drug name is ignored. */
+	 *  so a dose far from any drug name is ignored. Counted in the FOLDED clause
+	 *  {@link #attributedDoses} establishes, since issue #260 — {@link DrugReference#foldDiacritics} is
+	 *  not length-preserving, so this is a budget in that coordinate system and not in the answer's. */
 	private static final int MAX_ALIAS_TO_DOSE_DISTANCE = 120;
 
 	@Autowired
@@ -4790,6 +4792,14 @@ public class DrugSafetyValidator {
 	 * dose, and {@code paracetamol} written {@code paracétamol} located nothing at all, so a subject the
 	 * gate had just accepted could not claim its own.
 	 *
+	 * <p><b>And it moves a warning the other way too</b>, which is worth stating because this layer's
+	 * standing rule is that nothing firing today may stop. Applying the fold to the whole clause applies
+	 * it to RIVALS as well: an answer writing another drug's name with diacritics now locates that rival,
+	 * so it can take a dose the raw search left with the subject. That is the accented case above read
+	 * from the other side, and it is what the arm's contract asks for — the number was stated nearer the
+	 * other drug's name. The boundary half moves only toward more warnings, except where a substance was
+	 * near the dose SOLELY by a substring occurrence of one of its own names, which is the defect itself.
+	 *
 	 * <p>Known limitation (v1): only the literal unit {@code mg} is recognised; doses written in
 	 * grams ("1 g"), "mgs", or "milligrams" are not parsed and will not be flagged. That is the
 	 * conservative (miss, never false-positive) direction.
@@ -4805,14 +4815,16 @@ public class DrugSafetyValidator {
 	private static List<AttributedDose> attributedDoses(String lowerAnswer, List<DrugReference> rows,
 			List<DrugReference> allEntries) {
 		List<AttributedDose> out = new ArrayList<AttributedDose>();
-		for (String sentence : CLAUSE_DELIMITER.split(lowerAnswer)) {
+		for (String rawClause : CLAUSE_DELIMITER.split(lowerAnswer)) {
 			// ONE coordinate system per clause, established here (issue #260). Everything below is about
 			// POSITIONS in this clause — where the dose sits, where a limit cue sits, how near each
 			// substance is named — and the module's matching rule folds diacritics, so a clause left
-			// unfolded would have the gate reading one string and the locator another. Folded once at the
-			// top rather than inside the locator because the fold is not length-preserving: DOSE_MG's own
-			// index has to be an index into the same string the names are found in.
-			String clause = DrugReference.foldDiacritics(sentence);
+			// unfolded would have the gate reading one string and the locator another. Converted once at
+			// the top rather than inside the locator because neither half of foldedLower preserves
+			// length: DOSE_MG's own index has to be an index into the same string the names are found in.
+			// foldedLower and not foldDiacritics even though lowerAnswer is already lowercased, so that
+			// the operand form is named rather than half-assumed from a parameter 4500 lines away.
+			String clause = DrugReference.foldedLower(rawClause);
 			if (!namesSubstance(clause, rows)) {
 				continue;
 			}
@@ -4932,14 +4944,17 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>"Named" here means what it means everywhere else</b>
 	 *         ({@link DrugReference#nearestNameDistance}, the prose rule), which it did not until issue
-	 *         #260: the veto scanned for a raw substring, so it ran over EVERY entry in the knowledge
-	 *         base asking a question the clause gate above would have answered no to. An entry the
-	 *         clause does not name could therefore take a dose away from one it does — and, the same
-	 *         disagreement reversed, a subject the gate had just accepted could fail to locate itself.
+	 *         #260: the walk below asked every entry in the knowledge base a RAW SUBSTRING question,
+	 *         which the clause gate above would have answered no to. The walk itself is unchanged — what
+	 *         changed is the question. An entry the clause does not name could take a dose away from one
+	 *         it does, and, the same disagreement reversed, a subject the gate had just accepted could
+	 *         fail to locate itself. That second one is now structurally impossible rather than merely
+	 *         fixed: the gate and {@code mine} run the same predicate over the same string, so a clause
+	 *         that passes {@link #namesSubstance} cannot yield {@link Integer#MAX_VALUE} here.
 	 */
 	private static boolean substanceOwnsDose(String clause, int dosePos, List<DrugReference> rows,
 			List<DrugReference> allEntries) {
-		int mine = nearestAliasDistance(clause, dosePos, rows);
+		int mine = nearestNameDistance(clause, dosePos, rows);
 		if (mine == Integer.MAX_VALUE || mine > MAX_ALIAS_TO_DOSE_DISTANCE) {
 			return false;
 		}
@@ -4966,7 +4981,7 @@ public class DrugSafetyValidator {
 	 *          i.e. how close the substance is named to {@code pos} by whichever of its rows publishes
 	 *          the name the text used. {@code text} is the folded clause {@link #attributedDoses}
 	 *          established, and {@code pos} an index into it. */
-	private static int nearestAliasDistance(String text, int pos, List<DrugReference> rows) {
+	private static int nearestNameDistance(String text, int pos, List<DrugReference> rows) {
 		int best = Integer.MAX_VALUE;
 		for (DrugReference row : rows) {
 			int distance = row.nearestNameDistance(text, pos);

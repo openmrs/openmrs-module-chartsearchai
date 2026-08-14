@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "source": "test fixture — issue #260: a rival substance whose name occurs in an answer only as a SUBSTRING of a longer word",
+  "description": "Two substances, one of which publishes a daily ceiling. Paracetamol carries a 4000 mg/day ceiling, so a stated 1500 mg four times daily is 6000 and must warn; Penicillin publishes no band and is here only to be the rival whose alias the answer's wording does or does not carry. The pair is chosen because 'penicillin' occurs inside the plural 'penicillins' — a form a clinical answer routinely uses and which the module's own prose rule (DrugReference.containsWord, zero trailing letters) does not treat as naming the drug, while String.indexOf does. Different level-4 ATC subgroups so the class arm raises nothing beside the dose warning. No bundled dataset can pose the shape: the ddinter source publishes substance names but no age bands, and the shipped curated seed publishes age bands but no substance names.",
+  "entries": [
+    {
+      "id": "paracetamol",
+      "name": "Paracetamol",
+      "substanceName": "paracetamol",
+      "aliases": [
+        "paracetamol"
+      ],
+      "atcCodes": [
+        "N02BE01"
+      ],
+      "ageBands": [
+        {
+          "minYears": 0,
+          "maxYears": 120,
+          "mgPerKgMin": 0,
+          "mgPerKgMax": 0,
+          "maxDailyDoseMg": 4000
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "penicillin",
+      "name": "Penicillin",
+      "substanceName": "penicillin",
+      "aliases": [
+        "penicillin"
+      ],
+      "atcCodes": [
+        "J01CE01"
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

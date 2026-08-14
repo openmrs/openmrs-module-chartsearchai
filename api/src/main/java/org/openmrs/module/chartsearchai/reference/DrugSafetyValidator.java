@@ -348,9 +348,10 @@ public class DrugSafetyValidator {
 		// what issue #206 is, the contraindication arm having answered it positionally while the other two
 		// went through interactionSubject.
 		//
-		// Per-validate locals, never fields: a memoised DrugReference outliving a getAll() hot-reload
-		// fails the reference comparisons the contraindication arms make against the same objects
-		// (issue #172), which would silently re-open #145 with no test failing.
+		// Per-validate locals, never fields — issue #172's rule, for the reasons DrugReferenceService's
+		// class javadoc gives and not the getAll() hot-reload these comments used to cite: there is none
+		// (measured 2026-08-14, statically and on a running server). This bean is a Spring singleton, so
+		// a field memo is one unsynchronized structure shared by every concurrent request.
 		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
 		SubstanceSubjects subjects = new SubstanceSubjects(resolvedRows, recordedDrugNames(context));
 
@@ -385,8 +386,8 @@ public class DrugSafetyValidator {
 
 		// One ledger of the (substance, partner) pairs an interaction chip has been raised for, spanning
 		// the drug-in-play arm below and the screening arm at the end — see InteractionPairs. Like the
-		// contraindication ledger above it is a per-validate local, and for the same reason: it holds
-		// DrugReference-derived keys, which must not outlive a getAll() hot-reload.
+		// contraindication ledger above it is a per-validate local, and for the same reason: it is a memo
+		// of getAll()-derived keys, and this bean is a singleton (issue #172, see above).
 		InteractionPairs interactionPairs = new InteractionPairs();
 
 		// The patient's recorded allergies resolved to the SUBSTANCES they name, ONE resolution per pass
@@ -395,8 +396,10 @@ public class DrugSafetyValidator {
 		// subject, so a patient with several subjects resolved the same allergy list several times over —
 		// and since a recorded name now also resolves each of its constituents and its parent moiety, the
 		// repeat is several dataset sweeps rather than one. Same shape as orderEntries above (issue #136),
-		// and a per-validate local for the same reason as the two ledgers: it holds DrugReference objects,
-		// which must not outlive a getAll() hot-reload (issue #172).
+		// and a per-validate local for the same reason as the two ledgers (issue #172, see above) — plus
+		// one of its own, since this memo has no key: it is a function of THIS patient's allergy tokens,
+		// so a field would answer for whoever asked first. RecordedAllergenMemoScopeTest is the case that
+		// pins the rule at this site; before it, nothing did.
 		List<List<DrugReference>> recordedAllergens = warnContra
 				? recordedAllergens(context) : Collections.<List<DrugReference>> emptyList();
 
@@ -732,8 +735,9 @@ public class DrugSafetyValidator {
 	 * {@code estrone} and nothing spelled {@code estrone sulfate}; see
 	 * {@link DrugReferenceService#findImpliedByQuery}) — and reasoned rather than measured.
 	 *
-	 * <p>Memoised for the pass and not beyond it — a {@link DrugReference} outliving a {@code getAll()}
-	 * hot-reload fails the identity comparisons the contraindication arms make (issue #172).
+	 * <p>Memoised for the pass and not beyond it — issue #172's rule, for the reasons
+	 * {@link DrugReferenceService}'s class javadoc gives and not the {@code getAll()} hot-reload this
+	 * used to cite: there is none (measured 2026-08-14).
 	 */
 	private static final class SubstanceSubjects {
 
@@ -1412,8 +1416,10 @@ public class DrugSafetyValidator {
 	 * must not choose from different row sets.
 	 *
 	 * <p>In-play rows come FIRST and order rows after, so a full tie on {@link #outranks} keeps a row
-	 * the text actually named. It is still a per-{@code validate} local for issue #172's reason, and the
-	 * lists are the ones {@link #substanceRows} just built, so appending to them mutates nothing shared.
+	 * the text actually named. It is still a per-{@code validate} local for issue #172's reason — which
+	 * lives in {@link DrugReferenceService}'s class javadoc and not on the issue, whose own statement of
+	 * it was measured false — and the lists are the ones {@link #substanceRows} just built, so appending
+	 * to them mutates nothing shared.
 	 */
 	private static Map<Object, List<DrugReference>> resolvedSubstanceRows(
 			Collection<DrugReference> inPlay, List<DrugReference> orderEntries) {
@@ -2685,9 +2691,9 @@ public class DrugSafetyValidator {
 	 *         the most severe rule, and both now hand the whole row group to
 	 *         {@link #bestRulePerPartner} / {@link #outranks} instead.
 	 *
-	 *         <p>A per-{@code validate} local map, never a field, for the reason issue #172 records:
-	 *         a memoised {@link DrugReference} outliving a {@code getAll()} hot-reload fails the
-	 *         reference comparisons the contraindication arms make against the same objects.
+	 *         <p>A per-{@code validate} local map, never a field — issue #172's rule, for the reasons
+	 *         {@link DrugReferenceService}'s class javadoc gives and not the {@code getAll()} hot-reload
+	 *         this used to cite: there is none (measured 2026-08-14).
 	 *
 	 * @param recordedNames passed through to {@link #interactionSubject}, so the screening arm anchors a
 	 *        substance's representative row on the patient's own order names exactly as the drug-in-play
@@ -3714,9 +3720,9 @@ public class DrugSafetyValidator {
 	 * function of {@code getAll()} alone, which is loaded once — a property of the service, not
 	 * something this method enforces. The memos below are per CALL and do not change that; widening
 	 * them to the whole {@code validate} pass would, and would cut the repeated full scans, but they
-	 * must then be locals threaded through the pass and NEVER fields: a memoised
-	 * {@link DrugReference} outliving a {@code getAll()} reload fails the reference comparisons the
-	 * contraindication arms make (issue #172), which silently re-opens issue #145.
+	 * must then be locals threaded through the pass and NEVER fields — issue #172's rule, for the
+	 * reasons {@link DrugReferenceService}'s class javadoc gives. Not the {@code getAll()} reload this
+	 * used to cite: there is none, which the "loaded once" above already said.
 	 *
 	 * <p>Issue #185 added a name resolution to this loop, bounded rather than paid for everywhere:
 	 * {@link #substanceRowsNamedBy} runs only for a code the dataset cannot name, and is memoised per
@@ -3747,10 +3753,11 @@ public class DrugSafetyValidator {
 		// partly-covered order rescans the dataset for every code it carries; substanceRowsNamedBy is a
 		// resolution of every name of an order and issue #185 asks it once per UNNAMEABLE code while
 		// issue #228's leg asks it once per unmapped order. A
-		// field would be issue #172's trap — a memoised DrugReference outliving a getAll() hot-reload
-		// fails the reference comparisons the contraindication arms make, silently re-opening issue
-		// #145 — and the third memo holds DrugReference rows and substanceGroupKey() values, which can
-		// themselves BE a DrugReference.
+		// field would be issue #172's trap, for the reasons DrugReferenceService's class javadoc gives
+		// and not the getAll() hot-reload this used to cite — there is none (measured 2026-08-14). Both
+		// of those reasons bite hardest here: this bean is a singleton, and two of the four memos are
+		// keyed on an ActiveDrugOrder, which is a per-request object, so a field would grow for the life
+		// of the JVM. (The fourth is bounded by the dataset — see findImpliedByDrugName(String, Map).)
 		Map<String, DrugReference> entryByCode = new LinkedHashMap<String, DrugReference>();
 		Map<PatientClinicalContext.ActiveDrugOrder, DrugReference> substanceByOrder =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, DrugReference>();

@@ -70,7 +70,9 @@ import org.slf4j.Logger;
  * load makes a log line unable to answer.
  *
  * <p>An instance is a per-load collector, created where the load happens and discarded with it — never a
- * field, and never shared between loads (issue #172's rule for anything cached around this data). Not
+ * field, and never shared between loads (issue #172's rule for anything cached around this data; its
+ * reason is stated in {@link DrugReferenceService}'s class javadoc and not on the issue, whose own
+ * statement of it was measured false). Not
  * thread-safe, and does not need to be: it is built inside {@code DrugReferenceService.ensureLoaded}'s
  * monitor and is immutable in practice by the time anything else can see it.
  */

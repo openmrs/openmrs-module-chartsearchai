@@ -316,6 +316,37 @@ public class DrugReferenceService {
 	 * {@code hydrocortisone}, which denotes one substance, while {@code Abacavir / lamivudine} carries
 	 * {@code abacavir} for one row and {@code lamivudine} for the other and both stand.
 	 *
+	 * <p><b>The constraint on what this answer may be used FOR (issue #226).</b> This result may seed a
+	 * CANDIDATE SET, where a superset costs a spurious candidate that a later rank filters out. It must
+	 * not seed a SUPPRESSION unless that consumer accepts a superset, because there over-reporting
+	 * silences a warning — with no chip, no log line and nothing for a clinician to notice. One accessor,
+	 * two consumers whose safe direction of error is opposite; {@code DrugSafetyValidator}'s
+	 * restating-existing-therapy skip has been the second kind since issue #185.
+	 *
+	 * <p>The over-report is not a missing rank, and that matters because it rules out the obvious fix.
+	 * It is {@link #rowsOf}'s FAIL-OPEN, which is deliberate and pinned by
+	 * {@code SubstanceCandidateSetTest.narrowingNeverEmptiesACandidateSetEvenWhenNoMatchedRowIsTheStrongestClaimant}:
+	 * emptying a non-empty set means a question naming a drug gets no contraindication, no interaction and
+	 * no overdose check at all, which is the silent-and-closed failure this whole layer exists to prevent.
+	 * The {@code matched.size() < 2} early return above is that same fail-open's DEGENERATE case rather
+	 * than a second shape — with one candidate there is nothing to rank, so ranking harder cannot narrow
+	 * it. Giving a suppression a narrower answer therefore means a THIRD accessor, one allowed to return
+	 * empty, plus a decision about what a suppression should do when it does.
+	 *
+	 * <p><b>What makes it safe today is the DATA, not this code.</b> The fallback's precondition is an
+	 * entry whose {@code aliases} omit its own {@code name}; measured 2026-08-14 through
+	 * {@link DrugReference#isNamed}, that holds for <b>0 of the 2283 entries</b> of the shipped 19 MB KB
+	 * and 0 of each bundled sample, which makes the fallback unreachable for ANY input string on them
+	 * rather than merely for a sampled population. It is a property of the PARSERS
+	 * ({@link DdiDrugReferenceSource} makes the display name {@code alias[0]},
+	 * {@link AtcDrugReferenceSource} makes it the only alias) and, since issue #150, of
+	 * {@link DrugReferenceValidity}'s {@code sanitizeAliases}, which appends an entry's own name when it
+	 * is missing. So what would make this reachable is a future DATASET, not a future caller — re-derive
+	 * that count before relying on it. The narrowing is meanwhile doing real work and is not inert:
+	 * measured the same way through this method, it removes a substance the string does not name on
+	 * <b>276 of 29 808</b> order-name-shaped strings, {@code Hydrocortisone Injection vial 100mg} reaching
+	 * {@code Hydrocortisone butyrate} (issue #209) among them.
+	 *
 	 * @return the matching entries, in dataset order — a subset of {@link #findByDrugName}
 	 */
 	public List<DrugReference> findImpliedByDrugName(String drugName) {

@@ -873,8 +873,11 @@ public class DrugSafetyValidator {
 	 * a rule with none renders its own token back ({@link ChartSearchAiUtils#firstNonBlank}, "…:
 	 * ibuprofen") and is outranked, so it survives only where the allergen arm resolved nothing to this
 	 * SAME substance — a class or group chip about a DIFFERENT allergen is a different key and stands
-	 * beside it. Ties keep the incumbent, so a group of equally-related rows is reported with the
-	 * dataset's first such row's CONTENT. The surviving chip is written back into the position the
+	 * beside it. Since issue #223 a note is necessary and not sufficient: the allergy RECORD the rule
+	 * matched must also NAME that drug, because the fold's premise is that it reports the allergen arm's
+	 * fact and the match that files it here is bare containment. See {@link #contraindicationRank}, which is where
+	 * the whole choice lives. Ties keep the incumbent, so a group of equally-related rows is reported
+	 * with the dataset's first such row's CONTENT. The surviving chip is written back into the position the
 	 * group's first candidate took, so no client sees the chip sequence reshuffle when a later, stronger
 	 * row replaces an earlier one.
 	 *
@@ -938,11 +941,12 @@ public class DrugSafetyValidator {
 	private static final class ContraindicationChips {
 
 		/** A curated allergy rule NAMING THE SUBSTANCE it is filed against and carrying a note of its
-		 *  own (issue #146): the identity relationship below, stated in the deployment's own clinical
-		 *  wording. Above {@link #IDENTITY} because it says the identity fact and the note besides,
-		 *  which nothing else in this ledger can reproduce — a deployment authoring
-		 *  {@code drug-reference.json} is recording exactly that wording, and a fold that kept the
-		 *  module's stock sentence would silently discard it. */
+		 *  own (issue #146), where the allergy RECORD it matched also names that drug (issue #223 — per
+		 *  matched record, never over the allergy list as a whole; see {@link #contraindicationRank}): the identity
+		 *  relationship below, stated in the deployment's own clinical wording. Above {@link #IDENTITY}
+		 *  because it says the identity fact and the note besides, which nothing else in this ledger can
+		 *  reproduce — a deployment authoring {@code drug-reference.json} is recording exactly that
+		 *  wording, and a fold that kept the module's stock sentence would silently discard it. */
 		static final int SELF_NAMED_RULE = 4;
 
 		/** A recorded allergy to this very substance — needs no ATC code and outranks both class
@@ -977,6 +981,33 @@ public class DrugSafetyValidator {
 		 *  {@link DrugReferenceService#findImpliedSubstances} is boundary-aware), so dropping it would
 		 *  have made a curated rule conditional on an arm that never gated it. */
 		static final int SELF_NAMED_RULE_WITHOUT_A_NOTE = 0;
+
+		/** A {@link #SELF_NAMED_RULE} that reached the allergy list only through
+		 *  {@link PatientClinicalContext#hasAllergyToken}'s bare containment — no allergy record it
+		 *  matched NAMES this entry ({@link DrugReference#matchesDrugName} over
+		 *  {@link PatientClinicalContext#allergensMatching}), so the token sits inside a longer word or
+		 *  past an implausible tail: {@code opium} in an allergen recorded as {@code Tiotropium}
+		 *  (issue #223, and issue #86's own example). Such a rule may still be the whole finding, so it is
+		 *  still RAISED — the arms fire on different evidence and this one was never gated on the other,
+		 *  which is what {@link #SELF_NAMED_RULE_WITHOUT_A_NOTE} above says for its own reason. What it may
+		 *  not do is SPEAK for a chip the allergen arm corroborated, because the fold's whole premise is
+		 *  that a self-named rule reports that arm's fact, and a match no recorded name supports does not.
+		 *
+		 *  <p>0 rather than 3.5: what it has to be is BELOW {@link #IDENTITY}, and the two class ranks can
+		 *  never share this key ({@link #addAllergyContraindications} reaches them only after
+		 *  {@link #firstOfSameSubstance} returned null). It shares {@link #SELF_NAMED_RULE_WITHOUT_A_NOTE}'s
+		 *  value — unlike {@link #CURATED_RULE} and {@link #SAME_GROUP}, which share one because they can
+		 *  never meet, these two CAN meet, on an entry carrying one rule of each shape. They rank alike
+		 *  deliberately: neither has a claim on {@link #IDENTITY}'s rank, so what is left between them is
+		 *  the ledger's own tie rule, which keeps the incumbent and is what issue #146 already settled for
+		 *  two rules on one key. Two names for it because the two disqualifications are different facts —
+		 *  one about the rule's CONTENT, one about the RECORD it fired on — and a call site should say
+		 *  which one it found. Nothing measured separates them. Ranks 1 and 2 are free on this key space
+		 *  if a reason to order them ever appears, and the shape that would need one is authorable rather
+		 *  than impossible — one entry carrying both, one token matching only mid-word, and no identity
+		 *  chip on the key — but no shipped dataset carries it and this ranking has no measurement to rest
+		 *  on, so it is left as the ledger's own tie rather than guessed. */
+		static final int SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE = 0;
 
 		/** A chip already raised for one key: where it sits in {@code warnings}, and how specific the
 		 *  relationship behind it is. ONE entry rather than two maps keyed alike, so the position and the
@@ -1096,18 +1127,92 @@ public class DrugSafetyValidator {
 			// every request, for a loop that then does nothing. SubstanceSubjects memoises per substance, so
 			// asking it once per MATCHED rule costs no more than asking it once.
 			DrugReference subject = chips.subjectOf(ref);
-			// Reaching here means the rule MATCHED, so a self-named allergy rule is necessarily one whose
-			// allergy leg matched: recordedContraindicationKind's legs are exclusive by TYPE, and a rule
-			// whose type is "allergy" and whose token no allergy token contains answered null above.
-			int relationship = !selfNamedAllergyRule(ref, c) ? ContraindicationChips.CURATED_RULE
-					: ChartSearchAiUtils.isBlank(c.getNote())
-							? ContraindicationChips.SELF_NAMED_RULE_WITHOUT_A_NOTE
-							: ContraindicationChips.SELF_NAMED_RULE;
-			chips.add(subject, contraindicationFinding(ref, c), relationship,
+			chips.add(subject, contraindicationFinding(ref, c), contraindicationRank(ref, c, context),
 					new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
 							subject.displayLabel() + " is contraindicated by an " + recorded + ": "
 									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
 		}
+	}
+
+	/**
+	 * @return how specific a relationship a MATCHED contraindication rule states, in
+	 *         {@link ContraindicationChips}' ordering — the whole of what decides whether a curated rule
+	 *         may speak in the identity chip's place. Called only from the walk above, so {@code c} has
+	 *         already matched; each constant's javadoc carries its own justification and none of it is
+	 *         restated here.
+	 *
+	 *         <p>A rule that does not name its own entry keeps its own key space and never competes with
+	 *         the identity ranks at all. One that does — issue #146's fold — is ranked by what it ADDS to
+	 *         the identity sentence, and that is now two questions rather than one:
+	 *
+	 *         <ul>
+	 *         <li><b>Does it have anything of its own to say?</b> A blank note renders the rule's own
+	 *         token back and says strictly less than identity ({@link ChartSearchAiUtils#firstNonBlank}).
+	 *         <li><b>Is the record it fired on one the chart reads as this drug?</b> (Issue #223.) The
+	 *         fold's premise is that such a rule reports {@link #addAllergyContraindications}'s fact, and
+	 *         the match that put it there is {@link PatientClinicalContext#hasAllergyToken}'s bare
+	 *         containment — deliberately bare, because a curated token may name a CLASS or a fragment of
+	 *         free text, and that is measured as the right rule for those (see
+	 *         {@link PatientClinicalContext#hasAllergyToken}). What containment does not say is WHICH
+	 *         allergy record the token reached, so the witnesses are asked for
+	 *         ({@link PatientClinicalContext#allergensMatching}) and each is put to the entry by the
+	 *         accessor for a clinician-entered drug NAME, {@link DrugReference#matchesDrugName}. Without
+	 *         that an allergen recorded as {@code Tiotropium} let an {@code Opium} rule replace the
+	 *         sentence a genuine, separately recorded opium allergy had raised.
+	 *         </ul>
+	 *
+	 *         <p><b>Per witness, and against the ENTRY rather than the token</b> — both halves measured,
+	 *         because the obvious narrower rule ("does some allergen name what the TOKEN names") demotes
+	 *         a rule it must not: an entry whose own names include {@code thyroxine}, ruling on that
+	 *         name, for a patient whose recorded allergy is {@code Levothyroxine}. The token sits
+	 *         mid-word there, so the token-scoped question answers no — while the entry itself publishes
+	 *         the name the chart used, the allergen arm raises its identity chip for that very substance,
+	 *         and the operator's note is the one thing in the response that says what the reaction was.
+	 *         Asking it per witness is the other half: the entry-scoped question over the whole allergy
+	 *         list would be satisfied by {@code Papaveretum} while the rule had actually fired on
+	 *         {@code Tiotropium}, which is issue #223 again with a longer proof.
+	 *
+	 *         <p><b>The rejected alternative, measured.</b> The same question can be asked with the
+	 *         allergen arm's OWN resolver — {@code findImpliedSubstances(witness)} reaching
+	 *         {@code ref.substanceGroupKey()}, i.e. literally "would that arm raise its identity chip from
+	 *         this record". Built and run: <b>outcome-identical over the whole suite</b> (1194 tests, 0
+	 *         failures, 2026-08-14), so nothing constructible separates them. This one is kept because the
+	 *         question here is the one CLAUDE.md's three-shapes rule settles — a recorded allergen against
+	 *         an entry is a clinician-entered NAME, which is {@link DrugReference#matchesDrugName}'s shape
+	 *         — and because it is an alias walk rather than a dataset sweep per witness. What the
+	 *         alternative would buy, stated so the next reader has it: {@code matchesDrugName} is
+	 *         ROW-scoped where this ledger's key is SUBSTANCE-scoped, so a row that omits its SUBSTANCE's
+	 *         bare name from its aliases would be demoted for an allergy recorded under a sibling row's
+	 *         name. Nothing reports that shape: {@link DrugReferenceValidity#ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES}
+	 *         is keyed on an entry's OWN display name and repairs it, so a row named by its own alias and
+	 *         not by its family's is silent. Re-measure before swapping:
+	 *         the swap also silently makes this rank depend on {@code findImpliedSubstances}' NARROWING,
+	 *         which demotes a rule filed on an entry publishing a borrowed alias.
+	 *
+	 *         <p>Ranked and not gated, which is the same choice issue #146 made for the note: the arms
+	 *         fire on different evidence and this one was never conditional on the other, so a rule no
+	 *         recorded allergy names still chips where nothing else reports the drug — it simply cannot
+	 *         outrank something that does. Tightening the MATCH instead was measured and declined; the
+	 *         corpus and the 5 names it would cost are on {@link PatientClinicalContext#hasAllergyToken}.
+	 */
+	private static int contraindicationRank(DrugReference ref, DrugReference.Contraindication c,
+			PatientClinicalContext context) {
+		if (!selfNamedAllergyRule(ref, c)) {
+			return ContraindicationChips.CURATED_RULE;
+		}
+		if (ChartSearchAiUtils.isBlank(c.getNote())) {
+			return ContraindicationChips.SELF_NAMED_RULE_WITHOUT_A_NOTE;
+		}
+		// Reaching here means the rule MATCHED, so its ALLERGY leg matched: recordedContraindicationKind's
+		// legs are exclusive by TYPE, and selfNamedAllergyRule is true only of an allergy rule. So the
+		// witness list below is non-empty, and what is being asked of it is which of those records the
+		// chart reads as this drug.
+		for (String allergen : context.allergensMatching(c.getToken())) {
+			if (ref.matchesDrugName(allergen)) {
+				return ContraindicationChips.SELF_NAMED_RULE;
+			}
+		}
+		return ContraindicationChips.SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE;
 	}
 
 	/**
@@ -1199,8 +1304,12 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return whether {@code c} is an ALLERGY rule whose token is one of {@code ref}'s own names — the
-	 *         one rule shape that reports {@link #addAllergyContraindications}'s fact rather than its
-	 *         own, and so the one that crosses into that arm's key space (issue #146). A property of the
+	 *         one rule shape that CAN report {@link #addAllergyContraindications}'s fact rather than its
+	 *         own, and so the one that crosses into that arm's key space (issue #146). Can, not does:
+	 *         since issue #223 whether a given match reports it is a further question, asked of the
+	 *         patient's own records by {@link #contraindicationRank}. The KEY still crosses
+	 *         unconditionally, which is what this predicate decides and why it stays as it is — A
+	 *         property of the
 	 *         rule and the entry alone, never of the patient: a record ABOUT the drug has to reach the
 	 *         same answer as a chip about this patient, and only the collapse UNIT is shared between
 	 *         them.

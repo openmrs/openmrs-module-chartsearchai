@@ -48,7 +48,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><b>Which chip survives is decided by CONTENT</b>, not by a fixed arm-yields-to-arm precedence —
  * issue #88's lesson, that the yielding arm can be the one carrying something. The curated rule
  * carries an operator-authored note the identity sentence cannot reproduce, so it outranks identity
- * while it has one; with a blank note it renders its own token back
+ * while it has one AND while the allergy record it matched NAMES that drug (issue #223 — bare
+ * containment can reach a record about something else entirely, and a rule standing on that must not
+ * speak in the identity chip's place; see {@link SelfNamedAllergyRuleRankTest}); with a blank note it
+ * renders its own token back
  * ({@code ChartSearchAiUtils.firstNonBlank}) and says strictly less than the identity sentence, so it
  * ranks below and the identity wording survives instead.
  *

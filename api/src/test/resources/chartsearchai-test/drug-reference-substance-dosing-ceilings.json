@@ -72,6 +72,25 @@
       "source": "hand-authored fixture"
     },
     {
+      "id": "ceftriaxone",
+      "name": "Ceftriaxone",
+      "substanceName": "ceftriaxone",
+      "aliases": ["ceftriaxone"],
+      "atcCodes": ["J01DD04"],
+      "contraindications": [
+        { "type": "allergy", "token": "ceftriaxone", "note": "documented cephalosporin allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ceftriaxone-im",
+      "name": "Ceftriaxone (intramuscular)",
+      "substanceName": "ceftriaxone",
+      "aliases": ["ceftriaxone"],
+      "atcCodes": ["J01DD04"],
+      "source": "hand-authored fixture"
+    },
+    {
       "id": "cefadroxil",
       "name": "Cefadroxil",
       "aliases": ["cefadroxil"],

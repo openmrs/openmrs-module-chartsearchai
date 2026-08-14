@@ -64,6 +64,18 @@ public class ReferenceRecordRowAttributionTest {
 	private static final String CEILINGS =
 			"chartsearchai-test/drug-reference-substance-dosing-ceilings.json";
 
+	/**
+	 * The clause's opening words, shared by every POSITIVE expectation and every NEGATIVE guard here so
+	 * the two cannot come apart. They did: this file's silence cases were written against
+	 * {@code "Published for"} and the production wording later became {@code "Published by this dataset
+	 * for"} (a bare "published for X, not for Y" reads as a licensing claim — "indicated for X" — which
+	 * is the opposite of what the sentence means). The positive cases went red and were updated; the
+	 * seven {@code assertFalse}s went on passing, because a string production never emits is absent from
+	 * every record. Seven guards that could not fail, green, until this constant tied them to the same
+	 * words the positive cases assert.
+	 */
+	private static final String ATTRIBUTION_LEAD = "Published by this dataset for";
+
 	/** One active order for {@code display}, resolved through the production reconciliation the
 	 *  injector and the validator both read, so both surfaces see one context. */
 	private static PatientClinicalContext chartNaming(DrugReferenceService service, Integer age,
@@ -119,8 +131,8 @@ public class ReferenceRecordRowAttributionTest {
 		// and the whole suite stayed GREEN until this line said startsWith.
 		assertTrue(record.startsWith("Drug reference — Dexamethasone (ATC A01AC02, C05AA09, D07AB19, "
 				+ "D07XB05, D10AA03, H02AB02, R01AD03, S01BA01, S01CB01, S02BA06, S03BA01). "
-				+ "Published for Dexamethasone, not for Dexamethasone (ophthalmic) — the row this "
-				+ "patient's record names, filed separately for the same substance."),
+				+ ATTRIBUTION_LEAD + " Dexamethasone, not for Dexamethasone (ophthalmic) "
+				+ "— the row this patient's record names, filed separately for the same substance."),
 				"the record must say which row it describes, and say it BEFORE what it qualifies, was: "
 						+ record);
 
@@ -159,9 +171,10 @@ public class ReferenceRecordRowAttributionTest {
 		// the placement — a `contains` pair passed with the clause appended after the dosing sentence.
 		String record = DrugReferenceTestSupport
 				.referenceTextNaming(inject(service, context, question), "Amoxicillin");
-		assertEquals("Drug reference — Amoxicillin (ATC J01CA04). Published for Amoxicillin, not for "
-				+ "Amoxicillin (suspension) — the row this patient's record names, filed separately for "
-				+ "the same substance. Dosing for ages 0-120: 15-30 mg/kg per dose, maximum 3000 mg/day.",
+		assertEquals("Drug reference — Amoxicillin (ATC J01CA04). " + ATTRIBUTION_LEAD
+				+ " Amoxicillin, not for Amoxicillin (suspension) — the row this patient's record names, "
+				+ "filed separately for the same substance. Dosing for ages 0-120: 15-30 mg/kg per dose, "
+				+ "maximum 3000 mg/day.",
 				record, "the record keeps its own row's ceiling and says whose it is, in that order");
 
 		// The chip's stricter number, which is the one the clinician is warned on — asserted so the case
@@ -187,7 +200,7 @@ public class ReferenceRecordRowAttributionTest {
 						"Is it safe to give her dexamethasone?"), "Dexamethasone");
 
 		assertNotNull(record, "precondition: the record must still be injected");
-		assertFalse(record.contains("Published for"),
+		assertFalse(record.contains(ATTRIBUTION_LEAD),
 				"a record this response names by its own row says nothing further, was: " + record);
 	}
 
@@ -202,7 +215,7 @@ public class ReferenceRecordRowAttributionTest {
 				"Cefadroxil");
 
 		assertNotNull(record, "precondition: the record must be injected");
-		assertFalse(record.contains("Published for"),
+		assertFalse(record.contains(ATTRIBUTION_LEAD),
 				"a one-row substance has no other row to be named by, was: " + record);
 	}
 
@@ -210,7 +223,7 @@ public class ReferenceRecordRowAttributionTest {
 	public void twoRowsPublishingOneNameAreAttributedToNobody() throws IOException {
 		// The operator-editable boundary, the same one DoseCeilingAttributionTest
 		// .twoRowsPublishingOneNameAreAttributedToNobodyEither guards on the chip: a curated file may file
-		// two rows under one display name, and "Published for Ranitidine, not for Ranitidine" is a
+		// two rows under one display name, and "…for Ranitidine, not for Ranitidine" is a
 		// contradiction shown to a clinician rather than a provenance. The record still renders, and says
 		// nothing it cannot say.
 		DrugReferenceService service =
@@ -229,7 +242,7 @@ public class ReferenceRecordRowAttributionTest {
 				"Ranitidine");
 
 		assertNotNull(record, "precondition: the record must still be injected");
-		assertFalse(record.contains("Published for"),
+		assertFalse(record.contains(ATTRIBUTION_LEAD),
 				"two rows of one name are attributed to nobody, was: " + record);
 	}
 
@@ -272,14 +285,20 @@ public class ReferenceRecordRowAttributionTest {
 		// The delta expressed as the clause itself rather than as a number: a magic constant would have
 		// to be re-derived on every wording change and says nothing about WHAT was added, while this
 		// fails if anything else in the record moved with it.
-		String clause = " Published for Dexamethasone, not for Dexamethasone (ophthalmic) — the row this "
-				+ "patient's record names, filed separately for the same substance.";
+		String clause = " " + ATTRIBUTION_LEAD + " Dexamethasone, not for Dexamethasone "
+				+ "(ophthalmic) — the row this patient's record names, filed separately for the same "
+				+ "substance.";
 		assertEquals(unattributed.length() + clause.length(), attributed.length(),
 				"the clause is the whole cost, and it is one bounded sentence per record — attributed:\n"
 						+ attributed + "\nunattributed:\n" + unattributed);
-		assertTrue(clause.length() < 160,
-				"and it stays one sentence — issue #229 is open because nothing bounds the injected "
-						+ "slice, so this cost is asserted rather than assumed, was: " + clause.length());
+		// The COST MODEL rather than a ceiling: the clause is the two row names plus a fixed frame, so
+		// what a deployment pays is bounded by names it already carries. A bare "< N" would have to be
+		// re-derived on every wording change and would say nothing about how the cost scales — which is
+		// the question issue #229 is open about, nothing bounding or observing the injected slice.
+		assertEquals(121, clause.length() - "Dexamethasone".length()
+				- "Dexamethasone (ophthalmic)".length(),
+				"the clause is one sentence of fixed size around the two names it contrasts, was: "
+						+ clause.length() + " chars for " + clause);
 	}
 
 	@Test
@@ -301,9 +320,9 @@ public class ReferenceRecordRowAttributionTest {
 		assertNotNull(sirolimus, "precondition: both records must be injected, was: "
 				+ DrugReferenceTestSupport.referenceTexts(chart));
 
-		assertTrue(dexamethasone.contains("Published for Dexamethasone, not for Dexamethasone "
+		assertTrue(dexamethasone.contains(ATTRIBUTION_LEAD + " Dexamethasone, not for Dexamethasone "
 				+ "(ophthalmic)"), "the charted substance is attributed, was: " + dexamethasone);
-		assertFalse(sirolimus.contains("Published for"),
+		assertFalse(sirolimus.contains(ATTRIBUTION_LEAD),
 				"and the one the chart says nothing about is not, was: " + sirolimus);
 	}
 
@@ -337,12 +356,42 @@ public class ReferenceRecordRowAttributionTest {
 						"What dose of acetylsalicylic acid?"), "Acetylsalicylic acid");
 
 		assertNotNull(record, "precondition: a record must be injected for the unqualified row");
-		assertTrue(record.contains("Published for Acetylsalicylic acid, not for Acetylsalicylic acid "
-				+ "(enteric-coated) — the row this patient's record names, filed separately for the same "
-				+ "substance."),
+		assertTrue(record.contains(ATTRIBUTION_LEAD + " Acetylsalicylic acid, not for "
+				+ "Acetylsalicylic acid (enteric-coated) — the row this patient's record names, filed "
+				+ "separately for the same substance."),
 				"the clause names the rows as the record's own header names them, was: " + record);
 		assertFalse(record.contains("(aspirin)"),
 				"and the synonym-augmented chip label never enters prompt text, was: " + record);
+	}
+
+	@Test
+	public void rowsGroupedOnlyByASharedIdAreAttributedToNobody() throws IOException {
+		// The operator-editable boundary on the OTHER key matchingEntries groups by. A source publishing
+		// no substanceName falls back to getId(), the curated parser drops an entry only for a blank id
+		// or name, and no DrugReferenceValidity rule reports a duplicate id — so two rows can share one
+		// group without the file ever having said they are one substance. The clause says "filed
+		// separately for the same substance", which would then be a claim the data does not support.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
+				.fixtureEntries("chartsearchai-test/drug-reference-duplicate-id-rows.json"));
+		List<DrugReference> rows = service.getAll();
+		DrugReference unqualified = DrugReferenceTestSupport.row(rows, "Trimethoprim");
+		DrugReference paediatric = DrugReferenceTestSupport.row(rows, "Trimethoprim (paediatric)");
+
+		// The premises that make this able to fail: the two rows really are grouped (one id), the group
+		// is NOT a declared substance, and their names differ — so a missing guard would have two names
+		// to contrast and would print a clause.
+		assertEquals(unqualified.getId(), paediatric.getId(), "precondition: the two rows share an id");
+		assertEquals(null, unqualified.substanceKey(),
+				"precondition: and neither declares a substance, so the group is the id fallback");
+		assertEquals(null, paediatric.substanceKey(), "precondition: neither declares a substance");
+
+		String record = DrugReferenceTestSupport.referenceTextNaming(
+				inject(service, chartNaming(service, 30, 70.0, "Trimethoprim (paediatric)"),
+						"What dose of trimethoprim?"), "Trimethoprim");
+
+		assertNotNull(record, "precondition: a record must still be injected");
+		assertFalse(record.contains(ATTRIBUTION_LEAD),
+				"rows the file never called one substance are attributed to nobody, was: " + record);
 	}
 
 	@Test
@@ -363,7 +412,7 @@ public class ReferenceRecordRowAttributionTest {
 				inject(service, chartNaming(service, 30, 70.0, "Ibuprofen"),
 						"What dose of ibuprofen?"), "Ibuprofen");
 		assertNotNull(record, "precondition: the record must be injected");
-		assertFalse(record.contains("Published for"),
+		assertFalse(record.contains(ATTRIBUTION_LEAD),
 				"the shipped curated wording is unchanged, was: " + record);
 	}
 
@@ -382,7 +431,7 @@ public class ReferenceRecordRowAttributionTest {
 				"Dexamethasone");
 
 		assertNotNull(record, "precondition: the question's own drug is still injected");
-		assertFalse(record.contains("Published for"),
+		assertFalse(record.contains(ATTRIBUTION_LEAD),
 				"a record that cannot see the chart claims nothing about it, was: " + record);
 	}
 
@@ -395,14 +444,16 @@ public class ReferenceRecordRowAttributionTest {
 		// case above and silently move every citation.
 		DrugReferenceService service =
 				DrugReferenceTestSupport.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
-		List<org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping> references =
-				DrugReferenceTestSupport.injectedReferences(inject(service,
-						chartNaming(service, 60, null, "Dexamethasone (ophthalmic)"),
-						"Is it safe to give her dexamethasone?"));
+		// The resource ids, extracted BEFORE the assertion so the failure message carries them:
+		// RecordMapping defines no toString, so a message built from the mappings prints identity
+		// hashes and a failure says nothing about which row was cited instead.
+		List<String> cited = DrugReferenceTestSupport
+				.injectedReferences(inject(service, chartNaming(service, 60, null,
+						"Dexamethasone (ophthalmic)"), "Is it safe to give her dexamethasone?"))
+				.stream().map(m -> m.getResourceUuid()).collect(java.util.stream.Collectors.toList());
 
-		assertEquals(Collections.singletonList("DDInter513"),
-				references.stream().map(m -> m.getResourceUuid()).collect(java.util.stream.Collectors
-						.toList()),
-				"one record per substance, citing the row it renders, was: " + references);
+		assertEquals(Collections.singletonList("DDInter513"), cited,
+				"one record per substance, citing the row it renders — DDInter515 is the ophthalmic row, "
+						+ "i.e. the record followed the chart instead of saying which row it is");
 	}
 }

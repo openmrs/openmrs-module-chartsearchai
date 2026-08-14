@@ -1400,6 +1400,18 @@ public class DrugReferenceInjector {
 	 *         exists for is the same one: an operator-editable file may put two rows under ONE display
 	 *         name, for which "for X, not for X" is a contradiction shown to a clinician.
 	 *
+	 *         <p><b>NOT gated on the {@code drugSafety.*} switches</b>, which is the opposite of the
+	 *         patient-specific reading rendered a few lines above it and so has to be said rather than
+	 *         left to look like an oversight. Issue #208's reading ADDS a claim about the patient and is
+	 *         the record's half of a chip, so with the chips off it would be prose with no chip and it
+	 *         stands down with them ({@link #statesTheChartsContraindicationReading}). This clause does
+	 *         the reverse: it NARROWS a claim the record makes anyway — the ceiling, the notes and the
+	 *         drug's name are rendered whatever those switches say. Gating a correction on a switch ships
+	 *         the UNCORRECTED sentence whenever the switch is off, which is issue #259 reachable by
+	 *         configuration. {@code ReferenceRecordRowAttributionToggleContextTest} pins both switches,
+	 *         with the #208 reading standing down in the same record as the witness that the toggle
+	 *         really moved.
+	 *
 	 *         <p><b>A null CONTEXT is silent without needing a branch</b>, which is worth stating because
 	 *         the contraindication reading beside it does need one. "Nothing known about the patient" is
 	 *         an empty recorded-name set, every row then ties at {@link DrugReference#NAME_NO_MATCH}, and
@@ -1411,7 +1423,14 @@ public class DrugReferenceInjector {
 	 *         cannot come from.
 	 */
 	private static String rowAttribution(DrugReference ref, DrugReference subject) {
-		if (subject == null) {
+		// Only where the DATASET declared these rows one substance. Otherwise the group was keyed on
+		// getId() — matchingEntries' documented fallback for a source publishing no substance name — and
+		// a curated file may repeat an id (the parse drops an entry only for a blank id or name, and no
+		// validity rule reports a duplicate). Two rows sharing an id are one CITABLE entity and not
+		// necessarily one substance, so the sentence's "filed separately for the same substance" would
+		// claim something the file never said. Silence there costs nothing: the record renders exactly as
+		// it did before issues #237/#259.
+		if (subject == null || ref.substanceKey() == null) {
 			return "";
 		}
 		// getName(), NEVER displayLabel(): the synonym-augmented label is a chip-display concern and is
@@ -1427,8 +1446,13 @@ public class DrugReferenceInjector {
 		if (!DrugSafetyValidator.worthNamingApart(rendered, named)) {
 			return "";
 		}
-		return " Published for " + rendered + ", not for " + named + " — the row this patient's record "
-				+ "names, filed separately for the same substance.";
+		// "Published BY THIS DATASET for", not a bare "Published for": the shorter form reads as a
+		// clinical claim — "indicated for X, not for Y" — which is a licensing statement this module has
+		// no basis for and the opposite of what the sentence means. Naming the dataset is what keeps the
+		// attribution a fact about where the row was FILED, which is the same reason
+		// DrugSafetyValidator.ceilingAttribution says "a ceiling this dataset publishes for".
+		return " Published by this dataset for " + rendered + ", not for " + named + " — the row this "
+				+ "patient's record names, filed separately for the same substance.";
 	}
 
 	/** Appends one section of a rendered record — {@code lead}, the items joined by the {@code "; "}

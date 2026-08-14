@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issues #237/#259 — not shipped data",
+  "description": "Two entries sharing ONE id and publishing NO substanceName, which is the shape DrugReferenceInjector.matchingEntries groups on its documented getId() fallback. The curated parser drops an entry only for a blank id or name and no DrugReferenceValidity rule reports a duplicate id, so an operator-editable file reaches this. They are one CITABLE entity and NOT a declared substance, so the row-attribution clause must stay silent: 'filed separately for the same substance' would claim something this file never said. Both rows publish a band so the record has content either way, and they differ in name so a clause WOULD have two names to contrast if the guard were missing.",
+  "entries": [
+    {
+      "id": "shared-id",
+      "name": "Trimethoprim",
+      "aliases": ["trimethoprim"],
+      "atcCodes": ["J01EA01"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 2, "mgPerKgMax": 4, "maxDailyDoseMg": 400 }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "shared-id",
+      "name": "Trimethoprim (paediatric)",
+      "aliases": ["trimethoprim"],
+      "atcCodes": ["J01EA01"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 2, "mgPerKgMax": 4, "maxDailyDoseMg": 200 }
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

@@ -1243,8 +1243,23 @@ public class DrugReference {
 	 *         not its right one — see there for why one matcher cannot serve both.
 	 */
 	static boolean containsWord(String text, String word) {
-		return containsBoundedToken(text, word, 0);
+		return containsBoundedToken(text, word, PROSE_TRAILING_LETTERS);
 	}
+
+	/**
+	 * How many trailing letters PROSE may carry past a matched drug token before the token stops naming
+	 * that drug. None: prose is words, so the boundary is symmetric — the "symmetric boundary" row of
+	 * {@link #matchesOrderName}'s measured table, which is the rule a question, an answer or a rendered
+	 * record gets.
+	 *
+	 * <p>A constant rather than a literal for the same reason {@link #MAX_ORDER_NAME_INFLECTION_LETTERS}
+	 * is one, and since issue #260 for a sharper one: prose is now asked as a boolean
+	 * ({@link #containsWord}) and as a position ({@link #wordIndex}), and two literals would be two
+	 * decisions about which of the two boundary rules prose gets — the drift #260 was, one level up.
+	 * {@link #nearestNameDistance} also depends on it arithmetically: its {@code end} is
+	 * {@code idx + w.length()}, which is the whole match only while this is zero.
+	 */
+	private static final int PROSE_TRAILING_LETTERS = 0;
 
 	/**
 	 * How many trailing letters an active-order display name may carry past a matched drug token
@@ -1411,10 +1426,21 @@ public class DrugReference {
 		return boundedTokenIndex(foldedLower(text), foldedLower(token), maxTrailingLetters, 0) >= 0;
 	}
 
-	/** @return {@code value} lowercased ({@link Locale#ROOT}) and then {@link #foldDiacritics}-folded —
-	 *          the form both operands of {@link #boundedTokenIndex} must be in, named once so that a
-	 *          caller preparing them itself cannot apply half of it or apply the two in the other order.
-	 *          Idempotent, so a caller that has already lowercased may pass its string straight in. */
+	/**
+	 * @return {@code value} lowercased ({@link Locale#ROOT}) and then {@link #foldDiacritics}-folded —
+	 *         the form both operands of {@link #boundedTokenIndex} must be in, named once so that a
+	 *         caller preparing them itself cannot apply half of it or apply the two in the other order.
+	 *
+	 *         <p><b>{@code toLowerCase} is idempotent, and that alone is what lets a caller holding an
+	 *         already-lowercased string pass it straight in</b> ({@code DrugSafetyValidator.attributedDoses}
+	 *         does). <b>The composition is NOT.</b> Measured 2026-08-14 through this method: the sequence
+	 *         {@code a}, U+1D16D, U+0E31, U+1D165 folds to {@code a}, U+1D16D, U+1D165 and folding THAT
+	 *         gives {@code a}, U+1D165, U+1D16D — stripping a combining mark of canonical class 0 from
+	 *         between two of higher class merges two canonical-ordering runs, and the next NFD reorders
+	 *         them. No reference or chart string reaches that shape, but do not build an argument on
+	 *         re-folding being free; {@code DrugSafetyValidator.substanceOwnsDose} records what it still
+	 *         costs at the one place a string is folded twice.
+	 */
 	static String foldedLower(String value) {
 		return foldDiacritics(value.toLowerCase(Locale.ROOT));
 	}
@@ -1490,8 +1516,7 @@ public class DrugReference {
 	 *         <p>{@code foldedLowerText} must be in {@link #foldedLower} form and {@code pos} an index
 	 *         into THAT string; see {@link #boundedTokenIndex} for why positions from the two forms may
 	 *         not be mixed. The names read are this entry's {@code aliases} — the same list
-	 *         {@link #matchesText} reads, which for a dataset whose entries omit their own display name
-	 *         is not the same thing as everything the entry is called.
+	 *         {@link #matchesText} reads.
 	 *
 	 *         <p>The metric is asymmetric by one, and always was: {@code end} is exclusive and the test
 	 *         is {@code pos > end}, so a name ending immediately before {@code pos} scores 0 while one
@@ -1533,7 +1558,7 @@ public class DrugReference {
 	 *          allowance bound once, so the boolean and the index cannot come to disagree about which of
 	 *          the two boundary rules prose gets. Operands in {@link #foldedLower} form. */
 	private static int wordIndex(String foldedLowerText, String foldedLowerWord, int from) {
-		return boundedTokenIndex(foldedLowerText, foldedLowerWord, 0, from);
+		return boundedTokenIndex(foldedLowerText, foldedLowerWord, PROSE_TRAILING_LETTERS, from);
 	}
 
 	/** Unicode non-spacing marks — the combining accents an NFD decomposition separates out. */

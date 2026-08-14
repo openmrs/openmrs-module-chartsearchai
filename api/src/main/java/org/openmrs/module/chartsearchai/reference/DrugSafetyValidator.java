@@ -4797,8 +4797,10 @@ public class DrugSafetyValidator {
 	 * it to RIVALS as well: an answer writing another drug's name with diacritics now locates that rival,
 	 * so it can take a dose the raw search left with the subject. That is the accented case above read
 	 * from the other side, and it is what the arm's contract asks for — the number was stated nearer the
-	 * other drug's name. The boundary half moves only toward more warnings, except where a substance was
-	 * near the dose SOLELY by a substring occurrence of one of its own names, which is the defect itself.
+	 * other drug's name. The boundary half moves toward more warnings except in one case — where the
+	 * occurrence NEAREST the dose was a substring one. Then {@code mine} grows, and the dose can fall
+	 * outside {@link #MAX_ALIAS_TO_DOSE_DISTANCE} or a rival can become strictly nearer. That case is the
+	 * defect itself: a substring is not a naming, so that dose was never this substance's to claim.
 	 *
 	 * <p>Known limitation (v1): only the literal unit {@code mg} is recognised; doses written in
 	 * grams ("1 g"), "mgs", or "milligrams" are not parsed and will not be flagged. That is the
@@ -4948,9 +4950,19 @@ public class DrugSafetyValidator {
 	 *         which the clause gate above would have answered no to. The walk itself is unchanged — what
 	 *         changed is the question. An entry the clause does not name could take a dose away from one
 	 *         it does, and, the same disagreement reversed, a subject the gate had just accepted could
-	 *         fail to locate itself. That second one is now structurally impossible rather than merely
-	 *         fixed: the gate and {@code mine} run the same predicate over the same string, so a clause
-	 *         that passes {@link #namesSubstance} cannot yield {@link Integer#MAX_VALUE} here.
+	 *         fail to locate itself.
+	 *
+	 *         <p><b>That second one is closed for every string this arm can receive — but not
+	 *         structurally, and the difference is worth stating rather than rounding off.</b> The gate
+	 *         re-folds the clause ({@link DrugReference#matchesText} folds its own operands) while this
+	 *         reads the clause exactly as {@link #attributedDoses} established it, and
+	 *         {@link DrugReference#foldedLower} is not idempotent — see there. Measured 2026-08-14
+	 *         through both production methods: an entry whose alias is {@code a}, U+1D165, U+1D16D is
+	 *         matched by the gate in a clause folded from {@code a}, U+1D16D, U+0E31, U+1D165 and is
+	 *         NOT located here, so {@code mine} is {@link Integer#MAX_VALUE} for a clause that passed.
+	 *         Unreachable from any dataset or chart string — it needs musical combining marks in a drug
+	 *         name — and closing it means changing which accessor {@link #namesSubstance} calls, which
+	 *         CLAUDE.md governs. Reported rather than taken.
 	 */
 	private static boolean substanceOwnsDose(String clause, int dosePos, List<DrugReference> rows,
 			List<DrugReference> allEntries) {

@@ -53,9 +53,10 @@ import org.junit.jupiter.api.Test;
  * by nothing: stopping at the first occurrence left the whole api suite green.
  *
  * <p><b>Hand-authored fixture, and the reason is the RIVAL and nothing else.</b> The shipped curated seed
- * would carry four of these six cases unchanged — it publishes Paracetamol with the same 4000 mg/day adult
- * ceiling, and {@code DoseCeilingAttributionTest.noShippedConfigurationCanReachTheAttributionAtAll} shows
- * the dose arm running on it. What the seed cannot pose is a SECOND substance whose published name a
+ * would carry the three cases that name no rival — the control, the accented subject and the named-twice
+ * pair — because it publishes Paracetamol with the same 4000 mg/day adult ceiling, and
+ * {@code DoseCeilingAttributionTest.noShippedConfigurationCanReachTheAttributionAtAll} shows the dose arm
+ * running on it. What the seed cannot pose is a SECOND substance whose published name a
  * clinical answer would naturally write in a form that nests it: its twelve aliases are
  * {@code ibuprofen/brufen/nurofen/advil}, {@code paracetamol/acetaminophen/panadol/tylenol/calpol},
  * {@code amoxicillin/amoxil} and {@code gentamicin}, and no answer writes "ibuprofens" or "gentamicins"

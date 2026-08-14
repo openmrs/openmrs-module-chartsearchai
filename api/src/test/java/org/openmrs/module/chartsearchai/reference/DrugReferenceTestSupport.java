@@ -194,11 +194,39 @@ public final class DrugReferenceTestSupport {
 	 *         cannot silently assert nothing
 	 */
 	public static RecordMapping injectedSafetyFinding(String question, String activeDrug, String atcCode) {
-		DrugReferenceService service = ddinterServiceWithGroups();
-		PatientChart chart = injectorWithSafety(service).injectRecords(oneRecordChart(),
-				ctx(60, null, set(activeDrug), set(atcCode), null, null), question);
+		PatientChart chart = injectedSafetyFindingChart(question, activeDrug, atcCode);
 		return injectedFindings(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
 				"no safety-finding record was injected for question: " + question));
+	}
+
+	/**
+	 * The whole chart {@link #injectedSafetyFinding} reads its record out of — the one arrangement
+	 * behind both, so the finding's citation index means the same thing in a test that takes the
+	 * record and a test that takes the chart it sits in.
+	 *
+	 * <p>For the inference tests rather than the grounding ones: they need what production hands the model rather than one record of it,
+	 * because the class-code fidelity check (issue #142) compares an answer against EVERY cited
+	 * record, and a test served only the finding could not fail if the check ignored the rest of the
+	 * chart. Pair it with {@link #safetyFindingIn} rather than with {@link #injectedSafetyFinding},
+	 * which builds its own chart: two runs of one arrangement agree, but only the pair gives the
+	 * test a record that IS an element of the chart it serves.
+	 */
+	public static PatientChart injectedSafetyFindingChart(String question, String activeDrug,
+			String atcCode) {
+		DrugReferenceService service = ddinterServiceWithGroups();
+		return injectorWithSafety(service).injectRecords(oneRecordChart(),
+				ctx(60, null, set(activeDrug), set(atcCode), null, null), question);
+	}
+
+	/**
+	 * The first injected {@code safety_finding} in a chart a caller already holds — {@link
+	 * #injectedFindings}' single-record form, public for the same cross-package reason
+	 * {@link #injectedSafetyFindingChart} is: a test that serves a chart and cites a record out of
+	 * it needs the record to BE an element of that chart, not an equal one from a second run.
+	 */
+	public static RecordMapping safetyFindingIn(PatientChart chart) {
+		return injectedFindings(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
+				"no safety-finding record in the chart: " + chart.getText()));
 	}
 
 	/**

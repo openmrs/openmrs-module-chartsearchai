@@ -90,7 +90,9 @@ import org.springframework.stereotype.Service;
  * Tier-2 (nor consume its per-answer cap), and Tier-1 can only <em>demote</em>: a cosine
  * fail still flags an off-topic citation ({@code grounded=false}), but a pass renders
  * {@code null} (unverified), never {@code true}. Faithfulness of reference content is
- * checked deterministically by the {@code DrugSafetyValidator} chips instead. Accepted
+ * checked deterministically instead: by the {@code DrugSafetyValidator} chips, and — for the one
+ * part of a recitation that no semantic check can see, an ATC class code the model edited while
+ * citing the record that carries it — by {@link ClassCodeFidelityCheck} (issue #142). Accepted
  * cost: under entailment mode these citations now take the lazy Tier-1 path (up to two
  * embedding passes each) that the amortized Tier-2 batch previously spared them — the
  * off-topic flag is kept mode-uniform at the price of ~one embed pair per reference

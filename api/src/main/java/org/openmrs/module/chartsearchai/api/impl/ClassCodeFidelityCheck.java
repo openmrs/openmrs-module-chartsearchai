@@ -148,7 +148,7 @@ final class ClassCodeFidelityCheck {
 	 * accept a code welded to a neighbouring alphanumeric run (the tail of {@code 0DTJ4ZZ}), which
 	 * is not a code the model copied but a fragment of something else.
 	 */
-	static final Pattern ATC_CLASS_CODE = Pattern.compile(
+	private static final Pattern ATC_CLASS_CODE = Pattern.compile(
 			"(?<![A-Za-z0-9])[" + MAIN_GROUPS + "]\\d{2}[A-Z](?:[A-Z](?:\\d{2})?)?(?![A-Za-z0-9])");
 
 	private ClassCodeFidelityCheck() {
@@ -180,6 +180,7 @@ final class ClassCodeFidelityCheck {
 	 * Reports, at WARN, every ATC class code {@code answer} states that none of the records it
 	 * cites contains.
 	 *
+	 * @param patient whose answer it is — logged so a line is attributable under concurrent requests
 	 * @param answer the answer prose, unchanged by this method
 	 * @param question the clinician's own question — its codes count as support, see the body
 	 * @param cited the references the answer cites, as resolved by

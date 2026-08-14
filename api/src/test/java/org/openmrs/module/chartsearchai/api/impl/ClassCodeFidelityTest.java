@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
@@ -52,8 +53,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * reported at WARN carrying both the code the answer states and the codes its cited records state.
  * When they state none, there was nothing to copy and the check says nothing. There is deliberately
  * no roll-up from a cited substance code to its class: correct as such an answer usually is,
- * accepting it silences this issue's own headline capture, and `generalisingACitedSubstanceCodeToIts
- * ClassIsReported` pins that with the reason. The answer prose
+ * accepting it silences this issue's own headline capture, and
+ * {@link #generalisingACitedSubstanceCodeToItsClassIsReported()} pins that with the reason. The answer prose
  * is never rewritten — a silent edit of a clinician-facing sentence is a larger decision than this
  * check, and a visible flag is worth more than a quiet repair.
  *
@@ -381,6 +382,36 @@ public class ClassCodeFidelityTest {
 			}
 		}
 		throw new IllegalStateException("no drug-reference record was injected: " + chart.getText());
+	}
+
+	@Test
+	public void aCheckThatThrowsIsReportedAndTheAnswerStillReturns() {
+		// The guard exists so a diagnostic can never break a clinical answer — the promise
+		// CitationGroundingVerifier makes in its javadoc, made structurally here. Nothing in the
+		// check does I/O, so the only way to reach it is a record that throws when read: this one is
+		// a RecordMapping that does, served through the real chart path. Nothing else in search()
+		// reads the text (extractCitedReferences works off indices; the validator is stubbed;
+		// grounding is off), so the throw lands in the check and nowhere else.
+		PatientChart throwing = new PatientChart(chart.getText(),
+				Arrays.asList(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,
+						"00000000-0000-0000-0000-000000000001", null) {
+
+					@Override
+					public String getText() {
+						throw new IllegalStateException("record text unavailable");
+					}
+				}),
+				Collections.<Integer> emptyList());
+		TestableService onThrowing = newService(throwing);
+		onThrowing.setLlmProvider(answering("It is the same ATC class " + MISCOPIED_CODE + " [1]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = onThrowing.search(patient(), QUESTION);
+			assertTrue(answer.getAnswer().contains(MISCOPIED_CODE),
+					"the answer must come back whatever the check does; got: " + answer.getAnswer());
+			assertTrue(warnStating(capture, "Class-code check failed"),
+					"and the check's own failure must not be silent. Captured: "
+							+ capture.describeAll());
+		}
 	}
 
 	/** An answer sentence of the shape the model really produces, citing the finding record. */

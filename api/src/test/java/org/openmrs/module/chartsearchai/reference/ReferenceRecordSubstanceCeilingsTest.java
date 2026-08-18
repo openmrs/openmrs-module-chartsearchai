@@ -439,7 +439,7 @@ public class ReferenceRecordSubstanceCeilingsTest {
 		// no bundled curated entry sets substanceName, so every substance there is one row. The ddinter
 		// half needs no case — DdiDrugReferenceSource sets no ageBands at all, so no row of the shipped
 		// 19 MB KB publishes a ceiling for any row to disagree with.
-		DrugReferenceService service = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
 		DrugReference ibuprofen = service.lookupByToken("ibuprofen");
 		assertNotNull(ibuprofen, "precondition: the shipped seed must carry ibuprofen");
 		assertEquals(null, ibuprofen.getSubstanceName(),

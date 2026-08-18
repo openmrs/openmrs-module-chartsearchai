@@ -106,8 +106,9 @@ public final class DrugReferenceLoad {
 	/**
 	 * @return the source format actually used ({@code json}, {@code atc} or {@code ddinter}); null
 	 *         when not loaded. Differs from {@link #getConfiguredSourceFormat()} when the configured
-	 *         value matches no adapter and the curated default was used — a typo there is itself a
-	 *         way to end up inert.
+	 *         value matches no adapter and the curated {@code json} parser was used instead — which
+	 *         since ADR Decision 36 is not the default, so a typo now changes the dataset as well as
+	 *         the parser, and is itself a way to end up inert.
 	 */
 	public String getSourceFormat() {
 		return sourceFormat;

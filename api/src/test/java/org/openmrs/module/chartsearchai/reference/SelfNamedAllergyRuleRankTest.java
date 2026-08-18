@@ -273,13 +273,13 @@ public class SelfNamedAllergyRuleRankTest {
 		// produced, so a future source that started emitting rules is caught here rather than silently
 		// changing what this bound means.
 		//
-		// The CORPUS is the bundled DDInter sample, 16 entries — not the 2283-entry KB a real deployment
+		// The CORPUS is the DDInter excerpt, 16 entries — not the 2283-entry KB a real deployment
 		// loads, which is not on the test classpath. That one was measured separately through this same
 		// DdiDrugReferenceSource.parse (2026-08-14: 2283 entries, 0 contraindication rules, so 0 self-named
 		// allergy rules). What makes 16 entries enough here is that the property is the PARSER's, not the
 		// dataset's: it emits no contraindications for any input.
 		DrugReferenceService service = DrugReferenceTestSupport.ddinterService();
-		assertFalse(service.getAll().isEmpty(), "precondition: the ddinter sample must load something");
+		assertFalse(service.getAll().isEmpty(), "precondition: the DDInter excerpt must load something");
 		for (DrugReference entry : service.getAll()) {
 			assertTrue(entry.getContraindications().isEmpty(),
 					"a DDInter load carries no curated rule — " + entry.displayLabel());

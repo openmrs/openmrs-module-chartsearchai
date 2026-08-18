@@ -33,9 +33,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * so the module ships with working defaults (the shared
  * {@link ReferenceDataFiles} resolution).
  *
- * <p>This is the curated/hand-authored source. For authoritative datasets
- * (e.g. WHO ATC) see {@link AtcDrugReferenceSource}; the source is chosen by
- * {@code chartsearchai.drugReference.sourceFormat}.
+ * <p>This is the curated/hand-authored source, selected by
+ * {@code chartsearchai.drugReference.sourceFormat=json}. It was the DEFAULT until ADR Decision 36 moved
+ * that to {@link DdiDrugReferenceSource}, and what it is still the only source of is DOSING: its four
+ * seeded entries carry the age bands the dose-excess check needs, which neither DDInter nor a WHO ATC
+ * export publishes. It also remains the parser a mistyped {@code sourceFormat} falls through to, so a
+ * document of another format reaching it is a live case rather than a hypothetical — see
+ * {@code DrugReferenceService.effectiveFormat}. For authoritative datasets see
+ * {@link AtcDrugReferenceSource} and {@link DdiDrugReferenceSource}.
  */
 public class JsonDrugReferenceSource implements DrugReferenceSource {
 

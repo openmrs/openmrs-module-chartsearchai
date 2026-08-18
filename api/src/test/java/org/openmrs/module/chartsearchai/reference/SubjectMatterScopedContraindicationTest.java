@@ -57,7 +57,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * records, over the real bundled curated dataset ({@code sourceFormat=json}, whose ibuprofen entry
  * carries both an identity-resolvable name and curated allergy and condition rules) — except the two
  * CROSS-REACTIVITY cases ({@link #anAllergyTheResponseCitesReachesADrugItCrossReactsWith} and its
- * control), which need the bundled DDInter sample plus the curated cross-reactivity groups
+ * control), which need the DDInter excerpt plus the curated cross-reactivity groups
  * ({@link #nsaidValidator()}) because the curated four carry no two entries the data relates, and only
  * where the allergen and the order are DIFFERENT substances does the finding side run on its own — with
  * one substance the drug side is satisfied by the same words and the leg never executes.
@@ -96,11 +96,11 @@ public class SubjectMatterScopedContraindicationTest {
 			"Allergy: Aspirin. Reaction: rash");
 
 	private static DrugSafetyValidator validator() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	/**
-	 * The bundled DDInter sample plus the curated cross-reactivity groups: the curated four carry no
+	 * The DDInter excerpt plus the curated cross-reactivity groups: the curated four carry no
 	 * two entries sharing a class, so a finding-side case needs a dataset where the allergen and the
 	 * order are genuinely different substances the data still relates.
 	 */

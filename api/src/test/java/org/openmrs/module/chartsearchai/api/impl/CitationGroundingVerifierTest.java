@@ -938,7 +938,7 @@ public class CitationGroundingVerifierTest {
 
 	/**
 	 * The real injected safety-finding record the REAL production chain renders for the canonical
-	 * case — a patient on simvastatin asked about clarithromycin — off the bundled DDInter sample
+	 * case — a patient on simvastatin asked about clarithromycin — off the DDInter excerpt
 	 * (load → parse → validate → injectRecords → renderFinding). The whole mapping rather than only
 	 * its text, unlike {@link #realReferenceRecordText}: the record's own citation index is what an
 	 * answer sentence has to cite, and its real resource type is what the carve-out keys on.

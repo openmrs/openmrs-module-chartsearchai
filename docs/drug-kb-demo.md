@@ -39,8 +39,18 @@ section and [ADR Decisions 23 & 24](adr.md). This document is only the **demo da
 | 8 | Cross-reactivity (ATC class) | an allergy to a *different* drug in the same ATC subgroup as the asked drug — one whose own published name names chemistry or a molecular target, not merely a purpose ([Decision 34](adr.md#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts)) |
 | 9 | Overdose | the answer states a dose above the KB maximum (LLM-output dependent — see [caveat](#overdose-caveat)) |
 
-The bundled KB has four drugs: **ibuprofen** (`M01AE01`), **paracetamol** (`N02BE01`),
-**amoxicillin** (`J01CA04`), **gentamicin** (`J01GB03`). Paths 1–7 work against the bundled
+This demo runs against the **curated** KB, which has four drugs: **ibuprofen** (`M01AE01`),
+**paracetamol** (`N02BE01`), **amoxicillin** (`J01CA04`), **gentamicin** (`J01GB03`).
+
+> **That is no longer the module's default**, so Step 1 selects it explicitly. Since
+> [ADR Decision 36](adr.md#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base) the
+> default is the whole DDInter knowledge base (2283 substances), which publishes interactions only —
+> so on the default, paths 2, 3 and 9 have no data to fire on (no hand-authored allergy/condition
+> rules, no dose ceilings) while paths 1, 5, 6, 7 and 8 fire far more widely than this seed can
+> illustrate. The four curated drugs are still the dataset that exercises every path in one place,
+> which is why this document pins them.
+
+Paths 1–7 work against the curated
 KB — except path 4, which since [#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146) needs an allergy the seed does not carry (see its row above); path 8 needs the [custom KB](#step-4-cross-reactivity-custom-kb) (it adds Naproxen,
 `M01AE02`, sharing ibuprofen's subgroup).
 
@@ -72,6 +82,9 @@ short-circuit to empty when it is `false`, regardless of `validateAnswers`.
 
 ```bash
 gp chartsearchai.drugReference.enabled true
+# the curated four-drug KB, which is what every path below is written against.
+# NOT the default any more (that is the whole DDInter knowledge base) — see the note above.
+gp chartsearchai.drugReference.sourceFormat json
 # these default to true already; shown for completeness
 gp chartsearchai.drugSafety.validateAnswers true
 gp chartsearchai.drugReference.injectFromQuery true
@@ -260,8 +273,11 @@ SELECT order_number, (SELECT cn.name FROM concept_name cn WHERE cn.concept_id=o.
 > rules. It is *data*, not logic: the code that injects citations, parses doses, and derives the
 > ATC-class warnings lives in the module, not in the file. The active dataset comes from one of
 > two sources:
-> - **Bundled default** — `drug-reference.json` shipped inside the module (the four drugs above).
->   Used automatically when no override is configured.
+> - **Bundled** — a dataset shipped inside the module and used when no override is configured. There
+>   are two: `ddi-knowledge-base.json`, the whole DDInter knowledge base, which
+>   `sourceFormat=ddinter` selects and which is the module's default; and `drug-reference.json`, the
+>   curated four drugs above, which `sourceFormat=json` selects and which Step 1 sets because this
+>   document is written against it.
 > - **External override** — any file `chartsearchai.drugReference.dataFilePath` points at (within
 >   the app-data directory). When set, it **replaces** the bundled dataset entirely — it does
 >   **not** merge with it. So a custom file must contain *all* the drugs you want, not just the
@@ -271,7 +287,7 @@ SELECT order_number, (SELECT cn.name FROM concept_name cn WHERE cn.concept_id=o.
 > while `dataFilePath` points at it, it *is* the live knowledge base and the bundled one is
 > dormant. Clearing the GP (and restarting) reverts to the bundled dataset. *(A third option:
 > `sourceFormat=atc` reads a WHO-ATC classification export instead of JSON — classification only,
-> no hand-authored rules; the default `json` format is the curated, rule-bearing KB.)*
+> no hand-authored rules; `json` is the curated, rule-bearing KB and the only one carrying doses.)*
 
 Cross-reactivity (path 8) needs two KB drugs sharing an ATC subgroup that names chemistry or a molecular target — a purpose-named one such as `S01AA` "Antibiotics" licenses path 6 and not path 8 ([Decision 34](adr.md#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts)). The bundled four are all
 in different subgroups, so this path is unreachable by patient data alone. Extend the KB via

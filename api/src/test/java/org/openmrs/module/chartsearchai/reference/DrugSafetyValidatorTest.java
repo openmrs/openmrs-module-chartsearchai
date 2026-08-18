@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 public class DrugSafetyValidatorTest {
 
 	private DrugSafetyValidator validator() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	/**
@@ -115,10 +115,10 @@ public class DrugSafetyValidatorTest {
 		// only the assertion: since issue #143 that is no longer an unconditional property of the
 		// module, because the patient's own active orders are checked against her allergies too. TWO
 		// things keep this case at zero, and neither alone would be worth relying on: her one order
-		// (warfarin) resolves to no entry in the bundled dataset, and the response is about her blood
-		// pressure, which the subject-matter scoping of that arm requires it not to be. Give her an
-		// order the dataset carries and this call still warns about nothing — it takes a response about
-		// the drug or about the allergy as well.
+		// (warfarin) resolves to no entry in the curated dataset this case runs on, and the response is
+		// about her blood pressure, which the subject-matter scoping of that arm requires it not to be.
+		// Give her an order the dataset carries and this call still warns about nothing — it takes a
+		// response about the drug or about the allergy as well.
 		List<SafetyWarning> warnings = validator().validate(
 				"The patient's most recent blood pressure is 120/80 mmHg [1].",
 				ctx(40, set("warfarin"), set("nsaid"), null));

@@ -38,7 +38,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * checked against the CHART ({@code hasActiveDrug}), never against the other drug the question
  * named — so a two-drug question was silently reduced to two independent one-drug questions.
  *
- * <p>All scenarios run the real pipeline: real datasets — the bundled DDInter sample and the curated
+ * <p>All scenarios run the real pipeline: real datasets — the DDInter excerpt and the curated
  * seed, plus {@link #PAIR_FIXTURE} for shapes neither carries — parsed by the real sources, real
  * {@code validate}/{@code injectRecords} overloads, GP reads on their no-context defaults.
  */
@@ -46,7 +46,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 
 	private static final String PAIR_QUESTION = "Does warfarin interact with aspirin?";
 
-	/** Shapes the bundled DDInter sample cannot express — route variants sharing a match token, a
+	/** Shapes the DDInter excerpt cannot express — route variants sharing a match token, a
 	 *  pair joined by two differently-tokened rules, an ATC-only rule — each a miniature of a shape
 	 *  the full KB carries; see the fixture's own description. */
 	private static final String PAIR_FIXTURE = "chartsearchai-test/drug-reference-question-pairs.json";
@@ -64,10 +64,11 @@ public class DrugSafetyQuestionPairInteractionTest {
 		return DrugReferenceTestSupport.ctx(60, null, null, null, null, null);
 	}
 
-	/** The real parsed entry for {@code name} (real bundled DDInter sample, real parser). */
+	/** The real parsed entry for {@code name}, from the same DDInter excerpt this class's validator runs
+	 *  over (real parser, real data) — never the bundled default, which since ADR Decision 36 is the whole
+	 *  knowledge base and would make every premise here a statement about data the assertions never see. */
 	private static DrugReference ddinterEntry(String name) {
-		return new DdiDrugReferenceSource().load().stream()
-				.filter(r -> name.equalsIgnoreCase(r.getName())).findFirst().orElseThrow();
+		return DrugReferenceTestSupport.row(DrugReferenceTestSupport.ddinterEntries(), name);
 	}
 
 	/** A service over {@link #PAIR_FIXTURE}, parsed by the real {@link JsonDrugReferenceSource}. */
@@ -139,7 +140,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		DrugReference simvastatin = ddinterEntry("Simvastatin");
 		assertTrue(simvastatin.getInteractions().stream()
 				.anyMatch(i -> "aspirin".equals(i.getToken()) && "Unknown".equals(i.getSeverity())),
-				"precondition: the sample rates simvastatin x aspirin Unknown, i.e. below the default floor");
+				"precondition: the excerpt rates simvastatin x aspirin Unknown, i.e. below the default floor");
 
 		List<SafetyWarning> warnings = ddinterValidator().validate(
 				"The records do not address the interaction between simvastatin and aspirin.",
@@ -154,7 +155,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		// The no-false-positive case, on the curated seed (source-independent arm): its Ibuprofen
 		// entry's rules name warfarin and aspirin, and its Paracetamol entry's rule names warfarin —
 		// neither names the other, so naming both in one question must produce nothing.
-		DrugReferenceService curated = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService curated = DrugReferenceTestSupport.curatedService();
 		String question = "Can we give ibuprofen together with paracetamol?";
 		List<DrugReference> resolved = curated.findByQuery(question);
 		assertTrue(resolved.stream().anyMatch(r -> "Ibuprofen".equals(r.getName()))
@@ -380,7 +381,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		}
 	}
 
-	/** Every drug in the bundled DDInter sample, named in one question — the polypharmacy-review shape
+	/** Every drug in the DDInter excerpt, named in one question — the polypharmacy-review shape
 	 *  a clinician can type in one line, and the arm's worst case, since pairs grow as N²/2. */
 	private static final String POLYPHARMACY_QUESTION = "Reviewing polypharmacy: lisinopril, metformin,"
 			+ " methotrexate, omeprazole, sertraline, simvastatin, spironolactone, tramadol, warfarin,"
@@ -405,7 +406,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 	 * than returning a sentinel when it cannot classify one: a pair chip built from a rated rule that
 	 * arrives with no rating means the ordering key was not carried, which is precisely the state in
 	 * which the ordering assertion below would otherwise silently stop asserting. Every chip this arm
-	 * raises from the bundled DDInter sample is rule-rated — the sample assigns every row one of the
+	 * raises from the DDInter excerpt is rule-rated — the sample assigns every row one of the
 	 * four ratings — so an absent rating here is never the legitimate unrated case.
 	 */
 	private static int chipSeverityRank(SafetyWarning warning) {
@@ -467,7 +468,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		assertTrue(named.stream().map(DrugReference::getName).collect(Collectors.toList())
 				.containsAll(Arrays.asList("Warfarin", "Ibuprofen")),
 				"precondition: the ANSWER must name both drugs of a pair the source rates above the"
-						+ " floor (warfarin x ibuprofen is Major in the bundled sample), else this proves"
+						+ " floor (warfarin x ibuprofen is Major in the DDInter excerpt), else this proves"
 						+ " nothing: " + named);
 
 		List<SafetyWarning> warnings = ddinterValidator().validate(answer, "Is ibuprofen safe here?",
@@ -569,7 +570,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		// Keying pairs on the drugs' match tokens is a de-duplication inside a safety net, so its
 		// failure direction is the dangerous one — a key too coarse drops a real interaction silently
 		// — and this pins it against real data: three drugs named in one question, three above-floor
-		// pairs among them in the bundled sample, three chips.
+		// pairs among them in the DDInter excerpt, three chips.
 		List<SafetyWarning> warnings = ddinterValidator().validate(
 				"These are commonly co-prescribed.",
 				"Is it safe to combine lisinopril, spironolactone and ibuprofen?", patientOnNeitherDrug());

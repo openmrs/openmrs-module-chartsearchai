@@ -41,6 +41,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 33: A residual ATC subgroup is not a relationship](#decision-33-a-residual-atc-subgroup-is-not-a-relationship)
 - [Decision 34: An ATC subgroup licenses only the claim its own name asserts](#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts)
 - [Decision 35: A class code in the answer must come from a record the answer cites](#decision-35-a-class-code-in-the-answer-must-come-from-a-record-the-answer-cites)
+- [Decision 36: The shipped default is the whole DDInter knowledge base](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -1747,9 +1748,9 @@ Not every safety dimension has a clean, free, downloadable authoritative dataset
 | **Drug classification** | **Yes — WHO ATC** | Enables class-based allergy/interaction reasoning (the scalable win). WHOCC bulk ATC/DDD data carries use-terms; the cleanest machine-readable form is often an RxNorm↔ATC crosswalk. |
 | **Essential-medicines list** | **Yes — WHO EML** | A curated formulary list. |
 | **Max / safe daily dose** | **No (free)** | WHO **DDD is a drug-*utilization* statistic, not a clinical ceiling**, and is adult-only — it must **not** drive overdose checks. Dosing maxima live in the WHO Model Formulary as prose, not a dataset. |
-| **Pairwise interactions / contraindication rules** | **No (free)** | Structured rules live in prose formularies or in **commercial** databases (First Databank, Lexicomp, Medi-Span, full DrugBank). The adapter lets one be plugged in when licensed. |
+| **Pairwise interactions / contraindication rules** | **No (free) when this was written; partly yes since [Decision 36](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base)** | Structured rules live in prose formularies or in **commercial** databases (First Databank, Lexicomp, Medi-Span, full DrugBank), and the adapter lets one be plugged in when licensed. What the `ddinter` adapter then found is a third position this row did not anticipate: DDInter 2.0 publishes ~295,000 severity-rated INTERACTION pairs free of charge, and the module now bundles them — but under CC BY-NC-SA terms and from an academic group rather than an agency, so it is free-and-usable rather than free-and-authoritative, which is why Decision 36 carries the governance caveat instead of deleting this row. CONTRAINDICATION rules are still unavailable: DDInter publishes none. |
 
-So pointing at WHO ATC delivers **class-based contraindication/interaction reasoning today**; the **exact-dosing and pairwise-rule** dimensions have no free authoritative dataset and remain either a small curated seed or a licensed source loaded through the same adapter. This is a documented bound, not a regression — it is the same or better than the Decision 23 seed.
+So pointing at WHO ATC delivers **class-based contraindication/interaction reasoning today**; the **exact-dosing** dimension has no free authoritative dataset and remains either a small curated seed or a licensed source loaded through the same adapter. This is a documented bound, not a regression — it is the same or better than the Decision 23 seed. The **pairwise-rule** dimension was in that sentence too until [Decision 36](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base) shipped DDInter as the default; dosing is what is left of the bound.
 
 ### Relationship to other decisions
 
@@ -2221,6 +2222,82 @@ Four things stay invisible or wrong by construction. A duplicated correct code i
 - **Keeping the code out of the record the model recites** (#142's direction 1: render the class *name* instead of, or beside, the code, so a miscopy reads as visibly wrong). The names are the data [Decision 34](#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts) records the module as not carrying: no shipped dataset has them (the `atc` source format reads them only from a file an operator supplies), and whether the WHO ATC/DDD index they were read from may be redistributed with this module has not been established. The chip and the finding record share one sentence, so it is also a change to what a clinician reads, and the sentence is written out in 70 lines across 17 test files, 66 of them inside a string literal (`grep -rn "same ATC class (" --include='*.java' api/src/test omod/src/test`, measured on this branch — a different grep counts differently, which is why it is named; and every merge moves it, so re-run rather than quote). Complementary rather than alternative: rendering a name makes a miscopy legible, it does not detect one — and a name can be miscopied too.
 - **Documenting it and doing nothing** (#142's direction 3). Defensible only if the failure is rare, and its rate is unmeasurable here: answer prose is not reproducible on the reference box (`cache_prompt` KV reuse), so "rare" cannot be established. What *is* deterministic is the check.
 - **Comparing the answer's codes against the CHIPS instead of the cited records.** The chips are what the answer was expected to report, not what it was licensed to state; a model that legitimately declines to repeat a chip would be reported, and a code read off a chart record would be too.
+
+## Decision 36: The shipped default is the whole DDInter knowledge base
+
+**Status: Accepted** (August 2026) — implemented. Extends [Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets).
+
+### Context
+
+Decision 24 made the drug-reference data layer pluggable and left the default where Decision 23 had put it: the hand-curated `drug-reference.json`, **four drugs**. The `ddinter` adapter shipped a 16-drug excerpt as its classpath fallback, with the real 18.9 MB `ddi_knowledge_base.json` left for the operator to download from the [openmrs-ddi-knowledge-base](https://github.com/pbiondich/openmrs-ddi-knowledge-base) project and point `dataFilePath` at.
+
+That default under-delivers by so much that it misrepresents the feature. An implementer who switches `chartsearchai.drugReference.enabled` on gets interaction cover for ibuprofen, paracetamol, amoxicillin and gentamicin, and nothing else — while the module's own machinery (the severity floor, the pair cap, the substance-identity rules, the ATC class arms) was built and measured against the full knowledge base. Nothing in the product tells the operator that the safety net they just enabled is nearly empty, and "no interaction found" is indistinguishable from "not in the four drugs I know".
+
+### Decision
+
+**Bundle the whole knowledge base and select it by default.** Two global-property defaults move, and the classpath fallback becomes the real dataset:
+
+| | before | after |
+|---|---|---|
+| `chartsearchai.drugReference.sourceFormat` | `json` | `ddinter` |
+| `chartsearchai.drugReference.dataFilePath` | `chartsearchai/drug-reference.json` | `chartsearchai/ddi_knowledge_base.json` |
+| bundled `/chartsearchai/ddi-knowledge-base.json` | 16-drug excerpt | the whole KB (2283 substances, 8234 mechanisms, 295,184 rows) |
+
+The path default is the **upstream release's own filename**, so refreshing the knowledge base is a file copy into `<appdata>/chartsearchai/` with no property to edit — and therefore no way for the path and the format to end up disagreeing. The module never creates that file, so an untouched install falls back to the bundled dataset and stays silent about it, which is the rule `DrugReferenceValidity` already enforced for the path.
+
+Measured through the production `DdiDrugReferenceSource.parse` over the shipped file: **0.6 s** to parse cold (~0.4 s warm), **~30 MB** retained for the module's lifetime, **2.1 MB** of packed jar. The parse is lazy and once per module lifetime, so the cost lands on the first drug question after a restart. The interning the parser already does for mechanism notes and severities is what keeps 590,312 partner links inside 30 MB.
+
+The excerpt survives as a **test fixture** (`DrugReferenceTestSupport.DDI_EXCERPT`), because a case asserting "this record renders exactly these partners", "this entry has one partner" or "13 were withheld" needs a dataset whose partner lists it can state — lisinopril alone has 730 in the full KB, and pointing those cases at the shipped default would test the prompt budget's truncation instead of the behaviour each one is about.
+
+### What the default gives up: dosing
+
+DDInter publishes drug-drug interactions only. The shipped default therefore carries **no age band and no hand-authored allergy/condition rule**, so `chartsearchai.drugSafety.warnOnDoseExcess` defaults to `true` and has nothing it can ever fire on. That is the trade taken deliberately — 5 hand-authored interaction rules over 4 drugs, exchanged for ~295,000 severity-rated pairs over 2283 substances — and it is not a regression this decision hides:
+
+- Decision 24's data-availability matrix already records that **no free authoritative dataset publishes dosing maxima** (WHO DDD is a drug-*utilization* statistic and adult-only; the Model Formulary carries maxima as prose). The curated seed was never a knowledge base, only a seed.
+- Contraindications still reach the clinician on the three arms that need no hand-authored rule: a recorded allergy to the drug itself (which needs no ATC code either), a shared ATC level-4 subgroup, and the curated cross-reactivity groups. 1839 of the 2283 entries publish ATC codes.
+- `sourceFormat=json` remains selectable for a deployment that wants the dose ceilings, and `dataFilePath` takes any dataset that publishes age bands.
+- `ShippedDrugReferenceDefaultTest` **pins the bound** rather than leaving it to be discovered, because a safety arm that cannot fire looks exactly like one that found nothing.
+
+### The consequence nobody expected: a shipped dataset that trips our own rules
+
+The module's load-time validity check (Decision 32, issues #150/#156/#196/#211/#242) reports what is wrong with the dataset it just loaded. Run over the real knowledge base it fires on **19 of the 2283 rows**, plus 28 interaction rows the parser drops as self-paired:
+
+| rule | count | shape |
+|---|---|---|
+| `alias-names-another-substance` | 18 | `Omeprazole` publishes `esomeprazole`; five `Tozinameran`/Pfizer rows publish `moderna covid-19 vaccine`; `Trastuzumab emtansine` publishes `trastuzumab deruxtecan`; … |
+| `derivative-merged-with-its-parent-substance` | 1 | `Fluoroestradiol f-18` keyed as `estradiol` |
+| `self-paired-interaction-rows` | 28 rows | both sides the same substance |
+
+That collided with two standing rules: *a rule must stay silent on an untouched default*, and `everyShippedDatasetSatisfiesEveryRule`, whose premise was that every dataset the module ships satisfies every rule. Three resolutions were considered and two rejected on evidence.
+
+**Correcting the data ourselves was rejected.** It sounds obvious — we are the ones shipping it — and it tops out at 10 of 19. Classifying each offender by the field that holds the offending value: **10 are stray `ciel[]` cross-walk links** (a rival product wrongly attached to a row), which delete cleanly and assert nothing new. The other **9 sit in the row's own `rxnorm_name`**, which `DdiDrugReferenceSource` feeds to `setSubstanceName` — the field `DrugReference.substanceKey()`/`substanceGroupKey()` are built from, and that issues #164, #185 and #187 rest on. Editing it re-partitions substances on our own authority. And they are not typos: they are RxNorm ingredient normalizations of enantiomers, prodrugs and metabolites (`Hyoscyamine`→`atropine` — hyoscyamine *is* l-atropine; `Fenofibric acid`→`fenofibrate`, its active metabolite; `Fosnetupitant`→`netupitant`, its prodrug), so "correcting" them means authoring a clinical normalization decision per substance. `Fluoroestradiol f-18` would need a DrugBank id the module does not have. So a data fork cannot reach silence, and would trade a checkable provenance for one.
+
+**Keeping every finding at WARN was rejected too.** It leaves three WARN lines on every module start of every install, naming rows no operator can act on — the "noise every install learns to ignore" that `DrugReferenceValidity`'s own class javadoc is written against.
+
+**What was taken: the log LEVEL is scoped to who can act; the status channel is not.** A finding about the DATA is WARN when the dataset came from the application data directory (the operator's file, which they can fix) and INFO when it came from the module's own classpath (the dataset we ship, whose remedy is the upstream handoff #196 already defines). A finding about the CONFIGURATION never scales — and keying the scoping on the rule rather than on the origin alone is precisely what keeps that true, because #156's finding fires *when the operator's file was not read and the bundled dataset was*, so an origin-only rule would have silenced the one case Decision 32 and issues #149/#154 exist for. `DrugReferenceLoad.getFindings()` and `GET /chartsearchai/drugreferencestatus` carry every finding identically either way: **the level says who can act, the status says what is true.** Anything not classified as a data rule stays loud, so the fail direction is loud.
+
+This keeps the rule and replaces its reason, the same move Decision 32's own history took twice. It also promoted the parser's self-pair count from a bare `log.warn` to a real finding (`self-paired-interaction-rows`, remedy `dropped`) — it was the one data verdict in the loader that never reached the status endpoint, and the only one that would have stayed loud about a dataset the module ships.
+
+`everyShippedDatasetSatisfiesEveryRule` split accordingly, into `everyDatasetTheModuleAuthorsSatisfiesEveryRule` and `theDatasetTheModuleRedistributesReportsOnlyFindingsItsOwnProvenanceExplains`: a dataset the module **authors** must still produce no finding at all, while the dataset it **redistributes** must produce only findings the scoping may soften — a configuration finding among them would mean the softening had swallowed something that names an operator's own choice. The counts are deliberately not pinned: that would break the build on any refresh, **including one that fixes these rows**.
+
+### Provenance
+
+Bundled byte-identical to the upstream release, so it can be verified rather than trusted:
+
+- source: `ddi_knowledge_base.json`, openmrs-ddi-knowledge-base @ `main` (last upstream commit 2026-07-22, "Fix ATC to level-5 and enforce it in the build pipeline")
+- `sha256` = `3eccdfec3838cdd9f5877f341b122fef65057b02091b5f3d875e56f8c2eb7a07`, 18,918,643 bytes
+- underlying data: DDInter 2.0 (Xiong G, *et al.*, *Nucleic Acids Research*, 2025), CC BY-NC-SA 4.0; the upstream project's `ATTRIBUTION.md` records its terms review, and the README carries the attribution the module now owes as a redistributor.
+- refreshing it: replace the file, run the suite (`DrugReferenceValidityContextTest` and `ShippedDrugReferenceDefaultTest` are the checks that speak), and re-record the hash here.
+
+### Trade-offs
+
+- **+** The feature is real out of the box: 2283 substances and ~295,000 rated pairs instead of 4 drugs, with no download and no configuration.
+- **+** The module's own measured behaviour (severity floor, pair cap, substance identity, ATC class arms) was tuned against this dataset, so the default is now the configuration the code was designed for.
+- **+** A knowledge-base refresh is a file copy, and provenance is checkable by hash.
+- **−** The dose-excess arm is dormant by default; an install that needs dose ceilings must select `sourceFormat=json` or supply a dosing dataset.
+- **−** The module becomes a redistributor of a third-party academic dataset, with the attribution, NC licence terms and governance caveat that carries.
+- **−** 19 known data defects ship with it, reported but unfixed, pending an upstream handoff.
+- **−** +2.1 MB of packed jar, ~30 MB of heap, and 0.6 s on the first drug question after a restart. (The omod grows twice that: its build unpacks the whole api jar into the omod root as well, an SDK-archetype step whose stated purpose is only `moduleApplicationContext.xml` and `messages`. Narrowing that would recover ~2.1 MB and is untouched here.)
 
 ## Known limitations
 

@@ -159,7 +159,7 @@ public class InjectedContraindicationClauseTest {
 		// distinct (type, token) pairs, so nothing may collapse and the record must read exactly as it
 		// always has. Without this the collapse could key on something coarser — the type alone, say —
 		// and merge two genuinely different contraindications into one clause.
-		PatientChart chart = DrugReferenceTestSupport.injector(DrugReferenceTestSupport.bundledService())
+		PatientChart chart = DrugReferenceTestSupport.injector(DrugReferenceTestSupport.curatedService())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), allergicToIbuprofen(), QUESTION);
 		RecordMapping record = DrugReferenceTestSupport.injectedReferences(chart).get(0);
 

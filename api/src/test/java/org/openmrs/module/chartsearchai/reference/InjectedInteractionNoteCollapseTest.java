@@ -358,7 +358,7 @@ public class InjectedInteractionNoteCollapseTest {
 	@Test
 	public void aSinglePartnerRecordIsUnchanged() throws Exception {
 		// The control. Nothing may move for an entry whose partners are each filed once: the
-		// bundled DDInter sample's Lisinopril carries 15 partners and no repeats, so its record must
+		// DDInter excerpt's Lisinopril carries 15 partners and no repeats, so its record must
 		// render byte-for-byte as it did before the collapse. Pinned as the exact string rather than
 		// a length, because a collapse keyed wrongly (on the note, say, or on the severity) would
 		// change WHICH partner survives while leaving the length alone.

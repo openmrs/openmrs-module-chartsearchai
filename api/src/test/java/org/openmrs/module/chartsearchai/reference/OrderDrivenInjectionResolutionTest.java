@@ -51,13 +51,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * real {@link DrugSafetyValidator} behind it, so a chip assertion and a record assertion in one case
  * describe one production pass. The premise case calls the service accessors directly — it is stating
  * what the arrangement IS, not what it does — and the two route-variant cases run the real
- * {@link DdiDrugReferenceSource} over a test fixture rather than the bundled sample, which carries no
+ * {@link DdiDrugReferenceSource} over a test fixture rather than the DDInter excerpt, which carries no
  * entry the knowledge base classifies nowhere.
  */
 public class OrderDrivenInjectionResolutionTest {
 
 	/** The patient's own order, recorded the way a chart records one: a display name with a strength
-	 *  appended. The bundled DDInter sample's entry is NAMED {@code Acetylsalicylic acid}, which is why
+	 *  appended. The DDInter excerpt's entry is NAMED {@code Acetylsalicylic acid}, which is why
 	 *  this order name resolves it at all, while every rule that names it — on the OTHER entries, since
 	 *  the parser tokenizes a rule with its partner's {@code rxnorm_name} — carries the token
 	 *  {@code aspirin} (issue #136), which is why the chip below can name a partner the order name does
@@ -69,7 +69,7 @@ public class OrderDrivenInjectionResolutionTest {
 	 *  branches, which is exactly what the bundled groups file exists to bridge. */
 	private static final String IBUPROFEN_QUESTION = "Is it safe to give ibuprofen?";
 
-	/** The real bundled DDInter sample carrying the real curated cross-reactivity groups (the NSAID
+	/** The real DDInter excerpt carrying the real curated cross-reactivity groups (the NSAID
 	 *  family the aspirin/ibuprofen pair below needs), with the real validator behind the real injector
 	 *  so {@code preAnswerFindings} runs the same deterministic pass the chips come from. */
 	private static PatientChart inject(PatientClinicalContext context, String question) {
@@ -170,7 +170,7 @@ public class OrderDrivenInjectionResolutionTest {
 
 	@Test
 	public void anUnrelatedActiveOrderResolvedByNameIsStillNotInjected() {
-		// The gate is untouched. Warfarin x ibuprofen is Major in the bundled sample, so this patient DOES
+		// The gate is untouched. Warfarin x ibuprofen is Major in the DDInter excerpt, so this patient DOES
 		// get a chip — but warfarin (B01AA) shares no ATC subgroup and no curated group with the
 		// question's drug, so its monograph is not what this question needs and is not injected. Order-driven
 		// injection is relevance-scoped; issue #151 widens which orders are CANDIDATES, not which are

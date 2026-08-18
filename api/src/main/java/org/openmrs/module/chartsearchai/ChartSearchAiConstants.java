@@ -414,24 +414,34 @@ public class ChartSearchAiConstants {
 	 * read (issue #156, which is loud): see {@code DrugReferenceValidity}. Pinned against
 	 * {@code config.xml} by {@code GlobalPropertyDefaultsTest} — a drift here would silently make every
 	 * install loud or every misconfiguration silent.
+	 *
+	 * <p>It is the upstream release's OWN filename, and that is what makes a knowledge-base refresh a
+	 * file copy rather than a configuration change: dropping a newer {@code ddi_knowledge_base.json}
+	 * from the openmrs-ddi-knowledge-base project into {@code <appdata>/chartsearchai/} is enough for it
+	 * to be read in place of the bundled one, with no global property to edit and so no chance of the
+	 * path and the format disagreeing. Do not rename it to match the bundled resource
+	 * ({@code ddi-knowledge-base.json}): the two names are deliberately different, one naming what an
+	 * operator downloads and the other what the module ships.
 	 */
-	public static final String DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH = "chartsearchai/drug-reference.json";
+	public static final String DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH = "chartsearchai/ddi_knowledge_base.json";
 
-	/** Selects the drug-reference data adapter: {@code json} (the curated default) or {@code atc}
-	 *  (consume a WHO ATC classification export by pointing dataFilePath at it). See ADR Decision 24. */
+	/** Selects the drug-reference data adapter: {@code ddinter} (the default — the bundled DDInter
+	 *  knowledge base), {@code json} (the curated seed) or {@code atc} (consume a WHO ATC
+	 *  classification export by pointing dataFilePath at it). See ADR Decision 24. */
 	public static final String GP_DRUG_REFERENCE_SOURCE_FORMAT = "chartsearchai.drugReference.sourceFormat";
 
 	/**
 	 * Value of {@link #GP_DRUG_REFERENCE_SOURCE_FORMAT} that selects the curated source — the NAME of a
 	 * format, which is a different fact from {@link #DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT}'s "and it is
-	 * the one in force when nobody chose". They have been one constant, and the two uses only look alike
-	 * while the default happens to be {@code json}: anything naming the curated format through the
-	 * default would start naming whatever the default became. Its sibling formats each have their own
-	 * name constant; this is the one that was missing.
+	 * the one in force when nobody chose". They were one constant, and the two uses only looked alike
+	 * while the default happened to be {@code json}: anything naming the curated format through the
+	 * default would start naming whatever the default became. <b>That has now happened</b> — the default
+	 * is {@link #DRUG_REFERENCE_SOURCE_DDINTER} — so this is no longer a precaution: every remaining use
+	 * of the default constant means "whatever is in force when nobody chose", and every site meaning the
+	 * curated parser names it here. Its sibling formats each have their own name constant; this is the
+	 * one that was missing.
 	 */
 	public static final String DRUG_REFERENCE_SOURCE_JSON = "json";
-
-	public static final String DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT = DRUG_REFERENCE_SOURCE_JSON;
 
 	/** Value of {@link #GP_DRUG_REFERENCE_SOURCE_FORMAT} that selects the ATC classification source. */
 	public static final String DRUG_REFERENCE_SOURCE_ATC = "atc";
@@ -440,6 +450,26 @@ public class ChartSearchAiConstants {
 	 *  (structured drug-drug interactions with severity and mechanism, normalized to RxNorm and
 	 *  cross-walked to CIEL). See ADR Decision 24 and the openmrs-ddi-knowledge-base data project. */
 	public static final String DRUG_REFERENCE_SOURCE_DDINTER = "ddinter";
+
+	/**
+	 * The format in force when nobody chose, which since ADR Decision 36 is the DDInter knowledge base
+	 * the module bundles: an install that switches {@link #GP_DRUG_REFERENCE_ENABLED} on and configures
+	 * nothing else gets 2283 substances and ~295k severity-rated interaction pairs rather than the
+	 * four-drug curated seed. What it does NOT get is dosing or hand-authored allergy/condition rules —
+	 * DDInter publishes neither, so {@link #GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS} has nothing it can fire
+	 * on under this default and an install needing dose ceilings selects
+	 * {@link #DRUG_REFERENCE_SOURCE_JSON} (or points {@link #GP_DRUG_REFERENCE_DATA_FILE_PATH} at a
+	 * dataset that carries them). Pinned, with the bound, by {@code ShippedDrugReferenceDefaultTest}.
+	 *
+	 * <p><b>An unrecognised value is not this.</b> A typo falls back to {@link #DRUG_REFERENCE_SOURCE_JSON}
+	 * — see {@code DrugReferenceService.effectiveFormat}, whose fall-through has to name the parser
+	 * {@code sourceFor} falls through to — so it is NOT the same thing as leaving the property unset, and
+	 * an install that mistypes {@code ddinter} gets the curated parser applied to whatever
+	 * {@code dataFilePath} names. That divergence is reported in both channels
+	 * ({@code DrugReferenceValidity.configuredSourceFormatNotUsed}), which is the only reason it is safe
+	 * to differ from the default at all.
+	 */
+	public static final String DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT = DRUG_REFERENCE_SOURCE_DDINTER;
 
 	/** Path (relative to the OpenMRS application data directory) to the curated cross-reactivity
 	 *  groups dataset, loaded alongside EITHER source format. When absent, the groups bundled on

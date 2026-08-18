@@ -36,7 +36,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 public class DrugReferenceInjectorTest {
 
 	private DrugReferenceInjector injector() {
-		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.curatedService());
 	}
 
 	/** Injector backed by the real WHO ATC sample (parsed by the real source), which — unlike the
@@ -46,7 +46,7 @@ public class DrugReferenceInjectorTest {
 		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.atcService(false));
 	}
 
-	/** Injector over the real bundled DDInter sample — the only bundled dataset whose entries carry
+	/** Injector over the real DDInter excerpt — the only bundled dataset whose entries carry
 	 *  enough interaction partners (Lisinopril: 15) to exercise the render cap. */
 	private DrugReferenceInjector ddinterInjector() {
 		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.ddinterService());
@@ -233,7 +233,7 @@ public class DrugReferenceInjectorTest {
 	public void renderedInteractionsMustNameThePartnerThePatientIsActuallyOn() {
 		// The rendered Interactions: section is capped at MAX_INTERACTION_RENDER_CHARS and was
 		// filled in DATASET order, so which partners a clinician's model can cite was decided by
-		// the dataset's ordering rather than by the patient. In the real bundled DDInter sample
+		// the dataset's ordering rather than by the patient. In the real DDInter excerpt
 		// Lisinopril carries 15 partners and the 1500-char cut falls after seven of them, so
 		// Ibuprofen — the LAST one, and a Moderate NSAID x ACE-inhibitor interaction that
 		// attenuates the antihypertensive effect — was truncated out entirely.
@@ -370,7 +370,7 @@ public class DrugReferenceInjectorTest {
 	@Test
 	public void whenTheBudgetForcesAChoiceTheMoreSevereInteractionKeepsItsMechanism() {
 		// Ordering the patient's own partners first fixed WHICH partners render; it left WHICH ONE
-		// keeps its mechanism prose to the dataset's ordering. On the bundled sample a patient on
+		// keeps its mechanism prose to the dataset's ordering. On the DDInter excerpt a patient on
 		// lisinopril (Moderate x ibuprofen, 910 chars) and aspirin (MAJOR x ibuprofen, 809) has both
 		// promoted, but 1721 chars do not fit the 1500 budget — and because lisinopril sits earlier
 		// in the dataset it took the full note, abbreviating the Major interaction. Both severities

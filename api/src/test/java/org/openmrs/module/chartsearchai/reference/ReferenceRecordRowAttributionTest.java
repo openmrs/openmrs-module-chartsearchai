@@ -522,7 +522,7 @@ public class ReferenceRecordRowAttributionTest {
 		// substance there is one row and no chart can name it by another. The ddinter half is the
 		// opposite and is why the first case above exists — that source DOES set substanceName, so the
 		// shipped 19 MB KB reaches this immediately.
-		DrugReferenceService service = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
 		DrugReference ibuprofen = service.lookupByToken("ibuprofen");
 		assertNotNull(ibuprofen, "precondition: the shipped seed must carry ibuprofen");
 		assertEquals(null, ibuprofen.getSubstanceName(),

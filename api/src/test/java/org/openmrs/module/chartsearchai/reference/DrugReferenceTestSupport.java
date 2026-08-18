@@ -12,9 +12,12 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -26,6 +29,7 @@ import java.util.stream.Collectors;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
+import org.openmrs.util.OpenmrsUtil;
 
 /**
  * The one set of drug-reference test helpers, shared by the reference test classes (and, via
@@ -39,7 +43,7 @@ public final class DrugReferenceTestSupport {
 
 	/**
 	 * The real rendered text of the drug-reference record the REAL injector injects for
-	 * {@code question} (bundled DDInter sample, real load → parse → injectRecords → render
+	 * {@code question} (DDInter excerpt, real load → parse → injectRecords → render
 	 * chain). The one cross-package accessor for tests that need genuine injected record text
 	 * without reimplementing the renderer.
 	 */
@@ -128,6 +132,38 @@ public final class DrugReferenceTestSupport {
 		return false;
 	}
 
+
+	/**
+	 * Copies a dataset from the test classpath into {@code <appdata>/chartsearchai/<asName>} — the
+	 * arrangement every context-sensitive case needs to drive the OPERATOR-FILE branch of the real load,
+	 * as against the classpath fallback.
+	 *
+	 * <p>One body for what had become three, and they had already drifted: two stripped a leading slash
+	 * from the resource name and one did not, so handing a source class's own {@code CLASSPATH_DEFAULT}
+	 * (which carries the slash) to that one produced a null stream and an assertion message naming the
+	 * resource but not the reason. Shared for the reason this class exists.
+	 *
+	 * @param created the caller's cleanup list, which the copied file is added to — the deletion is
+	 *        per-test {@code @AfterEach} work and this helper has no lifecycle of its own
+	 * @return the value to set {@code dataFilePath} (or the groups path) to: relative to the application
+	 *         data directory, which is the form the global property holds
+	 */
+	static String copyDatasetToAppData(String classpathResource, String asName, List<File> created)
+			throws IOException {
+		File dir = new File(OpenmrsUtil.getApplicationDataDirectory(), "chartsearchai");
+		dir.mkdirs();
+		File target = new File(dir, asName);
+		created.add(target);
+		String resource = classpathResource.startsWith("/") ? classpathResource.substring(1)
+				: classpathResource;
+		try (InputStream in = DrugReferenceTestSupport.class.getClassLoader()
+				.getResourceAsStream(resource)) {
+			assertNotNull(in, "dataset " + classpathResource + " should be on the test classpath");
+			Files.copy(in, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+		}
+		return "chartsearchai/" + asName;
+	}
+
 	/**
 	 * The raw text of a test-classpath dataset, for the assertions that have to read the FILE rather
 	 * than the parsed model — a row the parser is expected to drop is invisible in its output, so the
@@ -180,7 +216,7 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * The real safety-finding record the REAL pipeline injects for {@code question} asked about a
 	 * patient on {@code activeDrug} (with ATC code {@code atcCode}) — the whole production chain,
-	 * bundled DDInter sample through {@code DrugSafetyValidator.validate} and
+	 * DDInter excerpt through {@code DrugSafetyValidator.validate} and
 	 * {@code injectRecords}/{@code renderFinding}, with the real validator behind the real injector
 	 * (through the same {@code set*} seams the other helpers here use, in place of production's
 	 * autowiring). The third cross-package accessor, for the grounding tests.
@@ -320,6 +356,37 @@ public final class DrugReferenceTestSupport {
 	 *  slice, which is why it is shared rather than local. */
 	static final String DDI_EMPTY_INTERACTIONS_TABLE =
 			"chartsearchai-test/ddi-empty-interactions-table.json";
+
+	/**
+	 * The 16-drug DDInter excerpt behind {@link #ddinterService} — 16 substances, 60 mechanisms, 120
+	 * interaction rows of real DDInter data, and the module's bundled default until ADR Decision 36
+	 * replaced it with the whole knowledge base (which is why the file's own {@code metadata.note} still
+	 * reads as a bundled default: it is kept byte-identical to what shipped, so the cases that pin
+	 * rendered text are pinned to data that has not changed). Unlike its siblings above it is not a slice
+	 * built to pose one shape — it is a general-purpose bounded dataset, which is exactly what a case
+	 * asserting "these partners, in this order" needs. {@link #ddinterService} says why the shipped
+	 * default cannot serve that purpose.
+	 */
+	static final String DDI_EXCERPT = "chartsearchai-test/ddi-knowledge-base-sample.json";
+
+	/**
+	 * Issues #152/#164's corpus: six drug rows carrying three interaction rows that pair a substance with
+	 * itself, which {@link DdiDrugReferenceSource#isSelfPair} drops and
+	 * {@link DrugReferenceValidity#SELF_PAIRED_INTERACTION_ROWS} counts. Shared rather than spelled in each
+	 * file that wants it, for the reason {@code DrugReferenceValidityContextTest.FIXTURE_DIR} gives about
+	 * its own pair: two literals naming one fixture are under no compiler obligation to agree, and here one
+	 * of the two dependants pins the dropped COUNT.
+	 */
+	static final String DDI_SELF_INTERACTION = "chartsearchai-test/ddi-self-interaction.json";
+
+	/**
+	 * Issue #196's corpus: DDInter-shaped rows where one entry publishes, among its own names, a name a
+	 * different substance is called — the rule the shipped knowledge base trips on 18 of its rows, which is
+	 * why two files want this same slice (the rule's own case, and the one that shows the same rule reported
+	 * at two different LEVELS depending on whose dataset it is).
+	 */
+	static final String DDI_ALIAS_NAMES_ANOTHER_SUBSTANCE =
+			"chartsearchai-test/ddi-alias-names-another-substance.json";
 
 	/** Three nitroimidazoles, curated ({@link JsonDrugReferenceSource}) rather than DDInter-shaped: the
 	 *  class arm's co-medication GROUPING slice, where one order's codes are covered only in part
@@ -485,20 +552,67 @@ public final class DrugReferenceTestSupport {
 		return service.withReferenceNames(raw, service.findForActiveOrders(raw));
 	}
 
-	/** A service over the real bundled datasets (classpath fallback — the production default path). */
-	static DrugReferenceService bundledService() {
-		return new DrugReferenceService();
-	}
-
-	/** A service over the real bundled DDInter sample, parsed by the real {@link DdiDrugReferenceSource}.
-	 *  Cross-reactivity groups are pinned EMPTY by the {@code setEntries} seam underneath — use
-	 *  {@link #ddinterServiceWithGroups} when a case depends on a curated group. */
-	static DrugReferenceService ddinterService() {
-		return serviceWith(new DdiDrugReferenceSource().load());
+	/**
+	 * A service over the bundled CURATED dataset — the real {@link DrugReferenceService} load path
+	 * (so the load-time validity repairs run and the real curated cross-reactivity groups are loaded,
+	 * unlike the {@code setEntries} seam behind {@link #serviceWith}), with the adapter pinned through
+	 * the {@code setSource} seam instead of the format global property, which a non-context test cannot
+	 * set.
+	 *
+	 * <p>Pinned rather than left to the default because the default MOVED: since ADR Decision 36 it is
+	 * the DDInter knowledge base, which publishes no age band and no hand-authored allergy/condition
+	 * rule, and every case behind this accessor is about exactly those — a dose ceiling, a curated
+	 * contraindication note, a self-naming allergy rule. Named for the dataset it wants for the same
+	 * reason {@code DRUG_REFERENCE_SOURCE_JSON} exists: "the bundled one" and "the default one" were the
+	 * same dataset and are not the same fact.
+	 *
+	 * <p>{@link DrugReferenceService#getLoadStatus()} on the returned service describes the format the
+	 * GP selects rather than the injected adapter (the seam says so), so no case here may assert it.
+	 */
+	static DrugReferenceService curatedService() {
+		DrugReferenceService service = new DrugReferenceService();
+		service.setSource(new JsonDrugReferenceSource());
+		return service;
 	}
 
 	/**
-	 * As {@link #ddinterService}, carrying the real curated cross-reactivity groups — the bundled-sample
+	 * A service over the 16-drug DDInter EXCERPT, parsed by the real {@link DdiDrugReferenceSource}.
+	 * Cross-reactivity groups are pinned EMPTY by the {@code setEntries} seam underneath — use
+	 * {@link #ddinterServiceWithGroups} when a case depends on a curated group.
+	 *
+	 * <p>The excerpt is a pinned fixture and no longer the module's bundled default: since ADR
+	 * Decision 36 the bundled dataset is the WHOLE knowledge base, and the cases behind this accessor
+	 * need a dataset whose partner lists they can state — "this record renders exactly these partners",
+	 * "this entry has one partner", "13 were withheld". Against 2283 substances and 590,312 links those
+	 * premises are all false (lisinopril alone has 730 partners), so pointing them at the shipped default
+	 * would test the prompt budget's truncation rather than the behaviour each case is about. The excerpt
+	 * is still real DDInter data read by the real parser; only its size is chosen.
+	 * {@link ShippedDrugReferenceDefaultTest} and {@link DdiDrugReferenceSourceTest} are what cover the
+	 * shipped default itself.
+	 */
+	static DrugReferenceService ddinterService() {
+		return serviceWith(ddinterEntries());
+	}
+
+	/**
+	 * The excerpt's entries, parsed by the real {@link DdiDrugReferenceSource} — what
+	 * {@link #ddinterService} is built over, exposed so a case that states a PREMISE about one row
+	 * ("warfarin's ibuprofen interaction is Major") reads it from the same dataset the validator under
+	 * test is using. Straddling two is how a premise comes to describe data the assertion never sees,
+	 * which is what happened when the bundled default stopped being this excerpt.
+	 */
+	static List<DrugReference> ddinterEntries() {
+		try {
+			return ddiFixtureEntries(DDI_EXCERPT);
+		}
+		catch (IOException e) {
+			throw new IllegalStateException("the pinned DDInter excerpt " + DDI_EXCERPT
+					+ " must be readable from the test classpath", e);
+		}
+	}
+
+	/**
+	 * As {@link #ddinterService}, carrying the real curated cross-reactivity groups — the excerpt
 	 * counterpart of {@link #ddiFixtureService}, and here for the same reason that one is: the two steps
 	 * have to stay together, because {@link #serviceWith} pins the groups EMPTY through its
 	 * {@code setEntries} seam and a service built without the second call silently cannot raise a

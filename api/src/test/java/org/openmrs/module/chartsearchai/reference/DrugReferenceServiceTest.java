@@ -23,15 +23,23 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
- * Exercises the real {@link DrugReferenceService} against the real dataset bundled
- * on the classpath. With no OpenMRS context available, the service falls back to
- * the bundled {@code /chartsearchai/drug-reference.json} — which is exactly the
- * production default path, so these tests run the production load path.
+ * Exercises the real {@link DrugReferenceService} against the real bundled
+ * {@code /chartsearchai/drug-reference.json} — the CURATED dataset, whose four entries every
+ * assertion here names ({@code ibuprofen}, {@code amoxil}, {@code M01AE01}, its age bands). It runs
+ * the production load path: the real classpath fallback, the real parser, the real load-time validity
+ * pass.
+ *
+ * <p>The adapter is pinned rather than left to the default, through
+ * {@link DrugReferenceTestSupport#curatedService()}, because the default MOVED — since ADR Decision 36
+ * it selects the DDInter knowledge base, where {@code ibuprofen}'s entry id is its RxCUI {@code 5640}
+ * and no entry carries an age band. Every case here is a statement about the curated file's own shape,
+ * so it names that file; what the shipped default is, is
+ * {@link ShippedDrugReferenceDefaultTest}'s subject.
  */
 public class DrugReferenceServiceTest {
 
 	private DrugReferenceService service() {
-		return new DrugReferenceService();
+		return DrugReferenceTestSupport.curatedService();
 	}
 
 	@Test

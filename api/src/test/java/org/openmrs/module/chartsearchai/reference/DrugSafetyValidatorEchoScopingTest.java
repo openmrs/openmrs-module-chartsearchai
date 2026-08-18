@@ -29,7 +29,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * names, or that the answer introduces on its own authority (no citation anywhere, or cited
  * records that do not contain it), keeps the full safety check.
  *
- * <p>All scenarios run the real pipeline: entries parsed from the real bundled DDInter sample,
+ * <p>All scenarios run the real pipeline: entries parsed from the real DDInter excerpt,
  * charts built by the real injector, and the real {@code validate} overload that production
  * calls with the chart's mappings.
  */

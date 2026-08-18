@@ -992,7 +992,7 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>Ordering alone is not sufficient, which is why {@code render} also overrides the budget for
 	 * this segment: two above-floor partners can exceed {@link #MAX_INTERACTION_RENDER_CHARS}
-	 * between them (measured on the bundled sample: methotrexate 783 + aspirin 809 against a 1500
+	 * between them (measured on the 16-drug DDInter excerpt: methotrexate 783 + aspirin 809 against a 1500
 	 * budget), and dropping the second reinstates exactly the chip-versus-prose split described
 	 * above for the polypharmacy case. So the cap becomes a soft budget with a bounded overshoot
 	 * rather than a hard ceiling — bounded by the patient's own active-drug count, not the dataset's
@@ -1056,7 +1056,7 @@ public class DrugReferenceInjector {
 		}
 		// Within the promoted segment, severity — not dataset position — decides who keeps their
 		// mechanism prose when the budget can only afford one full note (see render). Measured on the
-		// bundled sample: a patient on lisinopril (Moderate x ibuprofen, 910 chars) and aspirin
+		// 16-drug DDInter excerpt: a patient on lisinopril (Moderate x ibuprofen, 910 chars) and aspirin
 		// (MAJOR, 809) exceeded the budget, and because lisinopril sits earlier in the dataset it
 		// took the full note while the Major interaction was abbreviated to "aspirin (Major)". Both
 		// severities stayed visible, so nothing was silently dropped — but the actionable half went

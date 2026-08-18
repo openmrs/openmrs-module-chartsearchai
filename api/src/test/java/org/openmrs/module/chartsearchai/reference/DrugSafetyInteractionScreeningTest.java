@@ -50,7 +50,7 @@ public class DrugSafetyInteractionScreeningTest {
 	}
 
 	private static DrugSafetyValidator curatedValidator() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	/** Validator over the substring-shape fixture, parsed by the real {@link DdiDrugReferenceSource}. */
@@ -78,7 +78,7 @@ public class DrugSafetyInteractionScreeningTest {
 	}
 
 	/** Two mutually interacting active orders: Simvastatin x Clarithromycin is Major in the real
-	 *  bundled DDInter sample, and the two share no ATC subgroup, so the rule arm is the only thing
+	 *  DDInter excerpt, and the two share no ATC subgroup, so the rule arm is the only thing
 	 *  that can produce a warning here. */
 	private static PatientClinicalContext interactingPairContext() {
 		return DrugReferenceTestSupport.ctx(60, null,
@@ -244,7 +244,7 @@ public class DrugSafetyInteractionScreeningTest {
 		// The issue's own repro patient (Mary Smith, one active order: Simvastatin 20mg). Honesty
 		// pin: pairwise screening cannot help a patient with one medication — there is no pair — so
 		// 0 chips stays the right answer for her, and the capability this adds needs at least two
-		// interacting orders to show. Simvastatin carries 15 partners in the bundled sample, none of
+		// interacting orders to show. Simvastatin carries 15 partners in the DDInter excerpt, none of
 		// which this patient is on.
 		List<SafetyWarning> warnings = screen(ddinterValidator(), SCREENING_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Simvastatin"),
@@ -295,7 +295,7 @@ public class DrugSafetyInteractionScreeningTest {
 		// fixed-dose combination ("Aspirin and omeprazole", Yosprala) resolves to BOTH constituents'
 		// entries, because the order name whole-word-matches an alias of each; the order's own concept
 		// carries the single mapped code A02BC05. Aspirin's rule against omeprazole is a real Minor row
-		// in the bundled sample, and it names omeprazole by that very ATC code — so a subject set that
+		// in the DDInter excerpt, and it names omeprazole by that very ATC code — so a subject set that
 		// only drops the SUBJECT's own codes leaves the code its co-formulated other half contributed
 		// standing as if it were a second order, and the two halves of one tablet get reported as an
 		// interacting pair (naming "esomeprazole", which the patient is on in no form at all).
@@ -598,7 +598,7 @@ public class DrugSafetyInteractionScreeningTest {
 		// has to have an answer: no, because the gates are mutually exclusive and at most one of them
 		// runs per question. That arm needs the question to resolve >= 2 drugs; this one needs it to
 		// resolve none. This question does both jobs at once — it names warfarin and aspirin (a real
-		// Major row in the bundled sample, neither of them on this chart) AND carries the screening
+		// Major row in the DDInter excerpt, neither of them on this chart) AND carries the screening
 		// cues — so it is the single input where a shared pair could be double-reported or lost.
 		// Exclusivity means the pair arm answers it and the patient's OWN pair is not raised.
 		List<SafetyWarning> warnings = screen(ddinterValidator(),
@@ -627,7 +627,7 @@ public class DrugSafetyInteractionScreeningTest {
 		// Blast radius. Pairs grow quadratically with the medication list — 10 active orders is 45
 		// pairs — and each surviving chip is also injected into the prompt as a citable finding, so
 		// an uncapped arm would both bury the clinician and write tens of thousands of characters
-		// into the context window. These six real bundled-sample drugs interact pairwise 15 ways,
+		// into the context window. These six real drugs from the excerpt interact pairwise 15 ways,
 		// exactly 10 of them Major, so the cap and the severity ordering are both observable: the
 		// arm must report 10, and all 10 must be the Major ones. Dataset order would instead keep
 		// simvastatin x warfarin (Minor) and three Moderates.

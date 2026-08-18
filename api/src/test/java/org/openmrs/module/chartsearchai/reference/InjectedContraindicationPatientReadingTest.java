@@ -64,7 +64,7 @@ public class InjectedContraindicationPatientReadingTest {
 
 	private static String ibuprofenRecord(PatientClinicalContext context) {
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(
-				DrugReferenceTestSupport.bundledService())
+				DrugReferenceTestSupport.curatedService())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, QUESTION);
 		// Through the shared terminator rule, not a bare startsWith: that also accepts a route-qualified
 		// sibling, and every case here asserts the content of ONE named entry's record.
@@ -129,7 +129,7 @@ public class InjectedContraindicationPatientReadingTest {
 		// has a documented amoxicillin allergy" — a clause of the list beside that very sentence.
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null, null, null);
 		assertTrue(DrugReferenceTestSupport.contraindicationDetails(DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService()).validate("", QUESTION, context))
+				.validator(DrugReferenceTestSupport.curatedService()).validate("", QUESTION, context))
 						.isEmpty(),
 				"precondition: no chip may be raised, or the record is not the only place this is stated");
 
@@ -201,7 +201,7 @@ public class InjectedContraindicationPatientReadingTest {
 		// the sibling InjectedContraindicationClauseTest filters the same way and says why.
 		List<String> chips = new ArrayList<String>();
 		for (String detail : DrugReferenceTestSupport.contraindicationDetails(DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService()).validate("", QUESTION, context))) {
+				.validator(DrugReferenceTestSupport.curatedService()).validate("", QUESTION, context))) {
 			if (detail.startsWith("Ibuprofen is contraindicated by an ")) {
 				chips.add(detail);
 			}

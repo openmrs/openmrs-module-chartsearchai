@@ -336,7 +336,7 @@ public class DrugReferenceService {
 	 * <p><b>What makes it safe today is the DATA, not this code.</b> The fallback's precondition is an
 	 * entry whose {@code aliases} omit its own {@code name}; measured 2026-08-14 through
 	 * {@link DrugReference#isNamed}, that holds for <b>0 of the 2283 entries</b> of the shipped 19 MB KB
-	 * and 0 of each bundled sample, which makes the fallback unreachable for ANY input string on them
+	 * and 0 of each smaller bundled dataset, which makes the fallback unreachable for ANY input string on them
 	 * rather than merely for a sampled population. It is a property of the PARSERS
 	 * ({@link DdiDrugReferenceSource} makes the display name {@code alias[0]},
 	 * {@link AtcDrugReferenceSource} makes it the only alias) and, since issue #150, of
@@ -399,7 +399,8 @@ public class DrugReferenceService {
 	 *         its first alias and {@link AtcDrugReferenceSource} makes it the only one, so on both of
 	 *         those every entry names itself. A hand-authored {@code json} dataset need not — the shape
 	 *         {@link DrugReference#nameMatchStrength}'s javadoc already records its gate as excluding —
-	 *         and {@code json} is the DEFAULT {@code sourceFormat}. There the rank-2 claimant can be an
+	 *         and a {@code json} dataset is what {@code sourceFormat=json} loads — the default until ADR
+	 *         Decision 36, and still what a deployment needing dosing selects. There the rank-2 claimant can be an
 	 *         entry the prose matcher never reached, and then no matched row's alias denotes its own
 	 *         substance and every one is dropped.
 	 *
@@ -409,7 +410,7 @@ public class DrugReferenceService {
 	 *         to prevent. Falling back to {@code matched} is the pre-#209 answer for that one shape, and it
 	 *         over-reports, which for a non-blocking advisory is the safe direction. Measured over every
 	 *         shipped dataset the fallback never fires — 0 firings on each, over the 7452 names and
-	 *         aliases of the full 19 MB KB and over the three bundled samples — so it costs the shipped
+	 *         aliases of the full 19 MB KB and over the smaller bundled datasets — so it costs the shipped
 	 *         configuration nothing.
 	 *         {@code narrowingNeverEmptiesACandidateSetEvenWhenNoMatchedRowIsTheStrongestClaimant} pins it.
 	 *
@@ -419,7 +420,7 @@ public class DrugReferenceService {
 	 *         {@code Ibuprofen tablets 400mg} keeps only the bare {@code Ibuprofen} row and the reference
 	 *         data's findings go with the dropped rows. Not addressed here: it needs the same precondition
 	 *         as the emptying shape — an entry whose aliases omit its own name — and no shipped dataset has
-	 *         one (measured: 0 such entries in the full 19 MB KB and in each of the three bundled samples).
+	 *         one (measured: 0 such entries in the full 19 MB KB and in each smaller bundled dataset).
 	 *         Closing it would mean deciding what a source publishing no substance name should mean by
 	 *         "one substance", which this issue does not settle.
 	 */
@@ -899,7 +900,10 @@ public class DrugReferenceService {
 			validity.addAll(active.lastLoadFindings());
 			validity.configuredSourceFormatNotUsed(configuredFormat, effectiveFormat);
 			validity.checkEntries(loaded);
-			validity.logTo(log);
+			// With the origin, so a data finding is reported at the level of whoever can act on it: the
+			// operator for their own file, the module's maintainers for the knowledge base we ship
+			// (ADR Decision 36). A configuration finding is loud either way — see logTo.
+			validity.logTo(log, active.lastLoadOrigin());
 			DrugReferenceLoad outcome = new DrugReferenceLoad(effectiveFormat, configuredFormat,
 					configuredPath, active.lastLoadOrigin(), loaded.size(), validity.getFindings());
 			// A configured source that resolved to nothing is reported LOUDLY, naming both global
@@ -929,15 +933,23 @@ public class DrugReferenceService {
 	}
 
 	/**
-	 * @return the source format that will actually be used for {@code configuredFormat}: {@code atc}
-	 *         and {@code ddinter} select their own adapters, and any other value (including the
-	 *         unset/no-context case, and a typo) falls back to the curated {@code json} default.
-	 *         Reported in {@link DrugReferenceLoad#getSourceFormat()} so that fallback is visible
-	 *         rather than silent — a mistyped format is one of the ways a deployment ends up parsing
-	 *         a dataset with the wrong parser and loading nothing.
+	 * @return the source format that will actually be used for {@code configuredFormat}: {@code atc} and
+	 *         {@code ddinter} select their own adapters, and any other value — a typo — falls through to
+	 *         the curated {@code json} parser. Reported in {@link DrugReferenceLoad#getSourceFormat()} so
+	 *         that fallback is visible rather than silent — a mistyped format is one of the ways a
+	 *         deployment ends up parsing a dataset with the wrong parser and loading nothing.
+	 *
+	 *         <p><b>The unset case no longer arrives here as a typo.</b> The caller reads the global
+	 *         property with {@link ChartSearchAiConstants#DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT} as its
+	 *         default, and since ADR Decision 36 that is {@code ddinter} — so an install that configured
+	 *         nothing, and a unit test with no context, both reach this method with {@code ddinter} and
+	 *         match above. What still lands on the fall-through is a value that matches no adapter, and
+	 *         that is now a DIFFERENT answer from the default rather than the same one: mistyping
+	 *         {@code ddinter} hands whatever {@code dataFilePath} names to the curated parser. Loud, via
+	 *         {@link DrugReferenceValidity#configuredSourceFormatNotUsed}.
 	 *
 	 *         <p>The fall-through returns the curated format's NAME rather than "whatever the default
-	 *         is", which are equal today and are not the same fact. It is paired with
+	 *         is" — they were equal until Decision 36 and were never the same fact. It is paired with
 	 *         {@link #sourceFor(String)}'s own fall-through, which is unconditionally
 	 *         {@link JsonDrugReferenceSource}, so the name has to be the one that parser answers to
 	 *         however the default moves.

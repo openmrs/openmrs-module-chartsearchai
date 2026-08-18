@@ -55,7 +55,7 @@ import org.junit.jupiter.api.Test;
 public class SelfInteractionTest {
 
 	/** Verbatim KB rows and interaction rows — see the fixture's own {@code metadata.note}. */
-	private static final String FIXTURE = "chartsearchai-test/ddi-self-interaction.json";
+	private static final String FIXTURE = DrugReferenceTestSupport.DDI_SELF_INTERACTION;
 
 	/**
 	 * The shape only the guard's ID leg can catch: verbatim KB rows publishing NO {@code rxnorm_name},

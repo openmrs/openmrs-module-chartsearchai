@@ -214,7 +214,7 @@ public class DoseCeilingAttributionTest {
 		// so the row the warning names is always the row that published the ceiling. A deployment editing
 		// drug-reference.json reaches the attribution immediately, which is why the fixtures above exist
 		// — but nothing shipped moves, and a change to the wording of the common case would redden here.
-		DrugReferenceService service = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
 		DrugReference ibuprofen = service.lookupByToken("ibuprofen");
 		assertNotNull(ibuprofen, "precondition: the shipped seed must carry ibuprofen");
 		assertNull(ibuprofen.getSubstanceName(),

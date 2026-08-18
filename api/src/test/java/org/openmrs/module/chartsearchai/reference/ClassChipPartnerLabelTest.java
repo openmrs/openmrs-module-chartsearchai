@@ -25,9 +25,12 @@ import org.junit.jupiter.api.Test;
  * belongs) and issue #174's site 1 (the label chosen by dataset order).
  *
  * <p><b>Issue #155.</b> {@code displayLabelForAtcCode} returned the code itself when the loaded
- * dataset carried no entry for it, so on the DEFAULT {@code sourceFormat=json} — the bundled
- * four-entry curated seed, which carries no aspirin entry at all — Agnes Adams' chip read
- * {@code … as active order N02BA01}. Reachable out of the box, and {@code N02BA01} is not a drug name.
+ * dataset carried no entry for it, so on {@code sourceFormat=json} — the bundled four-entry curated
+ * seed, which carries no aspirin entry at all — Agnes Adams' chip read
+ * {@code … as active order N02BA01}, and {@code N02BA01} is not a drug name. That was the DEFAULT when
+ * #155 was filed, so it was reachable out of the box; since ADR Decision 36 the default knowledge base
+ * does carry aspirin, which narrows the shape to a dataset that cannot name a code it was handed rather
+ * than removing it.
  * The order itself carries a display name, and the chip is built from that order.
  *
  * <p><b>Issue #174 site 1.</b> {@code entryForAtcCode} returned the FIRST entry carrying the code
@@ -73,7 +76,7 @@ public class ClassChipPartnerLabelTest {
 		// That is the residue addInteractionWarnings documented as needing the per-order codes; naming
 		// the order and correlating it are the same resolution, so they arrived together.
 		DrugSafetyValidator validator = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService());
+				.validator(DrugReferenceTestSupport.curatedService());
 
 		List<SafetyWarning> warnings = validator.validate("", "Can I give ibuprofen?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Aspirin 81mg"),
@@ -96,7 +99,7 @@ public class ClassChipPartnerLabelTest {
 		// print, and the two arms stay uncorrelated — exactly the case above, minus the order. The
 		// ladder stops here; it does not fabricate a name.
 		DrugSafetyValidator validator = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService());
+				.validator(DrugReferenceTestSupport.curatedService());
 
 		List<SafetyWarning> warnings = validator.validate("", "Can I give ibuprofen?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Aspirin 81mg"),

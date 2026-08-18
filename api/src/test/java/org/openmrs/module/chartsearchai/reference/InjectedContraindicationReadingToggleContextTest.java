@@ -53,7 +53,7 @@ public class InjectedContraindicationReadingToggleContextTest extends BaseModule
 	 *  arrangement that renders a reading naming one clause and withholding three. */
 	private String ibuprofenRecord() {
 		return DrugReferenceTestSupport.referenceTextNaming(
-				DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.bundledService())
+				DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.curatedService())
 						.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 								DrugReferenceTestSupport.ctx(60, null, null, null,
 										DrugReferenceTestSupport.set("Ibuprofen"), null),

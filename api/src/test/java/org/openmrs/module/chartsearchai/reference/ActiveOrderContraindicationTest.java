@@ -32,7 +32,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * appears in a {@code drug_order} chart record, which is exactly the record a good answer cites when
  * asked about medications. So an active ibuprofen order plus an ibuprofen allergy, a question naming
  * no drug and an answer citing the real order record raised <b>0 chips</b>, where the identical call
- * with {@code mappings=null} raised <b>2</b>. Measured on the default {@code sourceFormat=json}.
+ * with {@code mappings=null} raised <b>2</b>. Measured on {@code sourceFormat=json}, then the default.
  * That 2 is <b>1</b> since issue #146 — it was the curated rule and the identity check reporting one
  * allergy twice, not two findings — which changes none of the reasoning above and every ALLERGY count
  * below (a condition rule cannot fold, so that case is untouched).
@@ -118,7 +118,7 @@ public class ActiveOrderContraindicationTest {
 			+ " [" + ORDER_RECORD.getIndex() + "].";
 
 	private static DrugSafetyValidator validator() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	/** Context: one active ibuprofen order, plus whatever allergy/condition tokens a case needs. */
@@ -174,7 +174,7 @@ public class ActiveOrderContraindicationTest {
 		// findImpliedSubstances can reach the drug. Split out of the case above when issue #146 folded
 		// the two arms' chips there into one: without it, nothing on this path would still assert that
 		// the identity arm reaches a prescribed drug at all.
-		DrugReferenceService service = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
 		PatientClinicalContext context = ctx(DrugReferenceTestSupport.set("brufen"), null);
 		for (DrugReference.Contraindication rule : service.lookupByToken("ibuprofen")
 				.getContraindications()) {
@@ -250,7 +250,7 @@ public class ActiveOrderContraindicationTest {
 		// drug that DOES ask to be screened already contributed one, through the #113 arm; that is why
 		// this case uses NO_DRUG_QUESTION rather than SCREENING_QUESTION.) Real injector wired to the
 		// real validator.
-		DrugReferenceService service = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
 		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
 
@@ -365,7 +365,7 @@ public class ActiveOrderContraindicationTest {
 		// unresolvable token would exit the per-allergen loop before any comparison and the case would
 		// silently stop testing them. An arm that chipped from the presence of an active order alone, or
 		// that warned on any resolved allergen rather than a related one, fails here.
-		DrugReferenceService service = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
 		assertNotNull(service.lookupByToken("gentamicin"),
 				"precondition: the allergen must resolve, so the class comparisons really run");
 

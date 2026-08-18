@@ -140,7 +140,7 @@ public class ActiveOrderAtcContextTest extends BaseModuleContextSensitiveTest {
 		// Silent for the RIGHT reason. This entry point fails safe — any RuntimeException degrades to an
 		// empty list — so "no chips" alone cannot tell a correct suppression from a broken pipeline. The
 		// same validator, patient and knowledge base must still chip for a drug that genuinely interacts
-		// with this patient's own order: warfarin x aspirin is Major in the bundled sample, and the
+		// with this patient's own order: warfarin x aspirin is Major in the DDInter excerpt, and the
 		// order's own NAME is what witnesses it, so this control is independent of the codes mapped
 		// above. (That question raises other chips too — warfarin against the two entries those codes
 		// resolve to — which is the drug-in-play arm doing its own job against the chart, so the named

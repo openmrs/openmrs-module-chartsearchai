@@ -55,6 +55,19 @@ final class ReferenceDataFiles {
 	/** {@link Loaded#getOrigin()} when nothing could be read at all. */
 	static final String ORIGIN_NONE = "none";
 
+	/**
+	 * @param origin a {@link Loaded#getOrigin()}, or null
+	 * @return whether those entries came from a dataset the MODULE ships rather than from a file the
+	 *         deployment provided — the question "who can fix a defect in this data", which
+	 *         {@link DrugReferenceValidity#logTo(org.slf4j.Logger, String)} reports at the level of.
+	 *         Named here because this is where the origin vocabulary is defined; a caller testing the
+	 *         prefix itself would be a second answer to the same question. A null or unrecognised origin
+	 *         is NOT bundled: unknown provenance is reported loudly, so the fail direction is loud.
+	 */
+	static boolean isBundledOrigin(String origin) {
+		return origin != null && origin.startsWith(CLASSPATH_ORIGIN_PREFIX);
+	}
+
 	/** Parses one dataset stream into its items. */
 	@FunctionalInterface
 	interface DatasetParser<T> {
@@ -155,8 +168,12 @@ final class ReferenceDataFiles {
 				// classpath-origin load. Both parsers report strictly after their single read and then
 				// return, so parse() itself cannot report-then-throw. What is left is the close() of the
 				// stream below throwing after a reported parse — remote for a local file, and it would
-				// misattribute rather than duplicate. Not guarded, because a fresh collector per attempt
-				// would cost configuredDataFileNotRead its place in the same load's findings.
+				// misattribute rather than duplicate. Since ADR Decision 36 misattribution also costs the
+				// LEVEL, because DrugReferenceValidity.logTo picks it from the origin this method finally
+				// returns: such a finding describes the operator's file and would be logged at INFO as
+				// though it described the dataset the module ships. Still not guarded, and for the
+				// unchanged reason — a fresh collector per attempt would cost configuredDataFileNotRead
+				// its place in the same load's findings, which is a certainty against a remote maybe.
 				try (InputStream in = new FileInputStream(new File(resolved))) {
 					List<T> loaded = parser.parse(in, validity);
 					log.info("Loaded {} {} from {}", loaded.size(), datasetLabel, resolved);

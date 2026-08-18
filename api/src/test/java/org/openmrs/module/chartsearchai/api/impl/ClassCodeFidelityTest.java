@@ -68,7 +68,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class ClassCodeFidelityTest {
 
-	/** #142's live shape, reproducible from the bundled sample: ciprofloxacin against a patient
+	/** #142's live shape, reproducible from the DDInter excerpt: ciprofloxacin against a patient
 	 *  already on a fluoroquinolone raises the duplicate-therapy chip whose class is J01MA. */
 	private static final String QUESTION = "is it safe to give ciprofloxacin?";
 

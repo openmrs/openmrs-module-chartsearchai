@@ -143,6 +143,31 @@ public final class QueryScopeRouter {
 	}
 
 	/**
+	 * Whether {@code question} is in the MEDICATION domain, by the router's own classification.
+	 *
+	 * <p>Public for the same reason {@link #isInteractionScreening} is, and reusing
+	 * {@link #matchedIntents} for the same reason it does: one definition of "medication-domain
+	 * question", never a second drug vocabulary. The drug-safety layer asks it as a WIDENING signal
+	 * on the drug side of a contraindication — a question about what the patient is taking makes her
+	 * whole active-order list the response's subject matter even when the prose writes no individual
+	 * drug name, which a gate reading only the words would miss. It never narrows anything: a
+	 * question naming a drug the dataset recognises carries no cue word here ("Can I give her
+	 * bupivacaine?" matches none of the cues) and is already handled by the drug-in-play arm.
+	 */
+	public static boolean asksAboutMedications(String question) {
+		return matchedIntents(question).contains(Intent.MEDICATIONS);
+	}
+
+	/**
+	 * As {@link #asksAboutMedications}, for the ALLERGY domain — the widening signal on the FINDING
+	 * side. A question about her allergies makes her recorded allergies the subject matter, so a drug
+	 * one of them contraindicates is worth a chip even where the answer names neither.
+	 */
+	public static boolean asksAboutAllergies(String question) {
+		return matchedIntents(question).contains(Intent.ALLERGIES);
+	}
+
+	/**
 	 * Every enumeration intent whose cues match {@code question}, in {@link Intent} declaration
 	 * order; empty for null/blank/cue-free questions (the TOPICAL, similarity-only case). The
 	 * result never contains {@link Intent#TOPICAL}. Multi-cue questions return every matched

@@ -417,7 +417,9 @@ public class DrugSafetyValidator {
 
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
-				addContraindications(contraindications, ref, context);
+				// Ungated: a drug in play IS the subject matter — the question resolved it or the
+				// answer proposed it — so a subject-matter gate has nothing left to decide here.
+				addContraindications(contraindications, ref, context, null);
 				addAllergyContraindications(contraindications, ref, recordedAllergens);
 			}
 			// The rows this pass resolved for ref's substance, and the null/empty check the two-map form
@@ -454,8 +456,14 @@ public class DrugSafetyValidator {
 		// list rather than a finding AGAINST her records, they are the two that grow quadratically, and
 		// they are the two a cap can truncate (maxPairChips, #131).
 		if (warnContra) {
+			// Built here rather than above so the echo corpus stays lazy: with contraindications off,
+			// or an answer naming no drug the question did not, nothing has parsed citations yet and
+			// this is the first caller that needs them.
+			if (citedTextsLower == null) {
+				citedTextsLower = citedRecordTextsLower(answer, mappings);
+			}
 			addActiveOrderContraindications(contraindications, inPlay, context, orderEntries,
-					recordedAllergens);
+					recordedAllergens, new SubjectMatter(question, answer, citedTextsLower));
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
@@ -687,12 +695,107 @@ public class DrugSafetyValidator {
 	 *         what #105 measured and fixed.
 	 */
 	private static boolean isEchoOfCitedRecord(DrugReference ref, List<String> citedTextsLower) {
-		for (String text : citedTextsLower) {
+		return namesAnyOf(citedTextsLower, ref);
+	}
+
+	/**
+	 * @return whether any of {@code texts} names {@code ref}, by the PROSE rule
+	 *         ({@link DrugReference#matchesText}) because every one of them is prose — a question, an
+	 *         answer, or a rendered chart record. Extracted so {@link #isEchoOfCitedRecord} and
+	 *         {@link SubjectMatter} cannot answer "does this text name this drug" two ways; they
+	 *         differ only in WHICH texts they ask about, which is the whole distinction between
+	 *         issue #105's echo test and subject-matter scoping.
+	 */
+	private static boolean namesAnyOf(List<String> texts, DrugReference ref) {
+		for (String text : texts) {
 			if (ref.matchesText(text)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * What THIS response is about: the question, the answer, and the records the answer cited.
+	 *
+	 * <p><b>Why the active-order contraindication arm needs one.</b> chartsearchai answers questions;
+	 * it is not an alerting system, and this class's own contract is a check that runs after the
+	 * answer and ANNOTATES it. Issue #143 widened one arm past that: it walked every active order
+	 * against every recorded allergy and condition <em>whatever the question and the answer named</em>.
+	 * Measured live on the 3.7.1 standalone, four unrelated questions — allergies, interactions,
+	 * cancer, date of birth — returned the same two contraindication chips byte for byte, which is how
+	 * a reader learns to skip the box. The finding it was carrying is real and belongs on a surface
+	 * with subscription and acknowledgement (order entry, a chart banner, CDS hooks), not on every
+	 * answer this module happens to produce.
+	 *
+	 * <p><b>Both sides count, and that is the point.</b> A contraindication relates a DRUG to a
+	 * recorded FINDING, and either can be what was asked about. Scoped to the drug alone it would lose
+	 * a chip whose allergy is the subject and whose drug is never written; scoped to the finding alone
+	 * it would lose issue #143's own case, a prescribed drug named only by the cited {@code drug_order}
+	 * record that issue #105's echo rule keeps out of the in-play set.
+	 *
+	 * <p><b>The two widenings are signals, never gates.</b> A medication-domain question makes the
+	 * whole active-order list subject matter and an allergy-domain question makes the recorded
+	 * allergies subject matter, because there the LIST is the topic even where the prose writes no
+	 * individual name. Both go through {@link QueryScopeRouter}'s own classification rather than a
+	 * second vocabulary here. Neither can narrow anything: a question naming a drug outright carries
+	 * no cue word at all ("Can I give her bupivacaine?") and is answered by the drug-in-play arm
+	 * before this one runs.
+	 */
+	private static final class SubjectMatter {
+
+		/** Question, answer and cited-record texts, lowercased — every one of them prose. */
+		private final List<String> texts;
+
+		private final boolean coversActiveOrders;
+
+		private final boolean coversRecordedAllergies;
+
+		private SubjectMatter(String question, String answer, List<String> citedTextsLower) {
+			List<String> collected = new ArrayList<String>();
+			if (question != null && !question.trim().isEmpty()) {
+				collected.add(question.toLowerCase(Locale.ROOT));
+			}
+			if (answer != null && !answer.trim().isEmpty()) {
+				collected.add(answer.toLowerCase(Locale.ROOT));
+			}
+			collected.addAll(citedTextsLower);
+			this.texts = collected;
+			this.coversActiveOrders = QueryScopeRouter.asksAboutMedications(question);
+			this.coversRecordedAllergies = QueryScopeRouter.asksAboutAllergies(question);
+		}
+
+		/** Whether an active order is what this response is about. */
+		private boolean names(DrugReference ref) {
+			return coversActiveOrders || namesAnyOf(texts, ref);
+		}
+
+		/**
+		 * Whether the finding a MATCHED rule fired on is what this response is about — asked of the
+		 * rule's own token and never of the patient's whole list, because a response citing one
+		 * condition while a rule fires on another is the reported defect again at token granularity.
+		 * Through {@link PatientClinicalContext#containsToken}, the matcher that decided the rule
+		 * matched at all, so the two cannot drift.
+		 */
+		private boolean names(DrugReference.Contraindication c) {
+			if (coversRecordedAllergies && "allergy".equalsIgnoreCase(c.getType())) {
+				return true;
+			}
+			return PatientClinicalContext.containsToken(texts, c.getToken());
+		}
+
+		/** Whether a recorded allergen — the entries one charted allergy resolved to — is subject matter. */
+		private boolean namesRecordedAllergen(List<DrugReference> allergen) {
+			if (coversRecordedAllergies) {
+				return true;
+			}
+			for (DrugReference entry : allergen) {
+				if (namesAnyOf(texts, entry)) {
+					return true;
+				}
+			}
+			return false;
+		}
 	}
 
 	/**
@@ -1097,7 +1200,7 @@ public class DrugSafetyValidator {
 	}
 
 	private void addContraindications(ContraindicationChips chips, DrugReference ref,
-			PatientClinicalContext context) {
+			PatientClinicalContext context, SubjectMatter askedAbout) {
 		if (context == null) {
 			return;
 		}
@@ -1122,6 +1225,12 @@ public class DrugSafetyValidator {
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			String recorded = recordedContraindicationKind(c, context);
 			if (recorded == null) {
+				continue;
+			}
+			// A null gate means the DRUG is already subject matter: every in-play caller, and the
+			// order-driven caller whose order the response is about. Only the order-driven caller whose
+			// drug is NOT subject matter passes one, and then the rule may speak for a finding that is.
+			if (askedAbout != null && !askedAbout.names(c)) {
 				continue;
 			}
 			// Resolved after the match rather than above the loop: the shipped ddinter source emits no
@@ -3527,18 +3636,55 @@ public class DrugSafetyValidator {
 	 */
 	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries,
-			List<List<DrugReference>> recordedAllergens) {
+			List<List<DrugReference>> recordedAllergens, SubjectMatter askedAbout) {
 		if (context == null
 				|| (context.getAllergyTokens().isEmpty() && context.getConditionTokens().isEmpty())) {
 			return;
 		}
+		// The recorded allergies THIS response is about, resolved once per pass rather than once per
+		// order: it is a function of the response and of the patient's allergy list, neither of which
+		// varies inside the loop. A per-call local and never a field, for issue #172's reason — this
+		// bean is a Spring singleton, so a field here is one unsynchronized structure shared by every
+		// concurrent request, and this one is keyed on nothing at all.
+		List<List<DrugReference>> allergensAskedAbout = null;
 		for (DrugReference ref : orderEntries) {
 			if (inPlay.contains(ref)) {
 				continue;
 			}
-			addContraindications(chips, ref, context);
-			addAllergyContraindications(chips, ref, recordedAllergens);
+			// Either side of a contraindication can be what was asked about, so the drug side is tried
+			// first and, where it holds, the whole of the patient's own record is fair game: a response
+			// ABOUT one of her prescriptions may report anything her chart says contraindicates it.
+			// Where it does not hold, only the findings the response is itself about may speak — which
+			// is what stops a cancer question carrying chips about her local anaesthetics.
+			if (askedAbout.names(ref)) {
+				addContraindications(chips, ref, context, null);
+				addAllergyContraindications(chips, ref, recordedAllergens);
+				continue;
+			}
+			if (allergensAskedAbout == null) {
+				allergensAskedAbout = recordedAllergensAskedAbout(recordedAllergens, askedAbout);
+			}
+			addContraindications(chips, ref, context, askedAbout);
+			addAllergyContraindications(chips, ref, allergensAskedAbout);
 		}
+	}
+
+	/**
+	 * @return the recorded allergies {@code askedAbout} covers, in order, each still carrying every
+	 *         entry it resolved to. Filtered per recorded ALLERGY and not per resolved entry: one
+	 *         charted allergy is one finding however many rows or constituents it names (issues
+	 *         #145/#193/#195), so admitting the allergy on any of its entries keeps the identity and
+	 *         cross-reactivity arms reasoning over the same finding they always did.
+	 */
+	private static List<List<DrugReference>> recordedAllergensAskedAbout(
+			List<List<DrugReference>> recordedAllergens, SubjectMatter askedAbout) {
+		List<List<DrugReference>> out = new ArrayList<List<DrugReference>>();
+		for (List<DrugReference> allergen : recordedAllergens) {
+			if (askedAbout.namesRecordedAllergen(allergen)) {
+				out.add(allergen);
+			}
+		}
+		return out;
 	}
 
 	/**

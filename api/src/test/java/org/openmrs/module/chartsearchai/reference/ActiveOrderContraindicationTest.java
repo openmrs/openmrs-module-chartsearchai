@@ -37,6 +37,15 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * allergy twice, not two findings — which changes none of the reasoning above and every ALLERGY count
  * below (a condition rule cannot fold, so that case is untouched).
  *
+ * <p><b>Read with the scoping that came after.</b> The arm this class was written for still exists
+ * and every case below still drives it, but it no longer runs on responses that are about something
+ * else: a chip is raised where either side of it — the drug or the recorded finding — is part of what
+ * the response is about. The case that used to assert the opposite is
+ * {@link #aPrescribedAllergyIsNotRaisedWhereTheResponseIsAboutSomethingElse}, which carries the
+ * reversal and its reasons; the rule itself and what it gives up are in
+ * {@code SubjectMatterScopedContraindicationTest}. Nothing else in the #143 story below is affected,
+ * because a question about the patient's medications keeps her whole active-order list in scope.
+ *
  * <p>{@code isEchoOfCitedRecord} justified that residual risk by asserting a proposal-worthy drug is
  * "usually question-named (always validated) or actively ordered (checked directly by the
  * order-driven arms)". The second half was false: counted over the whole class, the order-driven arms
@@ -47,7 +56,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p><b>Why the missing arm rather than a scoping exemption.</b> Exempting contraindications from
  * echo scoping would fix the measured case and nothing beyond it: it still needs the ANSWER to name
- * the drug, so the shape in {@link #aPrescribedAllergyIsRaisedEvenWhenNeitherQuestionNorAnswerNamesTheDrug}
+ * the drug, so the shape in
+ * {@link #aPrescribedAllergyIsNotRaisedWhereTheResponseIsAboutSomethingElse}
  * — a prescribing error nobody happened to write down — stays invisible. It would also widen #105's
  * over-reach onto the contraindication surface, which
  * {@link #aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck} pins against: a drug the
@@ -175,16 +185,35 @@ public class ActiveOrderContraindicationTest {
 	}
 
 	@Test
-	public void aPrescribedAllergyIsRaisedEvenWhenNeitherQuestionNorAnswerNamesTheDrug() {
-		// The half no scoping tweak can reach, and the reason the missing arm is the fix rather than
-		// a contraindications-are-exempt carve-out: the prescribing error is in the chart whether or
-		// not the LLM's prose happens to mention the drug. Pre-fix: 0 chips.
+	public void aPrescribedAllergyIsNotRaisedWhereTheResponseIsAboutSomethingElse() {
+		// DELIBERATE REVERSAL of what this case asserted when issue #143 was written, made on the
+		// maintainer's decision and recorded here rather than in a commit message. It used to assert 1
+		// chip, on the reasoning that "the prescribing error is in the chart whether or not the LLM's
+		// prose happens to mention the drug" — true as a statement about the CHART, and the wrong
+		// conclusion for THIS module. chartsearchai answers questions; it has no subscription, no
+		// acknowledgement and no delivery path that opens unprompted, so an unconditional finding here
+		// is an alert with none of an alerting system's machinery, riding whatever answer a clinician
+		// happened to ask for. Measured live on the 3.7.1 standalone, that is exactly how it behaved:
+		// "any allergies?", "are there any drug interactions with her current medications?", "does she
+		// have cancer?" and "what is her date of birth?" returned the same two contraindication chips
+		// byte for byte.
+		//
+		// The arm is not removed — the case it was really built for is a prescribed drug named only by
+		// a cited drug_order record, which issue #105's echo rule keeps out of the in-play set, and
+		// that still fires (see aPrescribedDrugTheAnswerOnlyEchoesIsStillCheckedAgainstTheAllergyList
+		// above, unchanged). What is withdrawn is the claim on responses about something else. The
+		// replacement rule and everything it deliberately gives up live in
+		// SubjectMatterScopedContraindicationTest; the standing-alert case belongs on a surface with
+		// acknowledgement (order entry, a chart banner, CDS hooks), not on every answer.
+		//
+		// This question and this chart are the shape that reversal is about: a blood-pressure answer
+		// citing the obs record, with the ibuprofen order sitting uncited in the same chart.
 		List<SafetyWarning> warnings = validator().validate(
 				"Her most recent blood pressure is 120/80 mmHg [1].", "What is her blood pressure?",
 				ctx(DrugReferenceTestSupport.set("ibuprofen"), null), chartWithTheOrderRecord().getMappings());
 
-		assertEquals(1, contraindications(warnings).size(),
-				"the allergy to the active order must be raised with no drug named anywhere, was: "
+		assertEquals(0, contraindications(warnings).size(),
+				"a response about her blood pressure must not carry chips about her prescriptions, was: "
 						+ warnings);
 	}
 

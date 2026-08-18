@@ -1589,4 +1589,28 @@ public class CitationGroundingVerifierTest {
 		assertEquals("Active drugs: Ornidazole [3]", clauses.get(2).text,
 				"and so must one that follows ', and '");
 	}
+
+	@Test
+	public void enumeration_groundsOnTheTier1OnlyPathToo_whichIsTheShippedEntailmentDefault() {
+		// chartsearchai.grounding.entailment.enabled defaults to FALSE, so Tier-1 cosine alone decides on
+		// the commonest configuration — and the split changes which TEXT is embedded there, not just
+		// which statement Tier-2 judges. Every other enumeration test runs with Tier-2 on, so this path
+		// was altered untested. The whole sentence is registered ORTHOGONAL to all three records, so
+		// these verdicts can only come from each citation being scored against its own item.
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		embeddings.register(ENUMERATION, AXIS_B);
+		embeddings.register(preamble + "Lidocaine [1]", AXIS_A);
+		embeddings.register(preamble + "Ketoconazole [2]", AXIS_A);
+		embeddings.register(preamble + "Aspirin [3]", AXIS_A);
+		embeddings.register("Allergy: Lidocaine (drug allergen)", AXIS_A);
+		embeddings.register("Allergy: Ketoconazole (drug allergen)", AXIS_A);
+		embeddings.register("Allergy: Aspirin (drug allergen)", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(ENUMERATION, threeRefs(),
+				allergyMappings("Ketoconazole"), FLOOR, TIER1_ONLY, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "[1] scored against its own item");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "[2] scored against its own item");
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded(), "[3] scored against its own item");
+	}
 }

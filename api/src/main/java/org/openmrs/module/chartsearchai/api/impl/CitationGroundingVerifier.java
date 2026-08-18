@@ -728,6 +728,30 @@ public class CitationGroundingVerifier {
 	 * does not exist. The conjunction is optional and the punctuation classes around it are not, so
 	 * {@code ", Ketoconazole"} strips exactly {@code ", "}.
 	 */
+	/**
+	 * Most whitespace-separated words an enumerated item may carry and still be treated as a NAME
+	 * rather than a clause. The split is only sound while the shared preamble carries the sentence's
+	 * SUBJECT; an item long enough to be a clause may carry its own, and then the siblings' claims lose
+	 * it — "Findings: the patient has diabetes [1] and asthma [2]" would ask about "Findings: asthma",
+	 * which a family-history record for someone else's asthma entails. That is a citation published
+	 * grounded=true that the whole-sentence claim correctly refused: fail-OPEN, in the exact
+	 * subject-flip case Tier-2 exists to catch, so the bound refuses the split instead.
+	 *
+	 * <p><strong>This is a heuristic and the honest limit of it is stated rather than implied.</strong>
+	 * Whether the preamble holds the subject is not decidable from the text without parsing it, and I
+	 * could not establish a general discriminator. Word count is a proxy for "noun phrase, not clause":
+	 * 3 admits the widest name-with-qualifier form the live answers produce ("Aspirin (drug allergen)")
+	 * and the bare names beside it, and refuses a four-word clause. Candidates considered and NOT
+	 * chosen, with no evidence separating them: requiring a comma between markers (a serial-list
+	 * signal, but it admits "…diabetes [1], and asthma [2]" and refuses the common two-item "X [1] and
+	 * Y [2]" list), and testing only the FIRST item (the subject can only be lost from item 1, but a
+	 * later clause-shaped item is equally a sign the colon is a lead-in rather than a list header).
+	 * Both directions of error are bounded the same way: too strict leaves a citation mis-scoped, which
+	 * is today's behaviour and visible; too loose publishes a wrong verdict silently. So when in doubt
+	 * this refuses to split.
+	 */
+	private static final int MAX_ENUMERATION_ITEM_WORDS = 3;
+
 	private static final Pattern LEADING_ITEM_SEPARATOR =
 			Pattern.compile("^[\\s,;]*(?:(?:and|or)\\b[\\s,;]*)?", Pattern.CASE_INSENSITIVE);
 
@@ -757,8 +781,10 @@ public class CitationGroundingVerifier {
 	 * subject-stripping, because this decides whether a TRUE citation is published as unsupported.
 	 *
 	 * <p>Returns {@code null} — meaning "not an enumeration" — for a single-citation sentence, for a
-	 * sentence with no colon before its first marker, and for one where any item contributes no text
-	 * of its OWN beyond its marker. That last guard is why it tests the MARKER-STRIPPED item: the
+	 * sentence with no colon before its first marker, for one where any item contributes no text of its
+	 * OWN beyond its marker, and for one where any item is longer than
+	 * {@link #MAX_ENUMERATION_ITEM_WORDS} words (a clause-shaped item means the colon is a lead-in
+	 * rather than a list header, and the preamble is then not the subject — see that constant). That last guard is why it tests the MARKER-STRIPPED item: the
 	 * substring always ends in {@code [N]}, whose characters {@link #LEADING_ITEM_SEPARATOR} cannot
 	 * consume, so an emptiness check on the raw item is unreachable. A colon followed immediately by
 	 * a citation ("allergies: [1], Ketoconazole [2]") is not a list of NAMED items, so reading it as
@@ -801,7 +827,8 @@ public class CitationGroundingVerifier {
 		while (marker.find()) {
 			String item = LEADING_ITEM_SEPARATOR.matcher(
 					sentence.text.substring(itemStart, marker.end())).replaceFirst("").trim();
-			if (stripCitationMarkers(item).isEmpty()) {
+			String named = stripCitationMarkers(item).trim();
+			if (named.isEmpty() || named.split("\\s+").length > MAX_ENUMERATION_ITEM_WORDS) {
 				return null;
 			}
 			items.add(new Sentence(preamble + " " + item,

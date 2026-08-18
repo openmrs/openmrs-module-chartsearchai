@@ -1488,4 +1488,21 @@ public class CitationGroundingVerifierTest {
 		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "the repeated index still gets a verdict");
 		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
 	}
+
+	@Test
+	public void splitIntoCitedSentences_doesNotSplitWhenTheSubjectSitsInsideTheFirstItem() {
+		// The split is only safe while the shared preamble carries the SUBJECT. Here the colon is a
+		// bare lead-in and the subject ("the patient has") lives inside item 1, so splitting would hand
+		// item 2 the claim "Findings: asthma" -- stripped of the subject. A family-history record for
+		// the mother's asthma entails THAT, so a citation the whole-sentence claim correctly refused
+		// would be published grounded=true. Fail open in a verification feature, and precisely the flip
+		// Tier-2 exists to catch, so this shape must keep whole-sentence scoping.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Findings: the patient has diabetes [1] and asthma [2].");
+
+		assertEquals(1, sentences.size(), "a clause-shaped first item means the preamble is not the subject");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
 }

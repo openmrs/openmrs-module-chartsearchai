@@ -1381,6 +1381,18 @@ public class CitationGroundingVerifierTest {
 		for (List<String> perCall : judge.statementsPerCall) {
 			assertEquals(1, perCall.size());
 		}
+
+		// Pin the statement text the judge actually RECEIVES, not just the splitter's Sentence.text:
+		// the citation markers are stripped between the two, and asserting only the fragment leaves
+		// that step unverified on this path.
+		List<String> received = new ArrayList<String>();
+		for (List<String> perCall : judge.statementsPerCall) {
+			received.add(perCall.get(0));
+		}
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		assertTrue(received.contains(preamble + "Lidocaine"), "judge saw: " + received);
+		assertTrue(received.contains(preamble + "Ketoconazole"), "judge saw: " + received);
+		assertTrue(received.contains(preamble + "Aspirin"), "judge saw: " + received);
 	}
 
 	@Test

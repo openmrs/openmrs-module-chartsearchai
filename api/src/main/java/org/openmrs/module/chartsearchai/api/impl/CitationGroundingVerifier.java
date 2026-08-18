@@ -752,6 +752,31 @@ public class CitationGroundingVerifier {
 	 */
 	private static final int MAX_ENUMERATION_ITEM_WORDS = 3;
 
+	/**
+	 * Marks an enumerated item as a CLAUSE rather than a name, at any length — a personal pronoun or
+	 * possessive, the word "patient", or a finite verb of clinical assertion. Any of these means the
+	 * item carries its own subject, so the shared preamble is not the sentence's subject and splitting
+	 * would strip it from the siblings (see {@link #MAX_ENUMERATION_ITEM_WORDS} for the failure that
+	 * causes).
+	 *
+	 * <p>This exists because the word bound alone is POROUS, which is worth stating plainly rather than
+	 * leaving for the next reader to rediscover: "he has diabetes" is three words, so it clears the
+	 * bound while being exactly the clause the bound was added to refuse. Length is a proxy for
+	 * "name, not clause"; these tokens say so directly, so the two nets are independent rather than
+	 * redundant — one bounds size, the other detects grammar.
+	 *
+	 * <p>Neither net makes the rule SOUND, and no claim is made that it does. Together they refuse the
+	 * shapes that have been constructed and tested; a two-word verbless clause would still pass. The
+	 * closed set is small on purpose — every entry is a word no drug, condition or allergen name
+	 * contains as a whole token — and the errors it does make are refusals ({@code IT band syndrome}
+	 * matches {@code it}), which cost a mis-scoped citation rather than a wrong verdict.
+	 */
+	private static final Pattern CLAUSE_MARKER = Pattern.compile(
+			"\\b(?:i|we|you|he|she|they|it|his|her|their|patient|patients"
+					+ "|has|have|had|is|are|was|were|shows|showed|reports|reported"
+					+ "|denies|denied|takes|took|receives|received|presents|remains)\\b",
+			Pattern.CASE_INSENSITIVE);
+
 	private static final Pattern LEADING_ITEM_SEPARATOR =
 			Pattern.compile("^[\\s,;]*(?:(?:and|or)\\b[\\s,;]*)?", Pattern.CASE_INSENSITIVE);
 
@@ -783,8 +808,9 @@ public class CitationGroundingVerifier {
 	 * <p>Returns {@code null} — meaning "not an enumeration" — for a single-citation sentence, for a
 	 * sentence with no colon before its first marker, for one where any item contributes no text of its
 	 * OWN beyond its marker, and for one where any item is longer than
-	 * {@link #MAX_ENUMERATION_ITEM_WORDS} words (a clause-shaped item means the colon is a lead-in
-	 * rather than a list header, and the preamble is then not the subject — see that constant). That last guard is why it tests the MARKER-STRIPPED item: the
+	 * {@link #MAX_ENUMERATION_ITEM_WORDS} words or matches {@link #CLAUSE_MARKER} (either means the
+	 * item is a clause, so the colon is a lead-in rather than a list header and the preamble is not the
+	 * subject — see those two constants, which are independent nets over size and grammar). That last guard is why it tests the MARKER-STRIPPED item: the
 	 * substring always ends in {@code [N]}, whose characters {@link #LEADING_ITEM_SEPARATOR} cannot
 	 * consume, so an emptiness check on the raw item is unreachable. A colon followed immediately by
 	 * a citation ("allergies: [1], Ketoconazole [2]") is not a list of NAMED items, so reading it as
@@ -828,7 +854,8 @@ public class CitationGroundingVerifier {
 			String item = LEADING_ITEM_SEPARATOR.matcher(
 					sentence.text.substring(itemStart, marker.end())).replaceFirst("").trim();
 			String named = stripCitationMarkers(item).trim();
-			if (named.isEmpty() || named.split("\\s+").length > MAX_ENUMERATION_ITEM_WORDS) {
+			if (named.isEmpty() || named.split("\\s+").length > MAX_ENUMERATION_ITEM_WORDS
+					|| CLAUSE_MARKER.matcher(named).find()) {
 				return null;
 			}
 			items.add(new Sentence(preamble + " " + item,

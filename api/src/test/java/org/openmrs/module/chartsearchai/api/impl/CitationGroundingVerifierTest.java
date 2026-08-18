@@ -1505,4 +1505,32 @@ public class CitationGroundingVerifierTest {
 		assertTrue(sentences.get(0).cites(2));
 		assertFalse(sentences.get(0).isolate);
 	}
+
+	@Test
+	public void splitIntoCitedSentences_doesNotSplitWhenAnItemCarriesItsOwnSubjectWithinTheWordBound() {
+		// The word bound alone is porous: "he has diabetes" is three words, so it clears
+		// MAX_ENUMERATION_ITEM_WORDS while still being a CLAUSE carrying its own subject — and item 2's
+		// claim would again lose it ("Findings: asthma"). Length is a proxy for "name, not clause"; a
+		// pronoun or a finite verb says so directly, at any length.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Findings: he has diabetes [1] and asthma [2].");
+
+		assertEquals(1, sentences.size(), "a pronoun-and-verb item is a clause, so the preamble is not the subject");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aQualifiedDrugNameIsStillANameNotAClause() {
+		// The clause test must not swallow the parenthetical-qualified item shape the live answers do
+		// produce: three words, no pronoun, no verb — a name, so the list still splits.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences(
+						"Recorded allergies: Aspirin (drug allergen) [1], Ketoconazole (drug allergen) [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Recorded allergies: Aspirin (drug allergen) [1]", clauses.get(0).text);
+		assertEquals("Recorded allergies: Ketoconazole (drug allergen) [2]", clauses.get(1).text);
+	}
 }

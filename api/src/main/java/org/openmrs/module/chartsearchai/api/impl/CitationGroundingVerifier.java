@@ -749,6 +749,10 @@ public class CitationGroundingVerifier {
 	 * Both directions of error are bounded the same way: too strict leaves a citation mis-scoped, which
 	 * is today's behaviour and visible; too loose publishes a wrong verdict silently. So when in doubt
 	 * this refuses to split.
+	 *
+	 * <p>Length is not the whole test: this bound is POROUS on its own ("he has diabetes" is three
+	 * words), so {@link #CLAUSE_MARKER} refuses a clause by its grammar at any length. Read the two
+	 * together — neither is sufficient alone.
 	 */
 	private static final int MAX_ENUMERATION_ITEM_WORDS = 3;
 

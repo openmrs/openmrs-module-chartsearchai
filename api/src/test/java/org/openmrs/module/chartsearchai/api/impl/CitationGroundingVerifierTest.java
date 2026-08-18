@@ -1613,4 +1613,34 @@ public class CitationGroundingVerifierTest {
 		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "[2] scored against its own item");
 		assertEquals(Boolean.TRUE, result.get(2).getGrounded(), "[3] scored against its own item");
 	}
+
+	@Test
+	public void splitIntoCitedSentences_aNegatedPreamblePropagatesToEveryItem() {
+		// The preamble is shared, so a qualifier sitting in it must reach every item's claim. If it did
+		// not, "No recorded allergies except: X [1], Y [2]" would hand each citation a bare drug name and
+		// a record for an allergy the patient does NOT have could ground true. The preamble is provably
+		// marker-free (the colon precedes the first marker), which is what makes this propagation total.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("No recorded allergies except: Lidocaine [1], Aspirin [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("No recorded allergies except: Lidocaine [1]", clauses.get(0).text);
+		assertEquals("No recorded allergies except: Aspirin [2]", clauses.get(1).text,
+				"a preamble qualifier must not be dropped from later items");
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aNegationInsideAnItemStaysWithThatItemOnly() {
+		// The mirror case: a qualifier sitting in ONE item must not leak to its siblings and must not be
+		// stripped from its own. "not sulfa" keeps its negation, so a sulfa-allergy record cannot ground
+		// it; "penicillin" does not inherit the negation, so a penicillin record still can.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: penicillin [1], not sulfa [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Recorded allergies: penicillin [1]", clauses.get(0).text,
+				"item 1 must not inherit item 2's negation");
+		assertEquals("Recorded allergies: not sulfa [2]", clauses.get(1).text,
+				"the separator strip must not eat the negation");
+	}
 }

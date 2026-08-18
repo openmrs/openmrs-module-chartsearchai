@@ -46,7 +46,7 @@ public class DrugReferenceInjectorTest {
 		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.atcService(false));
 	}
 
-	/** Injector over the real bundled DDInter sample — the only bundled dataset whose entries carry
+	/** Injector over the real DDInter excerpt — the only bundled dataset whose entries carry
 	 *  enough interaction partners (Lisinopril: 15) to exercise the render cap. */
 	private DrugReferenceInjector ddinterInjector() {
 		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.ddinterService());
@@ -233,7 +233,7 @@ public class DrugReferenceInjectorTest {
 	public void renderedInteractionsMustNameThePartnerThePatientIsActuallyOn() {
 		// The rendered Interactions: section is capped at MAX_INTERACTION_RENDER_CHARS and was
 		// filled in DATASET order, so which partners a clinician's model can cite was decided by
-		// the dataset's ordering rather than by the patient. In the real bundled DDInter sample
+		// the dataset's ordering rather than by the patient. In the real DDInter excerpt
 		// Lisinopril carries 15 partners and the 1500-char cut falls after seven of them, so
 		// Ibuprofen — the LAST one, and a Moderate NSAID x ACE-inhibitor interaction that
 		// attenuates the antihypertensive effect — was truncated out entirely.

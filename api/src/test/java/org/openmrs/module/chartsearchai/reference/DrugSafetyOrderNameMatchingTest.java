@@ -62,7 +62,7 @@ public class DrugSafetyOrderNameMatchingTest {
 	 * A verbatim slice of the full DDInter KB (2283 drugs / 295,184 rows) carrying the rows behind
 	 * the live-reproduced collisions — linezolid x opium, dolutegravir x iron — the
 	 * multivitamin x warfarin row the localized plural must still match, and the warfarin x heparin
-	 * row the far-edge case needs. The bundled 16-drug sample contains none of those drugs, so it
+	 * row the far-edge case needs. The 16-drug DDInter excerpt contains none of those drugs, so it
 	 * cannot express any of this (same reason {@code ddi-severity-floor-pair.json} exists).
 	 */
 	private static final String COLLISION_SLICE = "chartsearchai-test/ddi-order-name-collisions.json";
@@ -72,7 +72,7 @@ public class DrugSafetyOrderNameMatchingTest {
 				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(COLLISION_SLICE)));
 	}
 
-	/** A validator over the real bundled DDInter sample, parsed by the real source. */
+	/** A validator over the real DDInter excerpt, parsed by the real source. */
 	private DrugSafetyValidator bundledValidator() {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterService());
 	}

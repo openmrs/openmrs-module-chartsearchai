@@ -57,7 +57,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 public class OrderDrivenInjectionResolutionTest {
 
 	/** The patient's own order, recorded the way a chart records one: a display name with a strength
-	 *  appended. The bundled DDInter sample's entry is NAMED {@code Acetylsalicylic acid}, which is why
+	 *  appended. The DDInter excerpt's entry is NAMED {@code Acetylsalicylic acid}, which is why
 	 *  this order name resolves it at all, while every rule that names it — on the OTHER entries, since
 	 *  the parser tokenizes a rule with its partner's {@code rxnorm_name} — carries the token
 	 *  {@code aspirin} (issue #136), which is why the chip below can name a partner the order name does
@@ -69,7 +69,7 @@ public class OrderDrivenInjectionResolutionTest {
 	 *  branches, which is exactly what the bundled groups file exists to bridge. */
 	private static final String IBUPROFEN_QUESTION = "Is it safe to give ibuprofen?";
 
-	/** The real bundled DDInter sample carrying the real curated cross-reactivity groups (the NSAID
+	/** The real DDInter excerpt carrying the real curated cross-reactivity groups (the NSAID
 	 *  family the aspirin/ibuprofen pair below needs), with the real validator behind the real injector
 	 *  so {@code preAnswerFindings} runs the same deterministic pass the chips come from. */
 	private static PatientChart inject(PatientClinicalContext context, String question) {

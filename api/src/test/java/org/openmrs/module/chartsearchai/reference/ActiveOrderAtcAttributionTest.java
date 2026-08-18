@@ -37,7 +37,7 @@ import org.junit.jupiter.api.Test;
  * dictionary carry any ATC map, which is why no stock probe patient reaches this and why the live
  * reproduction needed a purpose-made concept.
  *
- * <p>Both cases below run the real production path: the real bundled DDInter sample parsed by the real
+ * <p>Both cases below run the real production path: the real DDInter excerpt parsed by the real
  * source (Simvastatin {@code C10AA01} × Clarithromycin {@code J01FA09} is a real Major row in it, and
  * the rule names its partner by that very code), the real {@code validate} entry point, real question
  * text, GP reads on their no-context defaults. {@link ActiveOrderAtcContextTest} covers the other half

@@ -47,7 +47,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * <p>Context-sensitive because the point is the GP: the cases write a real global property through the
  * admin service and read it back through the real {@code validate} path, so a cap assertion cannot pass
  * on a hardcoded default (the exception is the absent-row case, whose whole point is to write none).
- * The knowledge base is the real bundled DDInter sample parsed by the real source; its 16 drugs are
+ * The knowledge base is the real DDInter excerpt parsed by the real source; its 16 drugs are
  * exactly the 16 the question below names, and they carry <b>72</b> above-floor pairs (23 Major,
  * 40 Moderate, 9 Minor) — enough to outrun every cap tested here.
  */
@@ -62,10 +62,10 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 
 	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
-	/** Above-floor pairs among the sample's 16 drugs — the candidate count every cap here cuts. */
+	/** Above-floor pairs among the excerpt's 16 drugs — the candidate count every cap here cuts. */
 	private static final int CANDIDATE_PAIRS = 72;
 
-	/** How many of those the sample rates Major, i.e. what a cap of 25 or more shows in full. */
+	/** How many of those the excerpt rates Major, i.e. what a cap of 25 or more shows in full. */
 	private static final int MAJOR_PAIRS = 23;
 
 	private DrugSafetyValidator validator;

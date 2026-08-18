@@ -74,7 +74,7 @@ public class DrugSafetyDiacriticOrderNameTest {
 	/**
 	 * A verbatim slice of the full DDInter KB (2283 drugs / 295,184 rows): four subject drugs whose
 	 * rule lists carry, between them, every token of the #128 kill set above the {@code minor} floor,
-	 * plus the partners the accented names must resolve to. The bundled 16-drug sample contains none
+	 * plus the partners the accented names must resolve to. The 16-drug DDInter excerpt contains none
 	 * of them, and {@code ddi-order-name-collisions.json} carries only the two collisions #128
 	 * reproduced live — same reason {@code ddi-severity-floor-pair.json} exists.
 	 */

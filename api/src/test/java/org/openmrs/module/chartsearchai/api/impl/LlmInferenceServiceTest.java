@@ -218,7 +218,7 @@ public class LlmInferenceServiceTest {
 		// so a client can render provenance on the citation chip instead. This is the hop that makes
 		// that reachable: without it the two facts stop at the mapping and are effectively lost.
 		//
-		// Real mappings from the real injector over the real bundled DDInter sample, so the values
+		// Real mappings from the real injector over the real DDInter excerpt, so the values
 		// asserted are the ones production computes, not hand-set stand-ins.
 		List<RecordMapping> mappings = org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
 				.injectedDdinterMappings("is warfarin safe to add?");

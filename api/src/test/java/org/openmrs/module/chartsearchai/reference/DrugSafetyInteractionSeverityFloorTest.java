@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
  * them by default while Major/Moderate/Minor rules, class-based chips, contraindications, and
  * curated rules without a severity (all deliberate, hand-authored) are untouched.
  *
- * <p>All scenarios run the real pipeline: real bundled DDInter sample (or curated seed) parsed
+ * <p>All scenarios run the real pipeline: real DDInter excerpt (or curated seed) parsed
  * by the real sources, real validate overloads, GP reads on their no-context defaults.
  */
 public class DrugSafetyInteractionSeverityFloorTest {
@@ -132,7 +132,7 @@ public class DrugSafetyInteractionSeverityFloorTest {
 	@Test
 	public void classBasedChipsAreUnaffectedByTheFloor() {
 		// The floor governs rule-based chips only: the class arm (duplicate therapy) carries no
-		// severity and keeps firing. Enalapril is not a bundled-sample drug, so no rated rule
+		// severity and keeps firing. Enalapril is not in the excerpt, so no rated rule
 		// is involved here at all — this pins the pure class arm; the rule-filtered-same-pair
 		// seam is pinned by sameSubgroupPairKeepsTheClassChipWhenItsRuleIsFloorFiltered.
 		List<SafetyWarning> warnings = ddinterValidator().validate(

@@ -43,7 +43,7 @@ public final class DrugReferenceTestSupport {
 
 	/**
 	 * The real rendered text of the drug-reference record the REAL injector injects for
-	 * {@code question} (bundled DDInter sample, real load → parse → injectRecords → render
+	 * {@code question} (DDInter excerpt, real load → parse → injectRecords → render
 	 * chain). The one cross-package accessor for tests that need genuine injected record text
 	 * without reimplementing the renderer.
 	 */
@@ -216,7 +216,7 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * The real safety-finding record the REAL pipeline injects for {@code question} asked about a
 	 * patient on {@code activeDrug} (with ATC code {@code atcCode}) — the whole production chain,
-	 * bundled DDInter sample through {@code DrugSafetyValidator.validate} and
+	 * DDInter excerpt through {@code DrugSafetyValidator.validate} and
 	 * {@code injectRecords}/{@code renderFinding}, with the real validator behind the real injector
 	 * (through the same {@code set*} seams the other helpers here use, in place of production's
 	 * autowiring). The third cross-package accessor, for the grounding tests.

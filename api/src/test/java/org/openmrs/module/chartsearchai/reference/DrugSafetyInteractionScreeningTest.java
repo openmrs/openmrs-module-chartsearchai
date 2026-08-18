@@ -78,7 +78,7 @@ public class DrugSafetyInteractionScreeningTest {
 	}
 
 	/** Two mutually interacting active orders: Simvastatin x Clarithromycin is Major in the real
-	 *  bundled DDInter sample, and the two share no ATC subgroup, so the rule arm is the only thing
+	 *  DDInter excerpt, and the two share no ATC subgroup, so the rule arm is the only thing
 	 *  that can produce a warning here. */
 	private static PatientClinicalContext interactingPairContext() {
 		return DrugReferenceTestSupport.ctx(60, null,
@@ -627,7 +627,7 @@ public class DrugSafetyInteractionScreeningTest {
 		// Blast radius. Pairs grow quadratically with the medication list — 10 active orders is 45
 		// pairs — and each surviving chip is also injected into the prompt as a citable finding, so
 		// an uncapped arm would both bury the clinician and write tens of thousands of characters
-		// into the context window. These six real bundled-sample drugs interact pairwise 15 ways,
+		// into the context window. These six real drugs from the excerpt interact pairwise 15 ways,
 		// exactly 10 of them Major, so the cap and the severity ordering are both observable: the
 		// arm must report 10, and all 10 must be the Major ones. Dataset order would instead keep
 		// simvastatin x warfarin (Minor) and three Moderates.

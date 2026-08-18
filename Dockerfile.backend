@@ -81,7 +81,7 @@ EXPOSE 8080
 # satisfied by the setup-wizard redirect). Repeated here so the healthcheck is
 # honored even if the deploy server's compose file does not carry our
 # healthcheck block — which is the case for chartsearchai.openmrs.org.
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30m --retries=10 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30m --retries=15 \
     CMD curl -fsS -m 5 -o /dev/null http://localhost:8080/openmrs/health/started || exit 1
 
 ENTRYPOINT ["/usr/local/bin/backend-init.sh"]

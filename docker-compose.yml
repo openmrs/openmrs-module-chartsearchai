@@ -63,11 +63,17 @@ services:
     # OpenMRS starts synchronously at context init, so nothing answers until the
     # 5,284-patient seed has been brought up to the current schema. Failures
     # inside the window do not count toward retries, and a success ends it.
+    #
+    # Note for whoever closes the other half of #275: this widens the legitimate
+    # not-yet-healthy window from ~2 min to as much as 30. Re-enabling the deploy
+    # wrapper's own poll by dropping --no-health-check, without giving that poll a
+    # matching timeout, would make a reset deploy report failure while the
+    # instance is starting perfectly normally.
     healthcheck:
       test: ["CMD", "curl", "-fsS", "-m", "5", "-o", "/dev/null", "http://localhost:8080/openmrs/health/started"]
       interval: 30s
       timeout: 10s
-      retries: 10
+      retries: 15
       start_period: 30m
     volumes:
       - openmrs-data:/openmrs/data

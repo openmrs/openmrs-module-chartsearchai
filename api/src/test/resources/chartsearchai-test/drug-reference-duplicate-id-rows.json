@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "source": "hand-authored fixture for issues #237/#259 — not shipped data",
-  "description": "Two entries sharing ONE id and publishing NO substanceName, which is the shape DrugReferenceInjector.matchingEntries groups on its documented getId() fallback. The curated parser drops an entry only for a blank id or name and no DrugReferenceValidity rule reports a duplicate id, so an operator-editable file reaches this. They are one CITABLE entity and NOT a declared substance, so the row-attribution clause must stay silent: 'filed separately for the same substance' would claim something this file never said. Both rows publish a band so the record has content either way, and they differ in name so a clause WOULD have two names to contrast if the guard were missing.",
+  "description": "Two entries sharing ONE id and publishing NO substanceName, which is the shape DrugReferenceInjector.matchingEntries groups on its documented getId() fallback. The curated parser drops an entry only for a blank id or name and no DrugReferenceValidity rule reports a duplicate id, so an operator-editable file reaches this. They are one CITABLE entity and NOT a declared substance, so neither the row-attribution clause nor the other-rows dosing section may speak: 'filed separately for the same substance' and 'other rows of this substance' would each claim something this file never said. Both rows publish a band and the bands DIFFER (400 against 200), so both features would have content but for their guards, and they differ in name so a clause would have two names to contrast. The second row carries the alias `tmp-paediatric`, which the first does NOT, and that alias is what puts BOTH rows in one group: the ranked accessors resolve one row per name, so with `trimethoprim` as the only alias the question leg and the order leg both resolved the unqualified row, the group was a single row, interactionSubject short-circuited on it, and BOTH guards were unreachable — every assertion here passed on a group that could not have reached them. Drive the order by `tmp-paediatric` (as both test files do) so the question leg resolves the unqualified row, the order leg resolves this one, and the shared id really does put two rows in one group.",
   "entries": [
     {
       "id": "shared-id",
@@ -16,7 +16,7 @@
     {
       "id": "shared-id",
       "name": "Trimethoprim (paediatric)",
-      "aliases": ["trimethoprim"],
+      "aliases": ["trimethoprim", "tmp-paediatric"],
       "atcCodes": ["J01EA01"],
       "ageBands": [
         { "minYears": 0, "maxYears": 120, "mgPerKgMin": 2, "mgPerKgMax": 4, "maxDailyDoseMg": 200 }

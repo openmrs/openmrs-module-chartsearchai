@@ -444,6 +444,30 @@ public final class DrugReferenceTestSupport {
 		return activeOrder("order-" + name, name, set(name), entry.normalizedAtcCodes());
 	}
 
+	/**
+	 * A context whose ACTIVE ORDERS carry {@code displays}, resolved through the same production
+	 * reconciliation the injector and the validator each perform on it
+	 * ({@link DrugReferenceService#withReferenceNames} over
+	 * {@link DrugReferenceService#findForActiveOrders}) — so a case that drives both surfaces drives them
+	 * over ONE context rather than over two that could disagree about what the chart records.
+	 *
+	 * <p>Shared rather than written per test file: which row a response NAMES a substance by is ranked
+	 * off these display names (issues #187, #194, #206), so every case about a record and a chip naming
+	 * one substance depends on this being built one way.
+	 */
+	static PatientClinicalContext contextNaming(DrugReferenceService service, Integer age,
+			Double weightKg, String... displays) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders =
+				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		Set<String> names = new LinkedHashSet<String>();
+		for (String display : displays) {
+			orders.add(activeOrder("order-" + display, display, display));
+			names.add(display);
+		}
+		PatientClinicalContext raw = ctx(age, weightKg, names, null, null, null, orders);
+		return service.withReferenceNames(raw, service.findForActiveOrders(raw));
+	}
+
 	/** A service over the real bundled datasets (classpath fallback — the production default path). */
 	static DrugReferenceService bundledService() {
 		return new DrugReferenceService();

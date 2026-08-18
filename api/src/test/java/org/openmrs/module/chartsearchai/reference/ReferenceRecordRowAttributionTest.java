@@ -77,22 +77,6 @@ public class ReferenceRecordRowAttributionTest {
 	 */
 	private static final String ATTRIBUTION_LEAD = "Published by this dataset for";
 
-	/** One active order for {@code display}, resolved through the production reconciliation the
-	 *  injector and the validator both read, so both surfaces see one context. */
-	private static PatientClinicalContext chartNaming(DrugReferenceService service, Integer age,
-			Double weightKg, String... displays) {
-		List<PatientClinicalContext.ActiveDrugOrder> orders =
-				new java.util.ArrayList<PatientClinicalContext.ActiveDrugOrder>();
-		java.util.Set<String> names = new java.util.LinkedHashSet<String>();
-		for (String display : displays) {
-			orders.add(DrugReferenceTestSupport.activeOrder("order-" + display, display, display));
-			names.add(display);
-		}
-		PatientClinicalContext raw = DrugReferenceTestSupport.ctx(age, weightKg, names, null, null, null,
-				orders);
-		return service.withReferenceNames(raw, service.findForActiveOrders(raw));
-	}
-
 	private static PatientChart inject(DrugReferenceService service, PatientClinicalContext context,
 			String question) {
 		return DrugReferenceTestSupport.injectorWithSafety(service)
@@ -107,7 +91,7 @@ public class ReferenceRecordRowAttributionTest {
 		DrugReferenceService service =
 				DrugReferenceTestSupport.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
 		PatientClinicalContext context =
-				chartNaming(service, 60, null, "Dexamethasone (ophthalmic)", "Phenytoin");
+				DrugReferenceTestSupport.contextNaming(service, 60, null, "Dexamethasone (ophthalmic)", "Phenytoin");
 		String question = "Is it safe to give her dexamethasone?";
 
 		// The premise, through production accessors: the two rows really are ONE substance, and the row
@@ -150,11 +134,16 @@ public class ReferenceRecordRowAttributionTest {
 	@Test
 	public void theRecordAttributesTheCeilingTheChipDidNotUse() throws IOException {
 		// #259, verbatim: the record renders the 3000 row while the dose chip warns at the charted row's
-		// 2000, and the record's number is the CITABLE one. The clause is what lets a reader see whose
-		// 3000 that is.
+		// 2000, and the record's number is the CITABLE one. This case is the CLAUSE's half of that — the
+		// record names the row its 3000 belongs to. Naming the row settles whose number it is; it does not
+		// put the chip's 2000 in the evidence, and that half is
+		// ReferenceRecordSubstanceCeilingsTest.theRecordStatesTheCeilingTheChipQuotes, whose section this
+		// record now also carries. The expectation below is the whole record either way, so both halves
+		// fail here if either moves.
 		DrugReferenceService service =
 				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(CEILINGS));
-		PatientClinicalContext context = chartNaming(service, 30, 70.0, "Amoxicillin (suspension)");
+		PatientClinicalContext context =
+				DrugReferenceTestSupport.contextNaming(service, 30, 70.0, "Amoxicillin (suspension)");
 		String question = "What dose of amoxicillin?";
 
 		// The premise: the two rows publish DIFFERENT ceilings, so the two surfaces really do carry two
@@ -175,7 +164,8 @@ public class ReferenceRecordRowAttributionTest {
 		assertEquals("Drug reference — Amoxicillin (ATC J01CA04). " + ATTRIBUTION_LEAD
 				+ " Amoxicillin, not for Amoxicillin (suspension) — the row this patient's record names, "
 				+ "filed separately for the same substance. Dosing for ages 0-120: 15-30 mg/kg per dose, "
-				+ "maximum 3000 mg/day.",
+				+ "maximum 3000 mg/day. Also published for other rows of this substance: Amoxicillin "
+				+ "(suspension) 15-30 mg/kg per dose, maximum 2000 mg/day (ages 0-120).",
 				record, "the record keeps its own row's ceiling and says whose it is, in that order");
 
 		// The chip's stricter number, which is the one the clinician is warned on — asserted so the case
@@ -212,8 +202,8 @@ public class ReferenceRecordRowAttributionTest {
 		DrugReferenceService service =
 				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(CEILINGS));
 		String record = DrugReferenceTestSupport.referenceTextNaming(
-				inject(service, chartNaming(service, 30, 70.0, "Cefadroxil"), "What dose of cefadroxil?"),
-				"Cefadroxil");
+				inject(service, DrugReferenceTestSupport.contextNaming(service, 30, 70.0, "Cefadroxil"),
+						"What dose of cefadroxil?"), "Cefadroxil");
 
 		assertNotNull(record, "precondition: the record must be injected");
 		assertFalse(record.contains(ATTRIBUTION_LEAD),
@@ -249,8 +239,8 @@ public class ReferenceRecordRowAttributionTest {
 				"precondition: and must not reach the first, or the two tie and the fold decides");
 
 		String record = DrugReferenceTestSupport.referenceTextNaming(
-				inject(service, chartNaming(service, 30, 70.0, "zantac"), "What dose of ranitidine?"),
-				"Ranitidine");
+				inject(service, DrugReferenceTestSupport.contextNaming(service, 30, 70.0, "zantac"),
+						"What dose of ranitidine?"), "Ranitidine");
 
 		assertNotNull(record, "precondition: the record must still be injected");
 		assertFalse(record.contains(ATTRIBUTION_LEAD),
@@ -265,7 +255,7 @@ public class ReferenceRecordRowAttributionTest {
 		DrugReferenceService service =
 				DrugReferenceTestSupport.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
 		PatientClinicalContext context =
-				chartNaming(service, 60, null, "Dexamethasone (ophthalmic)", "Phenytoin");
+				DrugReferenceTestSupport.contextNaming(service, 60, null, "Dexamethasone (ophthalmic)", "Phenytoin");
 		List<SafetyWarning> chips = DrugReferenceTestSupport.validator(service)
 				.validate("", "Is it safe to give her dexamethasone?", context);
 
@@ -289,7 +279,8 @@ public class ReferenceRecordRowAttributionTest {
 				inject(service, DrugReferenceTestSupport.ctx(60, null, null, null, null, null), question),
 				"Dexamethasone");
 		String attributed = DrugReferenceTestSupport.referenceTextNaming(inject(service,
-				chartNaming(service, 60, null, "Dexamethasone (ophthalmic)"), question), "Dexamethasone");
+				DrugReferenceTestSupport.contextNaming(service, 60, null, "Dexamethasone (ophthalmic)"),
+				question), "Dexamethasone");
 
 		assertNotNull(unattributed, "precondition: both arrangements inject a record");
 		assertNotNull(attributed, "precondition: both arrangements inject a record");
@@ -321,7 +312,7 @@ public class ReferenceRecordRowAttributionTest {
 		DrugReferenceService service =
 				DrugReferenceTestSupport.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
 		PatientChart chart = inject(service,
-				chartNaming(service, 60, null, "Dexamethasone (ophthalmic)"),
+				DrugReferenceTestSupport.contextNaming(service, 60, null, "Dexamethasone (ophthalmic)"),
 				"Is it safe to give her dexamethasone or sirolimus?");
 
 		String dexamethasone = DrugReferenceTestSupport.referenceTextNaming(chart, "Dexamethasone");
@@ -363,8 +354,9 @@ public class ReferenceRecordRowAttributionTest {
 				"precondition: one substance, or there is nothing to attribute");
 
 		String record = DrugReferenceTestSupport.referenceTextNaming(
-				inject(service, chartNaming(service, 30, 70.0, "Acetylsalicylic acid (enteric-coated)"),
-						"What dose of acetylsalicylic acid?"), "Acetylsalicylic acid");
+				inject(service, DrugReferenceTestSupport.contextNaming(service, 30, 70.0,
+						"Acetylsalicylic acid (enteric-coated)"), "What dose of acetylsalicylic acid?"),
+				"Acetylsalicylic acid");
 
 		assertNotNull(record, "precondition: a record must be injected for the unqualified row");
 		assertTrue(record.contains(ATTRIBUTION_LEAD + " Acetylsalicylic acid, not for "
@@ -397,7 +389,7 @@ public class ReferenceRecordRowAttributionTest {
 				.names(service.findImpliedByQuery(question)).toString(),
 				"precondition: the question must resolve ONLY the unqualified row, or the injected set "
 						+ "already contains the charted one and the widening is untested");
-		PatientClinicalContext context = chartNaming(service, 30, 70.0, charted);
+		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 30, 70.0, charted);
 		assertTrue(DrugReferenceTestSupport.names(service.findForActiveOrders(context)).contains(charted),
 				"precondition: while the patient's own order resolves the charted row, so the two sets "
 						+ "really do differ — was: "
@@ -450,11 +442,11 @@ public class ReferenceRecordRowAttributionTest {
 		// than the injected set. Without it the group is one row, interactionSubject takes its short cut,
 		// and the assertFalse below passes with the guard never reached.
 		assertTrue(DrugReferenceTestSupport.names(service.findForActiveOrders(
-				chartNaming(service, 30, 70.0, "Clobetasol 0.05%"))).contains("Clobetasol"),
+				DrugReferenceTestSupport.contextNaming(service, 30, 70.0, "Clobetasol 0.05%"))).contains("Clobetasol"),
 				"precondition: the order must resolve the unqualified row into the pass");
 
 		String record = DrugReferenceTestSupport.referenceTextNaming(
-				inject(service, chartNaming(service, 30, 70.0, "Clobetasol 0.05%"),
+				inject(service, DrugReferenceTestSupport.contextNaming(service, 30, 70.0, "Clobetasol 0.05%"),
 						"What dose of clobex?"), "Clobetasol (topical)");
 
 		assertNotNull(record, "precondition: the topical row's record must be injected, so the case is "
@@ -495,9 +487,26 @@ public class ReferenceRecordRowAttributionTest {
 				"precondition: and neither declares a substance, so the group is the id fallback");
 		assertEquals(null, paediatric.substanceKey(), "precondition: neither declares a substance");
 
-		String record = DrugReferenceTestSupport.referenceTextNaming(
-				inject(service, chartNaming(service, 30, 70.0, "Trimethoprim (paediatric)"),
-						"What dose of trimethoprim?"), "Trimethoprim");
+		// And the premise that was MISSING, without which this case could not fail: the group must really
+		// hold two rows. The ranked accessors return one row per NAME, so while `trimethoprim` was the
+		// second row's only alias both legs resolved the FIRST row — the group was a single row,
+		// interactionSubject took its rows.size() == 1 short cut, chartAnchoredSubject answered null, and
+		// the case was silenced by "the chart named no row in particular" without the substanceKey() guard
+		// it is named for ever being reached (found by mutating that guard away for issue #259's section:
+		// nothing reddened). Driving the order by the second row's OWN alias fixes it; the two accessors
+		// below are the ones matchingEntries unions.
+		PatientClinicalContext context =
+				DrugReferenceTestSupport.contextNaming(service, 30, 70.0, "tmp-paediatric");
+		String question = "What dose of trimethoprim?";
+		assertEquals("[Trimethoprim]",
+				DrugReferenceTestSupport.names(service.findImpliedByQuery(question)).toString(),
+				"precondition: the question leg must resolve the unqualified row");
+		assertEquals("[Trimethoprim (paediatric)]",
+				DrugReferenceTestSupport.names(service.findForActiveOrders(context)).toString(),
+				"precondition: and the order leg the OTHER row, or the guard is never reached");
+
+		String record = DrugReferenceTestSupport
+				.referenceTextNaming(inject(service, context, question), "Trimethoprim");
 
 		assertNotNull(record, "precondition: a record must still be injected");
 		assertFalse(record.contains(ATTRIBUTION_LEAD),
@@ -519,7 +528,7 @@ public class ReferenceRecordRowAttributionTest {
 						+ "is one row");
 
 		String record = DrugReferenceTestSupport.referenceTextNaming(
-				inject(service, chartNaming(service, 30, 70.0, "Ibuprofen"),
+				inject(service, DrugReferenceTestSupport.contextNaming(service, 30, 70.0, "Ibuprofen"),
 						"What dose of ibuprofen?"), "Ibuprofen");
 		assertNotNull(record, "precondition: the record must be injected");
 		assertFalse(record.contains(ATTRIBUTION_LEAD),
@@ -558,7 +567,7 @@ public class ReferenceRecordRowAttributionTest {
 		// RecordMapping defines no toString, so a message built from the mappings prints identity
 		// hashes and a failure says nothing about which row was cited instead.
 		List<String> cited = DrugReferenceTestSupport
-				.injectedReferences(inject(service, chartNaming(service, 60, null,
+				.injectedReferences(inject(service, DrugReferenceTestSupport.contextNaming(service, 60, null,
 						"Dexamethasone (ophthalmic)"), "Is it safe to give her dexamethasone?"))
 				.stream().map(m -> m.getResourceUuid()).collect(java.util.stream.Collectors.toList());
 

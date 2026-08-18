@@ -1397,4 +1397,60 @@ public class CitationGroundingVerifierTest {
 		assertTrue(sentences.get(0).cites(2));
 		assertFalse(sentences.get(0).isolate);
 	}
+
+	@Test
+	public void splitIntoCitedSentences_anItemWhoseNameStartsWithOrKeepsIt() {
+		// The \b in LEADING_ITEM_SEPARATOR is load-bearing and was untested: without it the optional
+		// "or" alternative eats the first two letters of a name that merely STARTS with them, and the
+		// claim then asks about "phenadrine", a drug that does not exist.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Active drugs: Orphenadrine [1], Oxycodone [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Active drugs: Orphenadrine [1]", clauses.get(0).text,
+				"a name beginning 'Or' must not be truncated to 'phenadrine'");
+		assertEquals("Active drugs: Oxycodone [2]", clauses.get(1).text);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_theColonNearestTheItemsIsThePreamble() {
+		// lastIndexOf, not indexOf: the introducer is the colon closest to the first item, so the
+		// earlier one stays inside the preamble rather than truncating it.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Findings: recorded allergies: Lidocaine [1], Aspirin [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Findings: recorded allergies: Lidocaine [1]", clauses.get(0).text);
+		assertEquals("Findings: recorded allergies: Aspirin [2]", clauses.get(1).text,
+				"the whole preamble is retained, not just the text after the first colon");
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aColonAfterTheFirstMarkerDoesNotIntroduceAList() {
+		// The colon has to precede the FIRST marker to be introducing the items. One that appears
+		// later belongs to a subsequent clause and says nothing about how item 1 is bounded, so the
+		// sentence keeps today's whole-sentence scoping.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Aspirin allergy [1] and note: severity is severe [2].");
+
+		assertEquals(1, sentences.size());
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_enumerationHandlesMultiDigitCitationIndices() {
+		// The live answer that produced issue #278 cited [11], not [3] — a 4-character marker, so the
+		// item boundaries are wider than the single-digit cases above. Offsets come from Matcher.end(),
+		// which is width-agnostic; this pins that.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences(
+						"Recorded allergies: Lidocaine [1], Ketoconazole [2], and Aspirin [11].");
+
+		assertEquals(3, clauses.size());
+		assertEquals("Recorded allergies: Aspirin [11]", clauses.get(2).text);
+		assertTrue(clauses.get(2).cites(11));
+		assertFalse(clauses.get(2).cites(1));
+	}
 }

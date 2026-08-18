@@ -247,7 +247,9 @@ public class CitationGroundingVerifier {
 	 *
 	 * <p>When {@code clauseScoped}, a sentence citing multiple records is split so each citation is
 	 * checked against the answer text up to and including its own {@code [N]} marker, not the whole
-	 * compound sentence (see {@link #splitIntoClauseScopedSentences}). Those split citations are each
+	 * compound sentence (see {@link #splitIntoClauseScopedSentences}). Independently of this flag, an
+	 * ENUMERATING sentence is split per item (#278) — so a split fragment is not evidence that
+	 * {@code clauseScoped} was set. Those split citations are each
 	 * Tier-2 verified in their OWN entailment call rather than co-batched: batched entailment is not
 	 * per-pair independent, so co-batching a compound sentence's citations (whose clause statements
 	 * overlap) lets the LLM couple their verdicts. Every other citation is still confirmed in the one
@@ -334,9 +336,10 @@ public class CitationGroundingVerifier {
 		List<Integer> batchPositions = new ArrayList<Integer>();
 		List<String> batchSources = new ArrayList<String>();
 		List<String> batchStatements = new ArrayList<String>();
-		// Isolate candidates — the citations of one compound sentence under clause-scope, whose clause
-		// statements overlap — are each verified in their OWN single-pair call so the LLM cannot couple
-		// their verdicts (see this class's Tier-2 javadoc).
+		// Isolate candidates — the citations of ONE sentence whose per-citation statements overlap: a
+		// clause-scoped compound (prefixes overlapping by length) or an enumeration in either mode
+		// (items sharing a preamble). Each is verified in its OWN single-pair call so the LLM cannot
+		// couple their verdicts (see this class's Tier-2 javadoc).
 		List<Integer> isolatePositions = new ArrayList<Integer>();
 		List<String> isolateSources = new ArrayList<String>();
 		List<String> isolateStatements = new ArrayList<String>();
@@ -389,9 +392,10 @@ public class CitationGroundingVerifier {
 						? batchVerdicts.get(k) : null;
 			}
 		}
-		// Isolate citations (one compound sentence's, under clause-scope) get a single-pair call each,
-		// so the batched LLM cannot couple their overlapping clause statements into each other's
-		// verdicts. Same null-degrades-to-Tier-1 contract as the batch.
+		// Isolate citations (one sentence's overlapping fragments — a clause-scoped compound, or an
+		// enumeration in either mode) get a single-pair call each, so the batched LLM cannot couple
+		// their statements into each other's verdicts. Same null-degrades-to-Tier-1 contract as the
+		// batch.
 		for (int k = 0; k < isolatePositions.size(); k++) {
 			List<Boolean> verdict = safeEntailsBatch(Collections.singletonList(isolateSources.get(k)),
 					Collections.singletonList(isolateStatements.get(k)));
@@ -448,7 +452,8 @@ public class CitationGroundingVerifier {
 	 * Claim selection for entailment-enabled grounding: identifies the claim sentence Tier-2 will
 	 * fact-check for one cited index, running Tier-1 embeds ONLY when the choice is ambiguous.
 	 * The common case — exactly one candidate sentence (a list-style answer where each line cites
-	 * its own record, or a clause under clause-scope) — selects deterministically with no
+	 * its own record, a clause under clause-scope, or an enumeration item in either mode) — selects
+	 * deterministically with no
 	 * embedding work, and the cosine verdict is DEFERRED ({@link Tier1Result#deferred}): it is
 	 * computed lazily by {@link #cosineVerdict} only if Tier-2 fails to produce a verdict.
 	 * With several candidates the eager cosine argmax runs exactly as {@link #verdictTier1}
@@ -534,8 +539,8 @@ public class CitationGroundingVerifier {
 
 	/**
 	 * Computes the Tier-1 cosine verdict for one cited index and identifies the single best-matching
-	 * claim sentence — a clause when grounding is clause-scoped — used as the Tier-2 entailment
-	 * target. Never throws: an embedding failure yields a {@code null} verdict.
+	 * claim sentence — a per-citation fragment wherever the sentence was split, by clause scope or by
+	 * enumeration — used as the Tier-2 entailment target. Never throws: an embedding failure yields a {@code null} verdict.
 	 */
 	private Tier1Result verdictTier1(int index, Map<Integer, String> textByIndex,
 			List<Sentence> sentences, double floor,
@@ -634,8 +639,9 @@ public class CitationGroundingVerifier {
 
 		final String recordText;
 
-		/** True when {@link #bestSentence} is a clause from a multi-citation sentence under
-		 *  clause-scope, so it must be Tier-2 verified in its own call rather than co-batched. */
+		/** True when {@link #bestSentence} is a per-citation fragment of a multi-citation sentence —
+		 *  a clause under clause-scope, or an enumeration item in either mode — so it must be Tier-2
+		 *  verified in its own call rather than co-batched. */
 		final boolean isolate;
 
 		/** Index of {@link #bestSentence} in the verify-call's sentence list, or -1 when there is
@@ -760,6 +766,18 @@ public class CitationGroundingVerifier {
 	 * nothing.
 	 * Each returned item is flagged {@link Sentence#isolate}: the items share a preamble, so
 	 * co-batching them would let the not-per-pair-independent LLM couple their verdicts.
+	 *
+	 * <p><strong>That isolation has a measured cost, and it is paid deliberately.</strong> N items
+	 * become N single-pair Tier-2 calls where the whole sentence was one batched call. Measured
+	 * 2026-08-18 on the streaming endpoint of a local 3.7.1 standalone (gemma-4-E4B-it-Q4_K_M, same
+	 * patient and session, from the {@code [timing] searchStreaming groundMs} field): a three-item
+	 * enumeration grounded in 2387 ms against 1335 ms for a one-pair batched answer, so roughly half a
+	 * second per additional citation. The existing
+	 * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} cap bounds the worst case. Do not
+	 * "optimise" this back into the shared batch: coupled verdicts flip a correct citation to
+	 * not-grounded SILENTLY, which is the failure class this method exists to remove, and a slower
+	 * honest verdict beats a fast wrong one. Note what is NOT claimed — no before/after of the same
+	 * question was measured, because the comparison above is between two shapes within one build.
 	 */
 	private static List<Sentence> splitEnumeration(Sentence sentence) {
 		if (sentence.citedIndexes.size() <= 1) {
@@ -796,7 +814,10 @@ public class CitationGroundingVerifier {
 	/**
 	 * Clause-scoped variant of {@link #splitIntoCitedSentences}: a sentence citing MORE than one
 	 * record is split so each citation is checked against the answer text up to and including its
-	 * own {@code [N]} marker, not the whole compound sentence. This grounds a citation that supports
+	 * own {@code [N]} marker, not the whole compound sentence. An ENUMERATING sentence never reaches
+	 * this rule — {@link #splitIntoCitedSentences} has already split it per item, in either mode, so
+	 * every fragment arriving here cites exactly one record and passes through unchanged (#278). The
+	 * cumulative prefix below therefore governs the compound sentences that are NOT enumerations. This grounds a citation that supports
 	 * its own clause but not a later clause cited by a different record — e.g. "Hearing Loss was
 	 * noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an
 	 * active condition) does not support the "provisional diagnosis" clause that [91] backs. The
@@ -828,11 +849,13 @@ public class CitationGroundingVerifier {
 	}
 
 	/**
-	 * An answer sentence (or, under clause-scoped grounding, a clause) and the citation indices it is
-	 * scored against. For a whole sentence (the default path) {@link #citedIndexes} is exactly the
-	 * {@code [N]} markers in {@link #text}; for a clause-scoped fragment the text may contain earlier
-	 * markers while {@code citedIndexes} holds only the one citation the clause is attributed to — so
-	 * do NOT re-derive citedIndexes by re-parsing the text.
+	 * An answer sentence, or a per-citation fragment of one — a clause under clause-scoped grounding,
+	 * or one item of an enumerating sentence in either mode — and the citation indices it is scored
+	 * against. For a whole sentence {@link #citedIndexes} is exactly the {@code [N]} markers in
+	 * {@link #text}; for a clause-scoped fragment the text may contain EARLIER markers while
+	 * {@code citedIndexes} holds only the one citation it is attributed to. So do NOT re-derive
+	 * citedIndexes by re-parsing the text — that an enumeration item happens to carry exactly its own
+	 * marker does not make re-parsing safe, because the clause-scoped fragment beside it does not.
 	 */
 	static class Sentence {
 
@@ -841,11 +864,14 @@ public class CitationGroundingVerifier {
 		final java.util.Set<Integer> citedIndexes = new java.util.HashSet<Integer>();
 
 		/**
-		 * True when this is a clause split from a MULTI-citation sentence, so its citation must be
-		 * Tier-2 verified ALONE — not co-batched with the sentence's other citations, whose
-		 * overlapping clause-scoped statements would otherwise couple the (not per-pair-independent)
-		 * batched LLM verdict. False for a whole sentence: sentence-scope, or a single-citation
-		 * sentence under clause-scope.
+		 * True when this is a per-citation FRAGMENT of a multi-citation sentence, so its citation must
+		 * be Tier-2 verified ALONE — not co-batched with the sentence's other citations, whose
+		 * statements overlap (they share text) and would otherwise couple the (not
+		 * per-pair-independent) batched LLM verdict. Two splitters produce such fragments: clause
+		 * scope, whose cumulative prefixes overlap by length, and enumeration splitting, whose items
+		 * share a preamble — the latter in EITHER mode, so this is not a clause-scope-only flag.
+		 * False for a whole sentence, which is what both modes keep for a single-citation sentence and
+		 * what sentence-scope keeps for a non-enumerating compound.
 		 */
 		final boolean isolate;
 
@@ -853,9 +879,10 @@ public class CitationGroundingVerifier {
 			this(text, java.util.Collections.<Integer> emptySet(), false);
 		}
 
-		/** Clause constructor: text, an explicit cited-index set, and whether the clause must be
-		 *  Tier-2 verified in isolation (used by clause-scoped splitting, where a clause's text may
-		 *  contain earlier markers but is attributed to one citation only). */
+		/** Fragment constructor: text, an explicit cited-index set, and whether the fragment must be
+		 *  Tier-2 verified in isolation. Used by BOTH splitters — clause-scoped splitting, whose text
+		 *  may contain earlier markers while being attributed to one citation only, and enumeration
+		 *  splitting, whose text is a preamble plus one item. */
 		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate) {
 			this.text = text;
 			this.citedIndexes.addAll(citedIndexes);

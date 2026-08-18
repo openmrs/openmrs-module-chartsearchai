@@ -800,6 +800,21 @@ public class CitationGroundingVerifier {
 	 * without it.</li>
 	 * </ul>
 	 *
+	 * <p><strong>Family and relative terms were measured and REJECTED — do not re-propose them.</strong>
+	 * They look obviously right, because the family-history flip is the canonical case Tier-2 exists for
+	 * and a verbless clause like "mother with asthma [1] and diabetes [2]" really does slip through this
+	 * net, costing item 2 the qualifier. Adding {@code mother|father|sibling|child|family|maternal…}
+	 * refused <strong>13</strong> real names across the two corpora: 6 on {@code child} alone
+	 * ({@code Child Aspirin}, {@code Aspirin Child Chewable}, {@code Well child visit, newborn},
+	 * {@code pfizer-biontech covid-19 vaccine (child)} …), and the rest on names such as
+	 * {@code Family history of hypertension}, {@code Sibling rivalry disorder} and {@code Malaria in
+	 * mother complicating pregnancy}. That is not merely a cost — it is aimed at the wrong position. An
+	 * item that CARRIES a family qualifier is safe to split, because its own claim keeps it; the danger
+	 * is a LATER item that lacks one. So the terms refuse exactly the lists they were meant to protect
+	 * and leave the case they were meant to catch, whose item-1 text they cannot be keyed on without
+	 * knowing which position it occupies. The verbless-clause residual is therefore accepted and stated
+	 * rather than papered over.
+	 *
 	 * <p>With {@code i} and {@code patient} dropped, <strong>0</strong> of either corpus matches (93 and
 	 * 24 refusals respectively, all by length). The earlier form of this comment — asserting that no
 	 * drug, condition or allergen name carries a member as a whole token — was an over-claim twice

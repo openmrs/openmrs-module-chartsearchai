@@ -481,8 +481,11 @@ public class ChartSearchAiConstants {
 	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS = true;
 
 	/** Cross-check the drugs in play — those the question asks about and those the answer names on its own
-	 *  authority — against the patient's allergies/conditions for contraindications, and, on every question,
-	 *  the patient's own active orders against those same records (issue #143). */
+	 *  authority — against the patient's allergies/conditions for contraindications, and the patient's own
+	 *  active orders against those same records (issue #143), scoped to what the response is about:
+	 *  either the drug or the recorded finding must be named by the question, the answer or a cited
+	 *  record, with a medication-, allergy- or condition-domain question keeping the corresponding
+	 *  list in scope. */
 	public static final String GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS =
 			"chartsearchai.drugSafety.warnOnContraindications";
 

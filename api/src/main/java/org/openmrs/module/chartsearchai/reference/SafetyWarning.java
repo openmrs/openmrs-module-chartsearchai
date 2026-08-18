@@ -51,7 +51,11 @@ public class SafetyWarning {
 	 * allergy to the very drug the clinician asked about, where the answer may never write the drug's
 	 * name at all (issue #135). The second exists because the in-play framing could not ask "is the
 	 * patient allergic to something they are TAKING?" — a prescribing error the chart already contains,
-	 * which no wording of a question or an answer should be able to hide (issue #143). So a
+	 * which the ANSWER's wording alone must not be able to hide (issue #143): a prescribed drug appears
+	 * in a cited {@code drug_order} record, so echo scoping read the answer's mention of it as a
+	 * recitation. What that join is bounded by instead is the whole response — question, answer and
+	 * cited records, either side of the chip counting — because this module annotates answers and an
+	 * annotation owing nothing to what was asked is an alert it has no machinery to carry. So a
 	 * contraindication chip does NOT imply that anything proposed the drug; it may be reporting a
 	 * medication the patient is already on. See {@code DrugSafetyValidator}.
 	 */

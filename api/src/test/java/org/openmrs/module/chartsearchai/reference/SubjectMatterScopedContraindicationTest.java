@@ -41,8 +41,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * the case issue #143 was really built for (a prescribed drug named only by a cited
  * {@code drug_order} record, which issue #105's echo rule removes from the in-play set), and the
  * FINDING side keeps a chip whose drug is never mentioned but whose allergy or condition is what the
- * response is about. A question in the medication or allergy domain widens its own side wholesale,
- * because there the patient's list IS the topic even when no individual name is written out.
+ * response is about. A question in the medication, allergy or condition domain widens its own side
+ * wholesale, because there the patient's list IS the topic even when no individual name is written
+ * out.
  *
  * <p><b>What this deliberately gives up</b>, recorded so it is not rediscovered as a bug: a
  * prescribing error nobody ever asks a drug-shaped question about is no longer announced. That is
@@ -54,10 +55,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p>Every case drives the real {@code DrugSafetyValidator.validate} with real querystore-shaped chart
  * records, over the real bundled curated dataset ({@code sourceFormat=json}, whose ibuprofen entry
  * carries both an identity-resolvable name and curated allergy and condition rules) — except the two
- * finding-side cases, which need the bundled DDInter sample plus the curated cross-reactivity groups
- * ({@link #nsaidValidator()}) because the curated four carry no two entries the data relates, and a
- * finding-side case is only a finding-side case where the allergen and the order are different
- * substances.
+ * CROSS-REACTIVITY cases ({@link #anAllergyTheResponseCitesReachesADrugItCrossReactsWith} and its
+ * control), which need the bundled DDInter sample plus the curated cross-reactivity groups
+ * ({@link #nsaidValidator()}) because the curated four carry no two entries the data relates, and only
+ * where the allergen and the order are DIFFERENT substances does the finding side run on its own — with
+ * one substance the drug side is satisfied by the same words and the leg never executes.
  */
 public class SubjectMatterScopedContraindicationTest {
 
@@ -175,9 +177,15 @@ public class SubjectMatterScopedContraindicationTest {
 		// the drug side alone would lose this, which is why the rule is two-sided rather than an echo test.
 		// The ANSWER is the only carrier: it names the ulcer and cites the tumour record, so the ulcer
 		// record sitting uncited in the same chart cannot be what put the chip in scope.
+		//
+		// The QUESTION is deliberately cue-free — no medication, allergy or CONDITION cue — because a
+		// conditions-domain question ("what is on her problem list?", which this case used to ask) is
+		// itself a widening since aConditionsQuestionPutsHerRecordedConditionsInSubjectMatter below, and
+		// it would satisfy the gate on its own. This case would still pass, for a reason that is not the
+		// one it is named for, and the answer-carrier leg would go unpinned.
 		List<SafetyWarning> warnings = validator().validate(
 				"Her problems include Peptic Ulcer Disease, and a tumour of the tongue [1].",
-				"What is on her problem list?",
+				"What should I know about her?",
 				ctx(null, DrugReferenceTestSupport.set("peptic ulcer disease")),
 				chart(TUMOUR_RECORD, ORDER_RECORD, ULCER_RECORD).getMappings());
 
@@ -263,6 +271,43 @@ public class SubjectMatterScopedContraindicationTest {
 		// the records it cited. Every test SubjectMatter applies is monotone in those texts, so a
 		// finding can appear beside the answer that was not in the prompt — never the reverse, which is
 		// the direction that would assert a record nothing chips.
+		//
+		// The arrangement has to leave the pre-answer pass with something to promote or the comparison
+		// below is over an empty list and pins nothing — which is what a first version of this case did,
+		// asserting 0 pre-answer findings and then iterating them. A MEDICATION-domain question is what
+		// gives it a finding with no answer yet, and it is also the leg most likely to break monotonicity,
+		// since the drug side is satisfied by the question-derived widening rather than by a text the
+		// chips pass would only ever add to. The answer is about her tumour, so it names neither side and
+		// contributes nothing of its own: the chip beside it has to come from the same widening.
+		PatientClinicalContext context = ctx(DrugReferenceTestSupport.set("ibuprofen"), null);
+		String question = "What are her current medications?";
+
+		List<SafetyWarning> preAnswer = validator().validate("", question, context, null);
+		List<SafetyWarning> chips = validator().validate(
+				"Yes — the patient has a Malignant tumor of base of tongue [1].", question, context,
+				chart(TUMOUR_RECORD, ORDER_RECORD).getMappings());
+
+		// The anti-vacuity guard, asserted rather than assumed: without it a later change that emptied
+		// the pre-answer pass would turn the loop below back into a no-op and this case would stay green
+		// while checking nothing at all.
+		assertEquals(1, contraindications(preAnswer).size(),
+				"the pre-answer pass must promote something here or the comparison below is vacuous, was: "
+						+ preAnswer);
+		for (SafetyWarning finding : contraindications(preAnswer)) {
+			assertTrue(detailsOf(chips).contains(finding.getDetail()),
+					"every pre-answer finding must have a chip beside the answer, missing: "
+							+ finding.getDetail() + ", chips were: " + chips);
+		}
+	}
+
+	@Test
+	public void theQuestionAloneCanLeaveThePreAnswerPassWithNothingToPromote() {
+		// The other side of the pair above, and the reason the subset is a subset rather than an
+		// equality: this question names neither side and carries no widening cue, so the prompt gets no
+		// finding, while the answer citing the drug_order record puts the drug in subject matter and the
+		// chip appears beside the answer. A finding in the chips that was not in the prompt is the
+		// direction that has always been allowed — a drug only the ANSWER names cannot be known before
+		// there is an answer.
 		PatientClinicalContext context = ctx(DrugReferenceTestSupport.set("ibuprofen"), null);
 		String question = "What is she taking?";
 
@@ -275,11 +320,6 @@ public class SubjectMatterScopedContraindicationTest {
 				"the question alone names neither side here, was: " + preAnswer);
 		assertEquals(1, contraindications(chips).size(),
 				"the answer citing the order record does, was: " + chips);
-		for (SafetyWarning finding : contraindications(preAnswer)) {
-			assertTrue(detailsOf(chips).contains(finding.getDetail()),
-					"every pre-answer finding must have a chip beside the answer, missing: "
-							+ finding.getDetail());
-		}
 	}
 
 	@Test
@@ -304,5 +344,42 @@ public class SubjectMatterScopedContraindicationTest {
 
 		assertEquals(1, contraindications(warnings).size(),
 				"an allergy question keeps her own allergy records in scope, was: " + warnings);
+	}
+
+	@Test
+	public void aConditionsQuestionPutsHerRecordedConditionsInSubjectMatter() {
+		// The third widening, and the one the first version of this change left out. A contraindication
+		// relates a drug to a recorded finding, and a recorded finding is an allergy OR a condition, so
+		// the argument the other two rest on — a question about that LIST makes the list the topic even
+		// where the prose writes no individual name — reads identically here. Left out, the gate was
+		// asymmetric for no reason anyone could state: "does she have any allergies?" promoted a finding
+		// into the prompt and "what conditions does she have?" did not, though the ulcer rule is as much
+		// the topic in the second as the allergy is in the first.
+		//
+		// The empty answer is the pre-answer production shape (DrugReferenceInjector.preAnswerFindings),
+		// which is where the asymmetry actually bit: with an answer, an enumeration usually spells the
+		// condition out and containsToken reaches it without any widening at all.
+		List<SafetyWarning> warnings = validator().validate("", "What conditions does she have?",
+				ctx(null, DrugReferenceTestSupport.set("peptic ulcer disease")), null);
+
+		assertEquals(1, contraindications(warnings).size(),
+				"a conditions question keeps her own condition records in scope, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", "active condition"),
+				"worded as the in-play arm words it, was: " + warnings);
+	}
+
+	@Test
+	public void aConditionsQuestionWidensConditionsAndNotHerAllergiesAsWell() {
+		// The widening is per LIST, not "the question is about her chart". An allergy rule matched on
+		// her allergy list is not what a conditions question asked about, so it stays out — the same
+		// separation aFindingTheResponseIsNotAboutStaysSilent holds at token granularity, held here
+		// between the widenings themselves. Without it the three collapse into one "asks about her
+		// chart", and a question naming any record domain would carry chips about every other.
+		List<SafetyWarning> warnings = validator().validate("", "What conditions does she have?",
+				ctx(DrugReferenceTestSupport.set("ibuprofen"), null), null);
+
+		assertEquals(0, contraindications(warnings).size(),
+				"a conditions question must not reach her allergy records, was: " + warnings);
 	}
 }

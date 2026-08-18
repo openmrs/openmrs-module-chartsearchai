@@ -172,6 +172,20 @@ public class QueryScopeRouterTest {
 	}
 
 	@Test
+	public void asksAboutConditions_coversTheProblemListsOwnVocabulary() {
+		assertTrue(QueryScopeRouter.asksAboutConditions("What conditions does she have?"));
+		assertTrue(QueryScopeRouter.asksAboutConditions("what was she diagnosed with?"));
+		assertTrue(QueryScopeRouter.asksAboutConditions("what is on her problem list?"));
+		assertFalse(QueryScopeRouter.asksAboutConditions(null));
+
+		// LOAD-BEARING, and the counterpart of the bupivacaine case above: the reported off-topic
+		// question names a condition outright and carries none of the CONDITIONS cues, so this predicate
+		// must not be mistaken for "is this question about a clinical finding". It is the widening
+		// signal for the LIST, and a question about one named condition is answered by the token match.
+		assertFalse(QueryScopeRouter.asksAboutConditions("Does she have cancer?"));
+	}
+
+	@Test
 	public void matchedIntents_shouldDetectOrdersIntent() {
 		assertEquals(EnumSet.of(Intent.ORDERS),
 				QueryScopeRouter.matchedIntents("What things have been ordered for this patient over the past 6 months?"));

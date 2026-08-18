@@ -11,9 +11,9 @@ path) swaps in a small custom knowledge base.
 > ([#114](https://github.com/openmrs/openmrs-module-chartsearchai/issues/114)), the
 > interaction screen ([#113](https://github.com/openmrs/openmrs-module-chartsearchai/issues/113))
 > and the active-order contraindication join
-> ([#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143), which fires
-> on this seeded patient — see the note above the cheat-sheet). The README's GP table is the
-> authoritative list of what the feature does; this document is only the demo data.
+> ([#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143), which can fire
+> on this seeded patient, on the questions the note above the cheat-sheet names). The README's GP
+> table is the authoritative list of what the feature does; this document is only the demo data.
 
 For the feature itself — config reference, design, API/SSE shape — see the
 [README "Drug-reference injection & safety validation"](../README.md#drug-reference-injection--safety-validation)
@@ -419,14 +419,18 @@ entry dataset).
 
 Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless noted.
 
-> **Since [#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143) a query does
-> NOT surface only the warnings for the drug it names.** Every question additionally has this
-> patient's own active orders checked against her own allergies and conditions, so every row below
-> that runs on Margaret also carries chips about drugs the query never mentions. (The last row is
-> scoped to any patient; on a stock demo patient, who has neither an allergy nor a condition, the
-> arm returns before it looks at any order.) With the bundled KB and **Steps 1-3 run**,
-> two of her orders resolve to an entry her own records contraindicate, and they contribute three
-> chips:
+> **Since [#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143) a query need
+> NOT surface only the warnings for the drug it names.** This patient's own active orders are also
+> checked against her own allergies and conditions, so a row below can carry chips about drugs the
+> query never mentions. **Which rows, since the subject-matter scoping of that arm, depends on the
+> question**: the chips appear where either side of one is part of what the response is about — the
+> drug or the recorded finding named by the question, the answer or a record the answer cited — and a
+> question in the medication, allergy or condition domain keeps the corresponding list in scope
+> wholesale. Off-topic questions get none of them, which is the whole point of the scoping; see the
+> per-row note under the table. (The last row is scoped to any patient; on a stock demo patient, who
+> has neither an allergy nor a condition, the arm returns before it looks at any order.) With the
+> bundled KB and **Steps 1-3 run**, two of her orders resolve to an entry her own records
+> contraindicate, and they can contribute three chips:
 >
 > - **Amoxicillin** (`DKB-ORD-6`) — its curated `penicillin` rule against her seeded penicillin-class
 >   allergy (`162297…`, which the table above calls *Penicillins* and the current demo DB names
@@ -435,11 +439,20 @@ Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless not
 > - **Gentamicin** (`DKB-ORD-8`) — twice, off her non-coded *Aminoglycoside* allergy and her
 >   *Significant renal impairment*.
 >
-> All three are EXTRA only on a query that names neither drug. A query that does name one of them puts
-> that entry in play, and the arm skips an entry already in play, so the chip comes from the
-> drug-in-play loop instead and the row's own stated expectation already covers it — the amoxicillin
-> row gains the two Gentamicin chips and no second penicillin chip, and the gentamicin row gains only
-> the Amoxicillin one.
+> A query that NAMES one of them puts that entry in play, and the arm skips an entry already in play,
+> so the chip comes from the drug-in-play loop instead and the row's own stated expectation already
+> covers it — the amoxicillin row gains the two Gentamicin chips (its question is not about
+> gentamicin, but the *aminoglycoside* and *renal impairment* findings are only in scope where the
+> response is about them, so expect these only when the answer or a cited record says so) and no
+> second penicillin chip.
+>
+> **The other rows no longer carry them by default.** *Can this patient take paracetamol?*, *Can this
+> patient take ibuprofen?* and *Is naproxen safe for this patient?* carry no medication, allergy or
+> condition cue and name neither contraindicated order, so unless the model's answer or a cited record
+> happens to name one of those drugs or findings, the three extra chips are absent. That is the
+> scoping working, not a broken deployment. To demonstrate the arm deliberately, ask a
+> medication-domain question that names no drug — *"What are her current medications?"* — which keeps
+> her whole active-order list in scope and brings all three back.
 >
 > Her Warfarin, Aspirin, Methotrexate, Furosemide, Ampicillin and Amikacin orders resolve to no
 > bundled entry, so they add nothing. Note **how** Gentamicin resolves: `DKB-ORD-8` is on
@@ -455,7 +468,11 @@ Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless not
 > arm contributes nothing at all.
 >
 > That is the point of the fix: an allergy to a drug she is already taking is a prescribing error the
-> chart already contains, and no wording of a question should hide it.
+> chart already contains, and the ANSWER's wording alone should not hide it — a prescribed drug turns
+> up in a cited `drug_order` record, which is exactly what echo scoping was reading as a recitation.
+> What the module deliberately no longer does is announce it on a response about something else; that
+> finding needs a surface with acknowledgement
+> ([#280](https://github.com/openmrs/openmrs-module-chartsearchai/issues/280)).
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|

@@ -33,12 +33,20 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p>What the switch means matters here more than for the arms it already gated. Those fire only for a
  * drug the question or the answer names, so an operator who turns them off is declining an answer-scoped
- * annotation. This arm fires on EVERY question about an allergy-bearing patient on a related drug, and
- * every chip it raises is also injected into the prompt as a citable finding (issue #110) — so an arm
- * that ignored the flag would keep writing contraindications into the context window of a deployment
- * that had switched contraindication reporting off, and the answer could assert one with no chip beside
- * it. Both directions are asserted, because a 0-chip assertion under a disabled flag proves nothing
- * unless the same arrangement provably chips when it is enabled.
+ * annotation. This arm takes its SUBJECTS from the chart rather than from any wording — it can chip
+ * about a prescription nothing in the response names individually — and every chip it raises is also
+ * injected into the prompt as a citable finding (issue #110), so an arm that ignored the flag would keep
+ * writing contraindications into the context window of a deployment that had switched contraindication
+ * reporting off, and the answer could assert one with no chip beside it. Both directions are asserted,
+ * because a 0-chip assertion under a disabled flag proves nothing unless the same arrangement provably
+ * chips when it is enabled.
+ *
+ * <p><b>The question in the fixture below is load-bearing and reads as if it were incidental.</b> This
+ * class used to say the arm "fires on EVERY question", which was true when it was written and is not
+ * since {@code DrugSafetyValidator.SubjectMatter} bounded the arm to what the response is about. What
+ * keeps the enabled case chipping is that "What are her current medications?" is a medication-domain
+ * question, so her whole active-order list is subject matter; swap it for a cue-free one and the
+ * enabled assertion goes red for a reason that has nothing to do with the toggle.
  */
 public class ContraindicationToggleContextTest extends BaseModuleContextSensitiveTest {
 

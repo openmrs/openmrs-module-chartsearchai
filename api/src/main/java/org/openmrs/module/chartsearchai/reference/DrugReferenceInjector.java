@@ -163,14 +163,33 @@ public class DrugReferenceInjector {
 	 * The first cannot differ between this pre-answer pass and the post-answer chips pass. The second
 	 * CAN, and only in the safe direction: this pass calls {@code validate} with an EMPTY answer, so
 	 * its subject matter is the question alone, while the chips pass adds the answer and the records it
-	 * cited — a superset of the same texts, with the two question-derived widenings identical either
+	 * cited — a superset of the same texts, with the three question-derived widenings identical either
 	 * way. Every test {@code SubjectMatter} applies is monotone in those texts, so the findings of this
 	 * pass are a SUBSET of the chips beside the answer. That is the direction this property exists for:
 	 * a finding in the prompt is never asserted without a chip beside the answer. The converse — a chip
 	 * whose record was not in the prompt — the drug-in-play arm above has always allowed, since a drug
-	 * only the ANSWER names cannot be known before there is an answer. (The #143 arm skips a drug already in play, so a question naming one of the patient's
-	 * own orders moves that chip from this arm to the drug-in-play loop rather than adding or dropping
-	 * one — the same chips, from a different arm.)
+	 * only the ANSWER names cannot be known before there is an answer. Pinned by
+	 * {@code SubjectMatterScopedContraindicationTest
+	 * .theInjectorsPreAnswerFindingsAreASubsetOfTheChipsBesideTheAnswer}, over an arrangement whose
+	 * pre-answer set is deliberately NON-empty — the first version of that case asserted zero findings
+	 * and then iterated them, so it pinned nothing. (The #143 arm skips a drug already in play, so a
+	 * question naming one of the patient's own orders moves that chip from this arm to the drug-in-play
+	 * loop rather than adding or dropping one — the same chips, from a different arm.)
+	 *
+	 * <p><b>A THIRD channel carries this patient's own contraindication findings into the prompt, and
+	 * it is neither of those.</b> {@link #contraindicationSections} marks a rendered clause "Recorded
+	 * for this patient" on an injected {@code drug_reference} record, off
+	 * {@code DrugSafetyValidator.recordedContraindicationKind} and nothing else. That method's javadoc
+	 * used to call the marking exact — "which is exactly when the ledger raises a chip for that key" —
+	 * and the order leg no longer satisfies it: {@link #matchingEntries} admits an active order that
+	 * merely SHARES a class with a question-named drug, such an entry is not in the drugs-in-play set,
+	 * so its chip goes through {@code SubjectMatter} while the clause is marked regardless. The
+	 * statement the record makes is still true (the chart does record it), and the residue is bounded:
+	 * no two entries of the bundled curated file share a level-4 subgroup or the shipped NSAID group,
+	 * and the {@code ddinter} and {@code atc} sources publish no contraindication rules at all, so it
+	 * takes a deployment-authored dataset relating two entries. Stated rather than left to be
+	 * rediscovered, because it is the one place a patient-specific contraindication can still reach the
+	 * prompt with no chip beside it, and a wider curated file is the documented expansion path.
 	 *
 	 * <p>The list is empty whenever the deterministic layer finds nothing, so a question that nothing
 	 * bears on gains no record and its abstention survives by construction rather than by prompt
@@ -1799,9 +1818,20 @@ public class DrugReferenceInjector {
 	 *         active gastrointestinal bleeding", with no chip beside it. The predicate is
 	 *         {@link DrugSafetyValidator#recordedContraindicationKind}, the chip arm's own, for the same
 	 *         reason the KEY here is the chip ledger's own; and a clause is marked when ANY rule folded
-	 *         into it matched, which is exactly when the ledger raises a chip for that key. Selecting
+	 *         into it matched, which is when the ledger raises a chip for that key. Selecting
 	 *         from the clauses in this walk rather than recomputing them afterwards is what keeps the
 	 *         marked strings a subset of the rendered ones by construction.
+	 *
+	 *         <p><b>"When", and no longer "exactly when".</b> Since the active-order contraindication
+	 *         arm became subject-matter scoped, a record rendered for an order the response is NOT about
+	 *         can mark a clause the ledger raises no chip for: {@link #matchingEntries} admits an order
+	 *         that merely shares a class with a question-named drug, and such an entry is not in the
+	 *         drugs-in-play set, so its chip goes through that scoping while this marking does not. The
+	 *         marking is a statement about the CHART and stays true either way, which is why it is not
+	 *         gated here as well — this record must not report an absence it cannot substantiate
+	 *         (issue #208 item 2), and scoping it would make it do exactly that. What the residue costs
+	 *         is stated at {@link #preAnswerFindings}, where the prompt-versus-chip channels are
+	 *         enumerated; it is unreachable on any bundled dataset.
 	 */
 	private static ContraindicationSections contraindicationSections(DrugReference ref,
 			PatientClinicalContext context) {

@@ -484,7 +484,8 @@ public class ChartSearchAiConstants {
 	 *  authority — against the patient's allergies/conditions for contraindications, and the patient's own
 	 *  active orders against those same records (issue #143), scoped to what the response is about:
 	 *  either the drug or the recorded finding must be named by the question, the answer or a cited
-	 *  record, with a medication- or allergy-domain question keeping the corresponding list in scope. */
+	 *  record, with a medication-, allergy- or condition-domain question keeping the corresponding
+	 *  list in scope. */
 	public static final String GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS =
 			"chartsearchai.drugSafety.warnOnContraindications";
 

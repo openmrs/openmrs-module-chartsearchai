@@ -687,11 +687,23 @@ public class DrugSafetyValidator {
 	 *         enumeration answer), and what bounds the residue is that a proposal-worthy X is
 	 *         either question-named (always validated) or actively ordered — and an actively-ordered
 	 *         X is checked against the patient's allergy and condition records by
-	 *         {@link #addActiveOrderContraindications} whatever the answer's wording, so the
-	 *         exemption can no longer withhold a contraindication for a drug the patient is on.
+	 *         {@link #addActiveOrderContraindications}, so the exemption can no longer withhold a
+	 *         contraindication for a drug the patient is on.
 	 *
-	 *         <p>That second half USED to be asserted here of "the order-driven arms", and was false
-	 *         (issue #143). Counted over this class, those arms — {@link #addInteractionWarnings},
+	 *         <p><b>Why that still holds now the arm is scoped.</b> It used to read "whatever the
+	 *         answer's wording", which {@link SubjectMatter} falsified: that arm no longer runs on a
+	 *         response it has nothing to say about. The bound survives, and by a tighter argument than
+	 *         the wording one it replaces. The corpus this method asks about is {@code citedTextsLower},
+	 *         and {@code validate} hands that same list to the {@code SubjectMatter} constructor, which
+	 *         only ever ADDS the question and the answer on top of it. So this returning true implies
+	 *         {@code SubjectMatter.names(ref)}: whenever the exemption withholds a drug, the very record
+	 *         that triggered the exemption has already put that drug in subject matter, and the arm
+	 *         checks it. The two are not merely usually in step, they are one containment — which is
+	 *         also what a later change has to preserve, since narrowing what the arm reads to less than
+	 *         the cited records would reopen issue #143 with nothing going red.
+	 *
+	 *         <p>The second half of the bound USED to be asserted here of "the order-driven arms", and
+	 *         was false (issue #143). Counted over this class, those arms — {@link #addInteractionWarnings},
 	 *         {@link #addQuestionPairInteractions}, {@link #addActiveOrderPairInteractions} — read the
 	 *         allergy list ZERO times, because what they check is INTERACTIONS; the contraindication
 	 *         arms read allergies but only ever about the drug in play. Nothing joined the two, so a
@@ -744,13 +756,22 @@ public class DrugSafetyValidator {
 	 * it would lose issue #143's own case, a prescribed drug named only by the cited {@code drug_order}
 	 * record that issue #105's echo rule keeps out of the in-play set.
 	 *
-	 * <p><b>The two widenings are signals, never gates.</b> A medication-domain question makes the
-	 * whole active-order list subject matter and an allergy-domain question makes the recorded
-	 * allergies subject matter, because there the LIST is the topic even where the prose writes no
-	 * individual name. Both go through {@link QueryScopeRouter}'s own classification rather than a
-	 * second vocabulary here. Neither can narrow anything: a question naming a drug outright carries
-	 * no cue word at all ("Can I give her bupivacaine?") and is answered by the drug-in-play arm
-	 * before this one runs.
+	 * <p><b>The three widenings are signals, never gates.</b> A medication-domain question makes the
+	 * whole active-order list subject matter, and an allergy- or conditions-domain question makes the
+	 * corresponding recorded findings subject matter, because there the LIST is the topic even where the
+	 * prose writes no individual name. All three go through {@link QueryScopeRouter}'s own
+	 * classification rather than a second vocabulary here. None can narrow anything: a question naming a
+	 * drug outright carries no cue word at all ("Can I give her bupivacaine?") and is answered by the
+	 * drug-in-play arm before this one runs.
+	 *
+	 * <p><b>Three and not two, and one per LIST.</b> A contraindication's recorded side is an allergy
+	 * OR a condition, so the argument above reads identically for both and leaving conditions out made
+	 * the gate asymmetric for a reason nobody could state: "does she have any allergies?" promoted a
+	 * finding into the prompt and "what conditions does she have?" did not. Where that bit is the
+	 * pre-answer pass, which has no answer text at all — with an answer, an enumeration usually spells
+	 * the condition out and {@link PatientClinicalContext#containsToken} reaches it unaided. They stay
+	 * three separate signals rather than one "asks about her chart", because a conditions question that
+	 * also put her allergy records in scope would be the reported defect again one level up.
 	 */
 	private static final class SubjectMatter {
 
@@ -760,6 +781,8 @@ public class DrugSafetyValidator {
 		private final boolean coversActiveOrders;
 
 		private final boolean coversRecordedAllergies;
+
+		private final boolean coversRecordedConditions;
 
 		private SubjectMatter(String question, String answer, List<String> citedTextsLower) {
 			List<String> collected = new ArrayList<String>();
@@ -773,6 +796,7 @@ public class DrugSafetyValidator {
 			this.texts = collected;
 			this.coversActiveOrders = QueryScopeRouter.asksAboutMedications(question);
 			this.coversRecordedAllergies = QueryScopeRouter.asksAboutAllergies(question);
+			this.coversRecordedConditions = QueryScopeRouter.asksAboutConditions(question);
 		}
 
 		/** Whether an active order is what this response is about. */
@@ -786,9 +810,18 @@ public class DrugSafetyValidator {
 		 * condition while a rule fires on another is the reported defect again at token granularity.
 		 * Through {@link PatientClinicalContext#containsToken}, the matcher that decided the rule
 		 * matched at all, so the two cannot drift.
+		 *
+		 * <p>The domain widening is asked of the rule's own TYPE for the same reason: a rule is put to
+		 * one of the two chart lists ({@link #recordedContraindicationKind}) and only the question that
+		 * covers THAT list has widened it. Both legs read the same two predicates the matcher does, so a
+		 * vocabulary that grew a synonym cannot keep matching rules while the widening quietly stopped
+		 * applying to them.
 		 */
 		private boolean names(DrugReference.Contraindication c) {
 			if (coversRecordedAllergies && isAllergyRule(c)) {
+				return true;
+			}
+			if (coversRecordedConditions && isConditionRule(c)) {
 				return true;
 			}
 			return PatientClinicalContext.containsToken(texts, c.getToken());
@@ -1373,7 +1406,7 @@ public class DrugSafetyValidator {
 		if (isAllergyRule(c) && context.hasAllergyToken(c.getToken())) {
 			return "active allergy";
 		}
-		if ("condition".equalsIgnoreCase(c.getType()) && context.hasConditionToken(c.getToken())) {
+		if (isConditionRule(c) && context.hasConditionToken(c.getToken())) {
 			return "active condition";
 		}
 		return null;
@@ -3688,15 +3721,6 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return whether the chart records anything an active order could be contraindicated BY. Extracted
-	 *         from {@link #addActiveOrderContraindications}'s own guard rather than copied to its call
-	 *         site: the call site has to know the same answer to decide whether parsing the cited-record
-	 *         corpus can pay for itself, and two spellings of "this patient records nothing to check
-	 *         against" would drift into a corpus built for an arm that returns, or an arm that runs
-	 *         without one. Both token sets, for the reason the guard's own javadoc gives — the curated
-	 *         arm's condition leg is half of what the original scoping suppressed.
-	 */
-	/**
 	 * @return whether {@code c} is the ALLERGY leg of the curated rule vocabulary. One spelling of that
 	 *         test, because two consumers now ask it for different reasons — {@link
 	 *         #recordedContraindicationKind} to decide which chart list a rule is put to, and {@link
@@ -3709,6 +3733,26 @@ public class DrugSafetyValidator {
 		return "allergy".equalsIgnoreCase(c.getType());
 	}
 
+	/**
+	 * @return whether {@code c} is the CONDITION leg of that same vocabulary. Extracted alongside
+	 *         {@link #isAllergyRule} and for the identical reason, not for symmetry's sake: the two
+	 *         consumers are the same two, and a rule's type is what decides both which chart list it is
+	 *         put to and which domain question widens it. Keeping one of the pair literal and the other
+	 *         named is how the pair comes apart.
+	 */
+	private static boolean isConditionRule(DrugReference.Contraindication c) {
+		return "condition".equalsIgnoreCase(c.getType());
+	}
+
+	/**
+	 * @return whether the chart records anything an active order could be contraindicated BY. Extracted
+	 *         from {@link #addActiveOrderContraindications}'s own guard rather than copied to its call
+	 *         site: the call site has to know the same answer to decide whether parsing the cited-record
+	 *         corpus can pay for itself, and two spellings of "this patient records nothing to check
+	 *         against" would drift into a corpus built for an arm that returns, or an arm that runs
+	 *         without one. Both token sets, for the reason the guard's own javadoc gives — the curated
+	 *         arm's condition leg is half of what the original scoping suppressed.
+	 */
 	private static boolean hasContraindicationRecords(PatientClinicalContext context) {
 		return context != null
 				&& !(context.getAllergyTokens().isEmpty() && context.getConditionTokens().isEmpty());

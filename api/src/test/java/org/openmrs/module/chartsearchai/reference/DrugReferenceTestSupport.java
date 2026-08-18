@@ -445,6 +445,23 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * The opening words of the two sentences a record adds when a substance is filed as several rows —
+	 * the row-attribution clause (issue #237) and the other-rows dosing section (issue #259).
+	 *
+	 * <p>Defined ONCE for every file that asserts on them, positive expectations and silence guards
+	 * alike, because a copy per file is how the two come apart: a wording change reddens the file holding
+	 * the positive expectation while an {@code assertFalse} in the next file goes on passing against a
+	 * string production no longer emits. That is not hypothetical — {@code
+	 * ReferenceRecordRowAttributionTest.ATTRIBUTION_LEAD}'s own note records seven such guards having
+	 * shipped green, and its constant fixed that within one file while leaving a second copy free to
+	 * appear. It did.
+	 */
+	static final String ROW_ATTRIBUTION_LEAD = "Published by this dataset for";
+
+	/** @see #ROW_ATTRIBUTION_LEAD */
+	static final String OTHER_ROW_DOSING_LEAD = "Also published for other rows of this substance: ";
+
+	/**
 	 * A context whose ACTIVE ORDERS carry {@code displays}, resolved through the same production
 	 * reconciliation the injector and the validator each perform on it
 	 * ({@link DrugReferenceService#withReferenceNames} over

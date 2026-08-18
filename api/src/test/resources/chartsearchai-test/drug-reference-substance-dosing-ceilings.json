@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "source": "hand-authored fixture for issue #259 — not shipped data",
-  "description": "One substance filed as two rows publishing DIFFERENT daily ceilings, which is what separates this from drug-reference-substance-dosing-rows.json (whose two Amoxicillin rows publish the same 3000 and are that file's same-row control). Here the route-unspecified row publishes 3000 and the suspension 2000, so a patient whose chart names the suspension gets a dose chip quoting 2000 beside an injected reference record rendered from the 3000 row — the two numbers issue #259 reports. `Ranitidine`/`ranitidine` are two rows of one substance carrying ONE display name (they fold to one name) and publishing different ceilings, so the attribution clause would read \"for Ranitidine, not for Ranitidine\": the guard case, borrowed in shape from DoseCeilingAttributionTest.twoRowsPublishingOneNameAreAttributedToNobodyEither. Only the SECOND row publishes `zantac`, so a chart naming zantac lets that row STRICTLY out-claim its sibling — without which the two rows tie, interactionSubject returns the very row canonicalRow picks, and the case is silenced by subject==rendered rather than by the shared label guard it exists to test. `Clobetasol`/`Clobetasol (topical)` are the FOLD-MOVED-IT pair: only the topical row publishes `clobex`, so a question naming clobex injects that row alone, while an order display like `Clobetasol 0.05%` ties BOTH rows on nameMatchStrength and resolves both — so the subject moves to the unqualified row by canonicalRow rather than by anything the chart named, and the clause must stay silent. Neither row carries ATC codes, which is what keeps the order leg's relevance gate from also injecting the unqualified row and silencing the case for the wrong reason. `Mupirocin`/`Mupirocin (nasal)` are the WIDENED-GROUP pair: the nasal row deliberately does NOT publish the bare alias, so a question naming mupirocin injects the unqualified row ALONE while the patient's own order resolves the nasal one. The subject group therefore has to be questionDrugs UNION orderEntries — built from the injected rows instead, the group is a single row, interactionSubject short-circuits, and the record falls silent in exactly the case #237/#259 are about. Neither row carries ATC codes, so the relevance gate cannot inject the nasal row and hide the point. `Cefadroxil` is a single-row substance, the control that must gain no clause. No entry carries contraindications, so every chip here is the dose arm's own.",
+  "description": "One substance filed as two rows publishing DIFFERENT daily ceilings, which is what separates this from drug-reference-substance-dosing-rows.json (whose two Amoxicillin rows publish the same 3000 and are that file's same-row control). Here the route-unspecified row publishes 3000 and the suspension 2000, so a patient whose chart names the suspension gets a dose chip quoting 2000 beside an injected reference record rendered from the 3000 row — the two numbers issue #259 reports. `Ranitidine`/`ranitidine` are two rows of one substance carrying ONE display name (they fold to one name) and publishing different ceilings, so the attribution clause would read \"for Ranitidine, not for Ranitidine\": the guard case, borrowed in shape from DoseCeilingAttributionTest.twoRowsPublishingOneNameAreAttributedToNobodyEither. Only the SECOND row publishes `zantac`, so a chart naming zantac lets that row STRICTLY out-claim its sibling — without which the two rows tie, interactionSubject returns the very row canonicalRow picks, and the case is silenced by subject==rendered rather than by the shared label guard it exists to test. `Clobetasol`/`Clobetasol (topical)` are the FOLD-MOVED-IT pair: only the topical row publishes `clobex`, so a question naming clobex injects that row alone, while an order display like `Clobetasol 0.05%` ties BOTH rows on nameMatchStrength and resolves both — so the subject moves to the unqualified row by canonicalRow rather than by anything the chart named, and the clause must stay silent. Neither row carries ATC codes, which is what keeps the order leg's relevance gate from also injecting the unqualified row and silencing the case for the wrong reason. `Mupirocin`/`Mupirocin (nasal)` are the WIDENED-GROUP pair: the nasal row deliberately does NOT publish the bare alias, so a question naming mupirocin injects the unqualified row ALONE while the patient's own order resolves the nasal one. The subject group therefore has to be questionDrugs UNION orderEntries — built from the injected rows instead, the group is a single row, interactionSubject short-circuits, and the record falls silent in exactly the case #237/#259 are about. Neither row carries ATC codes, so the relevance gate cannot inject the nasal row and hide the point. `Nitrofurantoin`/`Nitrofurantoin (modified-release)` are the RECITAL pair, and the only pair here whose route-unspecified row is the STRICTER one (100 against 200) — deliberately, because every other pair has it laxer. That inversion is what makes a recited record able to raise a false overdose chip. The other-rows section states a NON-rendered row's own ceiling beside that row's name, in one clause, so an alias-scoped dose reading can attribute the 200 to the substance while `addOverdose` compares it against the subject row's 100 first. On every other pair here the section's number is the qualified sibling's STRICTER one, so it cannot exceed any ceiling the walk reaches and the arithmetic acquits the text whatever the parser does; only the inversion puts the cue under load. Production is safe because `DrugSafetyValidator.LIMIT_CUE` reads a number preceded by `maximum` as a ceiling. `Cefadroxil` is a single-row substance, the control that must gain no clause. `Ceftriaxone`/`Ceftriaxone (intramuscular)` are the TOGGLE pair, and the only entry here carrying a contraindication rule: that rule's patient-specific reading is what stands down when a drugSafety switch is written, which is the witness ReferenceRecordRowAttributionToggleContextTest needs to prove the switch really moved, and their differing ceilings (4000 against 2000) put the attribution clause, the #208 reading and the other-rows section in ONE record so all three can be watched across the same write. Every other entry carries no contraindication, so every chip they raise is the dose arm's own.",
   "entries": [
     {
       "id": "amoxicillin-suspension",
@@ -80,6 +80,9 @@
       "contraindications": [
         { "type": "allergy", "token": "ceftriaxone", "note": "documented cephalosporin allergy" }
       ],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 20, "mgPerKgMax": 50, "maxDailyDoseMg": 4000 }
+      ],
       "source": "hand-authored fixture"
     },
     {
@@ -88,6 +91,9 @@
       "substanceName": "ceftriaxone",
       "aliases": ["ceftriaxone"],
       "atcCodes": ["J01DD04"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 20, "mgPerKgMax": 50, "maxDailyDoseMg": 2000 }
+      ],
       "source": "hand-authored fixture"
     },
     {
@@ -127,6 +133,28 @@
       "aliases": ["mupirocin (nasal)"],
       "ageBands": [
         { "minYears": 0, "maxYears": 120, "mgPerKgMin": 1, "mgPerKgMax": 2, "maxDailyDoseMg": 30 }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "nitrofurantoin",
+      "name": "Nitrofurantoin",
+      "substanceName": "nitrofurantoin",
+      "aliases": ["nitrofurantoin"],
+      "atcCodes": ["J01XE01"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 1, "mgPerKgMax": 2, "maxDailyDoseMg": 100 }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "nitrofurantoin-mr",
+      "name": "Nitrofurantoin (modified-release)",
+      "substanceName": "nitrofurantoin",
+      "aliases": ["nitrofurantoin"],
+      "atcCodes": ["J01XE01"],
+      "ageBands": [
+        { "minYears": 0, "maxYears": 120, "mgPerKgMin": 1, "mgPerKgMax": 2, "maxDailyDoseMg": 200 }
       ],
       "source": "hand-authored fixture"
     },

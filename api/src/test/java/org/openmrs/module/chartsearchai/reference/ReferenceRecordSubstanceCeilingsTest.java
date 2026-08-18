@@ -76,17 +76,15 @@ public class ReferenceRecordSubstanceCeilingsTest {
 	 *  whose {@code Cefalexin} pair files the band on the row the record does NOT render. */
 	private static final String ROWS = "chartsearchai-test/drug-reference-substance-dosing-rows.json";
 
-	/**
-	 * The section's lead, shared by every POSITIVE expectation and every NEGATIVE guard here so the two
-	 * cannot come apart — the failure {@code ReferenceRecordRowAttributionTest.ATTRIBUTION_LEAD} records
-	 * having actually happened: seven silence guards written against wording production later stopped
-	 * emitting passed unconditionally, green, for as long as nothing tied them to the positive cases.
-	 */
-	private static final String SECTION_LEAD = "Also published for other rows of this substance: ";
+	/** The section's lead, shared by every POSITIVE expectation and every NEGATIVE guard in the suite —
+	 *  defined in {@link DrugReferenceTestSupport#OTHER_ROW_DOSING_LEAD}, which explains why it may not be
+	 *  written out per file. */
+	private static final String SECTION_LEAD = DrugReferenceTestSupport.OTHER_ROW_DOSING_LEAD;
 
 	/** The clause issue #237 added, asserted here only where this section must be able to speak WITHOUT
-	 *  it (and vice versa) — the two are independent and one guard must not silence the other. */
-	private static final String ATTRIBUTION_LEAD = "Published by this dataset for";
+	 *  it (and vice versa) — the two are independent and one guard must not silence the other. Shared for
+	 *  the reason {@link DrugReferenceTestSupport#ROW_ATTRIBUTION_LEAD} gives. */
+	private static final String ATTRIBUTION_LEAD = DrugReferenceTestSupport.ROW_ATTRIBUTION_LEAD;
 
 	/** The injected reference record naming {@code drug}, through the real injector. */
 	private static String record(DrugReferenceService service, PatientClinicalContext context,
@@ -141,9 +139,9 @@ public class ReferenceRecordSubstanceCeilingsTest {
 				record, "the record keeps its own row's ceiling, says whose it is, and states the other "
 						+ "row's — in that order");
 
-		// THE property, derived rather than restated: whatever ceiling the chip quotes must be in the
-		// record. A fix that stated some other row's number, or that stated this one under a different
-		// rounding, passes the equality above only by luck and fails here.
+		// The same requirement stated as a property rather than as text: whatever ceiling the chip quotes
+		// must appear in the record. It ties the two surfaces to each other, which the equality above
+		// cannot do — that one fixes the record's wording and says nothing about the chip's number.
 		String chip = DrugReferenceTestSupport.overdoseDetail(DrugReferenceTestSupport.validator(service)
 				.validate("Give amoxicillin 1250 mg twice daily.", question, context),
 				"Amoxicillin (suspension)");
@@ -275,6 +273,34 @@ public class ReferenceRecordSubstanceCeilingsTest {
 				record, "rows that publish one ceiling state it once");
 		assertFalse(record.contains(SECTION_LEAD),
 				"a section restating the record's own numbers says nothing, was: " + record);
+	}
+
+	@Test
+	public void anUnknownAgeStatesNoRowsDosingAndStillNamesTheRow() throws IOException {
+		// The input that silences every number in this record — no age, so no band matches for ANY row
+		// (DrugReference.bandForAge answers null for a null age, which is what the record's age scoping
+		// rests on). Worth pinning as a composition rather than as a null check: the two features are
+		// independently gated, so the clause must still name the row the chart records while the section
+		// says nothing, and the dose chip must be silent for the same reason the section is
+		// (DrugSafetyValidator.anyActionableBand reads the same accessor). A patient with no recorded
+		// birthdate is not a patient whose ceilings are unknown to the dataset — it is one this record may
+		// not state them for.
+		DrugReferenceService service =
+				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(CEILINGS));
+		PatientClinicalContext context =
+				DrugReferenceTestSupport.contextNaming(service, null, 70.0, "Amoxicillin (suspension)");
+		String question = "What dose of amoxicillin?";
+
+		String record = record(service, context, question, "Amoxicillin");
+
+		assertEquals("Drug reference — Amoxicillin (ATC J01CA04). " + ATTRIBUTION_LEAD + " Amoxicillin, "
+				+ "not for Amoxicillin (suspension) — the row this patient's record names, filed separately "
+				+ "for the same substance.", record,
+				"an unknown age states no ceiling — its own row's or any other's — and still says which "
+						+ "row it is");
+		assertEquals("", DrugReferenceTestSupport.overdoseDetail(DrugReferenceTestSupport.validator(service)
+				.validate("Give amoxicillin 1250 mg twice daily.", question, context), "Amoxicillin"),
+				"and no chip can quote one either, so the two surfaces are silent together");
 	}
 
 	@Test
@@ -425,6 +451,45 @@ public class ReferenceRecordSubstanceCeilingsTest {
 
 		assertFalse(record.contains(SECTION_LEAD),
 				"the shipped curated wording is unchanged, was: " + record);
+	}
+
+	@Test
+	public void aRecitedRecordIsReadAsCeilingsAndNotAsADose() throws IOException {
+		// The boundary this section crosses, which no wording case can see: the model is told to cite these
+		// records, so this text can arrive back in the ANSWER that DrugSafetyValidator parses for a
+		// prescribed dose. Its LIMIT_CUE reads a number as a ceiling only when a cue precedes it, which is
+		// why every number here keeps the "maximum N mg/day" order rather than "N mg/day max".
+		//
+		// Why this needs a pair of its own rather than the Amoxicillin one. Dose attribution is
+		// CLAUSE-scoped and alias-anchored, and the record's own dosing sentence carries no drug name — so
+		// a recited "maximum 3000 mg/day" is attributed to nobody whatever the cue does. The section's item
+		// is the first record text that puts a NAME and a ceiling in one clause, and it always pairs a row
+		// with its OWN ceiling, so the parsed figure can only exceed something when the SUBJECT row is a
+		// different row publishing a STRICTER one. Nitrofurantoin is the only pair here shaped that way
+		// (route-unspecified 100, modified-release 200); on every other pair the arithmetic acquits the
+		// text and the cue is never load-bearing, which is why mutating LIMIT_CUE left this file green
+		// until this case existed.
+		DrugReferenceService service =
+				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(CEILINGS));
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(30, 70.0, null, null, null, null);
+		String question = "What dose of nitrofurantoin?";
+		String record = record(service, context, question, "Nitrofurantoin");
+
+		// The premises, both needed: the record must state the LAXER row's ceiling in a clause that names
+		// that row, and the subject row must publish the stricter one for it to be compared against.
+		assertTrue(record.contains(SECTION_LEAD + "Nitrofurantoin (modified-release) 1-2 mg/kg per dose, "
+				+ "maximum 200 mg/day (ages 0-120)."),
+				"precondition: the section must name a row beside its own laxer ceiling, was: " + record);
+		assertEquals(100.0, DrugReferenceTestSupport.row(service.getAll(), "Nitrofurantoin").bandForAge(30)
+				.getMaxDailyDoseMg(), 0.0, "precondition: while the subject row publishes the stricter 100");
+
+		List<SafetyWarning> chips =
+				DrugReferenceTestSupport.validator(service).validate(record, question, context);
+		assertEquals("", DrugReferenceTestSupport.overdoseDetail(chips, "Nitrofurantoin"),
+				"a ceiling this record publishes must not be read as a dose someone prescribed, was: "
+						+ chips);
+		assertEquals("", DrugReferenceTestSupport.overdoseDetail(chips,
+				"Nitrofurantoin (modified-release)"), "under either row's name, was: " + chips);
 	}
 
 	@Test

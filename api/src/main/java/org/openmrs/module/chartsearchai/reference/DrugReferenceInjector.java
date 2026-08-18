@@ -495,11 +495,12 @@ public class DrugReferenceInjector {
 	 * Deduplicated union of question-driven and patient-driven matches, query matches first — <b>one
 	 * entry per SUBSTANCE</b>, not one per reference row (issue #163, see {@code collect}).
 	 *
-	 * <p>The two answers are carried together rather than the second being re-derived at the render site,
-	 * because they are answers about the same row GROUP and the group is gone by then: a renderer handed
-	 * only the surviving row could not tell a substance filed as one row from a substance filed as four
-	 * whose siblings the chart never named. See {@link #rowAttribution} for what the second is used for,
-	 * and for why it is not used to change the first.
+	 * <p>The rendered row is carried together with the substance's whole row GROUP rather than the group
+	 * being re-derived at the render site, because the group is gone by then: a renderer handed only the
+	 * surviving row could not tell a substance filed as one row from a substance filed as four whose
+	 * siblings the chart never named. Two things are read off it there and neither changes which row is
+	 * rendered — {@link #rowAttribution} says which row that is, and {@link #otherRowDosing} says what the
+	 * others publish. See {@link SubstanceRendering}.
 	 *
 	 * <p>Order-driven injection is <em>relevance-scoped</em>: an active-order reference is injected only
 	 * when the question is about a specific drug clinically related to that order (sharing an ATC
@@ -574,10 +575,10 @@ public class DrugReferenceInjector {
 	 *        {@code orderEntries} has, and {@code ReferenceRecordRowAttributionTest
 	 *        .aNullContextStatesNoAttributionAtAll} pins it
 	 * @return the row each record RENDERS ({@link DrugReference#canonicalRow} over the rows this method
-	 *         decided to inject) mapped to the row this response NAMES that substance by when the
-	 *         patient's own record chose it ({@link #chartAnchoredSubject}), else {@code null} for that
-	 *         substance. In insertion order — query matches first — because every citation index in the
-	 *         injected chart depends on it.
+	 *         decided to inject), mapped to what the renderer needs to know about the substance's other
+	 *         rows — see {@link SubstanceRendering}, which carries the rows this pass resolved and which
+	 *         of them this response names the substance by. In insertion order — query matches first —
+	 *         because every citation index in the injected chart depends on it.
 	 */
 	Map<DrugReference, SubstanceRendering> matchingEntries(List<DrugReference> orderEntries, String question,
 			PatientClinicalContext context) {
@@ -755,10 +756,11 @@ public class DrugReferenceInjector {
 	/**
 	 * Record {@code ref} among the rows of its substance, from which the caller picks the one this
 	 * record renders ({@link DrugReference#canonicalRow}) and the one this response names the substance
-	 * by ({@link DrugSafetyValidator#interactionSubject}).
+	 * by ({@link DrugSafetyValidator#interactionSubject}), and which it then carries whole so the record
+	 * can state what the others publish ({@link #otherRowDosing}).
 	 *
-	 * <p>The rows are KEPT rather than folded as they arrive (issues #237/#259). Both choices were a
-	 * pairwise fold here until the second was needed, and only the first can be made that way:
+	 * <p>The rows are KEPT rather than folded as they arrive (issues #237/#259). The first two choices
+	 * were a pairwise fold here until the second was needed, and only the first can be made that way:
 	 * {@code canonicalRow} is associative over pairs, while the subject ranking takes a MAXIMUM over the
 	 * group's claims and then folds among the rows tied on it, which two rows at a time cannot compute.
 	 * Approximating it pairwise would be a local variant of a decision CLAUDE.md gives exactly one
@@ -1496,8 +1498,10 @@ public class DrugReferenceInjector {
 	 *         <p><b>#259 is the same split reaching a NUMBER</b>, and a number is worse: the record
 	 *         renders the canonical row's age band, so a clinician reading the cited record sees
 	 *         {@code maximum 3000 mg/day} beside a chip that warned at the charted row's 2000, with
-	 *         nothing saying whose 3000 that is. This clause is what says it — the record's ceiling stays
-	 *         its own row's, exactly as issue #244 kept the chip's.
+	 *         nothing saying whose 3000 that is. This clause says whose it is, and the record's headline
+	 *         ceiling stays its own row's, exactly as issue #244 kept the chip's. It is <b>not</b> the
+	 *         whole of #259: naming the row does not put the chip's 2000 into the citable evidence, which
+	 *         is {@link #otherRowDosing}'s half and the reason that method exists beside this one.
 	 *
 	 *         <p><b>Rendering the CHARTED row instead was measured and declined.</b> Over the same KB,
 	 *         drawing the patient's partner from the canonical row, a record rendered from the charted
@@ -1606,6 +1610,37 @@ public class DrugReferenceInjector {
 	 *         formulary, and issue #163 exists because near-duplicate row material crowds the chart out of
 	 *         the prompt.
 	 *
+	 *         <p><b>Why DOSING crosses rows here while interaction PARTNERS do not.</b> The two look like
+	 *         an inconsistency and are not: {@code RenderedReference.withheldInteractions} records that a
+	 *         partner carried only by a sibling row is absent from this record, and it stays absent. What
+	 *         separates them is size, which is issue #163's whole subject — one sibling's dosing is one
+	 *         clause, while a sibling's partner list is the thing that reaches
+	 *         {@link #MAX_INTERACTION_RENDER_CHARS} on its own (the {@code ddinter} source's Warfarin row
+	 *         publishes ~934). Widening this to partners would spend the budget #163 exists to protect;
+	 *         that is the reason, and not that a sibling's partners would be less true.
+	 *
+	 *         <p><b>The phrasing is load-bearing outside this class, and newly so.</b> The model may recite
+	 *         a record it is told to cite, so a ceiling here can arrive back in the ANSWER that
+	 *         {@code DrugSafetyValidator} parses for a prescribed dose. Its {@code LIMIT_CUE} reads a
+	 *         number as a ceiling only when a cue ({@code maximum}, {@code up to}, {@code no more than} …)
+	 *         sits BEFORE it, so every number here keeps the {@code "maximum N mg/day"} order the rendered
+	 *         row's own sentence uses; written {@code "N mg/day max"} a recited ceiling becomes a stated
+	 *         dose.
+	 *
+	 *         <p>Why that guard did not matter before and does now: dose attribution is CLAUSE-scoped and
+	 *         alias-anchored, and the rendered row's dosing sentence carries no drug name, so its ceiling
+	 *         is attributed to nobody however it is worded. An item here is the first sentence THIS CLASS
+	 *         composes that pairs a row's NAME with a published ceiling inside one clause — dataset free
+	 *         text can of course pair anything, and always could. It always pairs a row with its OWN
+	 *         ceiling, so
+	 *         the figure can exceed something only where the SUBJECT row is a different row publishing a
+	 *         stricter one — measured, not argued: mutating {@code maximum} out of {@code LIMIT_CUE} left
+	 *         this file green until a fixture pair shaped that way existed, and then produced
+	 *         {@code "The stated Nitrofurantoin dose ~200 mg/day exceeds the 100 mg/day maximum"} from a
+	 *         record nobody had prescribed anything from.
+	 *         {@code ReferenceRecordSubstanceCeilingsTest.aRecitedRecordIsReadAsCeilingsAndNotAsADose}
+	 *         feeds this record back through the real {@code validate} and is what pins it.
+	 *
 	 *         <p><b>The residue, stated rather than discovered.</b> The chips' post-answer pass can also
 	 *         resolve rows the ANSWER's own wording names, which no pre-answer record can carry — it is
 	 *         written before the answer exists. So this closes every shape reachable from the pass that
@@ -1619,6 +1654,12 @@ public class DrugReferenceInjector {
 	private static List<String> otherRowDosing(DrugReference ref, List<DrugReference> rows,
 			DrugReference.AgeBand band, Integer age) {
 		List<String> items = new ArrayList<String>();
+		// Asked of the RENDERED row alone, and that is sufficient rather than lax — but only because of
+		// something invisible here: `collect` keys a declared substance on substanceKey(), which is a
+		// LIST, and the fallback on getId(), which is a String. The two can never collide, so a group
+		// whose rendered row declares a substance holds only rows sharing that same declared key. Were
+		// substanceKey() ever to return a String, an entry whose id equals another entry's substance name
+		// would join that group and this loop would call it a row of the same substance.
 		if (ref.substanceKey() == null) {
 			return items;
 		}
@@ -1675,7 +1716,7 @@ public class DrugReferenceInjector {
 	 *  are no items. Every section obeys that rule for the same reason: an empty
 	 *  "Recorded for this patient: ." states nothing and spends prompt budget saying it, and the dataset
 	 *  is operator-editable so any section can arrive empty. Written out four times before issue #208
-	 *  needed a fifth. */
+	 *  needed a fifth, and #259 a sixth ({@link #otherRowDosing}, whose emptiness is the common case). */
 	private static void appendSection(StringBuilder sb, String lead, Collection<String> items) {
 		if (!items.isEmpty()) {
 			sb.append(lead).append(String.join("; ", items)).append(".");

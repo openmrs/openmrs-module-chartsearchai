@@ -66,8 +66,10 @@ public class ReferenceRecordRowAttributionTest {
 			"chartsearchai-test/drug-reference-substance-dosing-ceilings.json";
 
 	/**
-	 * The clause's opening words, shared by every POSITIVE expectation and every NEGATIVE guard here so
-	 * the two cannot come apart. They did: this file's silence cases were written against
+	 * The clause's opening words, shared by every POSITIVE expectation and every NEGATIVE guard here — and
+	 * since issue #259's section, across every file that asserts on them, which is why the value now lives
+	 * in {@link DrugReferenceTestSupport#ROW_ATTRIBUTION_LEAD} — so the two cannot come apart. They did:
+	 * this file's silence cases were written against
 	 * {@code "Published for"} and the production wording later became {@code "Published by this dataset
 	 * for"} (a bare "published for X, not for Y" reads as a licensing claim — "indicated for X" — which
 	 * is the opposite of what the sentence means). The positive cases went red and were updated; the
@@ -75,7 +77,7 @@ public class ReferenceRecordRowAttributionTest {
 	 * every record. Seven guards that could not fail, green, until this constant tied them to the same
 	 * words the positive cases assert.
 	 */
-	private static final String ATTRIBUTION_LEAD = "Published by this dataset for";
+	private static final String ATTRIBUTION_LEAD = DrugReferenceTestSupport.ROW_ATTRIBUTION_LEAD;
 
 	private static PatientChart inject(DrugReferenceService service, PatientClinicalContext context,
 			String question) {

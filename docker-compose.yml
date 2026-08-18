@@ -48,18 +48,33 @@ services:
       OMRS_CONFIG_CONNECTION_DATABASE: openmrs
       OMRS_CONFIG_CONNECTION_USERNAME: ${OMRS_DB_USER:-openmrs}
       OMRS_CONFIG_CONNECTION_PASSWORD: ${OMRS_DB_PASSWORD:-openmrs}
-    # Tomcat-reachability probe rather than OpenMRS-fully-started:
-    # /openmrs/health/started returns 503 until Listener.isOpenmrsStarted()
-    # flips, which on first boot can take 10-30 min and overruns the deploy
-    # script's poll window. /openmrs/ goes through StartupFilter and gets a
-    # 302 redirect to /openmrs/initialsetup once Tomcat has deployed the
-    # WAR (~20s in), which curl -f treats as success.
+    # OpenMRS-fully-started, not Tomcat-reachability. /openmrs/health/started
+    # returns 503 until Listener.isOpenmrsStarted() flips and 200 after, which
+    # is the question worth asking. This used to probe /openmrs/ instead,
+    # because health/started can take 10-30 min on first boot and overruns the
+    # deploy script's poll window — but that poll is disabled anyway
+    # (deploy.yml passes --no-health-check), and probing /openmrs/ meant the
+    # check was PASSED BY the 302 to /openmrs/initialsetup, i.e. by an instance
+    # sitting in the installation wizard. That is exactly how a wiped-volume
+    # deploy stayed green while serving a setup screen; backend-init.sh now
+    # keeps that state from arising, and this stops rewarding it if it does.
+    #
+    # start_period covers a genuine first boot: with runtime properties present
+    # OpenMRS starts synchronously at context init, so nothing answers until the
+    # 5,284-patient seed has been brought up to the current schema. Failures
+    # inside the window do not count toward retries, and a success ends it.
+    #
+    # Note for whoever closes the other half of #275: this widens the legitimate
+    # not-yet-healthy window from ~2 min to as much as 30. Re-enabling the deploy
+    # wrapper's own poll by dropping --no-health-check, without giving that poll a
+    # matching timeout, would make a reset deploy report failure while the
+    # instance is starting perfectly normally.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "-m", "5", "-o", "/dev/null", "http://localhost:8080/openmrs/"]
+      test: ["CMD", "curl", "-fsS", "-m", "5", "-o", "/dev/null", "http://localhost:8080/openmrs/health/started"]
       interval: 30s
       timeout: 10s
       retries: 15
-      start_period: 120s
+      start_period: 30m
     volumes:
       - openmrs-data:/openmrs/data
 

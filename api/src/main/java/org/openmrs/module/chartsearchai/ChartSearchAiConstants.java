@@ -361,11 +361,19 @@ public class ChartSearchAiConstants {
 	public static final boolean DEFAULT_GROUNDING_CLAUSE_SCOPED = false;
 
 	/**
-	 * Upper bound on the number of citations Tier-2 entailment verifies per answer (i.e. the batch
-	 * size), so a heavily-cited answer cannot make the single batched entailment prompt grow without
-	 * bound. References beyond this many keep their Tier-1 verdict; the verifier logs once when the
-	 * cap is hit (no silent truncation). Tier-2 issues one batched LLM call per answer regardless of
-	 * how many citations it carries.
+	 * Upper bound on the number of citations Tier-2 entailment verifies per answer, so a heavily-cited
+	 * answer cannot make the entailment prompt grow without bound. References beyond this many keep
+	 * their Tier-1 verdict; the verifier logs once when the cap is hit (no silent truncation).
+	 *
+	 * <p>It bounds PAIRS, not calls, and is deliberately no longer described as "the batch size".
+	 * Citations whose claim statements overlap are verified one pair per call rather than co-batched,
+	 * because batched entailment is not per-pair independent — the fragments of a clause-scoped
+	 * compound sentence, and of an ENUMERATING sentence in either mode (#278). An answer can therefore
+	 * cost up to this many LLM round-trips rather than one, which is why the number is also a latency
+	 * ceiling and not only a prompt-size one; {@code CitationGroundingVerifier.splitEnumeration}
+	 * records the measured per-call cost. The previous wording ("Tier-2 issues one batched LLM call per
+	 * answer regardless of how many citations it carries") was already inaccurate for clause-scoped
+	 * grounding before #278 made it inaccurate by default.
 	 */
 	public static final int GROUNDING_ENTAILMENT_MAX_CHECKS = 16;
 
@@ -503,8 +511,11 @@ public class ChartSearchAiConstants {
 	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS = true;
 
 	/** Cross-check the drugs in play — those the question asks about and those the answer names on its own
-	 *  authority — against the patient's allergies/conditions for contraindications, and, on every question,
-	 *  the patient's own active orders against those same records (issue #143). */
+	 *  authority — against the patient's allergies/conditions for contraindications, and the patient's own
+	 *  active orders against those same records (issue #143), scoped to what the response is about:
+	 *  either the drug or the recorded finding must be named by the question, the answer or a cited
+	 *  record, with a medication-, allergy- or condition-domain question keeping the corresponding
+	 *  list in scope. */
 	public static final String GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS =
 			"chartsearchai.drugSafety.warnOnContraindications";
 

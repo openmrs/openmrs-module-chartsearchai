@@ -504,9 +504,12 @@ public class LlmProvider {
 	 * Tier-2 grounding check for a SINGLE {@code (source, statement)} pair: asks the active LLM
 	 * whether {@code source} actually supports {@code statement}. It catches the subject/polarity
 	 * flips cosine alone cannot judge (high lexical overlap but e.g. "patient has X" vs "mother had
-	 * X"). The chart-grounding path now verifies all of an answer's citations in one round-trip via
-	 * {@link #entailsBatch}; this single-pair form is retained as the primitive and for one-off
-	 * checks.
+	 * X"). The chart-grounding path verifies an answer's citations via {@link #entailsBatch} — in ONE
+	 * round-trip for citations whose statements do not overlap, but in a single-pair call each for the
+	 * fragments of one sentence that do (a clause-scoped compound, or an enumeration in either mode:
+	 * see {@code CitationGroundingVerifier} and #278). So this single-pair form is not only the
+	 * primitive and the one-off path — {@code entailsBatch} is genuinely called with one pair on the
+	 * grounding path too.
 	 *
 	 * @param source the cited record's text
 	 * @param statement the answer sentence that cites it

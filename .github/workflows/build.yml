@@ -71,6 +71,26 @@ jobs:
       - name: kv_prefill_gate.py (refuses to measure without a real KV cache dir)
         run: python3 eval/latency/kv_prefill_gate.py --selftest
 
+  # backend-init.sh is the demo backend's ENTRYPOINT, and until this job existed nothing in CI
+  # parsed it. Dockerfile.backend only COPYs it, so a syntax error builds a perfectly good image,
+  # build-docker publishes it, the deploy reports success and the container exits at startup —
+  # a green pipeline and a dead demo. `sh -n` is the gate that matters (the script is #!/bin/sh
+  # and written for POSIX sh, not bash); shellcheck at -S warning catches the live bugs — unquoted
+  # expansions, unreachable branches — while staying below the style noise the file would
+  # otherwise fail on. Both are clean as of this commit, so a red run here means a new defect,
+  # not a pre-existing one.
+  entrypoint-lint:
+    name: backend-init.sh lint (the demo entrypoint nothing else parses)
+    # Opted out of the daily schedule — see the `schedule:` comment above.
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: sh -n (POSIX syntax — a failure here bricks the container at startup)
+        run: sh -n backend-init.sh
+      - name: shellcheck (warnings and above)
+        run: shellcheck -s sh -S warning backend-init.sh
+
   # Issue #181. `api/pom.xml` declares querystore-api at 1.0.0-SNAPSHOT, so what this module
   # compiles against is whatever snapshot was published remotely last (CI) or `mvn install`ed
   # locally last (a developer). When querystore changes a method this module calls, the local build

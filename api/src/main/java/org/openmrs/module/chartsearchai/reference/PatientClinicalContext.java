@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -406,8 +407,16 @@ public class PatientClinicalContext {
 	 * and the same strings feed {@code lookupByToken}, so a comment would be read as the allergen
 	 * itself and fabricate an allergy. A reaction is a symptom, not a drug. The fragment rationale
 	 * above survives on {@code nonCodedAllergen}, which is genuinely free text.
+	 *
+	 * <p><b>Package-private, and taking a {@link Collection} rather than a {@code Set}</b> since the
+	 * subject-matter scoping of the active-order contraindication arm: that gate asks whether the
+	 * finding a rule FIRED ON is part of what the response is about, and it must ask it with the same
+	 * matcher the firing used, or "did not match" and "is not what was asked about" drift apart. One
+	 * definition — never a second copy here. That caller's haystack is PROSE rather than recorded
+	 * values, and lower-cased on the way in, because {@link #containsFolded} folds a value but does not
+	 * case-fold it.
 	 */
-	private static boolean containsToken(Set<String> haystack, String token) {
+	static boolean containsToken(Collection<String> haystack, String token) {
 		if (!matchableToken(token)) {
 			// A token of nothing but combining marks folds to empty AFTER the fold, not before — and the
 			// empty string is contained in everything, so both emptiness checks live in matchableToken.

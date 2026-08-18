@@ -47,9 +47,13 @@ import java.util.regex.Pattern;
  * plus {@code patient} and {@code obs}, which this router never scopes ({@code patient} is
  * always included by the builder; {@code obs} is the similarity path's domain).
  *
- * <p>Public only so the drug-safety layer can reuse {@link #isInteractionScreening} — question
- * intent is classified here and must not be classified a second time elsewhere. Every other member
- * stays package-private.
+ * <p>Public only so the drug-safety layer can reuse this router's classification of a question —
+ * {@link #isInteractionScreening}, and the three domain predicates {@link #asksAboutMedications},
+ * {@link #asksAboutAllergies} and {@link #asksAboutConditions} that scope its contraindication arm.
+ * Question intent is classified here and must not be classified a second time elsewhere, which is the
+ * whole of what earns a member its {@code public}: every member that is not read outside this package
+ * stays package-private, and a new one becomes public only by being a classification a caller would
+ * otherwise re-derive.
  */
 public final class QueryScopeRouter {
 
@@ -140,6 +144,42 @@ public final class QueryScopeRouter {
 	public static boolean isInteractionScreening(String question) {
 		return question != null && INTERACTION_CUES.matcher(question).find()
 				&& matchedIntents(question).contains(Intent.MEDICATIONS);
+	}
+
+	/**
+	 * Whether {@code question} is in the MEDICATION domain, by the router's own classification.
+	 *
+	 * <p>Public for the same reason {@link #isInteractionScreening} is, and reusing
+	 * {@link #matchedIntents} for the same reason it does: one definition of "medication-domain
+	 * question", never a second drug vocabulary. The drug-safety layer asks it as a WIDENING signal
+	 * on the drug side of a contraindication — a question about what the patient is taking makes her
+	 * whole active-order list the response's subject matter even when the prose writes no individual
+	 * drug name, which a gate reading only the words would miss. It never narrows anything: a
+	 * question naming a drug the dataset recognises carries no cue word here ("Can I give her
+	 * bupivacaine?" matches none of the cues) and is already handled by the drug-in-play arm.
+	 */
+	public static boolean asksAboutMedications(String question) {
+		return matchedIntents(question).contains(Intent.MEDICATIONS);
+	}
+
+	/**
+	 * As {@link #asksAboutMedications}, for the ALLERGY domain — one of the two widening signals on the
+	 * FINDING side. A question about her allergies makes her recorded allergies the subject matter, so a
+	 * drug one of them contraindicates is worth a chip even where the answer names neither.
+	 */
+	public static boolean asksAboutAllergies(String question) {
+		return matchedIntents(question).contains(Intent.ALLERGIES);
+	}
+
+	/**
+	 * As {@link #asksAboutAllergies}, for the CONDITION domain — the other widening signal on the
+	 * finding side, because the finding a contraindication rule fires on is an allergy OR a condition
+	 * and the two lists have equal claim to being what was asked about. Kept a separate predicate rather
+	 * than folded into one "asks about her records": the drug-safety layer widens per LIST, so a
+	 * question about her problem list must not put her allergy records in scope as well.
+	 */
+	public static boolean asksAboutConditions(String question) {
+		return matchedIntents(question).contains(Intent.CONDITIONS);
 	}
 
 	/**

@@ -1216,4 +1216,431 @@ public class CitationGroundingVerifierTest {
 		}
 		return -1;
 	}
+
+	// ---- enumerating sentences (issue #278) ----
+
+	/**
+	 * The real answer the live module produces for "any allergies?" — one sentence ENUMERATING three
+	 * chart records. The list-introducing colon is the structural signal that the text after it is a
+	 * series of sibling items rather than one compound claim.
+	 */
+	private static final String ENUMERATION =
+			"Yes — the patient has the following recorded allergies: Lidocaine [1], Ketoconazole [2], and Aspirin [3].";
+
+	/**
+	 * A judge that models what a correct entailment check does with a CONJUNCTION: the record entails
+	 * the statement only if every vocabulary term the statement names is one the record itself names.
+	 * A statement naming three allergens is therefore entailed by no single allergy record — which is
+	 * exactly why issue #278's answer was graded ungrounded on every citation.
+	 */
+	private static class ConjunctionAwareJudge extends LlmProvider {
+
+		private final List<String> vocabulary;
+
+		final List<List<String>> statementsPerCall = new ArrayList<List<String>>();
+
+		ConjunctionAwareJudge(String... vocabulary) {
+			this.vocabulary = Arrays.asList(vocabulary);
+		}
+
+		@Override
+		public List<Boolean> entailsBatch(List<String> sources, List<String> statements) {
+			statementsPerCall.add(new ArrayList<String>(statements));
+			List<Boolean> out = new ArrayList<Boolean>();
+			for (int i = 0; i < sources.size(); i++) {
+				String source = sources.get(i).toLowerCase();
+				String statement = statements.get(i).toLowerCase();
+				boolean entailed = true;
+				for (String term : vocabulary) {
+					if (statement.contains(term) && !source.contains(term)) {
+						entailed = false;
+					}
+				}
+				out.add(Boolean.valueOf(entailed));
+			}
+			return out;
+		}
+	}
+
+	private List<RecordMapping> allergyMappings(String secondAllergen) {
+		return Arrays.asList(mapping(1, "Allergy: Lidocaine (drug allergen)"),
+				mapping(2, "Allergy: " + secondAllergen + " (drug allergen)"),
+				mapping(3, "Allergy: Aspirin (drug allergen)"));
+	}
+
+	private List<RecordReference> threeRefs() {
+		return new ArrayList<RecordReference>(
+				Arrays.asList(reference(1), reference(2), reference(3)));
+	}
+
+	@Test
+	public void splitIntoCitedSentences_enumerationGivesEachCitationThePreambleAndItsOwnItem() {
+		List<CitationGroundingVerifier.Sentence> clauses =
+				CitationGroundingVerifier.splitIntoCitedSentences(ENUMERATION);
+
+		assertEquals(3, clauses.size(), "an enumerating sentence yields one claim per cited record");
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		assertEquals(preamble + "Lidocaine [1]", clauses.get(0).text);
+		assertEquals(preamble + "Ketoconazole [2]", clauses.get(1).text,
+				"[2]'s claim must name ITS allergen only, not the cumulative list");
+		assertEquals(preamble + "Aspirin [3]", clauses.get(2).text,
+				"the trailing item's separator and conjunction are dropped");
+
+		for (int i = 0; i < 3; i++) {
+			assertTrue(clauses.get(i).cites(i + 1));
+			assertTrue(clauses.get(i).isolate,
+					"enumeration claims share a preamble, so they must not be co-batched");
+		}
+		assertFalse(clauses.get(1).cites(1), "[2]'s claim is attributed to [2] alone");
+		assertFalse(clauses.get(1).cites(3), "[2]'s claim must not reach the later [3]");
+	}
+
+	@Test
+	public void splitIntoClauseScopedSentences_enumerationIsNotTheCumulativePrefix() {
+		List<CitationGroundingVerifier.Sentence> clauses =
+				CitationGroundingVerifier.splitIntoClauseScopedSentences(ENUMERATION);
+
+		assertEquals(3, clauses.size());
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		assertEquals(preamble + "Ketoconazole [2]", clauses.get(1).text,
+				"clause scope must not hand [2] the prefix that still names Lidocaine");
+		assertEquals(preamble + "Aspirin [3]", clauses.get(2).text);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_compoundSentenceWithoutAListColonStaysOneSentence() {
+		// Invariant guard: only a sentence that ANNOUNCES a list is split. A qualifier-shaped compound
+		// keeps today's behaviour, because its later text re-qualifies one subject rather than naming
+		// a sibling, and the preamble/first-item boundary is not findable there.
+		List<CitationGroundingVerifier.Sentence> sentences =
+				CitationGroundingVerifier.splitIntoCitedSentences("A condition [1] and a diagnosis [2].");
+
+		assertEquals(1, sentences.size());
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void enumeration_everyCitationGroundsAgainstItsOwnItem_onTheSentenceScopedDefault() {
+		// Issue #278: the SHIPPED default (clauseScoped=false) graded all three false, because each
+		// record was asked to entail the whole three-allergen list.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("lidocaine", "ketoconazole", "aspirin");
+		verifier.setLlmProvider(judge);
+
+		List<RecordReference> result = verifier.verify(ENUMERATION, threeRefs(),
+				allergyMappings("Ketoconazole"), FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "[1] Lidocaine");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "[2] Ketoconazole");
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded(), "[3] Aspirin");
+	}
+
+	@Test
+	public void enumeration_everyCitationGroundsUnderClauseScopeToo() {
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("lidocaine", "ketoconazole", "aspirin");
+		verifier.setLlmProvider(judge);
+
+		List<RecordReference> result = verifier.verify(ENUMERATION, threeRefs(),
+				allergyMappings("Ketoconazole"), FLOOR, TIER2_ON, true);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(),
+				"clause scope previously left the second citation false");
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded(),
+				"clause scope previously left the third citation false");
+	}
+
+	@Test
+	public void enumeration_aCitationWhoseRecordDoesNotSupportItsOwnItemStaysUngrounded() {
+		// The split must not become a rubber stamp: record 2 is a PENICILLIN allergy while the answer
+		// attributes Ketoconazole to it, and that citation must still be flagged.
+		ConjunctionAwareJudge judge =
+				new ConjunctionAwareJudge("lidocaine", "ketoconazole", "aspirin", "penicillin");
+		verifier.setLlmProvider(judge);
+
+		List<RecordReference> result = verifier.verify(ENUMERATION, threeRefs(),
+				allergyMappings("Penicillin"), FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.FALSE, result.get(1).getGrounded(),
+				"a mis-attributed allergen must still be caught after the split");
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded());
+	}
+
+	@Test
+	public void enumeration_citationsAreVerifiedInSeparateCallsBecauseTheyShareAPreamble() {
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("lidocaine", "ketoconazole", "aspirin");
+		verifier.setLlmProvider(judge);
+
+		verifier.verify(ENUMERATION, threeRefs(), allergyMappings("Ketoconazole"),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(3, judge.statementsPerCall.size(),
+				"co-batching overlapping enumeration statements lets the LLM couple their verdicts");
+		for (List<String> perCall : judge.statementsPerCall) {
+			assertEquals(1, perCall.size());
+		}
+
+		// Pin the statement text the judge actually RECEIVES, not just the splitter's Sentence.text:
+		// the citation markers are stripped between the two, and asserting only the fragment leaves
+		// that step unverified on this path.
+		List<String> received = new ArrayList<String>();
+		for (List<String> perCall : judge.statementsPerCall) {
+			received.add(perCall.get(0));
+		}
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		assertTrue(received.contains(preamble + "Lidocaine"), "judge saw: " + received);
+		assertTrue(received.contains(preamble + "Ketoconazole"), "judge saw: " + received);
+		assertTrue(received.contains(preamble + "Aspirin"), "judge saw: " + received);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aColonFollowedStraightByAMarkerIsNotAnEnumeration() {
+		// The guard has to test the MARKER-STRIPPED item: the raw item always ends in "[N]", so a
+		// plain isEmpty() check could never fire. Here [1] contributes no name of its own, so the
+		// colon is not introducing a list of named items and the sentence must fall back whole
+		// rather than hand [1] a preamble-only claim that asserts nothing.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: [1], Ketoconazole [2].");
+
+		assertEquals(1, sentences.size(), "not an enumeration of named items -> no split");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_anItemWhoseNameStartsWithOrKeepsIt() {
+		// The \b in LEADING_ITEM_SEPARATOR is load-bearing and was untested: without it the optional
+		// "or" alternative eats the first two letters of a name that merely STARTS with them, and the
+		// claim then asks about "phenadrine", a drug that does not exist.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Active drugs: Orphenadrine [1], Oxycodone [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Active drugs: Orphenadrine [1]", clauses.get(0).text,
+				"a name beginning 'Or' must not be truncated to 'phenadrine'");
+		assertEquals("Active drugs: Oxycodone [2]", clauses.get(1).text);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_theColonNearestTheItemsIsThePreamble() {
+		// lastIndexOf, not indexOf: the introducer is the colon closest to the first item, so the
+		// earlier one stays inside the preamble rather than truncating it.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Findings: recorded allergies: Lidocaine [1], Aspirin [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Findings: recorded allergies: Lidocaine [1]", clauses.get(0).text);
+		assertEquals("Findings: recorded allergies: Aspirin [2]", clauses.get(1).text,
+				"the whole preamble is retained, not just the text after the first colon");
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aColonAfterTheFirstMarkerDoesNotIntroduceAList() {
+		// The colon has to precede the FIRST marker to be introducing the items. One that appears
+		// later belongs to a subsequent clause and says nothing about how item 1 is bounded, so the
+		// sentence keeps today's whole-sentence scoping.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Aspirin allergy [1] and note: severity is severe [2].");
+
+		assertEquals(1, sentences.size());
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_enumerationHandlesMultiDigitCitationIndices() {
+		// The live answer that produced issue #278 cited [11], not [3] — a 4-character marker, so the
+		// item boundaries are wider than the single-digit cases above. Offsets come from Matcher.end(),
+		// which is width-agnostic; this pins that.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences(
+						"Recorded allergies: Lidocaine [1], Ketoconazole [2], and Aspirin [11].");
+
+		assertEquals(3, clauses.size());
+		assertEquals("Recorded allergies: Aspirin [11]", clauses.get(2).text);
+		assertTrue(clauses.get(2).cites(11));
+		assertFalse(clauses.get(2).cites(1));
+	}
+
+	@Test
+	public void splitIntoCitedSentences_enumerationRepeatingOneIndexYieldsAFragmentPerMARKER() {
+		// The split walks MARKERS, while the no-split guard counts DISTINCT cited indexes — so a list
+		// naming one record twice produces two fragments attributed to the same index. That is the
+		// pre-existing multi-candidate shape (selectClaim cosine-picks between them), reached here by a
+		// new route, so pin that it is produced rather than crashing or silently dropping a fragment.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: Aspirin [1], Ketoconazole [2], and aspirin again [1].");
+
+		assertEquals(3, clauses.size(), "one fragment per marker, not per distinct index");
+		assertEquals("Recorded allergies: Aspirin [1]", clauses.get(0).text);
+		assertEquals("Recorded allergies: Ketoconazole [2]", clauses.get(1).text);
+		assertEquals("Recorded allergies: aspirin again [1]", clauses.get(2).text);
+		assertTrue(clauses.get(0).cites(1));
+		assertTrue(clauses.get(2).cites(1), "both fragments of the repeated index are attributed to it");
+	}
+
+	@Test
+	public void enumeration_repeatingOneIndexStillProducesAVerdictForThatCitation() {
+		// End-to-end guard on the same shape: two candidate fragments must not leave the citation
+		// unverified. selectClaim picks one by cosine and Tier-2 still runs on it.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("aspirin", "ketoconazole");
+		verifier.setLlmProvider(judge);
+		String answer = "Recorded allergies: Aspirin [1], Ketoconazole [2], and aspirin again [1].";
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "Allergy: Aspirin (drug allergen)"),
+						mapping(2, "Allergy: Ketoconazole (drug allergen)")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "the repeated index still gets a verdict");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+	}
+
+	@Test
+	public void splitIntoCitedSentences_doesNotSplitWhenTheSubjectSitsInsideTheFirstItem() {
+		// The split is only safe while the shared preamble carries the SUBJECT. Here the colon is a
+		// bare lead-in and the subject ("the patient has") lives inside item 1, so splitting would hand
+		// item 2 the claim "Findings: asthma" -- stripped of the subject. A family-history record for
+		// the mother's asthma entails THAT, so a citation the whole-sentence claim correctly refused
+		// would be published grounded=true. Fail open in a verification feature, and precisely the flip
+		// Tier-2 exists to catch, so this shape must keep whole-sentence scoping.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Findings: the patient has diabetes [1] and asthma [2].");
+
+		assertEquals(1, sentences.size(), "a clause-shaped first item means the preamble is not the subject");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_doesNotSplitWhenAnItemCarriesItsOwnSubjectWithinTheWordBound() {
+		// CLAUSE_MARKER, not length, is the subject test — and this is the case that establishes why.
+		// "he has diabetes" sits comfortably inside MAX_ENUMERATION_ITEM_WORDS (a runaway-text backstop,
+		// not a grammar test), so only its grammar can refuse it; without that net item 2's claim loses
+		// the subject and becomes "Findings: asthma". Written when the bound was 3 and this cleared it by
+		// exactly fitting, which is what showed length could not do this job at any value.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Findings: he has diabetes [1] and asthma [2].");
+
+		assertEquals(1, sentences.size(), "a pronoun-and-verb item is a clause, so the preamble is not the subject");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aQualifiedDrugNameIsStillANameNotAClause() {
+		// The clause test must not swallow the parenthetical-qualified item shape the live answers do
+		// produce: three words, no pronoun, no verb — a name, so the list still splits.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences(
+						"Recorded allergies: Aspirin (drug allergen) [1], Ketoconazole (drug allergen) [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Recorded allergies: Aspirin (drug allergen) [1]", clauses.get(0).text);
+		assertEquals("Recorded allergies: Ketoconazole (drug allergen) [2]", clauses.get(1).text);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_admitsALongDrugNameCarryingNoClauseMarker() {
+		// The coverage the raised bound buys, and the reason it was raised: 1190 of the 7452 names the
+		// shipped KB publishes are longer than three words, and refusing them left a real citation
+		// mis-scoped for no safety gain — a long noun phrase carries no subject, so splitting is correct.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: Belladonna alkaloids with phenobarbital [1], "
+						+ "Brompheniramine, phenylephrine and codeine [2].");
+
+		assertEquals(2, clauses.size(), "a multi-word drug name is a name, not a clause");
+		assertEquals("Recorded allergies: Belladonna alkaloids with phenobarbital [1]", clauses.get(0).text);
+		assertEquals("Recorded allergies: Brompheniramine, phenylephrine and codeine [2]", clauses.get(1).text);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_refusesAnItemThatRunsPastTheLengthBackstop() {
+		// What the bound still does once CLAUSE_MARKER owns the subject test: stop runaway text becoming
+		// a "claim". Nine words, deliberately with no pronoun and no finite verb, so only length can
+		// refuse it — this is the test that pins MAX_ENUMERATION_ITEM_WORDS at all.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: one two three four five six seven eight nine [1], "
+						+ "Aspirin [2].");
+
+		assertEquals(1, sentences.size(), "past the backstop the sentence keeps whole-sentence scoping");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+	}
+
+	@Test
+	public void splitIntoCitedSentences_anOrNameKeepsItsPrefixInALaterPositionToo() {
+		// Position matters to LEADING_ITEM_SEPARATOR: item 1 follows the colon (whitespace only) while a
+		// later item follows ", " or ", and ". Only the later position exercises the conjunction
+		// alternative against a name that starts with those letters, so pin it there as well as first.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Active drugs: Aspirin [1], Orphenadrine [2], and Ornidazole [3].");
+
+		assertEquals(3, clauses.size());
+		assertEquals("Active drugs: Orphenadrine [2]", clauses.get(1).text,
+				"a comma-separated name beginning 'Or' must survive the separator strip");
+		assertEquals("Active drugs: Ornidazole [3]", clauses.get(2).text,
+				"and so must one that follows ', and '");
+	}
+
+	@Test
+	public void enumeration_groundsOnTheTier1OnlyPathToo_whichIsTheShippedEntailmentDefault() {
+		// chartsearchai.grounding.entailment.enabled defaults to FALSE, so Tier-1 cosine alone decides on
+		// the commonest configuration — and the split changes which TEXT is embedded there, not just
+		// which statement Tier-2 judges. Every other enumeration test runs with Tier-2 on, so this path
+		// was altered untested. The whole sentence is registered ORTHOGONAL to all three records, so
+		// these verdicts can only come from each citation being scored against its own item.
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		embeddings.register(ENUMERATION, AXIS_B);
+		embeddings.register(preamble + "Lidocaine [1]", AXIS_A);
+		embeddings.register(preamble + "Ketoconazole [2]", AXIS_A);
+		embeddings.register(preamble + "Aspirin [3]", AXIS_A);
+		embeddings.register("Allergy: Lidocaine (drug allergen)", AXIS_A);
+		embeddings.register("Allergy: Ketoconazole (drug allergen)", AXIS_A);
+		embeddings.register("Allergy: Aspirin (drug allergen)", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(ENUMERATION, threeRefs(),
+				allergyMappings("Ketoconazole"), FLOOR, TIER1_ONLY, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "[1] scored against its own item");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "[2] scored against its own item");
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded(), "[3] scored against its own item");
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aNegatedPreamblePropagatesToEveryItem() {
+		// The preamble is shared, so a qualifier sitting in it must reach every item's claim. If it did
+		// not, "No recorded allergies except: X [1], Y [2]" would hand each citation a bare drug name and
+		// a record for an allergy the patient does NOT have could ground true. The preamble is provably
+		// marker-free (the colon precedes the first marker), which is what makes this propagation total.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("No recorded allergies except: Lidocaine [1], Aspirin [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("No recorded allergies except: Lidocaine [1]", clauses.get(0).text);
+		assertEquals("No recorded allergies except: Aspirin [2]", clauses.get(1).text,
+				"a preamble qualifier must not be dropped from later items");
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aNegationInsideAnItemStaysWithThatItemOnly() {
+		// The mirror case: a qualifier sitting in ONE item must not leak to its siblings and must not be
+		// stripped from its own. "not sulfa" keeps its negation, so a sulfa-allergy record cannot ground
+		// it; "penicillin" does not inherit the negation, so a penicillin record still can.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: penicillin [1], not sulfa [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Recorded allergies: penicillin [1]", clauses.get(0).text,
+				"item 1 must not inherit item 2's negation");
+		assertEquals("Recorded allergies: not sulfa [2]", clauses.get(1).text,
+				"the separator strip must not eat the negation");
+	}
 }

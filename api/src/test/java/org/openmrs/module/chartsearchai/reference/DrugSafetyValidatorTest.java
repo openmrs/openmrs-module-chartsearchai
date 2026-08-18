@@ -113,9 +113,12 @@ public class DrugSafetyValidatorTest {
 	public void noFalsePositiveWhenAnswerNeedsNoReference() {
 		// Chart-sufficient answer naming no reference drug -> no warnings. Read the arrangement, not
 		// only the assertion: since issue #143 that is no longer an unconditional property of the
-		// module. The patient's own active orders are checked against her allergies on every question,
-		// so what keeps this case at zero is that her one order (warfarin) resolves to no entry in the
-		// bundled dataset — give her an order the dataset carries and the same call warns.
+		// module, because the patient's own active orders are checked against her allergies too. TWO
+		// things keep this case at zero, and neither alone would be worth relying on: her one order
+		// (warfarin) resolves to no entry in the curated dataset this case runs on, and the response is
+		// about her blood pressure, which the subject-matter scoping of that arm requires it not to be.
+		// Give her an order the dataset carries and this call still warns about nothing — it takes a
+		// response about the drug or about the allergy as well.
 		List<SafetyWarning> warnings = validator().validate(
 				"The patient's most recent blood pressure is 120/80 mmHg [1].",
 				ctx(40, set("warfarin"), set("nsaid"), null));

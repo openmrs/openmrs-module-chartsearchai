@@ -857,7 +857,9 @@ public class CitationGroundingVerifier {
 		while (marker.find()) {
 			String item = LEADING_ITEM_SEPARATOR.matcher(
 					sentence.text.substring(itemStart, marker.end())).replaceFirst("").trim();
-			String named = stripCitationMarkers(item).trim();
+			// stripCitationMarkers already trims, so the item's own leading separator (stripped above)
+			// and the marker are both gone by here — `named` is the item's bare text.
+			String named = stripCitationMarkers(item);
 			if (named.isEmpty() || named.split("\\s+").length > MAX_ENUMERATION_ITEM_WORDS
 					|| CLAUSE_MARKER.matcher(named).find()) {
 				return null;

@@ -768,7 +768,7 @@ public class CitationGroundingVerifier {
 
 	/**
 	 * Marks an enumerated item as a CLAUSE rather than a name, at any length — a personal pronoun or
-	 * possessive, the word "patient", or a finite verb of clinical assertion. Any of these means the
+	 * possessive, or a finite verb of clinical assertion. Any of these means the
 	 * item carries its own subject, so the shared preamble is not the sentence's subject and splitting
 	 * would strip it from the siblings (see {@link #MAX_ENUMERATION_ITEM_WORDS} for the failure that
 	 * causes).
@@ -782,21 +782,34 @@ public class CitationGroundingVerifier {
 	 * <p>This net does NOT make the rule sound, and no claim is made that it does; it refuses the
 	 * subject-bearing shapes that have been constructed and tested, and a verbless clause would pass.
 	 *
-	 * <p><strong>The set was measured against real names, and that removed a member.</strong> Sweeping
-	 * {@link #splitIntoCitedSentences} over the 7452 names the real {@code DdiDrugReferenceSource.parse}
-	 * publishes from the shipped KB, an earlier version of this set that included the pronoun
-	 * {@code i} refused <strong>14</strong> of them — every one a radioisotope form where {@code I} is
-	 * iodine, not a pronoun ({@code Iodide I-131}, {@code Iobenguane (I-123)}, {@code Iodine,I-125} …).
-	 * With {@code i} dropped, <strong>0</strong> of the 7452 match at any length the bound admits
-	 * (re-attributed at the current bound of 8, so the figure is this net's own and not the length
-	 * net's: 93 refusals over the sweep, all of them by length, none by this set). So the claim "no drug name carries
-	 * one of these as a whole token" is now a measurement rather than an assumption — re-run that sweep
-	 * before adding a member, because the obvious short words are exactly the ones chemistry reuses.
-	 * Residual errors are refusals ({@code IT band syndrome} matches {@code it}), which cost a
-	 * mis-scoped citation rather than a wrong verdict.
+	 * <p><strong>The set was measured against real names, and that removed two members.</strong> Both
+	 * sweeps drive {@link #splitIntoCitedSentences} — the production splitter, no predicate
+	 * re-expressed — and attribute each refusal at the CURRENT bound, so these figures are this net's
+	 * own and not the length net's.
+	 *
+	 * <ul>
+	 * <li><strong>Drug names</strong>, the 7452 the real {@code DdiDrugReferenceSource.parse} publishes
+	 * from the shipped 19 MB KB: a version including the pronoun {@code i} refused <strong>14</strong>,
+	 * every one a radioisotope form where {@code I} is iodine rather than a pronoun ({@code Iodide
+	 * I-131}, {@code Iobenguane (I-123)}, {@code Iodine,I-125} …).</li>
+	 * <li><strong>Condition, diagnosis and allergen names</strong>, the 1194 distinct forms behind the
+	 * 704 conditions, 704 diagnoses and 23 allergies on the 3.7.1 demo database: a version including
+	 * {@code patient} refused <strong>2</strong> — {@code Patient died} and {@code Smear positive, new
+	 * tuberculosis patient}. It bought no safety in exchange: the clause it was added for ("the patient
+	 * has diabetes") is caught by {@code has}, and both cycle-1 regression tests still fail closed
+	 * without it.</li>
+	 * </ul>
+	 *
+	 * <p>With {@code i} and {@code patient} dropped, <strong>0</strong> of either corpus matches (93 and
+	 * 24 refusals respectively, all by length). The earlier form of this comment — asserting that no
+	 * drug, condition or allergen name carries a member as a whole token — was an over-claim twice
+	 * over: it covered three name kinds while only drugs had been swept, and it was false for the kind
+	 * that had been. Re-run BOTH sweeps before adding a member; short words are exactly what chemistry
+	 * and clinical phrasing reuse. Residual errors are refusals ({@code IT band syndrome} matches
+	 * {@code it}), which cost a mis-scoped citation rather than a wrong verdict.
 	 */
 	private static final Pattern CLAUSE_MARKER = Pattern.compile(
-			"\\b(?:we|you|he|she|they|it|his|her|their|patient|patients"
+			"\\b(?:we|you|he|she|they|it|his|her|their"
 					+ "|has|have|had|is|are|was|were|shows|showed|reports|reported"
 					+ "|denies|denied|takes|took|receives|received|presents|remains)\\b",
 			Pattern.CASE_INSENSITIVE);

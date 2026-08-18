@@ -140,6 +140,21 @@ public class ShippedDrugReferenceDefaultTest extends BaseModuleContextSensitiveT
 		List<DrugReference> entries = new DrugReferenceService().getAll();
 
 		assertTrue(entries.size() >= WHOLE_KNOWLEDGE_BASE_ENTRIES, "precondition: the whole KB is loaded");
+
+		int carryingInteractions = 0;
+		for (DrugReference entry : entries) {
+			if (!entry.getInteractions().isEmpty()) {
+				carryingInteractions++;
+			}
+		}
+		// The ONLY half, asserted rather than assumed: without this the case says nothing about what the
+		// dataset does carry, and would pass on one carrying nothing at all — which is the shape a name
+		// like this one invites a reader to stop checking. The VOLUME is
+		// theShippedDefaultIsTheWholeDdinterKnowledgeBaseBundledInTheModule's link floor; this is the
+		// scope claim.
+		assertTrue(carryingInteractions > 0,
+				"interactions are the one thing this source publishes, so entries must carry them");
+
 		for (DrugReference entry : entries) {
 			assertTrue(entry.getAgeBands().isEmpty(),
 					"DDInter publishes no dosing, so no entry may carry an age band — a dose ceiling from "

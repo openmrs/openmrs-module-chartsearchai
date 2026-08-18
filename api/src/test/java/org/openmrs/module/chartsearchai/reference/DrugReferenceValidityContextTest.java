@@ -1048,9 +1048,11 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertTrue(status.getEntryCount() > 0, "the bundled DDInter knowledge base loads");
 		assertFalse(status.isInert());
 		for (DrugReferenceValidity.Finding found : status.getFindings()) {
-			assertFalse(
-					DrugReferenceValidity.CONFIGURED_DATA_FILE_NOT_READ.equals(found.getRule())
-							|| DrugReferenceValidity.CONFIGURED_SOURCE_FORMAT_NOT_USED.equals(found.getRule()),
+			// Asked of the production classification rather than of a list of the two configuration rules
+			// spelled here: a THIRD one added later would slip past an enumeration while this dataset went
+			// on reporting it. Which rules are configuration is pinned separately, by
+			// DrugReferenceFindingLoudnessTest.everyRuleIsClassifiedAsDataOrAsConfiguration.
+			assertTrue(DrugReferenceValidity.scopedToWhoOwnsTheDataset(found.getRule()),
 					"a finding naming the operator's own configuration must never be among what the "
 							+ "shipped dataset reports, because those are the findings that stay loud. Was: "
 							+ found);

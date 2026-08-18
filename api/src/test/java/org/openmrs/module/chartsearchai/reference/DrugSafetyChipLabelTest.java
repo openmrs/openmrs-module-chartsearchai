@@ -27,6 +27,13 @@ import org.junit.jupiter.api.Test;
  * of the full KB's 276 diverging names, most are INN-vs-USAN pairs or worse, and the lidocaine
  * route variants share one RxNorm name — a swap mistranslates or collapses them. So display
  * names stay, and labels append the generic as a parenthetical when it genuinely diverges.
+ *
+ * <p>The three parser-model cases here read the BUNDLED dataset, which since ADR Decision 36 is the whole
+ * knowledge base — deliberately, and unlike the cases that reach for
+ * {@link DrugReferenceTestSupport#ddinterEntries()}: each is a statement about what the parser does to
+ * any real DDInter document rather than about one bounded slice, and the interning case reasons about the
+ * full KB's ~300k rows explicitly, so the shipped dataset is the honest data for it rather than merely a
+ * larger one.
  */
 public class DrugSafetyChipLabelTest {
 

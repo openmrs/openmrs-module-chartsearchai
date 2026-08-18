@@ -60,6 +60,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * on the classpath at {@code /chartsearchai/ddi-knowledge-base.json}; any failure degrades
  * to an empty list (fail-safe), so the feature stays an additive net.
  *
+ * <p><b>This is the module's DEFAULT source, and the bundled dataset is the WHOLE knowledge base</b>
+ * (ADR Decision 36) — 2283 substances, 8234 mechanisms, 295,184 interaction rows, byte-identical to the
+ * openmrs-ddi-knowledge-base release it came from, so a refresh is a file copy and its provenance is
+ * checkable by hash. It used to be a 16-drug excerpt with the full file left to the operator to download,
+ * which meant an install that enabled the feature and configured nothing got four curated drugs. Measured
+ * through this parser on the shipped file: 0.6 s to parse cold, ~30 MB retained, 2.1 MB of packed jar.
+ * The excerpt survives as a test fixture ({@code DrugReferenceTestSupport.DDI_EXCERPT}) because a case
+ * asserting "this record renders exactly these partners" needs a dataset whose partner lists it can
+ * state — lisinopril alone has 730 here.
+ *
+ * <p><b>What it does not carry, the default therefore does not either:</b> no dosing (so
+ * {@code chartsearchai.drugSafety.warnOnDoseExcess} has nothing to fire on) and no hand-authored
+ * allergy/condition rules — see the scope note below, and {@code ShippedDrugReferenceDefaultTest}, which
+ * pins the bound rather than leaving it to be discovered.
+ *
  * <p><b>Scope.</b> V1 carries drug-drug interactions only: entries expose {@code interactions},
  * never {@code ageBands} or {@code contraindications} (dosing and drug-allergy/condition are
  * out of scope). {@code management} is not a discrete DDInter field, so whatever management prose
@@ -237,15 +252,14 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, severity, note));
 			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, severity, note));
 		}
-		if (selfPairs > 0) {
-			// WARN, not DEBUG: a knowledge base pairing a drug with itself is a data-validity problem in
-			// the operator's or the upstream project's file, and the count is how they see a refresh has
-			// introduced more of them. Once per load, with the count, rather than per row — the shipped KB
-			// has 26 of them among 295,184 rows and a per-row line would say nothing extra.
-			log.warn("Skipped {} DDInter interaction row(s) pairing a drug with itself or with another "
-					+ "route/formulation row of the same substance — a drug cannot interact with itself",
-					selfPairs);
-		}
+		// Reported through the validity collector rather than logged here: a knowledge base pairing a drug
+		// with itself is a data-validity problem in the operator's or the upstream project's file, which is
+		// what that channel is for, and the count is how they see a refresh has introduced more of them.
+		// Once per load with the count, never per row — the shipped KB has 28 of them among 295,184 rows.
+		// It was a bare log.warn until ADR Decision 36, which cost it the status endpoint (the channel that can still
+		// answer after a lazy load, #154) and made it the one data verdict that stayed loud about a dataset
+		// the module itself ships.
+		validity.rowsPairingASubstanceWithItself(selfPairs);
 
 		// RxCUI frequency: some route variants share a RxCUI (e.g. the Lidocaine variants all
 		// map to 6387). The id must be unique — the injector dedups citations by it — so the

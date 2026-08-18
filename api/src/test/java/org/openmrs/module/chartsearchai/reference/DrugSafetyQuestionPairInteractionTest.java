@@ -64,10 +64,11 @@ public class DrugSafetyQuestionPairInteractionTest {
 		return DrugReferenceTestSupport.ctx(60, null, null, null, null, null);
 	}
 
-	/** The real parsed entry for {@code name} (real bundled DDInter sample, real parser). */
+	/** The real parsed entry for {@code name}, from the same DDInter excerpt this class's validator runs
+	 *  over (real parser, real data) — never the bundled default, which since ADR Decision 36 is the whole
+	 *  knowledge base and would make every premise here a statement about data the assertions never see. */
 	private static DrugReference ddinterEntry(String name) {
-		return new DdiDrugReferenceSource().load().stream()
-				.filter(r -> name.equalsIgnoreCase(r.getName())).findFirst().orElseThrow();
+		return DrugReferenceTestSupport.row(DrugReferenceTestSupport.ddinterEntries(), name);
 	}
 
 	/** A service over {@link #PAIR_FIXTURE}, parsed by the real {@link JsonDrugReferenceSource}. */
@@ -154,7 +155,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		// The no-false-positive case, on the curated seed (source-independent arm): its Ibuprofen
 		// entry's rules name warfarin and aspirin, and its Paracetamol entry's rule names warfarin —
 		// neither names the other, so naming both in one question must produce nothing.
-		DrugReferenceService curated = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService curated = DrugReferenceTestSupport.curatedService();
 		String question = "Can we give ibuprofen together with paracetamol?";
 		List<DrugReference> resolved = curated.findByQuery(question);
 		assertTrue(resolved.stream().anyMatch(r -> "Ibuprofen".equals(r.getName()))

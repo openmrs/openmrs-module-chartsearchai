@@ -36,7 +36,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 public class DrugReferenceInjectorTest {
 
 	private DrugReferenceInjector injector() {
-		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.injector(DrugReferenceTestSupport.curatedService());
 	}
 
 	/** Injector backed by the real WHO ATC sample (parsed by the real source), which — unlike the

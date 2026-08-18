@@ -53,7 +53,7 @@ public class ContraindicationToggleContextTest extends BaseModuleContextSensitiv
 	 * to it, asked a question that names no drug — so nothing but this arm can raise a contraindication.
 	 */
 	private List<SafetyWarning> chipsForAPrescribedAllergy() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService()).validate("",
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService()).validate("",
 				"What are her current medications?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Ibuprofen 400mg"),
 						null, DrugReferenceTestSupport.set("ibuprofen"), null));

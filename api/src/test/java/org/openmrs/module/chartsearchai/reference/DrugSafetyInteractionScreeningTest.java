@@ -50,7 +50,7 @@ public class DrugSafetyInteractionScreeningTest {
 	}
 
 	private static DrugSafetyValidator curatedValidator() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	/** Validator over the substring-shape fixture, parsed by the real {@link DdiDrugReferenceSource}. */

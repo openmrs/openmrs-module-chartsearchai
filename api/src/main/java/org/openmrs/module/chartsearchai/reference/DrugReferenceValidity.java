@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -57,21 +58,31 @@ import org.slf4j.Logger;
  * path ({@link ReferenceDataFiles}), and refusing a dataset over a content defect would turn a
  * misconfiguration into an inert safety layer — the exact state issue #149's WARN exists to flag.
  *
- * <p><b>Every finding is loud, and silence is the absence of a finding rather than a muted one.</b> That
- * distinction is what keeps the channel usable. An untouched default must stay silent: {@code dataFilePath}
- * and {@code crossReactivityGroupsFilePath} both default to paths inside the application data directory
- * that the module never creates, so every install that has configured nothing falls back, and a rule that
- * warned on every fallback would fire on every install and be filtered within a week — worse than silence,
- * because it trains people to ignore the channel. So {@link #configuredDataFileNotRead} returns without
- * reporting anything there. What it does NOT do is report a finding and then keep it out of the log: a
- * finding that exists is one the operator needs, and "visible on the status but not in the log" is the
- * confusion issues #149 and #154 settled — see {@link #CONFIGURED_SOURCE_FORMAT_NOT_USED}, which used to
- * be the exception.
+ * <p><b>Every finding is reported, and silence is the absence of a finding rather than a muted one.</b>
+ * That distinction is what keeps the channel usable. An untouched default must stay silent:
+ * {@code dataFilePath} and {@code crossReactivityGroupsFilePath} both default to paths inside the
+ * application data directory that the module never creates, so every install that has configured nothing
+ * falls back, and a rule that warned on every fallback would fire on every install and be filtered within
+ * a week — worse than silence, because it trains people to ignore the channel. So
+ * {@link #configuredDataFileNotRead} returns without reporting anything there. What it does NOT do is
+ * report a finding and then keep it out of a channel: a finding that exists is one somebody needs, and
+ * "visible on the status but absent from the log" is the confusion issues #149 and #154 settled — see
+ * {@link #CONFIGURED_SOURCE_FORMAT_NOT_USED}, which used to be the exception.
  *
  * <p>Both channels carry every finding, for the same reason: the log says it once, at the moment it
  * happened, and {@link DrugReferenceLoad#getFindings()} — including over
  * {@code GET /chartsearchai/drugreferencestatus} — answers it afterwards, which is the question a lazy
  * load makes a log line unable to answer.
+ *
+ * <p><b>What is scoped is the LEVEL, and only in the log.</b> "Every finding is loud" was true while every
+ * dataset the module shipped was one it authored; since ADR Decision 36 the default is a third-party
+ * knowledge base, and a data finding about THAT names something no operator can fix — 19 of its 2283 rows
+ * trip two of the rules below, and reporting them at WARN on every install of every deployment is the
+ * noise this class exists to avoid. So {@link #logTo(Logger, String)} reports a DATA finding about the
+ * dataset the module ships at INFO and everything else at WARN, while the status channel stays identical
+ * either way. The level says who can act; the status says what is true. A CONFIGURATION finding is never
+ * scoped, because it names a choice the operator made — and because #156's own finding fires exactly when
+ * the bundled dataset was the one read.
  *
  * <p>An instance is a per-load collector, created where the load happens and discarded with it — never a
  * field, and never shared between loads. That is issue #172's rule taken for a reason of this class's
@@ -113,6 +124,21 @@ public final class DrugReferenceValidity {
 	/** A document that omits a table the parser reading it requires, so content it does carry is
 	 *  discarded — issue #242. */
 	public static final String DATASET_MISSING_A_REQUIRED_TABLE = "dataset-missing-a-required-table";
+
+	/**
+	 * Interaction rows pairing a drug with itself, or with another route/formulation row of the same
+	 * substance — issues #152 and #164. A drug cannot interact with itself, so
+	 * {@link DdiDrugReferenceSource} drops the rows; this is where the count is reported.
+	 *
+	 * <p>A finding rather than the bare WARN it used to be. The count was already the thing worth
+	 * reporting — it is how a maintainer sees whether a refresh introduced more of them — but as a log
+	 * line it reached only the channel that cannot answer after a lazy load (#154), and it was the one
+	 * data verdict in this loader that never appeared on
+	 * {@code GET /chartsearchai/drugreferencestatus}. Routing it here also means it is scoped by
+	 * {@link #logTo(Logger, String)} like every other data rule, instead of being the one that stayed
+	 * loud about a dataset the module ships.
+	 */
+	public static final String SELF_PAIRED_INTERACTION_ROWS = "self-paired-interaction-rows";
 
 	/** An explicitly configured dataset file that could not be read, so a different dataset is in
 	 *  force — issue #156, case 1. */
@@ -236,16 +262,89 @@ public final class DrugReferenceValidity {
 	}
 
 	/**
-	 * Reports every finding at WARN, one line each. Owned here so no caller can come to report them
-	 * differently: the entry dataset through {@link DrugReferenceService}, the cross-reactivity groups
-	 * through {@link CrossReactivityGroupsLoader} (which has no status object to be read from), and the
-	 * two parsers' one-argument {@code parse} forms, which have no load to report into at all and so
-	 * would otherwise be the place a document rule went quiet.
+	 * Reports every finding at WARN, one line each — the form for a caller that does not know which
+	 * dataset was read, which is every caller that has no load to report into: the two parsers'
+	 * one-argument {@code parse} forms, and {@link CrossReactivityGroupsLoader}. Unknown provenance is
+	 * reported loudly on purpose; {@link #logTo(Logger, String)} is what softens, and only on evidence.
+	 *
+	 * <p>Owned here so no caller can come to report findings differently.
 	 */
 	void logTo(Logger log) {
+		logTo(log, null);
+	}
+
+	/**
+	 * Reports every finding, at the level the party who can ACT on it can be expected to read.
+	 *
+	 * <p><b>A finding about the DATA scales with who owns the dataset</b> ({@link #DATA_RULES}). Read
+	 * from the application data directory it describes the operator's own file, which they can fix, and
+	 * it is WARN. Read from the module's own classpath it describes the knowledge base the module
+	 * SHIPS — since ADR Decision 36 that is the default — and no operator can fix it: the remedy is the
+	 * upstream handoff issue #196 records, so it is INFO. Reporting it at WARN on every install of every
+	 * deployment is the "noise every install learns to ignore" this whole class is written to avoid, and
+	 * the shipped knowledge base trips two of these rules on 19 of its 2283 rows.
+	 *
+	 * <p><b>A finding about the CONFIGURATION never scales.</b> It names a choice the operator made and
+	 * can unmake, so it is WARN wherever the entries came from — and keying the softening on the rule
+	 * rather than on the origin alone is exactly what keeps that true: issue #156's finding fires when
+	 * the operator's file was NOT read and the bundled dataset WAS, so an origin-only rule would silence
+	 * the one case issues #149 and #154 exist for. Anything not named in {@link #DATA_RULES} is loud,
+	 * including a rule added later and not classified — silence about an operator's mistake is the worse
+	 * failure of the two, so the default direction is loud.
+	 *
+	 * <p><b>The status channel is not scoped with the log.</b> {@link #getFindings()} and
+	 * {@link Finding#toMap()} carry every finding identically either way, so
+	 * {@code GET /chartsearchai/drugreferencestatus} answers the same question after the load whichever
+	 * dataset was read. That is what makes this a statement about AUDIENCE rather than a muted finding:
+	 * the level says who can act, the status says what is true. Do not "fix" an apparent inconsistency
+	 * by scoping the status too.
+	 *
+	 * @param origin the load's {@link ReferenceDataFiles.Loaded#getOrigin()}, or null where the caller
+	 *        has none — which is read as unknown provenance and therefore as loud
+	 */
+	void logTo(Logger log, String origin) {
+		boolean weShipIt = ReferenceDataFiles.isBundledOrigin(origin);
 		for (Finding found : findings) {
-			log.warn("Drug-reference data validity — {}", found);
+			if (weShipIt && scopedToWhoOwnsTheDataset(found.getRule())) {
+				log.info("Drug-reference data validity — {} (in the dataset the module ships, so the "
+						+ "remedy is a data fix upstream rather than a change to this deployment)", found);
+			}
+			else {
+				log.warn("Drug-reference data validity — {}", found);
+			}
 		}
+	}
+
+	/**
+	 * The rules whose subject is the DATA, and so the ones {@link #logTo(Logger, String)} may report
+	 * without being loud when the dataset is the one the module ships. Everything else — the two
+	 * {@code configured*} rules today — describes the operator's configuration and is always loud.
+	 *
+	 * <p>Named as a list of what may soften rather than of what may not, so that a rule added later and
+	 * left unclassified stays loud. {@link #DATASET_MISSING_A_REQUIRED_TABLE} is in here even though on a
+	 * bundled dataset it would mean a packaging defect rather than an operator's file: that case loads
+	 * zero entries, and {@link DrugReferenceLoad#isInert()}'s own unconditional WARN in
+	 * {@link DrugReferenceService} is what makes it loud, which is where the catastrophic case belongs.
+	 */
+	private static final Set<String> DATA_RULES = Collections.unmodifiableSet(
+			new LinkedHashSet<String>(Arrays.asList(BLANK_ALIAS, ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES,
+					RULES_WITHOUT_A_SUBSTANCE_IDENTITY, ALIAS_NAMES_ANOTHER_SUBSTANCE,
+					DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE, DATASET_MISSING_A_REQUIRED_TABLE,
+					SELF_PAIRED_INTERACTION_ROWS)));
+
+	/**
+	 * @return whether {@code rule}'s subject is the DATA, and so whether {@link #logTo(Logger, String)}
+	 *         may report it without being loud when the dataset is the one the module ships. A rule this
+	 *         answers {@code false} for is loud everywhere — see {@link #DATA_RULES} for why the default
+	 *         direction is that way round.
+	 *
+	 *         <p>Exposed rather than inlined so the classification can be GUARDED: a rule added later and
+	 *         left out of that list would be loud on the shipped dataset, which is the safe direction but
+	 *         still the wrong register, and nothing about it would fail.
+	 *         {@code DrugReferenceFindingLoudnessTest} is what makes an unclassified rule fail the build.
+	 */
+	static boolean scopedToWhoOwnsTheDataset(String rule) {
+		return DATA_RULES.contains(rule);
 	}
 
 	// ------------------------------------------------------------------
@@ -308,6 +407,32 @@ public final class DrugReferenceValidity {
 						+ "document of the format in force, or, where a catalogue carrying no rules is "
 						+ "intended, the missing table has to be declared empty. Reading it as empty here "
 						+ "would load an export truncated before it wrote that table as a complete one.");
+	}
+
+	/**
+	 * Issues #152 and #164: interaction rows the parser dropped because both sides are the same
+	 * substance — see {@link #SELF_PAIRED_INTERACTION_ROWS}.
+	 *
+	 * <p><b>DROPPED, and the count is the whole report.</b> A row asserting that a drug interacts with
+	 * itself carries no clinical claim to preserve, so the offending value is the row and the rest of the
+	 * dataset is untouched — the same shape as {@link #BLANK_ALIAS}. Per row rather than per rule instance
+	 * because the count is what a maintainer compares across refreshes; the shipped knowledge base has 28
+	 * such rows among its 295,184.
+	 *
+	 * <p>Which rows those are is decided by {@code DdiDrugReferenceSource.isSelfPair} and not restated
+	 * here: it needs the dataset's own substance registry, which only the parser holds.
+	 *
+	 * @param rows how many rows were dropped; nothing is reported when it is zero
+	 */
+	void rowsPairingASubstanceWithItself(int rows) {
+		if (rows <= 0) {
+			return;
+		}
+		report(SELF_PAIRED_INTERACTION_ROWS, Remedy.DROPPED, rows,
+				rows + " interaction row(s) pair a drug with itself or with another route/formulation "
+						+ "row of the same substance, and a drug cannot interact with itself, so they were "
+						+ "dropped. The fix is in the dataset; the count is how a refresh introducing more "
+						+ "of them becomes visible.");
 	}
 
 	// ------------------------------------------------------------------

@@ -94,7 +94,7 @@ public class SelfNamedAllergyRuleFoldTest {
 		//
 		// It is also the reachability statement for this whole class: without it, every case below could
 		// be about a shape no shipped deployment ever loads.
-		DrugReferenceService bundled = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService bundled = DrugReferenceTestSupport.curatedService();
 		List<String> selfNamed = new ArrayList<String>();
 		for (DrugReference entry : bundled.getAll()) {
 			for (DrugReference.Contraindication rule : entry.getContraindications()) {
@@ -117,7 +117,7 @@ public class SelfNamedAllergyRuleFoldTest {
 	public void anAllergyToTheDrugItselfIsOneChipAndKeepsTheCuratedNote() {
 		// THE case, on the shipped default sourceFormat=json. Pre-fix: 2 chips, one per arm.
 		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService())
+				.validator(DrugReferenceTestSupport.curatedService())
 				.validate("", "Is it safe to give her ibuprofen?",
 						DrugReferenceTestSupport.ctx(60, null, null, null,
 								DrugReferenceTestSupport.set("ibuprofen"), null));
@@ -140,7 +140,7 @@ public class SelfNamedAllergyRuleFoldTest {
 		// safety-finding record, so two chips for one fact were also two near-identical records in the
 		// context window. Real injector wired to the real validator, so the record count follows the
 		// chips rather than being asserted separately.
-		DrugReferenceService service = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
 		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
 
@@ -162,7 +162,7 @@ public class SelfNamedAllergyRuleFoldTest {
 		// allergy rule names a CLASS, so the curated arm cannot fire on a gentamicin allergy and the
 		// identity arm is the only thing that can chip at all. It was one chip before and must stay one.
 		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService())
+				.validator(DrugReferenceTestSupport.curatedService())
 				.validate("", "Is it safe to give her gentamicin?",
 						DrugReferenceTestSupport.ctx(60, null, null, null,
 								DrugReferenceTestSupport.set("gentamicin"), null));
@@ -180,7 +180,7 @@ public class SelfNamedAllergyRuleFoldTest {
 		// reported, so it keeps its own chip. A fold keyed on "the curated arm and the allergen arm both
 		// fired for this entry" would silence the class rule and lose a genuine second finding.
 		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService())
+				.validator(DrugReferenceTestSupport.curatedService())
 				.validate("", "Is it safe to give her ibuprofen?",
 						DrugReferenceTestSupport.ctx(60, null, null, null,
 								DrugReferenceTestSupport.set("ibuprofen", "nsaid"), null));

@@ -73,7 +73,7 @@ public class ClassChipPartnerLabelTest {
 		// That is the residue addInteractionWarnings documented as needing the per-order codes; naming
 		// the order and correlating it are the same resolution, so they arrived together.
 		DrugSafetyValidator validator = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService());
+				.validator(DrugReferenceTestSupport.curatedService());
 
 		List<SafetyWarning> warnings = validator.validate("", "Can I give ibuprofen?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Aspirin 81mg"),
@@ -96,7 +96,7 @@ public class ClassChipPartnerLabelTest {
 		// print, and the two arms stay uncorrelated — exactly the case above, minus the order. The
 		// ladder stops here; it does not fabricate a name.
 		DrugSafetyValidator validator = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService());
+				.validator(DrugReferenceTestSupport.curatedService());
 
 		List<SafetyWarning> warnings = validator.validate("", "Can I give ibuprofen?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Aspirin 81mg"),

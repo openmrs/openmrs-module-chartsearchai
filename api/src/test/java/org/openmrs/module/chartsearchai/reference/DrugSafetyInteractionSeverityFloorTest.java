@@ -39,8 +39,8 @@ public class DrugSafetyInteractionSeverityFloorTest {
 
 	@Test
 	public void ddinterInteractionsCarryStructuredSeverity() {
-		DrugReference warfarin = new DdiDrugReferenceSource().load().stream()
-				.filter(r -> "Warfarin".equalsIgnoreCase(r.getName())).findFirst().orElseThrow();
+		DrugReference warfarin = DrugReferenceTestSupport.row(
+				DrugReferenceTestSupport.ddinterEntries(), "Warfarin");
 		DrugReference.Interaction ibuprofen = warfarin.getInteractions().stream()
 				.filter(i -> "ibuprofen".equals(i.getToken())).findFirst().orElseThrow();
 		assertEquals("Major", ibuprofen.getSeverity(),
@@ -119,7 +119,7 @@ public class DrugSafetyInteractionSeverityFloorTest {
 		// The curated seed's hand-authored rules carry no severity field; absent severity is
 		// exempt from the floor — every curated rule is deliberate.
 		DrugSafetyValidator validator = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService());
+				.validator(DrugReferenceTestSupport.curatedService());
 		List<SafetyWarning> warnings = validator.validate(
 				"Ibuprofen would be a reasonable choice.", "What can we give for pain?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Warfarin"),

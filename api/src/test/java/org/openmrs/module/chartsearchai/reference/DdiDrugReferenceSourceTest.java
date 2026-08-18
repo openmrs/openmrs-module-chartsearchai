@@ -27,13 +27,16 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 /**
  * Exercises the real {@link DdiDrugReferenceSource} and its behaviour through the real injector
  * and validator (via {@link DrugReferenceTestSupport}). With no OpenMRS context available the
- * source falls back to the bundled {@code /chartsearchai/ddi-knowledge-base.json} sample — the
- * production default — so these run the real load/parse/inject/validate paths against real data.
+ * source falls back to the bundled {@code /chartsearchai/ddi-knowledge-base.json} — the production
+ * default, and since ADR Decision 36 the whole 2283-substance knowledge base rather than the 16-drug
+ * excerpt it used to be — so these run the real load/parse/inject/validate paths against the data a
+ * default install actually reasons over.
  *
- * <p>The tests that need a KB slice the 60-mechanism bundled sample does not contain feed the real
- * {@link DdiDrugReferenceSource#parse} a fixture instead (through the shared
- * {@link DrugReferenceTestSupport#ddiFixtureEntries}); the pipeline exercised is the same, only the
- * dataset is narrowed.
+ * <p>The tests that need a slice the knowledge base does not contain, or a bounded one whose partner
+ * lists they can state, feed the real {@link DdiDrugReferenceSource#parse} a fixture instead (through
+ * the shared {@link DrugReferenceTestSupport#ddiFixtureEntries}, or
+ * {@link DrugReferenceTestSupport#ddinterEntries()} for the excerpt); the pipeline exercised is the
+ * same, only the dataset is narrowed.
  *
  * <p>Not only parser behaviour: six of these cases specify {@link DrugSafetyValidator}'s
  * one-chip-per-(drug, active order) collapse of issue #115, because the shape that motivates it —

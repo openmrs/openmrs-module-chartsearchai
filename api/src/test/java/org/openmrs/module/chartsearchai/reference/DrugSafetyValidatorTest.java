@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 public class DrugSafetyValidatorTest {
 
 	private DrugSafetyValidator validator() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	/**

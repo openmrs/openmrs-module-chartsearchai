@@ -135,8 +135,14 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	}
 
 	private static List<String> rulesOf(DrugReferenceLoad status) {
+		return rulesOf(status.getFindings());
+	}
+
+	/** The findings-list form, for the parse-level sweep, which has a collector rather than a load. One
+	 *  definition so the two call shapes cannot come to mean different things. */
+	private static List<String> rulesOf(List<DrugReferenceValidity.Finding> findings) {
 		List<String> rules = new ArrayList<String>();
-		for (DrugReferenceValidity.Finding found : status.getFindings()) {
+		for (DrugReferenceValidity.Finding found : findings) {
 			rules.add(found.getRule());
 		}
 		return rules;
@@ -158,7 +164,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	@Test
 	public void aBlankAliasIsDroppedAtLoadSoTheEntryStopsMatchingEveryAllergen() throws IOException {
 		DrugReferenceService service = loading(BLANK_ALIAS_FIXTURE, "h150-blank-alias.json",
-				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
 
 		DrugReferenceLoad status;
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
@@ -214,7 +220,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	@Test
 	public void anEntryWhoseAliasesOmitItsOwnNameIsGivenItAtLoad() throws IOException {
 		DrugReferenceService service = loading(NAME_NOT_ITS_OWN_ALIAS_FIXTURE, "h211-stem-only.json",
-				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
 
 		DrugReferenceLoad status;
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
@@ -260,7 +266,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	@Test
 	public void rulesOnRowsThatDoNotDeclareTheirSubstanceAreReportedAsUnreachable() throws IOException {
 		DrugReferenceService service = loading(NAME_NOT_ITS_OWN_ALIAS_FIXTURE, "h211-undeclared.json",
-				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
 
 		DrugReferenceLoad status = service.getLoadStatus();
 
@@ -296,7 +302,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	@Test
 	public void declaringTheSubstanceKeepsEveryRuleBearingRowAndSilencesTheFinding() throws IOException {
 		DrugReferenceService service = loading(SUBSTANCE_DECLARED_FIXTURE, "h211-declared.json",
-				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
 
 		DrugReferenceLoad status;
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
@@ -534,6 +540,11 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	public void anExplicitDataFilePathThatCouldNotBeReadIsReportedLoudly() {
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
+		// Named rather than left to the default, so the classpath fallback this case asserts on is the
+		// curated parser's own and stays that whatever the default format is (it moved once, in ADR Decision 36).
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT,
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
 				"chartsearchai/h156-absent-drug-reference.json");
@@ -613,7 +624,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 							+ capture.describeAll());
 		}
 
-		assertEquals(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT,
+		assertEquals(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON,
 				status.getSourceFormat(), "the curated parser is what actually ran");
 		assertTrue(status.getEntryCount() > 0, "and it could read the file, so the load looks healthy");
 		DrugReferenceValidity.Finding found = finding(status,
@@ -655,7 +666,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 */
 	@Test
 	public void anUnsetOrCorrectSourceFormatIsNotAFinding() throws IOException {
-		for (String honoured : new String[] { "", ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT,
+		for (String honoured : new String[] { "", ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON,
 				"DDINTER" }) {
 			DrugReferenceService service = loading(ALIAS_NAMES_ANOTHER_SUBSTANCE_FIXTURE,
 					"h156-honoured.json", honoured);
@@ -814,7 +825,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	public void aDdinterDocumentReadByTheCuratedParserIsReportedTheSameWay() throws IOException {
 		DrugReferenceService service = loading(DrugReferenceTestSupport.DDI_EMPTY_INTERACTIONS_TABLE,
 				"h242-curated-parser.json",
-				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT);
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
 
 		DrugReferenceLoad status;
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
@@ -899,7 +910,13 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 				parsed = ddi ? DdiDrugReferenceSource.parse(in, validity)
 						: JsonDrugReferenceSource.parse(in, validity);
 			}
-			boolean unusable = parsed.isEmpty() || !validity.getFindings().isEmpty();
+			// The DOCUMENT rule, not "any finding". Those were the same thing while a table this parser
+			// requires was the only thing a parse could report; since ADR Decision 36 a parse also reports the rows
+			// it dropped as self-paired, and TEN fixtures here carry such rows deliberately — they are the
+			// #152/#164 corpus. A row a parser dropped does not make the file unusable, which is what this
+			// sweep is about and what its javadoc says: the tables its parser needs, and at least one entry.
+			boolean unusable = parsed.isEmpty() || rulesOf(validity.getFindings())
+					.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE);
 			if (unusable != DELIBERATELY_MIS_SHAPED.equals(fixture.getName())) {
 				wrong.add(fixture.getName() + " -> " + parsed.size() + " entries " + validity.getFindings());
 			}
@@ -947,30 +964,72 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	// ------------------------------------------------------------------
 
 	/**
-	 * Every dataset the module ships must satisfy every rule. This is the control that keeps the check
+	 * Every dataset the module AUTHORS must satisfy every rule. This is the control that keeps the check
 	 * from becoming a channel operators filter: it is not evidence that any rule works — the cases above
 	 * are — and it is the thing that breaks if a rule is written loosely enough to fire on good data.
 	 *
-	 * <p>The full 19 MB knowledge base is not in this repository, so it cannot be asserted here; it is
-	 * the bundled sample that ships in the omod, and the full KB is measured on a deployment.
+	 * <p>The curated dataset is one the module authors, so a finding on it is a defect a commit here can
+	 * fix, and the bar stays "none".
 	 */
 	@Test
-	public void everyShippedDatasetSatisfiesEveryRule() throws IOException {
+	public void everyDatasetTheModuleAuthorsSatisfiesEveryRule() throws IOException {
+		DrugReferenceLoad status = shippedLoadOf(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
+
+		assertTrue(status.getEntryCount() > 0, "the bundled curated dataset loads");
+		assertTrue(status.getFindings().isEmpty(),
+				"a dataset this repository authors must satisfy every rule the loader applies to an "
+						+ "operator's file. Findings were: " + status.getFindings());
+	}
+
+	/**
+	 * The dataset the module REDISTRIBUTES cannot be held to that bar, and this is the honest statement of
+	 * what replaces it. The shipped DDInter knowledge base trips two content rules on 19 of its 2283 rows
+	 * — {@code Omeprazole} publishing {@code esomeprazole}, four more {@code rxnorm_name}s naming an
+	 * enantiomer or a prodrug's parent, ten stray CIEL cross-walk links, and {@code Fluoroestradiol f-18}
+	 * keyed as {@code estradiol} — and issue #196 records the remedy for exactly these as an upstream
+	 * handoff. Nine of them sit in {@code rxnorm_name}, which is the field
+	 * {@link DrugReference#substanceKey()} is built from, so correcting them here would re-partition
+	 * substances on our own authority; that is why ADR Decision 36 ships the file byte-identical and
+	 * scopes the log level instead.
+	 *
+	 * <p>So the property asserted is the one that LICENSES that scoping: every finding this dataset
+	 * produces must be one {@link DrugReferenceValidity#logTo(org.slf4j.Logger, String)} may report
+	 * without being loud. A CONFIGURATION finding here would mean the softening had swallowed something
+	 * that names an operator's own choice, which is the regression that would otherwise be invisible.
+	 *
+	 * <p><b>What this deliberately does not pin is the COUNT.</b> Pinning 18/1/28 would break the build on
+	 * any knowledge-base refresh, including one that FIXES these rows, and Decision 36 chose not to couple
+	 * the suite to a third party's data. The counts are reported on
+	 * {@code GET /chartsearchai/drugreferencestatus}, which is where a maintainer reads them; what is
+	 * pinned here is that the load still works ({@link ShippedDrugReferenceDefaultTest} holds the floors)
+	 * and that nothing it reports is of a kind that must stay loud.
+	 */
+	@Test
+	public void theDatasetTheModuleRedistributesReportsOnlyFindingsItsOwnProvenanceExplains()
+			throws IOException {
+		DrugReferenceLoad status = shippedLoadOf(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		assertTrue(status.getEntryCount() > 0, "the bundled DDInter knowledge base loads");
+		assertFalse(status.isInert());
+		for (DrugReferenceValidity.Finding found : status.getFindings()) {
+			assertFalse(
+					DrugReferenceValidity.CONFIGURED_DATA_FILE_NOT_READ.equals(found.getRule())
+							|| DrugReferenceValidity.CONFIGURED_SOURCE_FORMAT_NOT_USED.equals(found.getRule()),
+					"a finding naming the operator's own configuration must never be among what the "
+							+ "shipped dataset reports, because those are the findings that stay loud. Was: "
+							+ found);
+		}
+	}
+
+	/** The shipped dataset of {@code format}: the feature on, nothing else configured, so the classpath
+	 *  fallback is what the real load resolves to. */
+	private DrugReferenceLoad shippedLoadOf(String format) {
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
-
-		for (String format : new String[] { ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT,
-				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER }) {
-			Context.getAdministrationService().setGlobalProperty(
-					ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT, format);
-			Context.getAdministrationService().setGlobalProperty(
-					ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, "");
-
-			DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
-			assertTrue(status.getEntryCount() > 0, "the bundled " + format + " dataset loads");
-			assertTrue(status.getFindings().isEmpty(),
-					"the bundled " + format + " dataset must satisfy every rule the loader applies to an "
-							+ "operator's file. Findings were: " + status.getFindings());
-		}
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT, format);
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, "");
+		return new DrugReferenceService().getLoadStatus();
 	}
 }

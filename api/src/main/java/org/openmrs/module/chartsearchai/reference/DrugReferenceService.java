@@ -899,7 +899,10 @@ public class DrugReferenceService {
 			validity.addAll(active.lastLoadFindings());
 			validity.configuredSourceFormatNotUsed(configuredFormat, effectiveFormat);
 			validity.checkEntries(loaded);
-			validity.logTo(log);
+			// With the origin, so a data finding is reported at the level of whoever can act on it: the
+			// operator for their own file, the module's maintainers for the knowledge base we ship
+			// (ADR Decision 36). A configuration finding is loud either way — see logTo.
+			validity.logTo(log, active.lastLoadOrigin());
 			DrugReferenceLoad outcome = new DrugReferenceLoad(effectiveFormat, configuredFormat,
 					configuredPath, active.lastLoadOrigin(), loaded.size(), validity.getFindings());
 			// A configured source that resolved to nothing is reported LOUDLY, naming both global
@@ -929,15 +932,23 @@ public class DrugReferenceService {
 	}
 
 	/**
-	 * @return the source format that will actually be used for {@code configuredFormat}: {@code atc}
-	 *         and {@code ddinter} select their own adapters, and any other value (including the
-	 *         unset/no-context case, and a typo) falls back to the curated {@code json} default.
-	 *         Reported in {@link DrugReferenceLoad#getSourceFormat()} so that fallback is visible
-	 *         rather than silent — a mistyped format is one of the ways a deployment ends up parsing
-	 *         a dataset with the wrong parser and loading nothing.
+	 * @return the source format that will actually be used for {@code configuredFormat}: {@code atc} and
+	 *         {@code ddinter} select their own adapters, and any other value — a typo — falls through to
+	 *         the curated {@code json} parser. Reported in {@link DrugReferenceLoad#getSourceFormat()} so
+	 *         that fallback is visible rather than silent — a mistyped format is one of the ways a
+	 *         deployment ends up parsing a dataset with the wrong parser and loading nothing.
+	 *
+	 *         <p><b>The unset case no longer arrives here as a typo.</b> The caller reads the global
+	 *         property with {@link ChartSearchAiConstants#DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT} as its
+	 *         default, and since ADR Decision 36 that is {@code ddinter} — so an install that configured
+	 *         nothing, and a unit test with no context, both reach this method with {@code ddinter} and
+	 *         match above. What still lands on the fall-through is a value that matches no adapter, and
+	 *         that is now a DIFFERENT answer from the default rather than the same one: mistyping
+	 *         {@code ddinter} hands whatever {@code dataFilePath} names to the curated parser. Loud, via
+	 *         {@link DrugReferenceValidity#configuredSourceFormatNotUsed}.
 	 *
 	 *         <p>The fall-through returns the curated format's NAME rather than "whatever the default
-	 *         is", which are equal today and are not the same fact. It is paired with
+	 *         is" — they were equal until Decision 36 and were never the same fact. It is paired with
 	 *         {@link #sourceFor(String)}'s own fall-through, which is unconditionally
 	 *         {@link JsonDrugReferenceSource}, so the name has to be the one that parser answers to
 	 *         however the default moves.

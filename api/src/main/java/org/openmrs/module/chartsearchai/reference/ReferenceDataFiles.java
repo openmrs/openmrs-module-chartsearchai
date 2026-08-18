@@ -55,6 +55,19 @@ final class ReferenceDataFiles {
 	/** {@link Loaded#getOrigin()} when nothing could be read at all. */
 	static final String ORIGIN_NONE = "none";
 
+	/**
+	 * @param origin a {@link Loaded#getOrigin()}, or null
+	 * @return whether those entries came from a dataset the MODULE ships rather than from a file the
+	 *         deployment provided — the question "who can fix a defect in this data", which
+	 *         {@link DrugReferenceValidity#logTo(org.slf4j.Logger, String)} reports at the level of.
+	 *         Named here because this is where the origin vocabulary is defined; a caller testing the
+	 *         prefix itself would be a second answer to the same question. A null or unrecognised origin
+	 *         is NOT bundled: unknown provenance is reported loudly, so the fail direction is loud.
+	 */
+	static boolean isBundledOrigin(String origin) {
+		return origin != null && origin.startsWith(CLASSPATH_ORIGIN_PREFIX);
+	}
+
 	/** Parses one dataset stream into its items. */
 	@FunctionalInterface
 	interface DatasetParser<T> {

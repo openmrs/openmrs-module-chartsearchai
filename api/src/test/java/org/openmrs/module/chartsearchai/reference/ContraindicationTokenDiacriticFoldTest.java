@@ -66,7 +66,7 @@ public class ContraindicationTokenDiacriticFoldTest {
 
 	/** The shipped curated dataset, through the production classpath default. */
 	private DrugSafetyValidator curatedValidator() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	private PatientClinicalContext allergicTo(String allergen) {

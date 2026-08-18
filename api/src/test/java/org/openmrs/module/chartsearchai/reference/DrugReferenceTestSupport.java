@@ -321,6 +321,18 @@ public final class DrugReferenceTestSupport {
 	static final String DDI_EMPTY_INTERACTIONS_TABLE =
 			"chartsearchai-test/ddi-empty-interactions-table.json";
 
+	/**
+	 * The 16-drug DDInter excerpt behind {@link #ddinterService} — 16 substances, 60 mechanisms, 120
+	 * interaction rows of real DDInter data, and the module's bundled default until ADR Decision 36
+	 * replaced it with the whole knowledge base (which is why the file's own {@code metadata.note} still
+	 * reads as a bundled default: it is kept byte-identical to what shipped, so the cases that pin
+	 * rendered text are pinned to data that has not changed). Unlike its siblings above it is not a slice
+	 * built to pose one shape — it is a general-purpose bounded dataset, which is exactly what a case
+	 * asserting "these partners, in this order" needs. {@link #ddinterService} says why the shipped
+	 * default cannot serve that purpose.
+	 */
+	static final String DDI_EXCERPT = "chartsearchai-test/ddi-knowledge-base-sample.json";
+
 	/** Three nitroimidazoles, curated ({@link JsonDrugReferenceSource}) rather than DDInter-shaped: the
 	 *  class arm's co-medication GROUPING slice, where one order's codes are covered only in part
 	 *  (issue #186) and the same order shapes are asked of the name rung (issue #228). */
@@ -485,20 +497,67 @@ public final class DrugReferenceTestSupport {
 		return service.withReferenceNames(raw, service.findForActiveOrders(raw));
 	}
 
-	/** A service over the real bundled datasets (classpath fallback — the production default path). */
-	static DrugReferenceService bundledService() {
-		return new DrugReferenceService();
-	}
-
-	/** A service over the real bundled DDInter sample, parsed by the real {@link DdiDrugReferenceSource}.
-	 *  Cross-reactivity groups are pinned EMPTY by the {@code setEntries} seam underneath — use
-	 *  {@link #ddinterServiceWithGroups} when a case depends on a curated group. */
-	static DrugReferenceService ddinterService() {
-		return serviceWith(new DdiDrugReferenceSource().load());
+	/**
+	 * A service over the bundled CURATED dataset — the real {@link DrugReferenceService} load path
+	 * (so the load-time validity repairs run and the real curated cross-reactivity groups are loaded,
+	 * unlike the {@code setEntries} seam behind {@link #serviceWith}), with the adapter pinned through
+	 * the {@code setSource} seam instead of the format global property, which a non-context test cannot
+	 * set.
+	 *
+	 * <p>Pinned rather than left to the default because the default MOVED: since ADR Decision 36 it is
+	 * the DDInter knowledge base, which publishes no age band and no hand-authored allergy/condition
+	 * rule, and every case behind this accessor is about exactly those — a dose ceiling, a curated
+	 * contraindication note, a self-naming allergy rule. Named for the dataset it wants for the same
+	 * reason {@code DRUG_REFERENCE_SOURCE_JSON} exists: "the bundled one" and "the default one" were the
+	 * same dataset and are not the same fact.
+	 *
+	 * <p>{@link DrugReferenceService#getLoadStatus()} on the returned service describes the format the
+	 * GP selects rather than the injected adapter (the seam says so), so no case here may assert it.
+	 */
+	static DrugReferenceService curatedService() {
+		DrugReferenceService service = new DrugReferenceService();
+		service.setSource(new JsonDrugReferenceSource());
+		return service;
 	}
 
 	/**
-	 * As {@link #ddinterService}, carrying the real curated cross-reactivity groups — the bundled-sample
+	 * A service over the 16-drug DDInter EXCERPT, parsed by the real {@link DdiDrugReferenceSource}.
+	 * Cross-reactivity groups are pinned EMPTY by the {@code setEntries} seam underneath — use
+	 * {@link #ddinterServiceWithGroups} when a case depends on a curated group.
+	 *
+	 * <p>The excerpt is a pinned fixture and no longer the module's bundled default: since ADR
+	 * Decision 36 the bundled dataset is the WHOLE knowledge base, and the cases behind this accessor
+	 * need a dataset whose partner lists they can state — "this record renders exactly these partners",
+	 * "this entry has one partner", "13 were withheld". Against 2283 substances and 590,312 links those
+	 * premises are all false (lisinopril alone has 730 partners), so pointing them at the shipped default
+	 * would test the prompt budget's truncation rather than the behaviour each case is about. The excerpt
+	 * is still real DDInter data read by the real parser; only its size is chosen.
+	 * {@link ShippedDrugReferenceDefaultTest} and {@link DdiDrugReferenceSourceTest} are what cover the
+	 * shipped default itself.
+	 */
+	static DrugReferenceService ddinterService() {
+		return serviceWith(ddinterEntries());
+	}
+
+	/**
+	 * The excerpt's entries, parsed by the real {@link DdiDrugReferenceSource} — what
+	 * {@link #ddinterService} is built over, exposed so a case that states a PREMISE about one row
+	 * ("warfarin's ibuprofen interaction is Major") reads it from the same dataset the validator under
+	 * test is using. Straddling two is how a premise comes to describe data the assertion never sees,
+	 * which is what happened when the bundled default stopped being this excerpt.
+	 */
+	static List<DrugReference> ddinterEntries() {
+		try {
+			return ddiFixtureEntries(DDI_EXCERPT);
+		}
+		catch (IOException e) {
+			throw new IllegalStateException("the pinned DDInter excerpt " + DDI_EXCERPT
+					+ " must be readable from the test classpath", e);
+		}
+	}
+
+	/**
+	 * As {@link #ddinterService}, carrying the real curated cross-reactivity groups — the excerpt
 	 * counterpart of {@link #ddiFixtureService}, and here for the same reason that one is: the two steps
 	 * have to stay together, because {@link #serviceWith} pins the groups EMPTY through its
 	 * {@code setEntries} seam and a service built without the second call silently cannot raise a

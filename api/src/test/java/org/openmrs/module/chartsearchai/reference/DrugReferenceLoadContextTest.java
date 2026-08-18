@@ -131,7 +131,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	@Test
 	public void curatedFormatPointedAtTheDdiKnowledgeBaseLoadsNothingAndIsReportedAtWarn() throws IOException {
 		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "mismatch-ddi.json");
-		configure(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT, path);
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON, path);
 
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
 			assertTrue(new DrugReferenceService().getAll().isEmpty(),
@@ -142,9 +142,17 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		}
 	}
 
+	/**
+	 * A HEALTHY operator file, which means one with nothing for a rule to report: the 16-drug DDInter
+	 * excerpt rather than the shipped knowledge base, because that knowledge base is not healthy in this
+	 * sense — it trips two content rules on 19 of its rows (ADR Decision 36), and read from the
+	 * application data directory it is an operator's file, so those findings are correctly LOUD. Using it
+	 * here would have this case assert that a dataset with known defects is quiet, which is the opposite
+	 * of what the rule says and would have to be weakened again the next time a rule was added.
+	 */
 	@Test
 	public void healthyLoadIsNotReportedAtWarnOrError() throws IOException {
-		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "healthy-ddi.json");
+		String path = copyToAppData(DrugReferenceTestSupport.DDI_EXCERPT, "healthy-ddi.json");
 		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER, path);
 
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
@@ -280,7 +288,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 
 			assertEquals("ddintr", status.getConfiguredSourceFormat(),
 					"the raw global-property value is reported as configured, typo and all");
-			assertEquals(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT,
+			assertEquals(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON,
 					status.getSourceFormat(),
 					"an unrecognised format silently falls back to the curated parser, and the status "
 							+ "is where that becomes visible rather than silent");
@@ -342,7 +350,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	 */
 	@Test
 	public void loadStatusNamesTheBundledOriginWhenTheConfiguredFileIsAbsent() {
-		configure(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT,
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON,
 				"chartsearchai/no-such-drug-reference.json");
 
 		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
@@ -425,7 +433,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 
 		// Flip both GPs to a mismatched pair AFTER the load, exactly as an operator or a
 		// verification pass would.
-		configure(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT, path);
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON, path);
 
 		DrugReferenceLoad second = service.getLoadStatus();
 		assertEquals(first.getSourceFormat(), second.getSourceFormat(),

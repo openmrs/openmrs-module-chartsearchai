@@ -58,11 +58,13 @@ import org.springframework.stereotype.Service;
  * module-supplied reference material are excepted, see below. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
  * citation) is a Tier-1 pass, so confirming only failures would miss it. References are verified
- * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except that, under clause-scoped
- * grounding, the citations of one compound sentence are each verified in their OWN call: batched
- * entailment is NOT per-pair independent, so co-batching a compound sentence's citations (whose
- * overlapping clause statements differ only by length) lets the LLM couple their verdicts and
- * silently flip a correct citation to not-grounded. The total is capped at
+ * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except for the citations of ONE
+ * sentence whose statements overlap, which are each verified in their OWN call: batched entailment
+ * is NOT per-pair independent, so co-batching them lets the LLM couple their verdicts and silently
+ * flip a correct citation to not-grounded. Two shapes qualify — a compound sentence under
+ * clause-scoped grounding (whose cumulative-prefix statements differ only by length), and an
+ * ENUMERATING sentence in either mode (whose per-item statements share a preamble, see
+ * {@code splitEnumeration} and issue #278). The total is capped at
  * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer;
  * references beyond the cap keep their Tier-1 verdict.
  *
@@ -683,6 +685,11 @@ public class CitationGroundingVerifier {
 	/**
 	 * Splits the answer into sentences, recording for each the set of {@code [N]}
 	 * indices it cites inline. Returns an empty list for null/blank answers.
+	 *
+	 * <p>A sentence that ENUMERATES its citations is split per item by
+	 * {@link #splitEnumeration} — in BOTH scoping modes, because an enumeration's claim is
+	 * mis-identified rather than merely wide-scoped (issue #278). Every other sentence is returned
+	 * whole, so sentence-scope keeps handing a compound sentence's citations one shared statement.
 	 */
 	static List<Sentence> splitIntoCitedSentences(String answer) {
 		List<Sentence> sentences = new ArrayList<Sentence>();
@@ -695,9 +702,95 @@ public class CitationGroundingVerifier {
 			}
 			Sentence sentence = new Sentence(raw);
 			sentence.citedIndexes.addAll(ChartSearchAiUtils.citedIndexes(raw));
-			sentences.add(sentence);
+			List<Sentence> items = splitEnumeration(sentence);
+			if (items != null) {
+				sentences.addAll(items);
+			} else {
+				sentences.add(sentence);
+			}
 		}
 		return sentences;
+	}
+
+	/**
+	 * Leading separator of an enumerated item — the punctuation and coordinating conjunction that
+	 * join it to its siblings ({@code ", "}, {@code ", and "}, {@code " or "}). Stripped so a
+	 * claim reads as its own statement rather than a dangling continuation.
+	 *
+	 * <p>The {@code \b} after {@code and|or} is load-bearing: without it a first item named
+	 * {@code Orphenadrine} loses its {@code Or} and the claim asks about "phenadrine", a drug that
+	 * does not exist. The conjunction is optional and the punctuation classes around it are not, so
+	 * {@code ", Ketoconazole"} strips exactly {@code ", "}.
+	 */
+	private static final Pattern LEADING_ITEM_SEPARATOR =
+			Pattern.compile("^[\\s,;]*(?:(?:and|or)\\b[\\s,;]*)?", Pattern.CASE_INSENSITIVE);
+
+	/**
+	 * Splits a sentence that ENUMERATES its cited records into one claim per record — the shared
+	 * preamble plus that record's OWN item — or returns {@code null} when the sentence is not an
+	 * enumeration and must be left to the caller's normal scoping.
+	 *
+	 * <p><strong>Why this exists.</strong> Both scoping modes ask the wrong-sized question of an
+	 * enumeration (issue #278). Sentence-scope hands every citation the whole sentence, so each
+	 * allergy record is asked to entail a conjunction naming the OTHER allergens too; clause-scope
+	 * hands citation <em>k</em> the cumulative prefix, which still names items 1..<em>k</em>−1. Only
+	 * the first citation is ever asked about its own claim, and a correct judge answers "no" to
+	 * every other one — measured live as {@code grounded=false} on all three citations of a correct,
+	 * fully-cited allergy list, which a client renders as <em>Unsupported</em>.
+	 *
+	 * <p><strong>Why it is keyed on a colon.</strong> The claim for one item is "preamble + that
+	 * item", and the preamble is the text the items hang off — so the split needs the boundary
+	 * between the preamble and the FIRST item. That boundary is not recoverable in general: in
+	 * "Has diabetes [1] and hypertension [2]" the preamble could be "Has" or "Has diabetes", and
+	 * guessing it short strips the subject, which is the one thing the cumulative prefix exists to
+	 * retain (a subject-stripped fragment cannot catch the family-history / negation flips Tier-2 is
+	 * for). A list-introducing colon is the sentence declaring that boundary itself, so it is taken
+	 * as the only reliable signal rather than as a convenience. Consequence, stated rather than
+	 * hidden: a comma-only enumeration ("The patient has diabetes [1], hypertension [2]") is NOT
+	 * split and remains mis-scoped — #278 stays open for it. Narrow and correct beats broad and
+	 * subject-stripping, because this decides whether a TRUE citation is published as unsupported.
+	 *
+	 * <p>Returns {@code null} — meaning "not an enumeration" — for a single-citation sentence, for a
+	 * sentence with no colon before its first marker, and for one where any item contributes no text
+	 * of its OWN beyond its marker. That last guard is why it tests the MARKER-STRIPPED item: the
+	 * substring always ends in {@code [N]}, whose characters {@link #LEADING_ITEM_SEPARATOR} cannot
+	 * consume, so an emptiness check on the raw item is unreachable. A colon followed immediately by
+	 * a citation ("allergies: [1], Ketoconazole [2]") is not a list of NAMED items, so reading it as
+	 * one is a misread — falling back beats handing that citation a preamble-only claim that asserts
+	 * nothing.
+	 * Each returned item is flagged {@link Sentence#isolate}: the items share a preamble, so
+	 * co-batching them would let the not-per-pair-independent LLM couple their verdicts.
+	 */
+	private static List<Sentence> splitEnumeration(Sentence sentence) {
+		if (sentence.citedIndexes.size() <= 1) {
+			return null;
+		}
+		Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(sentence.text);
+		if (!marker.find()) {
+			return null;
+		}
+		// lastIndexOf, not indexOf: with several colons before the items the one nearest the first
+		// item is the one introducing the list ("Findings: allergies: X [1], Y [2]").
+		int colon = sentence.text.lastIndexOf(':', marker.start());
+		if (colon < 0) {
+			return null;
+		}
+		String preamble = sentence.text.substring(0, colon + 1);
+
+		List<Sentence> items = new ArrayList<Sentence>();
+		int itemStart = colon + 1;
+		marker.reset();
+		while (marker.find()) {
+			String item = LEADING_ITEM_SEPARATOR.matcher(
+					sentence.text.substring(itemStart, marker.end())).replaceFirst("").trim();
+			if (stripCitationMarkers(item).isEmpty()) {
+				return null;
+			}
+			items.add(new Sentence(preamble + " " + item,
+					Collections.singleton(Integer.valueOf(marker.group(1))), true));
+			itemStart = marker.end();
+		}
+		return items;
 	}
 
 	/**

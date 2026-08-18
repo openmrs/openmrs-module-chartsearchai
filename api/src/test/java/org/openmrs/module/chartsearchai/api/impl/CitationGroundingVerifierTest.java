@@ -1453,4 +1453,39 @@ public class CitationGroundingVerifierTest {
 		assertTrue(clauses.get(2).cites(11));
 		assertFalse(clauses.get(2).cites(1));
 	}
+
+	@Test
+	public void splitIntoCitedSentences_enumerationRepeatingOneIndexYieldsAFragmentPerMARKER() {
+		// The split walks MARKERS, while the no-split guard counts DISTINCT cited indexes — so a list
+		// naming one record twice produces two fragments attributed to the same index. That is the
+		// pre-existing multi-candidate shape (selectClaim cosine-picks between them), reached here by a
+		// new route, so pin that it is produced rather than crashing or silently dropping a fragment.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: Aspirin [1], Ketoconazole [2], and aspirin again [1].");
+
+		assertEquals(3, clauses.size(), "one fragment per marker, not per distinct index");
+		assertEquals("Recorded allergies: Aspirin [1]", clauses.get(0).text);
+		assertEquals("Recorded allergies: Ketoconazole [2]", clauses.get(1).text);
+		assertEquals("Recorded allergies: aspirin again [1]", clauses.get(2).text);
+		assertTrue(clauses.get(0).cites(1));
+		assertTrue(clauses.get(2).cites(1), "both fragments of the repeated index are attributed to it");
+	}
+
+	@Test
+	public void enumeration_repeatingOneIndexStillProducesAVerdictForThatCitation() {
+		// End-to-end guard on the same shape: two candidate fragments must not leave the citation
+		// unverified. selectClaim picks one by cosine and Tier-2 still runs on it.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("aspirin", "ketoconazole");
+		verifier.setLlmProvider(judge);
+		String answer = "Recorded allergies: Aspirin [1], Ketoconazole [2], and aspirin again [1].";
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "Allergy: Aspirin (drug allergen)"),
+						mapping(2, "Allergy: Ketoconazole (drug allergen)")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "the repeated index still gets a verdict");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+	}
 }

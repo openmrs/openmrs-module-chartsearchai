@@ -1520,10 +1520,11 @@ public class CitationGroundingVerifierTest {
 
 	@Test
 	public void splitIntoCitedSentences_doesNotSplitWhenAnItemCarriesItsOwnSubjectWithinTheWordBound() {
-		// The word bound alone is porous: "he has diabetes" is three words, so it clears
-		// MAX_ENUMERATION_ITEM_WORDS while still being a CLAUSE carrying its own subject — and item 2's
-		// claim would again lose it ("Findings: asthma"). Length is a proxy for "name, not clause"; a
-		// pronoun or a finite verb says so directly, at any length.
+		// CLAUSE_MARKER, not length, is the subject test — and this is the case that establishes why.
+		// "he has diabetes" sits comfortably inside MAX_ENUMERATION_ITEM_WORDS (a runaway-text backstop,
+		// not a grammar test), so only its grammar can refuse it; without that net item 2's claim loses
+		// the subject and becomes "Findings: asthma". Written when the bound was 3 and this cleared it by
+		// exactly fitting, which is what showed length could not do this job at any value.
 		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
 				.splitIntoCitedSentences("Findings: he has diabetes [1] and asthma [2].");
 

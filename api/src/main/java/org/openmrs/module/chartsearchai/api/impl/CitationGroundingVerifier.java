@@ -787,7 +787,9 @@ public class CitationGroundingVerifier {
 	 * publishes from the shipped KB, an earlier version of this set that included the pronoun
 	 * {@code i} refused <strong>14</strong> of them — every one a radioisotope form where {@code I} is
 	 * iodine, not a pronoun ({@code Iodide I-131}, {@code Iobenguane (I-123)}, {@code Iodine,I-125} …).
-	 * With {@code i} dropped, <strong>0</strong> of the 7452 match. So the claim "no drug name carries
+	 * With {@code i} dropped, <strong>0</strong> of the 7452 match at any length the bound admits
+	 * (re-attributed at the current bound of 8, so the figure is this net's own and not the length
+	 * net's: 93 refusals over the sweep, all of them by length, none by this set). So the claim "no drug name carries
 	 * one of these as a whole token" is now a measurement rather than an assumption — re-run that sweep
 	 * before adding a member, because the obvious short words are exactly the ones chemistry reuses.
 	 * Residual errors are refusals ({@code IT band syndrome} matches {@code it}), which cost a

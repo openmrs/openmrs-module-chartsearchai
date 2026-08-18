@@ -1573,4 +1573,19 @@ public class CitationGroundingVerifierTest {
 		assertTrue(sentences.get(0).cites(1));
 		assertTrue(sentences.get(0).cites(2));
 	}
+
+	@Test
+	public void splitIntoCitedSentences_anOrNameKeepsItsPrefixInALaterPositionToo() {
+		// Position matters to LEADING_ITEM_SEPARATOR: item 1 follows the colon (whitespace only) while a
+		// later item follows ", " or ", and ". Only the later position exercises the conjunction
+		// alternative against a name that starts with those letters, so pin it there as well as first.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Active drugs: Aspirin [1], Orphenadrine [2], and Ornidazole [3].");
+
+		assertEquals(3, clauses.size());
+		assertEquals("Active drugs: Orphenadrine [2]", clauses.get(1).text,
+				"a comma-separated name beginning 'Or' must survive the separator strip");
+		assertEquals("Active drugs: Ornidazole [3]", clauses.get(2).text,
+				"and so must one that follows ', and '");
+	}
 }

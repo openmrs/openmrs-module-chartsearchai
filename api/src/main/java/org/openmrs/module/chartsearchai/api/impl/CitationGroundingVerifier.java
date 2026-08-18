@@ -58,11 +58,13 @@ import org.springframework.stereotype.Service;
  * module-supplied reference material are excepted, see below. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
  * citation) is a Tier-1 pass, so confirming only failures would miss it. References are verified
- * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except that, under clause-scoped
- * grounding, the citations of one compound sentence are each verified in their OWN call: batched
- * entailment is NOT per-pair independent, so co-batching a compound sentence's citations (whose
- * overlapping clause statements differ only by length) lets the LLM couple their verdicts and
- * silently flip a correct citation to not-grounded. The total is capped at
+ * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except for the citations of ONE
+ * sentence whose statements overlap, which are each verified in their OWN call: batched entailment
+ * is NOT per-pair independent, so co-batching them lets the LLM couple their verdicts and silently
+ * flip a correct citation to not-grounded. Two shapes qualify — a compound sentence under
+ * clause-scoped grounding (whose cumulative-prefix statements differ only by length), and an
+ * ENUMERATING sentence in either mode (whose per-item statements share a preamble, see
+ * {@code splitEnumeration} and issue #278). The total is capped at
  * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer;
  * references beyond the cap keep their Tier-1 verdict.
  *
@@ -245,7 +247,9 @@ public class CitationGroundingVerifier {
 	 *
 	 * <p>When {@code clauseScoped}, a sentence citing multiple records is split so each citation is
 	 * checked against the answer text up to and including its own {@code [N]} marker, not the whole
-	 * compound sentence (see {@link #splitIntoClauseScopedSentences}). Those split citations are each
+	 * compound sentence (see {@link #splitIntoClauseScopedSentences}). Independently of this flag, an
+	 * ENUMERATING sentence is split per item (#278) — so a split fragment is not evidence that
+	 * {@code clauseScoped} was set. Those split citations are each
 	 * Tier-2 verified in their OWN entailment call rather than co-batched: batched entailment is not
 	 * per-pair independent, so co-batching a compound sentence's citations (whose clause statements
 	 * overlap) lets the LLM couple their verdicts. Every other citation is still confirmed in the one
@@ -332,9 +336,10 @@ public class CitationGroundingVerifier {
 		List<Integer> batchPositions = new ArrayList<Integer>();
 		List<String> batchSources = new ArrayList<String>();
 		List<String> batchStatements = new ArrayList<String>();
-		// Isolate candidates — the citations of one compound sentence under clause-scope, whose clause
-		// statements overlap — are each verified in their OWN single-pair call so the LLM cannot couple
-		// their verdicts (see this class's Tier-2 javadoc).
+		// Isolate candidates — the citations of ONE sentence whose per-citation statements overlap: a
+		// clause-scoped compound (prefixes overlapping by length) or an enumeration in either mode
+		// (items sharing a preamble). Each is verified in its OWN single-pair call so the LLM cannot
+		// couple their verdicts (see this class's Tier-2 javadoc).
 		List<Integer> isolatePositions = new ArrayList<Integer>();
 		List<String> isolateSources = new ArrayList<String>();
 		List<String> isolateStatements = new ArrayList<String>();
@@ -387,9 +392,10 @@ public class CitationGroundingVerifier {
 						? batchVerdicts.get(k) : null;
 			}
 		}
-		// Isolate citations (one compound sentence's, under clause-scope) get a single-pair call each,
-		// so the batched LLM cannot couple their overlapping clause statements into each other's
-		// verdicts. Same null-degrades-to-Tier-1 contract as the batch.
+		// Isolate citations (one sentence's overlapping fragments — a clause-scoped compound, or an
+		// enumeration in either mode) get a single-pair call each, so the batched LLM cannot couple
+		// their statements into each other's verdicts. Same null-degrades-to-Tier-1 contract as the
+		// batch.
 		for (int k = 0; k < isolatePositions.size(); k++) {
 			List<Boolean> verdict = safeEntailsBatch(Collections.singletonList(isolateSources.get(k)),
 					Collections.singletonList(isolateStatements.get(k)));
@@ -446,7 +452,8 @@ public class CitationGroundingVerifier {
 	 * Claim selection for entailment-enabled grounding: identifies the claim sentence Tier-2 will
 	 * fact-check for one cited index, running Tier-1 embeds ONLY when the choice is ambiguous.
 	 * The common case — exactly one candidate sentence (a list-style answer where each line cites
-	 * its own record, or a clause under clause-scope) — selects deterministically with no
+	 * its own record, a clause under clause-scope, or an enumeration item in either mode) — selects
+	 * deterministically with no
 	 * embedding work, and the cosine verdict is DEFERRED ({@link Tier1Result#deferred}): it is
 	 * computed lazily by {@link #cosineVerdict} only if Tier-2 fails to produce a verdict.
 	 * With several candidates the eager cosine argmax runs exactly as {@link #verdictTier1}
@@ -532,8 +539,8 @@ public class CitationGroundingVerifier {
 
 	/**
 	 * Computes the Tier-1 cosine verdict for one cited index and identifies the single best-matching
-	 * claim sentence — a clause when grounding is clause-scoped — used as the Tier-2 entailment
-	 * target. Never throws: an embedding failure yields a {@code null} verdict.
+	 * claim sentence — a per-citation fragment wherever the sentence was split, by clause scope or by
+	 * enumeration — used as the Tier-2 entailment target. Never throws: an embedding failure yields a {@code null} verdict.
 	 */
 	private Tier1Result verdictTier1(int index, Map<Integer, String> textByIndex,
 			List<Sentence> sentences, double floor,
@@ -632,8 +639,9 @@ public class CitationGroundingVerifier {
 
 		final String recordText;
 
-		/** True when {@link #bestSentence} is a clause from a multi-citation sentence under
-		 *  clause-scope, so it must be Tier-2 verified in its own call rather than co-batched. */
+		/** True when {@link #bestSentence} is a per-citation fragment of a multi-citation sentence —
+		 *  a clause under clause-scope, or an enumeration item in either mode — so it must be Tier-2
+		 *  verified in its own call rather than co-batched. */
 		final boolean isolate;
 
 		/** Index of {@link #bestSentence} in the verify-call's sentence list, or -1 when there is
@@ -683,6 +691,11 @@ public class CitationGroundingVerifier {
 	/**
 	 * Splits the answer into sentences, recording for each the set of {@code [N]}
 	 * indices it cites inline. Returns an empty list for null/blank answers.
+	 *
+	 * <p>A sentence that ENUMERATES its citations is split per item by
+	 * {@link #splitEnumeration} — in BOTH scoping modes, because an enumeration's claim is
+	 * mis-identified rather than merely wide-scoped (issue #278). Every other sentence is returned
+	 * whole, so sentence-scope keeps handing a compound sentence's citations one shared statement.
 	 */
 	static List<Sentence> splitIntoCitedSentences(String answer) {
 		List<Sentence> sentences = new ArrayList<Sentence>();
@@ -695,15 +708,224 @@ public class CitationGroundingVerifier {
 			}
 			Sentence sentence = new Sentence(raw);
 			sentence.citedIndexes.addAll(ChartSearchAiUtils.citedIndexes(raw));
-			sentences.add(sentence);
+			List<Sentence> items = splitEnumeration(sentence);
+			if (items != null) {
+				sentences.addAll(items);
+			} else {
+				sentences.add(sentence);
+			}
 		}
 		return sentences;
 	}
 
 	/**
+	 * Leading separator of an enumerated item — the punctuation and coordinating conjunction that
+	 * join it to its siblings ({@code ", "}, {@code ", and "}, {@code " or "}). Stripped so a
+	 * claim reads as its own statement rather than a dangling continuation.
+	 *
+	 * <p>The {@code \b} after {@code and|or} is load-bearing: without it a first item named
+	 * {@code Orphenadrine} loses its {@code Or} and the claim asks about "phenadrine", a drug that
+	 * does not exist. The conjunction is optional and the punctuation classes around it are not, so
+	 * {@code ", Ketoconazole"} strips exactly {@code ", "}.
+	 */
+	/**
+	 * Most whitespace-separated words an enumerated item may carry and still be treated as a NAME
+	 * rather than a clause. The split is only sound while the shared preamble carries the sentence's
+	 * SUBJECT; an item long enough to be a clause may carry its own, and then the siblings' claims lose
+	 * it — "Findings: the patient has diabetes [1] and asthma [2]" would ask about "Findings: asthma",
+	 * which a family-history record for someone else's asthma entails. That is a citation published
+	 * grounded=true that the whole-sentence claim correctly refused: fail-OPEN, in the exact
+	 * subject-flip case Tier-2 exists to catch, so the bound refuses the split instead.
+	 *
+	 * <p><strong>This is a heuristic and the honest limit of it is stated rather than implied.</strong>
+	 * Whether the preamble holds the subject is not decidable from the text without parsing it, and I
+	 * could not establish a general discriminator. Word count is a proxy for "noun phrase, not clause":
+	 * 3 admits the widest name-with-qualifier form the live answers produce ("Aspirin (drug allergen)")
+	 * and the bare names beside it, and refuses a four-word clause. Candidates considered and NOT
+	 * chosen, with no evidence separating them: requiring a comma between markers (a serial-list
+	 * signal, but it admits "…diabetes [1], and asthma [2]" and refuses the common two-item "X [1] and
+	 * Y [2]" list), and testing only the FIRST item (the subject can only be lost from item 1, but a
+	 * later clause-shaped item is equally a sign the colon is a lead-in rather than a list header).
+	 * Both directions of error are bounded the same way: too strict leaves a citation mis-scoped, which
+	 * is today's behaviour and visible; too loose publishes a wrong verdict silently. So when in doubt
+	 * this refuses to split.
+	 *
+	 * <p>Length is not the subject test at all, and this bound was measured down from doing that job.
+	 * {@link #CLAUSE_MARKER} refuses a clause by its GRAMMAR at any length, which is both sharper and
+	 * sufficient for every subject-bearing shape tested — a long item with no pronoun and no finite verb
+	 * is a noun phrase, and splitting on it is correct rather than unsafe. What remains here is only a
+	 * backstop against runaway text, so the claim handed to the judge stays bounded.
+	 *
+	 * <p><strong>Measured 2026-08-18, which is why it is 8 and not 3.</strong> Driving
+	 * {@link #splitIntoCitedSentences} (the production splitter, no predicate re-expressed) over the
+	 * 7452 names the real {@code DdiDrugReferenceSource.parse} publishes from the shipped 19 MB KB, a
+	 * bound of 3 refuses <strong>1190</strong> of them — 16% of real drug names, a far bigger loss than
+	 * the clause it was added to catch, and every one a citation left mis-scoped. 8 refuses 93 (1.2%).
+	 * Raise this only with a fresh sweep; the distribution is long-tailed, so a value chosen by eye is
+	 * wrong in the tail that matters.
+	 */
+	private static final int MAX_ENUMERATION_ITEM_WORDS = 8;
+
+	/**
+	 * Marks an enumerated item as a CLAUSE rather than a name, at any length — a personal pronoun or
+	 * possessive, or a finite verb of clinical assertion. Any of these means the
+	 * item carries its own subject, so the shared preamble is not the sentence's subject and splitting
+	 * would strip it from the siblings (see {@link #MAX_ENUMERATION_ITEM_WORDS} for the failure that
+	 * causes).
+	 *
+	 * <p>This exists because the word bound alone is POROUS, which is worth stating plainly rather than
+	 * leaving for the next reader to rediscover: "he has diabetes" is three words, so it clears the
+	 * bound while being exactly the clause the bound was added to refuse. Length is a proxy for
+	 * "name, not clause"; these tokens say so directly, so the two nets are independent rather than
+	 * redundant — one bounds size, the other detects grammar.
+	 *
+	 * <p>This net does NOT make the rule sound, and no claim is made that it does; it refuses the
+	 * subject-bearing shapes that have been constructed and tested, and a verbless clause would pass.
+	 *
+	 * <p><strong>The set was measured against real names, and that removed two members.</strong> Both
+	 * sweeps drive {@link #splitIntoCitedSentences} — the production splitter, no predicate
+	 * re-expressed — and attribute each refusal at the CURRENT bound, so these figures are this net's
+	 * own and not the length net's.
+	 *
+	 * <ul>
+	 * <li><strong>Drug names</strong>, the 7452 the real {@code DdiDrugReferenceSource.parse} publishes
+	 * from the shipped 19 MB KB: a version including the pronoun {@code i} refused <strong>14</strong>,
+	 * every one a radioisotope form where {@code I} is iodine rather than a pronoun ({@code Iodide
+	 * I-131}, {@code Iobenguane (I-123)}, {@code Iodine,I-125} …).</li>
+	 * <li><strong>Condition, diagnosis and allergen names</strong>, the 1194 distinct forms behind the
+	 * 704 conditions, 704 diagnoses and 23 allergies on the 3.7.1 demo database: a version including
+	 * {@code patient} refused <strong>2</strong> — {@code Patient died} and {@code Smear positive, new
+	 * tuberculosis patient}. It bought no safety in exchange: the clause it was added for ("the patient
+	 * has diabetes") is caught by {@code has}, and both cycle-1 regression tests still fail closed
+	 * without it.</li>
+	 * </ul>
+	 *
+	 * <p><strong>Family and relative terms were measured and REJECTED — do not re-propose them.</strong>
+	 * They look obviously right, because the family-history flip is the canonical case Tier-2 exists for
+	 * and a verbless clause like "mother with asthma [1] and diabetes [2]" really does slip through this
+	 * net, costing item 2 the qualifier. Adding {@code mother|father|sibling|child|family|maternal…}
+	 * refused <strong>13</strong> real names across the two corpora: 6 on {@code child} alone
+	 * ({@code Child Aspirin}, {@code Aspirin Child Chewable}, {@code Well child visit, newborn},
+	 * {@code pfizer-biontech covid-19 vaccine (child)} …), and the rest on names such as
+	 * {@code Family history of hypertension}, {@code Sibling rivalry disorder} and {@code Malaria in
+	 * mother complicating pregnancy}. That is not merely a cost — it is aimed at the wrong position. An
+	 * item that CARRIES a family qualifier is safe to split, because its own claim keeps it; the danger
+	 * is a LATER item that lacks one. So the terms refuse exactly the lists they were meant to protect
+	 * and leave the case they were meant to catch, whose item-1 text they cannot be keyed on without
+	 * knowing which position it occupies. The verbless-clause residual is therefore accepted and stated
+	 * rather than papered over.
+	 *
+	 * <p>With {@code i} and {@code patient} dropped, <strong>0</strong> of either corpus matches (93 and
+	 * 24 refusals respectively, all by length). The earlier form of this comment — asserting that no
+	 * drug, condition or allergen name carries a member as a whole token — was an over-claim twice
+	 * over: it covered three name kinds while only drugs had been swept, and it was false for the kind
+	 * that had been. Re-run BOTH sweeps before adding a member; short words are exactly what chemistry
+	 * and clinical phrasing reuse. Residual errors are refusals ({@code IT band syndrome} matches
+	 * {@code it}), which cost a mis-scoped citation rather than a wrong verdict.
+	 */
+	private static final Pattern CLAUSE_MARKER = Pattern.compile(
+			"\\b(?:we|you|he|she|they|it|his|her|their"
+					+ "|has|have|had|is|are|was|were|shows|showed|reports|reported"
+					+ "|denies|denied|takes|took|receives|received|presents|remains)\\b",
+			Pattern.CASE_INSENSITIVE);
+
+	private static final Pattern LEADING_ITEM_SEPARATOR =
+			Pattern.compile("^[\\s,;]*(?:(?:and|or)\\b[\\s,;]*)?", Pattern.CASE_INSENSITIVE);
+
+	/**
+	 * Splits a sentence that ENUMERATES its cited records into one claim per record — the shared
+	 * preamble plus that record's OWN item — or returns {@code null} when the sentence is not an
+	 * enumeration and must be left to the caller's normal scoping.
+	 *
+	 * <p><strong>Why this exists.</strong> Both scoping modes ask the wrong-sized question of an
+	 * enumeration (issue #278). Sentence-scope hands every citation the whole sentence, so each
+	 * allergy record is asked to entail a conjunction naming the OTHER allergens too; clause-scope
+	 * hands citation <em>k</em> the cumulative prefix, which still names items 1..<em>k</em>−1. Only
+	 * the first citation is ever asked about its own claim, and a correct judge answers "no" to
+	 * every other one — measured live as {@code grounded=false} on all three citations of a correct,
+	 * fully-cited allergy list, which a client renders as <em>Unsupported</em>.
+	 *
+	 * <p><strong>Why it is keyed on a colon.</strong> The claim for one item is "preamble + that
+	 * item", and the preamble is the text the items hang off — so the split needs the boundary
+	 * between the preamble and the FIRST item. That boundary is not recoverable in general: in
+	 * "Has diabetes [1] and hypertension [2]" the preamble could be "Has" or "Has diabetes", and
+	 * guessing it short strips the subject, which is the one thing the cumulative prefix exists to
+	 * retain (a subject-stripped fragment cannot catch the family-history / negation flips Tier-2 is
+	 * for). A list-introducing colon is the sentence declaring that boundary itself, so it is taken
+	 * as the only reliable signal rather than as a convenience. Consequence, stated rather than
+	 * hidden: a comma-only enumeration ("The patient has diabetes [1], hypertension [2]") is NOT
+	 * split and remains mis-scoped — #278 stays open for it. Narrow and correct beats broad and
+	 * subject-stripping, because this decides whether a TRUE citation is published as unsupported.
+	 *
+	 * <p>Returns {@code null} — meaning "not an enumeration" — for a single-citation sentence, for a
+	 * sentence with no colon before its first marker, for one where any item contributes no text of its
+	 * OWN beyond its marker, and for one where any item is longer than
+	 * {@link #MAX_ENUMERATION_ITEM_WORDS} words or matches {@link #CLAUSE_MARKER} (either means the
+	 * item is a clause, so the colon is a lead-in rather than a list header and the preamble is not the
+	 * subject — see those two constants, which are independent nets over size and grammar). That last guard is why it tests the MARKER-STRIPPED item: the
+	 * substring always ends in {@code [N]}, whose characters {@link #LEADING_ITEM_SEPARATOR} cannot
+	 * consume, so an emptiness check on the raw item is unreachable. A colon followed immediately by
+	 * a citation ("allergies: [1], Ketoconazole [2]") is not a list of NAMED items, so reading it as
+	 * one is a misread — falling back beats handing that citation a preamble-only claim that asserts
+	 * nothing.
+	 * Each returned item is flagged {@link Sentence#isolate}: the items share a preamble, so
+	 * co-batching them would let the not-per-pair-independent LLM couple their verdicts.
+	 *
+	 * <p><strong>That isolation has a measured cost, and it is paid deliberately.</strong> N items
+	 * become N single-pair Tier-2 calls where the whole sentence was one batched call. Measured
+	 * 2026-08-18 on the streaming endpoint of a local 3.7.1 standalone (gemma-4-E4B-it-Q4_K_M, same
+	 * patient and session, from the {@code [timing] searchStreaming groundMs} field): a three-item
+	 * enumeration grounded in 2387 ms against 1335 ms for a one-pair batched answer, so roughly half a
+	 * second per additional citation. The existing
+	 * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} cap bounds the worst case. Do not
+	 * "optimise" this back into the shared batch: coupled verdicts flip a correct citation to
+	 * not-grounded SILENTLY, which is the failure class this method exists to remove, and a slower
+	 * honest verdict beats a fast wrong one. Note what is NOT claimed — no before/after of the same
+	 * question was measured, because the comparison above is between two shapes within one build.
+	 */
+	private static List<Sentence> splitEnumeration(Sentence sentence) {
+		if (sentence.citedIndexes.size() <= 1) {
+			return null;
+		}
+		Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(sentence.text);
+		if (!marker.find()) {
+			return null;
+		}
+		// lastIndexOf, not indexOf: with several colons before the items the one nearest the first
+		// item is the one introducing the list ("Findings: allergies: X [1], Y [2]").
+		int colon = sentence.text.lastIndexOf(':', marker.start());
+		if (colon < 0) {
+			return null;
+		}
+		String preamble = sentence.text.substring(0, colon + 1);
+
+		List<Sentence> items = new ArrayList<Sentence>();
+		int itemStart = colon + 1;
+		marker.reset();
+		while (marker.find()) {
+			String item = LEADING_ITEM_SEPARATOR.matcher(
+					sentence.text.substring(itemStart, marker.end())).replaceFirst("").trim();
+			// stripCitationMarkers already trims, so the item's own leading separator (stripped above)
+			// and the marker are both gone by here — `named` is the item's bare text.
+			String named = stripCitationMarkers(item);
+			if (named.isEmpty() || named.split("\\s+").length > MAX_ENUMERATION_ITEM_WORDS
+					|| CLAUSE_MARKER.matcher(named).find()) {
+				return null;
+			}
+			items.add(new Sentence(preamble + " " + item,
+					Collections.singleton(Integer.valueOf(marker.group(1))), true));
+			itemStart = marker.end();
+		}
+		return items;
+	}
+
+	/**
 	 * Clause-scoped variant of {@link #splitIntoCitedSentences}: a sentence citing MORE than one
 	 * record is split so each citation is checked against the answer text up to and including its
-	 * own {@code [N]} marker, not the whole compound sentence. This grounds a citation that supports
+	 * own {@code [N]} marker, not the whole compound sentence. An ENUMERATING sentence never reaches
+	 * this rule — {@link #splitIntoCitedSentences} has already split it per item, in either mode, so
+	 * every fragment arriving here cites exactly one record and passes through unchanged (#278). The
+	 * cumulative prefix below therefore governs the compound sentences that are NOT enumerations. This grounds a citation that supports
 	 * its own clause but not a later clause cited by a different record — e.g. "Hearing Loss was
 	 * noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an
 	 * active condition) does not support the "provisional diagnosis" clause that [91] backs. The
@@ -735,11 +957,13 @@ public class CitationGroundingVerifier {
 	}
 
 	/**
-	 * An answer sentence (or, under clause-scoped grounding, a clause) and the citation indices it is
-	 * scored against. For a whole sentence (the default path) {@link #citedIndexes} is exactly the
-	 * {@code [N]} markers in {@link #text}; for a clause-scoped fragment the text may contain earlier
-	 * markers while {@code citedIndexes} holds only the one citation the clause is attributed to — so
-	 * do NOT re-derive citedIndexes by re-parsing the text.
+	 * An answer sentence, or a per-citation fragment of one — a clause under clause-scoped grounding,
+	 * or one item of an enumerating sentence in either mode — and the citation indices it is scored
+	 * against. For a whole sentence {@link #citedIndexes} is exactly the {@code [N]} markers in
+	 * {@link #text}; for a clause-scoped fragment the text may contain EARLIER markers while
+	 * {@code citedIndexes} holds only the one citation it is attributed to. So do NOT re-derive
+	 * citedIndexes by re-parsing the text — that an enumeration item happens to carry exactly its own
+	 * marker does not make re-parsing safe, because the clause-scoped fragment beside it does not.
 	 */
 	static class Sentence {
 
@@ -748,11 +972,14 @@ public class CitationGroundingVerifier {
 		final java.util.Set<Integer> citedIndexes = new java.util.HashSet<Integer>();
 
 		/**
-		 * True when this is a clause split from a MULTI-citation sentence, so its citation must be
-		 * Tier-2 verified ALONE — not co-batched with the sentence's other citations, whose
-		 * overlapping clause-scoped statements would otherwise couple the (not per-pair-independent)
-		 * batched LLM verdict. False for a whole sentence: sentence-scope, or a single-citation
-		 * sentence under clause-scope.
+		 * True when this is a per-citation FRAGMENT of a multi-citation sentence, so its citation must
+		 * be Tier-2 verified ALONE — not co-batched with the sentence's other citations, whose
+		 * statements overlap (they share text) and would otherwise couple the (not
+		 * per-pair-independent) batched LLM verdict. Two splitters produce such fragments: clause
+		 * scope, whose cumulative prefixes overlap by length, and enumeration splitting, whose items
+		 * share a preamble — the latter in EITHER mode, so this is not a clause-scope-only flag.
+		 * False for a whole sentence, which is what both modes keep for a single-citation sentence and
+		 * what sentence-scope keeps for a non-enumerating compound.
 		 */
 		final boolean isolate;
 
@@ -760,9 +987,10 @@ public class CitationGroundingVerifier {
 			this(text, java.util.Collections.<Integer> emptySet(), false);
 		}
 
-		/** Clause constructor: text, an explicit cited-index set, and whether the clause must be
-		 *  Tier-2 verified in isolation (used by clause-scoped splitting, where a clause's text may
-		 *  contain earlier markers but is attributed to one citation only). */
+		/** Fragment constructor: text, an explicit cited-index set, and whether the fragment must be
+		 *  Tier-2 verified in isolation. Used by BOTH splitters — clause-scoped splitting, whose text
+		 *  may contain earlier markers while being attributed to one citation only, and enumeration
+		 *  splitting, whose text is a preamble plus one item. */
 		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate) {
 			this.text = text;
 			this.citedIndexes.addAll(citedIndexes);

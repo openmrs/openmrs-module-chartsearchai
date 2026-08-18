@@ -439,20 +439,23 @@ Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless not
 > - **Gentamicin** (`DKB-ORD-8`) — twice, off her non-coded *Aminoglycoside* allergy and her
 >   *Significant renal impairment*.
 >
-> A query that NAMES one of them puts that entry in play, and the arm skips an entry already in play,
-> so the chip comes from the drug-in-play loop instead and the row's own stated expectation already
-> covers it — the amoxicillin row gains the two Gentamicin chips (its question is not about
-> gentamicin, but the *aminoglycoside* and *renal impairment* findings are only in scope where the
-> response is about them, so expect these only when the answer or a cited record says so) and no
-> second penicillin chip.
+> **No row in the table below carries these three as extras any more.** A query that NAMES one of the
+> two drugs puts that entry in play, the arm skips an entry already in play, and the chip comes from
+> the drug-in-play loop instead — which is what the row's own stated expectation already covers, so
+> the amoxicillin row shows its penicillin chip once and not twice. What it does NOT pick up is the
+> other drug's chips: *Is amoxicillin safe for this patient?* carries no medication, allergy or
+> condition cue and names neither *gentamicin*, *aminoglycoside* nor *renal impairment*, so nothing
+> puts that order or those findings in the response's subject matter, and the two Gentamicin chips
+> are absent. The gentamicin row loses the Amoxicillin one for the mirror-image reason. So do the
+> rows naming neither: *Can this patient take paracetamol?*, *Can this patient take ibuprofen?* and
+> *Is naproxen safe for this patient?*. In every case the escape hatch is the same — if the model's
+> answer or a record it cites happens to name one of those drugs or findings, that side is in subject
+> matter and the chip returns, so a run may show more than the row promises.
 >
-> **The other rows no longer carry them by default.** *Can this patient take paracetamol?*, *Can this
-> patient take ibuprofen?* and *Is naproxen safe for this patient?* carry no medication, allergy or
-> condition cue and name neither contraindicated order, so unless the model's answer or a cited record
-> happens to name one of those drugs or findings, the three extra chips are absent. That is the
-> scoping working, not a broken deployment. To demonstrate the arm deliberately, ask a
+> That is the scoping working, not a broken deployment. To demonstrate the arm deliberately, ask a
 > medication-domain question that names no drug — *"What are her current medications?"* — which keeps
-> her whole active-order list in scope and brings all three back.
+> her whole active-order list in scope and brings all three back. *"Does she have any allergies?"*
+> brings back the two that rest on an allergy, and *"What conditions does she have?"* the renal one.
 >
 > Her Warfarin, Aspirin, Methotrexate, Furosemide, Ampicillin and Amikacin orders resolve to no
 > bundled entry, so they add nothing. Note **how** Gentamicin resolves: `DKB-ORD-8` is on

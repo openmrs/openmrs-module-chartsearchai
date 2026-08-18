@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -113,6 +114,19 @@ public class SubjectMatterScopedContraindicationTest {
 				null, allergies, conditions);
 	}
 
+	/**
+	 * A chart with TWO contraindicated prescriptions, her findings split across both chart lists:
+	 * {@code docs/drug-kb-demo.md}'s Margaret Holloway reduced to what this arm reads. The single-order
+	 * {@link #ctx} above cannot separate "the arm is scoped" from "the arm found its only subject" —
+	 * with one prescription there is no second chip for a scoping failure to leak.
+	 */
+	private static PatientClinicalContext twoPrescriptionsCtx() {
+		return DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Amoxicillin 500mg", "Gentamicin 80mg"), null,
+				DrugReferenceTestSupport.set("Penicillin drug class", "Aminoglycoside"),
+				DrugReferenceTestSupport.set("Significant renal impairment"));
+	}
+
 	private static PatientChart chart(RecordMapping... records) {
 		return DrugReferenceTestSupport.chartOf(records);
 	}
@@ -123,6 +137,13 @@ public class SubjectMatterScopedContraindicationTest {
 			out.add(warning.getDetail());
 		}
 		return out;
+	}
+
+	/** The contraindication chips {@code question} raises for {@code context}, by detail — the
+	 *  pre-answer production shape, so the only thing varying between calls is the question. */
+	private static List<String> contraindicationDetails(String question,
+			PatientClinicalContext context) {
+		return detailsOf(contraindications(validator().validate("", question, context, null)));
 	}
 
 	private static List<SafetyWarning> contraindications(List<SafetyWarning> warnings) {
@@ -367,6 +388,54 @@ public class SubjectMatterScopedContraindicationTest {
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
 				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", "active condition"),
 				"worded as the in-play arm words it, was: " + warnings);
+	}
+
+	@Test
+	public void aQuestionNamingOnePrescriptionDoesNotChipAboutAnother() {
+		// The reported defect's own shape, which no other case here has: a patient on SEVERAL orders,
+		// each contraindicated by her own records. Every case above puts her on one drug, so none of
+		// them can tell "the arm is scoped" from "the arm found its only subject" — the chip that has to
+		// disappear is the one about the order the response is NOT about, and with one order there is no
+		// such chip to miss. This is Margaret Holloway's chart from docs/drug-kb-demo.md, reduced: the
+		// amoxicillin question must carry her penicillin chip and neither of the gentamicin ones.
+		List<SafetyWarning> warnings = validator().validate("", "Is amoxicillin safe for this patient?",
+				twoPrescriptionsCtx(), null);
+
+		assertEquals(1, contraindications(warnings).size(),
+				"the question's own drug, and nothing about the other prescription, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Amoxicillin", "penicillin-class"),
+				"and it is the amoxicillin one, was: " + warnings);
+	}
+
+	@Test
+	public void eachWideningBringsBackItsOwnListAndNoOther() {
+		// The three widenings over that same multi-order chart, which is where they are separable: her
+		// three findings split two-to-one across the allergy and condition lists, so a widening that
+		// reached the wrong list shows up as a count. Asserted together rather than as three cases
+		// because what is being pinned is the PARTITION — that the medication widening is the union and
+		// the other two are disjoint halves of it — and three separate assertions of a size cannot say
+		// that. These are the counts docs/drug-kb-demo.md promises an operator running the demo.
+		PatientClinicalContext context = twoPrescriptionsCtx();
+
+		List<String> onMedications =
+				contraindicationDetails("What are her current medications?", context);
+		List<String> onAllergies = contraindicationDetails("Does she have any allergies?", context);
+		List<String> onConditions = contraindicationDetails("What conditions does she have?", context);
+
+		assertEquals(3, onMedications.size(),
+				"the medication widening is her whole active-order list, was: " + onMedications);
+		assertEquals(2, onAllergies.size(),
+				"the allergy widening is the two findings on her allergy list, was: " + onAllergies);
+		assertEquals(1, onConditions.size(),
+				"the condition widening is the one on her problem list, was: " + onConditions);
+		assertTrue(onMedications.containsAll(onAllergies) && onMedications.containsAll(onConditions),
+				"and each finding-side widening is a subset of the drug-side one, was: " + onAllergies
+						+ " / " + onConditions + " against " + onMedications);
+		for (String allergyChip : onAllergies) {
+			assertFalse(onConditions.contains(allergyChip),
+					"the two finding-side widenings must not overlap, shared: " + allergyChip);
+		}
 	}
 
 	@Test

@@ -1447,12 +1447,16 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>The token half is {@link PatientClinicalContext#matchableToken}, the very emptiness rule
 	 *         the matcher applies, so "not matchable" and "did not match" cannot come to disagree about a
-	 *         token of nothing but combining marks. The type half is stated here because these two names
-	 *         are the two chart lists this class reads; a dataset may carry any string, and the curated
-	 *         parser validates neither field (it drops an entry only for a blank id or name).
+	 *         token of nothing but combining marks. The type half is the same pair of predicates
+	 *         {@link #recordedContraindicationKind} puts a rule to its chart list by
+	 *         ({@link #isAllergyRule}, {@link #isConditionRule}) and for the same reason: this is the
+	 *         highest-stakes reader of that vocabulary, since a rule it wrongly calls evaluable is one
+	 *         the record then reports the chart as NOT having. A dataset may carry any string here — the
+	 *         curated parser validates neither field, dropping an entry only for a blank id or name — so
+	 *         what the two chart lists are called has to have exactly one definition.
 	 */
 	static boolean evaluatesAgainstTheChart(DrugReference.Contraindication c) {
-		return ("allergy".equalsIgnoreCase(c.getType()) || "condition".equalsIgnoreCase(c.getType()))
+		return (isAllergyRule(c) || isConditionRule(c))
 				&& PatientClinicalContext.matchableToken(c.getToken());
 	}
 
@@ -1481,7 +1485,7 @@ public class DrugSafetyValidator {
 	 *         fact about a CONDITION record, which no chip in that key space is about.
 	 */
 	static boolean selfNamedAllergyRule(DrugReference ref, DrugReference.Contraindication c) {
-		return "allergy".equalsIgnoreCase(c.getType()) && ref.isNamed(c.getToken());
+		return isAllergyRule(c) && ref.isNamed(c.getToken());
 	}
 
 	/**
@@ -3610,8 +3614,16 @@ public class DrugSafetyValidator {
 	 * raised <b>2</b> — which is <b>1</b> since issue #146, those two having been the curated rule and
 	 * the identity check reporting one allergy twice rather than two findings. An allergy to a
 	 * currently-prescribed drug is a prescribing error the chart
-	 * already contains, and it reached the clinician neither as a chip nor — since issue #110 turns
-	 * every chip into a citable pre-answer record — as anything in the prompt.
+	 * already contains, and it reached the clinician as neither a chip nor anything in the prompt: the
+	 * pre-answer findings issue #110 injects come from this same {@code validate}, so an arm that
+	 * raises nothing puts nothing in front of the model either.
+	 *
+	 * <p>That implication is the one this paragraph needs, and it still holds. Its CONVERSE does not,
+	 * since {@link SubjectMatter}: a chip this arm raises because the ANSWER or a cited record named
+	 * the drug has no pre-answer record behind it, the prompt pass having run on the question alone.
+	 * Other comments in this class still put the converse as a general property of issue #110 — they
+	 * are about drug-in-play chips, where a drug only the ANSWER names has never had a pre-answer
+	 * record either, so the looseness is older than this arm and correcting it is its own pass.
 	 *
 	 * <p><b>Why this arm rather than exempting contraindications from the scoping.</b> A carve-out
 	 * would fix the measured case and nothing past it, because it still needs the ANSWER to name the
@@ -3722,12 +3734,16 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return whether {@code c} is the ALLERGY leg of the curated rule vocabulary. One spelling of that
-	 *         test, because two consumers now ask it for different reasons — {@link
-	 *         #recordedContraindicationKind} to decide which chart list a rule is put to, and {@link
-	 *         SubjectMatter} to decide whether an allergy-domain question puts the rule in scope. Left
-	 *         as two literals they would drift silently and in the worse direction: a vocabulary that
-	 *         grew a synonym would keep matching rules while the widening quietly stopped applying to
-	 *         them, and the widening has no test that would notice.
+	 *         test, because FOUR consumers now ask it for different reasons — {@link
+	 *         #recordedContraindicationKind} to decide which chart list a rule is put to, {@link
+	 *         SubjectMatter} to decide whether an allergy-domain question puts the rule in scope,
+	 *         {@link #evaluatesAgainstTheChart} to decide whether the module could ask the chart at all,
+	 *         and {@link #selfNamedAllergyRule} for issue #146's fold. Left as literals they would drift
+	 *         silently and in the worse direction: a vocabulary that grew a synonym would keep matching
+	 *         rules through one reader while another quietly stopped applying to them, and the worst of
+	 *         those pairings is a rule {@code recordedContraindicationKind} can evaluate that
+	 *         {@code evaluatesAgainstTheChart} cannot — the injected record then reports the chart as NOT
+	 *         recording something nobody looked for, which is issue #208 item 2 with the sign flipped.
 	 */
 	private static boolean isAllergyRule(DrugReference.Contraindication c) {
 		return "allergy".equalsIgnoreCase(c.getType());
@@ -3735,10 +3751,9 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return whether {@code c} is the CONDITION leg of that same vocabulary. Extracted alongside
-	 *         {@link #isAllergyRule} and for the identical reason, not for symmetry's sake: the two
-	 *         consumers are the same two, and a rule's type is what decides both which chart list it is
-	 *         put to and which domain question widens it. Keeping one of the pair literal and the other
-	 *         named is how the pair comes apart.
+	 *         {@link #isAllergyRule} and for the reason listed there, which is not symmetry: the readers
+	 *         of a rule's TYPE are enumerated once, on that method, rather than half here and half
+	 *         there. Keeping one of the pair literal and the other named is how the pair comes apart.
 	 */
 	private static boolean isConditionRule(DrugReference.Contraindication c) {
 		return "condition".equalsIgnoreCase(c.getType());

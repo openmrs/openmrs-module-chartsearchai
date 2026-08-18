@@ -44,7 +44,16 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@link #aPrescribedAllergyIsNotRaisedWhereTheResponseIsAboutSomethingElse}, which carries the
  * reversal and its reasons; the rule itself and what it gives up are in
  * {@code SubjectMatterScopedContraindicationTest}. Nothing else in the #143 story below is affected,
- * because a question about the patient's medications keeps her whole active-order list in scope.
+ * and one part of why is worth knowing before anyone narrows the scoping. Measured by turning the
+ * medication widening off and running this class: exactly four cases depend on it —
+ * {@link #aConditionContraindicatingAnActiveOrderIsRaisedToo},
+ * {@link #everyActiveOrderIsCheckedRatherThanOnlyTheFirst},
+ * {@link #theFindingReachesThePromptAsACitableRecord} and
+ * {@link #thePatientsOwnContraindicationsLeadTheScreensPairChips}, each of which asks a
+ * medication-domain question, so her whole active-order list is subject matter. Those four are the
+ * widening's regression net. The other cases do not depend on it, by more than one mechanism — some
+ * assert an absence, one is carried by the drug-in-play arm — so do not read them as evidence for any
+ * single leg.
  *
  * <p>{@code isEchoOfCitedRecord} justified that residual risk by asserting a proposal-worthy drug is
  * "usually question-named (always validated) or actively ordered (checked directly by the

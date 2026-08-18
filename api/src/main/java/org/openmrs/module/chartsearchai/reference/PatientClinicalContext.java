@@ -412,9 +412,9 @@ public class PatientClinicalContext {
 	 * subject-matter scoping of the active-order contraindication arm: that gate asks whether the
 	 * finding a rule FIRED ON is part of what the response is about, and it must ask it with the same
 	 * matcher the firing used, or "did not match" and "is not what was asked about" drift apart. One
-	 * definition, two callers — never a second copy here. The new caller's haystack is PROSE rather than
-	 * recorded values, and lower-cased on the way in, because {@link #containsFolded} folds a value but
-	 * does not case-fold it.
+	 * definition — never a second copy here. That caller's haystack is PROSE rather than recorded
+	 * values, and lower-cased on the way in, because {@link #containsFolded} folds a value but does not
+	 * case-fold it.
 	 */
 	static boolean containsToken(Collection<String> haystack, String token) {
 		if (!matchableToken(token)) {

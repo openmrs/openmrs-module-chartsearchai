@@ -52,7 +52,7 @@ services:
     # returns 503 until Listener.isOpenmrsStarted() flips and 200 after, which
     # is the question worth asking. This used to probe /openmrs/ instead,
     # because health/started can take 10-30 min on first boot and overruns the
-    # deploy script's poll window -- but that poll is disabled anyway
+    # deploy script's poll window — but that poll is disabled anyway
     # (deploy.yml passes --no-health-check), and probing /openmrs/ meant the
     # check was PASSED BY the 302 to /openmrs/initialsetup, i.e. by an instance
     # sitting in the installation wizard. That is exactly how a wiped-volume

@@ -379,8 +379,12 @@ public final class DrugReferenceValidity {
 	 * to add. Refusing the file is not available either, for the reason no rule here refuses one.
 	 *
 	 * <p>Stated over "a table THIS parser requires" rather than over one schema, because the same silence
-	 * exists in both directions and the other one is likelier: {@code sourceFormat} left at its default
-	 * while {@code dataFilePath} names a DDInter export is a curated document carrying no {@code entries}.
+	 * exists in both directions, and which one is likelier moved with the default: while it was {@code json},
+	 * an untouched {@code sourceFormat} beside a {@code dataFilePath} naming a DDInter export handed a
+	 * DDInter document to the curated parser, and that is the direction this rule was written for. Since
+	 * ADR Decision 36 the untouched case is {@code ddinter}, so the likely mismatch is now the mirror of
+	 * it — an operator's curated file read by the DDInter parser — which is why the rule is stated over
+	 * "a table THIS parser requires" and covers both without naming either schema.
 	 * Issue #156's rule is correctly silent there — {@code json} and {@code ddinter} both name real
 	 * adapters, so nothing was overridden — and the mismatch is between the format and the FILE, which
 	 * only the parser can observe.

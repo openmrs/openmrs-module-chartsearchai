@@ -46,7 +46,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p><b>The fixture</b> is a verbatim excerpt of that dataset — {@code Ledipasvir} and {@code
  * Leucovorin}, two of the 444, plus {@code Ciprofloxacin} and {@code Levofloxacin} as a real
- * classified pair — parsed by the real {@link DdiDrugReferenceSource}. The bundled sample cannot host
+ * classified pair — parsed by the real {@link DdiDrugReferenceSource}. The DDInter excerpt cannot host
  * these cases: all 16 of its drugs carry ATC codes, which is why no existing test covered a direct
  * allergy to an unclassified drug.
  *

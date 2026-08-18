@@ -65,7 +65,7 @@ public class DrugSafetyInteractionSeverityFloorTest {
 	@Test
 	public void moderateSeverityRuleChipStillFires() {
 		// Boundary pin one step above the default floor: aspirin x lisinopril is a Moderate
-		// row in the bundled sample and must keep chipping.
+		// row in the DDInter excerpt and must keep chipping.
 		List<SafetyWarning> warnings = ddinterValidator().validate(
 				"Aspirin could be considered for cardioprotection.", "Can she take aspirin?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Lisinopril"),
@@ -80,7 +80,7 @@ public class DrugSafetyInteractionSeverityFloorTest {
 		// The floor's LOWER boundary: "minimum severity a rule must carry" means Minor itself
 		// passes under the default floor. Mutation-proven necessary: with the comparison
 		// off-by-one (<=), every other test in the suite still passes while Minor rules are
-		// silently filtered. Spironolactone x aspirin is a Minor row in the bundled sample,
+		// silently filtered. Spironolactone x aspirin is a Minor row in the DDInter excerpt,
 		// and spironolactone shares no subgroup or group with aspirin here, so the Minor rule
 		// chip is the only warning this arrangement can produce.
 		List<SafetyWarning> warnings = ddinterValidator().validate(
@@ -94,7 +94,7 @@ public class DrugSafetyInteractionSeverityFloorTest {
 
 	@Test
 	public void sameSubgroupPairKeepsTheClassChipWhenItsRuleIsFloorFiltered() throws Exception {
-		// The floor x class-arm seam, pinned on a real-shaped fixture (the bundled sample has
+		// The floor x class-arm seam, pinned on a real-shaped fixture (the DDInter excerpt has
 		// no same-subgroup pair): two ACE inhibitors joined by an Unknown-severity row. The
 		// rated rule chip is floor-filtered; the duplicate-therapy class chip survives — the
 		// pair yields exactly ONE warning, and it is the informative one (this is also what

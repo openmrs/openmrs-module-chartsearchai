@@ -51,7 +51,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * real {@link DrugSafetyValidator} behind it, so a chip assertion and a record assertion in one case
  * describe one production pass. The premise case calls the service accessors directly — it is stating
  * what the arrangement IS, not what it does — and the two route-variant cases run the real
- * {@link DdiDrugReferenceSource} over a test fixture rather than the bundled sample, which carries no
+ * {@link DdiDrugReferenceSource} over a test fixture rather than the DDInter excerpt, which carries no
  * entry the knowledge base classifies nowhere.
  */
 public class OrderDrivenInjectionResolutionTest {
@@ -170,7 +170,7 @@ public class OrderDrivenInjectionResolutionTest {
 
 	@Test
 	public void anUnrelatedActiveOrderResolvedByNameIsStillNotInjected() {
-		// The gate is untouched. Warfarin x ibuprofen is Major in the bundled sample, so this patient DOES
+		// The gate is untouched. Warfarin x ibuprofen is Major in the DDInter excerpt, so this patient DOES
 		// get a chip — but warfarin (B01AA) shares no ATC subgroup and no curated group with the
 		// question's drug, so its monograph is not what this question needs and is not injected. Order-driven
 		// injection is relevance-scoped; issue #151 widens which orders are CANDIDATES, not which are

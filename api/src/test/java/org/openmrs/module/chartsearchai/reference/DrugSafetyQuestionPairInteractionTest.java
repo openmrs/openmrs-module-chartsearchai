@@ -468,7 +468,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		assertTrue(named.stream().map(DrugReference::getName).collect(Collectors.toList())
 				.containsAll(Arrays.asList("Warfarin", "Ibuprofen")),
 				"precondition: the ANSWER must name both drugs of a pair the source rates above the"
-						+ " floor (warfarin x ibuprofen is Major in the bundled sample), else this proves"
+						+ " floor (warfarin x ibuprofen is Major in the DDInter excerpt), else this proves"
 						+ " nothing: " + named);
 
 		List<SafetyWarning> warnings = ddinterValidator().validate(answer, "Is ibuprofen safe here?",
@@ -570,7 +570,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		// Keying pairs on the drugs' match tokens is a de-duplication inside a safety net, so its
 		// failure direction is the dangerous one — a key too coarse drops a real interaction silently
 		// — and this pins it against real data: three drugs named in one question, three above-floor
-		// pairs among them in the bundled sample, three chips.
+		// pairs among them in the DDInter excerpt, three chips.
 		List<SafetyWarning> warnings = ddinterValidator().validate(
 				"These are commonly co-prescribed.",
 				"Is it safe to combine lisinopril, spironolactone and ibuprofen?", patientOnNeitherDrug());

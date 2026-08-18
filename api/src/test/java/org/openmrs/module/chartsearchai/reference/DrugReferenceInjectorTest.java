@@ -370,7 +370,7 @@ public class DrugReferenceInjectorTest {
 	@Test
 	public void whenTheBudgetForcesAChoiceTheMoreSevereInteractionKeepsItsMechanism() {
 		// Ordering the patient's own partners first fixed WHICH partners render; it left WHICH ONE
-		// keeps its mechanism prose to the dataset's ordering. On the bundled sample a patient on
+		// keeps its mechanism prose to the dataset's ordering. On the DDInter excerpt a patient on
 		// lisinopril (Moderate x ibuprofen, 910 chars) and aspirin (MAJOR x ibuprofen, 809) has both
 		// promoted, but 1721 chars do not fit the 1500 budget — and because lisinopril sits earlier
 		// in the dataset it took the full note, abbreviating the Major interaction. Both severities

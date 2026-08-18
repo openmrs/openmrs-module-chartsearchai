@@ -32,7 +32,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * appears in a {@code drug_order} chart record, which is exactly the record a good answer cites when
  * asked about medications. So an active ibuprofen order plus an ibuprofen allergy, a question naming
  * no drug and an answer citing the real order record raised <b>0 chips</b>, where the identical call
- * with {@code mappings=null} raised <b>2</b>. Measured on the default {@code sourceFormat=json}.
+ * with {@code mappings=null} raised <b>2</b>. Measured on {@code sourceFormat=json}, then the default.
  * That 2 is <b>1</b> since issue #146 — it was the curated rule and the identity check reporting one
  * allergy twice, not two findings — which changes none of the reasoning above and every ALLERGY count
  * below (a condition rule cannot fold, so that case is untouched).

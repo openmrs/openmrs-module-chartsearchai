@@ -25,7 +25,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * One recorded allergy is ONE chip, whichever of the two contraindication arms can see it (issue
  * #146).
  *
- * <p><b>The defect.</b> On the <em>shipped default</em> {@code sourceFormat=json}, an allergy to a
+ * <p><b>The defect.</b> On {@code sourceFormat=json} — the shipped default when this was filed, and
+ * since ADR Decision 36 the format selected for dosing — an allergy to a
  * drug the curated file also carries a self-named allergy rule for produced two chips for one fact:
  * <pre>
  * Ibuprofen is contraindicated by an active allergy: documented ibuprofen allergy

@@ -846,8 +846,9 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>The one rule that crosses (issue #146).</b> An allergy rule whose token is one of the SUBJECT
 	 * ENTRY'S OWN names reports the allergy arm's fact — the patient is allergic to this very drug — so
-	 * it is filed in the allergy arm's key space instead of the rule one, and the two collapse. On the
-	 * shipped default {@code sourceFormat=json} that shape is 3 of the file's 4 entries (Gentamicin's
+	 * it is filed in the allergy arm's key space instead of the rule one, and the two collapse. On
+	 * {@code sourceFormat=json} — the shipped default when this was measured, and since ADR Decision 36
+	 * the format a deployment selects for dosing — that shape is 3 of the file's 4 entries (Gentamicin's
 	 * allergy rule names a class, which is why it was the control), and each of the three double-reported
 	 * one allergy: {@code Ibuprofen is contraindicated by an active allergy: documented ibuprofen
 	 * allergy} beside {@code The patient has a recorded allergy to Ibuprofen.} — with no non-default
@@ -3452,7 +3453,8 @@ public class DrugSafetyValidator {
 	 * record the answer cites already names it. A drug the patient is PRESCRIBED appears in a
 	 * {@code drug_order} chart record — which is exactly the record a good answer cites when asked
 	 * about medications — so the scoping fired on the one shape where the finding matters most.
-	 * Measured on the bundled curated dataset (the production default {@code sourceFormat=json}): an
+	 * Measured on the bundled curated dataset ({@code sourceFormat=json}, the production default when this
+	 * was measured): an
 	 * active ibuprofen order plus an ibuprofen allergy, a question naming no drug and an answer citing
 	 * the real order record raised <b>0 chips</b>, where the identical call with {@code mappings=null}
 	 * raised <b>2</b> — which is <b>1</b> since issue #146, those two having been the curated rule and
@@ -3872,7 +3874,7 @@ public class DrugSafetyValidator {
 	 * every substance in the tablet.
 	 *
 	 * <p><b>The label follows the same ladder</b> (issue #155). It used to be the entry's label or,
-	 * failing that, the bare CODE — so on the default {@code sourceFormat=json}, whose four-entry
+	 * failing that, the bare CODE — so on {@code sourceFormat=json}, then the default, whose four-entry
 	 * curated seed carries no aspirin, Agnes Adams' chip read "… as active order N02BA01". A clinician
 	 * has no reason to recognise an ATC code, and the order it stands for carries a display name that
 	 * needs no reference dataset at all. The code survives only as the last resort, where nothing in
@@ -4659,11 +4661,13 @@ public class DrugSafetyValidator {
 		// than tidy: the walk below is the only thing in this arm that costs anything, since
 		// substanceOwnsDose compares against every entry in the knowledge base per stated dose, and
 		// while it sat behind the per-row guard it never ran at all on a dataset publishing no bands.
-		// That is not the shipped DEFAULT — config.xml defaults sourceFormat to json and the bundled
-		// curated seed does publish bands — but it is exactly the ddinter and atc deployments, where no
-		// entry carries a band at all and the largest knowledge bases are. Hoisting the walk out of the
-		// loop below without hoisting the guard with it would have made those deployments pay, on every
-		// request, for a check their data can never answer.
+		// That IS the shipped default since ADR Decision 36 — config.xml defaults sourceFormat to
+		// ddinter, and neither that knowledge base nor an atc export carries a band at all — so this
+		// ordering went from protecting the two opt-in deployments to protecting every install, over the
+		// largest dataset the module ships. (It was written when the default was the curated seed, which
+		// does publish bands, and the comment said so.) Hoisting the walk out of the loop below without
+		// hoisting the guard with it would make those installs pay, on every request, for a check their
+		// data can never answer.
 		if (!anyActionableBand(rows, context)) {
 			return;
 		}

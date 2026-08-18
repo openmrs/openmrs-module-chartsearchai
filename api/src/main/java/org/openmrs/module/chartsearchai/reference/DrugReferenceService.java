@@ -399,7 +399,8 @@ public class DrugReferenceService {
 	 *         its first alias and {@link AtcDrugReferenceSource} makes it the only one, so on both of
 	 *         those every entry names itself. A hand-authored {@code json} dataset need not — the shape
 	 *         {@link DrugReference#nameMatchStrength}'s javadoc already records its gate as excluding —
-	 *         and {@code json} is the DEFAULT {@code sourceFormat}. There the rank-2 claimant can be an
+	 *         and a {@code json} dataset is what {@code sourceFormat=json} loads — the default until ADR
+	 *         Decision 36, and still what a deployment needing dosing selects. There the rank-2 claimant can be an
 	 *         entry the prose matcher never reached, and then no matched row's alias denotes its own
 	 *         substance and every one is dropped.
 	 *

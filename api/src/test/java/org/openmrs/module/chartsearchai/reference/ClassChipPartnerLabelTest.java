@@ -25,9 +25,12 @@ import org.junit.jupiter.api.Test;
  * belongs) and issue #174's site 1 (the label chosen by dataset order).
  *
  * <p><b>Issue #155.</b> {@code displayLabelForAtcCode} returned the code itself when the loaded
- * dataset carried no entry for it, so on the DEFAULT {@code sourceFormat=json} — the bundled
- * four-entry curated seed, which carries no aspirin entry at all — Agnes Adams' chip read
- * {@code … as active order N02BA01}. Reachable out of the box, and {@code N02BA01} is not a drug name.
+ * dataset carried no entry for it, so on {@code sourceFormat=json} — the bundled four-entry curated
+ * seed, which carries no aspirin entry at all — Agnes Adams' chip read
+ * {@code … as active order N02BA01}, and {@code N02BA01} is not a drug name. That was the DEFAULT when
+ * #155 was filed, so it was reachable out of the box; since ADR Decision 36 the default knowledge base
+ * does carry aspirin, which narrows the shape to a dataset that cannot name a code it was handed rather
+ * than removing it.
  * The order itself carries a display name, and the chip is built from that order.
  *
  * <p><b>Issue #174 site 1.</b> {@code entryForAtcCode} returned the FIRST entry carrying the code

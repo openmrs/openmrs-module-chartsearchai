@@ -54,7 +54,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 
 	/** The 16-drug polypharmacy question, live-measured at 72 above-floor pairs on the full KB and on
-	 *  the bundled sample alike — the shape a cap exists for. */
+	 *  the DDInter excerpt alike — the shape a cap exists for. */
 	private static final String POLYPHARMACY_QUESTION = "Reviewing polypharmacy: lisinopril, metformin,"
 			+ " methotrexate, omeprazole, sertraline, simvastatin, spironolactone, tramadol, warfarin,"
 			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"

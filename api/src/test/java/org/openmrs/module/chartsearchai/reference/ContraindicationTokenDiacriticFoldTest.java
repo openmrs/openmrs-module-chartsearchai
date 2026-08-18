@@ -51,7 +51,8 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Every case runs the real pipeline: the real
  * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)} over the real curated
- * dataset (the bundled classpath default, which is what an unset {@code sourceFormat} GP selects) or
+ * dataset (the bundled curated file, which an unset {@code sourceFormat} GP selected until ADR Decision
+ * 36 moved the default to {@code ddinter}; these cases pin it explicitly through the shared accessor) or
  * over a fixture parsed by the real {@link JsonDrugReferenceSource}.
  */
 public class ContraindicationTokenDiacriticFoldTest {

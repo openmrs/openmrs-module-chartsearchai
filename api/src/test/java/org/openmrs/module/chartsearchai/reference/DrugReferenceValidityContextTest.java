@@ -849,8 +849,11 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	}
 
 	/**
-	 * And the mirror, which is the likeliest of all: {@code sourceFormat} left at its default while
-	 * {@code dataFilePath} points at a DDInter export. The curated parser requires {@code entries}, finds
+	 * And the mirror, which was the likeliest of all while {@code json} was the default: an untouched
+	 * {@code sourceFormat} beside a {@code dataFilePath} pointing at a DDInter export. Since ADR Decision
+	 * 36 the untouched case is {@code ddinter}, so this direction now takes an explicit
+	 * {@code sourceFormat=json} — which is why the case names the format rather than leaving it unset, and
+	 * why the likelier mismatch today is the one asserted above. The curated parser requires {@code entries}, finds
 	 * none, and used to return empty in the same silence — one loader, one answer, so the rule is stated
 	 * over "a table this parser requires" rather than over the DDInter schema.
 	 */

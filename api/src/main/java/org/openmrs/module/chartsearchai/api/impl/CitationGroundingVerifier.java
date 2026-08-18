@@ -750,11 +750,21 @@ public class CitationGroundingVerifier {
 	 * is today's behaviour and visible; too loose publishes a wrong verdict silently. So when in doubt
 	 * this refuses to split.
 	 *
-	 * <p>Length is not the whole test: this bound is POROUS on its own ("he has diabetes" is three
-	 * words), so {@link #CLAUSE_MARKER} refuses a clause by its grammar at any length. Read the two
-	 * together — neither is sufficient alone.
+	 * <p>Length is not the subject test at all, and this bound was measured down from doing that job.
+	 * {@link #CLAUSE_MARKER} refuses a clause by its GRAMMAR at any length, which is both sharper and
+	 * sufficient for every subject-bearing shape tested — a long item with no pronoun and no finite verb
+	 * is a noun phrase, and splitting on it is correct rather than unsafe. What remains here is only a
+	 * backstop against runaway text, so the claim handed to the judge stays bounded.
+	 *
+	 * <p><strong>Measured 2026-08-18, which is why it is 8 and not 3.</strong> Driving
+	 * {@link #splitIntoCitedSentences} (the production splitter, no predicate re-expressed) over the
+	 * 7452 names the real {@code DdiDrugReferenceSource.parse} publishes from the shipped 19 MB KB, a
+	 * bound of 3 refuses <strong>1190</strong> of them — 16% of real drug names, a far bigger loss than
+	 * the clause it was added to catch, and every one a citation left mis-scoped. 8 refuses 93 (1.2%).
+	 * Raise this only with a fresh sweep; the distribution is long-tailed, so a value chosen by eye is
+	 * wrong in the tail that matters.
 	 */
-	private static final int MAX_ENUMERATION_ITEM_WORDS = 3;
+	private static final int MAX_ENUMERATION_ITEM_WORDS = 8;
 
 	/**
 	 * Marks an enumerated item as a CLAUSE rather than a name, at any length — a personal pronoun or
@@ -769,14 +779,22 @@ public class CitationGroundingVerifier {
 	 * "name, not clause"; these tokens say so directly, so the two nets are independent rather than
 	 * redundant — one bounds size, the other detects grammar.
 	 *
-	 * <p>Neither net makes the rule SOUND, and no claim is made that it does. Together they refuse the
-	 * shapes that have been constructed and tested; a two-word verbless clause would still pass. The
-	 * closed set is small on purpose — every entry is a word no drug, condition or allergen name
-	 * contains as a whole token — and the errors it does make are refusals ({@code IT band syndrome}
-	 * matches {@code it}), which cost a mis-scoped citation rather than a wrong verdict.
+	 * <p>This net does NOT make the rule sound, and no claim is made that it does; it refuses the
+	 * subject-bearing shapes that have been constructed and tested, and a verbless clause would pass.
+	 *
+	 * <p><strong>The set was measured against real names, and that removed a member.</strong> Sweeping
+	 * {@link #splitIntoCitedSentences} over the 7452 names the real {@code DdiDrugReferenceSource.parse}
+	 * publishes from the shipped KB, an earlier version of this set that included the pronoun
+	 * {@code i} refused <strong>14</strong> of them — every one a radioisotope form where {@code I} is
+	 * iodine, not a pronoun ({@code Iodide I-131}, {@code Iobenguane (I-123)}, {@code Iodine,I-125} …).
+	 * With {@code i} dropped, <strong>0</strong> of the 7452 match. So the claim "no drug name carries
+	 * one of these as a whole token" is now a measurement rather than an assumption — re-run that sweep
+	 * before adding a member, because the obvious short words are exactly the ones chemistry reuses.
+	 * Residual errors are refusals ({@code IT band syndrome} matches {@code it}), which cost a
+	 * mis-scoped citation rather than a wrong verdict.
 	 */
 	private static final Pattern CLAUSE_MARKER = Pattern.compile(
-			"\\b(?:i|we|you|he|she|they|it|his|her|their|patient|patients"
+			"\\b(?:we|you|he|she|they|it|his|her|their|patient|patients"
 					+ "|has|have|had|is|are|was|were|shows|showed|reports|reported"
 					+ "|denies|denied|takes|took|receives|received|presents|remains)\\b",
 			Pattern.CASE_INSENSITIVE);

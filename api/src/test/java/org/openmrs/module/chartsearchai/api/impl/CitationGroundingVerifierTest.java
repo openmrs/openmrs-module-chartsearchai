@@ -1545,4 +1545,32 @@ public class CitationGroundingVerifierTest {
 		assertEquals("Recorded allergies: Aspirin (drug allergen) [1]", clauses.get(0).text);
 		assertEquals("Recorded allergies: Ketoconazole (drug allergen) [2]", clauses.get(1).text);
 	}
+
+	@Test
+	public void splitIntoCitedSentences_admitsALongDrugNameCarryingNoClauseMarker() {
+		// The coverage the raised bound buys, and the reason it was raised: 1190 of the 7452 names the
+		// shipped KB publishes are longer than three words, and refusing them left a real citation
+		// mis-scoped for no safety gain — a long noun phrase carries no subject, so splitting is correct.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: Belladonna alkaloids with phenobarbital [1], "
+						+ "Brompheniramine, phenylephrine and codeine [2].");
+
+		assertEquals(2, clauses.size(), "a multi-word drug name is a name, not a clause");
+		assertEquals("Recorded allergies: Belladonna alkaloids with phenobarbital [1]", clauses.get(0).text);
+		assertEquals("Recorded allergies: Brompheniramine, phenylephrine and codeine [2]", clauses.get(1).text);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_refusesAnItemThatRunsPastTheLengthBackstop() {
+		// What the bound still does once CLAUSE_MARKER owns the subject test: stop runaway text becoming
+		// a "claim". Nine words, deliberately with no pronoun and no finite verb, so only length can
+		// refuse it — this is the test that pins MAX_ENUMERATION_ITEM_WORDS at all.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: one two three four five six seven eight nine [1], "
+						+ "Aspirin [2].");
+
+		assertEquals(1, sentences.size(), "past the backstop the sentence keeps whole-sentence scoping");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+	}
 }

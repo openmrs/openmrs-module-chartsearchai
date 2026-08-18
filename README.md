@@ -210,13 +210,13 @@ chartsearchai delegates all retrieval to the [openmrs-module-querystore](https:/
 
 1. LLM available — local GGUF ([step 2](#2-download-the-llm-model-local-mode-only)) or remote engine.
 2. e5-base-v2 ONNX + vocab placed at `<openmrs-application-data-directory>/querystore/` ([step 3](#3-download-the-embedding-model-optional)).
-3. Global properties set per the table below.
+3. Global properties set per the table below — done for you on the Docker path (see *Who sets these* below the table).
 4. Indexing is lazy on first chart access — no backfill task needed.
 
 | Property | Value | Description |
 |----------|-------|-------------|
 | `chartsearchai.querystore.topK` | `12` | Number of similarity records requested from querystore. In `queryScoped` mode (the default `chartsearchai.chartMode`) this sizes the query-scoped slice the LLM actually sees, alongside the question's complete typed scope; in `fullChart` mode it only sizes the optional focus hint, and is unused when `chartsearchai.embedding.preFilter` is `false`. querystore is a required module and is always the retrieval path — there is no toggle to disable it. `ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K` carries the default and the measurements behind it |
-| `querystore.embedding.modelFilePath` | `querystore/model.onnx` | Path to the ONNX embedder, relative to `<openmrs-application-data-directory>`. Querystore ships this with an empty default (the module is model-agnostic), so a fresh install must set it |
+| `querystore.embedding.modelFilePath` | `querystore/model.onnx` | Path to the ONNX embedder, relative to `<openmrs-application-data-directory>`. Querystore ships this with an empty default (the module is model-agnostic), so it has to be set somewhere — on the Docker path `backend-init.sh` does it, otherwise you do (see *Who sets these* below) |
 | `querystore.embedding.vocabFilePath` | `querystore/vocab.txt` | Path to the WordPiece vocab, same convention |
 | `querystore.embedding.queryModelFilePath` | *(empty)* | Leave empty for `e5-base-v2`; set only for dual-encoder models like MedCPT |
 
@@ -224,7 +224,7 @@ chartsearchai delegates all retrieval to the [openmrs-module-querystore](https:/
 
 **Prompt-stability caveat — only relevant in `fullChart` mode.** In `fullChart` mode the chart bytes are a function of the patient alone, so the `<system> + <chart>` prompt prefix is stable across consecutive queries and llama-server's KV cache reuses it; that is what the [Warmup](#warmup) endpoint and the disk-persisted KV cache exist to exploit. In the default `queryScoped` mode each question carries its own small slice, so there is no shared prefix to amortize — and none is needed, because a slice prefills in a fraction of the time. Setting `chartsearchai.embedding.preFilter=true` in `fullChart` mode leaves the chart prefix intact (the focus hint is a small trailing payload), so it does not break the reuse.
 
-A follow-up will populate these defaults in the querystore module's `config.xml` so fresh deploys work without manual GP wiring. The GPs are already declared there with empty values, which is why they appear in **Admin > Settings** today; until the defaults land, set them yourself after first start. See [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this path uses `e5-base-v2`.
+**Who sets these.** On the Docker path, `backend-init.sh` writes them itself on every start — `chartsearchai.querystore.enabled`, `querystore.embedding.modelFilePath` and `querystore.embedding.vocabFilePath`, pointed at the files it has just provisioned — and only where the property is blank, so a value you set deliberately survives. One exception: when the demo dataset is (re)seeded, `chartsearchai.querystore.enabled` and `querystore.bootstrap.autostart` are asserted outright, because a freshly imported dump brings its own values for both and they describe the dump rather than your server. They used to be a manual step, which meant they existed nowhere but the running instance's database: a `--destroy-volumes` deploy deleted the wiring along with it, and because the demo seed also enables `querystore.bootstrap.autostart`, the next start swept every record of every seeded patient against an unconfigured embedder and logged a stack trace for each one. On any other install you still set them yourself after first start. A follow-up in the querystore module's `config.xml` would make them defaults everywhere; the GPs are already declared there with empty values, which is why they appear in **Admin > Settings** today. See [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this path uses `e5-base-v2`.
 
 #### Retrieval
 

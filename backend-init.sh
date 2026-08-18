@@ -17,16 +17,21 @@
 # and don't transfer to other embedders without re-tuning — so we don't
 # provision a chartsearchai-side embedder here.
 #
-# Operator wiring (global properties) required for fresh deployments —
-# both modules ship these with empty/false defaults, so the files this
-# script provisions are unused until an operator points the GPs at them:
+# Retrieval wiring (global properties). Both modules ship these with
+# empty/false defaults, so the files provisioned here would be unused
+# until something points the properties at them:
 #   chartsearchai.querystore.enabled    = true
 #   querystore.embedding.modelFilePath  = querystore/model.onnx
 #   querystore.embedding.vocabFilePath  = querystore/vocab.txt
 #   querystore.embedding.queryModelFilePath = (empty — single encoder)
-# A follow-up change will move those defaults into querystore's config.xml
-# so a fresh deploy works without manual GP wiring; until then, the
-# project README's deployment section is the source of truth.
+# configure_retrieval_gps below now writes them, on every start and only
+# where the property is blank, so a deliberately-set value survives. The
+# one exception is chartsearchai.querystore.enabled on the seed path,
+# which maybe_seed_demo_data asserts outright because a freshly imported
+# dump carries its own value for it. They used to be an operator step,
+# which meant they lived nowhere but the demo's database and a
+# --destroy-volumes deploy deleted the wiring along with it; see that
+# function for what the resulting unconfigured-embedder state costs.
 
 # When started as root (deployments without a separate init container that
 # chowns the volume), heal pre-Apr-27 root-owned contents and drop to the
@@ -203,8 +208,15 @@ fetch_llm_in_background \
 # the first time a backend built with this entrypoint boots against a DB that
 # hasn't been seeded with it yet. This is how the chartsearchai.openmrs.org demo
 # gets its dataset without any direct DB access: the seed runs in-container
-# against the `db` service over the compose network, on an ordinary deploy — no
-# volume wipe, so the downloaded models and runtime properties are untouched.
+# against the `db` service over the compose network.
+#
+# Two deploy shapes reach here, and they are not equivalent. On an ordinary
+# deploy nothing is wiped, so the models and runtime properties survive and the
+# sentinel below skips the seed entirely. On a --destroy-volumes deploy this is
+# the code that repopulates an empty database — and the database it hands back
+# is then complete while openmrs-data is empty, which is a combination OpenMRS
+# does not otherwise produce. The two steps after this function exist for that
+# case and must stay downstream of it.
 #
 # Safety:
 #   * Gated by a sentinel global property -> runs exactly once.
@@ -214,7 +226,11 @@ fetch_llm_in_background \
 #     bricks the demo.
 #   * Snapshots and restores the server's own chartsearchai/querystore global
 #     properties, so the dump's config (LLM endpoint, model paths) does not
-#     overwrite the operator's wiring.
+#     overwrite the operator's wiring. Two properties are then set deliberately
+#     AFTER that restore — querystore.bootstrap.autostart and
+#     chartsearchai.querystore.enabled — because a freshly imported dump brings
+#     its own values for both and they describe the dump, not this server. That
+#     is the one place the restore is overridden on purpose.
 # The repairs mirror what loading this dump requires (orphan rows, stale module
 # changelog rows, liquibase checksums); see commit history for the rationale.
 DEMO_DUMP_URL="${CHARTSEARCHAI_DEMO_DUMP_URL:-https://github.com/openmrs/openmrs-module-chartsearchai/releases/download/demo-data-5284-2026-05-19/openmrs-2.8-refapp-demo-5284-patients-2026-05-19.sql.gz}"
@@ -339,6 +355,16 @@ SQL
   seed_sql "$DB_NAME" -e \
     "INSERT INTO global_property (property, property_value, uuid) VALUES ('querystore.bootstrap.autostart','true', UUID()) ON DUPLICATE KEY UPDATE property_value='true';" || true
 
+  # The dump carries chartsearchai.querystore.enabled=false baked in, so the
+  # blank-only wiring below cannot reach it and a re-seeded demo would come back
+  # with retrieval switched off. Asserted here rather than there because this is
+  # where the demo's intended configuration is being established from scratch —
+  # it runs after the operator-GP snapshot is restored, alongside the autostart
+  # line above, and only on the seed path, so an ordinary boot never overrides a
+  # deliberate false.
+  seed_sql "$DB_NAME" -e \
+    "INSERT INTO global_property (property, property_value, uuid) VALUES ('chartsearchai.querystore.enabled','true', UUID()) ON DUPLICATE KEY UPDATE property_value='true';" || true
+
   rm -f "$_dump" "$_gp"
   _count=$(seed_sql -N "$DB_NAME" -e 'SELECT COUNT(*) FROM patient' 2>/dev/null)
   seed_status "done: $_count patients"
@@ -346,6 +372,216 @@ SQL
 }
 
 maybe_seed_demo_data || echo "[demo-seed] seed step errored; continuing to start OpenMRS."
+
+# ---- does this database already carry an OpenMRS schema? --------------------
+# The three steps below all need to tell a virgin database from one this
+# entrypoint (or a previous boot) has already populated — and, separately, from
+# one they could not reach at all.
+#
+# Memoised, because those steps ask up to six times between them and
+# every miss pays a full connect timeout against a DB that is not answering.
+# record_cpu_breadcrumb further down caps its own wait for exactly that reason —
+# "doesn't add another 30s to an already-failing boot" — and this keeps that
+# true rather than quietly spending the budget just above it. Safe to cache over
+# this window: maybe_seed_demo_data has already done the 60s wait, and these
+# calls all land within a second of each other.
+DB_REACHABLE=""
+db_reachable() {
+  if [ -z "$DB_REACHABLE" ]; then
+    if command -v mariadb >/dev/null 2>&1 && seed_sql -N -e "SELECT 1" >/dev/null 2>&1; then
+      DB_REACHABLE=yes
+    else
+      DB_REACHABLE=no
+    fi
+  fi
+  [ "$DB_REACHABLE" = yes ]
+}
+
+# Four core tables rather than one, so a stray leftover table cannot pass for a
+# schema. Answers no when the DB is unreachable; schema_absent_because below is
+# what keeps that from being reported as "empty".
+openmrs_schema_present() {
+  db_reachable || return 1
+  _tables=$(seed_sql -N -e \
+    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME' \
+     AND table_name IN ('global_property','patient','person','users')" 2>/dev/null | tr -dc '0-9')
+  [ -n "$_tables" ] && [ "$_tables" -ge 4 ]
+}
+
+# Why openmrs_schema_present said no. "I could not ask" must not be reported as
+# "the database is empty": the two lead an operator to opposite conclusions while
+# reading these lines during an outage, and an unreachable DB is an ordinary path
+# here, not a freak one — maybe_seed_demo_data logs and survives it a few lines up.
+schema_absent_because() {
+  if db_reachable; then
+    echo "'$DB_NAME' carries no OpenMRS schema"
+  else
+    echo "'$DB_NAME' could not be reached, so whether it carries a schema is unknown"
+  fi
+}
+
+# ---- align the automated installer with the database that now exists --------
+# The base image regenerates its automated-installation script on every boot
+# (startup-init.sh writes $OMRS_HOME/openmrs-server.properties out of the
+# OMRS_CONFIG_* environment), and startup.sh then drives OpenMRS's
+# InitializationFilter with it by curl-ing /openmrs/ shortly after Tomcat comes
+# up. That script carries create_tables=${OMRS_CONFIG_CREATE_TABLES}, which the
+# deployed compose sets to true.
+#
+# create_tables=true means "this database is empty, build the schema". That is
+# right for a virgin install and wrong for every database this entrypoint hands
+# to OpenMRS: maybe_seed_demo_data above imports a COMPLETE OpenMRS database, so
+# on the first boot after a volume wipe (deploy.yml's `reset` input, which passes
+# --destroy-volumes) the installer runs against a schema that already exists. It
+# dies on the first CREATE TABLE of the 2.8.x schema-only snapshot — "Table
+# 'allergy' already exists" — and the install is abandoned. /openmrs/ then
+# redirects to /openmrs/initialsetup for the life of the container, so a visitor
+# to the demo gets an installation screen. (The application itself does come up
+# behind that redirect on this path — modules load and the REST API answers --
+# which is why nothing downstream complained: the old healthcheck probed
+# /openmrs/ and was satisfied by the very redirect that was the symptom, and the
+# deploy had already reported success. Both are addressed alongside this: see
+# the HEALTHCHECK in Dockerfile.backend.)
+#
+# It clears on a restart — the abandoned install leaves openmrs-runtime.properties
+# behind, so the next boot skips the wizard — which is exactly why it bites only
+# the first boot after a wipe and why steady-state checks never see it.
+#
+# So decide create_tables from the database rather than from the environment.
+# The same correction covers a wipe of openmrs-data alone (db-data kept), where
+# the schema likewise predates the installer.
+#
+# Keep this even though the next step usually makes it moot. Writing the runtime
+# properties stops the installer from running at all, so create_tables is then
+# never read — but that write can fail (it says so and falls through), and this
+# is what makes that fallback land on a working instance instead of the wizard.
+# The two are a pair: do not drop one as redundant with the other.
+if openmrs_schema_present; then
+  echo "[install] '$DB_NAME' already carries an OpenMRS schema; installing with create_tables=false."
+  OMRS_CONFIG_CREATE_TABLES=false
+  export OMRS_CONFIG_CREATE_TABLES
+else
+  echo "[install] $(schema_absent_because); leaving create_tables=${OMRS_CONFIG_CREATE_TABLES:-unset} as it stands."
+fi
+
+# ---- hand OpenMRS the runtime properties for the database just prepared -----
+# openmrs-runtime.properties is what tells OpenMRS "this database is ready".
+# Without it, Listener latches "initial setup is needed" at context init and
+# /openmrs/ redirects to /openmrs/initialsetup for the entire life of the JVM —
+# even once the automated install has run, written that file itself and started
+# the application successfully. Measured on the published image with the
+# create_tables correction above in place: the install completes cleanly, the
+# context refreshes, /openmrs/ws/rest/v1/session answers 200, and /openmrs/ still
+# serves the setup wizard until the container is restarted. A visitor to
+# /openmrs sees an installation screen on a server that is actually running.
+#
+# The file only ever lives in the openmrs-data volume, so a --destroy-volumes
+# deploy deletes it while the seed refills the database — and those two have to
+# agree about whether the database is ready. Write it here, from the credentials
+# that have just queried this database successfully, so the first boot after a wipe is
+# indistinguishable from a steady-state one and no wizard is involved at all.
+#
+# Narrow on purpose: only when the schema is really present and the file is
+# really absent. An existing file is never rewritten (startup-init.sh merges its
+# own extras into it), and a genuinely empty database still gets the ordinary
+# first-install path. Skipping the wizard also leaves the seeded dump's own admin
+# credentials in place, which is what every non-reset deploy has always had.
+write_runtime_properties_if_missing() {
+  _rtp_file="/openmrs/data/openmrs-runtime.properties"
+  if [ -f "$_rtp_file" ]; then
+    echo "[runtime-properties] $_rtp_file already present; leaving it untouched."
+    return 0
+  fi
+  if ! openmrs_schema_present; then
+    echo "[runtime-properties] $(schema_absent_because); leaving the first-install wizard to write it."
+    return 0
+  fi
+
+  _db_port="${OMRS_DB_PORT:-3306}"
+  _db_args="?autoReconnect=true&sessionVariables=default_storage_engine=InnoDB&useUnicode=true&characterEncoding=UTF-8"
+  # Java's Properties parser splits on the FIRST unescaped separator, so ':' and
+  # '=' inside the value need no escaping; the wizard escapes them only because
+  # Properties.store() always does.
+  ( umask 077; cat > "$_rtp_file" <<EOF
+#Written by backend-init.sh for a database this entrypoint prepared
+connection.driver_class=com.mysql.jdbc.Driver
+connection.url=jdbc:mysql://${DB_HOST}:${_db_port}/${DB_NAME}${_db_args}
+connection.username=${DB_USER}
+connection.password=${DB_PASS}
+auto_update_database=${OMRS_CONFIG_AUTO_UPDATE_DATABASE:-true}
+module.allow_web_admin=${OMRS_CONFIG_MODULE_WEB_ADMIN:-true}
+EOF
+  )
+  if [ -s "$_rtp_file" ]; then
+    echo "[runtime-properties] wrote $_rtp_file for ${DB_USER}@${DB_HOST}:${_db_port}/${DB_NAME}; OpenMRS starts without the setup wizard."
+  else
+    echo "[runtime-properties] could not write $_rtp_file; falling back to the setup wizard." >&2
+    rm -f "$_rtp_file"
+  fi
+}
+write_runtime_properties_if_missing || echo "[runtime-properties] step errored; continuing to start OpenMRS."
+
+# ---- retrieval wiring (global properties) ----------------------------------
+# This script provisions querystore/model.onnx and querystore/vocab.txt at the
+# top, but the properties that point querystore at them live in the DATABASE,
+# and both modules ship them empty. Until now they were set by hand on the demo,
+# so a --destroy-volumes deploy deleted the wiring along with the database. The
+# header of this file has described exactly these as an operator step with a
+# "follow-up change" pending since the querystore migration; this is it.
+#
+# Leaving them unset costs more than a disabled feature. maybe_seed_demo_data
+# turns querystore.bootstrap.autostart on, so the next start sweeps every record
+# of all 5,284 seeded patients — and with modelFilePath unset each record throws
+# IllegalStateException out of OnnxEmbeddingProvider and is logged with a full
+# stack trace. Measured against the published image on a wiped volume: 112MB of
+# stack traces in the first eight minutes and still climbing, on a host that also
+# ships its logs to Loki.
+#
+# Written only where the property is blank, so an operator who deliberately
+# points these elsewhere keeps their value — the same courtesy the seed already
+# extends by snapshotting chartsearchai%/querystore% across the import.
+gp_set_if_blank() {
+  seed_sql "$DB_NAME" -e \
+    "INSERT INTO global_property (property, property_value, uuid) VALUES ('$1','$2',UUID()) \
+     ON DUPLICATE KEY UPDATE property_value = IF(property_value IS NULL OR property_value = '', '$2', property_value);" \
+    >/dev/null 2>&1
+}
+
+gp_value() {
+  seed_sql -N "$DB_NAME" -e \
+    "SELECT COALESCE(property_value,'') FROM global_property WHERE property='$1'" 2>/dev/null
+}
+
+configure_retrieval_gps() {
+  command -v mariadb >/dev/null 2>&1 || { echo "[retrieval-wiring] mariadb client absent; skipping."; return 0; }
+  if ! openmrs_schema_present; then
+    echo "[retrieval-wiring] $(schema_absent_because); no global properties written, so querystore stays unconfigured and chart search will be off."
+    return 0
+  fi
+
+  # Paths are relative to the application data directory, derived from the same
+  # variables the downloads above wrote to so there is one source of truth.
+  gp_set_if_blank 'chartsearchai.querystore.enabled' 'true'
+  gp_set_if_blank 'querystore.embedding.modelFilePath' "${ONNX_FILE#/openmrs/data/}"
+  gp_set_if_blank 'querystore.embedding.vocabFilePath' "${VOCAB_FILE#/openmrs/data/}"
+
+  _model_gp=$(gp_value 'querystore.embedding.modelFilePath')
+  _enabled_gp=$(gp_value 'chartsearchai.querystore.enabled')
+
+  # Never leave the combination that floods: a bootstrap sweep enabled with no
+  # embedder to run it. If the embedder is still unconfigured after the wiring
+  # above, switch the sweep off rather than let every record fail and log a stack
+  # trace.
+  if [ -z "$_model_gp" ]; then
+    seed_sql "$DB_NAME" -e \
+      "UPDATE global_property SET property_value='false' WHERE property='querystore.bootstrap.autostart';" \
+      >/dev/null 2>&1 || true
+    echo "[retrieval-wiring] embedder unconfigured; querystore.bootstrap.autostart forced to false so the sweep cannot fail per record."
+  fi
+
+  echo "[retrieval-wiring] chartsearchai.querystore.enabled=$_enabled_gp querystore.embedding.modelFilePath=$_model_gp bootstrap.autostart=$(gp_value 'querystore.bootstrap.autostart')"
+}
+configure_retrieval_gps || echo "[retrieval-wiring] step errored; continuing to start OpenMRS."
 
 # ---- CPU / RAM breadcrumb (diagnostic) -------------------------------------
 # Records the host CPU model, the ISA-extension subset that matters for

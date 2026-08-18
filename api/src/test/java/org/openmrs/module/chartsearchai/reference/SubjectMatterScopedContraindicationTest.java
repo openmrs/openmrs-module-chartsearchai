@@ -51,9 +51,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * (order entry, a chart banner, CDS hooks). See the rewritten case in
  * {@link ActiveOrderContraindicationTest}, which is where this reverses a documented decision.
  *
- * <p>Every case drives the real {@code DrugSafetyValidator.validate} over the real bundled curated
- * dataset ({@code sourceFormat=json}, whose ibuprofen entry carries both an identity-resolvable name
- * and curated allergy and condition rules) with real querystore-shaped chart records.
+ * <p>Every case drives the real {@code DrugSafetyValidator.validate} with real querystore-shaped chart
+ * records, over the real bundled curated dataset ({@code sourceFormat=json}, whose ibuprofen entry
+ * carries both an identity-resolvable name and curated allergy and condition rules) — except the two
+ * finding-side cases, which need the bundled DDInter sample plus the curated cross-reactivity groups
+ * ({@link #nsaidValidator()}) because the curated four carry no two entries the data relates, and a
+ * finding-side case is only a finding-side case where the allergen and the order are different
+ * substances.
  */
 public class SubjectMatterScopedContraindicationTest {
 
@@ -68,13 +72,37 @@ public class SubjectMatterScopedContraindicationTest {
 			ChartSearchAiConstants.RESOURCE_TYPE_CONDITION, "condition-uuid-1", null,
 			"Condition: Malignant tumor of base of tongue");
 
-	/** The condition one of ibuprofen's curated rules fires on, as a chart record an answer can cite. */
+	/**
+	 * The condition one of ibuprofen's curated rules fires on, as a chart record an answer can cite.
+	 * Deliberately in TITLE CASE, as a clinician's chart writes it: {@code containsFolded} folds the
+	 * haystack but does not lower-case it, so the normalisation {@link SubjectMatter} applies on the way
+	 * in is load-bearing here. With all-lower-case prose, removing it changed no test — measured.
+	 */
 	private static final RecordMapping ULCER_RECORD = new RecordMapping(3,
 			ChartSearchAiConstants.RESOURCE_TYPE_CONDITION, "condition-uuid-3", null,
-			"Condition: peptic ulcer disease");
+			"Condition: Peptic Ulcer Disease");
+
+	/**
+	 * A charted allergy record naming a DIFFERENT substance from the order — aspirin against an
+	 * ibuprofen order — so a case citing it exercises the finding side alone. The two are linked by
+	 * the shipped curated NSAID group ({@code M01AE} + {@code N02BA}), which is cross-branch and so
+	 * unreachable through ATC subgroups.
+	 */
+	private static final RecordMapping ASPIRIN_ALLERGY_RECORD = new RecordMapping(4,
+			ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY, "allergy-uuid-4", null,
+			"Allergy: Aspirin. Reaction: rash");
 
 	private static DrugSafetyValidator validator() {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+	}
+
+	/**
+	 * The bundled DDInter sample plus the curated cross-reactivity groups: the curated four carry no
+	 * two entries sharing a class, so a finding-side case needs a dataset where the allergen and the
+	 * order are genuinely different substances the data still relates.
+	 */
+	private static DrugSafetyValidator nsaidValidator() {
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterServiceWithGroups());
 	}
 
 	private static PatientClinicalContext ctx(java.util.Set<String> allergies,
@@ -85,6 +113,14 @@ public class SubjectMatterScopedContraindicationTest {
 
 	private static PatientChart chart(RecordMapping... records) {
 		return DrugReferenceTestSupport.chartOf(records);
+	}
+
+	private static List<String> detailsOf(List<SafetyWarning> warnings) {
+		List<String> out = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			out.add(warning.getDetail());
+		}
+		return out;
 	}
 
 	private static List<SafetyWarning> contraindications(List<SafetyWarning> warnings) {
@@ -137,8 +173,11 @@ public class SubjectMatterScopedContraindicationTest {
 		// The other half of "either side": the answer is about her peptic ulcer and never writes the
 		// word ibuprofen, but the drug that ulcer contraindicates is one she is on. Scoping the arm to
 		// the drug side alone would lose this, which is why the rule is two-sided rather than an echo test.
+		// The ANSWER is the only carrier: it names the ulcer and cites the tumour record, so the ulcer
+		// record sitting uncited in the same chart cannot be what put the chip in scope.
 		List<SafetyWarning> warnings = validator().validate(
-				"Her active problems include peptic ulcer disease [3].", "What is on her problem list?",
+				"Her problems include Peptic Ulcer Disease, and a tumour of the tongue [1].",
+				"What is on her problem list?",
 				ctx(null, DrugReferenceTestSupport.set("peptic ulcer disease")),
 				chart(TUMOUR_RECORD, ORDER_RECORD, ULCER_RECORD).getMappings());
 
@@ -148,6 +187,21 @@ public class SubjectMatterScopedContraindicationTest {
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
 				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", "active condition"),
 				"worded as the in-play arm words it, was: " + warnings);
+	}
+
+	@Test
+	public void aFindingNamedOnlyByTheQuestionIsSubjectMatterToo() {
+		// The third carrier. Subject matter is question + answer + cited records, and each has to be
+		// able to carry a finding on its own or the set is really only two of them. Here the clinician
+		// names the ulcer and the answer does not, in the case the LLM answers about something else.
+		List<SafetyWarning> warnings = validator().validate(
+				"Yes — the patient has a Malignant tumor of base of tongue [1].",
+				"Does her Peptic Ulcer Disease rule out an anti-inflammatory?",
+				ctx(null, DrugReferenceTestSupport.set("peptic ulcer disease")),
+				chart(TUMOUR_RECORD, ORDER_RECORD, ULCER_RECORD).getMappings());
+
+		assertEquals(1, contraindications(warnings).size(),
+				"a finding the question names must reach the drug it contraindicates, was: " + warnings);
 	}
 
 	@Test
@@ -163,6 +217,69 @@ public class SubjectMatterScopedContraindicationTest {
 
 		assertEquals(0, contraindications(warnings).size(),
 				"a rule may only speak for the finding the response is actually about, was: " + warnings);
+	}
+
+	@Test
+	public void anAllergyTheResponseCitesReachesADrugItCrossReactsWith() {
+		// The finding side through a CITATION and nothing else, which the identity case cannot show:
+		// there the allergen IS the drug, so the drug side is satisfied by the same words and this leg
+		// never runs. Here they are different substances — an aspirin allergy against an ibuprofen
+		// order, linked by the shipped curated NSAID group across ATC branches — the question carries
+		// no allergy cue, and the word "ibuprofen" appears nowhere in the response. What puts the chip
+		// in scope is that the answer cited the allergy record.
+		List<SafetyWarning> warnings = nsaidValidator().validate(
+				"The reaction documented at that visit is recorded here [4].",
+				"What happened at her last visit?",
+				ctx(DrugReferenceTestSupport.set("aspirin"), null),
+				chart(TUMOUR_RECORD, ORDER_RECORD, ASPIRIN_ALLERGY_RECORD).getMappings());
+
+		assertEquals(1, contraindications(warnings).size(),
+				"an allergy the response cites must still reach the drug it cross-reacts with, was: "
+						+ warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", "cross-reactivity group"),
+				"through the curated group, was: " + warnings);
+	}
+
+	@Test
+	public void theSameAllergyStaysSilentWhereTheResponseDoesNotCiteIt() {
+		// The control that makes the case above about the citation rather than about the chart: same
+		// patient, same order, same allergy, same chart — only the record the answer cites differs.
+		List<SafetyWarning> warnings = nsaidValidator().validate(
+				"Yes — the patient has a Malignant tumor of base of tongue [1].", "Does she have cancer?",
+				ctx(DrugReferenceTestSupport.set("aspirin"), null),
+				chart(TUMOUR_RECORD, ORDER_RECORD, ASPIRIN_ALLERGY_RECORD).getMappings());
+
+		assertEquals(0, contraindications(warnings).size(),
+				"an allergy the response never mentions must not chip her prescriptions, was: "
+						+ warnings);
+	}
+
+	@Test
+	public void theInjectorsPreAnswerFindingsAreASubsetOfTheChipsBesideTheAnswer() {
+		// The property DrugReferenceInjector's javadoc rests on, which this scoping changed from an
+		// equality into a subset and therefore has to pin. The pre-answer pass calls validate with an
+		// EMPTY answer (its subject matter is the question alone); the chips pass adds the answer and
+		// the records it cited. Every test SubjectMatter applies is monotone in those texts, so a
+		// finding can appear beside the answer that was not in the prompt — never the reverse, which is
+		// the direction that would assert a record nothing chips.
+		PatientClinicalContext context = ctx(DrugReferenceTestSupport.set("ibuprofen"), null);
+		String question = "What is she taking?";
+
+		List<SafetyWarning> preAnswer = validator().validate("", question, context, null);
+		List<SafetyWarning> chips = validator().validate(
+				"Her only active medication is " + IBUPROFEN_ORDER + " [2].", question, context,
+				chart(TUMOUR_RECORD, ORDER_RECORD).getMappings());
+
+		assertEquals(0, contraindications(preAnswer).size(),
+				"the question alone names neither side here, was: " + preAnswer);
+		assertEquals(1, contraindications(chips).size(),
+				"the answer citing the order record does, was: " + chips);
+		for (SafetyWarning finding : contraindications(preAnswer)) {
+			assertTrue(detailsOf(chips).contains(finding.getDetail()),
+					"every pre-answer finding must have a chip beside the answer, missing: "
+							+ finding.getDetail());
+		}
 	}
 
 	@Test

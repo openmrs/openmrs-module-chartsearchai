@@ -144,6 +144,34 @@ public class QueryScopeRouterTest {
 	}
 
 	@Test
+	public void asksAboutMedications_isTheWideningSignalAndNotADrugDetector() {
+		// Read by the drug-safety layer to decide that a question about what the patient is TAKING puts
+		// her whole active-order list in the response's subject matter.
+		assertTrue(QueryScopeRouter.asksAboutMedications("What are her current medications?"));
+		assertTrue(QueryScopeRouter.asksAboutMedications("is she on any drugs?"));
+		assertTrue(QueryScopeRouter.asksAboutMedications("what has she been prescribed?"));
+		assertFalse(QueryScopeRouter.asksAboutMedications("Does she have cancer?"));
+		assertFalse(QueryScopeRouter.asksAboutMedications("What is her date of birth?"));
+		assertFalse(QueryScopeRouter.asksAboutMedications(null));
+		assertFalse(QueryScopeRouter.asksAboutMedications("   "));
+
+		// LOAD-BEARING, and the reason the safety layer must not be gated on this predicate alone: a
+		// question naming a drug outright carries none of the medication cue words. Such a question is
+		// answered by the drug-in-play arm, which the subject-matter scoping never touches — but a
+		// reader who mistook this for "is this a drug question" would gate that arm on it and silence it.
+		assertFalse(QueryScopeRouter.asksAboutMedications("Can I give her bupivacaine?"));
+	}
+
+	@Test
+	public void asksAboutAllergies_coversTheAllergyTablesOwnVocabulary() {
+		assertTrue(QueryScopeRouter.asksAboutAllergies("any allergies?"));
+		assertTrue(QueryScopeRouter.asksAboutAllergies("has she had any adverse reactions?"));
+		assertTrue(QueryScopeRouter.asksAboutAllergies("any intolerance on record?"));
+		assertFalse(QueryScopeRouter.asksAboutAllergies("Does she have cancer?"));
+		assertFalse(QueryScopeRouter.asksAboutAllergies(null));
+	}
+
+	@Test
 	public void matchedIntents_shouldDetectOrdersIntent() {
 		assertEquals(EnumSet.of(Intent.ORDERS),
 				QueryScopeRouter.matchedIntents("What things have been ordered for this patient over the past 6 months?"));

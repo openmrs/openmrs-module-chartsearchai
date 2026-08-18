@@ -42,7 +42,8 @@ public class SafetyWarning {
 	/**
 	 * Contraindication: a drug is contraindicated by an active allergy or condition. Two joins — a drug
 	 * IN PLAY (asked about in the question, or named by the answer on its own authority), and the
-	 * patient's OWN ACTIVE ORDERS whatever the question and the answer name. (Enumerated for the same
+	 * patient's OWN ACTIVE ORDERS, scoped to what the response is about — either the drug or the
+	 * recorded finding must be named by the question, the answer or a cited record. (Enumerated for the same
 	 * reason {@link #TYPE_INTERACTION} enumerates its three: which joins a chip type can come from is
 	 * what a renderer needs to know about it.)
 	 *

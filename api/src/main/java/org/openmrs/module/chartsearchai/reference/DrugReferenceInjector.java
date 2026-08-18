@@ -155,14 +155,20 @@ public class DrugReferenceInjector {
 	 *   <li>the patient's own active orders screened against EACH OTHER when the question asks to be
 	 *       screened for interactions (issue #113) — that gate reads the QUESTION only;</li>
 	 *   <li>the patient's own active orders checked against their own allergy and condition records
-	 *       (issue #143, {@code DrugSafetyValidator.addActiveOrderContraindications}) — whose GATE and
-	 *       whose SUBJECTS read no question and no answer at all, only the chart. It does read the
+	 *       (issue #143, {@code DrugSafetyValidator.addActiveOrderContraindications}) — whose SUBJECTS
+	 *       read only the chart, and whose bound reads the response's subject matter. It does read the
 	 *       drugs-in-play set, but only to skip what the loop above has already covered; see the
 	 *       parenthetical below.</li>
 	 * </ul>
-	 * Neither can therefore differ between this pre-answer pass and the post-answer chips pass, which
-	 * is the property that keeps a finding in the prompt from ever being asserted without a chip beside
-	 * the answer. (The #143 arm skips a drug already in play, so a question naming one of the patient's
+	 * The first cannot differ between this pre-answer pass and the post-answer chips pass. The second
+	 * CAN, and only in the safe direction: this pass calls {@code validate} with an EMPTY answer, so
+	 * its subject matter is the question alone, while the chips pass adds the answer and the records it
+	 * cited — a superset of the same texts, with the two question-derived widenings identical either
+	 * way. Every test {@code SubjectMatter} applies is monotone in those texts, so the findings of this
+	 * pass are a SUBSET of the chips beside the answer. That is the direction this property exists for:
+	 * a finding in the prompt is never asserted without a chip beside the answer. The converse — a chip
+	 * whose record was not in the prompt — the drug-in-play arm above has always allowed, since a drug
+	 * only the ANSWER names cannot be known before there is an answer. (The #143 arm skips a drug already in play, so a question naming one of the patient's
 	 * own orders moves that chip from this arm to the drug-in-play loop rather than adding or dropping
 	 * one — the same chips, from a different arm.)
 	 *

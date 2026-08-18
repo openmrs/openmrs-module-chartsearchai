@@ -85,10 +85,11 @@ import org.springframework.stereotype.Service;
  *       either: a hand-authored allergy rule naming the very drug it is filed against reports the
  *       identity check's fact, so the two fold into one chip keeping whichever wording carries the
  *       deployment's own note (issue #146 — 3 of the 4 entries in the shipped curated file). These
- *       same two checks additionally run over the patient's OWN ACTIVE ORDERS, whatever the question
- *       and the answer name — "is the patient allergic to something they are taking?" is a fact
- *       about their chart, and the drug-in-play framing above could not ask it (see
- *       {@link #addActiveOrderContraindications}, issue #143).</li>
+ *       same two checks additionally run over the patient's OWN ACTIVE ORDERS — "is the patient
+ *       allergic to something they are taking?" is a fact about their chart, and the drug-in-play
+ *       framing above could not ask it (see {@link #addActiveOrderContraindications}, issue #143) —
+ *       scoped to what the RESPONSE is about, either side of the chip counting, since that arm
+ *       annotates an answer rather than raising an alert ({@link SubjectMatter}).</li>
  * </ul>
  *
  * <p>The rule-based checks fire on the entry's own curated {@code interactions}/
@@ -117,9 +118,11 @@ import org.springframework.stereotype.Service;
  * check here. See {@link #addAllergyContraindications}.
  *
  * <p>Two checks do not need a drug in play at all. The first is the patient's own active orders
- * checked against their own allergy and condition records, on every question — see
+ * checked against their own allergy and condition records — see
  * {@link #addActiveOrderContraindications}, issue #143, which exists because the echo scoping below
- * withheld exactly that finding for a drug appearing in a cited {@code drug_order} record.
+ * withheld exactly that finding for a drug appearing in a cited {@code drug_order} record. It needs
+ * no drug in play; it is not therefore unconditional, and {@link SubjectMatter} bounds it to the
+ * responses it has something to say about.
  *
  * <p>The second: a question that asks to be <em>screened</em> for
  * interactions ("are there any drug interactions with her current medications?") names no drug, so
@@ -316,8 +319,11 @@ public class DrugSafetyValidator {
 		Set<DrugReference> questionDrugs = new LinkedHashSet<DrugReference>(
 				drugReferenceService.findImpliedByQuery(question));
 		Set<DrugReference> inPlay = new LinkedHashSet<DrugReference>(questionDrugs);
-		// The echo corpus is built lazily so the common case — the answer names no drug beyond
-		// the question's — does no citation parsing and no mapping sweep at all.
+		// Built lazily and at most once, for two consumers now: the echo test below, and the subject
+		// matter the order-driven contraindication arm is scoped to. The laziness is therefore no
+		// longer "the answer names no drug beyond the question's" alone — the arm needs the corpus
+		// whenever it runs — but it still buys the whole of it where contraindications are off or the
+		// chart records nothing an order could be contraindicated by (hasContraindicationRecords).
 		List<String> citedTextsLower = null;
 		for (DrugReference ref : drugReferenceService.findImpliedByQuery(answer)) {
 			if (questionDrugs.contains(ref)) {
@@ -455,10 +461,12 @@ public class DrugSafetyValidator {
 		// pairs are her own orders on both sides — but because they are a lookup OVER her medication
 		// list rather than a finding AGAINST her records, they are the two that grow quadratically, and
 		// they are the two a cap can truncate (maxPairChips, #131).
-		if (warnContra) {
-			// Built here rather than above so the echo corpus stays lazy: with contraindications off,
-			// or an answer naming no drug the question did not, nothing has parsed citations yet and
-			// this is the first caller that needs them.
+		if (warnContra && hasContraindicationRecords(context)) {
+			// The corpus is parsed HERE only where the arm can actually reach a chip. Asking the
+			// precondition at the call site as well as inside the arm is one predicate and two callers,
+			// never a second copy: a patient with no allergy and no condition record adds no parse of
+			// its own. Not "parses nothing" — the echo loop above builds the same corpus when the answer
+			// names a drug the question did not, and this only ever reuses it.
 			if (citedTextsLower == null) {
 				citedTextsLower = citedRecordTextsLower(answer, mappings);
 			}
@@ -722,9 +730,11 @@ public class DrugSafetyValidator {
 	 * it is not an alerting system, and this class's own contract is a check that runs after the
 	 * answer and ANNOTATES it. Issue #143 widened one arm past that: it walked every active order
 	 * against every recorded allergy and condition <em>whatever the question and the answer named</em>.
-	 * Measured live on the 3.7.1 standalone, four unrelated questions — allergies, interactions,
-	 * cancer, date of birth — returned the same two contraindication chips byte for byte, which is how
-	 * a reader learns to skip the box. The finding it was carrying is real and belongs on a surface
+	 * Measured live on the 3.7.1 standalone, four different questions — about allergies, interactions,
+	 * cancer and a date of birth — returned the same two contraindication chips byte for byte. The
+	 * finding is the INVARIANCE, not that all four were off-topic: two of them were squarely about
+	 * drugs. The chips simply did not depend on what was asked, which is how a reader learns to skip
+	 * the box. The finding it was carrying is real and belongs on a surface
 	 * with subscription and acknowledgement (order entry, a chart banner, CDS hooks), not on every
 	 * answer this module happens to produce.
 	 *
@@ -778,7 +788,7 @@ public class DrugSafetyValidator {
 		 * matched at all, so the two cannot drift.
 		 */
 		private boolean names(DrugReference.Contraindication c) {
-			if (coversRecordedAllergies && "allergy".equalsIgnoreCase(c.getType())) {
+			if (coversRecordedAllergies && isAllergyRule(c)) {
 				return true;
 			}
 			return PatientClinicalContext.containsToken(texts, c.getToken());
@@ -1360,7 +1370,7 @@ public class DrugSafetyValidator {
 		if (context == null) {
 			return null;
 		}
-		if ("allergy".equalsIgnoreCase(c.getType()) && context.hasAllergyToken(c.getToken())) {
+		if (isAllergyRule(c) && context.hasAllergyToken(c.getToken())) {
 			return "active allergy";
 		}
 		if ("condition".equalsIgnoreCase(c.getType()) && context.hasConditionToken(c.getToken())) {
@@ -3592,11 +3602,20 @@ public class DrugSafetyValidator {
 	 * mentions has no dose to check, and reinstating an echoed drug's dose check is precisely what #105
 	 * measured and fixed.
 	 *
-	 * <p><b>Not gated on the question, deliberately.</b> "Is the patient allergic to something they are
-	 * taking?" is a fact about their chart, not about the wording of a query, and gating a
-	 * contraindication on the question's wording is what produced this defect. What bounds the arm
-	 * instead is the chart: it can only fire where an allergy or condition record and an active order
-	 * point at the same drug, and the two arms it delegates to bound it further — one chip per
+	 * <p><b>Bounded by the response's subject matter, not by the question's wording.</b> This paragraph
+	 * used to read "not gated on the question, deliberately", and the reasoning it gave — that "is the
+	 * patient allergic to something they are taking?" is a fact about the chart rather than about the
+	 * wording of a query — is still true and is still not a licence to answer it unasked. Unbounded,
+	 * the arm put the identical chips on every response: measured live on the 3.7.1 standalone, four
+	 * questions about allergies, interactions, cancer and a date of birth returned the same two,
+	 * byte for byte. This module annotates answers and has none of an alerting system's machinery, so
+	 * the arm is bounded by {@link SubjectMatter} — a chip is raised where either SIDE of it, the drug
+	 * or the recorded finding, is part of what the response is about. That is deliberately NOT a gate
+	 * on the question's wording, which is the thing this defect taught: a question naming a drug
+	 * carries no medication cue word at all, and the answer and the cited records count as much as the
+	 * question. What bounds the arm besides is the chart: it can only fire where an allergy or
+	 * condition record and an active order point at the same drug, and the two arms it delegates to
+	 * bound it further — one chip per
 	 * (substance, allergen's substance) and one per (substance, matching curated rule), those two being
 	 * ONE bound wherever the rule names the substance itself (issue #146), through the same
 	 * {@link ContraindicationChips} ledger the drug-in-play call site uses, which is what stops one
@@ -3637,8 +3656,7 @@ public class DrugSafetyValidator {
 	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries,
 			List<List<DrugReference>> recordedAllergens, SubjectMatter askedAbout) {
-		if (context == null
-				|| (context.getAllergyTokens().isEmpty() && context.getConditionTokens().isEmpty())) {
+		if (!hasContraindicationRecords(context)) {
 			return;
 		}
 		// The recorded allergies THIS response is about, resolved once per pass rather than once per
@@ -3667,6 +3685,33 @@ public class DrugSafetyValidator {
 			addContraindications(chips, ref, context, askedAbout);
 			addAllergyContraindications(chips, ref, allergensAskedAbout);
 		}
+	}
+
+	/**
+	 * @return whether the chart records anything an active order could be contraindicated BY. Extracted
+	 *         from {@link #addActiveOrderContraindications}'s own guard rather than copied to its call
+	 *         site: the call site has to know the same answer to decide whether parsing the cited-record
+	 *         corpus can pay for itself, and two spellings of "this patient records nothing to check
+	 *         against" would drift into a corpus built for an arm that returns, or an arm that runs
+	 *         without one. Both token sets, for the reason the guard's own javadoc gives — the curated
+	 *         arm's condition leg is half of what the original scoping suppressed.
+	 */
+	/**
+	 * @return whether {@code c} is the ALLERGY leg of the curated rule vocabulary. One spelling of that
+	 *         test, because two consumers now ask it for different reasons — {@link
+	 *         #recordedContraindicationKind} to decide which chart list a rule is put to, and {@link
+	 *         SubjectMatter} to decide whether an allergy-domain question puts the rule in scope. Left
+	 *         as two literals they would drift silently and in the worse direction: a vocabulary that
+	 *         grew a synonym would keep matching rules while the widening quietly stopped applying to
+	 *         them, and the widening has no test that would notice.
+	 */
+	private static boolean isAllergyRule(DrugReference.Contraindication c) {
+		return "allergy".equalsIgnoreCase(c.getType());
+	}
+
+	private static boolean hasContraindicationRecords(PatientClinicalContext context) {
+		return context != null
+				&& !(context.getAllergyTokens().isEmpty() && context.getConditionTokens().isEmpty());
 	}
 
 	/**

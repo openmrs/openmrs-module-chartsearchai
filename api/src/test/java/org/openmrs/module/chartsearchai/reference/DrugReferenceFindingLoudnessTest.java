@@ -15,9 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,7 +27,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
-import org.openmrs.util.OpenmrsUtil;
 
 /**
  * How loudly a validity finding is reported, which since ADR Decision 36 depends on WHOSE dataset it
@@ -55,8 +53,8 @@ public class DrugReferenceFindingLoudnessTest extends BaseModuleContextSensitive
 
 	/** A DDInter-shaped fixture that trips {@link DrugReferenceValidity#ALIAS_NAMES_ANOTHER_SUBSTANCE} —
 	 *  the same rule the shipped knowledge base trips, so the only variable between the two cases below
-	 *  is where the dataset was read from. */
-	private static final String DEFECTIVE_FIXTURE = "chartsearchai-test/ddi-alias-names-another-substance.json";
+	 *  is where the dataset was read from. Shared with the rule's own case rather than spelled again. */
+	private static final String DEFECTIVE_FIXTURE = DrugReferenceTestSupport.DDI_ALIAS_NAMES_ANOTHER_SUBSTANCE;
 
 	private final List<File> created = new ArrayList<File>();
 
@@ -69,15 +67,7 @@ public class DrugReferenceFindingLoudnessTest extends BaseModuleContextSensitive
 	}
 
 	private String copyToAppData(String classpathResource, String asName) throws IOException {
-		File dir = new File(OpenmrsUtil.getApplicationDataDirectory(), "chartsearchai");
-		dir.mkdirs();
-		File target = new File(dir, asName);
-		created.add(target);
-		try (InputStream in = getClass().getClassLoader().getResourceAsStream(classpathResource)) {
-			assertTrue(in != null, classpathResource + " should be on the test classpath");
-			Files.copy(in, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
-		}
-		return "chartsearchai/" + asName;
+		return DrugReferenceTestSupport.copyDatasetToAppData(classpathResource, asName, created);
 	}
 
 	private void enable() {
@@ -112,9 +102,9 @@ public class DrugReferenceFindingLoudnessTest extends BaseModuleContextSensitive
 	@Test
 	public void everyRuleIsClassifiedAsDataOrAsConfiguration() throws Exception {
 		List<String> rules = new ArrayList<String>();
-		for (java.lang.reflect.Field field : DrugReferenceValidity.class.getDeclaredFields()) {
-			if (field.getType() == String.class && java.lang.reflect.Modifier.isPublic(field.getModifiers())
-					&& java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+		for (Field field : DrugReferenceValidity.class.getDeclaredFields()) {
+			if (field.getType() == String.class && Modifier.isPublic(field.getModifiers())
+					&& Modifier.isStatic(field.getModifiers())) {
 				rules.add((String) field.get(null));
 			}
 		}
@@ -187,15 +177,40 @@ public class DrugReferenceFindingLoudnessTest extends BaseModuleContextSensitive
 	@Test
 	public void theStatusChannelIsIdenticalWhicheverDatasetTheFindingIsAbout() throws IOException {
 		enable();
+		// The bundled dataset, with nothing configured — the softened side.
 		DrugReferenceLoad bundled = new DrugReferenceService().getLoadStatus();
-		DrugReferenceValidity.Finding fromBundled = finding(bundled,
-				DrugReferenceValidity.ALIAS_NAMES_ANOTHER_SUBSTANCE);
 
-		assertEquals(DrugReferenceValidity.Remedy.REPORTED, fromBundled.getRemedy(),
-				"the remedy is a property of the rule, not of who owns the file");
-		assertTrue(fromBundled.getOccurrences() > 0, "and the count is carried, not suppressed");
-		assertTrue(fromBundled.toMap().get("detail").toString().length() > 0,
-				"and so is the detail that names the rows");
+		// The SAME file, as the operator's own — the loud side. One dataset read twice is what makes
+		// this a comparison rather than two unrelated readings, and each service instance performs its
+		// own lazy load, so the second is a real second resolution.
+		String path = copyToAppData(DdiDrugReferenceSource.CLASSPATH_DEFAULT, "loudness-same-file.json");
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, path);
+		DrugReferenceLoad operators = new DrugReferenceService().getLoadStatus();
+
+		assertTrue(bundled.getOrigin().startsWith(ReferenceDataFiles.CLASSPATH_ORIGIN_PREFIX)
+				&& operators.getOrigin().startsWith(ReferenceDataFiles.APPDATA_ORIGIN_PREFIX),
+				"precondition: the two loads must differ in ORIGIN and nothing else. Were: "
+						+ bundled.getOrigin() + " and " + operators.getOrigin());
+		assertEquals(bundled.getEntryCount(), operators.getEntryCount(),
+				"precondition: the same dataset, so the same entries");
+
+		assertEquals(publishedFindings(bundled).toString(), publishedFindings(operators).toString(),
+				"the status channel is not scoped with the log: every finding must reach it with the same "
+						+ "rule, remedy, occurrence count and detail whoever owns the dataset. This is the "
+						+ "assertion that fails if toMap() is ever scoped by origin, which the log level's "
+						+ "existence makes a tempting thing to 'fix'");
+	}
+
+	/** Each finding as {@code rule/remedy/occurrences/detail}, which is the whole of what the status
+	 *  publishes — compared as a list so an extra or missing finding fails too, not only a changed one. */
+	private static List<String> publishedFindings(DrugReferenceLoad status) {
+		List<String> out = new ArrayList<String>();
+		for (DrugReferenceValidity.Finding found : status.getFindings()) {
+			out.add(found.getRule() + "/" + found.getRemedy() + "/" + found.getOccurrences() + "/"
+					+ found.getDetail());
+		}
+		return out;
 	}
 
 	/**

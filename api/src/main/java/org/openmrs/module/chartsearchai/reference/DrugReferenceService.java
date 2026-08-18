@@ -336,7 +336,7 @@ public class DrugReferenceService {
 	 * <p><b>What makes it safe today is the DATA, not this code.</b> The fallback's precondition is an
 	 * entry whose {@code aliases} omit its own {@code name}; measured 2026-08-14 through
 	 * {@link DrugReference#isNamed}, that holds for <b>0 of the 2283 entries</b> of the shipped 19 MB KB
-	 * and 0 of each bundled sample, which makes the fallback unreachable for ANY input string on them
+	 * and 0 of each smaller bundled dataset, which makes the fallback unreachable for ANY input string on them
 	 * rather than merely for a sampled population. It is a property of the PARSERS
 	 * ({@link DdiDrugReferenceSource} makes the display name {@code alias[0]},
 	 * {@link AtcDrugReferenceSource} makes it the only alias) and, since issue #150, of
@@ -409,7 +409,7 @@ public class DrugReferenceService {
 	 *         to prevent. Falling back to {@code matched} is the pre-#209 answer for that one shape, and it
 	 *         over-reports, which for a non-blocking advisory is the safe direction. Measured over every
 	 *         shipped dataset the fallback never fires — 0 firings on each, over the 7452 names and
-	 *         aliases of the full 19 MB KB and over the three bundled samples — so it costs the shipped
+	 *         aliases of the full 19 MB KB and over the smaller bundled datasets — so it costs the shipped
 	 *         configuration nothing.
 	 *         {@code narrowingNeverEmptiesACandidateSetEvenWhenNoMatchedRowIsTheStrongestClaimant} pins it.
 	 *
@@ -419,7 +419,7 @@ public class DrugReferenceService {
 	 *         {@code Ibuprofen tablets 400mg} keeps only the bare {@code Ibuprofen} row and the reference
 	 *         data's findings go with the dropped rows. Not addressed here: it needs the same precondition
 	 *         as the emptying shape — an entry whose aliases omit its own name — and no shipped dataset has
-	 *         one (measured: 0 such entries in the full 19 MB KB and in each of the three bundled samples).
+	 *         one (measured: 0 such entries in the full 19 MB KB and in each smaller bundled dataset).
 	 *         Closing it would mean deciding what a source publishing no substance name should mean by
 	 *         "one substance", which this issue does not settle.
 	 */

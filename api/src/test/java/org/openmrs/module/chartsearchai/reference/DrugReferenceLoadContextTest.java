@@ -11,14 +11,10 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -79,17 +75,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	 * @return the path to set {@code dataFilePath} to (relative to the application data directory)
 	 */
 	private String copyToAppData(String classpathResource, String asName) throws IOException {
-		File dir = new File(OpenmrsUtil.getApplicationDataDirectory(), "chartsearchai");
-		dir.mkdirs();
-		File target = new File(dir, asName);
-		created.add(target);
-		String resource = classpathResource.startsWith("/") ? classpathResource.substring(1)
-				: classpathResource;
-		try (InputStream in = getClass().getClassLoader().getResourceAsStream(resource)) {
-			assertNotNull(in, "dataset " + classpathResource + " should be on the classpath");
-			Files.copy(in, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
-		}
-		return "chartsearchai/" + asName;
+		return DrugReferenceTestSupport.copyDatasetToAppData(classpathResource, asName, created);
 	}
 
 	/**

@@ -18,8 +18,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +29,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
-import org.openmrs.util.OpenmrsUtil;
 
 /**
  * The load-time validity check: what the loader does when the dataset it was pointed at violates an
@@ -65,7 +62,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 			"chartsearchai-test/drug-reference-substance-name-declared.json";
 
 	private static final String ALIAS_NAMES_ANOTHER_SUBSTANCE_FIXTURE =
-			"chartsearchai-test/ddi-alias-names-another-substance.json";
+			DrugReferenceTestSupport.DDI_ALIAS_NAMES_ANOTHER_SUBSTANCE;
 
 	private static final String DERIVATIVE_MERGED_FIXTURE =
 			"chartsearchai-test/ddi-derivative-merged-into-one-substance.json";
@@ -107,20 +104,13 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 */
 	private DrugReferenceService loading(String classpathFixture, String asName, String sourceFormat)
 			throws IOException {
-		File dir = new File(OpenmrsUtil.getApplicationDataDirectory(), "chartsearchai");
-		dir.mkdirs();
-		File target = new File(dir, asName);
-		created.add(target);
-		try (InputStream in = getClass().getClassLoader().getResourceAsStream(classpathFixture)) {
-			assertNotNull(in, classpathFixture + " should be on the test classpath");
-			Files.copy(in, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
-		}
+		String path = DrugReferenceTestSupport.copyDatasetToAppData(classpathFixture, asName, created);
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_SOURCE_FORMAT, sourceFormat);
 		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, "chartsearchai/" + asName);
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, path);
 		return new DrugReferenceService();
 	}
 
@@ -525,6 +515,49 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 				"the module kept this derivative apart from Ketoconazole exactly as designed; its two "
 						+ "rows are route variants of the derivative itself, and nothing was merged. "
 						+ "Detail was: " + found.getDetail());
+	}
+
+	// ------------------------------------------------------------------
+	// #152/#164 — rows the parser dropped as self-paired
+	// ------------------------------------------------------------------
+
+	/**
+	 * Issues #152 and #164, reported rather than only logged. A row pairing a substance with itself
+	 * carries no clinical claim, so {@code DdiDrugReferenceSource.isSelfPair} drops it — and the COUNT is
+	 * what a maintainer compares across knowledge-base refreshes.
+	 *
+	 * <p>It was a bare {@code log.warn} inside the parser until ADR Decision 36, which cost it the channel
+	 * that can still answer after a lazy load (#154): it was the one data verdict in this loader that never
+	 * appeared on {@code GET /chartsearchai/drugreferencestatus}, so an operator polling the status saw a
+	 * healthy count and no sign that rows had been discarded. Asserted on all three of the things every
+	 * rule here is asserted on — what the loader did, that it said so, and that the status names it
+	 * afterwards — plus the count, because a rule reporting "some rows" would be the bare log line again.
+	 */
+	@Test
+	public void rowsPairingASubstanceWithItselfAreDroppedAndReportedWithTheirCount() throws IOException {
+		DrugReferenceService service = loading(DrugReferenceTestSupport.DDI_SELF_INTERACTION,
+				"h152-self-paired.json", ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"the fixture is an operator file, so its dropped rows are theirs to fix and must be "
+							+ "loud. Captured: " + capture.describeAll());
+		}
+
+		assertTrue(status.getEntryCount() > 0, "the rest of the dataset still loads");
+		DrugReferenceValidity.Finding found = finding(status,
+				DrugReferenceValidity.SELF_PAIRED_INTERACTION_ROWS);
+		assertEquals(DrugReferenceValidity.Remedy.DROPPED, found.getRemedy(),
+				"the row is the offending value and the rest of the dataset is usable");
+		assertEquals(3, found.getOccurrences(),
+				"the fixture carries three such rows, and the count is the reportable fact");
+		assertTrue(keyedSummary(status)
+				.contains("{rule=" + DrugReferenceValidity.SELF_PAIRED_INTERACTION_ROWS
+						+ ", remedy=dropped, occurrences=3}"),
+				"and it reaches the wire, which is what it never did as a log line. Was: "
+						+ keyedSummary(status));
 	}
 
 	// ------------------------------------------------------------------

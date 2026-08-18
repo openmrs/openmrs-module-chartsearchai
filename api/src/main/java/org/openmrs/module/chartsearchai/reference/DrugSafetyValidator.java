@@ -562,8 +562,8 @@ public class DrugSafetyValidator {
 	 * drugs a question resolves, and 45 pairs for 10 active orders. And every chip is ALSO injected into
 	 * the prompt as a citable pre-answer finding (see {@code DrugReferenceInjector.preAnswerFindings}),
 	 * so an uncapped arm both buries the clinician under chips and writes the whole cross-product into
-	 * the context window. Measured on the bundled sample with the patient on nothing: one question
-	 * naming its 16 drugs raised 72 chips carrying 42,708 characters of finding text, against a path
+	 * the context window. Measured on the 16-drug DDInter excerpt with the patient on nothing: one question
+	 * naming all 16 raised 72 chips carrying 42,708 characters of finding text, against a path
 	 * that caps a SINGLE reference record at {@link DrugReferenceInjector#MAX_INTERACTION_RENDER_CHARS}
 	 * = 1500 for precisely this reason. On the screening side, DDInter's longest mechanism text (~1.2k
 	 * chars) puts the default cap's contribution at ~12k characters, comparable to a handful of the
@@ -2899,7 +2899,7 @@ public class DrugSafetyValidator {
 	 *         a fixed-dose combination is one order that resolves to SEVERAL entries (the order name
 	 *         whole-word-matches an alias of each constituent) while its single mapped code belongs to
 	 *         just one of them, so dropping only {@code ref}'s codes left the co-formulated other half's
-	 *         code standing as if it were a second order. Measured on the bundled sample: one "Aspirin
+	 *         code standing as if it were a second order. Measured on the 16-drug DDInter excerpt: one "Aspirin
 	 *         and omeprazole" order reported "Acetylsalicylic acid (aspirin) interacts with active order
 	 *         esomeprazole — Minor", i.e. the two halves of one tablet as an interacting pair, naming a
 	 *         drug the patient is on in no form.

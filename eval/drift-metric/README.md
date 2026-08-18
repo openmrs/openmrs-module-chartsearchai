@@ -292,7 +292,7 @@ a safety violation; this probe needs the same split before it gates another answ
 `DrugReferenceInjector.render()` now orders interaction partners by the patient's own active drugs
 *before* applying the char cap (the cap itself is sound — it exists because Warfarin has ~934
 partners). Ordering alone proved insufficient: two above-floor partners can exceed the 1500-char
-budget between them (methotrexate 783 + aspirin 809 on the bundled sample), so a relevant partner
+budget between them (methotrexate 783 + aspirin 809 on the 16-drug DDInter excerpt), so a relevant partner
 whose note will not fit now renders as a compact `name (Severity)` instead of being dropped —
 otherwise the polypharmacy case reinstates the same chip-versus-prose split. Which one yields is
 decided by severity rather than dataset position, so the Major interaction keeps its mechanism text

@@ -12,9 +12,12 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -26,6 +29,7 @@ import java.util.stream.Collectors;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
+import org.openmrs.util.OpenmrsUtil;
 
 /**
  * The one set of drug-reference test helpers, shared by the reference test classes (and, via
@@ -126,6 +130,38 @@ public final class DrugReferenceTestSupport {
 			}
 		}
 		return false;
+	}
+
+
+	/**
+	 * Copies a dataset from the test classpath into {@code <appdata>/chartsearchai/<asName>} — the
+	 * arrangement every context-sensitive case needs to drive the OPERATOR-FILE branch of the real load,
+	 * as against the classpath fallback.
+	 *
+	 * <p>One body for what had become three, and they had already drifted: two stripped a leading slash
+	 * from the resource name and one did not, so handing a source class's own {@code CLASSPATH_DEFAULT}
+	 * (which carries the slash) to that one produced a null stream and an assertion message naming the
+	 * resource but not the reason. Shared for the reason this class exists.
+	 *
+	 * @param created the caller's cleanup list, which the copied file is added to — the deletion is
+	 *        per-test {@code @AfterEach} work and this helper has no lifecycle of its own
+	 * @return the value to set {@code dataFilePath} (or the groups path) to: relative to the application
+	 *         data directory, which is the form the global property holds
+	 */
+	static String copyDatasetToAppData(String classpathResource, String asName, List<File> created)
+			throws IOException {
+		File dir = new File(OpenmrsUtil.getApplicationDataDirectory(), "chartsearchai");
+		dir.mkdirs();
+		File target = new File(dir, asName);
+		created.add(target);
+		String resource = classpathResource.startsWith("/") ? classpathResource.substring(1)
+				: classpathResource;
+		try (InputStream in = DrugReferenceTestSupport.class.getClassLoader()
+				.getResourceAsStream(resource)) {
+			assertNotNull(in, "dataset " + classpathResource + " should be on the test classpath");
+			Files.copy(in, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+		}
+		return "chartsearchai/" + asName;
 	}
 
 	/**
@@ -332,6 +368,25 @@ public final class DrugReferenceTestSupport {
 	 * default cannot serve that purpose.
 	 */
 	static final String DDI_EXCERPT = "chartsearchai-test/ddi-knowledge-base-sample.json";
+
+	/**
+	 * Issues #152/#164's corpus: six drug rows carrying three interaction rows that pair a substance with
+	 * itself, which {@link DdiDrugReferenceSource#isSelfPair} drops and
+	 * {@link DrugReferenceValidity#SELF_PAIRED_INTERACTION_ROWS} counts. Shared rather than spelled in each
+	 * file that wants it, for the reason {@code DrugReferenceValidityContextTest.FIXTURE_DIR} gives about
+	 * its own pair: two literals naming one fixture are under no compiler obligation to agree, and here one
+	 * of the two dependants pins the dropped COUNT.
+	 */
+	static final String DDI_SELF_INTERACTION = "chartsearchai-test/ddi-self-interaction.json";
+
+	/**
+	 * Issue #196's corpus: DDInter-shaped rows where one entry publishes, among its own names, a name a
+	 * different substance is called — the rule the shipped knowledge base trips on 18 of its rows, which is
+	 * why two files want this same slice (the rule's own case, and the one that shows the same rule reported
+	 * at two different LEVELS depending on whose dataset it is).
+	 */
+	static final String DDI_ALIAS_NAMES_ANOTHER_SUBSTANCE =
+			"chartsearchai-test/ddi-alias-names-another-substance.json";
 
 	/** Three nitroimidazoles, curated ({@link JsonDrugReferenceSource}) rather than DDInter-shaped: the
 	 *  class arm's co-medication GROUPING slice, where one order's codes are covered only in part

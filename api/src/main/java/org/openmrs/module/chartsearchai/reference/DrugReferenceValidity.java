@@ -148,7 +148,10 @@ public final class DrugReferenceValidity {
 	 * An explicitly configured {@code sourceFormat} matching no adapter, so a different parser is in
 	 * force — issue #156, case 2.
 	 *
-	 * <p>Loud, like every rule here, and the reason it is worth stating is that it used not to be. An
+	 * <p>Loud <b>wherever the entries came from</b>, which since ADR Decision 36 is no longer true of every
+	 * rule here — the data rules soften for the dataset the module ships, and this one must not, because it
+	 * fires precisely when the operator's own file was NOT read and that dataset WAS. It names a choice
+	 * they made and can unmake. The reason it is worth stating is that it used not to be loud at all. An
 	 * assertion in {@code DrugReferenceLoadContextTest} held that this case needed no WARN because the
 	 * status reports the configured and effective formats separately, so the difference was already
 	 * visible. That ground is the confusion issues #149 and #154 settled: <b>observable is not the same
@@ -162,7 +165,11 @@ public final class DrugReferenceValidity {
 	/** What the loader did about a finding — see the class javadoc for why they differ per rule. */
 	public enum Remedy {
 
-		/** The data was left exactly as loaded; only the operator can fix it. */
+		/**
+		 * The data was left exactly as loaded; only whoever owns the file can fix it — the operator for
+		 * their own dataset, and the upstream project for the one the module ships, which is the
+		 * distinction {@link #logTo(Logger, String)} reports at the level of.
+		 */
 		REPORTED,
 
 		/** The loader brought the data to the shape its own resolution assumes. */

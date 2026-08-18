@@ -168,8 +168,12 @@ final class ReferenceDataFiles {
 				// classpath-origin load. Both parsers report strictly after their single read and then
 				// return, so parse() itself cannot report-then-throw. What is left is the close() of the
 				// stream below throwing after a reported parse — remote for a local file, and it would
-				// misattribute rather than duplicate. Not guarded, because a fresh collector per attempt
-				// would cost configuredDataFileNotRead its place in the same load's findings.
+				// misattribute rather than duplicate. Since ADR Decision 36 misattribution also costs the
+				// LEVEL, because DrugReferenceValidity.logTo picks it from the origin this method finally
+				// returns: such a finding describes the operator's file and would be logged at INFO as
+				// though it described the dataset the module ships. Still not guarded, and for the
+				// unchanged reason — a fresh collector per attempt would cost configuredDataFileNotRead
+				// its place in the same load's findings, which is a certainty against a remote maybe.
 				try (InputStream in = new FileInputStream(new File(resolved))) {
 					List<T> loaded = parser.parse(in, validity);
 					log.info("Loaded {} {} from {}", loaded.size(), datasetLabel, resolved);

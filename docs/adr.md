@@ -2276,7 +2276,7 @@ That collided with two standing rules: *a rule must stay silent on an untouched 
 
 This keeps the rule and replaces its reason, the same move Decision 32's own history took twice. It also promoted the parser's self-pair count from a bare `log.warn` to a real finding (`self-paired-interaction-rows`, remedy `dropped`) — it was the one data verdict in the loader that never reached the status endpoint, and the only one that would have stayed loud about a dataset the module ships.
 
-`everyShippedDatasetSatisfiesEveryRule` split accordingly: a dataset the module **authors** must still produce no finding at all, while the dataset it **redistributes** must produce only findings the scoping may soften — a configuration finding among them would mean the softening had swallowed something that names an operator's own choice. The counts are deliberately not pinned: that would break the build on any refresh, **including one that fixes these rows**.
+`everyShippedDatasetSatisfiesEveryRule` split accordingly, into `everyDatasetTheModuleAuthorsSatisfiesEveryRule` and `theDatasetTheModuleRedistributesReportsOnlyFindingsItsOwnProvenanceExplains`: a dataset the module **authors** must still produce no finding at all, while the dataset it **redistributes** must produce only findings the scoping may soften — a configuration finding among them would mean the softening had swallowed something that names an operator's own choice. The counts are deliberately not pinned: that would break the build on any refresh, **including one that fixes these rows**.
 
 ### Provenance
 

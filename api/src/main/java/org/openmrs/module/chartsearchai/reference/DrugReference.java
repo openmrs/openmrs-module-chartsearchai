@@ -322,8 +322,21 @@ public class DrugReference {
 	 * {@code DrugSafetyValidator.interactionSubject} asks {@link #nameMatchStrength} first — the row the
 	 * patient's own record names is the truthful subject (#187) — and folds only the rows tied on that.
 	 * This fold is unchanged and still decides every case where the record names none of them, which is
-	 * most of them. Do not add the recorded-name step here: {@code DrugReferenceInjector.matchingEntries}
-	 * and the class-partner site have no recorded name to anchor on.
+	 * most of them.
+	 *
+	 * <p><b>Do not add the recorded-name step here</b> — but not for the reason this used to give. It
+	 * said {@code DrugReferenceInjector.matchingEntries} and the class-partner site "have no recorded
+	 * name to anchor on", and since issues #237/#259 that is false of the first: {@code matchingEntries}
+	 * takes the patient's context and asks {@code interactionSubject} which row this response names each
+	 * substance by. The reasons it must still not move are two, and both are stronger than the one they
+	 * replace. First, this fold is the tie-break INSIDE {@code interactionSubject}, so a recorded-name
+	 * step here would be applied twice at every chip-subject site. Second, {@code matchingEntries} calls
+	 * this to choose the row a reference record is RENDERED from, and moving that to the charted row was
+	 * measured and declined — the route-unspecified row carries the breadth, and rendering the charted
+	 * one loses the patient's own interaction partner in 74 of the shipped KB's 129 multi-row families
+	 * against 0 the other way. The injector says which row it rendered instead
+	 * ({@code DrugReferenceInjector.rowAttribution}). The class-partner site genuinely still has no
+	 * recorded name.
 	 *
 	 * @return {@code candidate} when it {@link #namesNoRoute()} and {@code incumbent} does not, else
 	 *         {@code incumbent} — so the route-unspecified row wins wherever the family has one, and

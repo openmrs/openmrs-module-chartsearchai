@@ -556,9 +556,34 @@ def _collapse(text):
     return re.sub(r"[ \t]+", " ", text)
 
 
+# The caution lead's own cases, in the shape score_directness.selftest uses for classify, and here
+# for the reason that one is there: the two fixture arms exercise CAUTION_LED only in the POSITIVE
+# direction, so the failure the regex's comment is written against — "the records do not address
+# whether ibuprofen can be given" reading as a caution verdict — is pinned by nothing without these.
+# The last three are the ones that matter: a hedge whose lead is a genuine abstention, a "Yes" that
+# must stay a YES so inverted_yes still fires on it, and an occurrence past the first clause.
+CAUTION_LEAD_CASES = [
+    ("Ibuprofen can be given, with one caution: it interacts with X.", True),
+    ("Warfarin can be given, with one caution: Warfarin interacts with active order Simvastatin.", True),
+    ("Rifampicin (rifampin) can be given, with one caution: it interacts with lidocaine.", True),
+    ("The records do not address whether ibuprofen can be given.", False),
+    ("Yes, ibuprofen can be given.", False),
+    ("No — ibuprofen should not be given.", False),
+    ("It cannot be determined whether ibuprofen can be given.", False),
+    ("The patient has several readings; ibuprofen can be given later.", False),
+    ("", False),
+]
+
+
 def selftest():
     fixtures = os.path.join(HERE, "fixtures", "probe-safety")
     failures = []
+    for text, want in CAUTION_LEAD_CASES:
+        got = caution_led({"answer": text})
+        if got != want:
+            failures.append("caution_led(%r) = %s, want %s" % (text[:60], got, want))
+    print("  ok  %-32s %d case(s)" % ("caution-lead classification", len(CAUTION_LEAD_CASES))
+          if not failures else "  FAIL caution-lead classification")
     # A selftest that checks nothing is the fault this selftest exists for. Every fixture directory
     # on disk must be asserted by at least one case, and there must be cases.
     if not os.path.isdir(fixtures):

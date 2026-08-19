@@ -132,7 +132,9 @@ def main():
     # #283 that is a part rather than the whole: that scorer also counts a caution lead ("the drug
     # can be given, with one caution"), which classify calls NONE. It is not counted here and does
     # not need to be — this script's captures are the presence topics of capture_probe_yesno.sh
-    # (allergies, eye, heart …), where no safety finding is injected and no caution lead can arise.
+    # (allergies, eye, heart …), and the caution lead is taught only for a finding that STATES a
+    # caution, which only an interaction finding does and only for the drug asked about. A presence
+    # question names no drug, so the lead cannot arise there.
     # Point it at a safety capture and this line under-counts; the label says which definition it
     # is, because "two live definitions sharing one label" is the fault in this file's own docstring.
     directness = lambda c: c.get("YES", 0) + c.get("NO", 0) + c.get("CANNOT", 0)

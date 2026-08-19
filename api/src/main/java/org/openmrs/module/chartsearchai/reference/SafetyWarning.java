@@ -202,9 +202,17 @@ public class SafetyWarning {
 	 * {@code safetyWarnings} chip, which issues #113 and #171 would both have to re-measure — and
 	 * pinned by {@code FoldedFindingStrengthTest
 	 * .theScreeningArmStatesTheWeakerClaimForTheSamePairBecauseItRunsNoClassArm} so that moving either
-	 * arm is visible. The question-pair arm does not set it either and there it is no asymmetry: that
-	 * arm's two drugs need not be on the chart at all, so there is no co-medication for a class
-	 * relationship to hold against.
+	 * arm is visible. The question-pair arm does not set it either — its warning is built at its own
+	 * call site — so a question-pair finding always states the strength its RATING licenses. This
+	 * javadoc read "there it is no asymmetry: that arm's two drugs need not be on the chart at all,
+	 * so there is no co-medication for a class relationship to hold against", and the second half
+	 * does not follow from the first: the patient CAN be on one of a question-named pair. What holds
+	 * without it is narrower and is all this flag needs — the fold happens only inside
+	 * {@code addInteractionWarnings}, so a class relationship that does hold for one of those drugs
+	 * is never folded into the pair finding; it reaches the model as its own unrated warning, which
+	 * licenses withholding on the rating leg. Whether the two arms can report one pair at once was
+	 * not established here — {@code coveredByActiveOrderArm} asks {@code hasActiveDrug} where the
+	 * pair walk asks {@code identifies}, and the two are different questions.
 	 *
 	 * <p>Not serialized; the wire shape is unchanged.
 	 */

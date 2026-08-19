@@ -37,8 +37,10 @@ import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
  * <p><b>What these assertions are, and are not.</b> They pin the prompt's CONTENT: that the
  * evidence-against claim is now conditional on the strength the finding states, that both strength
  * classes are taught in the words the injected record uses ({@code SafetyFindingSeverityStrengthTest}
- * pins the record side), and that the caution class is demonstrated. What the model then produces is
- * measured on a server; a prompt test cannot assert an answer.
+ * pins the record side), and that the caution class is demonstrated. Since the two clauses SHARE a
+ * phrase — "a reason to withhold it" occurs inside the caution one, negated — they also pin which
+ * SENTENCE each phrase sits in, without which the two branches can be swapped and stay green.
+ * What the model then produces is measured on a server; a prompt test cannot assert an answer.
  */
 public class SafetyVerdictSeverityGradationTest {
 
@@ -89,9 +91,15 @@ public class SafetyVerdictSeverityGradationTest {
 		// prompt reinstating #283 and inverting every Major refusal and every contraindication on
 		// top of it. Giving branch one the caution clause alone is green too, and then NO branch
 		// matches a withholding finding, which is the fall-through the contraindication round
-		// measured at 3/3 on the standalone. Nothing else in this class reaches either mutation:
-		// bothStrengthClassesAreTaughtInTheWordsTheInjectedRecordUses and
-		// theRuleNamesTheClauseTheRecordActuallyCarries test containment in the whole paragraph.
+		// measured at 3/3 on the standalone. Nothing else in this class reached either mutation when
+		// this line was added — bothStrengthClassesAreTaughtInTheWordsTheInjectedRecordUses and
+		// theRuleNamesTheClauseTheRecordActuallyCarries test containment in the whole paragraph, and
+		// theCautionBranchLeadsWithNeitherARefusalNorAYes read forward from the first occurrence of
+		// the caution clause. That case is sentence-scoped now and reddens on both as well, so the
+		// two lines overlap; each still holds one the other does not, which is why both are here.
+		// The one that is this line's alone: gate branch one on the caution CLASS without the full
+		// clause ("a caution to note RATHER THAN a reason to withhold it"). The caution case's
+		// anchor then still finds branch two and passes, and only this line reddens (measured).
 		assertFalse(sentence.contains(cautionClass()),
 				"and on THAT clause rather than on the phrase the caution clause also contains, "
 						+ "which is the whole of what separates this branch from the caution one: "
@@ -159,6 +167,14 @@ public class SafetyVerdictSeverityGradationTest {
 		// serious" to this sentence keeps the lead intact, so only this line reddens. That is the
 		// drift shape the branch is exposed to once it has a lead of its own — a refusal creeping
 		// back INTO the caution branch rather than replacing it.
+		//
+		// It also constrains the paragraph's SHAPE, which is worth saying because the failure is
+		// otherwise cryptic: the caution branch and the ranking sentence have to stay separate
+		// sentences. Joined by a semicolon into one, this line reddens on the ranking half's "No"
+		// while aSetOfFindingsStatingDifferentStrengthsIsLedByTheStrongest still passes on the same
+		// span (measured). That is the right constraint — they are two rules and the model is told
+		// to apply them in different cases — but a reword that merges them fails here rather than
+		// where the ranking is checked.
 		assertFalse(sentence.contains("\"No\""),
 				"and it is the branch that must NOT open with a refusal — that lead belongs to the "
 						+ "withholding branch and to the ranking sentence: " + sentence);

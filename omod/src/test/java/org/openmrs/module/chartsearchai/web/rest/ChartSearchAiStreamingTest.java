@@ -75,13 +75,19 @@ public class ChartSearchAiStreamingTest {
 	 * fails here, which is what the original assertion was protecting.</p>
 	 *
 	 * <p>Those two spellings are named rather than "every thread this controller creates" because they
-	 * are what the scan actually reaches. The {@code Executors} half was itself missing until a
-	 * factory-less {@code Executors.newSingleThreadExecutor} in this class running
-	 * {@code Context.getAuthenticatedUser} was measured passing the whole suite: the default thread
-	 * factory writes no {@code new Thread(} for the loop to find. A thread can still arrive by a route
-	 * neither spelling reaches ({@code new Timer()}, {@code CompletableFuture.runAsync}, a
-	 * Spring-managed pool), and stating that is the point — a guard whose message claims more than it
-	 * checks is the same silent weakening as a region that reads short.</p>
+	 * are what the scan actually reaches, and each is decided by WHERE the creation sits. Both halves of
+	 * that were missing once and each was measured passing the whole suite. A factory-less
+	 * {@code Executors.newSingleThreadExecutor} in this class running
+	 * {@code Context.getAuthenticatedUser} went green because the default thread factory writes no
+	 * {@code new Thread(} for the loop to find; and a raw
+	 * {@code new Thread(runnable, "chartsearchai-sse-keepalive")} outside {@code SseKeepAlive}, running
+	 * that same read, went green at 85 of 85 because the loop matches on the name literal, and reddened
+	 * only once its name was changed. So the name is asserted for what a name is worth — a thread that
+	 * identifies itself in a dump — and the two count assertions are what say a thread is the
+	 * keep-alive's. A thread can still arrive by a route neither spelling reaches
+	 * ({@code new Timer()}, {@code CompletableFuture.runAsync}, a Spring-managed pool), and stating
+	 * that is the point — a guard whose message claims more than it checks is the same silent weakening
+	 * as a region that reads short.</p>
 	 *
 	 * <p>The stop-flag assertion is a text check rather than a behavioural one because the property
 	 * cannot be reddened behaviourally: with the read gone, a task parked on the {@code out} monitor
@@ -97,18 +103,23 @@ public class ChartSearchAiStreamingTest {
 		String source = controllerSource();
 
 		assertTrue(source.contains("new Thread("),
-				"the keep-alive's thread must be created HERE, in the controller, or the loop below "
-						+ "iterates nothing and passes: an empty scan is indistinguishable from a "
-						+ "compliant one. Extracting the thread factory to a shared helper is the "
-						+ "refactor that does this — the module hand-rolls the same daemon factory in "
-						+ "LocalLlmEngine and PrewarmRefreshExecutor, so it looks like obvious reuse — "
-						+ "and it would leave the next background thread added to this controller "
-						+ "unguarded while the suite stayed green");
+				"the keep-alive's thread must be created HERE, in the controller, or both thread "
+						+ "assertions below pass on nothing: the loop iterates zero times, and the count "
+						+ "matches zero against zero. An empty scan is indistinguishable from a compliant "
+						+ "one. Extracting the thread factory to a shared helper is the refactor that does "
+						+ "this — the module hand-rolls the same daemon factory in LocalLlmEngine and "
+						+ "PrewarmRefreshExecutor, so it looks like obvious reuse — and it would leave the "
+						+ "next background thread added to this controller unguarded while the suite stayed "
+						+ "green. Measured: dropping the factory for a bare "
+						+ "Executors.newSingleThreadScheduledExecutor() reddens this and nothing else in "
+						+ "the module, because the two below then compare zero against zero");
 		for (int at = source.indexOf("new Thread("); at >= 0; at = source.indexOf("new Thread(", at + 1)) {
 			String creation = source.substring(at, Math.min(source.length(), at + 120));
 			assertTrue(creation.contains("\"chartsearchai-sse-keepalive\""),
-					"the only thread this controller may create is the SSE keep-alive's, because "
-							+ "OpenMRS authentication is bound to the request thread; found: " + creation);
+					"a thread this controller creates must carry the keep-alive's NAME, so that it "
+							+ "identifies itself in a thread dump. That it IS the keep-alive's is the count "
+							+ "assertion below and not this one, which a rogue thread reusing the name "
+							+ "satisfies; found: " + creation);
 		}
 		String keepAlive = nestedClassBody(source, "SseKeepAlive");
 		assertTrue(keepAlive.contains("stopped = true"),
@@ -126,10 +137,22 @@ public class ChartSearchAiStreamingTest {
 						+ "parked on the monitor writes after streamAnswer returns, into a response the "
 						+ "container may already have recycled, and shutdownNow cannot stop it because a "
 						+ "thread blocked entering a synchronized block ignores interrupt");
+		assertEquals(occurrences(keepAlive, "new Thread("), occurrences(source, "new Thread("),
+				"every thread this controller creates must sit INSIDE SseKeepAlive, not merely wear its "
+						+ "name: the loop above matches on the name literal, so a raw "
+						+ "new Thread(runnable, \"chartsearchai-sse-keepalive\") started anywhere else in "
+						+ "this class satisfies it. Measured before this assertion existed: such a thread "
+						+ "running Context.getAuthenticatedUser left the whole module green at 85 of 85, "
+						+ "and reddened the loop above only once its name was changed — the name equality "
+						+ "was the whole of what admitted it. Nothing else reaches it either: the "
+						+ "Executors. count below does not, because the thread is started directly, and "
+						+ "the Context. scan does not, because it is scoped to the class body. Needs no "
+						+ "region canary of its own, and a prose mention outside the class reddens it, "
+						+ "both for the reasons the Executors. assertion gives");
 		assertEquals(occurrences(keepAlive, "Executors."), occurrences(source, "Executors."),
 				"every executor this controller creates must be the keep-alive's own: the default "
-						+ "thread factory writes no `new Thread(` for the loop above to find, so a pool "
-						+ "built outside SseKeepAlive is a background thread with nothing at all "
+						+ "thread factory writes no `new Thread(` for either assertion above to find, so a "
+						+ "pool built outside SseKeepAlive is a background thread with nothing at all "
 						+ "guarding it. Measured before this assertion existed: an "
 						+ "Executors.newSingleThreadExecutor in this class running "
 						+ "Context.getAuthenticatedUser left the whole module green at 84 of 84. "

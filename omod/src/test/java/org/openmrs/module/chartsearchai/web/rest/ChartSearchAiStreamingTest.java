@@ -188,10 +188,55 @@ public class ChartSearchAiStreamingTest {
 	}
 
 	/**
+	 * The keep-alive must be scheduled at a fixed DELAY, not a fixed rate.
+	 *
+	 * <p>The third of the three mechanisms the keep-alive's correctness rests on, and the only one
+	 * nothing held. Swapping {@code scheduleWithFixedDelay} for {@code scheduleAtFixedRate} left every
+	 * other test in the module green (83 of 83, measured before this one existed), while dropping the
+	 * {@code out} monitor reddens
+	 * {@code ChartSearchAiStreamKeepAliveTest.aKeepAliveNeverSplitsAnEventFrame} and dropping the
+	 * stop-flag read reddens {@link #streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads()}.
+	 * The two schedule methods read as interchangeable, which is what makes the swap a plausible
+	 * edit.</p>
+	 *
+	 * <p>What it would cost: a write to a slow client can block for longer than the interval, and at a
+	 * fixed rate the executor then owes several runs and fires them back to back into the same
+	 * congested socket, growing its queue for as long as the congestion lasts. A keep-alive answers
+	 * "has anything been written lately", so the clock belongs after a write finishes.</p>
+	 *
+	 * <p>Matched on {@code timer.scheduleWithFixedDelay(} rather than on the bare method name, and that
+	 * is load-bearing rather than fussy: {@code SseKeepAlive.write}'s own catch comment names
+	 * {@code scheduleWithFixedDelay} in prose, so asserted on the name alone this PASSES with the call
+	 * swapped — measured, the whole suite stayed green — which is exactly the vacuous guard it exists
+	 * to be the opposite of. Whitespace-stripped so reformatting cannot redden it, and scoped to the
+	 * nested class body so text elsewhere in the controller cannot satisfy it. It needs no region
+	 * canary of the kind {@link #streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads()}
+	 * carries: this is a positive containment, so a short region fails it rather than passing it.</p>
+	 *
+	 * <p>A behavioural version would need a write that blocks longer than the interval and then a
+	 * judgment about what counts as back to back, so it would only redden probabilistically.</p>
+	 */
+	@Test
+	public void theKeepAliveIsScheduledAtAFixedDelayAndNotAFixedRate() throws Exception {
+		String keepAlive = nestedClassBody(controllerSource(), "SseKeepAlive");
+
+		assertTrue(keepAlive.replaceAll("\\s+", "").contains("timer.scheduleWithFixedDelay("),
+				"the keep-alive must be scheduled at a fixed DELAY, not a fixed rate: a write to a slow "
+						+ "client can block for longer than the interval, and at a fixed rate the "
+						+ "executor then owes several runs and fires them back to back into the same "
+						+ "congested socket, growing its queue for as long as the congestion lasts. "
+						+ "Measured: swapping the two leaves every other test in the module green");
+	}
+
+	/**
 	 * Reads the controller's production source as UTF-8.
 	 *
-	 * <p>One reader for all three source-scanning tests, which each had their own spelling of it.
-	 * The charset is explicit because the file contains non-ASCII characters and
+	 * <p>One reader for every source-scanning test in this class, which had each grown its own
+	 * spelling of it. Stated as "every" rather than counted, for the reason
+	 * {@link #resolveSourceFile()} gives one level up: a count here drifts the moment a test is added,
+	 * as it already has.</p>
+	 *
+	 * <p>The charset is explicit because the file contains non-ASCII characters and
 	 * {@code new String(byte[])} decodes with the platform default: every needle asserted here is
 	 * ASCII, so a wrong default would not break them today, and stating the charset is what keeps
 	 * that true of a needle someone adds later.</p>

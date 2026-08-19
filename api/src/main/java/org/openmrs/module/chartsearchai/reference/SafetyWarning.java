@@ -190,6 +190,22 @@ public class SafetyWarning {
 	 * as the rating did made the fold LOWER a claim: a Minor rule folded with duplicate therapy read as
 	 * a caution, while that same relationship on its own licenses withholding (issue #283).
 	 *
+	 * <p><b>It is scoped to the arm that can fold, and only one of the three can.</b>
+	 * {@code DrugSafetyValidator.classRelationships} runs per IN-PLAY substance, so the interaction
+	 * SCREEN (issue #113), which answers a question naming no drug, builds through the two-argument
+	 * {@code interactionWarning} and never sets this flag. One Minor-rated pair therefore states
+	 * withholding from the drug-in-play arm and a caution from the screen, on the same two active
+	 * orders: measured through the real {@code injectRecords} over
+	 * {@code chartsearchai-test/ddi-folded-minor-class-pair.json}, whose two drugs share {@code N06BA}.
+	 * That is a property of which arm ran rather than of the pair. It is left there deliberately —
+	 * giving the screen the class arm's sentence would change the DETAIL of a published
+	 * {@code safetyWarnings} chip, which issues #113 and #171 would both have to re-measure — and
+	 * pinned by {@code FoldedFindingStrengthTest
+	 * .theScreeningArmStatesTheWeakerClaimForTheSamePairBecauseItRunsNoClassArm} so that moving either
+	 * arm is visible. The question-pair arm does not set it either and there it is no asymmetry: that
+	 * arm's two drugs need not be on the chart at all, so there is no co-medication for a class
+	 * relationship to hold against.
+	 *
 	 * <p>Not serialized; the wire shape is unchanged.
 	 */
 	boolean carriesUnratedRelationship() {

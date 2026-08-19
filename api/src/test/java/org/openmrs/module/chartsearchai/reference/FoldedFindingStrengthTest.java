@@ -62,6 +62,11 @@ public class FoldedFindingStrengthTest {
 
 	private static final String CO_MEDICATION = "Modafinil";
 
+	/** The class arm's own sentence, shared by the case that requires it and the case that requires
+	 *  its ABSENCE: apart, a reword would redden only the first and quietly make the second stop
+	 *  discriminating. */
+	private static final String CLASS_SENTENCE = "same ATC class (N06BA)";
+
 	/** Pinned as literals here rather than taken from {@code DrugReferenceInjector}'s constants, and
 	 *  deliberately alongside the copies in {@link SafetyFindingSeverityStrengthTest} rather than
 	 *  hoisted into {@code DrugReferenceTestSupport}: the clause is the sentence a safety answer's
@@ -95,7 +100,7 @@ public class FoldedFindingStrengthTest {
 
 		assertTrue(finding.toLowerCase().contains("minor"),
 				"precondition: the rated half is the Minor rule: " + finding);
-		assertTrue(finding.contains("same ATC class (N06BA)"),
+		assertTrue(finding.contains(CLASS_SENTENCE),
 				"precondition: the unrated half is the duplicate-therapy sentence the fold appends — "
 						+ "without it this case would be an ordinary Minor finding: " + finding);
 	}
@@ -110,5 +115,46 @@ public class FoldedFindingStrengthTest {
 						+ finding);
 		assertFalse(finding.contains(CAUTION),
 				"and it must not read as a mere caution: " + finding);
+	}
+
+	/**
+	 * The same two drugs on the same chart, reached by the SCREENING arm instead, state the weaker
+	 * claim. What differs is which arm asked, not anything in the data.
+	 *
+	 * <p>Why the two arms differ, and why that is left rather than closed, is argued once on
+	 * {@link SafetyWarning#carriesUnratedRelationship()}. What this case adds is that it is CHECKED:
+	 * before #283 neither record stated a strength and the prompt refused on either, so the arms
+	 * differed only in detail text and nothing here could see it. Reddens on the mutation it is about
+	 * — {@code carriesUnratedRelationship()} returning true unconditionally fails this case and
+	 * neither of the two above it.
+	 */
+	@Test
+	public void theScreeningArmStatesTheWeakerClaimForTheSamePairBecauseItRunsNoClassArm()
+			throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(40, null,
+						DrugReferenceTestSupport.set("Methylphenidate", CO_MEDICATION),
+						DrugReferenceTestSupport.set("N06BA04", "N06BA07"), null, null),
+				"are there any drug interactions with her current medications?");
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
+
+		assertEquals(1, findings.size(),
+				"the screen must reach this one pair, or the comparison below is against nothing: "
+						+ chart.getText());
+		String screened = findings.get(0).getText();
+		assertTrue(screened.toLowerCase().contains("minor"),
+				"precondition: it is the same rated row the folded case is about: " + screened);
+		assertFalse(screened.contains(CLASS_SENTENCE),
+				"precondition: the screen raises no class sentence, which is WHY the strengths differ "
+						+ "— if this ever fails, the fold reached this arm and the assertion below is "
+						+ "the one to re-read: " + screened);
+
+		assertTrue(screened.contains(CAUTION),
+				"the screened finding carries the rating alone, so it states a caution: " + screened);
+		assertTrue(foldedFinding().contains(WITHHOLD),
+				"while the drug-in-play arm states withholding for the identical pair — the divergence "
+						+ "this case exists to keep visible");
 	}
 }

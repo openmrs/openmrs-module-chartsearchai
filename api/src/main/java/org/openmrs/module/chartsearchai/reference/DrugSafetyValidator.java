@@ -2839,7 +2839,11 @@ public class DrugSafetyValidator {
 
 	/**
 	 * The one chip an active-order interaction produces, so the question-driven arm and the
-	 * screening arm below cannot word the same finding differently.
+	 * screening arm below cannot word the same finding differently by accident.
+	 *
+	 * <p>They do differ deliberately, through the overload: only the drug-in-play arm can fold, and
+	 * since issue #283 the fold reaches the strength the injected record states rather than its
+	 * wording alone — see {@link SafetyWarning#carriesUnratedRelationship()}.
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i) {
 		return interactionWarning(ref, i, null);
@@ -2905,6 +2909,14 @@ public class DrugSafetyValidator {
 	 * over the reference entries for the patient's active orders instead of over the drugs the
 	 * question named. Because the partner side of the join is by definition another active order, one
 	 * pass over the order entries reaches every pair; no cross-product is enumerated.
+	 *
+	 * <p><b>"The same join" is not "the same finding" since issue #283.</b>
+	 * {@link #addInteractionWarnings} also folds the class arm's sentence in (issue #171) and this arm
+	 * cannot, because {@link #classRelationships} runs per IN-PLAY substance and a screening question
+	 * names none. Only a folded warning carries {@link SafetyWarning#carriesUnratedRelationship()},
+	 * which since #283 decides the strength the injected record states, so one Minor-rated pair reads
+	 * as a caution here and as a reason to withhold there. The measurement, and the reason it is left
+	 * rather than closed, are on that method.
 	 *
 	 * <p>Three things this arm must get right that the question-driven arm never faced:
 	 * <ul>

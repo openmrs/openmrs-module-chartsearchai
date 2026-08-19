@@ -187,10 +187,11 @@ public class ChartSearchAiStreamKeepAliveTest {
 	 * detection miss. Measured: over the fixed 200-write loop this replaced, dropping the keep-alive's
 	 * own lock was caught in 4 of 5 runs and dropping {@code writeSseEvent}'s in 2 of 3; waiting for
 	 * five scheduled comments catches both in 5 of 5, at the same runtime. Five and not two, and that
-	 * is measured rather than reasoned: at two the wait is ALREADY satisfied when the minimum is
-	 * reached — 200 emitted, 3 comments written — so the second loop runs zero iterations and creates
-	 * none of the contention it exists for, which is what left {@code writeSseEvent}'s lock at 2 of 3.
-	 * At five it emits 268 to reach 5.</p>
+	 * is measured rather than reasoned: at two the wait is ALREADY satisfied by the time the minimum is
+	 * reached, so the second loop runs ZERO iterations and creates none of the contention it exists
+	 * for, which is what left {@code writeSseEvent}'s lock at 2 of 3. At five it always runs on past the
+	 * minimum. How far is machine-dependent and deliberately not recorded here; the rate above is what
+	 * the choice rests on.</p>
 	 *
 	 * <p>The sink is deliberately not a {@link ByteArrayOutputStream}: every one of its methods is
 	 * synchronized, so a whole {@code write(byte[])} is already atomic there and this hazard cannot

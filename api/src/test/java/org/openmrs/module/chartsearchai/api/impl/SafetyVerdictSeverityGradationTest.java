@@ -92,15 +92,21 @@ public class SafetyVerdictSeverityGradationTest {
 						+ "measured at 5/6 inverted verdicts");
 	}
 
+	/** The demonstration record line for {@code drug}, to its newline — the shape
+	 *  {@code DrugReferenceInjector.renderFinding} produces and the model is handed. Shared by the
+	 *  two cases below so the withholding and caution demonstrations cannot be checked differently. */
+	private static String demonstratedFindingLine(String drug) {
+		String prompt = LlmProvider.DEFAULT_SYSTEM_PROMPT;
+		int at = prompt.indexOf(DrugReferenceInjector.FINDING_PREFIX + drug + ":");
+		assertTrue(at > 0, "the prompt must still demonstrate a safety finding for " + drug);
+		int end = prompt.indexOf('\n', at);
+		return prompt.substring(at, end < 0 ? prompt.length() : end);
+	}
+
 	@Test
 	public void aCautionClassFindingIsDemonstratedAndItIsARatedMinorOne() {
 		String prompt = LlmProvider.DEFAULT_SYSTEM_PROMPT;
-		int demonstrated = prompt.indexOf(DrugReferenceInjector.FINDING_PREFIX + "Lychee:");
-		assertTrue(demonstrated > 0,
-				"the graded rule needs the caution class DEMONSTRATED, not only described — the "
-						+ "Major refusal already is, and it is what generalized wrongly");
-		String findingLine = prompt.substring(demonstrated,
-				prompt.indexOf('\n', demonstrated) < 0 ? prompt.length() : prompt.indexOf('\n', demonstrated));
+		String findingLine = demonstratedFindingLine("Lychee");
 		assertTrue(findingLine.contains("— Minor."),
 				"the demonstrated caution has to be a rated Minor finding: " + findingLine);
 		assertTrue(findingLine.contains("a caution to note, not a reason to withhold it"),
@@ -110,5 +116,21 @@ public class SafetyVerdictSeverityGradationTest {
 				"the demonstrated answer must lead with the qualified call");
 		assertFalse(prompt.contains("\"answer\": \"No — lychee"),
 				"and must not refuse on a finding that withholds nothing");
+	}
+
+	@Test
+	public void theWithholdingClassIsDemonstratedOnItsOwnRecordLineToo() {
+		String findingLine = demonstratedFindingLine("Durian");
+
+		assertTrue(findingLine.contains("— Major."),
+				"the demonstrated refusal has to be a rated Major finding: " + findingLine);
+		// The half the caution case above does not cover, and the one carrying every refusal that
+		// matters. Found by mutation: deleting the clause from this record left all 1295 tests green,
+		// so the withholding class could lose its demonstrated record shape while the rule above kept
+		// instructing on it — the model matching a sentence no demonstration shows.
+		assertTrue(findingLine.contains("This finding is a reason to withhold it."),
+				"and must carry the withholding clause renderFinding appends: " + findingLine);
+		assertFalse(findingLine.contains("caution to note"),
+				"the two demonstrations must not teach the same strength: " + findingLine);
 	}
 }

@@ -40,18 +40,69 @@ public class ChartSearchAiStreamingTest {
 				"searchStream method should exist");
 	}
 
+	/**
+	 * No thread but the request thread may do OpenMRS work, and no authentication state may be shared
+	 * across threads.
+	 *
+	 * <p>This test forbade {@code new Thread(} outright until the SSE keep-alive was added. The ban
+	 * was narrowed rather than dropped, because the reason for it is the one the other three
+	 * assertions here name: OpenMRS binds authentication to the request thread, so work done off that
+	 * thread either loses its {@code Context} or shares it unsafely. A timer that only writes bytes to
+	 * the response carries none of that risk, and forbidding it cost the streaming endpoint its only
+	 * defence against a reverse proxy's read timeout — measured on the chartsearchai.openmrs.org demo
+	 * 2026-08-19, a query whose first output lands after that window is closed having delivered ZERO
+	 * bytes, with no error event and no audit row: silent, and indistinguishable from a hung origin.
+	 * Cloudflare cuts at ~120s, stock nginx at 60s.</p>
+	 *
+	 * <p>So the scope is now stated instead of assumed: every thread this controller creates must be
+	 * the keep-alive's, and {@code SseKeepAlive} must not touch {@code Context}. A thread that does
+	 * OpenMRS work still fails here, which is what the original assertion was protecting.</p>
+	 */
 	@Test
-	public void streamingEndpoint_shouldNotUseBackgroundThreads() throws Exception {
+	public void streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads() throws Exception {
 		java.io.File file = resolveSourceFile();
 		String source = new String(java.nio.file.Files.readAllBytes(file.toPath()));
-		assertTrue(!source.contains("new Thread("),
-				"Streaming must not create background threads");
+
+		for (int at = source.indexOf("new Thread("); at >= 0; at = source.indexOf("new Thread(", at + 1)) {
+			String creation = source.substring(at, Math.min(source.length(), at + 120));
+			assertTrue(creation.contains("\"chartsearchai-sse-keepalive\""),
+					"the only thread this controller may create is the SSE keep-alive's, because "
+							+ "OpenMRS authentication is bound to the request thread; found: " + creation);
+		}
+		assertTrue(!nestedClassBody(source, "SseKeepAlive").contains("Context."),
+				"the keep-alive thread must write bytes and nothing else — reading Context off it is "
+						+ "exactly the unsafe sharing this test exists to prevent");
+
 		assertTrue(!source.contains("import org.springframework.web.servlet.mvc.method.annotation.SseEmitter"),
 				"Streaming must not import SseEmitter");
 		assertTrue(!source.contains("addProxyPrivilege"),
 				"Streaming must not use proxy privileges");
 		assertTrue(!source.contains("setUserContext"),
 				"Must not share UserContext across threads");
+	}
+
+	/**
+	 * @return the body of the named nested class, brace-matched from its declaration, so an assertion
+	 *         about that class cannot be satisfied or broken by code outside it
+	 */
+	private static String nestedClassBody(String source, String simpleName) {
+		int declaration = source.indexOf("class " + simpleName);
+		assertTrue(declaration >= 0, "nested class " + simpleName + " must exist in the controller");
+		int open = source.indexOf('{', declaration);
+		assertTrue(open >= 0, "nested class " + simpleName + " must have a body");
+		int depth = 0;
+		for (int i = open; i < source.length(); i++) {
+			char c = source.charAt(i);
+			if (c == '{') {
+				depth++;
+			} else if (c == '}') {
+				depth--;
+				if (depth == 0) {
+					return source.substring(open, i + 1);
+				}
+			}
+		}
+		throw new AssertionError("unbalanced braces after " + simpleName);
 	}
 
 	@Test

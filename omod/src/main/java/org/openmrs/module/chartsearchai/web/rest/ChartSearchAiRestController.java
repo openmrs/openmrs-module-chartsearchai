@@ -20,6 +20,9 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -87,6 +90,33 @@ public class ChartSearchAiRestController {
 	private static final int MAX_QUESTION_LENGTH = 1000;
 
 	private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]");
+
+	/**
+	 * The keep-alive frame written while the answer is still being generated: an SSE comment, which
+	 * the spec requires a client to ignore, so this needs no client change and can raise no phantom
+	 * event in the UI.
+	 */
+	private static final String SSE_KEEP_ALIVE_COMMENT = ": keep-alive\n\n";
+
+	/**
+	 * How often {@link #streamAnswer} writes {@link #SSE_KEEP_ALIVE_COMMENT} until the answer is
+	 * finished.
+	 *
+	 * <p>Fifteen seconds, to sit well inside the read timeouts this module gets deployed behind:
+	 * nginx's {@code proxy_read_timeout} defaults to 60s and Cloudflare closes a silent origin
+	 * connection at ~120s. Deliberately not a global property — the only requirement on this number
+	 * is that it be smaller than every such default, and one large enough to need tuning would
+	 * already be broken.</p>
+	 *
+	 * <p>Measured on the chartsearchai.openmrs.org demo 2026-08-19, which is why this exists: with
+	 * Gemma 4 E4B served on that 4-core box, first output arrived after the edge's window and every
+	 * query was closed at ~125s having delivered ZERO bytes — non-streaming {@code /search} as a
+	 * Cloudflare 524 and the stream as a dropped connection carrying nothing. E2B, whose first
+	 * {@code thinking} lands at 27-38s, completed the same question at 149-154s. What decides
+	 * whether a long answer survives is therefore whether something is written EARLY, not whether
+	 * the answer finishes inside the window — so this keep-alive, not a faster model, is the fix.</p>
+	 */
+	private static final long KEEP_ALIVE_INTERVAL_MS = 15000L;
 
 	private static String formatDate(Date date) {
 		return date != null ? DateFormatUtil.formatDate(date) : null;
@@ -476,6 +506,24 @@ public class ChartSearchAiRestController {
 	 */
 	void streamAnswer(final OutputStream out, Patient patient, String sanitizedQuestion, User user,
 			boolean asyncGrounding) {
+		streamAnswer(out, patient, sanitizedQuestion, user, asyncGrounding, KEEP_ALIVE_INTERVAL_MS);
+	}
+
+	/**
+	 * As {@link #streamAnswer(OutputStream, Patient, String, User, boolean)}, with the keep-alive
+	 * interval given rather than taken from {@link #KEEP_ALIVE_INTERVAL_MS}.
+	 *
+	 * <p>The interval is a parameter so the periodic writes can be OBSERVED in a test without
+	 * waiting a production interval out — the alternative, a mutable field, would put the value on a
+	 * Spring singleton where one request could change another's. Production callers use the five-arg
+	 * form; nothing but a test should pass this.</p>
+	 *
+	 * @param keepAliveIntervalMillis how often to write {@link #SSE_KEEP_ALIVE_COMMENT} until the
+	 *        answer is finished
+	 */
+	void streamAnswer(final OutputStream out, Patient patient, String sanitizedQuestion, User user,
+			boolean asyncGrounding, long keepAliveIntervalMillis) {
+		final SseKeepAlive keepAlive = SseKeepAlive.start(out, keepAliveIntervalMillis);
 		try {
 			long startTime = System.currentTimeMillis();
 
@@ -588,6 +636,13 @@ public class ChartSearchAiRestController {
 					log.debug("Could not send error event, client likely disconnected");
 				}
 			}
+		}
+		finally {
+			// Every exit stops the timer, including a client disconnect, which unwinds through the
+			// catch above rather than returning. Once this returns no keep-alive can still be in
+			// flight (see SseKeepAlive.stop), so nothing can be appended after the terminal event
+			// and the flush below needs no lock of its own.
+			keepAlive.stop();
 		}
 
 		try {
@@ -1119,6 +1174,15 @@ public class ChartSearchAiRestController {
 		writeSseEventOrThrow(out, "references", json);
 	}
 
+	/**
+	 * Writes one SSE event frame.
+	 *
+	 * <p>The frame is serialized first and then written while holding the {@code out} monitor — the
+	 * same monitor {@link SseKeepAlive} takes. The keep-alive writes from its own thread, and two
+	 * unsynchronized writers on one servlet output stream can interleave: a comment landing between
+	 * an event's {@code event:} line and its {@code data:} lines would split one event into two
+	 * malformed ones for every client. Only the write is inside the lock, never the serialization.</p>
+	 */
 	private void writeSseEvent(OutputStream out, String event, String data) throws IOException {
 		StringBuilder sb = new StringBuilder();
 		sb.append("event: ").append(event).append('\n');
@@ -1126,8 +1190,97 @@ public class ChartSearchAiRestController {
 			sb.append("data: ").append(line).append('\n');
 		}
 		sb.append('\n');
-		out.write(sb.toString().getBytes("UTF-8"));
-		out.flush();
+		byte[] frame = sb.toString().getBytes("UTF-8");
+		synchronized (out) {
+			out.write(frame);
+			out.flush();
+		}
+	}
+
+	/**
+	 * The keep-alive for one streaming response: one comment written immediately, the rest on a
+	 * daemon timer, and a {@link #stop()} that a write already in flight cannot race.
+	 *
+	 * <p>One timer per response rather than one shared by the module: a single shared thread would
+	 * let one request's blocked write stall every other request's keep-alive, which is the failure
+	 * this class exists to prevent. The cost is bounded by
+	 * {@code chartsearchai.rateLimitPerMinute}.</p>
+	 */
+	private static final class SseKeepAlive {
+
+		private final OutputStream out;
+
+		private final ScheduledExecutorService timer;
+
+		/**
+		 * Guarded by {@code out}: set by {@link #stop()} so a task that wakes after the answer is
+		 * finished writes nothing.
+		 */
+		private boolean stopped;
+
+		private SseKeepAlive(OutputStream out, ScheduledExecutorService timer) {
+			this.out = out;
+			this.timer = timer;
+		}
+
+		/**
+		 * Writes the first comment and schedules the rest.
+		 *
+		 * <p>That first write is on the CALLING thread deliberately. The property that matters is
+		 * that a byte has left before generation begins; scheduling it would make that a race
+		 * against the model's own first token, which is the race this whole mechanism is about.</p>
+		 */
+		static SseKeepAlive start(OutputStream out, long intervalMillis) {
+			ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(runnable -> {
+				Thread thread = new Thread(runnable, "chartsearchai-sse-keepalive");
+				// Daemon so a timer that somehow outlives its request cannot hold up JVM shutdown.
+				thread.setDaemon(true);
+				return thread;
+			});
+			SseKeepAlive keepAlive = new SseKeepAlive(out, timer);
+			keepAlive.write();
+			timer.scheduleAtFixedRate(keepAlive::write, intervalMillis, intervalMillis,
+					TimeUnit.MILLISECONDS);
+			return keepAlive;
+		}
+
+		private void write() {
+			try {
+				// Encoded outside the lock, for the reason writeSseEvent states: the critical section
+				// holds the write and nothing else.
+				byte[] frame = SSE_KEEP_ALIVE_COMMENT.getBytes("UTF-8");
+				synchronized (out) {
+					if (stopped) {
+						return;
+					}
+					out.write(frame);
+					out.flush();
+				}
+			}
+			catch (IOException e) {
+				// The client is gone. The generation loop discovers that on its own next write and
+				// unwinds through writeSseEventOrThrow — a keep-alive is never the reason a request
+				// fails, and throwing from here would only cancel the schedule in silence.
+				log.debug("Could not write SSE keep-alive, client likely disconnected");
+			}
+			catch (RuntimeException e) {
+				// scheduleAtFixedRate silently unschedules a task that throws, so without this the
+				// rest of a long answer would run with no keep-alive and nothing to say why.
+				log.warn("SSE keep-alive failed; the stream continues without one", e);
+			}
+		}
+
+		/**
+		 * Stops the timer. Once this returns no keep-alive can be in flight or begin: a task already
+		 * holding the monitor completes its write before this can take it, and one that takes it
+		 * afterwards sees {@code stopped} and returns.
+		 */
+		void stop() {
+			synchronized (out) {
+				stopped = true;
+			}
+			timer.shutdownNow();
+		}
 	}
 
 	/**

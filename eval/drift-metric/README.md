@@ -132,6 +132,13 @@ timeout — warm the llama before batch runs).
 > 62/64 and 63/64 are correct read either way. The script now prints both rates under their own
 > names, so a future capture with a nonzero CANNOT cannot repeat the ambiguity. The captures
 > themselves are gone, so this is a reading of the committed record, not a re-score.
+>
+> *(2026-08-19.* `score_probe_safety.py`'s verdict-led definition has since gained a third class —
+> the #283 caution lead, "the drug can be given, with one caution", which `classify` calls NONE. The
+> reconciliation above is unaffected: these are presence-topic cells from `capture_probe_yesno.sh`,
+> where no safety finding is injected and no caution lead can arise, so the NONE column here is the
+> hedge it was. The "YES/NO only" description is what that scorer said on 2026-07-29, and is left
+> standing as the record of what the two figures were read under.*)
 
 Six class flips, read individually (full detail on
 [#107](https://github.com/openmrs/openmrs-module-chartsearchai/issues/107)): three are

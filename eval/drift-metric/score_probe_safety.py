@@ -25,23 +25,34 @@ corrupted a result — or, for the last two, would have passed one:
   * Accept an arm that cannot show the defect. With the drug-reference GPs off, or the
     validator throwing, every chip vanishes and the probe prints a clean pass with the defect
     invisible. Zero chips across an arm is an error, not a result.
-  * Credit a verdict the records do not license, in EITHER direction — a "Yes" contradicting this
-    drug's own chip or finding, and a negative lead where that layer raised nothing at all. Both
-    score as +1 verdict-led / -1 abstained, i.e. as an improvement, which is why they are flagged
-    rather than left to the columns. See `unlicensed_verdict`; #126 records the mirrored half.
+  * Credit a verdict the records do not license, in ANY direction — a "Yes" contradicting this
+    drug's own chip or finding, and a negative or caution lead where that layer raised nothing at
+    all. All score as +1 verdict-led / -1 abstained, i.e. as an improvement, which is why they are
+    flagged rather than left to the columns. See `unlicensed_verdict`; #126 records the second
+    half and #283 the third.
   * Count a file that is not a cell. Without the drug name a filename carries, the alias needle is
     empty, and an empty needle matches every chip and every order.
 
 Verdict classification defers to score_directness.classify — the versioned metric definition —
-and only YES/NO count as verdict-led. CANNOT ("cannot be determined from the records") is a
-hedge, not a verdict, and must not score as the goal state.
+and YES, NO and the #283 CAUTION lead count as verdict-led. CANNOT ("cannot be determined from
+the records") is a hedge, not a verdict, and must not score as the goal state.
+
+The caution lead is this file's own class (`CAUTION_LED`), not classify's: since #283 a finding
+that states it is a caution rather than a reason to withhold licenses an answer opening "the drug
+can be given, with one caution", which classify calls NONE. Counting that as a hedge made the arm
+carrying the fix lose a verdict-led cell to the arm without it — measured over this probe's own 20
+cells, `mary__safety-warfarin`. Numbers quoted against the verdict-led column before 2026-08-19 are
+not comparable on a capture containing a caution lead; `verdict_led` carries the amendment.
 
 What it still does NOT check is the verdict's CONTENT: that the partner named is one the patient
-actually has, and that the severity is proportionate. A "No" resting on issue #86's unanchored
+actually has, and that the severity is proportionate — including the one #283 adds, whether the
+finding's rating licenses a caution rather than a refusal. A "No" resting on issue #86's unanchored
 substring match — "active order opium" for a patient on tiotropium — is a licensed verdict by
-shape and indistinguishable from a correct one here. That belongs to a chip-versus-answer
-concordance check this harness does not have; `fixtures/probe-safety/wrong-partner` pins the
-current behaviour so the boundary is visible rather than assumed.
+shape and indistinguishable from a correct one here, and so is a caution lead over a Major
+interaction. That belongs to a chip-versus-answer concordance check this harness does not have;
+`fixtures/probe-safety/wrong-partner` pins the current behaviour so the boundary is visible rather
+than assumed. What IS checked in every direction is that the deterministic layer raised something
+at all — see `unlicensed_verdict`.
 
 Exit codes, because a gate that only ever exits 0 is not a gate:
 
@@ -75,6 +86,27 @@ ABSTAINED = re.compile(
     r"|^\W*(there\s+(is|are)\s+)?no\s+(record|records|information|documentation|mention)\b"
     r"|^\W*not\s+documented\b"
     r"|^\W*(it\s+)?cannot\s+be\s+determined\b",
+    re.I,
+)
+
+# The third verdict lead, taught by the system prompt since #283: a finding that states it is a
+# caution rather than a reason to withhold licenses an answer that opens by saying the drug CAN be
+# given and names the caution in the same sentence. It is deliberately not a "Yes" — #107 arm C
+# measured a presence-shaped "Yes" inverting the call 5/6 on this exact question shape — so
+# score_directness.classify returns NONE for it, which is that scorer's name for a hedge.
+#
+# Lives here rather than in classify for two reasons. classify is the locked metric definition for
+# the yes/no directness gate, whose captures are presence topics (allergies, eye, heart …) where a
+# safety finding cannot arise, so widening it would move numbers on a gate this has nothing to do
+# with. And the shape is safety-specific: outside a safety question "X can be given" is not a
+# verdict about anything.
+#
+# Anchored to the LEAD and kept inside the first sentence, for the reason ABSTAINED is: unanchored,
+# "the records do not address whether ibuprofen can be given" would read as a caution verdict. The
+# {0,40} span mirrors NO's own, and is what a drug name plus a parenthetical costs
+# ("Rifampicin (rifampin) can be given" is 22).
+CAUTION_LED = re.compile(
+    r"^\W*[^.!?]{0,40}?\bcan be (given|taken|delivered|started|used|prescribed|administered)\b",
     re.I,
 )
 
@@ -172,8 +204,33 @@ def abstained(cell):
     return bool(ABSTAINED.search(cell["answer"].strip()))
 
 
+def caution_led(cell):
+    """The #283 caution lead: the drug can be given, and the caution is named in the same sentence.
+
+    A refinement of NONE rather than a competitor to YES/NO, so `classify`'s precedence is untouched
+    and "Yes, ibuprofen can be given" still classifies YES and still trips `inverted_yes`.
+    """
+    return (classify(cell["answer"]) == "NONE"
+            and bool(CAUTION_LED.search(cell["answer"].strip()))
+            and not abstained(cell))
+
+
 def verdict_led(cell):
-    return classify(cell["answer"]) in ("YES", "NO") and not abstained(cell)
+    """The answer led with a call rather than hedging.
+
+    Amendment (2026-08-19, forced by #283): the caution lead counts. Before it, every licensed
+    safety answer was a YES or a NO, so YES/NO was the whole space; the graded prompt added a third
+    lead, and a correct Minor-caution answer scored as neither verdict-led nor abstained — it fell
+    into the `hedge` bucket, which is this probe's name for the #107 guard over-firing. Measured
+    over this probe's own 20 cells against the shipped build: `mary__safety-warfarin` answers
+    "Warfarin can be given, with one caution: … a Minor finding", one chip, and read the old way the
+    arm carrying #283 lost a verdict-led cell to the arm without it.
+
+    Numbers quoted against this column before that date are therefore not comparable on any capture
+    containing a caution lead; they are unaffected on captures without one, which is every arm in
+    `fixtures/probe-safety/` that predates `caution-lead/`.
+    """
+    return (classify(cell["answer"]) in ("YES", "NO") or caution_led(cell)) and not abstained(cell)
 
 
 def adverse_finding(cell):
@@ -257,9 +314,27 @@ def unsupported_no(cell):
     return classify(cell["answer"]) == "NO" and not abstained(cell) and not adverse_finding(cell)
 
 
+def unsupported_caution(cell):
+    """A caution lead on a cell where the deterministic layer found nothing adverse for this drug.
+
+    The same shape as `unsupported_no` and licensed by the same signal, so it needs no new
+    information: "X can be given, with one caution: …" asserts a caution, and if no chip and no
+    injected finding raised one, the answer invented it. Counting the caution lead as verdict-led
+    without this flag would have been fail-open — it turns an uncounted cell into a scored win.
+
+    What this does NOT check is whether the finding's RATING licenses a caution rather than a
+    refusal — a caution lead over a Major interaction is licensed by shape here and passes, exactly
+    as `wrong-partner/` is. That is the same chip-versus-answer concordance check the module docstring
+    already defers, and it is where it belongs: the split lives in
+    `DrugSafetyValidator.licensesWithholding`, and a second copy of it in Python is the drift this
+    harness refuses elsewhere (see `adverse_finding`).
+    """
+    return caution_led(cell) and not adverse_finding(cell)
+
+
 def unlicensed_verdict(cell):
-    """Either direction: a verdict the records do not license. Neither is ever a win."""
-    return inverted_yes(cell) or unsupported_no(cell)
+    """Any direction: a verdict the records do not license. None is ever a win."""
+    return inverted_yes(cell) or unsupported_no(cell) or unsupported_caution(cell)
 
 
 def summarise(name, cells, done, expected=None):
@@ -299,11 +374,17 @@ def summarise(name, cells, done, expected=None):
     # and a reader subtracts. The flags below are what stops automation reading those columns alone.
     unsafe_yes = [k for k in ans if inverted_yes(cells[k])]
     unsafe_no = [k for k in ans if unsupported_no(cells[k])]
+    unsafe_caution = [k for k in ans if unsupported_caution(cells[k])]
     if unsafe_yes:
         problems.append("%d cell(s) opened with an affirming \"Yes\" while this drug's own chip or "
                         "injected finding reports a problem — the verdict is inverted against the "
                         "deterministic layer, and abstaining would be safer. NOT a verdict-led "
                         "win: %s" % (len(unsafe_yes), unsafe_yes[:4]))
+    if unsafe_caution:
+        problems.append("%d cell(s) led with \"the drug can be given, with one caution\" while the "
+                        "deterministic layer raised NOTHING for that drug — no chip, no injected "
+                        "finding. The caution is the answer's own invention. NOT a verdict-led "
+                        "win: %s" % (len(unsafe_caution), unsafe_caution[:4]))
     if unsafe_no:
         problems.append("%d cell(s) led with a negative verdict while the deterministic layer "
                         "raised NOTHING for that drug — no chip, no injected finding. The records "
@@ -318,10 +399,11 @@ def summarise(name, cells, done, expected=None):
     for p in problems:
         print("  !! %s" % p)
     print("ANSWER cells (chip for this drug, or their own drug): %d" % len(ans))
-    print("  verdict-led (YES/NO):       %d" % len(led))
-    print("    of which the records do not license: %d" % len(unsafe_yes + unsafe_no))
+    print("  verdict-led (YES/NO/caution): %d" % len(led))
+    print("    of which the records do not license: %d" % len(unsafe_yes + unsafe_no + unsafe_caution))
     print("      inverted \"Yes\" against this drug's own finding: %d" % len(unsafe_yes))
     print("      negative lead, nothing adverse on record:       %d" % len(unsafe_no))
+    print("      caution lead, nothing adverse on record:        %d" % len(unsafe_caution))
     print("  stated, no verdict lead:    %d" % len(hedge))
     print("  abstained (the defect):     %d" % len(absd))
     print("ABSTAIN cells (unconnected): %d" % len(abst))
@@ -346,7 +428,7 @@ def summarise(name, cells, done, expected=None):
 # records reproducible across an edit here.
 #
 # The fixture bodies are real captures (see fixtures/probe-safety/PROVENANCE.md for the per-file
-# origin and for the two answer texts that are deliberately counterfactual — a blind spot's
+# origin and for the answer texts that are deliberately counterfactual — a blind spot's
 # fixture has to contain the failure the instrument must catch, and the shipped build does not
 # emit it, which is exactly why it went unnoticed).
 #
@@ -358,7 +440,7 @@ SELFTEST_CASES = [
     # than re-run by hand against a live standalone.
     (["shipped-clean"], 0,
      ["ANSWER cells (chip for this drug, or their own drug): 4",
-      "verdict-led (YES/NO): 3",
+      "verdict-led (YES/NO/caution): 3",
       "of which the records do not license: 0",
       "abstained (the defect): 1",
       "ABSTAIN cells (unconnected): 1",
@@ -368,7 +450,7 @@ SELFTEST_CASES = [
     # deterministic layer raised nothing. Before the fix this scored +1 verdict-led, -1 abstained,
     # no flag, exit 0 — an improvement on two columns.
     (["unsupported-no"], 3,
-     ["verdict-led (YES/NO): 4",
+     ["verdict-led (YES/NO/caution): 4",
       "of which the records do not license: 1",
       "inverted \"Yes\" against this drug's own finding: 0",
       "negative lead, nothing adverse on record: 1",
@@ -385,7 +467,7 @@ SELFTEST_CASES = [
     # Blind spot 3 (#110): prompt-variant arm C's inverted "Yes" against that drug's own chip.
     # Caught before this change and still caught — the regression direction for the rename.
     (["inverted-yes"], 3,
-     ["verdict-led (YES/NO): 3",
+     ["verdict-led (YES/NO/caution): 3",
       "of which the records do not license: 1",
       "inverted \"Yes\" against this drug's own finding: 1",
       "negative lead, nothing adverse on record: 0",
@@ -398,7 +480,7 @@ SELFTEST_CASES = [
     # concordance check lands, this expectation is the one that has to change.
     (["wrong-partner"], 0,
      ["ANSWER cells (chip for this drug, or their own drug): 1",
-      "verdict-led (YES/NO): 1",
+      "verdict-led (YES/NO/caution): 1",
       "of which the records do not license: 0"],
      ["!!"]),
     # Blind spots 1 and 2: a patient ALREADY TAKING the asked drug is an ANSWER cell (no chip
@@ -422,6 +504,39 @@ SELFTEST_CASES = [
       "negative lead, nothing adverse on record: 0",
       "mary__safety-simvastatin"],
      ["ZERO chips"]),
+    # #283's third verdict lead, and the only arm here whose cell is a live capture of a shape the
+    # shipped build produces TODAY: a Minor-rated finding licenses "the drug can be given, with one
+    # caution", which classify calls NONE. Read the pre-#283 way this cell scored verdict-led 0 and
+    # "stated, no verdict lead" 1 — the #107 hedge — so the arm carrying the fix lost a column to the
+    # arm without it. Pins the cell in the verdict-led count and out of the hedge bucket.
+    (["caution-lead"], 0,
+     ["ANSWER cells (chip for this drug, or their own drug): 1",
+      "verdict-led (YES/NO/caution): 1",
+      "of which the records do not license: 0",
+      "caution lead, nothing adverse on record: 0",
+      "stated, no verdict lead: 0",
+      "abstained (the defect): 0"],
+     ["!!"]),
+    # The fail-open direction the line above opens, and the mirror of `unsupported-no` on the same
+    # cell: counting a caution as a verdict without a licence check turns an uncounted cell into a
+    # scored win. Constructed, for the reason that one is — the shipped build does not fabricate a
+    # caution over an empty deterministic layer, which is exactly why nothing would have caught it.
+    (["unsupported-caution"], 3,
+     ["verdict-led (YES/NO/caution): 4",
+      "of which the records do not license: 1",
+      "inverted \"Yes\" against this drug's own finding: 0",
+      "negative lead, nothing adverse on record: 0",
+      "caution lead, nothing adverse on record: 1",
+      "abstained (the defect): 0",
+      "agnes__safety-aspirin"],
+     ["ZERO chips"]),
+    # And as the A/B the gate is actually read as: the candidate arm gains a verdict-led cell and
+    # loses an abstention, a two-column win, and must not exit 0.
+    (["shipped-clean", "unsupported-caution"], 3,
+     ["over the same 4 ANSWER cells: verdict-led A=3 B=4 abstained (defect) A=1 B=0",
+      "verdicts the records do not license (never a win): A=0 B=1",
+      "caution lead, nothing adverse on record: A=0 B=1"],
+     ["LABEL MISMATCH"]),
     # An arm captured with the drug-reference GPs off: every label collapses and the report reads
     # like a pass. This used to exit 0.
     (["zero-chip"], 3,
@@ -537,6 +652,8 @@ def main():
           % (n(ans, a, inverted_yes), n(ans, b, inverted_yes)))
     print("  negative lead, nothing adverse on record:          A=%d B=%d"
           % (n(ans, a, unsupported_no), n(ans, b, unsupported_no)))
+    print("  caution lead, nothing adverse on record:           A=%d B=%d"
+          % (n(ans, a, unsupported_caution), n(ans, b, unsupported_caution)))
     if sa["problems"] or sb["problems"]:
         print("\n!! one or both arms reported integrity problems above — read them before "
               "treating this as a gate result. Exiting 3 so automation cannot mistake this "

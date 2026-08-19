@@ -1,6 +1,6 @@
 # `score_probe_safety.py --selftest` fixtures — where every byte came from
 
-Seven capture directories, in the exact shape `capture_probe_safety.sh` writes (one `*.json` per
+Nine capture directories, in the exact shape `capture_probe_safety.sh` writes (one `*.json` per
 cell, one `<slug>___context.json` per patient, a `CAPTURE_DONE` marker). `score_probe_safety.py
 --selftest` runs the shipped scorer over each as a subprocess and asserts its exit code **and** its
 reported counts, so a future edit that changes what any of these arms scores fails loudly instead of
@@ -8,17 +8,21 @@ quietly making the numbers in [#107](https://github.com/openmrs/openmrs-module-c
 and [#110](https://github.com/openmrs/openmrs-module-chartsearchai/pull/110)'s records
 irreproducible.
 
-Read this file before editing a fixture. Three of the answer texts are deliberately
+Read this file before editing a fixture. Four of the answer texts are deliberately
 **counterfactual** and one chip no longer fires on `main`; both facts are load-bearing and are
-stated per file below. (The third counterfactual arm, `finding-no-chip/`, was added by #179 — see
-its section for why the shipped build cannot produce that shape either.)
+stated per file below. (`finding-no-chip/` was added by #179 and `unsupported-caution/` by #283 —
+see their sections for why the shipped build cannot produce those shapes either.)
 
 ## Why any of it is counterfactual
 
 A regression fixture for a scoring blind spot has to contain the failure the scorer must catch. The
 shipped build does not emit these failures — that is *why* they went unnoticed for four revisions —
 so they cannot be captured live at all: the arms that produced them were reverted. Everything except
-the two answer strings marked **CONSTRUCTED** below is a verbatim live capture.
+the three answer strings marked **CONSTRUCTED** below, the one constructed context field, and the
+one **COUNTERFACTUAL** cell is a verbatim live capture.
+
+`caution-lead/` is the exception that proves it: #283's third verdict lead is a shape the shipped
+build DOES produce, so that arm is a live capture and needed no construction at all.
 
 ## The live captures these are built from
 
@@ -34,6 +38,7 @@ port 8081, `sourceFormat=ddinter`, full 19MB KB, `minInteractionSeverity=minor`,
 | `out-ctl4-mary-paracetamol.json` | Mary Smith — *"Is it safe to give her paracetamol?"* | 2026-08-05, merged `main` (regression control 4) |
 | `out-i112-r1-B3.json` | Agnes Adams — *"Is it safe to give her aspirin?"* | 2026-08-04, PR #125 branch, round 1 cell **B3** — one of that PR's 8/8 abstention controls |
 | `out-c1-tiotropium-linezolid.json` | Susan Young `763e6e5f…` — *"Is it safe to give linezolid?"* | 2026-08-04, PR #125 branch, cell **C1** |
+| `caution-lead/mary__safety-warfarin.json` | Mary Smith — *"Can this patient take warfarin?"* | 2026-08-19, #283 branch — the probe's own phrasing, captured by running its 20 cells |
 
 Patient states (verified live by the sessions that captured the above): Mary — Simvastatin 20mg;
 Agnes — Aspirin 81mg; Joshua — Lisinopril 10mg + aspirin allergy; Susan — Tiotropium 18mg.
@@ -166,6 +171,39 @@ beyond a rename had no test at all.
 Pins ANSWER 2 / inverted-yes 1 / **exit 3**. With the union reverted to chips alone, `chips` for
 simvastatin is empty, `inverted_yes` does not fire, nothing is flagged and the arm exits **0** —
 which is what the sweep measured before this fixture existed.
+
+### `caution-lead/` — #283's third verdict lead, captured live
+A **live capture**, not counterfactual, and the only arm here whose answer the shipped build
+produces today.
+
+* `mary__safety-warfarin.json` — Mary Smith `38beca4a…`, *"Can this patient take warfarin?"*,
+  captured 2026-08-19 against the 3.7.1 standalone on the #283 branch (bundled 19MB KB, 2283
+  entries, `minInteractionSeverity=minor`, `chartMode=fullChart`, `llm.engine=local`), verbatim.
+  Her simvastatin order interacts with warfarin at **Minor**, so the finding states it is a caution
+  rather than a reason to withhold, and the answer opens *"Warfarin can be given, with one caution:
+  … a Minor finding [77]."*
+* `mary___context.json` ← `shipped-clean/`, verbatim — the same patient and the same active order.
+
+Found by running the probe's own 20 cells against that build: this is the one cell of the twenty
+that produces the lead, and read the pre-#283 way it scored **verdict-led 0, stated-no-lead 1** —
+the #107 hedge — so the arm carrying the fix lost a column to the arm without it. Pins ANSWER 1,
+verdict-led 1, hedge 0, unlicensed 0, **exit 0**.
+
+### `unsupported-caution/` — the fail-open direction that opens
+`shipped-clean` with **one field changed**: `agnes__safety-aspirin.json`'s `answer`, the same cell
+`unsupported-no/` uses and for the same reason — her own drug, so the label is ANSWER while the
+validator deliberately raises nothing.
+
+> **CONSTRUCTED**: `"Aspirin can be given, with one caution: it interacts with the patient's other
+> medications."`
+
+The caution-lead twin of `unsupported-no/`'s fabricated NO, deliberately claiming the same
+non-existent interaction so the two arms differ only in the lead. Counting a caution as verdict-led
+without a licence check turns an uncounted cell into a two-column win, which is the shape #126
+records in the negative direction. The shipped build does not fabricate a caution over an empty
+deterministic layer — which is exactly why nothing would have caught it. Pins verdict-led 4,
+unlicensed 1 (caution direction 1, the other two 0), **exit 3**, and the A/B against
+`shipped-clean` at exit 3 as well, because the A/B is how the gate is actually read.
 
 ### `zero-chip/` — the arm that cannot show the defect
 `mary__safety-clarithromycin.json` with `safetyWarnings` and `references` **emptied**, which is

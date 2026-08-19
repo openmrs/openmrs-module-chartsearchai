@@ -127,11 +127,19 @@ def main():
 
     # Two definitions, two lines, each named for the scorer that owns it. Neither is a
     # substitute for the other and the gap between them IS the CANNOT count.
+    #
+    # The second line is the YES/NO part of score_probe_safety's verdict-led definition, and since
+    # #283 that is a part rather than the whole: that scorer also counts a caution lead ("the drug
+    # can be given, with one caution"), which classify calls NONE. It is not counted here and does
+    # not need to be — this script's captures are the presence topics of capture_probe_yesno.sh
+    # (allergies, eye, heart …), where no safety finding is injected and no caution lead can arise.
+    # Point it at a safety capture and this line under-counts; the label says which definition it
+    # is, because "two live definitions sharing one label" is the fault in this file's own docstring.
     directness = lambda c: c.get("YES", 0) + c.get("NO", 0) + c.get("CANNOT", 0)
     verdict_led = lambda c: c.get("YES", 0) + c.get("NO", 0)
     print("\ndirectness  (lead != NONE, score_directness's definition): B=%d/%d  A=%d/%d"
           % (directness(counts["B"]), scored, directness(counts["A"]), scored))
-    print("verdict-led (YES/NO only, score_probe_safety's definition): B=%d/%d  A=%d/%d"
+    print("verdict-led (the YES/NO part of score_probe_safety's definition): B=%d/%d  A=%d/%d"
           % (verdict_led(counts["B"]), scored, verdict_led(counts["A"]), scored))
     print("  the difference between the two lines is the CANNOT hedge: B=%d A=%d"
           % (counts["B"].get("CANNOT", 0), counts["A"].get("CANNOT", 0)))
@@ -191,7 +199,7 @@ def selftest():
     # #179 records: one line labelled "directness (verdict-led / scored)" served both.
     check("two-named-rates", [clean, cand], 0,
           ["directness  (lead != NONE, score_directness's definition):",
-           "verdict-led (YES/NO only, score_probe_safety's definition):",
+           "verdict-led (the YES/NO part of score_probe_safety's definition):",
            "the difference between the two lines is the CANNOT hedge:",
            "REPORT (not a gate)"])
 

@@ -952,22 +952,28 @@ public class DrugReferenceInjector {
 	/**
 	 * The strength clause for one finding, or empty where the question does not arise.
 	 *
-	 * <p>Scoped to INTERACTION findings, and the scope is the point (#283). A contraindication
-	 * already licenses withholding without saying so — a recorded allergy to the drug asked about is
-	 * not a caution — and an overdose finding is a reason to change the DOSE rather than to withhold
-	 * the drug, so a withholding clause would overstate it and a caution clause would understate it.
-	 * Both keep the wording and the answer behaviour they had.
+	 * <p>Scoped to INTERACTION findings, and the scope is the point (#283). Of the other types, only a
+	 * CONTRAINDICATION can reach this renderer today, and it needs no clause: a recorded allergy to the
+	 * drug asked about licenses withholding without saying so, and it keeps the wording and the answer
+	 * behaviour it had. An OVERDOSE finding cannot arrive here at all — {@link #preAnswerFindings}
+	 * validates with an EMPTY answer and the dose arm parses a stated dose out of the answer, so the
+	 * arm cannot fire before there is one. The guard is therefore written positively rather than as a
+	 * list of exclusions: a type that starts reaching this renderer later gets no clause, rather than
+	 * the wrong one. If a caller ever renders findings AFTER an answer exists, an overdose finding
+	 * wants neither clause as written — it is a reason to change the DOSE, so withholding would
+	 * overstate it and a caution would understate it — and that is the case to add a test for at the
+	 * same time, since none can be written through the injector while the arm is unreachable here.
 	 *
-	 * <p>The severity comes off the warning ({@link SafetyWarning#getSeverity()}, issue #207) and the
-	 * split is {@link DrugSafetyValidator#licensesWithholding}, never a local reading of the rating:
-	 * unrated is not low-rated, and that is the half a second copy would get wrong.
+	 * <p>The split is {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)}, never a local
+	 * reading of the rating, and never {@code ratingLicensesWithholding} underneath it: unrated is not
+	 * low-rated, and a FOLDED finding asserts an unrated class relationship its rating does not cover —
+	 * two halves a second copy would get wrong in opposite directions.
 	 */
 	private static String strengthClause(SafetyWarning finding) {
 		if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
 			return "";
 		}
-		return DrugSafetyValidator.licensesWithholding(finding.getSeverity())
-				? STRENGTH_WITHHOLD : STRENGTH_CAUTION;
+		return DrugSafetyValidator.licensesWithholding(finding) ? STRENGTH_WITHHOLD : STRENGTH_CAUTION;
 	}
 
 	/**
@@ -995,8 +1001,9 @@ public class DrugReferenceInjector {
 	 * correspondence does not hold, because a question-PAIR chip names two drugs the question named
 	 * and neither need be an active order, so its partner is promoted nowhere. That does not reopen
 	 * the chip-versus-prose split this ordering exists to close — since issue #110 every chip is also
-	 * injected verbatim as its own numbered, citable record ({@code preAnswerFindings} →
-	 * {@link #renderFinding}), so a pair finding is grounded by that record rather than by these
+	 * injected as its own numbered, citable record, carrying the chip's detail verbatim and, for an
+	 * interaction, the strength clause after it ({@code preAnswerFindings} → {@link #renderFinding},
+	 * #283), so a pair finding is grounded by that record rather than by these
 	 * notes, and the promoted-note budget is untouched by it.
 	 *
 	 * <p>That correspondence is per PARTNER, and since issue #174 site 2 this method renders one note

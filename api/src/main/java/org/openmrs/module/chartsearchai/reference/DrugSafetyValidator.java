@@ -578,9 +578,28 @@ public class DrugSafetyValidator {
 	 * @param severity the source-assigned severity, or null where the source rates nothing
 	 * @return true when the finding licenses withholding the drug
 	 */
-	static boolean licensesWithholding(String severity) {
+	static boolean ratingLicensesWithholding(String severity) {
 		int rank = severityRank(severity);
 		return rank < 0 || rank >= severityRank("moderate");
+	}
+
+	/**
+	 * The same question asked of a whole FINDING rather than of a rating, and the form
+	 * {@link DrugReferenceInjector#renderFinding} must use.
+	 *
+	 * <p>A finding can assert more than its rating covers. Issue #171's fold puts the class arm's
+	 * duplicate-therapy or cross-reactivity sentence onto a rated rule's chip when both arms are about
+	 * one co-medication, and {@link SafetyWarning#getSeverity()} keeps reporting the RULE's rating there
+	 * on purpose — folding must not move what the pair is rated. So a Minor rule folded with a class
+	 * relationship read as a caution while that relationship alone licenses withholding: the fold
+	 * silently lowered a claim, and it also changed behaviour beyond what #283 set out to change, since
+	 * every finding refused before it. Taking the stronger of the two leaves those pairs where they were.
+	 *
+	 * <p>Measured over the shipped knowledge base: <b>54</b> Minor-rated rows pair two drugs sharing a
+	 * level-4 ATC subgroup, so this is a shape the data really carries rather than a constructed one.
+	 */
+	static boolean licensesWithholding(SafetyWarning finding) {
+		return ratingLicensesWithholding(finding.getSeverity()) || finding.carriesUnratedRelationship();
 	}
 
 	/** @return the floor rank for the GP value, falling back to the default floor when the
@@ -2831,9 +2850,14 @@ public class DrugSafetyValidator {
 		// The rule's own rating travels with the chip (issue #207). Null for a curated hand-authored
 		// rule, which is unrated by design — see SafetyWarning.getSeverity, and note that a FOLDED chip
 		// still reports the RULE's rating: the class sentence appended to it carries none, so folding
-		// cannot lower or raise what the pair is rated.
+		// cannot lower or raise what the pair is rated. What the fold DOES move is the strength the
+		// injected record states, which is why it travels separately — see
+		// SafetyWarning.carriesUnratedRelationship and licensesWithholding(SafetyWarning) (#283).
+		// The fold travels with the chip too (issue #283): the class sentence is unrated, so a folded
+		// warning asserts more than its rating does, and licensesWithholding needs to see that. The
+		// rating itself stays the RULE's, per the paragraph above.
 		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail,
-				i.getSeverity());
+				i.getSeverity(), alsoSameClass != null);
 	}
 
 	/**

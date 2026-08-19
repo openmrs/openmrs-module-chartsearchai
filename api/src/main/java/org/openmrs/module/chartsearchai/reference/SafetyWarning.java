@@ -69,6 +69,8 @@ public class SafetyWarning {
 
 	private final String severity;
 
+	private final boolean unratedRelationship;
+
 	/** A warning raised from something the reference data assigns no severity to — see
 	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
@@ -76,10 +78,20 @@ public class SafetyWarning {
 	}
 
 	public SafetyWarning(String type, String drug, String detail, String severity) {
+		this(type, drug, detail, severity, false);
+	}
+
+	/**
+	 * @param unratedRelationship whether this warning also asserts a relationship the source rates
+	 *            nothing for — see {@link #carriesUnratedRelationship()}
+	 */
+	public SafetyWarning(String type, String drug, String detail, String severity,
+			boolean unratedRelationship) {
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
 		this.severity = severity;
+		this.unratedRelationship = unratedRelationship;
 	}
 
 	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */
@@ -141,9 +153,34 @@ public class SafetyWarning {
 	 * clinician-facing text, anchored on a clause the module rewords freely. Measured: rewording that
 	 * clause left {@code thePairChipsAreOrderedBySeverityAndBounded} green while it asserted nothing at
 	 * all. Not serialized onto the REST response; the wire shape is unchanged.
+	 *
+	 * <p>Since issue #283 this value has a second reader, and it decides more than an order:
+	 * {@code DrugSafetyValidator.licensesWithholding} splits it into "a reason to withhold" and "a
+	 * caution to note", and {@code DrugReferenceInjector.renderFinding} states that answer in the
+	 * record the model reads — so how strongly a safety answer opens now rests on this field. The null
+	 * rule above is what carries the most weight there: unrated is not low-rated, and reading it as a
+	 * caution would soften a curated rule an implementation authored deliberately.
 	 */
 	public String getSeverity() {
 		return severity;
+	}
+
+	/**
+	 * Whether this warning asserts, beside whatever {@link #getSeverity()} rates, a relationship the
+	 * source rates nothing for — today exactly the folded chip of issue #171: a co-medication that is
+	 * both a rated interaction partner and class-related yields ONE warning carrying the rule's note
+	 * and the class arm's duplicate-therapy or cross-reactivity sentence together.
+	 *
+	 * <p>It exists because {@link #getSeverity()} deliberately keeps reporting the RULE's rating on a
+	 * folded warning — folding must not raise or lower what the pair is rated, which is what the chip
+	 * ordering depends on — so the rating alone cannot say how strong the whole finding is. Reading it
+	 * as the rating did made the fold LOWER a claim: a Minor rule folded with duplicate therapy read as
+	 * a caution, while that same relationship on its own licenses withholding (issue #283).
+	 *
+	 * <p>Not serialized; the wire shape is unchanged.
+	 */
+	boolean carriesUnratedRelationship() {
+		return unratedRelationship;
 	}
 
 	@Override

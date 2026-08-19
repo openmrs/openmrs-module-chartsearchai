@@ -77,8 +77,7 @@ public class ChartSearchAiStreamingTest {
 	 */
 	@Test
 	public void streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads() throws Exception {
-		java.io.File file = resolveSourceFile();
-		String source = new String(java.nio.file.Files.readAllBytes(file.toPath()));
+		String source = controllerSource();
 
 		for (int at = source.indexOf("new Thread("); at >= 0; at = source.indexOf("new Thread(", at + 1)) {
 			String creation = source.substring(at, Math.min(source.length(), at + 120));
@@ -140,8 +139,7 @@ public class ChartSearchAiStreamingTest {
 
 	@Test
 	public void authorizationCheck_shouldHappenBeforeStreaming() throws Exception {
-		java.io.File file = resolveSourceFile();
-		String source = new String(java.nio.file.Files.readAllBytes(file.toPath()));
+		String source = controllerSource();
 
 		int streamMethodIdx = source.indexOf("public void searchStream");
 		assertTrue(streamMethodIdx >= 0, "searchStream method must exist");
@@ -161,6 +159,48 @@ public class ChartSearchAiStreamingTest {
 				"Privilege check must happen before streaming");
 		assertTrue(canAccess < searchStreaming,
 				"Patient access check must happen before streaming");
+	}
+
+	/**
+	 * The production entry point must pass {@code KEEP_ALIVE_INTERVAL_MS} to {@code streamAnswer}, not
+	 * a literal.
+	 *
+	 * <p>{@code ChartSearchAiStreamKeepAliveTest} bounds that constant reflectively, and its javadoc
+	 * claims to bound "the interval PRODUCTION uses" — true only while the five-argument overload
+	 * really delegates with it. Swap it there for a literal and the bound still passes, against a
+	 * constant nothing reads, so the shipped interval is unbounded again with the suite green and that
+	 * other test's stated scope quietly false. The halves sit in different classes because only this
+	 * one reads the source, and neither is sufficient alone.</p>
+	 *
+	 * <p>Whitespace-stripped so reformatting cannot redden it, and matched on the constant as a
+	 * trailing argument rather than on the full call, which would couple the guard to a parameter
+	 * name. The {@code @link} references to the constant in the controller's own javadoc do not match:
+	 * none is preceded by a comma.</p>
+	 */
+	@Test
+	public void theProductionEntryPointPassesTheKeepAliveConstantAndNotALiteral() throws Exception {
+		String source = controllerSource();
+
+		assertTrue(source.replaceAll("\\s+", "").contains(",KEEP_ALIVE_INTERVAL_MS)"),
+				"the keep-alive interval must reach streamAnswer as the constant, so the reflective bound "
+						+ "in ChartSearchAiStreamKeepAliveTest bounds what production actually uses; a "
+						+ "literal here leaves that test checking a constant nothing reads");
+	}
+
+	/**
+	 * Reads the controller's production source as UTF-8.
+	 *
+	 * <p>One reader for all three source-scanning tests, which each had their own spelling of it.
+	 * The charset is explicit because the file contains non-ASCII characters and
+	 * {@code new String(byte[])} decodes with the platform default: every needle asserted here is
+	 * ASCII, so a wrong default would not break them today, and stating the charset is what keeps
+	 * that true of a needle someone adds later.</p>
+	 *
+	 * @return the whole file
+	 */
+	private static String controllerSource() throws java.io.IOException {
+		return new String(java.nio.file.Files.readAllBytes(resolveSourceFile().toPath()),
+				java.nio.charset.StandardCharsets.UTF_8);
 	}
 
 	/**

@@ -229,6 +229,11 @@ public class ChartSearchAiStreamKeepAliveTest {
 	 * Spring singleton is what the six-argument {@code streamAnswer} overload exists to avoid, and the
 	 * same reasoning applies to reaching for one here. A rename makes this fail with
 	 * {@link NoSuchFieldException} rather than silently stop checking.</p>
+	 *
+	 * <p>This bounds the constant; it cannot see whether production still reads it. That half is
+	 * {@code ChartSearchAiStreamingTest.theProductionEntryPointPassesTheKeepAliveConstantAndNotALiteral},
+	 * which is where the controller source is already in hand. Without it, "the interval PRODUCTION
+	 * uses" above would be a claim this test does not check.</p>
 	 */
 	@Test
 	public void theProductionIntervalSitsInsideEveryProxyReadTimeoutTheJavadocNames() throws Exception {

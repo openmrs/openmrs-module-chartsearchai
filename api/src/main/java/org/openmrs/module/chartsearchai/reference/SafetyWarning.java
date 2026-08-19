@@ -159,9 +159,12 @@ public class SafetyWarning {
 	 * "a caution to note", {@code licensesWithholding(SafetyWarning)} composes that with
 	 * {@link #carriesUnratedRelationship()} for the whole finding, and
 	 * {@code DrugReferenceInjector.renderFinding} states the answer in the record the model reads — so
-	 * how strongly a safety answer opens now rests on this field. The null
-	 * rule above is what carries the most weight there: unrated is not low-rated, and reading it as a
-	 * caution would soften a curated rule an implementation authored deliberately.
+	 * how strongly a safety answer opens now rests on this field, for an INTERACTION finding. Only for
+	 * one: a CONTRAINDICATION states withholding unconditionally and never consults this value (it
+	 * carries none — the arms that raise one use the three-argument constructor), because a recorded
+	 * allergy is not a caution at any rating. The null rule above is what carries the most weight
+	 * where the value IS read: unrated is not low-rated, and reading it as a caution would soften a
+	 * curated rule an implementation authored deliberately.
 	 */
 	public String getSeverity() {
 		return severity;

@@ -186,9 +186,11 @@ public class ChartSearchAiStreamKeepAliveTest {
 	 * flight together, so ending the loop before any scheduled comment lands is also what makes the
 	 * detection miss. Measured: over the fixed 200-write loop this replaced, dropping the keep-alive's
 	 * own lock was caught in 4 of 5 runs and dropping {@code writeSseEvent}'s in 2 of 3; waiting for
-	 * five scheduled comments catches both in 5 of 5, at the same runtime. Five and not two, which was
-	 * also measured: at two the wait is satisfied by the opening pair and the loop stops before the
-	 * contention it exists to create, which left {@code writeSseEvent}'s lock at 2 of 3.</p>
+	 * five scheduled comments catches both in 5 of 5, at the same runtime. Five and not two, and that
+	 * is measured rather than reasoned: at two the wait is ALREADY satisfied when the minimum is
+	 * reached — 200 emitted, 3 comments written — so the second loop runs zero iterations and creates
+	 * none of the contention it exists for, which is what left {@code writeSseEvent}'s lock at 2 of 3.
+	 * At five it emits 268 to reach 5.</p>
 	 *
 	 * <p>The sink is deliberately not a {@link ByteArrayOutputStream}: every one of its methods is
 	 * synchronized, so a whole {@code write(byte[])} is already atomic there and this hazard cannot
@@ -228,8 +230,8 @@ public class ChartSearchAiStreamKeepAliveTest {
 				"a SCHEDULED keep-alive must actually have been written while the events were going out, "
 						+ "or this test proves nothing: the synchronous one lands before generation starts "
 						+ "and cannot interleave with anything, so with only that one the assertions above "
-						+ "say no more than that 200 token frames are well formed, which the event-order "
-						+ "tests already cover. Got " + contending);
+						+ "say no more than that the emitted token frames are well formed, which the "
+						+ "event-order tests already cover. Got " + contending);
 	}
 
 	@Test
@@ -488,10 +490,11 @@ public class ChartSearchAiStreamKeepAliveTest {
 	/**
 	 * Counts keep-alive comments at LINE STARTS, which makes this an UNDERCOUNT over a stream that can
 	 * tear: a comment spliced into the middle of an event frame is no longer at a line start, so a run
-	 * with the production lock dropped counts far fewer than were written — 1 against the ~35 measured
-	 * with the lock in place. That is why {@link #aKeepAliveNeverSplitsAnEventFrame} counts last rather
-	 * than first: asserted first it reports a timer that never fired instead of the splice that did.
-	 * Callers over a whole-frame sink have no such problem.
+	 * with the production lock dropped counts short by however many were spliced. Two callers depend on
+	 * that. {@link #aKeepAliveNeverSplitsAnEventFrame} counts last rather than first, because asserted
+	 * first it could report a timer that never fired instead of the splice that did; and
+	 * {@link ChattyStub} bounds its wait rather than waiting on this alone, because a run where every
+	 * comment is spliced can never satisfy it. Callers over a whole-frame sink have no such problem.
 	 *
 	 * @return the number of lines in {@code written} that open an SSE comment
 	 */

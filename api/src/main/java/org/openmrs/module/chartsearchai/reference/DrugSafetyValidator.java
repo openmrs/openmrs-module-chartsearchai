@@ -548,6 +548,41 @@ public class DrugSafetyValidator {
 		return rank < 0 ? Integer.MAX_VALUE : rank;
 	}
 
+	/**
+	 * Whether a finding of this severity is a reason to WITHHOLD the drug, or a caution to note
+	 * beside giving it (issue #283). The one definition of that split, shared with
+	 * {@link DrugReferenceInjector#renderFinding}, which states its answer in the record the model
+	 * reads — so the strength of an answer's opening call cannot drift from the rating the chip
+	 * carries. Before it, the severity reached the model only as a WORD inside the finding's prose
+	 * and the prompt instructed a refusal for any finding at all: measured on the standalone,
+	 * {@code main} @ b0cfe545, a Minor row produced "No — gentamicin should not be given" on a
+	 * mechanism text ending "No special precautions are necessary".
+	 *
+	 * <p>The boundary is expressed against {@link #severityRank} rather than as a number, so it
+	 * cannot fall out of step with that switch: {@code minor} and {@code unknown} are cautions — the
+	 * ratings DDInter itself calls minimally significant, and {@code unknown} carries no mechanism
+	 * text at all, which is why the default floor filters it out of the chips entirely.
+	 *
+	 * <p><b>Unrated withholds, and it is the case a "no rating means nothing serious" reading gets
+	 * backwards.</b> Null is not a low rating — see {@link SafetyWarning#getSeverity()} — and it
+	 * covers two different things, which withhold for two different reasons. A CURATED rule is
+	 * unrated because an implementation authored it deliberately, and {@link #severityPriority}
+	 * already sorts it ABOVE {@code major} for exactly that reason; softening it would silence the
+	 * one arm a deployment added on purpose. An ATC-subgroup or cross-reactivity JOIN is unrated
+	 * because the reference data states the relationship without rating it, and nobody authored it at
+	 * all: it withholds here because that is the behaviour it already had, and softening a
+	 * relationship no dataset rates would be a change nothing has measured. Neither is a caution, but
+	 * do not carry the curated argument over to the join — the second is the weaker claim, and a
+	 * later decision to grade those joins should be made on its own evidence.
+	 *
+	 * @param severity the source-assigned severity, or null where the source rates nothing
+	 * @return true when the finding licenses withholding the drug
+	 */
+	static boolean licensesWithholding(String severity) {
+		int rank = severityRank(severity);
+		return rank < 0 || rank >= severityRank("moderate");
+	}
+
 	/** @return the floor rank for the GP value, falling back to the default floor when the
 	 *          value is unrecognized (a typo'd GP must not silently disable all rated rules). */
 	private static int floorRank(String gpValue) {
@@ -2807,8 +2842,12 @@ public class DrugSafetyValidator {
 	 *         a full stop, a curated note need not, and a rule carrying no note at all ends on the
 	 *         partner label. Trailing whitespace goes with it — a note padded in the source file would
 	 *         otherwise put the gap inside the sentence rather than between the two.
+	 *         <p>Package-private because {@link DrugReferenceInjector#renderFinding} appends the
+	 *         strength clause (#283) to this same detail and has to break the sentence the same way.
+	 *         A second copy of the rule would leave the gap inside one renderer's sentence and
+	 *         between the two in the other's, for one string the chip and the record share.
 	 */
-	private static String endSentence(String detail) {
+	static String endSentence(String detail) {
 		String trimmed = detail.trim();
 		if (trimmed.isEmpty()) {
 			return trimmed;

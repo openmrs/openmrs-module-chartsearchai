@@ -42,6 +42,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 34: An ATC subgroup licenses only the claim its own name asserts](#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts)
 - [Decision 35: A class code in the answer must come from a record the answer cites](#decision-35-a-class-code-in-the-answer-must-come-from-a-record-the-answer-cites)
 - [Decision 36: The shipped default is the whole DDInter knowledge base](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base)
+- [Decision 37: A safety answer's call is as strong as the finding's rating](#decision-37-a-safety-answers-call-is-as-strong-as-the-findings-rating)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -2310,3 +2311,49 @@ Bundled byte-identical to the upstream release, so it can be verified rather tha
 - **Agent/tool-use pattern**: Enable multi-step reasoning where the LLM can request additional data or perform follow-up queries. Deferred until local models with reliable tool-use capabilities are available.
 - **Multimodal medical image interpretation**: Extend the pipeline to pass complex observations (X-rays, dermatology photos, ultrasounds, pathology slides, scanned documents) alongside text to multimodal LLMs like MedGemma 1.5 4B. The main changes are: have querystore's obs serializer carry complex-value obs, add an optional image field to `SerializedRecord`, and update `LlmProvider`/`LlmEngine` implementations to construct multimodal content arrays (text + base64 image blocks) for the OpenAI-compatible `/chat/completions` API. Both engines already speak this protocol — the embedded llama-server supports multimodal via libmtmd, and remote backends (vLLM, OpenAI, Anthropic) accept the same content-array format. No new serializers are needed — complex obs are still observations.
 - **Unstructured data / image OCR**: Extract text from photos of paper forms at write time so the content flows through the existing serializer and embedding pipeline.
+
+
+## Decision 37: A safety answer's call is as strong as the finding's rating
+
+**Status: Accepted** (August 2026) — implemented. Extends [Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation).
+
+### Context
+
+The deterministic layer has rated every interaction it raises since issue #207 put the source's severity on the chip. The **answer's** opening call did not use it. The addressed-safety branch of the system prompt asserted, of any finding naming the drug asked about, that "that finding is evidence against giving it, so begin the answer with the call it supports — No", and the one demonstrated safety verdict in the few-shot was a **Major** finding refusing a delivery. Nothing said what a Minor rating should produce, so it produced the same refusal.
+
+Measured on the local standalone, `main` @ `b0cfe545` (bundled DDInter KB, `gemma-4-E4B-it-Q4_K_M`), asking "Is gentamicin appropriate for this patient?" of a patient on lidocaine:
+
+```
+No — gentamicin should not be given: Gentamicin interacts with active order lidocaine, a Minor interaction [239].
+```
+
+The chip beside it carried the finding's own mechanism text, which ends *"Data are available for neomycin only. No special precautions are necessary."* The answer withheld a drug on evidence that says no precautions are needed.
+
+It was also never the severity that decided the strength — the wording was. The same patient and question on this box produced *"which requires monitoring"* on two runs (2026-08-11 17:21, 17:46) and the flat refusal on the others, and answer prose here is not reproducible at all (`cache_prompt` KV reuse, `LocalLlmEngine`). A clinical call carried only by wording is a call nobody can pin.
+
+### Decision
+
+**The record states what the finding licenses, and the prompt follows what the record states.** Three pieces, no new data and no new global property:
+
+| | |
+|---|---|
+| `DrugSafetyValidator.licensesWithholding(severity)` | the one definition of the split: `minor` and `unknown` are cautions, `moderate` and `major` withhold, and **unrated withholds** |
+| `DrugReferenceInjector.renderFinding` | appends `STRENGTH_WITHHOLD` / `STRENGTH_CAUTION` to an **interaction** finding, breaking the sentence with the `endSentence` rule the chip detail already uses |
+| `LlmProvider.DEFAULT_SYSTEM_PROMPT` | the evidence-against claim becomes conditional on what the finding says, and the caution class is **demonstrated** beside the existing Major refusal — both clauses taken from the production constants, for the reason `FINDING_PREFIX` is |
+
+**Unrated withholds, and that is the half a "no rating means nothing serious" reading gets backwards.** A null severity is not a low one, and it covers two things that withhold for different reasons. A **curated** rule is unrated because an implementation authored it deliberately — `severityPriority` already sorts it *above* `major` for that reason — so reading it as a caution would silence the arm a deployment added on purpose. An **ATC-subgroup or cross-reactivity join** is unrated because the reference data relates the two drugs without rating the relationship, and nobody authored it at all: it withholds because that is the behaviour it already had, not because anything argues it should. That second case is the weaker claim and is deliberately left where it was; grading those joins is its own decision, on its own evidence.
+
+**Scoped to interaction findings.** A contraindication licenses withholding without needing to say so — a recorded allergy to the drug asked about is not a caution — and an overdose finding is a reason to change the **dose**, not to withhold the drug, so either clause would misstate it. Both keep the wording and the answer behaviour they had.
+
+**The chip and the wire are unchanged.** The clause is prompt-facing evidence about how far a rating reaches, not a clinical instruction to put in front of a clinician, and `safetyWarnings` is a published shape.
+
+### Why the caution branch is not a "Yes"
+
+Because a "Yes" here was measured wrong before. Issue #107's arm C let the addressed branch defer to the general yes/no rule, whose criterion is *presence* — and on a safety question a record naming the drug is evidence against it, so the model produced an inverted *"Yes … ivosidenib (Major …)"* on 5 of 6 runs. That is why the never-`"Yes"` token is pinned by `LlmProviderTest` and stays pinned here. The caution branch therefore leads with neither: it states that the drug **can be given** and names the caution in the same sentence. Gradation, not loosening — the two properties hold together, and `SafetyVerdictSeverityGradationTest` asserts the second one beside the first for that reason.
+
+### Trade-offs
+
+- **+** The strength of a clinical call now rests on the rating the deterministic layer assigned, and both halves of the mapping are pinned by tests over the real pipeline (`SafetyFindingSeverityStrengthTest` drives the real injector over real datasets; the full api suite is green at 1289 tests).
+- **+** Nothing changes for `major`, `moderate` or unrated findings, which is where the refusals that matter live.
+- **−** `moderate` still refuses. Whether it should qualify instead is a clinical judgement this decision deliberately does not take: the reported defect is Minor, and DDInter's own Moderate tier carries mechanisms that a refusal does not misrepresent.
+- **−** The guarantee is that the **evidence states its own strength**, not that the answer obeys it. The model can still write a refusal over a caution clause; what changed is that doing so now contradicts a sentence in the record it cites, which the answer-quality gate and a reader can both see.

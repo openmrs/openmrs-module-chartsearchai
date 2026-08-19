@@ -918,12 +918,56 @@ public class DrugReferenceInjector {
 	public static final String FINDING_PREFIX = "Safety finding — ";
 
 	/**
+	 * What an injected interaction finding licenses, stated in the record itself (issue #283) —
+	 * the clause for a finding that is a reason to withhold the drug. Public, and shared with
+	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT}'s graded safety rule and its format demonstration,
+	 * for the reason {@link #FINDING_PREFIX} is: the rule tells the model to follow the call the
+	 * finding STATES, so a reworded clause here with a copy of the old wording in the prompt would
+	 * leave the model matching on a sentence no record carries any more — and every test green.
+	 */
+	public static final String STRENGTH_WITHHOLD = " This finding is a reason to withhold it.";
+
+	/**
+	 * The counterpart clause for a finding that is not (issue #283): the strength a Minor or
+	 * Unknown-rated interaction actually licenses. Shared with the prompt for the reason
+	 * {@link #STRENGTH_WITHHOLD} is.
+	 */
+	public static final String STRENGTH_CAUTION =
+			" This finding is a caution to note, not a reason to withhold it.";
+
+	/**
 	 * One deterministic finding as a chart line. The detail text is reused verbatim — it is the same
 	 * string the clinician already sees on the chip, so the prose and the chip cannot describe the
-	 * same finding differently.
+	 * same finding differently — and an interaction finding then states what its severity licenses,
+	 * so the answer's opening call rests on the rating the deterministic layer assigned rather than
+	 * on the model's reading of a severity word inside the prose (#283).
 	 */
 	static String renderFinding(SafetyWarning finding) {
-		return FINDING_PREFIX + finding.getDrug() + ": " + finding.getDetail();
+		String strength = strengthClause(finding);
+		String detail = strength.isEmpty() ? finding.getDetail()
+				: DrugSafetyValidator.endSentence(finding.getDetail());
+		return FINDING_PREFIX + finding.getDrug() + ": " + detail + strength;
+	}
+
+	/**
+	 * The strength clause for one finding, or empty where the question does not arise.
+	 *
+	 * <p>Scoped to INTERACTION findings, and the scope is the point (#283). A contraindication
+	 * already licenses withholding without saying so — a recorded allergy to the drug asked about is
+	 * not a caution — and an overdose finding is a reason to change the DOSE rather than to withhold
+	 * the drug, so a withholding clause would overstate it and a caution clause would understate it.
+	 * Both keep the wording and the answer behaviour they had.
+	 *
+	 * <p>The severity comes off the warning ({@link SafetyWarning#getSeverity()}, issue #207) and the
+	 * split is {@link DrugSafetyValidator#licensesWithholding}, never a local reading of the rating:
+	 * unrated is not low-rated, and that is the half a second copy would get wrong.
+	 */
+	private static String strengthClause(SafetyWarning finding) {
+		if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+			return "";
+		}
+		return DrugSafetyValidator.licensesWithholding(finding.getSeverity())
+				? STRENGTH_WITHHOLD : STRENGTH_CAUTION;
 	}
 
 	/**

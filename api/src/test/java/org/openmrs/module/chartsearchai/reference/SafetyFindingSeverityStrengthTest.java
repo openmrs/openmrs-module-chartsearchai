@@ -46,9 +46,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * one Severe recorded Aspirin allergy and one NSAID cross-reactivity chip: <em>"No — ibuprofen should
  * not be taken"</em> became <em>"Ibuprofen can be given, with one caution"</em>, 3 of 3, and came back
  * once the contraindication stated its strength. {@link #everyInjectedFindingStatesOneOfTheTwoStrengths}
- * is the property; the cases either side of it are the two shapes it has to hold for. An OVERDOSE
- * finding is the one that wants neither clause and cannot reach the renderer at all today, which is
- * why that sweep is also what reddens if a caller ever makes it reachable.
+ * states the property; the other cases pin it one rating and one finding type at a time, the
+ * {@code moderate} one being the BOUNDARY itself — a sweep found every rating either side of it
+ * covered and the line between them free to move. An OVERDOSE finding is the one that wants neither
+ * clause and cannot reach the renderer at all today, which is why that property is also what reddens
+ * if a caller ever makes it reachable.
  *
  * <p>Every case here drives the real {@link DrugReferenceInjector#injectRecords} over a real dataset
  * parsed by the production parser, and asserts on the record text the model is actually handed.

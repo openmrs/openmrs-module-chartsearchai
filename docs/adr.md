@@ -837,7 +837,7 @@ Returns a `text/event-stream`. The event names are literals at the `writeSseEven
 - `grounded` — a *trailing* event after `done`, only under async grounding, carrying the verdicts
 - `error` — an error message if something goes wrong
 
-A client must therefore keep reading past `done`, and must not assume `done` is terminal.
+A client must therefore keep reading past `done`, and must not assume `done` is terminal. It must also skip any line beginning with `:` rather than read it as a frame: between events the stream carries SSE *comments* — one before generation begins and one every 15 s until the answer is finished — so a reverse proxy never sees a read-idle connection through the silent pre-answer wait, which on a CPU-only server is most of the request. They are not events and carry no data; `EventSource` discards them for you, and README's [Streaming search (SSE)](../README.md#streaming-search-sse) section carries the proxy timeout numbers and the demo measurements behind them.
 
 Both search endpoints return a `questionId` (the audit log row ID as a string) that the frontend uses to submit user feedback.
 

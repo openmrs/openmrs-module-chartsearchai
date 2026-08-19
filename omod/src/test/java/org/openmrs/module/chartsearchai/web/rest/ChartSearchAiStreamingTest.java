@@ -24,7 +24,9 @@ import org.junit.jupiter.api.Test;
  * <p>"On the request thread" rather than "without background threads": the SSE keep-alive runs a
  * timer that writes comment frames, and what matters is that no thread but the request thread does
  * OpenMRS work — see {@link #streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads}, which
- * states and enforces that scope.</p>
+ * states and enforces that scope. Letting that timer in added a second thing to guard, so the same
+ * method also pins the mechanism that keeps its writes inside the request: the stop flag must be
+ * read, not merely set.</p>
  */
 public class ChartSearchAiStreamingTest {
 
@@ -60,8 +62,18 @@ public class ChartSearchAiStreamingTest {
 	 * Cloudflare cuts at ~120s, stock nginx at 60s.</p>
 	 *
 	 * <p>So the scope is now stated instead of assumed: every thread this controller creates must be
-	 * the keep-alive's, and {@code SseKeepAlive} must not touch {@code Context}. A thread that does
-	 * OpenMRS work still fails here, which is what the original assertion was protecting.</p>
+	 * the keep-alive's, {@code SseKeepAlive} must not touch {@code Context}, and its {@code write}
+	 * must READ the stop flag that {@code stop} sets. A thread that does OpenMRS work still fails
+	 * here, which is what the original assertion was protecting.</p>
+	 *
+	 * <p>The stop-flag assertion is a text check rather than a behavioural one because the property
+	 * cannot be reddened behaviourally: with the read gone, a task parked on the {@code out} monitor
+	 * during the terminal write is free to write after {@code streamAnswer} has returned, but whether
+	 * it does turns on a monitor race against {@code stop()} that no test can force, so a behavioural
+	 * case would fail only probabilistically. Before this assertion existed, deleting
+	 * {@code if (stopped)} from {@code SseKeepAlive.write} left the omod suite green at 81/81 — the
+	 * flag's write half pinned by the region canary and its read half by nothing, which is exactly the
+	 * silent weakening that canary's own message names.</p>
 	 */
 	@Test
 	public void streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads() throws Exception {
@@ -77,8 +89,13 @@ public class ChartSearchAiStreamingTest {
 		String keepAlive = nestedClassBody(source, "SseKeepAlive");
 		assertTrue(keepAlive.contains("stopped = true"),
 				"the extracted class body must reach SseKeepAlive.stop, or the region is short and the "
-						+ "Context assertion below is passing on text it never read — a guard that weakens "
+						+ "assertions below are passing on text they never read — a guard that weakens "
 						+ "in silence is worse than no guard");
+		assertTrue(keepAlive.contains("if (stopped)"),
+				"stop() setting the flag is worthless unless write() reads it: without the read, a task "
+						+ "parked on the monitor writes after streamAnswer returns, into a response the "
+						+ "container may already have recycled, and shutdownNow cannot stop it because a "
+						+ "thread blocked entering a synchronized block ignores interrupt");
 		assertTrue(!keepAlive.contains("Context."),
 				"the keep-alive thread must write bytes and nothing else — reading Context off it is "
 						+ "exactly the unsafe sharing this test exists to prevent");

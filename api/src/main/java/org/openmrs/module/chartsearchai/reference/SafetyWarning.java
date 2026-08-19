@@ -82,10 +82,16 @@ public class SafetyWarning {
 	}
 
 	/**
+	 * Package-private, matching {@link #carriesUnratedRelationship()}: a caller may set only what it
+	 * may read back. The three- and four-argument forms above are public because the wire-facing
+	 * shape is, and this flag is deliberately not part of it — public here would offer an outside
+	 * caller a way to govern the injected record's strength with no way to observe the assertion from
+	 * where it was made. The one caller is {@code DrugSafetyValidator.interactionWarning}.
+	 *
 	 * @param unratedRelationship whether this warning also asserts a relationship the source rates
 	 *            nothing for — see {@link #carriesUnratedRelationship()}
 	 */
-	public SafetyWarning(String type, String drug, String detail, String severity,
+	SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship) {
 		this.type = type;
 		this.drug = drug;

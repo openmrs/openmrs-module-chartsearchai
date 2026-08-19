@@ -12,8 +12,11 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * An injected {@code safety_finding} states what the finding LICENSES, and that follows the severity
@@ -35,11 +38,20 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * reason — so an unrated rule must license withholding, and this is the case a "no rating means
  * nothing serious" reading would get backwards.
  *
- * <p><b>Scope.</b> Interaction findings only. A contraindication already licenses withholding without
- * saying so and an overdose finding is a reason to change the DOSE rather than withhold the drug, so
- * neither carries a strength clause and the answer path for both is unchanged. Every case here drives
- * the real {@link DrugReferenceInjector#injectRecords} over a real dataset parsed by the production
- * parser, and asserts on the record text the model is actually handed.
+ * <p><b>Scope: every finding, and that is the correction rather than the starting point.</b> The
+ * clause was first scoped to interaction findings, on the reasoning that a contraindication licenses
+ * withholding without needing to say so. It does not, because the prompt's evidence-against claim is
+ * now CONDITIONAL on the finding saying it, so a finding matching neither antecedent falls through to
+ * whichever branch the model reaches for. Measured on the standalone against {@code main} @ b0cfe545,
+ * one Severe recorded Aspirin allergy and one NSAID cross-reactivity chip: <em>"No — ibuprofen should
+ * not be taken"</em> became <em>"Ibuprofen can be given, with one caution"</em>, 3 of 3, and came back
+ * once the contraindication stated its strength. {@link #everyInjectedFindingStatesOneOfTheTwoStrengths}
+ * is the property; the cases either side of it are the two shapes it has to hold for. An OVERDOSE
+ * finding is the one that wants neither clause and cannot reach the renderer at all today, which is
+ * why that sweep is also what reddens if a caller ever makes it reachable.
+ *
+ * <p>Every case here drives the real {@link DrugReferenceInjector#injectRecords} over a real dataset
+ * parsed by the production parser, and asserts on the record text the model is actually handed.
  */
 public class SafetyFindingSeverityStrengthTest {
 
@@ -102,19 +114,67 @@ public class SafetyFindingSeverityStrengthTest {
 	}
 
 	@Test
-	public void aContraindicationFindingCarriesNoStrengthClauseAtAll() {
-		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(
-				DrugReferenceTestSupport.curatedService()).injectRecords(
-						DrugReferenceTestSupport.oneRecordChart(),
-						DrugReferenceTestSupport.ctx(60, null, null, null,
-								DrugReferenceTestSupport.set("ibuprofen"), null),
-						"Is it safe to give ibuprofen?");
-		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
+	public void aRecordedAllergyContraindicationSaysItIsAReasonToWithholdTheDrug() {
+		String finding = DrugReferenceTestSupport.safetyFindingIn(
+				DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.curatedService())
+						.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+								DrugReferenceTestSupport.ctx(60, null, null, null,
+										DrugReferenceTestSupport.set("ibuprofen"), null),
+								"Is it safe to give ibuprofen?")).getText();
 
 		assertTrue(finding.toLowerCase().contains("allerg"),
 				"this case is about the recorded-allergy contraindication finding: " + finding);
-		assertFalse(finding.contains(WITHHOLD) || finding.contains(CAUTION),
-				"the graded clause is scoped to interaction findings; a contraindication already "
-						+ "licenses withholding without one: " + finding);
+		assertTrue(finding.contains(WITHHOLD),
+				"a contraindication has to SAY it withholds, because since #283 the prompt's "
+						+ "evidence-against claim is conditional on the finding saying so: " + finding);
+		assertFalse(finding.contains(CAUTION),
+				"and it is never a caution: " + finding);
+	}
+
+	@Test
+	public void aCrossReactivityContraindicationSaysItIsAReasonToWithholdTheDrug() {
+		String finding = DrugReferenceTestSupport.safetyFindingIn(
+				DrugReferenceTestSupport.injectorWithSafety(
+						DrugReferenceTestSupport.ddinterServiceWithGroups())
+						.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+								DrugReferenceTestSupport.ctx(60, null, null, null,
+										DrugReferenceTestSupport.set("Aspirin"), null),
+								"Is it safe to give ibuprofen?")).getText();
+
+		assertTrue(finding.contains("cross-reactivity"),
+				"this case is the shape the regression was measured on — a curated-group "
+						+ "cross-reactivity contraindication, not an identity allergy: " + finding);
+		assertTrue(finding.contains(WITHHOLD),
+				"the weakest-worded contraindication the module raises still withholds, and this is "
+						+ "the one that flipped: " + finding);
+		assertFalse(finding.contains(CAUTION),
+				"a recorded allergy is never a caution: " + finding);
+	}
+
+	@Test
+	public void everyInjectedFindingStatesOneOfTheTwoStrengths() {
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(
+				DrugReferenceTestSupport.injectorWithSafety(
+						DrugReferenceTestSupport.ddinterServiceWithGroups())
+						.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+								DrugReferenceTestSupport.ctx(60, null,
+										DrugReferenceTestSupport.set("Ciprofloxacin", "Methotrexate"),
+										null, DrugReferenceTestSupport.set("Aspirin"), null),
+								"Is it safe to give omeprazole and ibuprofen?"));
+
+		assertTrue(findings.size() >= 3,
+				"the arrangement must reach both finding types and both strengths, or the sweep below "
+						+ "passes on too little: " + findings);
+		boolean sawWithhold = false, sawCaution = false;
+		for (RecordMapping finding : findings) {
+			String text = finding.getText();
+			sawWithhold |= text.contains(WITHHOLD);
+			sawCaution |= text.contains(CAUTION);
+			assertTrue(text.contains(WITHHOLD) ^ text.contains(CAUTION),
+					"every injected finding states exactly one strength, because the prompt's two "
+							+ "branches are keyed on those sentences and a finding matching neither "
+							+ "falls through to whichever branch the model reaches for: " + text);
+		}
+		assertTrue(sawWithhold && sawCaution, "both strengths must be reached: " + findings);
 	}
 }

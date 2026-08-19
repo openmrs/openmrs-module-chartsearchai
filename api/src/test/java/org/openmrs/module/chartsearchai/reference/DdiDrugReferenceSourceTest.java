@@ -368,7 +368,7 @@ public class DdiDrugReferenceSourceTest {
 
 		assertEquals(1, findings.size(),
 				"the fixture pair must yield exactly one citable safety finding, was: " + result.getText());
-		// The strength clause an interaction finding now states (#283) is taken from the production
+		// The strength clause every injected finding now states (#283) is taken from the production
 		// constant rather than spelled out: this assertion guards the field marker and the sentence
 		// shape, and its wording is pinned by literal in SafetyFindingSeverityStrengthTest, which is
 		// where a reword should fail. Spelling it out here would make one property fail in two files.

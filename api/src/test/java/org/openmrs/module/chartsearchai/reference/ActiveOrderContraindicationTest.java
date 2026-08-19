@@ -263,8 +263,13 @@ public class ActiveOrderContraindicationTest {
 		for (RecordMapping finding : findings) {
 			texts.add(finding.getText());
 		}
+		// The trailing full stop and the strength clause are what a contraindication record states
+		// since #283 — the clause taken from the constant, since its literal is pinned in
+		// SafetyFindingSeverityStrengthTest, which is where a reword should fail. This case's property,
+		// that the chip's own detail reaches the prompt as a citable record, is unchanged.
 		assertTrue(texts.contains(DrugReferenceInjector.FINDING_PREFIX + "Ibuprofen: Ibuprofen is "
-				+ "contraindicated by an active allergy: documented ibuprofen allergy"),
+				+ "contraindicated by an active allergy: documented ibuprofen allergy."
+				+ DrugReferenceInjector.STRENGTH_WITHHOLD),
 				"a record must carry the chip's own detail verbatim, was: " + texts);
 	}
 

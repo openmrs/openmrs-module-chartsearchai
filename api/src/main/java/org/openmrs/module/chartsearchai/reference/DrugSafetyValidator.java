@@ -595,8 +595,13 @@ public class DrugSafetyValidator {
 	 * silently lowered a claim, and it also changed behaviour beyond what #283 set out to change, since
 	 * every finding refused before it. Taking the stronger of the two leaves those pairs where they were.
 	 *
-	 * <p>Measured over the shipped knowledge base: <b>54</b> Minor-rated rows pair two drugs sharing a
-	 * level-4 ATC subgroup, so this is a shape the data really carries rather than a constructed one.
+	 * <p>Measured over the shipped knowledge base through the production predicates (the real
+	 * {@link DdiDrugReferenceSource#parse}, {@link DrugReference#atcSubgroups()},
+	 * {@link DrugReferenceService#lookupByToken}): <b>108 of the 24,690</b> Minor-rated interaction
+	 * ROWS pair two drugs sharing a level-4 ATC subgroup, i.e. 54 unordered pairs held from both
+	 * sides. Both numbers carry their counting base deliberately — quoting either without one is the
+	 * defect #261 exists to stop, and 54 alone reads as a row count here. So this is a shape the data
+	 * really carries rather than a constructed one.
 	 */
 	static boolean licensesWithholding(SafetyWarning finding) {
 		return ratingLicensesWithholding(finding.getSeverity()) || finding.carriesUnratedRelationship();
@@ -2851,11 +2856,9 @@ public class DrugSafetyValidator {
 		// rule, which is unrated by design — see SafetyWarning.getSeverity, and note that a FOLDED chip
 		// still reports the RULE's rating: the class sentence appended to it carries none, so folding
 		// cannot lower or raise what the pair is rated. What the fold DOES move is the strength the
-		// injected record states, which is why it travels separately — see
+		// injected record states — the class sentence is unrated, so a folded warning asserts more
+		// than its rating does — which is why it travels beside the rating rather than inside it: see
 		// SafetyWarning.carriesUnratedRelationship and licensesWithholding(SafetyWarning) (#283).
-		// The fold travels with the chip too (issue #283): the class sentence is unrated, so a folded
-		// warning asserts more than its rating does, and licensesWithholding needs to see that. The
-		// rating itself stays the RULE's, per the paragraph above.
 		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail,
 				i.getSeverity(), alsoSameClass != null);
 	}

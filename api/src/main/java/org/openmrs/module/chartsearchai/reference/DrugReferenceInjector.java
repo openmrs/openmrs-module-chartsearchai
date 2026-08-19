@@ -918,12 +918,108 @@ public class DrugReferenceInjector {
 	public static final String FINDING_PREFIX = "Safety finding — ";
 
 	/**
+	 * What an injected finding licenses, stated in the record itself (issue #283) — the clause for a
+	 * finding that is a reason to withhold the drug, which is every contraindication and every
+	 * interaction {@link DrugSafetyValidator#licensesWithholding} answers for. Public, and shared with
+	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT}'s graded safety rule and its format demonstration,
+	 * for the reason {@link #FINDING_PREFIX} is: the rule tells the model to follow the call the
+	 * finding STATES, so a reworded clause here with a copy of the old wording in the prompt would
+	 * leave the model matching on a sentence no record carries any more — and every test green.
+	 */
+	public static final String STRENGTH_WITHHOLD = " This finding is a reason to withhold it.";
+
+	/**
+	 * The counterpart clause for a finding that is not (issue #283): the strength a Minor or
+	 * Unknown-rated interaction actually licenses, and the only finding that ever carries it. Shared
+	 * with the prompt for the reason {@link #STRENGTH_WITHHOLD} is.
+	 */
+	public static final String STRENGTH_CAUTION =
+			" This finding is a caution to note, not a reason to withhold it.";
+
+	/**
 	 * One deterministic finding as a chart line. The detail text is reused verbatim — it is the same
 	 * string the clinician already sees on the chip, so the prose and the chip cannot describe the
-	 * same finding differently.
+	 * same finding differently — and the finding then states what it licenses, so the answer's opening
+	 * call rests on what the deterministic layer decided rather than on the model's reading of a
+	 * severity word inside the prose (#283). Every finding states one; see {@link #strengthClause} for
+	 * why silence is not a third answer.
+	 *
+	 * <p>"Verbatim" is of the detail, not of the whole line: a detail that does not already end a
+	 * sentence gains a full stop, so the clause after it reads as its own sentence rather than running
+	 * on. That is {@link DrugSafetyValidator#endSentence}, shared with the chip's own fold rather than
+	 * copied, and it is the only way the record's copy of the detail differs from the chip's.
 	 */
 	static String renderFinding(SafetyWarning finding) {
-		return FINDING_PREFIX + finding.getDrug() + ": " + finding.getDetail();
+		String strength = strengthClause(finding);
+		String detail = strength.isEmpty() ? finding.getDetail()
+				: DrugSafetyValidator.endSentence(finding.getDetail());
+		return FINDING_PREFIX + finding.getDrug() + ": " + detail + strength;
+	}
+
+	/**
+	 * The strength clause for one finding. Every finding that reaches the model states one, and that
+	 * is the invariant rather than a convenience (#283).
+	 *
+	 * <p><b>Silence is not a third answer, and it was measured to be the wrong one.</b> The first cut
+	 * of #283 scoped the clause to INTERACTION findings, on the reasoning that a recorded allergy to
+	 * the drug asked about licenses withholding without needing to say so. It does not, because the
+	 * same change made the prompt's evidence-against claim CONDITIONAL on the finding saying it: the
+	 * addressed-safety branch now offers a withholding branch and a caution branch, and a finding
+	 * matching neither antecedent falls through to whichever the model reaches for. Measured on the
+	 * standalone against {@code main} @ b0cfe545, one Severe recorded Aspirin allergy, one NSAID
+	 * cross-reactivity chip and no interaction finding: <em>"No — ibuprofen should not be taken"</em>
+	 * became <em>"Ibuprofen can be given, with one caution"</em>, 3 of 3, on the caution
+	 * demonstration's own wording. The chip was identical on both sides; only the answer's call moved.
+	 * So a contraindication states {@link #STRENGTH_WITHHOLD} — it is never a caution, and the record
+	 * is where this module says so, per {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)}.
+	 *
+	 * <p><b>A new type may not reach this renderer silently.</b> An OVERDOSE finding cannot arrive
+	 * today — {@link #preAnswerFindings} validates with an EMPTY answer and the dose arm parses a
+	 * stated dose out of the answer, so the arm cannot fire before there is one — and it wants neither
+	 * clause as written, being a reason to change the DOSE, which withholding overstates and a caution
+	 * understates. It therefore falls to the empty default here, and that default is now a defect
+	 * waiting on a caller rather than a safe fallback: whoever renders findings after an answer exists
+	 * must give the type its own clause in the same change.
+	 *
+	 * <p><b>What guards that, and what does not.</b> The PREMISE is pinned:
+	 * {@code SafetyFindingSeverityStrengthTest
+	 * .theTypeThatStatesNeitherClauseCannotReachTheRendererBeforeThereIsAnAnswer} drives an arrangement
+	 * that DOES raise an overdose warning through the real {@code validate} given an answer, and asserts
+	 * the pre-answer path raises none — so it reddens the moment the dose arm becomes reachable from
+	 * here. The CONCLUSION is not, and this javadoc claimed it was until review read the case:
+	 * {@code everyInjectedFindingStatesOneOfTheTwoStrengths} iterates the findings ONE fixed arrangement
+	 * produced, no arrangement of {@link #injectRecords} produces an overdose finding, so it can never
+	 * observe the type it was named as the guard for. Measured by mutation rather than argued: with
+	 * {@link #preAnswerFindings} validating against a stated dose instead of the empty string, the
+	 * premise case reddens and names the record that would reach the model ("The stated Amoxicillin
+	 * dose ~4000 mg/day exceeds …", no clause on it) while
+	 * {@code everyInjectedFindingStatesOneOfTheTwoStrengths} stays green. A caller that renders
+	 * findings after an answer
+	 * exists is a new path neither case runs; it writes its own clause with no test to lean on.
+	 *
+	 * <p>The interaction split is {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)},
+	 * never a local reading of the rating, and never {@code ratingLicensesWithholding} underneath it:
+	 * unrated is not low-rated, and a FOLDED finding asserts an unrated class relationship its rating
+	 * does not cover — two halves a second copy would get wrong in opposite directions.
+	 *
+	 * <p>The clause is a statement about the FINDING's strength, not an instruction about a
+	 * prescribing action, and that is what keeps it true on every arm that renders through here. The
+	 * screening arm (#113) states it of a pair both of whose drugs are the patient's own active
+	 * orders, and the allergy-versus-active-order join (#143) of a drug they are already taking, so
+	 * "withhold it" reads there as a reason to stop rather than a reason not to start. Both readings
+	 * are the finding's own claim; neither is this module telling a clinician what to do, which is the
+	 * line {@code DrugSafetyValidator}'s class javadoc draws. Measured on the standalone, the
+	 * screening answer is unchanged by the clause.
+	 */
+	private static String strengthClause(SafetyWarning finding) {
+		if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+			return DrugSafetyValidator.licensesWithholding(finding) ? STRENGTH_WITHHOLD
+					: STRENGTH_CAUTION;
+		}
+		if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())) {
+			return STRENGTH_WITHHOLD;
+		}
+		return "";
 	}
 
 	/**
@@ -951,9 +1047,10 @@ public class DrugReferenceInjector {
 	 * correspondence does not hold, because a question-PAIR chip names two drugs the question named
 	 * and neither need be an active order, so its partner is promoted nowhere. That does not reopen
 	 * the chip-versus-prose split this ordering exists to close — since issue #110 every chip is also
-	 * injected verbatim as its own numbered, citable record ({@code preAnswerFindings} →
-	 * {@link #renderFinding}), so a pair finding is grounded by that record rather than by these
-	 * notes, and the promoted-note budget is untouched by it.
+	 * injected as its own numbered, citable record, carrying the chip's detail verbatim and the
+	 * strength clause after it ({@code preAnswerFindings} → {@link #renderFinding}, #283), so a pair
+	 * finding is grounded by that record rather than by these notes, and the promoted-note budget is
+	 * untouched by it.
 	 *
 	 * <p>That correspondence is per PARTNER, and since issue #174 site 2 this method renders one note
 	 * per partner rather than one per ROW — the same collapse

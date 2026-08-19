@@ -272,16 +272,31 @@ public class LlmProviderTest {
 				+ "record it rests on. A demonstrated verdict with no citation behind it is exactly "
 				+ "the fabricated-verdict shape the eval gate cannot see (#126), taught by example");
 		// Both branches must stay reachable. #107's abstention is the direction that trades a
-		// missing verdict for a fabricated one, which is the worse defect, so the addressed-case
+		// missing verdict for a fabricated one, which is the worse defect, so EVERY addressed-case
 		// demonstration must sit AFTER the mango abstention and BEFORE the focus-hint banana
-		// abstention — it must not displace either.
+		// abstention — none of them may displace either. There are two since issue #283, which is
+		// why the chain below names both rather than only the first.
 		int mango = prompt.indexOf("Is it safe to deliver mangoes?");
 		int durian = prompt.indexOf("Is it safe to deliver durian?");
+		// The caution demonstration of issue #283 is a SECOND verdict demonstration, so the same
+		// constraint binds it and the chain includes it rather than skipping over it. Found by
+		// mutation: with the chain ending at durian, moving the lychee block after the banana
+		// abstention — leaving a VERDICT as the last thing the few-shot shows, which is the
+		// arrangement this ordering exists to prevent — left every test that reads the prompt green.
+		//
+		// This chain is the ONLY thing here that knows about that demonstration; its record shape,
+		// rating, lead and citations are asserted in SafetyVerdictSeverityGradationTest, beside the
+		// caution rule they belong to. So a THIRD demonstration needs assertions in whichever class
+		// owns its rule as well as an entry in this chain — the citation half of the durian block
+		// below did not travel to the lychee one for exactly that reason, and shipped unguarded until
+		// review mutated it away and found all 1300 tests still green.
+		int lychee = prompt.indexOf("Is it safe to deliver lychees?");
 		int focusHint = prompt.indexOf(LlmProvider.FOCUS_HINT_LABEL);
-		assertTrue(mango > 0 && durian > mango && focusHint > durian,
-				"Few-shot order must be mango abstention -> durian verdict -> focus-hint banana "
-				+ "abstention, so neither abstention demonstration is displaced by the new one. "
-				+ "mango=" + mango + " durian=" + durian + " focusHint=" + focusHint);
+		assertTrue(mango > 0 && durian > mango && lychee > durian && focusHint > lychee,
+				"Few-shot order must be mango abstention -> durian verdict -> lychee caution verdict "
+				+ "-> focus-hint banana abstention, so no abstention demonstration is displaced by a "
+				+ "verdict one. mango=" + mango + " durian=" + durian + " lychee=" + lychee
+				+ " focusHint=" + focusHint);
 		assertTrue(prompt.contains("never \"Yes\" or \"No\""),
 				"The unaddressed branch's #107 guard must survive verbatim");
 	}

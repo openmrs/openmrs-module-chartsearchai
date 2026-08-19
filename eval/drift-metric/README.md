@@ -132,6 +132,13 @@ timeout — warm the llama before batch runs).
 > 62/64 and 63/64 are correct read either way. The script now prints both rates under their own
 > names, so a future capture with a nonzero CANNOT cannot repeat the ambiguity. The captures
 > themselves are gone, so this is a reading of the committed record, not a re-score.
+>
+> *(2026-08-19.* `score_probe_safety.py`'s verdict-led definition has since gained a third class —
+> the #283 caution lead, "the drug can be given, with one caution", which `classify` calls NONE. The
+> reconciliation above is unaffected: these are presence-topic cells from `capture_probe_yesno.sh`,
+> where no safety finding is injected and no caution lead can arise, so the NONE column here is the
+> hedge it was. The "YES/NO only" description is what that scorer said on 2026-07-29, and is left
+> standing as the record of what the two figures were read under.*)
 
 Six class flips, read individually (full detail on
 [#107](https://github.com/openmrs/openmrs-module-chartsearchai/issues/107)): three are
@@ -283,7 +290,9 @@ tokens moving 7605 → 7687. Gate = `capture_probe_safety.sh` 20 cells/arm, plus
   that partner had been truncated 300 entries earlier.
 
 **Instrument gap this exposed (the third in this probe's history).** `score_probe_safety.py`
-counts YES and NO identically in `verdict_led`, so arm C's clinically inverted "Yes" scored as
+counted YES and NO identically in `verdict_led` (as of 2026-07-30; it now splits them, and since #283
+counts a third class — see the note under the verdict-lead table above), so arm C's clinically
+inverted "Yes" scored as
 **+1 verdict-led and −1 abstained — an improvement on two columns, exit code 0**. A green gate
 would have shipped it. `score_directness.py` already models "a bare YES with no named record" as
 a safety violation; this probe needs the same split before it gates another answer-shaping change.
@@ -442,6 +451,15 @@ empty chip list now makes a verdict more suspicious, not exempt. Both directions
 inside `verdict-led` rather than deducted from it, so every column keeps the meaning it had when
 earlier results were quoted against it.
 
+> *(2026-08-20, #283.* Three directions now, not two: the caution lead joined `YES` and `NO` as a
+> verdict lead, so `unsupported_caution` joined the two above it, on the same `adverse_finding`
+> licence test and counted inside `verdict-led` the same way. The columns quoted here are
+> unaffected. What the widening did cost is a comparison: `verdict-led` became a union, so two arms
+> can tie on it while one leads with a refusal and the other with a permission, and the A/B printed
+> that as no change at all until its flip condition compared the class too. It now does, it prints
+> `of which the lead is a caution, not a refusal` beside the column, and
+> `fixtures/probe-safety/caution-over-major/` pins it.*)
+
 **Reported-number changes to know about, since #107's and #110's numbers came out of these scripts.**
 The columns above are unchanged. What changed: the `affirming "Yes" against a chip` line is renamed
 (`inverted "Yes" against this drug's own finding`) and joined by two new lines; the YES check now
@@ -458,13 +476,15 @@ patient-context check. That flag's line now prints the reason as well as the key
 an operator. Re-scoring the arm C capture still reports one inverted `YES` and still exits 3; that is
 asserted, not assumed.
 
-**Fixtures, because four blind spots on record had none.** Each of the five closed faults now has a
-capture directory under `fixtures/probe-safety/`, built from real live captures (see its
-`PROVENANCE.md` for per-file origin, and for the two answer strings that are necessarily
-counterfactual — a blind spot's fixture has to contain the failure the scorer must catch, and the
-shipped build does not emit it). `score_probe_safety.py --selftest` runs the scorer over each as a
-subprocess and asserts **both** the exit code and the reported counts, which also makes these
-numbers reproducible across future edits. Wired into CI (`.github/workflows/build.yml`,
+**Fixtures, because four blind spots on record had none.** The faults recorded below have capture
+directories under `fixtures/probe-safety/`, built from real live captures (see its `PROVENANCE.md` for
+per-file origin and for which answer strings are necessarily counterfactual — a blind spot's fixture
+has to contain the failure the scorer must catch, and the shipped build does not emit it).
+`score_probe_safety.py --selftest` runs the scorer over each as a subprocess and asserts **both** the
+exit code and the reported counts, which also makes these numbers reproducible across future edits —
+and it refuses to run if any directory there is asserted by no case, which is the only count worth
+carrying here. This paragraph used to carry two ("five closed faults", "two answer strings"); both
+went stale the next time a fault was added, which is the same defect PROVENANCE's own header had. Wired into CI (`.github/workflows/build.yml`,
 `harness-selftests`) alongside the three pre-existing `--selftest` entry points, which nothing ran
 either.
 

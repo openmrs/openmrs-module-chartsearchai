@@ -69,6 +69,8 @@ public class SafetyWarning {
 
 	private final String severity;
 
+	private final boolean unratedRelationship;
+
 	/** A warning raised from something the reference data assigns no severity to — see
 	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
@@ -76,10 +78,26 @@ public class SafetyWarning {
 	}
 
 	public SafetyWarning(String type, String drug, String detail, String severity) {
+		this(type, drug, detail, severity, false);
+	}
+
+	/**
+	 * Package-private, matching {@link #carriesUnratedRelationship()}: a caller may set only what it
+	 * may read back. The three- and four-argument forms above are public because the wire-facing
+	 * shape is, and this flag is deliberately not part of it — public here would offer an outside
+	 * caller a way to govern the injected record's strength with no way to observe the assertion from
+	 * where it was made. The one caller is {@code DrugSafetyValidator.interactionWarning}.
+	 *
+	 * @param unratedRelationship whether this warning also asserts a relationship the source rates
+	 *            nothing for — see {@link #carriesUnratedRelationship()}
+	 */
+	SafetyWarning(String type, String drug, String detail, String severity,
+			boolean unratedRelationship) {
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
 		this.severity = severity;
+		this.unratedRelationship = unratedRelationship;
 	}
 
 	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */
@@ -141,9 +159,65 @@ public class SafetyWarning {
 	 * clinician-facing text, anchored on a clause the module rewords freely. Measured: rewording that
 	 * clause left {@code thePairChipsAreOrderedBySeverityAndBounded} green while it asserted nothing at
 	 * all. Not serialized onto the REST response; the wire shape is unchanged.
+	 *
+	 * <p>Since issue #283 this value has a second reader, and it decides more than an order:
+	 * {@code DrugSafetyValidator.ratingLicensesWithholding} splits it into "a reason to withhold" and
+	 * "a caution to note", {@code licensesWithholding(SafetyWarning)} composes that with
+	 * {@link #carriesUnratedRelationship()} for the whole finding, and
+	 * {@code DrugReferenceInjector.renderFinding} states the answer in the record the model reads — so
+	 * how strongly a safety answer opens now rests on this field, for an INTERACTION finding — and on
+	 * it for EVERY such finding the answer addresses rather than for one: where several name the drug
+	 * and their clauses disagree, the prompt ranks withholding above a caution, so one Major among
+	 * Minors still decides the lead. Only for one TYPE, though: a CONTRAINDICATION states withholding
+	 * unconditionally and never consults this value (it carries none — the arms that raise one use the
+	 * three-argument constructor), because a recorded allergy is not a caution at any rating. The null
+	 * rule above is what carries the most weight where the value IS read: unrated is not low-rated,
+	 * and reading it as a caution would soften a curated rule an implementation authored deliberately.
 	 */
 	public String getSeverity() {
 		return severity;
+	}
+
+	/**
+	 * Whether this warning asserts, beside whatever {@link #getSeverity()} rates, a relationship the
+	 * source rates nothing for — today exactly the folded chip of issue #171: a co-medication that is
+	 * both a rated interaction partner and class-related yields ONE warning carrying the rule's note
+	 * and the class arm's duplicate-therapy or cross-reactivity sentence together.
+	 *
+	 * <p>It exists because {@link #getSeverity()} deliberately keeps reporting the RULE's rating on a
+	 * folded warning — folding must not raise or lower what the pair is rated, which is what the chip
+	 * ordering depends on — so the rating alone cannot say how strong the whole finding is. Reading it
+	 * as the rating did made the fold LOWER a claim: a Minor rule folded with duplicate therapy read as
+	 * a caution, while that same relationship on its own licenses withholding (issue #283).
+	 *
+	 * <p><b>It is scoped to the arm that can fold, and only one of the three can.</b>
+	 * {@code DrugSafetyValidator.classRelationships} runs per IN-PLAY substance, so the interaction
+	 * SCREEN (issue #113), which answers a question naming no drug, builds through the two-argument
+	 * {@code interactionWarning} and never sets this flag. One Minor-rated pair therefore states
+	 * withholding from the drug-in-play arm and a caution from the screen, on the same two active
+	 * orders: measured through the real {@code injectRecords} over
+	 * {@code chartsearchai-test/ddi-folded-minor-class-pair.json}, whose two drugs share {@code N06BA}.
+	 * That is a property of which arm ran rather than of the pair. It is left there deliberately —
+	 * giving the screen the class arm's sentence would change the DETAIL of a published
+	 * {@code safetyWarnings} chip, which issues #113 and #171 would both have to re-measure — and
+	 * pinned by {@code FoldedFindingStrengthTest
+	 * .theScreeningArmStatesTheWeakerClaimForTheSamePairBecauseItRunsNoClassArm} so that moving either
+	 * arm is visible. The question-pair arm does not set it either — its warning is built at its own
+	 * call site — so a question-pair finding always states the strength its RATING licenses. This
+	 * javadoc read "there it is no asymmetry: that arm's two drugs need not be on the chart at all,
+	 * so there is no co-medication for a class relationship to hold against", and the second half
+	 * does not follow from the first: the patient CAN be on one of a question-named pair. What holds
+	 * without it is narrower and is all this flag needs — the fold happens only inside
+	 * {@code addInteractionWarnings}, so a class relationship that does hold for one of those drugs
+	 * is never folded into the pair finding; it reaches the model as its own unrated warning, which
+	 * licenses withholding on the rating leg. Whether the two arms can report one pair at once was
+	 * not established here — {@code coveredByActiveOrderArm} asks {@code hasActiveDrug} where the
+	 * pair walk asks {@code identifies}, and the two are different questions.
+	 *
+	 * <p>Not serialized; the wire shape is unchanged.
+	 */
+	boolean carriesUnratedRelationship() {
+		return unratedRelationship;
 	}
 
 	@Override

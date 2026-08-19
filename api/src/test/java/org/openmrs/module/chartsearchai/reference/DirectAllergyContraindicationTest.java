@@ -127,8 +127,13 @@ public class DirectAllergyContraindicationTest {
 						"Is it safe to give her ledipasvir?"));
 
 		assertEquals(1, findings.size(), "the finding must be injected exactly once, was: " + findings);
+		// Plus the strength clause a contraindication record states since #283, from the constant —
+		// its literal is pinned in SafetyFindingSeverityStrengthTest, which is where a reword should
+		// fail. What this case is about, the chip reaching the prompt as one citable record, is
+		// unchanged.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
-				+ "Ledipasvir: The patient has a recorded allergy to Ledipasvir.",
+				+ "Ledipasvir: The patient has a recorded allergy to Ledipasvir."
+				+ DrugReferenceInjector.STRENGTH_WITHHOLD,
 				findings.get(0).getText(), "the record carries the chip's own detail verbatim");
 	}
 

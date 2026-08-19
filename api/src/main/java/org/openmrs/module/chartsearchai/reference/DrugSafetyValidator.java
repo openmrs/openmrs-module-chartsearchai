@@ -548,6 +548,78 @@ public class DrugSafetyValidator {
 		return rank < 0 ? Integer.MAX_VALUE : rank;
 	}
 
+	/**
+	 * Whether a finding of this severity is a reason to WITHHOLD the drug, or a caution to note
+	 * beside giving it (issue #283). The one definition of that split, shared with
+	 * {@link DrugReferenceInjector#renderFinding}, which states its answer in the record the model
+	 * reads — so the strength of an answer's opening call cannot drift from the rating the chip
+	 * carries. Before it, the severity reached the model only as a WORD inside the finding's prose
+	 * and the prompt instructed a refusal for any finding at all: measured on the standalone,
+	 * {@code main} @ b0cfe545, a Minor row produced "No — gentamicin should not be given" on a
+	 * mechanism text ending "No special precautions are necessary".
+	 *
+	 * <p>The boundary is expressed against {@link #severityRank} rather than as a number, so it
+	 * cannot fall out of step with that switch: {@code minor} and {@code unknown} are cautions — the
+	 * ratings DDInter itself calls minimally significant, and {@code unknown} carries no mechanism
+	 * text at all, which is why the default floor filters it out of the chips entirely.
+	 *
+	 * <p><b>Unrated withholds, and it is the case a "no rating means nothing serious" reading gets
+	 * backwards.</b> Null is not a low rating — see {@link SafetyWarning#getSeverity()} — and it
+	 * covers two different things, which withhold for two different reasons. A CURATED rule is
+	 * unrated because an implementation authored it deliberately, and {@link #severityPriority}
+	 * already sorts it ABOVE {@code major} for exactly that reason; softening it would silence the
+	 * one arm a deployment added on purpose. An ATC-subgroup or cross-reactivity JOIN is unrated
+	 * because the reference data states the relationship without rating it, and nobody authored it at
+	 * all: it withholds here because that is the behaviour it already had, and softening a
+	 * relationship no dataset rates would be a change nothing has measured. Neither is a caution, but
+	 * do not carry the curated argument over to the join — the second is the weaker claim, and a
+	 * later decision to grade those joins should be made on its own evidence.
+	 *
+	 * @param severity the source-assigned severity, or null where the source rates nothing
+	 * @return true when the finding licenses withholding the drug
+	 */
+	static boolean ratingLicensesWithholding(String severity) {
+		int rank = severityRank(severity);
+		return rank < 0 || rank >= severityRank("moderate");
+	}
+
+	/**
+	 * The same question asked of a whole FINDING rather than of a rating, and the form
+	 * {@link DrugReferenceInjector#renderFinding} must use.
+	 *
+	 * <p>A finding can assert more than its rating covers. Issue #171's fold puts the class arm's
+	 * duplicate-therapy or cross-reactivity sentence onto a rated rule's chip when both arms are about
+	 * one co-medication, and {@link SafetyWarning#getSeverity()} keeps reporting the RULE's rating there
+	 * on purpose — folding must not move what the pair is rated. So a Minor rule folded with a class
+	 * relationship read as a caution while that relationship alone licenses withholding: the fold
+	 * silently lowered a claim, and it also changed behaviour beyond what #283 set out to change, since
+	 * every finding refused before it. Taking the stronger of the two leaves those pairs where they were.
+	 *
+	 * <p>Measured over the shipped knowledge base through the production predicates (the real
+	 * {@link DdiDrugReferenceSource#parse}, {@link DrugReference#atcSubgroups()},
+	 * {@link DrugReferenceService#lookupByToken}): <b>108 of the 24,690</b> Minor-rated interaction
+	 * ROWS pair two drugs sharing a level-4 ATC subgroup. So this is a shape the data really carries
+	 * rather than a constructed one. The count carries its base deliberately — quoting one without it
+	 * is the defect #261 exists to stop — and the ROW is the unit the fold turns on, because a chip is
+	 * raised per subject so either orientation can fold.
+	 *
+	 * <p><b>Do not restate that as a pair count by halving it.</b> This javadoc said "i.e. 54 unordered
+	 * pairs held from both sides" and review measured that wrong: through the same three predicates the
+	 * 108 rows are <b>56</b> unordered pairs of display names (44 by {@link DrugReference#substanceGroupKey()},
+	 * 60 keyed on the raw entry-name/token strings), and they are not two rows each — 32 pairs
+	 * contribute 2 rows, 18 contribute 1, 2 contribute 3 and 4 contribute 5, so 18 of the 56 are held
+	 * from ONE side only. The multiplicity is the multi-row families this class's identity rules exist
+	 * for: {@code Amphotericin B} has three presentation rows beside the plain one, so
+	 * {@code Amphotericin B | Clotrimazole} contributes five rows while
+	 * {@code Amphotericin B (liposomal) | Clotrimazole} contributes one, because clotrimazole's own row
+	 * names the token {@code amphotericin b} and {@link DrugReferenceService#lookupByToken} answers with
+	 * the plain row. 54 was 108/2 rather than a second measurement, which is why it reconciled with
+	 * nothing.
+	 */
+	static boolean licensesWithholding(SafetyWarning finding) {
+		return ratingLicensesWithholding(finding.getSeverity()) || finding.carriesUnratedRelationship();
+	}
+
 	/** @return the floor rank for the GP value, falling back to the default floor when the
 	 *          value is unrecognized (a typo'd GP must not silently disable all rated rules). */
 	private static int floorRank(String gpValue) {
@@ -2381,9 +2453,14 @@ public class DrugSafetyValidator {
 	 * whichever PR owned that method next (issue #174 site 2 was it). What is NOT affected is the
 	 * invariant the sentence exists to protect, that a chip and the prose cannot describe the same
 	 * finding differently: since issue #110 the deterministic finding is itself injected as a
-	 * numbered, citable record by {@code preAnswerFindings}, carrying this chip's string verbatim, so a
-	 * pair finding's grounding comes from that record rather than from the promoted notes, and the
-	 * promoted-note budget is untouched.
+	 * numbered, citable record by {@code preAnswerFindings}, carrying this chip's string verbatim and
+	 * the strength clause after it ({@link DrugReferenceInjector#renderFinding}, issue #283 — a
+	 * question-pair finding is an INTERACTION, so it states one like every other), so a pair
+	 * finding's grounding comes from that record rather than from the promoted notes, and the
+	 * promoted-note budget is untouched. That half is worded to match
+	 * {@link DrugReferenceInjector#orderedInteractionNotes}, which this paragraph is paired with —
+	 * each cites the other — because the two came apart once already, when only one of them was
+	 * reworded for the clause.
 	 */
 	private void addQuestionPairInteractions(List<SafetyWarning> warnings, Set<DrugReference> questionDrugs,
 			PatientClinicalContext context, int severityFloor) {
@@ -2767,7 +2844,11 @@ public class DrugSafetyValidator {
 
 	/**
 	 * The one chip an active-order interaction produces, so the question-driven arm and the
-	 * screening arm below cannot word the same finding differently.
+	 * screening arm below cannot word the same finding differently by accident.
+	 *
+	 * <p>They do differ deliberately, through the overload: only the drug-in-play arm can fold, and
+	 * since issue #283 the fold reaches the strength the injected record states rather than its
+	 * wording alone — see {@link SafetyWarning#carriesUnratedRelationship()}.
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i) {
 		return interactionWarning(ref, i, null);
@@ -2796,9 +2877,12 @@ public class DrugSafetyValidator {
 		// The rule's own rating travels with the chip (issue #207). Null for a curated hand-authored
 		// rule, which is unrated by design — see SafetyWarning.getSeverity, and note that a FOLDED chip
 		// still reports the RULE's rating: the class sentence appended to it carries none, so folding
-		// cannot lower or raise what the pair is rated.
+		// cannot lower or raise what the pair is rated. What the fold DOES move is the strength the
+		// injected record states — the class sentence is unrated, so a folded warning asserts more
+		// than its rating does — which is why it travels beside the rating rather than inside it: see
+		// SafetyWarning.carriesUnratedRelationship and licensesWithholding(SafetyWarning) (#283).
 		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail,
-				i.getSeverity());
+				i.getSeverity(), alsoSameClass != null);
 	}
 
 	/**
@@ -2807,8 +2891,12 @@ public class DrugSafetyValidator {
 	 *         a full stop, a curated note need not, and a rule carrying no note at all ends on the
 	 *         partner label. Trailing whitespace goes with it — a note padded in the source file would
 	 *         otherwise put the gap inside the sentence rather than between the two.
+	 *         <p>Package-private because {@link DrugReferenceInjector#renderFinding} appends the
+	 *         strength clause (#283) to this same detail and has to break the sentence the same way.
+	 *         A second copy of the rule would leave the gap inside one renderer's sentence and
+	 *         between the two in the other's, for one string the chip and the record share.
 	 */
-	private static String endSentence(String detail) {
+	static String endSentence(String detail) {
 		String trimmed = detail.trim();
 		if (trimmed.isEmpty()) {
 			return trimmed;
@@ -2826,6 +2914,14 @@ public class DrugSafetyValidator {
 	 * over the reference entries for the patient's active orders instead of over the drugs the
 	 * question named. Because the partner side of the join is by definition another active order, one
 	 * pass over the order entries reaches every pair; no cross-product is enumerated.
+	 *
+	 * <p><b>"The same join" is not "the same finding" since issue #283.</b>
+	 * {@link #addInteractionWarnings} also folds the class arm's sentence in (issue #171) and this arm
+	 * cannot, because {@link #classRelationships} runs per IN-PLAY substance and a screening question
+	 * names none. Only a folded warning carries {@link SafetyWarning#carriesUnratedRelationship()},
+	 * which since #283 decides the strength the injected record states, so one Minor-rated pair reads
+	 * as a caution here and as a reason to withhold there. The measurement, and the reason it is left
+	 * rather than closed, are on that method.
 	 *
 	 * <p>Three things this arm must get right that the question-driven arm never faced:
 	 * <ul>

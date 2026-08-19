@@ -152,8 +152,12 @@ public class SelfNamedAllergyRuleFoldTest {
 						"Is it safe to give her ibuprofen?"));
 
 		assertEquals(1, findings.size(), "one fact is one citable record, was: " + findings);
+		// Plus the full stop and the strength clause a contraindication record states since #283, the
+		// clause from the constant — its literal is pinned in SafetyFindingSeverityStrengthTest. The
+		// property here, one fact as one record carrying the surviving chip's detail, is unchanged.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX + "Ibuprofen: Ibuprofen is contraindicated "
-				+ "by an active allergy: documented ibuprofen allergy", findings.get(0).getText(),
+				+ "by an active allergy: documented ibuprofen allergy."
+				+ DrugReferenceInjector.STRENGTH_WITHHOLD, findings.get(0).getText(),
 				"carrying the surviving chip's own detail verbatim");
 	}
 

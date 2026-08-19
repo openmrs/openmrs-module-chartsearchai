@@ -71,7 +71,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 
 	@Test
 	public void aByteReachesTheClientBeforeGenerationStartsSoAProxyCannotTimeOutOnSilence() {
-		SilentThenAnswerStub stub = new SilentThenAnswerStub(out, 0L);
+		SilentThenAnswerStub stub = new SilentThenAnswerStub(out);
 		controller.setChartSearchService(stub);
 
 		controller.streamAnswer(out, patient(), "any allergies?", user(), false);
@@ -109,7 +109,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 
 	@Test
 	public void noKeepAliveIsWrittenOnceTheAnswerIsFinished() throws Exception {
-		controller.setChartSearchService(new SilentThenAnswerStub(out, 0L));
+		controller.setChartSearchService(new SilentThenAnswerStub(out));
 
 		controller.streamAnswer(out, patient(), "any allergies?", user(), false, 20L);
 		int settled = out.size();
@@ -155,7 +155,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 	@Test
 	public void aKeepAliveThatCannotBeWrittenDoesNotFailTheAnswer() {
 		RefusingSink refusing = new RefusingSink(false, 0, Integer.MAX_VALUE);
-		controller.setChartSearchService(new SilentThenAnswerStub(new ByteArrayOutputStream(), 0L));
+		controller.setChartSearchService(new SilentThenAnswerStub(new ByteArrayOutputStream()));
 
 		controller.streamAnswer(refusing, patient(), "any allergies?", user(), false);
 
@@ -176,9 +176,12 @@ public class ChartSearchAiStreamKeepAliveTest {
 		// assertion that failed without the catch would be that one, and a silently unscheduled TIMER
 		// would go unnoticed.
 		RefusingSink refusing = new RefusingSink(true, 1, 1);
-		controller.setChartSearchService(new SilentThenAnswerStub(new ByteArrayOutputStream(), 300L));
+		// Waits for the two keep-alives it asserts on rather than for a fixed span, for the reason
+		// SilentThenAnswerStub.awaitingComments gives: the refused write is never counted, so two in the
+		// sink means the synchronous one plus one that got through AFTER the refusal.
+		controller.setChartSearchService(SilentThenAnswerStub.awaitingComments(refusing.sink(), 2));
 
-		controller.streamAnswer(refusing, patient(), "any allergies?", user(), false, 40L);
+		controller.streamAnswer(refusing, patient(), "any allergies?", user(), false, 20L);
 
 		assertEquals(1, refusing.refused,
 				"a scheduled keep-alive must actually have been attempted and refused, or this test "
@@ -327,20 +330,18 @@ public class ChartSearchAiStreamKeepAliveTest {
 	/**
 	 * Stands in for a model that thinks for a while before saying anything: it records everything
 	 * already written to the stream at the moment generation begins — which is exactly the window a
-	 * proxy is timing — optionally after staying silent for {@code silentMillis} first.
+	 * proxy is timing — optionally after waiting for keep-alives to pile up first.
 	 */
 	private static class SilentThenAnswerStub implements ChartSearchService {
 
 		private final ByteArrayOutputStream sink;
 
-		private final long silentMillis;
-
 		private final int minComments;
 
 		String writtenAtEntry = "";
 
-		SilentThenAnswerStub(ByteArrayOutputStream sink, long silentMillis) {
-			this(sink, silentMillis, 0);
+		SilentThenAnswerStub(ByteArrayOutputStream sink) {
+			this(sink, 0);
 		}
 
 		/**
@@ -350,12 +351,11 @@ public class ChartSearchAiStreamKeepAliveTest {
 		 * writes or gives up and lets the assertion report how many really arrived.
 		 */
 		static SilentThenAnswerStub awaitingComments(ByteArrayOutputStream sink, int wanted) {
-			return new SilentThenAnswerStub(sink, 0L, wanted);
+			return new SilentThenAnswerStub(sink, wanted);
 		}
 
-		private SilentThenAnswerStub(ByteArrayOutputStream sink, long silentMillis, int minComments) {
+		private SilentThenAnswerStub(ByteArrayOutputStream sink, int minComments) {
 			this.sink = sink;
-			this.silentMillis = silentMillis;
 			this.minComments = minComments;
 		}
 
@@ -393,13 +393,6 @@ public class ChartSearchAiStreamKeepAliveTest {
 				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 			if (minComments > 0) {
 				awaitComments(minComments);
-			} else if (silentMillis > 0) {
-				try {
-					Thread.sleep(silentMillis);
-				}
-				catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-				}
 			}
 			writtenAtEntry = new String(sink.toByteArray(), StandardCharsets.UTF_8);
 			tokenConsumer.accept("Has TB [8].");
@@ -418,7 +411,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 		private final int chunks;
 
 		ChattyStub(int chunks) {
-			super(new ByteArrayOutputStream(), 0L);
+			super(new ByteArrayOutputStream());
 			this.chunks = chunks;
 		}
 

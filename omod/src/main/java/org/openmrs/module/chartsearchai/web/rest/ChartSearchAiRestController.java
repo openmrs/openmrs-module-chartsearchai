@@ -1274,8 +1274,9 @@ public class ChartSearchAiRestController {
 				log.debug("Could not write SSE keep-alive, client likely disconnected");
 			}
 			catch (RuntimeException e) {
-				// scheduleAtFixedRate silently unschedules a task that throws, so without this the
-				// rest of a long answer would run with no keep-alive and nothing to say why.
+				// scheduleWithFixedDelay silently unschedules a task that throws — the documented
+				// behaviour of both periodic schedule methods — so without this the rest of a long
+				// answer would run with no keep-alive and nothing to say why.
 				log.warn("SSE keep-alive failed; the stream continues without one", e);
 			}
 		}

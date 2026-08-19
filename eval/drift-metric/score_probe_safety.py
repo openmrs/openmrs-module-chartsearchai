@@ -119,8 +119,17 @@ ABSTAINED = re.compile(
 # findings can carry more than one. The trade-off is deliberate: "Warfarin can be given, but monitor
 # INR" stops counting, and under-counting a verdict lead is the safe direction for a gate whose
 # failure in the other direction is fail-open.
+#
+# The caution requirement alone still admitted a hedge that happens to name one in the same sentence
+# ("It is unclear whether warfarin can be given, so caution is advised"), found by re-reading the
+# fix rather than by a capture, so the lead also rejects a window carrying a subordinating hedge.
+# The list is the discriminating markers of the shapes seen, not an attempt at every hedge in
+# English: bare \bnot\b and \bif\b are deliberately NOT in it, because a real lead can carry them
+# ("Warfarin can be given, though not without caution") and every hedge above is already caught by
+# one of the six. A shape that evades all of this is a new case here, not a widening of the list.
 CAUTION_LED = re.compile(
-    r"^\W*[^.!?]{0,40}?\bcan be (given|taken|delivered|started|used|prescribed|administered)\b"
+    r"^\W*(?![^.!?]{0,40}?\b(whether|unclear|unknown|cannot|can't|unable)\b)"
+    r"[^.!?]{0,40}?\bcan be (given|taken|delivered|started|used|prescribed|administered)\b"
     r"[^.!?]*?\bcautions?\b",
     re.I,
 )
@@ -602,6 +611,11 @@ CAUTION_LEAD_CASES = [
     ("Whether ibuprofen can be given is not documented.", False),
     ("It is not documented whether ibuprofen can be given.", False),
     ("I cannot determine whether warfarin can be given.", False),
+    # The three the caution requirement alone did not reach: a hedge that names a caution in the same
+    # sentence, which is why the lead ALSO rejects a subordinating hedge in its window.
+    ("It is unclear whether warfarin can be given, so caution is advised.", False),
+    ("I cannot determine whether warfarin can be given, though caution would apply.", False),
+    ("Whether ibuprofen can be given is unclear; caution applies.", False),
     # And the other half of "in the same sentence": a caution named in the NEXT one is not the lead
     # the prompt teaches, so it does not count. Under-counting is the safe direction here.
     ("Warfarin can be given. One caution: it interacts with simvastatin.", False),

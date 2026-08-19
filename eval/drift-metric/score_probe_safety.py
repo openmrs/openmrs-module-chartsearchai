@@ -37,12 +37,15 @@ Verdict classification defers to score_directness.classify — the versioned met
 and YES, NO and the #283 CAUTION lead count as verdict-led. CANNOT ("cannot be determined from
 the records") is a hedge, not a verdict, and must not score as the goal state.
 
-The caution lead is this file's own class (`CAUTION_LED`), not classify's: since #283 a finding
+The caution lead is this file's own class (`caution_led`), not classify's: since #283 a finding
 that states it is a caution rather than a reason to withhold licenses an answer opening "the drug
 can be given, with one caution", which classify calls NONE. Counting that as a hedge made the arm
 carrying the fix lose a verdict-led cell to the arm without it — measured over this probe's own 20
 cells, `mary__safety-warfarin`. Numbers quoted against the verdict-led column before 2026-08-19 are
-not comparable on a capture containing a caution lead; `verdict_led` carries the amendment.
+not comparable on a capture containing a caution lead; `verdict_led` carries the amendment. Two
+things keep a hedge out of the class without enumerating hedge wordings, and CAUTION_LEAD_TAIL is
+where both are argued: the lead is anchored on the cell's OWN drug, and between that and the modal
+only name material may stand.
 
 What it still does NOT check is the verdict's CONTENT: that the partner named is one the patient
 actually has, and that the severity is proportionate — including the one #283 adds, whether the
@@ -101,56 +104,156 @@ ABSTAINED = re.compile(
 # with. And the shape is safety-specific: outside a safety question "X can be given" is not a
 # verdict about anything.
 #
-# Anchored to the LEAD and kept inside the first sentence, for the reason ABSTAINED is: unanchored,
-# "the records do not address whether ibuprofen can be given" would read as a caution verdict. The
-# {0,40} span mirrors NO's own, and is what a drug name plus a parenthetical costs
-# ("Rifampicin (rifampin) can be given" is 22).
-#
-# BOTH halves of the lead are required, and the window alone was not enough. The prompt teaches the
+# THREE things are required, and the first is what makes the other two hold. The prompt teaches the
 # whole shape — "open by stating that the drug can be given, and name the caution in the same
-# sentence so it is never dropped" — and matching only the first half let a hedge that happened to
-# fit 40 characters score as a verdict: "It is unclear whether warfarin can be given", "I cannot
-# determine whether warfarin can be given" and two more now pinned in CAUTION_LEAD_CASES, none of
-# which classify or ABSTAINED catch either. `unsupported_caution` does not cover them, because it
-# fires only where the deterministic layer raised nothing, so on a cell that DOES carry a finding
-# the hedge scored as the win — the #107 hedge credited by the instrument built to count it.
-# Requiring \bcautions?\b later in the SAME sentence costs no fixture (both arms here say "with one
-# caution") and rejects every one of them, since none names a caution. Plural because a mixed set of
-# findings can carry more than one. The trade-off is deliberate: "Warfarin can be given, but monitor
-# INR" stops counting, and under-counting a verdict lead is the safe direction for a gate whose
-# failure in the other direction is fail-open.
+# sentence so it is never dropped" — so a lead must (1) OPEN ON THE DRUG the cell is about, (2) reach
+# "can be given" with no subordinating marker in between, and (3) name a caution before the sentence
+# ends. Each was added after the one before it was measured insufficient, and the order is kept here
+# because it is the only thing stopping the weakest version being reinstated as a simplification.
 #
-# The caution requirement alone still admitted a hedge that happens to name one in the same sentence
-# ("It is unclear whether warfarin can be given, so caution is advised"), found by re-reading the
-# fix rather than by a capture, so the SPAN BEFORE the verb phrase must also carry no hedge marker.
-# That scoping is the load-bearing half. A first attempt excluded markers anywhere in the 40-character
-# window, which reaches past "can be given" into the caution's own prose, and there the affordable
-# list shrinks: \bif\b had to come out because "Warfarin can be given, with caution if monitored"
-# carries it, which then let "It is not known if warfarin can be given, so caution applies" through.
-# Confined to the prefix, a subordinating marker means exactly what it is being tested for — that
-# "can be given" is a subordinate clause of somebody's uncertainty rather than the answer's own call —
-# so `if` and `not known` are back and cost nothing after the verb.
+# (3) came first. Matching "can be given" alone credited hedges that fit a 40-character window and
+# that neither classify nor ABSTAINED catches — "It is unclear whether warfarin can be given", "I
+# cannot determine whether warfarin can be given" and two more, all pinned below. Neither does
+# `unsupported_caution`, which fires only where the deterministic layer raised nothing, so on a cell
+# that DOES carry a finding the hedge scored as the win: the #107 hedge credited by the instrument
+# built to count it. `cautions?` is plural because a mixed set of findings can carry more than one.
 #
-# The markers are the ones the shapes seen actually turn on, not an attempt at every hedge in English.
-# Bare \bnot\b is not among them because no shape found needs it — every hedge in CAUTION_LEAD_CASES
-# is caught by another marker — and whether a real lead's PREFIX could carry one was not established
-# either way, so it is left out rather than added on a guess. (The positive that carries "not",
-# "Warfarin can be given, though not without caution", carries it AFTER the verb phrase, so it says
-# nothing about the prefix.) A shape that evades all of this is a new case in CAUTION_LEAD_CASES, not
-# a wider list — the list growing per counterexample is how a regex ends up matching nothing anybody
-# wrote.
-CAUTION_LED = re.compile(
-    r"^\W*(?:(?!\b(whether|if|unclear|unknown|not\s+known|cannot|can't|unable)\b)[^.!?]){0,40}?"
-    r"\bcan be (given|taken|delivered|started|used|prescribed|administered)\b"
-    r"[^.!?]*?\bcautions?\b",
-    re.I,
+# (2) came second: a hedge can name a caution itself ("It is unclear whether warfarin can be given,
+# so caution is advised"), so the span BEFORE the verb phrase is constrained as well as the one after
+# it. That started as a list of subordinating markers and ended up as the structural rule below, for
+# the reason (1) did.
+#
+# (1) is this round, and it replaces a blacklist that could not be finished — with TWO rules, whose
+# division of labour is measured below rather than asserted. The marker list was "the shapes seen", and
+# review measured ELEVEN more registers it does not see, every one of which scored verdict-led: "It is
+# possible that warfarin can be given, with caution" and the same frame under
+# may/uncertain/doubtful/questionable/could-be-argued/nothing-states/insufficient-data/unsure, plus
+# "It seems warfarin can be given, with caution" and "Presumably warfarin can be given, with
+# caution". Widening the list was the wrong answer and this comment already said why: a list growing
+# per counterexample is how a regex ends up matching nothing anybody wrote — and the last two
+# subordinate nothing at all, so no marker reaches them however long the list gets.
+#
+# What closes it is the half of the prompt's own shape the regex was not using: every lead it teaches
+# opens ON THE DRUG ("Gentamicin can be given, with one caution: …"), and nothing else may stand
+# between that and the modal. The scorer already knows which drug each cell is about, since the
+# filename carries it and _aliases resolves it, which is how `chips`, `own_drug` and `findings` are
+# filtered. All eleven registers are rejected.
+#
+# The marker list is GONE, and that is the second half of the same fix rather than a tidy-up. The
+# anchor leaves one span open — between the drug name and the modal, where "Warfarin, if it can be
+# given, warrants caution" would otherwise read as a lead — and every attempt to guard that span by
+# naming hedges failed the same way the outer one did. Each attempt was measured, and each measurement
+# falsified the claim written beside the one before it:
+#
+#   nine markers        -> pinned by eight hedge cases while it stood alone, but with the anchor in
+#                          front of it dropping the whole lookahead reddened exactly ONE case, so
+#                          eight of the nine had become a guard that could not fire (CLAUDE.md's rule
+#                          about those). It did catch "Warfarin, unable to say, can be given".
+#   three complementizers
+#   (`if`/`that`/`whether`)
+#                       -> claimed to catch everything the nine did. FALSE: the `unable` aside above
+#                          passes all three.
+#   ... plus a comma ban -> claimed only a subordinating clause and a comma-delimited aside can fit.
+#                          FALSE again: "Warfarin possibly can be given, with caution" carries neither,
+#                          and nor does "Warfarin (uncertain) can be given, with caution".
+#
+# So the span is stated POSITIVELY instead, by what a real lead needs it for rather than by what a
+# hedge might put there: between the anchored name and the modal, only NAME MATERIAL may stand —
+# whitespace, a hyphen or dash, and one bracketed group ("Rifampicin (rifampin) can be given"). One rule in
+# place of four, and it subsumes all of them: a subordinating clause, a comma-delimited aside, a
+# pre-modal adverb and a dose apposition all put a bare word, a comma or a digit there, and none of
+# those is name material. A multi-word display name is handled in DRUG_ALIASES rather than by letting
+# the span carry words, which is what keeps that true.
+#
+# What it does NOT close is exactly one thing, and it is the one thing in the span that is not read:
+# the CONTENTS of the bracketed group. "Warfarin (uncertain) can be given, with caution" is shaped
+# identically to "Warfarin (Minor) can be given, with caution", and closing it means enumerating what
+# may appear inside brackets, which is the blacklist this rule exists to remove. Stating it that way
+# rather than by example is another correction to this comment: the span first allowed a few name
+# words before the bracket, to reach past "Acetylsalicylic acid (aspirin)", so the residue was really
+# "up to three unread words plus an unread bracket" — "Acetylsalicylic uncertain (x) can be given"
+# counted. Putting the full display name in DRUG_ALIASES removed the need for those words, so the span
+# now carries none and the residue is the bracket alone.
+#
+# The captures are the reason to think even that is narrow, and they were counted rather than assumed:
+# across every answer in fixtures/probe-safety there is exactly ONE parenthetical, `ivosidenib
+# (Major...)` in inverted-yes, i.e. a SEVERITY. So a bracket after a drug name carries a synonym or a
+# severity in practice, both of which are real leads and both pinned below.
+#
+# The natural adverb position bounds the residue on its own: "Warfarin can possibly be given" breaks
+# `can be given`, which the tail requires contiguous, so only the stilted pre-modal placement ever
+# reached the span, and that is now refused too. A shape that gets past all of this is a new case
+# below, not a looser span.
+#
+# WHICH of the two rejects the hedges was measured, and it is not the one this comment first credited.
+# Drop the anchor and only POSITIVES redden: every real lead stops counting, because the span will not
+# absorb "Ibuprofen " either. Loosen the span to a bare 30-character window and only HEDGES redden. So
+# the two cover the hedges redundantly, and what each uniquely holds is the other half — the anchor
+# ADMITS the drug name, the span REFUSES everything that is not name material. The evidence does not
+# single out either as "the" fix, and the earlier drafts of this comment that did were wrong in both
+# directions.
+#
+# WHICH CASE holds which part is left to the cases. A per-mutation tally lived here, in ADR 37 and in
+# the CLAUDE.md bullet, and went stale every time the rule moved, because the numbers move with it —
+# the same defect PROVENANCE's directory count had, with the same remedy: every part has at least one
+# case below, the selftest names the case that breaks, and CI runs it on every push.
+# The span replaced a {0,40} character window, which is what a drug name plus a parenthetical cost when
+# the span still had to hold the name itself.
+#
+# The trade-offs are real and are the ones already taken twice here. A lead that does not open on the
+# drug stops counting ("The patient can be given ibuprofen, with one caution"), so does "Warfarin can
+# be given, but monitor INR", and so does anything between the name and the modal that is not name
+# material — an apposition ("Warfarin, 5 mg daily, can be given, with one caution") most plausibly.
+# Under-counting a verdict lead is the safe direction for a gate whose failure in the other direction
+# is fail-open.
+CAUTION_LEAD_TAIL = (
+    # Between the anchored name and the modal, only NAME MATERIAL may stand: whitespace, a hyphen or
+    # dash, and one bracketed group. No bare word, no comma, no digit — so the span is punctuation plus
+    # a bracket whose contents are the one thing here that is not read. The en and em dashes are in the
+    # class because this module's own answers use them as a lead separator ("No — durian should not be
+    # delivered" is the demonstrated refusal), and a dash cannot smuggle a hedge in: one still needs a
+    # bare word, which is refused either side of it.
+    r"[ \-\u2013\u2014]*(?:\([^()]{0,25}\)[ \-\u2013\u2014]*)?"
+    r"\bcan be (?:given|taken|delivered|started|used|prescribed|administered)\b"
+    r"[^.!?]*?\bcautions?\b"
 )
+
+# One compiled pattern per alias set rather than per call. Keyed on the tuple the cell carries, so
+# two cells about the same drug share it.
+_CAUTION_PATTERNS = {}
+
+
+def _caution_lead_pattern(aliases):
+    """The caution-lead regex for one cell, anchored on its own drug names.
+
+    Why it is anchored, and why the span after the anchor is what it is, are argued once in
+    CAUTION_LEAD_TAIL above. Not restated here: this docstring used to carry its own justification and
+    the example in it stopped following from the anchor alone once the span was tightened.
+    """
+    key = tuple(aliases)
+    if key not in _CAUTION_PATTERNS:
+        # Longest first, so the anchor cannot settle on a PREFIX of a longer alias and leave the rest
+        # of the name in a span that admits no bare words ("acetylsalicylic" before "acetylsalicylic
+        # acid" would reject "Acetylsalicylic acid (aspirin) can be given"). That makes the pattern
+        # independent of DRUG_ALIASES' order; it is not separately pinned, since a case can only see
+        # the result, and the aspirin lead below is what fails if the alias set stops covering the
+        # whole name.
+        ordered = sorted(key, key=len, reverse=True)
+        _CAUTION_PATTERNS[key] = re.compile(
+            r"^\W*(?:" + "|".join(re.escape(a) for a in ordered) + r")\b" + CAUTION_LEAD_TAIL, re.I)
+    return _CAUTION_PATTERNS[key]
+
 
 # The probe's drug names to the aliases the KB resolves them through, so an order written
 # "Acetaminophen" counts as already taking "paracetamol".
 DRUG_ALIASES = {
     "paracetamol": ("paracetamol", "acetaminophen", "panadol", "tylenol", "calpol"),
-    "aspirin": ("aspirin", "acetylsalicylic"),
+    # "acetylsalicylic acid" is the KB's own display name, and it is here because the caution lead's
+    # span carries no bare words: an alias stopping at "acetylsalicylic" would leave " acid " in front
+    # of the modal and a real lead would stop counting. Its position in this tuple does not matter,
+    # since _caution_lead_pattern sorts longest-first. It costs the haystack filters nothing — anything
+    # containing it already contains the prefix.
+    "aspirin": ("aspirin", "acetylsalicylic acid", "acetylsalicylic"),
     "erythromycin": ("erythromycin",),
     "clarithromycin": ("clarithromycin",),
     "warfarin": ("warfarin", "coumadin"),
@@ -187,8 +290,12 @@ def load(directory):
         # denominator. Reported through the unreadable path rather than skipped, because silently
         # dropping a mis-named cell is the same fail-open in the other direction.
         if not sep:
+            # aliases EMPTY rather than _aliases(""), which would return ("",) and make
+            # caution_led's anchor match any lead at all — the same empty-needle fail-open this
+            # branch exists to stop, one predicate over.
             cells[key] = {"answer": "", "chips": [], "all_chips": [], "own_drug": False,
                           "ctx_ok": False, "refs": [], "findings": [], "date_parse_failures": [],
+                          "aliases": (),
                           "unreadable": "not a probe cell: no '__safety-<drug>' in the filename, "
                                         "so there is no drug to match this capture against"}
             continue
@@ -197,7 +304,7 @@ def load(directory):
         except Exception as e:
             cells[key] = {"answer": "", "unreadable": str(e), "chips": [], "all_chips": [],
                           "own_drug": False, "ctx_ok": False, "refs": [], "findings": [],
-                          "date_parse_failures": []}
+                          "aliases": _aliases(drug), "date_parse_failures": []}
             continue
 
         ctx = context.get(slug)
@@ -227,6 +334,9 @@ def load(directory):
                          if r.get("resourceType") == "safety_finding"
                          and any(a in (r.get("resourceUuid") or "").lower()
                                  for a in _aliases(drug))],
+            # The drug this cell is about, resolved through the same accessor the three filters
+            # above use, because caution_led anchors its lead on it (see CAUTION_LEAD_TAIL).
+            "aliases": _aliases(drug),
             "date_parse_failures": (ctx or {}).get("date_parse_failures", []),
         }
     return cells, done
@@ -241,18 +351,32 @@ def abstained(cell):
 
 
 def caution_led(cell):
-    """The #283 caution lead: the drug can be given, and the caution is named in the same sentence.
+    """The #283 caution lead: this cell's own drug can be given, and a caution is named beside it.
 
-    Both halves are required, and the span BEFORE the verb phrase must carry no subordinating hedge —
-    a hedge can name a caution itself ("It is unclear whether warfarin can be given, so caution is
-    advised"), which the caution requirement alone admitted. See CAUTION_LED for the markers and for
-    why the scoping to the prefix rather than to the whole window is the load-bearing half.
+    All three halves are required — the lead opens on the drug, only name material stands between that
+    and the modal, and a caution is named before the sentence ends. See CAUTION_LEAD_TAIL for why the
+    anchor is the load-bearing one and for the three claims that were falsified on the way to the span
+    rule beside it.
 
-    A refinement of NONE rather than a competitor to YES/NO, so `classify`'s precedence is untouched
-    and "Yes, ibuprofen can be given" still classifies YES and still trips `inverted_yes`.
+    A cell with no drug scores False rather than matching everything, which is the empty-needle
+    fail-open the loader's not-a-cell branch names. Measured, that guard is a SECOND line rather than
+    the only one: an empty alias no longer makes the pattern vacuous by itself, because the span cannot
+    swallow a drug name, so it takes an elliptical answer ("Can be given, with one caution") to reach
+    the guard at all. That case is pinned; dropping the guard with the span in place reddens nothing
+    else.
+
+    The other two terms are redundant TODAY and kept to state the intent rather than because anything
+    rests on them, which is worth saying so the next reader does not take them for guards. Both
+    `classify(...) == "NONE"` and `not abstained(...)` need a lead that opens on the cell's own drug AND
+    on "yes"/"no"/"not"/"cannot"/"the records", and the anchor forbids the second: dropping either
+    reddens no case. The property they were written for still holds and is owned elsewhere — a "Yes,
+    ibuprofen can be given" classifies YES and trips `inverted_yes`, and it fails the anchor as well.
     """
+    aliases = tuple(a for a in (cell.get("aliases") or ()) if a)
+    if not aliases:
+        return False
     return (classify(cell["answer"]) == "NONE"
-            and bool(CAUTION_LED.search(cell["answer"].strip()))
+            and bool(_caution_lead_pattern(aliases).search(cell["answer"].strip()))
             and not abstained(cell))
 
 
@@ -598,27 +722,56 @@ def _collapse(text):
 
 
 # The caution lead's own cases, in the shape score_directness.selftest uses for classify, and here
-# for the reason that one is there: the two fixture arms exercise CAUTION_LED only in the POSITIVE
-# direction, so the failure the regex's comment is written against — a hedge that happens to fit the
-# prefix reading as a caution verdict — is pinned by nothing without these. The negatives are where
-# the work is: a "Yes" that must stay a YES so inverted_yes still fires on it, an occurrence past the
-# first clause, and the hedges that reach neither classify nor ABSTAINED and were counted verdict-led
-# until CAUTION_LED required the caution and then the clean prefix. None of them came from a capture:
-# four are review's, the rest work the sentence and prefix boundaries, and no fixture arm pins any of
-# them. The `if` pair is the one to keep together — "it is not known IF … can be given, so caution
-# applies" against "can be given, with caution IF monitored" — since only prefix scoping separates
-# them, and either alone would pass under one of the two versions this went through.
+# for the reason that one is there: the two fixture arms exercise the lead only in the POSITIVE
+# direction, so the failure CAUTION_LEAD_TAIL's comment is written against — a hedge reading as a
+# caution verdict — is pinned by nothing without these. Each case carries the DRUG its cell would be
+# about, resolved through the production `_aliases`, because the lead is anchored on it.
+#
+# The negatives are where the work is: a "Yes" that must stay a YES so inverted_yes still fires on
+# it, a caution named past the first sentence, a cell with no drug at all, and the hedges that reach
+# neither classify nor ABSTAINED. None came from a capture — four are the first review round's, eleven
+# are the second's, the rest work the sentence, prefix and anchor boundaries — and no fixture arm pins
+# any of them.
+#
+# Two pairs are the ones to keep together. The `if` pair ("it is not known IF … can be given, so
+# caution applies" against "can be given, with caution IF monitored") is what only marker scoping
+# separates. And the anchor pair ("Presumably warfarin can be given, with caution" against "Warfarin
+# can be given, with caution if monitored") is what only the anchor separates: the first subordinates
+# nothing, so no marker list of any length reaches it.
 CAUTION_LEAD_CASES = [
-    ("Ibuprofen can be given, with one caution: it interacts with X.", True),
-    ("Warfarin can be given, with one caution: Warfarin interacts with active order Simvastatin.", True),
-    ("Rifampicin (rifampin) can be given, with one caution: it interacts with lidocaine.", True),
-    ("Methotrexate can be given, with two cautions: it interacts with warfarin and with aspirin.", True),
-    ("The records do not address whether ibuprofen can be given.", False),
-    ("Yes, ibuprofen can be given.", False),
-    ("No — ibuprofen should not be given.", False),
-    ("It cannot be determined whether ibuprofen can be given.", False),
-    ("The patient has several readings; ibuprofen can be given later.", False),
-    ("", False),
+    ("ibuprofen", "Ibuprofen can be given, with one caution: it interacts with X.", True),
+    ("warfarin", "Warfarin can be given, with one caution: Warfarin interacts with active order Simvastatin.", True),
+    ("rifampicin", "Rifampicin (rifampin) can be given, with one caution: it interacts with lidocaine.", True),
+    ("methotrexate", "Methotrexate can be given, with two cautions: it interacts with warfarin and with aspirin.", True),
+    # Through the alias table rather than the filename, the way `chips` and `own_drug` already are:
+    # the KB's display name for this cell's drug is not the slug the probe writes.
+    ("aspirin", "Acetylsalicylic acid (aspirin) can be given, with one caution: it interacts with Z.", True),
+    # The other thing a bracket after the drug name carries, and the only kind any capture here
+    # actually contains (`ivosidenib (Major...)`): a severity. Both are name material, which is why the
+    # span admits a bracketed group without reading what is inside it.
+    ("warfarin", "Warfarin (Minor) can be given, with one caution: it interacts with simvastatin.", True),
+    # A dash separator, which this module's own answer register uses, plus the proof that a dash does
+    # not license the word between two of them:
+    ("warfarin", "Warfarin — can be given, with one caution: it interacts with simvastatin.", True),
+    ("warfarin", "Warfarin — unclear — can be given, with caution.", False),
+    # And the seam that closes: a bracket does NOT license the bare word in front of it. The span used
+    # to allow a few name words before the bracket, to reach past "Acetylsalicylic acid (aspirin)",
+    # which admitted a hedge word there too. The full name is an alias now, so the span carries no bare
+    # words at all and the whole class goes — digits with it ("Warfarin 5 mg (Minor) can be given").
+    ("warfarin", "Warfarin possibly (Minor) can be given, with caution.", False),
+    ("ibuprofen", "The records do not address whether ibuprofen can be given.", False),
+    ("ibuprofen", "Yes, ibuprofen can be given.", False),
+    ("ibuprofen", "No — ibuprofen should not be given.", False),
+    ("ibuprofen", "It cannot be determined whether ibuprofen can be given.", False),
+    ("ibuprofen", "The patient has several readings; ibuprofen can be given later.", False),
+    ("ibuprofen", "", False),
+    # A cell the loader could not read a drug out of, which must not count. Two shapes, because only
+    # the second reaches the guard: with the name-material span in place an empty alias cannot swallow
+    # a drug name, so the first is rejected by the span, and it takes an ELLIPTICAL lead to get as far
+    # as the guard. Dropping the guard reddens the second alone. This is the empty-needle fail-open the
+    # module docstring's last bullet records in the labelling filters.
+    ("", "Ibuprofen can be given, with one caution: it interacts with X.", False),
+    ("", "Can be given, with one caution: it interacts with X.", False),
     # The four hedges the bare 40-character prefix let through, each landing in neither of the two
     # nets that were supposed to hold them: classify's NO wants "the records|patient|chart … no|not"
     # at the lead, its CANNOT is anchored at the string start (so "I cannot determine" misses), and
@@ -626,34 +779,77 @@ CAUTION_LEAD_CASES = [
     # so nothing else was in the way, and `unsupported_caution` does not cover them either — it fires
     # only where the deterministic layer raised nothing, so on a cell that DOES carry a finding the
     # hedge scored as the verdict-led win. That is the #107 hedge credited by the instrument built to
-    # count it. They are the reason CAUTION_LED also requires the caution to be named.
-    ("It is unclear whether warfarin can be given.", False),
-    ("Whether ibuprofen can be given is not documented.", False),
-    ("It is not documented whether ibuprofen can be given.", False),
-    ("I cannot determine whether warfarin can be given.", False),
-    # The three the caution requirement alone did not reach: a hedge that names a caution in the same
-    # sentence, which is why the lead ALSO requires a prefix free of subordinating hedges.
-    ("It is unclear whether warfarin can be given, so caution is advised.", False),
-    ("I cannot determine whether warfarin can be given, though caution would apply.", False),
-    ("Whether ibuprofen can be given is unclear; caution applies.", False),
-    ("It is not known if warfarin can be given, so caution applies.", False),
-    # The reason the hedge check is scoped to the PREFIX and not to the whole window: `if` after the
-    # verb phrase is the answer's own qualification, not somebody's uncertainty about it.
-    ("Warfarin can be given, with caution if monitored.", True),
-    ("Sulfamethoxazole-trimethoprim can be given, with caution: it interacts with warfarin.", True),
-    # And the other half of "in the same sentence": a caution named in the NEXT one is not the lead
-    # the prompt teaches, so it does not count. Under-counting is the safe direction here.
-    ("Warfarin can be given. One caution: it interacts with simvastatin.", False),
+    # count it. They are the reason the lead also requires the caution to be named.
+    ("warfarin", "It is unclear whether warfarin can be given.", False),
+    ("ibuprofen", "Whether ibuprofen can be given is not documented.", False),
+    ("ibuprofen", "It is not documented whether ibuprofen can be given.", False),
+    ("warfarin", "I cannot determine whether warfarin can be given.", False),
+    # The four the caution requirement alone did not reach: a hedge that names a caution in the same
+    # sentence, which is why a subordinating marker between the drug and the verb phrase is refused.
+    ("warfarin", "It is unclear whether warfarin can be given, so caution is advised.", False),
+    ("warfarin", "I cannot determine whether warfarin can be given, though caution would apply.", False),
+    ("ibuprofen", "Whether ibuprofen can be given is unclear; caution applies.", False),
+    ("warfarin", "It is not known if warfarin can be given, so caution applies.", False),
+    # The eleven registers the marker list could not see, all of which scored verdict-led before the
+    # lead was anchored on the drug. Nine put "can be given" inside a `that`-clause of somebody's
+    # uncertainty; the last two subordinate nothing at all, which is what makes a longer marker list
+    # no answer to them.
+    ("warfarin", "It is possible that warfarin can be given, with caution.", False),
+    ("warfarin", "It may be that warfarin can be given, with caution.", False),
+    ("ibuprofen", "It is uncertain that ibuprofen can be given, so caution applies.", False),
+    ("warfarin", "It is doubtful that warfarin can be given, but caution applies.", False),
+    ("warfarin", "It is questionable that warfarin can be given, with caution.", False),
+    ("warfarin", "It could be argued that warfarin can be given, with caution.", False),
+    ("warfarin", "Nothing states that warfarin can be given, with caution.", False),
+    ("warfarin", "Insufficient data show that warfarin can be given, with caution.", False),
+    ("warfarin", "I am unsure that warfarin can be given, with caution.", False),
+    ("warfarin", "It seems warfarin can be given, with caution.", False),
+    ("warfarin", "Presumably warfarin can be given, with caution.", False),
+    # The span between the drug name and the modal, which is the one place a hedge can still stand in
+    # front of the call. Every shape below was found by falsifying a claim made for the guard before
+    # it, and together they are what the name-material rule has to reject: subordinating clauses with
+    # and without a comma, an epistemic aside, and a pre-modal adverb. Only the last group needs no
+    # word enumerated to catch it, which is the point of stating the span positively.
+    ("warfarin", "Warfarin if it can be given needs caution.", False),
+    ("warfarin", "Warfarin is a drug that can be given, with caution.", False),
+    ("warfarin", "Warfarin whether or not it can be given needs caution.", False),
+    ("warfarin", "Warfarin, if it can be given, warrants caution.", False),
+    ("warfarin", "Warfarin, whether it can be given, needs caution.", False),
+    ("warfarin", "Warfarin, unable to say, can be given, with caution.", False),
+    ("warfarin", "Warfarin possibly can be given, with caution.", False),
+    ("warfarin", "Warfarin probably can be given, with caution.", False),
+    ("warfarin", "Warfarin 5 mg daily can be given, with one caution.", False),
+    # And the bound on what the span can be asked to catch at all: in the NATURAL adverb position the
+    # hedge breaks `can be given`, which the tail requires contiguous, so it never reaches the span.
+    ("warfarin", "Warfarin can possibly be given, with caution.", False),
+    # The under-count the anchor buys, stated as a case rather than left in the comment: this is a
+    # real caution beside a real permission and it stops counting, because it does not open on the
+    # drug. The safe direction for a gate whose other failure is fail-open.
+    ("ibuprofen", "The patient can be given ibuprofen, with one caution: it interacts with X.", False),
+    # The reason the marker check is scoped to the span before the verb phrase and not past it: `if`
+    # and `not` after the call are the answer's own qualification, not somebody's uncertainty about it.
+    ("warfarin", "Warfarin can be given, with caution if monitored.", True),
+    ("warfarin", "Warfarin can be given, though not without caution.", True),
+    ("sulfamethoxazole-trimethoprim",
+     "Sulfamethoxazole-trimethoprim can be given, with caution: it interacts with warfarin.", True),
+    # The caution requirement, on its own terms. Once the anchor rejects the hedge frames, these two
+    # are all that is left holding it, and the first is the one that matters: a BARE permission is not
+    # the lead the prompt teaches and is much nearer a "Yes", which #107 arm C measured inverting the
+    # call 5/6. The second is the other half of "in the same sentence" — a caution named in the NEXT
+    # one does not count, under-counting being the safe direction here.
+    ("warfarin", "Warfarin can be given.", False),
+    ("warfarin", "Warfarin can be given. One caution: it interacts with simvastatin.", False),
 ]
 
 
 def selftest():
     fixtures = os.path.join(HERE, "fixtures", "probe-safety")
     failures = []
-    for text, want in CAUTION_LEAD_CASES:
-        got = caution_led({"answer": text})
+    for drug, text, want in CAUTION_LEAD_CASES:
+        got = caution_led({"answer": text, "aliases": _aliases(drug)})
         if got != want:
-            failures.append("caution_led(%r) = %s, want %s" % (text[:60], got, want))
+            failures.append("caution_led(%r on drug %r) = %s, want %s"
+                            % (text[:60], drug, got, want))
     print("  ok  %-32s %d case(s)" % ("caution-lead classification", len(CAUTION_LEAD_CASES))
           if not failures else "  FAIL caution-lead classification")
     # A selftest that checks nothing is the fault this selftest exists for. Every fixture directory

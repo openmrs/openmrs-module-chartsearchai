@@ -283,6 +283,13 @@ public class LlmProviderTest {
 		// mutation: with the chain ending at durian, moving the lychee block after the banana
 		// abstention — leaving a VERDICT as the last thing the few-shot shows, which is the
 		// arrangement this ordering exists to prevent — left every test that reads the prompt green.
+		//
+		// This chain is the ONLY thing here that knows about that demonstration; its record shape,
+		// rating, lead and citations are asserted in SafetyVerdictSeverityGradationTest, beside the
+		// caution rule they belong to. So a THIRD demonstration needs assertions in whichever class
+		// owns its rule as well as an entry in this chain — the citation half of the durian block
+		// below did not travel to the lychee one for exactly that reason, and shipped unguarded until
+		// review mutated it away and found all 1300 tests still green.
 		int lychee = prompt.indexOf("Is it safe to deliver lychees?");
 		int focusHint = prompt.indexOf(LlmProvider.FOCUS_HINT_LABEL);
 		assertTrue(mango > 0 && durian > mango && lychee > durian && focusHint > lychee,

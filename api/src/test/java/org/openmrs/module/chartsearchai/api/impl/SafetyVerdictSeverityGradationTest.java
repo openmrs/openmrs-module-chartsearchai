@@ -145,6 +145,15 @@ public class SafetyVerdictSeverityGradationTest {
 						+ "demonstration teaches a record shape the model never sees: " + findingLine);
 		assertTrue(prompt.contains("\"answer\": \"Lychee can be delivered, with one caution:"),
 				"the demonstrated answer must lead with the qualified call");
+		// The half LlmProviderTest pins for the WITHHOLDING demonstration and that did not come across
+		// to this one. Found by mutation: replacing the lychee answer with "in store, a Minor problem.",
+		// "citations": [] left all 1300 tests green, so the few-shot could go on demonstrating a verdict
+		// that cites nothing while every prompt-reading case stayed green — the fabricated-verdict shape
+		// #126 records the eval gate cannot see, taught by example. Same gap as
+		// theWithholdingClassIsDemonstratedOnItsOwnRecordLineToo below, one demonstration over.
+		assertTrue(prompt.contains("a Minor problem [5].\", \"citations\": [2, 5]}"),
+				"the demonstrated answer must carry the finding's own severity and cite BOTH the "
+						+ "finding and the record it rests on");
 		assertFalse(prompt.contains("\"answer\": \"No — lychee"),
 				"and must not refuse on a finding that withholds nothing");
 	}

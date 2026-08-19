@@ -598,10 +598,23 @@ public class DrugSafetyValidator {
 	 * <p>Measured over the shipped knowledge base through the production predicates (the real
 	 * {@link DdiDrugReferenceSource#parse}, {@link DrugReference#atcSubgroups()},
 	 * {@link DrugReferenceService#lookupByToken}): <b>108 of the 24,690</b> Minor-rated interaction
-	 * ROWS pair two drugs sharing a level-4 ATC subgroup, i.e. 54 unordered pairs held from both
-	 * sides. Both numbers carry their counting base deliberately — quoting either without one is the
-	 * defect #261 exists to stop, and 54 alone reads as a row count here. So this is a shape the data
-	 * really carries rather than a constructed one.
+	 * ROWS pair two drugs sharing a level-4 ATC subgroup. So this is a shape the data really carries
+	 * rather than a constructed one. The count carries its base deliberately — quoting one without it
+	 * is the defect #261 exists to stop — and the ROW is the unit the fold turns on, because a chip is
+	 * raised per subject so either orientation can fold.
+	 *
+	 * <p><b>Do not restate that as a pair count by halving it.</b> This javadoc said "i.e. 54 unordered
+	 * pairs held from both sides" and review measured that wrong: through the same three predicates the
+	 * 108 rows are <b>56</b> unordered pairs of display names (44 by {@link DrugReference#substanceGroupKey()},
+	 * 60 keyed on the raw entry-name/token strings), and they are not two rows each — 32 pairs
+	 * contribute 2 rows, 18 contribute 1, 2 contribute 3 and 4 contribute 5, so 18 of the 56 are held
+	 * from ONE side only. The multiplicity is the multi-row families this class's identity rules exist
+	 * for: {@code Amphotericin B} has three presentation rows beside the plain one, so
+	 * {@code Amphotericin B | Clotrimazole} contributes five rows while
+	 * {@code Amphotericin B (liposomal) | Clotrimazole} contributes one, because clotrimazole's own row
+	 * names the token {@code amphotericin b} and {@link DrugReferenceService#lookupByToken} answers with
+	 * the plain row. 54 was 108/2 rather than a second measurement, which is why it reconciled with
+	 * nothing.
 	 */
 	static boolean licensesWithholding(SafetyWarning finding) {
 		return ratingLicensesWithholding(finding.getSeverity()) || finding.carriesUnratedRelationship();

@@ -290,7 +290,9 @@ tokens moving 7605 → 7687. Gate = `capture_probe_safety.sh` 20 cells/arm, plus
   that partner had been truncated 300 entries earlier.
 
 **Instrument gap this exposed (the third in this probe's history).** `score_probe_safety.py`
-counts YES and NO identically in `verdict_led`, so arm C's clinically inverted "Yes" scored as
+counted YES and NO identically in `verdict_led` (as of 2026-07-30; it now splits them, and since #283
+counts a third class — see the note under the verdict-lead table above), so arm C's clinically
+inverted "Yes" scored as
 **+1 verdict-led and −1 abstained — an improvement on two columns, exit code 0**. A green gate
 would have shipped it. `score_directness.py` already models "a bare YES with no named record" as
 a safety violation; this probe needs the same split before it gates another answer-shaping change.
@@ -465,13 +467,15 @@ patient-context check. That flag's line now prints the reason as well as the key
 an operator. Re-scoring the arm C capture still reports one inverted `YES` and still exits 3; that is
 asserted, not assumed.
 
-**Fixtures, because four blind spots on record had none.** Each of the five closed faults now has a
-capture directory under `fixtures/probe-safety/`, built from real live captures (see its
-`PROVENANCE.md` for per-file origin, and for the two answer strings that are necessarily
-counterfactual — a blind spot's fixture has to contain the failure the scorer must catch, and the
-shipped build does not emit it). `score_probe_safety.py --selftest` runs the scorer over each as a
-subprocess and asserts **both** the exit code and the reported counts, which also makes these
-numbers reproducible across future edits. Wired into CI (`.github/workflows/build.yml`,
+**Fixtures, because four blind spots on record had none.** The faults recorded below have capture
+directories under `fixtures/probe-safety/`, built from real live captures (see its `PROVENANCE.md` for
+per-file origin and for which answer strings are necessarily counterfactual — a blind spot's fixture
+has to contain the failure the scorer must catch, and the shipped build does not emit it).
+`score_probe_safety.py --selftest` runs the scorer over each as a subprocess and asserts **both** the
+exit code and the reported counts, which also makes these numbers reproducible across future edits —
+and it refuses to run if any directory there is asserted by no case, which is the only count worth
+carrying here. This paragraph used to carry two ("five closed faults", "two answer strings"); both
+went stale the next time a fault was added, which is the same defect PROVENANCE's own header had. Wired into CI (`.github/workflows/build.yml`,
 `harness-selftests`) alongside the three pre-existing `--selftest` entry points, which nothing ran
 either.
 

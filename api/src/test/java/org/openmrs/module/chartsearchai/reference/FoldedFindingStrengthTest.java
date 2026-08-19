@@ -41,13 +41,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><b>Not hypothetical.</b> Measured over the shipped knowledge base through the production
  * predicates — the real {@link DdiDrugReferenceSource#parse}, {@link DrugReference#atcSubgroups()} for
  * the subgroup test and {@link DrugReferenceService#lookupByToken} for the partner — <b>108 of the
- * 24,690</b> Minor-rated interactions the parsed model carries pair two drugs whose subgroups
- * intersect. That is 54 unordered pairs, each held by both entries; the row count is the honest unit
- * here because a chip is raised per subject, so either orientation can fold. A scan of the raw file
- * said 54 because it counted each pair once, which is the counting-base trap CLAUDE.md records — the
- * two agree only once the unit is stated. The fixture is one of them, sliced verbatim
- * (Methylphenidate × Modafinil, rated Minor, both publishing {@code N06BA} — a subgroup named for a
- * pharmacological action, so the duplicate-therapy claim is licensed rather than vetoed by #183's bar).
+ * 24,690</b> Minor-rated interaction ROWS the parsed model carries pair two drugs whose subgroups
+ * intersect. The ROW is the honest unit here because a chip is raised per subject, so either
+ * orientation can fold. The fixture is one of them, sliced verbatim (Methylphenidate × Modafinil,
+ * rated Minor, both publishing {@code N06BA} — a subgroup named for a pharmacological action, so the
+ * duplicate-therapy claim is licensed rather than vetoed by #183's bar).
+ *
+ * <p>This javadoc said "54 unordered pairs, each held by both entries", and review measured that
+ * wrong — see {@code DrugSafetyValidator.licensesWithholding} for the full breakdown. Through the
+ * same three predicates the 108 rows are <b>56</b> unordered display-name pairs, 18 of them held from
+ * one side only, with multiplicities of 1, 2, 3 and 5 from the multi-row families. 54 was 108/2 and
+ * not a second count, so the reconciliation with a raw-file scan that this paragraph claimed never
+ * existed. The fixture pair itself is one of the 32 symmetric ones.
  */
 public class FoldedFindingStrengthTest {
 

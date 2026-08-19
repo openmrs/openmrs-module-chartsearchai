@@ -78,6 +78,37 @@ public class SafetyVerdictSeverityGradationTest {
 						+ "model has to infer the mapping from severity to strength itself");
 	}
 
+	/** The part of a strength clause that NAMES the strength — the sentence without its
+	 *  "This finding is …" frame and its full stop, i.e. what the rule below has to quote back. The
+	 *  frame is asserted rather than assumed, so rewording the constant's SHAPE fails here and says
+	 *  so instead of silently making the check vacuous. */
+	private static String clauseCore(String clause) {
+		String sentence = clause.trim();
+		String frame = "This finding is ";
+		assertTrue(sentence.startsWith(frame) && sentence.endsWith("."),
+				"the strength clause must still read \"" + frame + "…\" for this check to mean "
+						+ "anything; it was: " + sentence);
+		return sentence.substring(frame.length(), sentence.length() - 1);
+	}
+
+	@Test
+	public void theRuleNamesTheClauseTheRecordActuallyCarries() {
+		String paragraph = safetyParagraph();
+
+		// DERIVED from the constants, and that is the whole point of this case. The two assertions in
+		// bothStrengthClassesAreTaughtInTheWordsTheInjectedRecordUses are literals, which is right —
+		// they pin what the model reads. But literals on both sides of a coupling are what let the
+		// two halves drift: measured, rewording STRENGTH_WITHHOLD reddens eight cases and every one
+		// of them is repaired by editing a test literal, after which the rule here still names a
+		// phrase no record carries. Same failure LlmProviderTest records for FINDING_PREFIX, and the
+		// demonstrations already avoid it by being built from the constants; the rule cannot be,
+		// because it embeds the phrase in a sentence, so it is checked instead.
+		assertTrue(paragraph.contains(clauseCore(DrugReferenceInjector.STRENGTH_WITHHOLD)),
+				"the withholding branch must name the clause renderFinding appends: " + paragraph);
+		assertTrue(paragraph.contains(clauseCore(DrugReferenceInjector.STRENGTH_CAUTION)),
+				"and so must the caution branch: " + paragraph);
+	}
+
 	@Test
 	public void theCautionBranchLeadsWithNeitherARefusalNorAYes() {
 		String paragraph = safetyParagraph();

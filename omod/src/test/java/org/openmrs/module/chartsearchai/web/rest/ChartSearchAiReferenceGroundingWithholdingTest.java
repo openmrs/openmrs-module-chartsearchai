@@ -142,8 +142,9 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 	public void searchResponse_withholdsTheVerdictFromEveryReferenceGroupCitation() {
 		// The OpenMRS static context is installed HERE rather than in setUp, and torn down whatever
 		// happens, because every other test in this class must keep running with no context at all:
-		// that absence is the only thing enforcing streamAnswer's "free of Context reads" contract
-		// (see RestControllerContext's javadoc).
+		// that absence is what enforces streamAnswer's "free of Context reads" contract on the request
+		// thread, the keep-alive's own thread being covered by a source scan instead (see
+		// RestControllerContext's javadoc).
 		openmrsContext.install();
 		try {
 			Map<String, String> body = new HashMap<String, String>();

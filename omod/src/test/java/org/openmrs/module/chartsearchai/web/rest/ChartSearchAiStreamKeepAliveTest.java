@@ -48,8 +48,11 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
  *
  * <p>One test here is deliberately not behavioural:
  * {@link #theProductionIntervalSitsInsideEveryProxyReadTimeoutTheJavadocNames} reads the production
- * constant reflectively, because the interval every other test passes is a test parameter and no
- * behavioural case can check the shipped one without waiting it out.</p>
+ * constant reflectively, because no behavioural case here can check the shipped interval's VALUE
+ * without waiting it out. The split is whether a case's assertion depends on the interval at all:
+ * the five that do pass their own, and the two that call the five-argument overload therefore run on
+ * the shipped constant, but they assert only on the synchronous first write, which
+ * {@code SseKeepAlive.start} performs before scheduling and which never reads it.</p>
  */
 public class ChartSearchAiStreamKeepAliveTest {
 
@@ -155,6 +158,12 @@ public class ChartSearchAiStreamKeepAliveTest {
 		controller.streamAnswer(gone, patient(), "any allergies?", user(), false, 20L);
 		int settled = gone.sink().size();
 
+		assertTrue(gone.refused >= 1,
+				"a frame must actually have been refused, or this test proves nothing: with nothing "
+						+ "refused streamAnswer RETURNS instead of unwinding, and this case silently "
+						+ "becomes a second copy of noKeepAliveIsWrittenOnceTheAnswerIsFinished, which "
+						+ "covers that path already. Measured: with the refusal removed the omod suite "
+						+ "stays green at 85 of 85");
 		assertTrue(countKeepAlives(gone.text()) >= 2,
 				"the timer must have been running when the disconnect happened, or this test proves "
 						+ "nothing: with only the synchronous comment written there is no schedule left to "
@@ -167,7 +176,19 @@ public class ChartSearchAiStreamKeepAliveTest {
 	}
 
 	/**
-	 * One keep-alive per millisecond against 200 event writes, over a sink that can tear.
+	 * One keep-alive per millisecond against a stream of event writes, over a sink that can tear.
+	 *
+	 * <p>{@link ChattyStub} keeps emitting until the SCHEDULED keep-alives have actually contended,
+	 * rather than emitting a fixed count and hoping. Both directions need that. A machine fast enough
+	 * to finish a fixed loop inside one interval would leave only the synchronous comment written, and
+	 * the {@code contending} canary below would then fail with nothing wrong in the production code;
+	 * and the splice this test exists to catch can only happen while a comment and a frame are in
+	 * flight together, so ending the loop before any scheduled comment lands is also what makes the
+	 * detection miss. Measured: over the fixed 200-write loop this replaced, dropping the keep-alive's
+	 * own lock was caught in 4 of 5 runs and dropping {@code writeSseEvent}'s in 2 of 3; waiting for
+	 * five scheduled comments catches both in 5 of 5, at the same runtime. Five and not two, which was
+	 * also measured: at two the wait is satisfied by the opening pair and the loop stops before the
+	 * contention it exists to create, which left {@code writeSseEvent}'s lock at 2 of 3.</p>
 	 *
 	 * <p>The sink is deliberately not a {@link ByteArrayOutputStream}: every one of its methods is
 	 * synchronized, so a whole {@code write(byte[])} is already atomic there and this hazard cannot
@@ -179,7 +200,8 @@ public class ChartSearchAiStreamKeepAliveTest {
 	@Test
 	public void aKeepAliveNeverSplitsAnEventFrame() {
 		TearingOutputStream tearing = new TearingOutputStream();
-		controller.setChartSearchService(new ChattyStub(200));
+		ChattyStub stub = new ChattyStub(tearing.sink(), 200, 5);
+		controller.setChartSearchService(stub);
 
 		controller.streamAnswer(tearing, patient(), "any allergies?", user(), false, 1L);
 
@@ -191,15 +213,16 @@ public class ChartSearchAiStreamKeepAliveTest {
 						"a token event's payload must survive intact beside a concurrent keep-alive");
 			}
 		}
-		assertEquals(200, tokens,
+		assertEquals(stub.emitted, tokens,
 				"every token event must reach the client exactly once; a comment spliced into a frame "
 						+ "would split it into a malformed pair and change this count");
 		assertEveryFrameIsWellFormed(tearing.text());
 
 		// Counted LAST, and that ordering is load-bearing. countKeepAlives finds comments at line
 		// starts, and a comment spliced into a frame is no longer at one — so with the production lock
-		// dropped this count reads 1, and asserted first it would report a timer that never fired
-		// instead of the splice that actually happened, sending the next reader after the scheduler.
+		// dropped this count is short by however many were spliced, and asserted first it could report
+		// a timer that never fired instead of the splice that actually happened, sending the next
+		// reader after the scheduler.
 		int contending = countKeepAlives(tearing.text());
 		assertTrue(contending >= 2,
 				"a SCHEDULED keep-alive must actually have been written while the events were going out, "
@@ -251,10 +274,12 @@ public class ChartSearchAiStreamKeepAliveTest {
 	}
 
 	/**
-	 * The interval PRODUCTION uses must sit inside the read timeouts this module is deployed behind.
-	 * That is the whole of why the keep-alive works, and nothing else in this class touches it: every
-	 * other test here passes its own interval, precisely so the periodic writes can be observed
-	 * without waiting a production one out. So without this, raising the constant above a proxy window
+	 * The interval PRODUCTION uses must sit inside the read timeouts this module is deployed
+	 * behind. That is the whole of why the keep-alive works, and no behavioural case here can check
+	 * its value: every case whose assertion depends on the interval passes its own, precisely so
+	 * the periodic writes can be observed without waiting a production one out, and the two that
+	 * run on the shipped constant assert only on the synchronous first write, which happens before
+	 * scheduling and never reads it. So without this, raising the constant above a proxy window
 	 * restores the exact defect the class exists to prevent — a long answer cut mid-stream with no
 	 * {@code error} event — and the whole suite stays green while it happens.
 	 *
@@ -376,6 +401,15 @@ public class ChartSearchAiStreamKeepAliveTest {
 
 		private final ByteArrayOutputStream sink = new ByteArrayOutputStream();
 
+		/**
+		 * Read by the test after {@code streamAnswer} returns, so the disconnect can be asserted. Needs
+		 * no synchronization, and for a simpler reason than {@link RefusingSink}'s counters: only event
+		 * frames are refused here and only the calling thread writes those, so this is incremented on
+		 * the test's own thread. That sibling's cross-thread happens-before argument is about its
+		 * counters being touched by the keep-alive thread, which these are not.
+		 */
+		int refused;
+
 		@Override
 		public void write(int b) {
 			sink.write(b);
@@ -384,6 +418,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 		@Override
 		public void write(byte[] frame, int off, int len) throws IOException {
 			if (len > 0 && frame[off] != ':') {
+				refused++;
 				throw new IOException("client gone");
 			}
 			sink.write(frame, off, len);
@@ -512,14 +547,27 @@ public class ChartSearchAiStreamKeepAliveTest {
 			this.minComments = minComments;
 		}
 
+		/** @return everything written to the stream so far, decoded. */
+		final String streamText() {
+			return new String(sink.toByteArray(), StandardCharsets.UTF_8);
+		}
+
+		/**
+		 * @return the keep-alives written so far that still START a line, which is an UNDERCOUNT over a
+		 *         torn stream for the reason {@link #countKeepAlives} gives, so a caller waiting on this
+		 *         needs a bound of its own
+		 */
+		final int commentsWritten() {
+			return countKeepAlives(streamText());
+		}
+
 		/**
 		 * Returns once the sink holds {@code wanted} comments, or after a deadline far longer than any
 		 * healthy timer needs. Never holds the stream's monitor while waiting.
 		 */
 		private void awaitComments(int wanted) {
 			long deadline = System.currentTimeMillis() + 5000L;
-			while (System.currentTimeMillis() < deadline
-					&& countKeepAlives(new String(sink.toByteArray(), StandardCharsets.UTF_8)) < wanted) {
+			while (System.currentTimeMillis() < deadline && commentsWritten() < wanted) {
 				try {
 					Thread.sleep(5L);
 				}
@@ -549,7 +597,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 			if (minComments > 0) {
 				awaitComments(minComments);
 			}
-			writtenAtEntry = new String(sink.toByteArray(), StandardCharsets.UTF_8);
+			writtenAtEntry = streamText();
 			tokenConsumer.accept("Has TB [8].");
 			citationsConsumer.accept(answer().getReferences());
 			return answer();
@@ -560,14 +608,31 @@ public class ChartSearchAiStreamKeepAliveTest {
 		}
 	}
 
-	/** Emits many token events in a tight loop, to contend with the keep-alive thread. */
+	/**
+	 * Emits token events in a tight loop to contend with the keep-alive thread, and keeps emitting past
+	 * {@code minChunks} until {@code wantedComments} scheduled keep-alives have actually been written.
+	 * See {@link #aKeepAliveNeverSplitsAnEventFrame} for why waiting rather than counting matters in
+	 * both directions.
+	 *
+	 * <p>Bounded twice, because with the production lock dropped a spliced comment no longer starts a
+	 * line and {@link #countKeepAlives} therefore undercounts it, so the wait can never be satisfied:
+	 * five times {@code minChunks}, or the same deadline {@code awaitComments} uses. Reaching either
+	 * bound is not failed — the canary reports what actually arrived.</p>
+	 */
 	private static class ChattyStub extends SilentThenAnswerStub {
 
-		private final int chunks;
+		private final int minChunks;
 
-		ChattyStub(int chunks) {
-			super(new ByteArrayOutputStream());
-			this.chunks = chunks;
+		private final int wantedComments;
+
+		/** Token events actually emitted, which the test asserts all arrived intact. */
+		int emitted;
+
+		ChattyStub(ByteArrayOutputStream sink, int minChunks, int wantedComments) {
+			// The real sink, so the inherited commentsWritten() reads the stream this contends on.
+			super(sink);
+			this.minChunks = minChunks;
+			this.wantedComments = wantedComments;
 		}
 
 		@Override
@@ -575,8 +640,16 @@ public class ChartSearchAiStreamKeepAliveTest {
 				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 				Consumer<List<RecordReference>> citationsConsumer,
 				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
-			for (int i = 0; i < chunks; i++) {
+			while (emitted < minChunks) {
 				tokenConsumer.accept("chunk");
+				emitted++;
+			}
+			long deadline = System.currentTimeMillis() + 5000L;
+			int cap = minChunks * 5;
+			while (commentsWritten() < wantedComments && emitted < cap
+					&& System.currentTimeMillis() < deadline) {
+				tokenConsumer.accept("chunk");
+				emitted++;
 			}
 			citationsConsumer.accept(answer().getReferences());
 			return answer();

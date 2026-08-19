@@ -37,12 +37,22 @@ import org.openmrs.api.context.UserContext;
  * run afterwards. What it would cost here is specific — several classes in this package
  * ({@code ChartSearchAiStreamEventOrderTest}, {@code ChartSearchAiReferenceGroupingTest},
  * {@code ChartSearchAiReferenceProvenanceTest}, and the contextless tests of
- * {@code ChartSearchAiReferenceGroundingWithholdingTest}) drive {@code streamAnswer} with NO context
- * at all, and that is the only thing enforcing its "free of {@code Context} reads" contract: a
- * re-added global-property read throws because nothing is installed. A leaked stub answers instead of
- * throwing, and they go green over exactly the drift issue #178 removed. That last class installs
- * this fixture for its one blocking-endpoint test and restores it in a {@code finally} rather than an
- * {@code @AfterEach}, precisely so its own SSE tests keep running contextless.
+ * {@code ChartSearchAiReferenceGroundingWithholdingTest}) drive {@code streamAnswer} with NO
+ * context at all, and on the REQUEST thread that is the only thing enforcing its "free of
+ * {@code Context} reads" contract: a re-added global-property read throws because nothing is
+ * installed. A leaked stub answers instead of throwing, and they go green over exactly the drift
+ * issue #178 removed. That last class installs this fixture for its one blocking-endpoint test and
+ * restores it in a {@code finally} rather than an {@code @AfterEach}, precisely so its own SSE
+ * tests keep running contextless.
+ *
+ * <p>"On the REQUEST thread" is a limit rather than a hedge. It does not reach the SSE keep-alive's
+ * own thread, whose two catches swallow whatever a {@code Context} read throws there. Measured
+ * 2026-08-19: a {@code Context.getAuthenticatedUser()} placed AFTER the write in
+ * {@code SseKeepAlive.write} leaves the whole omod suite green and is caught only by
+ * {@code ChartSearchAiStreamingTest}'s scan for {@code Context.} inside that class, while the same
+ * read placed BEFORE the write reddens six behavioural cases instead, because then no comment is ever
+ * written at all and six cases there assert that one was. So on that thread the source scan is the
+ * enforcement and this absence is not.
  *
  * <p>{@link #restore()} cannot simply put back "nothing", because {@code ServiceContext} has no
  * removal API and its {@code setService} returns silently when handed a null. So when there was no

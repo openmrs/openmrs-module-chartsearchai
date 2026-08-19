@@ -91,6 +91,12 @@ public class ChartSearchAiStreamingTest {
 				"the extracted class body must reach SseKeepAlive.stop, or the region is short and the "
 						+ "assertions below are passing on text they never read — a guard that weakens "
 						+ "in silence is worse than no guard");
+		assertTrue(keepAlive.replaceAll("\\s+", "").contains("synchronized(out){stopped=true;"),
+				"stop() must set the flag INSIDE the out monitor, and volatile is not an alternative: "
+						+ "taking the monitor is also what waits for a keep-alive write already in flight, "
+						+ "which is what lets streamAnswer's final flush run without the lock. Written "
+						+ "outside it the field is a plain race as well, so a task can read a stale false "
+						+ "and write after streamAnswer has returned");
 		assertTrue(keepAlive.contains("if (stopped)"),
 				"stop() setting the flag is worthless unless write() reads it: without the read, a task "
 						+ "parked on the monitor writes after streamAnswer returns, into a response the "
@@ -157,6 +163,26 @@ public class ChartSearchAiStreamingTest {
 				"Patient access check must happen before streaming");
 	}
 
+	/**
+	 * Locates the controller's production source, which every source-scanning assertion in this class
+	 * reads.
+	 *
+	 * <p>A file it cannot find FAILS rather than skips. It skipped until now, through
+	 * {@code Assumptions.assumeTrue}, and that is the same defect as the short-region one above, one
+	 * level further up: measured by pointing the path below at a directory that does not exist, omod
+	 * built GREEN with two tests skipped, so every assertion in this class stopped running and nothing
+	 * said so. Stated as "every" rather than listed, because a list here drifts the moment an
+	 * assertion is added — as it already had.</p>
+	 *
+	 * <p>The skip guarded nothing it could not have failed on instead. omod publishes no test-jar, so
+	 * these tests only ever run against this source tree, and the file goes missing only under a
+	 * working directory or a module layout this resolver has not been taught — worth a red build and a
+	 * message naming both, not a green one. That is the opposite of the endpoint-reachability and
+	 * opt-in-property assumptions elsewhere in the suite, which skip because the thing they need
+	 * genuinely may not exist.</p>
+	 *
+	 * @return the source file, which exists
+	 */
 	private static java.io.File resolveSourceFile() {
 		String sourceFile = "omod/src/main/java/org/openmrs/module/chartsearchai"
 				+ "/web/rest/ChartSearchAiRestController.java";
@@ -164,9 +190,11 @@ public class ChartSearchAiStreamingTest {
 		if (!file.exists()) {
 			file = new java.io.File("../" + sourceFile);
 		}
-		org.junit.jupiter.api.Assumptions.assumeTrue(file.exists(),
-				"Source file not found at " + file.getAbsolutePath()
-				+ " — skipping source-based test");
+		assertTrue(file.exists(),
+				"the controller source must be readable or every guard in this class asserts nothing: "
+						+ "not found at " + file.getAbsolutePath() + ", working directory "
+						+ new java.io.File(".").getAbsolutePath() + " — teach this resolver the layout "
+						+ "rather than letting the guards skip, which is green and silent");
 		return file;
 	}
 }

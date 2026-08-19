@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
@@ -44,6 +45,11 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
  *
  * <p>The keep-alive is an SSE comment (a line opening with {@code :}), which the spec requires
  * clients to ignore, so no client change is needed and no phantom event can reach the UI.</p>
+ *
+ * <p>One test here is deliberately not behavioural:
+ * {@link #theProductionIntervalSitsInsideEveryProxyReadTimeoutTheJavadocNames} reads the production
+ * constant reflectively, because the interval every other test passes is a test parameter and no
+ * behavioural case can check the shipped one without waiting it out.</p>
  */
 public class ChartSearchAiStreamKeepAliveTest {
 
@@ -150,6 +156,18 @@ public class ChartSearchAiStreamKeepAliveTest {
 				"every token event must reach the client exactly once; a comment spliced into a frame "
 						+ "would split it into a malformed pair and change this count");
 		assertEveryFrameIsWellFormed(tearing.text());
+
+		// Counted LAST, and that ordering is load-bearing. countKeepAlives finds comments at line
+		// starts, and a comment spliced into a frame is no longer at one — so with the production lock
+		// dropped this count reads 1, and asserted first it would report a timer that never fired
+		// instead of the splice that actually happened, sending the next reader after the scheduler.
+		int contending = countKeepAlives(tearing.text());
+		assertTrue(contending >= 2,
+				"a SCHEDULED keep-alive must actually have been written while the events were going out, "
+						+ "or this test proves nothing: the synchronous one lands before generation starts "
+						+ "and cannot interleave with anything, so with only that one the assertions above "
+						+ "say no more than that 200 token frames are well formed, which the event-order "
+						+ "tests already cover. Got " + contending);
 	}
 
 	@Test
@@ -191,6 +209,49 @@ public class ChartSearchAiStreamKeepAliveTest {
 						+ "silently unscheduled, which would leave the rest of a long answer with no "
 						+ "keep-alive and nothing in the log to say why. Got "
 						+ countKeepAlives(refusing.text()) + " written");
+	}
+
+	/**
+	 * The interval PRODUCTION uses must sit inside the read timeouts this module is deployed behind.
+	 * That is the whole of why the keep-alive works, and nothing else in this class touches it: every
+	 * other test here passes its own interval, precisely so the periodic writes can be observed
+	 * without waiting a production one out. So without this, raising the constant above a proxy window
+	 * restores the exact defect the class exists to prevent — a long answer cut mid-stream with no
+	 * {@code error} event — and the whole suite stays green while it happens.
+	 *
+	 * <p>The bound asserted is the one {@code KEEP_ALIVE_INTERVAL_MS}' own javadoc states, no
+	 * stricter: smaller than every read-timeout default it names, the tightest of which is nginx's
+	 * {@code proxy_read_timeout} at 60s. Setting it to exactly 60000 fails here, which is the point —
+	 * at an interval equal to the timeout the next write comes due exactly as the proxy gives up, so
+	 * which of the two happens first is a scheduling race rather than a guarantee.</p>
+	 *
+	 * <p>Read by reflection rather than by widening the constant to package-private. A test seam on a
+	 * Spring singleton is what the six-argument {@code streamAnswer} overload exists to avoid, and the
+	 * same reasoning applies to reaching for one here. A rename makes this fail with
+	 * {@link NoSuchFieldException} rather than silently stop checking.</p>
+	 */
+	@Test
+	public void theProductionIntervalSitsInsideEveryProxyReadTimeoutTheJavadocNames() throws Exception {
+		Field field = ChartSearchAiRestController.class.getDeclaredField("KEEP_ALIVE_INTERVAL_MS");
+		field.setAccessible(true);
+		// getLong, not a cast of get(): narrowing the constant to int is a harmless edit that a cast
+		// would redden with a ClassCastException saying nothing about the interval, while getLong
+		// widens and keeps checking the bound. A non-numeric type still fails, loudly.
+		long millis = field.getLong(null);
+
+		assertTrue(millis > 0L,
+				"scheduleWithFixedDelay rejects a non-positive delay with IllegalArgumentException, and "
+						+ "SseKeepAlive.start runs BEFORE streamAnswer's try block, so it escapes the whole "
+						+ "request: no error event, no audit row, and the executor it just created is never "
+						+ "stopped because keepAlive was never assigned for the finally to reach. Measured "
+						+ "by setting the constant to 0. This bound is what keeps that call safe where it "
+						+ "sits, which is why it is asserted and not assumed; got " + millis);
+		assertTrue(millis < 60000L,
+				"the production keep-alive interval must be smaller than every read-timeout default its "
+						+ "own javadoc names — nginx proxy_read_timeout 60s, Cloudflare ~120s — or a "
+						+ "silent gap longer than the timeout reopens and the connection is cut with no "
+						+ "error event, which is the defect measured on the demo 2026-08-19. Got "
+						+ millis + "ms");
 	}
 
 	/**
@@ -309,6 +370,16 @@ public class ChartSearchAiStreamKeepAliveTest {
 		}
 	}
 
+	/**
+	 * Counts keep-alive comments at LINE STARTS, which makes this an UNDERCOUNT over a stream that can
+	 * tear: a comment spliced into the middle of an event frame is no longer at a line start, so a run
+	 * with the production lock dropped counts far fewer than were written — 1 against the ~35 measured
+	 * with the lock in place. That is why {@link #aKeepAliveNeverSplitsAnEventFrame} counts last rather
+	 * than first: asserted first it reports a timer that never fired instead of the splice that did.
+	 * Callers over a whole-frame sink have no such problem.
+	 *
+	 * @return the number of lines in {@code written} that open an SSE comment
+	 */
 	private static int countKeepAlives(String written) {
 		int count = 0;
 		for (String line : written.split("\n")) {

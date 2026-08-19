@@ -38,13 +38,15 @@ Base path: `/ws/rest/v1/chartsearchai`. Every endpoint gates on a privilege up f
 | Method | Path | Privilege | Purpose |
 |---|---|---|---|
 | POST | `/search` | AI Query Patient Data | Blocking answer `{patient, question}` → answer + citations |
-| POST | `/search/stream` | AI Query Patient Data | Same, as Server-Sent Events. Event types, in emission order: `preliminary`, `thinking`, `token`, `references`, `done`, `grounded`, `error`. `grounded` is a *trailing* event after `done` (async grounding only), so a client must keep consuming the stream past `done`. Between events the stream also carries SSE *comments* — lines opening with `:`, written so a reverse proxy never sees a read-idle connection — which a client must skip rather than read as a frame; `EventSource` does that for it |
+| POST | `/search/stream` | AI Query Patient Data | Same, as Server-Sent Events — see the two client obligations below |
 | POST | `/warmup` | AI Query Patient Data | Fire-and-forget per-patient KV prewarm on chart open (202) |
 | **POST** | **`/prewarm`** | **Manage AI Prewarm** | **Bulk KV-prewarm bootstrap (202 + status)** |
 | **GET** | **`/prewarmstatus`** | **Manage AI Prewarm** | **Bulk-prewarm progress/status** |
 | GET | `/auditlog` | View AI Audit Logs | Query the AI audit log |
 | POST | `/feedback` | AI Query Patient Data | Submit thumbs-up/down on an answer |
 | GET | `/drugreferencestatus` | Get Global Properties | Which drug-reference dataset is actually loaded |
+
+**Writing a `/search/stream` client.** Events arrive in this order: `preliminary`, `thinking`, `token`, `references`, `done`, `grounded`, `error`. Two obligations, and a client that misses either is broken in a way the server cannot detect. `grounded` is a *trailing* event after `done` (async grounding only), so keep consuming the stream past `done` rather than treating it as terminal. And between events the stream carries SSE *comments* — lines opening with `:`, written so a reverse proxy never sees a read-idle connection — which must be skipped rather than read as a frame; `EventSource` does that for you. README's [Streaming search (SSE)](README.md#streaming-search-sse) section has each event's payload and the proxy read timeouts behind the comments.
 
 ### KV warmup & the prewarm bootstrap
 

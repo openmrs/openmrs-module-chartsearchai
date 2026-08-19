@@ -112,7 +112,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 		assertTrue(written >= 3,
 				"the silence must carry several keep-alives, not just the opening one: a proxy's read "
 						+ "timeout restarts on every byte, so one early byte does not save a prefill that "
-						+ "outlasts the timeout — E4B's was ~194s against a ~120s window. Got " + written
+						+ "outlasts the timeout, as E4B's did on the demo. Got " + written
 						+ " in " + quoted(stub.writtenAtEntry));
 	}
 

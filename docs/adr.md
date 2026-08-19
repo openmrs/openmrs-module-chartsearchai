@@ -932,7 +932,7 @@ Embedding computation is faster (~50–200ms per patient) so the embedding lock 
 
 - **Answer cache** (`chartsearchai.cacheTtlMinutes`): Identical (patient, question) pairs return cached results without acquiring the LLM lock.
 - **Rate limiter** (`chartsearchai.rateLimitPerMinute`): Limits per-user query frequency, reducing queue depth.
-- **Configurable timeout**: Prevents requests from waiting indefinitely.
+- **Configurable timeout** (`chartsearchai.llm.timeoutSeconds`): Caps how long one request can wait for the inference server's first output while holding the lock, so a call that stalls before producing anything cannot block the queue indefinitely. It does not bound the queue wait itself, or the generation that follows that first output (see point 3 above).
 
 ### Future options (not yet implemented)
 

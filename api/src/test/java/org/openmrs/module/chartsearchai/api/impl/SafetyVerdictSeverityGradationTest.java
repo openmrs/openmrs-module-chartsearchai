@@ -165,6 +165,19 @@ public class SafetyVerdictSeverityGradationTest {
 				"the two demonstrations must not teach the same strength: " + findingLine);
 	}
 
+	/** How the caution clause NAMES its class, i.e. {@code clauseCore(STRENGTH_CAUTION)} up to the
+	 *  comma that turns into the negation of the other one. Derived rather than written out for the
+	 *  reason {@link #theRuleNamesTheClauseTheRecordActuallyCarries} gives, and the comma is asserted
+	 *  so a reworded constant fails here instead of making the check vacuous. */
+	private static String cautionClass() {
+		String core = clauseCore(DrugReferenceInjector.STRENGTH_CAUTION);
+		int comma = core.indexOf(',');
+		assertTrue(comma > 0,
+				"the caution clause must still name its class before negating the other, for this "
+						+ "check to mean anything; its core was: " + core);
+		return core.substring(0, comma);
+	}
+
 	/**
 	 * Two findings about ONE drug can state different strengths, and the answer has one lead.
 	 *
@@ -180,15 +193,16 @@ public class SafetyVerdictSeverityGradationTest {
 	 * sort (the question-pair arm sorts on {@code PAIR_SEVERITY_DESCENDING} and the screen on
 	 * {@code SCREENED_PAIR_SEVERITY_DESCENDING}; {@code addInteractionWarnings} does not), and 10 of
 	 * that fixture's 16 entries produce an interleaved mix when the patient is on the rest, caution
-	 * before withhold in every one. So without a rule the Major refusal can open on the caution
-	 * branch's own wording — and {@code warfarin × aspirin} is the case issue #283 names as the one
-	 * this arm exists for.
+	 * before withhold in every one. So both antecedents were true with nothing ranking them, on the
+	 * {@code warfarin × aspirin} pair issue #283 names as the one this arm exists for. What that
+	 * produced on a server was not measured, and this case does not assert it — what is checked is
+	 * the reachability above and the paragraph's silence, which is the gap.
 	 *
 	 * <p>Keyed on the clause the RECORD carries rather than on a severity word, so the withholding
 	 * half is derived from the constant here for the reason
-	 * {@link #theRuleNamesTheClauseTheRecordActuallyCarries} gives. Note what this does NOT assert:
-	 * that the model obeys it. Every clause assertion in {@code SafetyFindingSeverityStrengthTest} is
-	 * per finding, so a set was pinned by nothing at all before this case.
+	 * {@link #theRuleNamesTheClauseTheRecordActuallyCarries} gives. Every clause assertion in
+	 * {@code SafetyFindingSeverityStrengthTest} is per finding, so a set was pinned by nothing at all
+	 * before this case.
 	 */
 	@Test
 	public void aSetOfFindingsStatingDifferentStrengthsIsLedByTheStrongest() {
@@ -210,6 +224,17 @@ public class SafetyVerdictSeverityGradationTest {
 		assertTrue(sentence.contains(clauseCore(DrugReferenceInjector.STRENGTH_WITHHOLD)),
 				"and keyed on the clause the record actually carries rather than on a severity word: "
 						+ sentence);
+		// BOTH sides named in the ranking, and this is not symmetry for its own sake. The phrase the
+		// withholding clause names its class with, "a reason to withhold it", occurs inside the
+		// CAUTION clause as well, negated ("…is a caution to note, NOT a reason to withhold it") —
+		// the two clauses are not substrings of one another, the shared phrase is. So a rule whose
+		// antecedent is that bare phrase is satisfied by a caution read shallowly, and the only thing
+		// separating them would be the "different strengths" half of the sentence. Naming the loser
+		// puts the discrimination inside the clause that does the ranking, which is what the two
+		// branches above already do.
+		assertTrue(sentence.contains(cautionClass()),
+				"the ranking must name what the withholding finding outranks, or its antecedent is a "
+						+ "phrase the caution clause also contains: " + sentence);
 		assertTrue(sentence.contains("\"No\""),
 				"the strongest of the two is the withholding one, so the lead it governs is the "
 						+ "refusal: " + sentence);

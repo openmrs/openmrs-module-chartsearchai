@@ -193,8 +193,11 @@ public class SafetyFindingSeverityStrengthTest {
 	 * javadoc used to claim it was.</b> That case iterates the findings ONE fixed arrangement produced,
 	 * and no arrangement of {@code injectRecords} can produce an overdose finding, so it can never
 	 * observe the type it was named as the guard for. It stays where it is for the property it does
-	 * hold. What is still uncovered, stated rather than left to be discovered: a caller that renders
-	 * findings after an answer exists is a NEW path, and neither case runs it.
+	 * hold. Measured by mutation rather than argued: with {@code preAnswerFindings} validating against
+	 * a stated dose instead of the empty string, THIS case reddens and names the clause-less record
+	 * ("The stated Amoxicillin dose ~4000 mg/day exceeds …") while that one stays green. What is still
+	 * uncovered, stated rather than left to be discovered: a caller that renders findings after an
+	 * answer exists is a NEW path, and neither case runs it.
 	 *
 	 * <p>The non-vacuity is carried by the precondition rather than by the property. Asserting that no
 	 * overdose record is injected would pass on an arrangement that could not raise one anyway, which

@@ -122,14 +122,26 @@ ABSTAINED = re.compile(
 #
 # The caution requirement alone still admitted a hedge that happens to name one in the same sentence
 # ("It is unclear whether warfarin can be given, so caution is advised"), found by re-reading the
-# fix rather than by a capture, so the lead also rejects a window carrying a subordinating hedge.
-# The list is the discriminating markers of the shapes seen, not an attempt at every hedge in
-# English: bare \bnot\b and \bif\b are deliberately NOT in it, because a real lead can carry them
-# ("Warfarin can be given, though not without caution") and every hedge above is already caught by
-# one of the six. A shape that evades all of this is a new case here, not a widening of the list.
+# fix rather than by a capture, so the SPAN BEFORE the verb phrase must also carry no hedge marker.
+# That scoping is the load-bearing half. A first attempt excluded markers anywhere in the 40-character
+# window, which reaches past "can be given" into the caution's own prose, and there the affordable
+# list shrinks: \bif\b had to come out because "Warfarin can be given, with caution if monitored"
+# carries it, which then let "It is not known if warfarin can be given, so caution applies" through.
+# Confined to the prefix, a subordinating marker means exactly what it is being tested for — that
+# "can be given" is a subordinate clause of somebody's uncertainty rather than the answer's own call —
+# so `if` and `not known` are back and cost nothing after the verb.
+#
+# The markers are the ones the shapes seen actually turn on, not an attempt at every hedge in English.
+# Bare \bnot\b is not among them because no shape found needs it — every hedge in CAUTION_LEAD_CASES
+# is caught by another marker — and whether a real lead's PREFIX could carry one was not established
+# either way, so it is left out rather than added on a guess. (The positive that carries "not",
+# "Warfarin can be given, though not without caution", carries it AFTER the verb phrase, so it says
+# nothing about the prefix.) A shape that evades all of this is a new case in CAUTION_LEAD_CASES, not
+# a wider list — the list growing per counterexample is how a regex ends up matching nothing anybody
+# wrote.
 CAUTION_LED = re.compile(
-    r"^\W*(?![^.!?]{0,40}?\b(whether|unclear|unknown|cannot|can't|unable)\b)"
-    r"[^.!?]{0,40}?\bcan be (given|taken|delivered|started|used|prescribed|administered)\b"
+    r"^\W*(?:(?!\b(whether|if|unclear|unknown|not\s+known|cannot|can't|unable)\b)[^.!?]){0,40}?"
+    r"\bcan be (given|taken|delivered|started|used|prescribed|administered)\b"
     r"[^.!?]*?\bcautions?\b",
     re.I,
 )
@@ -230,6 +242,11 @@ def abstained(cell):
 
 def caution_led(cell):
     """The #283 caution lead: the drug can be given, and the caution is named in the same sentence.
+
+    Both halves are required, and the span BEFORE the verb phrase must carry no subordinating hedge —
+    a hedge can name a caution itself ("It is unclear whether warfarin can be given, so caution is
+    advised"), which the caution requirement alone admitted. See CAUTION_LED for the markers and for
+    why the scoping to the prefix rather than to the whole window is the load-bearing half.
 
     A refinement of NONE rather than a competitor to YES/NO, so `classify`'s precedence is untouched
     and "Yes, ibuprofen can be given" still classifies YES and still trips `inverted_yes`.
@@ -583,11 +600,14 @@ def _collapse(text):
 # The caution lead's own cases, in the shape score_directness.selftest uses for classify, and here
 # for the reason that one is there: the two fixture arms exercise CAUTION_LED only in the POSITIVE
 # direction, so the failure the regex's comment is written against — a hedge that happens to fit the
-# window reading as a caution verdict — is pinned by nothing without these. The negatives are where
+# prefix reading as a caution verdict — is pinned by nothing without these. The negatives are where
 # the work is: a "Yes" that must stay a YES so inverted_yes still fires on it, an occurrence past the
-# first clause, and the five that reach neither classify nor ABSTAINED and were counted verdict-led
-# until CAUTION_LED required the caution too. None of the five came from a capture — four are review's
-# and the fifth works the sentence boundary — so no fixture arm pins any of them; keep them here.
+# first clause, and the hedges that reach neither classify nor ABSTAINED and were counted verdict-led
+# until CAUTION_LED required the caution and then the clean prefix. None of them came from a capture:
+# four are review's, the rest work the sentence and prefix boundaries, and no fixture arm pins any of
+# them. The `if` pair is the one to keep together — "it is not known IF … can be given, so caution
+# applies" against "can be given, with caution IF monitored" — since only prefix scoping separates
+# them, and either alone would pass under one of the two versions this went through.
 CAUTION_LEAD_CASES = [
     ("Ibuprofen can be given, with one caution: it interacts with X.", True),
     ("Warfarin can be given, with one caution: Warfarin interacts with active order Simvastatin.", True),
@@ -599,7 +619,7 @@ CAUTION_LEAD_CASES = [
     ("It cannot be determined whether ibuprofen can be given.", False),
     ("The patient has several readings; ibuprofen can be given later.", False),
     ("", False),
-    # The four hedges the 40-character window alone let through, each landing in neither of the two
+    # The four hedges the bare 40-character prefix let through, each landing in neither of the two
     # nets that were supposed to hold them: classify's NO wants "the records|patient|chart … no|not"
     # at the lead, its CANNOT is anchored at the string start (so "I cannot determine" misses), and
     # ABSTAINED wants "not documented" at the start too. Every prefix here fits inside 40 characters,
@@ -612,10 +632,15 @@ CAUTION_LEAD_CASES = [
     ("It is not documented whether ibuprofen can be given.", False),
     ("I cannot determine whether warfarin can be given.", False),
     # The three the caution requirement alone did not reach: a hedge that names a caution in the same
-    # sentence, which is why the lead ALSO rejects a subordinating hedge in its window.
+    # sentence, which is why the lead ALSO requires a prefix free of subordinating hedges.
     ("It is unclear whether warfarin can be given, so caution is advised.", False),
     ("I cannot determine whether warfarin can be given, though caution would apply.", False),
     ("Whether ibuprofen can be given is unclear; caution applies.", False),
+    ("It is not known if warfarin can be given, so caution applies.", False),
+    # The reason the hedge check is scoped to the PREFIX and not to the whole window: `if` after the
+    # verb phrase is the answer's own qualification, not somebody's uncertainty about it.
+    ("Warfarin can be given, with caution if monitored.", True),
+    ("Sulfamethoxazole-trimethoprim can be given, with caution: it interacts with warfarin.", True),
     # And the other half of "in the same sentence": a caution named in the NEXT one is not the lead
     # the prompt teaches, so it does not count. Under-counting is the safe direction here.
     ("Warfarin can be given. One caution: it interacts with simvastatin.", False),

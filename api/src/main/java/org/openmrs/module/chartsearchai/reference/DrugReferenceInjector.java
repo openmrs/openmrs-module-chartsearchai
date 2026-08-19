@@ -989,7 +989,12 @@ public class DrugReferenceInjector {
 	 * here. The CONCLUSION is not, and this javadoc claimed it was until review read the case:
 	 * {@code everyInjectedFindingStatesOneOfTheTwoStrengths} iterates the findings ONE fixed arrangement
 	 * produced, no arrangement of {@link #injectRecords} produces an overdose finding, so it can never
-	 * observe the type it was named as the guard for. A caller that renders findings after an answer
+	 * observe the type it was named as the guard for. Measured by mutation rather than argued: with
+	 * {@link #preAnswerFindings} validating against a stated dose instead of the empty string, the
+	 * premise case reddens and names the record that would reach the model ("The stated Amoxicillin
+	 * dose ~4000 mg/day exceeds …", no clause on it) while
+	 * {@code everyInjectedFindingStatesOneOfTheTwoStrengths} stays green. A caller that renders
+	 * findings after an answer
 	 * exists is a new path neither case runs; it writes its own clause with no test to lean on.
 	 *
 	 * <p>The interaction split is {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)},

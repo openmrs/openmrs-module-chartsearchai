@@ -272,9 +272,10 @@ public class LlmProviderTest {
 				+ "record it rests on. A demonstrated verdict with no citation behind it is exactly "
 				+ "the fabricated-verdict shape the eval gate cannot see (#126), taught by example");
 		// Both branches must stay reachable. #107's abstention is the direction that trades a
-		// missing verdict for a fabricated one, which is the worse defect, so the addressed-case
+		// missing verdict for a fabricated one, which is the worse defect, so EVERY addressed-case
 		// demonstration must sit AFTER the mango abstention and BEFORE the focus-hint banana
-		// abstention — it must not displace either.
+		// abstention — none of them may displace either. There are two since issue #283, which is
+		// why the chain below names both rather than only the first.
 		int mango = prompt.indexOf("Is it safe to deliver mangoes?");
 		int durian = prompt.indexOf("Is it safe to deliver durian?");
 		// The caution demonstration of issue #283 is a SECOND verdict demonstration, so the same

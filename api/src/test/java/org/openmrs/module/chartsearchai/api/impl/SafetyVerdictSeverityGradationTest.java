@@ -164,4 +164,54 @@ public class SafetyVerdictSeverityGradationTest {
 		assertFalse(findingLine.contains("caution to note"),
 				"the two demonstrations must not teach the same strength: " + findingLine);
 	}
+
+	/**
+	 * Two findings about ONE drug can state different strengths, and the answer has one lead.
+	 *
+	 * <p><b>Reachable, measured through the real pipeline rather than argued.</b> Driving the real
+	 * {@code DrugReferenceInjector.injectRecords} over the DDInter sample fixture, a patient on
+	 * Warfarin and Aspirin asked <em>"Is it safe to give methotrexate?"</em> is handed two findings:
+	 * the Minor warfarin pair stating {@code STRENGTH_CAUTION} and the <b>Major</b> aspirin pair
+	 * stating {@code STRENGTH_WITHHOLD}. Both antecedents above are then true at once, where the
+	 * single unconditional claim they replaced had nothing to resolve.
+	 *
+	 * <p>The caution is listed FIRST there, and that is not an ordering accident to lean on: the
+	 * drug-in-play arm emits one finding per partner in the entry's own rule order with no severity
+	 * sort (the question-pair arm sorts on {@code PAIR_SEVERITY_DESCENDING} and the screen on
+	 * {@code SCREENED_PAIR_SEVERITY_DESCENDING}; {@code addInteractionWarnings} does not), and 10 of
+	 * that fixture's 16 entries produce an interleaved mix when the patient is on the rest, caution
+	 * before withhold in every one. So without a rule the Major refusal can open on the caution
+	 * branch's own wording — and {@code warfarin × aspirin} is the case issue #283 names as the one
+	 * this arm exists for.
+	 *
+	 * <p>Keyed on the clause the RECORD carries rather than on a severity word, so the withholding
+	 * half is derived from the constant here for the reason
+	 * {@link #theRuleNamesTheClauseTheRecordActuallyCarries} gives. Note what this does NOT assert:
+	 * that the model obeys it. Every clause assertion in {@code SafetyFindingSeverityStrengthTest} is
+	 * per finding, so a set was pinned by nothing at all before this case.
+	 */
+	@Test
+	public void aSetOfFindingsStatingDifferentStrengthsIsLedByTheStrongest() {
+		String paragraph = safetyParagraph();
+		int at = paragraph.indexOf("the strongest governs");
+		assertTrue(at > 0,
+				"the paragraph must decide the lead where a set of findings states BOTH strengths: "
+						+ "both antecedents are true and only one lead can be taken: " + paragraph);
+
+		// The sentence carrying the rule, not the paragraph — the two branch sentences above already
+		// name both clauses, so a paragraph-wide check would pass on them alone.
+		int start = paragraph.lastIndexOf(". ", at);
+		int end = paragraph.indexOf(". ", at);
+		String sentence = paragraph.substring(start < 0 ? 0 : start + 2,
+				end < 0 ? paragraph.length() : end);
+		assertTrue(sentence.contains("more than one finding"),
+				"the rule has to be about a SET, not a reworded restatement of the single-finding "
+						+ "branches above it: " + sentence);
+		assertTrue(sentence.contains(clauseCore(DrugReferenceInjector.STRENGTH_WITHHOLD)),
+				"and keyed on the clause the record actually carries rather than on a severity word: "
+						+ sentence);
+		assertTrue(sentence.contains("\"No\""),
+				"the strongest of the two is the withholding one, so the lead it governs is the "
+						+ "refusal: " + sentence);
+	}
 }

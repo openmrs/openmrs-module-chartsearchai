@@ -9,9 +9,11 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -49,8 +51,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * states the property; the other cases pin it one rating and one finding type at a time, the
  * {@code moderate} one being the BOUNDARY itself — a sweep found every rating either side of it
  * covered and the line between them free to move. An OVERDOSE finding is the one that wants neither
- * clause and cannot reach the renderer at all today, which is why that property is also what reddens
- * if a caller ever makes it reachable.
+ * clause, and it is the PREMISE of its unreachability that is pinned rather than the conclusion — see
+ * {@link #theTypeThatStatesNeitherClauseCannotReachTheRendererBeforeThereIsAnAnswer}, which also says
+ * what remains uncovered. This javadoc claimed the property case reddens when a caller makes the arm
+ * reachable; review found that wrong by reading the case, since it can only see the findings its own
+ * arrangement produces and no arrangement of {@code injectRecords} produces an overdose one.
  *
  * <p>Every case here drives the real {@link DrugReferenceInjector#injectRecords} over a real dataset
  * parsed by the production parser, and asserts on the record text the model is actually handed.
@@ -171,6 +176,66 @@ public class SafetyFindingSeverityStrengthTest {
 						+ "the one that flipped: " + finding);
 		assertFalse(finding.contains(CAUTION),
 				"a recorded allergy is never a caution: " + finding);
+	}
+
+	/**
+	 * The PREMISE the empty default rests on, pinned: the one finding type that states neither clause
+	 * cannot reach {@link DrugReferenceInjector#renderFinding} before an answer exists.
+	 *
+	 * <p>An OVERDOSE finding wants neither clause as written, being a reason to change the DOSE, which
+	 * withholding overstates and a caution understates, so {@code strengthClause} leaves it the empty
+	 * default. That is only safe while the arm cannot fire: {@code preAnswerFindings} validates with an
+	 * EMPTY answer and the dose arm parses a stated dose out of the answer. This case asserts that,
+	 * both ways round, so it reddens the moment the dose arm becomes reachable before an answer and a
+	 * finding stating neither clause reaches the model.
+	 *
+	 * <p><b>Which is not what {@link #everyInjectedFindingStatesOneOfTheTwoStrengths} does, and the
+	 * javadoc used to claim it was.</b> That case iterates the findings ONE fixed arrangement produced,
+	 * and no arrangement of {@code injectRecords} can produce an overdose finding, so it can never
+	 * observe the type it was named as the guard for. It stays where it is for the property it does
+	 * hold. What is still uncovered, stated rather than left to be discovered: a caller that renders
+	 * findings after an answer exists is a NEW path, and neither case runs it.
+	 *
+	 * <p>The non-vacuity is carried by the precondition rather than by the property. Asserting that no
+	 * overdose record is injected would pass on an arrangement that could not raise one anyway, which
+	 * is the fault {@code SubjectMatterScopedContraindicationTest} records of its own first version, so
+	 * the same arrangement is first shown to raise exactly one through the real {@code validate}.
+	 */
+	@Test
+	public void theTypeThatStatesNeitherClauseCannotReachTheRendererBeforeThereIsAnAnswer()
+			throws Exception {
+		// The curated schema is the only one carrying ageBands, so the dose arm needs this fixture
+		// rather than either DDInter service above; the arrangement is OverdoseSubstanceCollapseTest's,
+		// which is where the 4000 mg/day against a published 3000 mg/day ceiling comes from.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.fixtureEntries(
+						"chartsearchai-test/drug-reference-substance-dosing-rows.json"));
+		PatientClinicalContext context =
+				DrugReferenceTestSupport.ctx(30, 70.0, null, null, null, null);
+		String question = "what dose of amoxicillin?";
+
+		List<SafetyWarning> withAnswer = DrugReferenceTestSupport.validator(service)
+				.validate("Give amoxicillin 2000 mg twice daily.", question, context);
+		assertEquals(1, withAnswer.size(),
+				"precondition: WITH an answer stating the dose this arrangement must raise exactly "
+						+ "one warning, or the property below passes on nothing: " + withAnswer);
+		assertEquals(SafetyWarning.TYPE_OVERDOSE, withAnswer.get(0).getType(),
+				"and it must be the overdose one, the type that states neither clause: " + withAnswer);
+
+		List<RecordMapping> injected = DrugReferenceTestSupport.injectedFindings(
+				DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+						DrugReferenceTestSupport.oneRecordChart(), context, question));
+		List<String> overdose = new ArrayList<String>();
+		for (RecordMapping finding : injected) {
+			if (finding.getResourceUuid().startsWith(SafetyWarning.TYPE_OVERDOSE + ":")) {
+				overdose.add(finding.getText());
+			}
+		}
+		assertTrue(overdose.isEmpty(),
+				"the injection path validates with an EMPTY answer, so the dose arm cannot fire and "
+						+ "the empty strength clause is unreachable. A finding here would reach the "
+						+ "model stating neither clause, and the prompt's two branches are keyed on "
+						+ "those sentences: " + overdose);
 	}
 
 	@Test

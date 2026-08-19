@@ -980,8 +980,17 @@ public class DrugReferenceInjector {
 	 * understates. It therefore falls to the empty default here, and that default is now a defect
 	 * waiting on a caller rather than a safe fallback: whoever renders findings after an answer exists
 	 * must give the type its own clause in the same change.
-	 * {@code SafetyFindingSeverityStrengthTest.everyInjectedFindingStatesOneOfTheTwoStrengths} is what
-	 * fails when one does not.
+	 *
+	 * <p><b>What guards that, and what does not.</b> The PREMISE is pinned:
+	 * {@code SafetyFindingSeverityStrengthTest
+	 * .theTypeThatStatesNeitherClauseCannotReachTheRendererBeforeThereIsAnAnswer} drives an arrangement
+	 * that DOES raise an overdose warning through the real {@code validate} given an answer, and asserts
+	 * the pre-answer path raises none — so it reddens the moment the dose arm becomes reachable from
+	 * here. The CONCLUSION is not, and this javadoc claimed it was until review read the case:
+	 * {@code everyInjectedFindingStatesOneOfTheTwoStrengths} iterates the findings ONE fixed arrangement
+	 * produced, no arrangement of {@link #injectRecords} produces an overdose finding, so it can never
+	 * observe the type it was named as the guard for. A caller that renders findings after an answer
+	 * exists is a new path neither case runs; it writes its own clause with no test to lean on.
 	 *
 	 * <p>The interaction split is {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)},
 	 * never a local reading of the rating, and never {@code ratingLicensesWithholding} underneath it:

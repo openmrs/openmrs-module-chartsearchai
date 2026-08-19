@@ -105,8 +105,23 @@ ABSTAINED = re.compile(
 # "the records do not address whether ibuprofen can be given" would read as a caution verdict. The
 # {0,40} span mirrors NO's own, and is what a drug name plus a parenthetical costs
 # ("Rifampicin (rifampin) can be given" is 22).
+#
+# BOTH halves of the lead are required, and the window alone was not enough. The prompt teaches the
+# whole shape — "open by stating that the drug can be given, and name the caution in the same
+# sentence so it is never dropped" — and matching only the first half let a hedge that happened to
+# fit 40 characters score as a verdict: "It is unclear whether warfarin can be given", "I cannot
+# determine whether warfarin can be given" and two more now pinned in CAUTION_LEAD_CASES, none of
+# which classify or ABSTAINED catch either. `unsupported_caution` does not cover them, because it
+# fires only where the deterministic layer raised nothing, so on a cell that DOES carry a finding
+# the hedge scored as the win — the #107 hedge credited by the instrument built to count it.
+# Requiring \bcautions?\b later in the SAME sentence costs no fixture (both arms here say "with one
+# caution") and rejects every one of them, since none names a caution. Plural because a mixed set of
+# findings can carry more than one. The trade-off is deliberate: "Warfarin can be given, but monitor
+# INR" stops counting, and under-counting a verdict lead is the safe direction for a gate whose
+# failure in the other direction is fail-open.
 CAUTION_LED = re.compile(
-    r"^\W*[^.!?]{0,40}?\bcan be (given|taken|delivered|started|used|prescribed|administered)\b",
+    r"^\W*[^.!?]{0,40}?\bcan be (given|taken|delivered|started|used|prescribed|administered)\b"
+    r"[^.!?]*?\bcautions?\b",
     re.I,
 )
 
@@ -558,20 +573,38 @@ def _collapse(text):
 
 # The caution lead's own cases, in the shape score_directness.selftest uses for classify, and here
 # for the reason that one is there: the two fixture arms exercise CAUTION_LED only in the POSITIVE
-# direction, so the failure the regex's comment is written against — "the records do not address
-# whether ibuprofen can be given" reading as a caution verdict — is pinned by nothing without these.
-# The last three are the ones that matter: a hedge whose lead is a genuine abstention, a "Yes" that
-# must stay a YES so inverted_yes still fires on it, and an occurrence past the first clause.
+# direction, so the failure the regex's comment is written against — a hedge that happens to fit the
+# window reading as a caution verdict — is pinned by nothing without these. The negatives are where
+# the work is: a "Yes" that must stay a YES so inverted_yes still fires on it, an occurrence past the
+# first clause, and the five that reach neither classify nor ABSTAINED and were counted verdict-led
+# until CAUTION_LED required the caution too. None of the five came from a capture — four are review's
+# and the fifth works the sentence boundary — so no fixture arm pins any of them; keep them here.
 CAUTION_LEAD_CASES = [
     ("Ibuprofen can be given, with one caution: it interacts with X.", True),
     ("Warfarin can be given, with one caution: Warfarin interacts with active order Simvastatin.", True),
     ("Rifampicin (rifampin) can be given, with one caution: it interacts with lidocaine.", True),
+    ("Methotrexate can be given, with two cautions: it interacts with warfarin and with aspirin.", True),
     ("The records do not address whether ibuprofen can be given.", False),
     ("Yes, ibuprofen can be given.", False),
     ("No — ibuprofen should not be given.", False),
     ("It cannot be determined whether ibuprofen can be given.", False),
     ("The patient has several readings; ibuprofen can be given later.", False),
     ("", False),
+    # The four hedges the 40-character window alone let through, each landing in neither of the two
+    # nets that were supposed to hold them: classify's NO wants "the records|patient|chart … no|not"
+    # at the lead, its CANNOT is anchored at the string start (so "I cannot determine" misses), and
+    # ABSTAINED wants "not documented" at the start too. Every prefix here fits inside 40 characters,
+    # so nothing else was in the way, and `unsupported_caution` does not cover them either — it fires
+    # only where the deterministic layer raised nothing, so on a cell that DOES carry a finding the
+    # hedge scored as the verdict-led win. That is the #107 hedge credited by the instrument built to
+    # count it. They are the reason CAUTION_LED also requires the caution to be named.
+    ("It is unclear whether warfarin can be given.", False),
+    ("Whether ibuprofen can be given is not documented.", False),
+    ("It is not documented whether ibuprofen can be given.", False),
+    ("I cannot determine whether warfarin can be given.", False),
+    # And the other half of "in the same sentence": a caution named in the NEXT one is not the lead
+    # the prompt teaches, so it does not count. Under-counting is the safe direction here.
+    ("Warfarin can be given. One caution: it interacts with simvastatin.", False),
 ]
 
 

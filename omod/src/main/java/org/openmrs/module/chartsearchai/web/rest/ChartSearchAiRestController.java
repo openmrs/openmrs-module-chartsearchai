@@ -395,12 +395,12 @@ public class ChartSearchAiRestController {
 	 * </ul>
 	 *
 	 * <p>Between those events the stream also carries SSE <em>comments</em> — lines opening with
-	 * {@code :}, one written before generation begins and one every
-	 * {@code KEEP_ALIVE_INTERVAL_MS} until the answer is finished. They are not events and carry no
-	 * data, so a client must skip any line beginning with {@code :} rather than read it as a frame;
-	 * {@code EventSource} does that for it. Their only job is to stop a reverse proxy closing a
-	 * connection it has read nothing on; README's Streaming search (SSE) section and
-	 * {@code docs/adr.md} carry the read timeouts behind them.</p>
+	 * {@code :}, one written before generation begins and one every {@code KEEP_ALIVE_INTERVAL_MS}
+	 * until the answer is finished. They are not events and carry no data, so a client must skip any
+	 * line beginning with {@code :} rather than read it as a frame; {@code EventSource} does that for
+	 * it. Their only job is to stop a reverse proxy closing a connection it has read nothing on;
+	 * README's Streaming search (SSE) section carries the read timeouts and the demo measurements
+	 * behind them.</p>
 	 */
 	@RequestMapping(value = "/search/stream", method = RequestMethod.POST)
 	public void searchStream(@RequestBody Map<String, String> body,

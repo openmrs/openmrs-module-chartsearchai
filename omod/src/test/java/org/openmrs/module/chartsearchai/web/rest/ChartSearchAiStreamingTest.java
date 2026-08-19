@@ -27,6 +27,12 @@ import org.junit.jupiter.api.Test;
  * states and enforces that scope. Letting that timer in added a second thing to guard, so the same
  * method also pins the mechanism that keeps its writes inside the request: the stop flag must be
  * read, not merely set.</p>
+ *
+ * <p>Threads and auth state are not the whole of it, and saying so is the point: this is the only
+ * test class that reads the controller's own SOURCE, so it is also where the keep-alive's
+ * source-level facts live: that the production entry point passes the interval CONSTANT, and that
+ * the timer is scheduled at a fixed DELAY. Neither is about threads, and a javadoc naming only
+ * threads and auth sends the next reader looking elsewhere for them.</p>
  */
 public class ChartSearchAiStreamingTest {
 
@@ -61,10 +67,11 @@ public class ChartSearchAiStreamingTest {
 	 * bytes, with no error event and no audit row: silent, and indistinguishable from a hung origin.
 	 * Cloudflare cuts at ~120s, stock nginx at 60s.</p>
 	 *
-	 * <p>So the scope is now stated instead of assumed: every thread this controller creates must be
-	 * the keep-alive's, {@code SseKeepAlive} must not touch {@code Context}, and its {@code write}
-	 * must READ the stop flag that {@code stop} sets. A thread that does OpenMRS work still fails
-	 * here, which is what the original assertion was protecting.</p>
+	 * <p>So the scope is now stated instead of assumed: a thread must be created here at all, every
+	 * thread this controller creates must be the keep-alive's, {@code SseKeepAlive} must not touch
+	 * {@code Context}, and its {@code write} must READ the stop flag that {@code stop} sets. A thread
+	 * that does OpenMRS work still fails here, which is what the original assertion was
+	 * protecting.</p>
 	 *
 	 * <p>The stop-flag assertion is a text check rather than a behavioural one because the property
 	 * cannot be reddened behaviourally: with the read gone, a task parked on the {@code out} monitor
@@ -79,6 +86,14 @@ public class ChartSearchAiStreamingTest {
 	public void streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads() throws Exception {
 		String source = controllerSource();
 
+		assertTrue(source.contains("new Thread("),
+				"the keep-alive's thread must be created HERE, in the controller, or the loop below "
+						+ "iterates nothing and passes: an empty scan is indistinguishable from a "
+						+ "compliant one. Extracting the thread factory to a shared helper is the "
+						+ "refactor that does this — the module hand-rolls the same daemon factory in "
+						+ "LocalLlmEngine and PrewarmRefreshExecutor, so it looks like obvious reuse — "
+						+ "and it would leave the next background thread added to this controller "
+						+ "unguarded while the suite stayed green");
 		for (int at = source.indexOf("new Thread("); at >= 0; at = source.indexOf("new Thread(", at + 1)) {
 			String creation = source.substring(at, Math.min(source.length(), at + 120));
 			assertTrue(creation.contains("\"chartsearchai-sse-keepalive\""),
@@ -190,10 +205,9 @@ public class ChartSearchAiStreamingTest {
 	/**
 	 * The keep-alive must be scheduled at a fixed DELAY, not a fixed rate.
 	 *
-	 * <p>The third of the three mechanisms the keep-alive's correctness rests on, and the only one
-	 * nothing held. Swapping {@code scheduleWithFixedDelay} for {@code scheduleAtFixedRate} left every
-	 * other test in the module green (83 of 83, measured before this one existed), while dropping the
-	 * {@code out} monitor reddens
+	 * <p>Nothing held this one. Swapping {@code scheduleWithFixedDelay} for
+	 * {@code scheduleAtFixedRate} left every other test in the module green (83 of 83, measured before
+	 * this one existed), while dropping the {@code out} monitor reddens
 	 * {@code ChartSearchAiStreamKeepAliveTest.aKeepAliveNeverSplitsAnEventFrame} and dropping the
 	 * stop-flag read reddens {@link #streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads()}.
 	 * The two schedule methods read as interchangeable, which is what makes the swap a plausible

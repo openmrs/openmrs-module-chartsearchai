@@ -838,7 +838,7 @@ Returns a `text/event-stream`. The event names are literals at the `writeSseEven
 - `grounded` — a *trailing* event after `done`, only under async grounding, carrying the verdicts
 - `error` — an error message if something goes wrong
 
-A client must therefore keep reading past `done`, and must not assume `done` is terminal.
+A client must therefore keep reading past `done`, and must not assume `done` is terminal. It must also skip any line beginning with `:` rather than read it as a frame: between events the stream carries SSE *comments* — one before generation begins and one every 15 s until the answer is finished — so a reverse proxy never sees a read-idle connection through the silent pre-answer wait, which on a CPU-only server is most of the request. They are not events and carry no data, and skipping them falls to whatever parser the client uses: `EventSource` would do it, but it issues a GET and sends no body, so it cannot reach this POST endpoint. README's [Streaming search (SSE)](../README.md#streaming-search-sse) section carries the proxy timeout numbers and the demo measurements behind them.
 
 Both search endpoints return a `questionId` (the audit log row ID as a string) that the frontend uses to submit user feedback.
 
@@ -923,9 +923,9 @@ When multiple users submit queries simultaneously to the local engine, requests 
 
 1. The first request acquires the engine lock and begins inference.
 2. Subsequent requests queue on the `synchronized` block and wait.
-3. Each request times out after `chartsearchai.llm.timeoutSeconds` (default 300s).
+3. `chartsearchai.llm.timeoutSeconds` (default 300s) does not bound that wait. It is a JDK `HttpRequest.timeout()` on the call to the inference server, so it does not start until a request already holds the lock, and it stops applying the moment that server's response headers arrive. On the streaming endpoint those arrive with the first token, so it bounds the prefill and leaves the queueing and the answer's own generation uncapped. Measured 2026-08-20 — README's [Streaming search (SSE)](../README.md#streaming-search-sse) keep-alive paragraph carries the figures.
 
-With an 8B model on CPU, a single query typically takes 15–45 seconds. This means roughly **2–3 concurrent users** can be served before requests start timing out. Smaller models (3B) are faster but produce lower quality responses; larger models (12B) have slower inference and reduce concurrency further.
+With an 8B model on CPU, a single query typically takes 15–45 seconds, so roughly **2–3 concurrent users** can be served before the queue wait is longer than a clinician will sit through. What happens then differs by endpoint, and only since the SSE keep-alive: `/search/stream` starts writing comment frames before it calls the service, so a request still queueing on the engine lock is not read-idle and nothing cuts it off — it waits. A blocking `/search` queued that long writes nothing and is still cut by the proxy's read timeout. Smaller models (3B) are faster but produce lower quality responses; larger models (12B) have slower inference and reduce concurrency further.
 
 Embedding computation is faster (~50–200ms per patient) so the embedding lock is rarely a bottleneck. The remote engine has no client-side serialisation — concurrency limits are whatever the remote server (vLLM, Ollama, OpenAI) imposes.
 
@@ -933,7 +933,7 @@ Embedding computation is faster (~50–200ms per patient) so the embedding lock 
 
 - **Answer cache** (`chartsearchai.cacheTtlMinutes`): Identical (patient, question) pairs return cached results without acquiring the LLM lock.
 - **Rate limiter** (`chartsearchai.rateLimitPerMinute`): Limits per-user query frequency, reducing queue depth.
-- **Configurable timeout**: Prevents requests from waiting indefinitely.
+- **Configurable timeout** (`chartsearchai.llm.timeoutSeconds`): Caps how long one request can wait for the inference server's first output while holding the lock, so a call that stalls before producing anything cannot block the queue indefinitely. It does not bound the queue wait itself, or the generation that follows that first output (see point 3 above).
 
 ### Future options (not yet implemented)
 

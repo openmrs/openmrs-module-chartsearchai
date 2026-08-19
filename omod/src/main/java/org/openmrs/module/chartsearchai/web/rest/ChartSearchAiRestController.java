@@ -653,14 +653,14 @@ public class ChartSearchAiRestController {
 		finally {
 			// Every exit stops the timer, including a client disconnect, which unwinds through the
 			// catch above rather than returning — the case ChartSearchAiStreamKeepAliveTest's
-			// aClientDisconnectStopsTheTimerToo holds, since the happy-path test beside it cannot tell
-			// this finally from a statement at the tail of the try block and stayed green when the two
-			// were swapped. Once stop() returns, no keep-alive can be in flight
-			// or begin (see SseKeepAlive.stop) — which is what lets the flush below take no lock.
-			// A comment can still land after the terminal event, because a task parked on the monitor
-			// during the final write may take it before stop() does. That is harmless: a comment
-			// carries no data, and with async grounding a client already has to keep reading past
-			// done. What must not happen is a write after this method returns, which is the window
+			// aClientDisconnectStopsTheTimerToo holds, since the happy-path test beside it cannot
+			// tell this finally from a statement at the tail of the try block and stayed green when
+			// the two were swapped. Once stop() returns, no keep-alive can be in flight or begin (see
+			// SseKeepAlive.stop) — which is what lets the flush below take no lock. A comment can
+			// still land after the terminal event, because a task parked on the monitor during the
+			// final write may take it before stop() does. That is harmless: a comment carries no
+			// data, and with async grounding a client already has to keep reading past done. What
+			// must not happen is a write after this method returns, which is the window
 			// SseKeepAlive's stopped flag closes — shutdownNow alone cannot, since interrupting a
 			// thread parked on a monitor does nothing.
 			keepAlive.stop();

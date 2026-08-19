@@ -74,7 +74,12 @@ public class ChartSearchAiStreamingTest {
 					"the only thread this controller may create is the SSE keep-alive's, because "
 							+ "OpenMRS authentication is bound to the request thread; found: " + creation);
 		}
-		assertTrue(!nestedClassBody(source, "SseKeepAlive").contains("Context."),
+		String keepAlive = nestedClassBody(source, "SseKeepAlive");
+		assertTrue(keepAlive.contains("stopped = true"),
+				"the extracted class body must reach SseKeepAlive.stop, or the region is short and the "
+						+ "Context assertion below is passing on text it never read — a guard that weakens "
+						+ "in silence is worse than no guard");
+		assertTrue(!keepAlive.contains("Context."),
 				"the keep-alive thread must write bytes and nothing else — reading Context off it is "
 						+ "exactly the unsafe sharing this test exists to prevent");
 

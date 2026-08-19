@@ -639,9 +639,14 @@ public class ChartSearchAiRestController {
 		}
 		finally {
 			// Every exit stops the timer, including a client disconnect, which unwinds through the
-			// catch above rather than returning. Once this returns no keep-alive can still be in
-			// flight (see SseKeepAlive.stop), so nothing can be appended after the terminal event
-			// and the flush below needs no lock of its own.
+			// catch above rather than returning. Once stop() returns, no keep-alive can be in flight
+			// or begin (see SseKeepAlive.stop) — which is what lets the flush below take no lock.
+			// A comment can still land after the terminal event, because a task parked on the monitor
+			// during the final write may take it before stop() does. That is harmless: a comment
+			// carries no data, and with async grounding a client already has to keep reading past
+			// done. What must not happen is a write after this method returns, which is the window
+			// SseKeepAlive's stopped flag closes — shutdownNow alone cannot, since interrupting a
+			// thread parked on a monitor does nothing.
 			keepAlive.stop();
 		}
 
@@ -1201,10 +1206,10 @@ public class ChartSearchAiRestController {
 	 * The keep-alive for one streaming response: one comment written immediately, the rest on a
 	 * daemon timer, and a {@link #stop()} that a write already in flight cannot race.
 	 *
-	 * <p>One timer per response rather than one shared by the module: a single shared thread would
-	 * let one request's blocked write stall every other request's keep-alive, which is the failure
-	 * this class exists to prevent. The cost is bounded by
-	 * {@code chartsearchai.rateLimitPerMinute}.</p>
+	 * <p>One timer per response rather than one shared by the module: a single shared thread would let
+	 * one request's blocked write stall every other request's keep-alive, which is the failure this
+	 * class exists to prevent. The cost is one daemon thread per in-flight streaming response, each
+	 * writing 14 bytes every {@link #KEEP_ALIVE_INTERVAL_MS}.</p>
 	 */
 	private static final class SseKeepAlive {
 

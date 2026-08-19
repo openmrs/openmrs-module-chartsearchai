@@ -203,11 +203,6 @@ public class ChartSearchAiStreamKeepAliveTest {
 	 * keep-alive's alike — happens inside the {@code OutputStream} monitor, and {@code stop()} takes
 	 * that same monitor before returning, which is the happens-before edge.</p>
 	 *
-	 * @param runtimeFailure throw an unchecked exception rather than an {@link IOException}, to reach
-	 *        the other of the two catches in {@code SseKeepAlive.write}
-	 * @param refuseFrom index of the first comment frame to refuse, counting from the synchronous one
-	 *        at 0, so a test can choose whether the synchronous or a scheduled write is the one denied
-	 * @param refuseCount how many comment frames to refuse from that index on
 	 */
 	private static final class RefusingSink extends OutputStream {
 
@@ -223,6 +218,13 @@ public class ChartSearchAiStreamKeepAliveTest {
 
 		int refused;
 
+		/**
+		 * @param runtimeFailure throw an unchecked exception rather than an {@link IOException}, to
+		 *        reach the other of the two catches in {@code SseKeepAlive.write}
+		 * @param refuseFrom index of the first comment frame to refuse, counting the synchronous one as
+		 *        0, so a test can choose whether the synchronous or a scheduled write is the one denied
+		 * @param refuseCount how many comment frames to refuse from that index on
+		 */
 		RefusingSink(boolean runtimeFailure, int refuseFrom, int refuseCount) {
 			this.runtimeFailure = runtimeFailure;
 			this.refuseFrom = refuseFrom;
@@ -359,8 +361,10 @@ public class ChartSearchAiStreamKeepAliveTest {
 			this.minComments = minComments;
 		}
 
-		/** @return once the sink holds {@code wanted} comments, or after a deadline far longer than any
-		 *          healthy timer needs. Never holds the stream's monitor while waiting. */
+		/**
+		 * Returns once the sink holds {@code wanted} comments, or after a deadline far longer than any
+		 * healthy timer needs. Never holds the stream's monitor while waiting.
+		 */
 		private void awaitComments(int wanted) {
 			long deadline = System.currentTimeMillis() + 5000L;
 			while (System.currentTimeMillis() < deadline

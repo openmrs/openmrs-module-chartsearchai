@@ -652,7 +652,10 @@ public class ChartSearchAiRestController {
 		}
 		finally {
 			// Every exit stops the timer, including a client disconnect, which unwinds through the
-			// catch above rather than returning. Once stop() returns, no keep-alive can be in flight
+			// catch above rather than returning — the case ChartSearchAiStreamKeepAliveTest's
+			// aClientDisconnectStopsTheTimerToo holds, since the happy-path test beside it cannot tell
+			// this finally from a statement at the tail of the try block and stayed green when the two
+			// were swapped. Once stop() returns, no keep-alive can be in flight
 			// or begin (see SseKeepAlive.stop) — which is what lets the flush below take no lock.
 			// A comment can still land after the terminal event, because a task parked on the monitor
 			// during the final write may take it before stop() does. That is harmless: a comment
@@ -1290,7 +1293,7 @@ public class ChartSearchAiRestController {
 				// scheduleWithFixedDelay silently unschedules a task that throws — the documented
 				// behaviour of both periodic schedule methods — so without this the rest of a long
 				// answer would run with no keep-alive and nothing to say why.
-				log.warn("SSE keep-alive failed; the stream continues without one", e);
+				log.warn("SSE keep-alive failed; the schedule continues", e);
 			}
 		}
 

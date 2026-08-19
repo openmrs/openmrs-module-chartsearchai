@@ -128,6 +128,45 @@ public class ChartSearchAiStreamKeepAliveTest {
 	}
 
 	/**
+	 * The exit that is NOT a return: a client that has gone away unwinds through
+	 * {@code streamAnswer}'s catch, and the timer has to be stopped there too.
+	 *
+	 * <p>{@link #noKeepAliveIsWrittenOnceTheAnswerIsFinished} above covers only the happy path, where
+	 * the tail of the try block runs anyway, so it cannot tell a {@code finally} from a statement at
+	 * that tail. Every other exit leaves through a catch instead, and that is most of them: a
+	 * disconnect, a chart too large, a misconfiguration, an LLM timeout. Measured before this test
+	 * existed — moving {@code keepAlive.stop()} out of the {@code finally} into the tail of the try
+	 * block left every other test in the module green, 84 of 84.</p>
+	 *
+	 * <p>What that costs: the request never reaches {@code stop()}, so {@code stopped} stays false and
+	 * {@code shutdownNow} is never called either, and one daemon thread per disconnected request goes
+	 * on writing every interval for the life of the JVM. Both catches in {@code SseKeepAlive.write}
+	 * keep it alive through whatever the recycled response throws at it, and in the case that actually
+	 * hurts the write SUCCEEDS instead of throwing, putting 14 bytes into whichever request owns that
+	 * stream object next.</p>
+	 */
+	@Test
+	public void aClientDisconnectStopsTheTimerToo() throws Exception {
+		DisconnectedClientSink gone = new DisconnectedClientSink();
+		// Waits for the keep-alives it asserts on rather than a fixed span, for the reason
+		// SilentThenAnswerStub.awaitingComments gives.
+		controller.setChartSearchService(SilentThenAnswerStub.awaitingComments(gone.sink(), 2));
+
+		controller.streamAnswer(gone, patient(), "any allergies?", user(), false, 20L);
+		int settled = gone.sink().size();
+
+		assertTrue(countKeepAlives(gone.text()) >= 2,
+				"the timer must have been running when the disconnect happened, or this test proves "
+						+ "nothing: with only the synchronous comment written there is no schedule left to "
+						+ "leak. Got " + countKeepAlives(gone.text()));
+		Thread.sleep(200L); // ten intervals; a timer still running would have written several times
+		assertEquals(settled, gone.sink().size(),
+				"a client disconnect leaves through a catch, not a return, so only a finally stops the "
+						+ "timer: unstopped it writes into a response the container has already recycled "
+						+ "for someone else, and shutdownNow cannot reach a task parked on the monitor");
+	}
+
+	/**
 	 * One keep-alive per millisecond against 200 event writes, over a sink that can tear.
 	 *
 	 * <p>The sink is deliberately not a {@link ByteArrayOutputStream}: every one of its methods is
@@ -309,6 +348,42 @@ public class ChartSearchAiStreamKeepAliveTest {
 				if (runtimeFailure) {
 					throw new IllegalStateException("response already recycled");
 				}
+				throw new IOException("client gone");
+			}
+			sink.write(frame, off, len);
+		}
+
+		ByteArrayOutputStream sink() {
+			return sink;
+		}
+
+		String text() {
+			return new String(sink.toByteArray(), StandardCharsets.UTF_8);
+		}
+	}
+
+	/**
+	 * A client that has gone away: the inverse of {@link RefusingSink}, in that the ANSWER's frames are
+	 * the ones refused, so the generation loop unwinds through {@code writeSseEventOrThrow} exactly as a
+	 * mid-stream disconnect does. Comment frames still land, which is what lets
+	 * {@link #aClientDisconnectStopsTheTimerToo} see whether the timer kept writing after the unwind.
+	 *
+	 * <p>An event frame is recognised by NOT opening with the {@code :} of an SSE comment, rather than by
+	 * matching {@code event:}, so a future frame shape the controller writes is refused too instead of
+	 * quietly turning this test green.</p>
+	 */
+	private static final class DisconnectedClientSink extends OutputStream {
+
+		private final ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+		@Override
+		public void write(int b) {
+			sink.write(b);
+		}
+
+		@Override
+		public void write(byte[] frame, int off, int len) throws IOException {
+			if (len > 0 && frame[off] != ':') {
 				throw new IOException("client gone");
 			}
 			sink.write(frame, off, len);

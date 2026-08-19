@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.web.rest;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -68,10 +69,19 @@ public class ChartSearchAiStreamingTest {
 	 * Cloudflare cuts at ~120s, stock nginx at 60s.</p>
 	 *
 	 * <p>So the scope is now stated instead of assumed: a thread must be created here at all, every
-	 * thread this controller creates must be the keep-alive's, {@code SseKeepAlive} must not touch
-	 * {@code Context}, and its {@code write} must READ the stop flag that {@code stop} sets. A thread
-	 * that does OpenMRS work still fails here, which is what the original assertion was
-	 * protecting.</p>
+	 * {@code new Thread(} and every {@code Executors} call in this controller must be the keep-alive's,
+	 * {@code SseKeepAlive} must not touch {@code Context}, and its {@code write} must READ the stop
+	 * flag that {@code stop} sets. A thread created either of those two ways and doing OpenMRS work
+	 * fails here, which is what the original assertion was protecting.</p>
+	 *
+	 * <p>Those two spellings are named rather than "every thread this controller creates" because they
+	 * are what the scan actually reaches. The {@code Executors} half was itself missing until a
+	 * factory-less {@code Executors.newSingleThreadExecutor} in this class running
+	 * {@code Context.getAuthenticatedUser} was measured passing the whole suite: the default thread
+	 * factory writes no {@code new Thread(} for the loop to find. A thread can still arrive by a route
+	 * neither spelling reaches ({@code new Timer()}, {@code CompletableFuture.runAsync}, a
+	 * Spring-managed pool), and stating that is the point — a guard whose message claims more than it
+	 * checks is the same silent weakening as a region that reads short.</p>
 	 *
 	 * <p>The stop-flag assertion is a text check rather than a behavioural one because the property
 	 * cannot be reddened behaviourally: with the read gone, a task parked on the {@code out} monitor
@@ -116,6 +126,17 @@ public class ChartSearchAiStreamingTest {
 						+ "parked on the monitor writes after streamAnswer returns, into a response the "
 						+ "container may already have recycled, and shutdownNow cannot stop it because a "
 						+ "thread blocked entering a synchronized block ignores interrupt");
+		assertEquals(occurrences(keepAlive, "Executors."), occurrences(source, "Executors."),
+				"every executor this controller creates must be the keep-alive's own: the default "
+						+ "thread factory writes no `new Thread(` for the loop above to find, so a pool "
+						+ "built outside SseKeepAlive is a background thread with nothing at all "
+						+ "guarding it. Measured before this assertion existed: an "
+						+ "Executors.newSingleThreadExecutor in this class running "
+						+ "Context.getAuthenticatedUser left the whole module green at 84 of 84. "
+						+ "This assertion needs no region canary of its own — a short region drops the "
+						+ "keep-alive's own call, the two counts stop matching, and it fails rather "
+						+ "than passes. It matches call sites, so a mention of Executors in prose "
+						+ "outside the class reddens it too; that is the safe direction");
 		assertTrue(!keepAlive.contains("Context."),
 				"the keep-alive thread must write bytes and nothing else — reading Context off it is "
 						+ "exactly the unsafe sharing this test exists to prevent");
@@ -126,6 +147,17 @@ public class ChartSearchAiStreamingTest {
 				"Streaming must not use proxy privileges");
 		assertTrue(!source.contains("setUserContext"),
 				"Must not share UserContext across threads");
+	}
+
+	/**
+	 * @return how many times {@code needle} occurs in {@code haystack}, counting overlaps
+	 */
+	private static int occurrences(String haystack, String needle) {
+		int count = 0;
+		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
+			count++;
+		}
+		return count;
 	}
 
 	/**

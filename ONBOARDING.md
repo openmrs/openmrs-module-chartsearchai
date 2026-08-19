@@ -38,7 +38,7 @@ Base path: `/ws/rest/v1/chartsearchai`. Every endpoint gates on a privilege up f
 | Method | Path | Privilege | Purpose |
 |---|---|---|---|
 | POST | `/search` | AI Query Patient Data | Blocking answer `{patient, question}` → answer + citations |
-| POST | `/search/stream` | AI Query Patient Data | Same, as Server-Sent Events. Event types, in emission order: `preliminary`, `thinking`, `token`, `references`, `done`, `grounded`, `error`. `grounded` is a *trailing* event after `done` (async grounding only), so a client must keep consuming the stream past `done` |
+| POST | `/search/stream` | AI Query Patient Data | Same, as Server-Sent Events. Event types, in emission order: `preliminary`, `thinking`, `token`, `references`, `done`, `grounded`, `error`. `grounded` is a *trailing* event after `done` (async grounding only), so a client must keep consuming the stream past `done`. Between events the stream also carries SSE *comments* — lines opening with `:`, written so a reverse proxy never sees a read-idle connection — which a client must skip rather than read as a frame; `EventSource` does that for it |
 | POST | `/warmup` | AI Query Patient Data | Fire-and-forget per-patient KV prewarm on chart open (202) |
 | **POST** | **`/prewarm`** | **Manage AI Prewarm** | **Bulk KV-prewarm bootstrap (202 + status)** |
 | **GET** | **`/prewarmstatus`** | **Manage AI Prewarm** | **Bulk-prewarm progress/status** |

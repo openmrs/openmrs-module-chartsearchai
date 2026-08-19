@@ -27,7 +27,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * (issue #283).
  *
  * <p><b>Why this needs a context.</b> {@code unknown} is the one rating on the caution side of
- * {@link DrugSafetyValidator#licensesWithholding} that the SHIPPED configuration can never show: the
+ * {@link DrugSafetyValidator#ratingLicensesWithholding(String)} that the SHIPPED configuration can never show: the
  * default {@code chartsearchai.drugSafety.minInteractionSeverity} is {@code minor}, so an
  * Unknown-rated row raises no chip and therefore renders no finding. It becomes reachable exactly
  * where the property's own documentation points an operator — lowering the floor to audit what the

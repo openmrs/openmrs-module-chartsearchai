@@ -155,9 +155,11 @@ public class SafetyWarning {
 	 * all. Not serialized onto the REST response; the wire shape is unchanged.
 	 *
 	 * <p>Since issue #283 this value has a second reader, and it decides more than an order:
-	 * {@code DrugSafetyValidator.licensesWithholding} splits it into "a reason to withhold" and "a
-	 * caution to note", and {@code DrugReferenceInjector.renderFinding} states that answer in the
-	 * record the model reads — so how strongly a safety answer opens now rests on this field. The null
+	 * {@code DrugSafetyValidator.ratingLicensesWithholding} splits it into "a reason to withhold" and
+	 * "a caution to note", {@code licensesWithholding(SafetyWarning)} composes that with
+	 * {@link #carriesUnratedRelationship()} for the whole finding, and
+	 * {@code DrugReferenceInjector.renderFinding} states the answer in the record the model reads — so
+	 * how strongly a safety answer opens now rests on this field. The null
 	 * rule above is what carries the most weight there: unrated is not low-rated, and reading it as a
 	 * caution would soften a curated rule an implementation authored deliberately.
 	 */

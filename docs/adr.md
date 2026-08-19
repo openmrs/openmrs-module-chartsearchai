@@ -2337,7 +2337,7 @@ It was also never the severity that decided the strength — the wording was. Th
 
 | | |
 |---|---|
-| `DrugSafetyValidator.licensesWithholding(severity)` | the one definition of the split: `minor` and `unknown` are cautions, `moderate` and `major` withhold, and **unrated withholds** |
+| `DrugSafetyValidator.licensesWithholding(SafetyWarning)` (over the rating-only `ratingLicensesWithholding`) | the one definition of the split: `minor` and `unknown` are cautions, `moderate` and `major` withhold, and **unrated withholds** |
 | `DrugReferenceInjector.renderFinding` | appends `STRENGTH_WITHHOLD` / `STRENGTH_CAUTION` to an **interaction** finding, breaking the sentence with the `endSentence` rule the chip detail already uses |
 | `LlmProvider.DEFAULT_SYSTEM_PROMPT` | the evidence-against claim becomes conditional on what the finding says, and the caution class is **demonstrated** beside the existing Major refusal — both clauses taken from the production constants, for the reason `FINDING_PREFIX` is |
 

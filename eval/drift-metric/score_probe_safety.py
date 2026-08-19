@@ -506,16 +506,33 @@ def unlicensed_verdict(cell):
 
 
 def _lead_class(cell):
-    """The class suffix a FLIP line carries after `classify`'s label.
+    """Which class of non-verdict lead a cell carries: `abstain`, `caution`, or neither.
 
-    `NONE` is not one thing since #283: it is a hedge OR the caution lead, and only one of those
-    counts as verdict-led, so a flip printed as `A:NO -> B:NONE` does not say which of them the
-    cell became. Subsumes the abstain marker it replaces at that call site rather than sitting
-    beside it, because the two cannot both apply — `caution_led` requires `not abstained`.
+    `classify` alone does not say, since #283. `NONE` is a hedge OR the caution lead and only one
+    of the two counts as verdict-led, so any report printing the label without the class leaves the
+    reader to re-derive from the aggregate counts which of them a given cell was — on a 20-cell
+    capture with several `NONE` rows that is not re-derivable at all. Both printers below had that
+    gap, so the class is decided here once rather than at each of them. Mutually exclusive by
+    construction: `caution_led` requires `not abstained`.
+
+    A bare token rather than either rendering, because the two are not the same shape and neither
+    is derivable from the other: the FLIP line appends it after `classify`'s label, and the
+    per-cell list uses `_LEAD_MARKERS` below.
     """
     if abstained(cell):
-        return " abstain"
-    return " caution" if caution_led(cell) else ""
+        return "abstain"
+    return "caution" if caution_led(cell) else ""
+
+
+# The per-cell list's rendering of the same three classes, spelled out rather than abbreviated off
+# the token: "ABST " is the existing marker and must stay byte-identical, and an abbreviation rule
+# would have to be re-checked for collisions the next time a class is added.
+#
+# Every class the classifier can return has an entry, including the empty one, and the read below
+# INDEXES rather than `.get`s. A missing entry then raises on the first run instead of printing no
+# marker at all, which would put the row back in exactly the ambiguity this table exists to remove
+# — and silently, since nothing about a `NONE` row with no marker looks wrong.
+_LEAD_MARKERS = {"": "", "abstain": "ABST ", "caution": "CAUT "}
 
 
 def summarise(name, cells, done, expected=None):
@@ -597,7 +614,7 @@ def summarise(name, cells, done, expected=None):
         why = ("chip" if c["chips"] else "") + ("+own" if c["own_drug"] else "")
         print("    %-28s %-7s %-9s %-7s %s%s"
               % (k, label(c), why or "-", classify(c["answer"]),
-                 "ABST " if abstained(c) else "", c["answer"][:58]))
+                 _LEAD_MARKERS[_lead_class(c)], c["answer"][:58]))
     return {"problems": problems}
 
 
@@ -624,6 +641,11 @@ SELFTEST_CASES = [
       "verdict-led (YES/NO/caution): 3",
       "of which the records do not license: 0",
       "abstained (the defect): 1",
+      # The per-cell list's abstain marker, which nothing pinned until the caution one joined it in
+      # `_LEAD_MARKERS` and gave a single edit two ways to drop a marker silently. `classify` prints
+      # NO for this cell — the ABSTAINED regex overrides it — so without the marker the row reads as
+      # a refusal, which is the opposite call.
+      "agnes__safety-aspirin ANSWER +own NO ABST The records do not address",
       "ABSTAIN cells (unconnected): 1",
       "abstention held: 1"],
      ["!!"]),
@@ -696,7 +718,11 @@ SELFTEST_CASES = [
       "of which the records do not license: 0",
       "caution lead, nothing adverse on record: 0",
       "stated, no verdict lead: 0",
-      "abstained (the defect): 0"],
+      "abstained (the defect): 0",
+      # And that the per-cell list SAYS so. `classify` prints NONE for this cell and for a hedge
+      # alike, so without the marker the one line a reader checks the counts against cannot be
+      # told apart from the #107 defect it is the fix for.
+      "mary__safety-warfarin ANSWER chip NONE CAUT Warfarin can be given"],
      ["!!"]),
     # The fail-open direction the line above opens, and the mirror of `unsupported-no` on the same
     # cell: counting a caution as a verdict without a licence check turns an uncounted cell into a
@@ -714,7 +740,11 @@ SELFTEST_CASES = [
     # And as the A/B the gate is actually read as: the candidate arm gains a verdict-led cell and
     # loses an abstention, a two-column win, and must not exit 0.
     (["shipped-clean", "unsupported-caution"], 3,
-     ["over the same 4 ANSWER cells: verdict-led A=3 B=4 abstained (defect) A=1 B=0",
+     [# Both FLIP suffixes on one line, which is the only place either is asserted: the abstain one
+      # has been printed since the A/B existed and the caution one since #283, and `_lead_class`
+      # now decides both.
+      "FLIP agnes__safety-aspirin (ANSWER) A:NO abstain -> B:NONE caution",
+      "over the same 4 ANSWER cells: verdict-led A=3 B=4 abstained (defect) A=1 B=0",
       "verdicts the records do not license (never a win): A=0 B=1",
       "caution lead, nothing adverse on record: A=0 B=1"],
      ["LABEL MISMATCH"]),
@@ -978,10 +1008,11 @@ def main():
     for k in both:
         if (verdict_led(a[k]) != verdict_led(b[k]) or abstained(a[k]) != abstained(b[k])
                 or caution_led(a[k]) != caution_led(b[k])):
+            a_lead, b_lead = _lead_class(a[k]), _lead_class(b[k])
             print("  FLIP %-28s (%s)  A:%s%s -> B:%s%s"
                   % (k, label(a[k]),
-                     classify(a[k]["answer"]), _lead_class(a[k]),
-                     classify(b[k]["answer"]), _lead_class(b[k])))
+                     classify(a[k]["answer"]), " " + a_lead if a_lead else "",
+                     classify(b[k]["answer"]), " " + b_lead if b_lead else ""))
             print("       A: %s" % a[k]["answer"][:96])
             print("       B: %s" % b[k]["answer"][:96])
 

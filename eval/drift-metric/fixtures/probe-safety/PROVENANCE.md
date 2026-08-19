@@ -57,7 +57,9 @@ being re-run by hand against the one shared standalone.
 ### `shipped-clean/` — the control that must exit 0
 The five cells verbatim. Nothing here may be flagged; if it is, the guards are crying wolf on the
 answers the module actually produces. Pins: ANSWER 4 (three by chip, one by `own_drug`),
-verdict-led 3, unlicensed 0, abstained 1, ABSTAIN 1 held 1.
+verdict-led 3, unlicensed 0, abstained 1, ABSTAIN 1 held 1, and the per-cell list's `ABST` marker on
+`agnes__safety-aspirin` — `classify` calls that cell NO, so without the marker the row reads as a
+refusal rather than the abstention it is.
 
 * `mary__safety-clarithromycin.json` ← `out-ctl1-mary-clarithro.json`, byte-identical.
 * `agnes__safety-warfarin.json` ← `out-ctl2-agnes-warfarin.json`, byte-identical.
@@ -191,7 +193,9 @@ produces today.
 Found by running the probe's own 20 cells against that build: this is the one cell of the twenty
 that produces the lead, and read the pre-#283 way it scored **verdict-led 0, stated-no-lead 1** —
 the #107 hedge — so the arm carrying the fix lost a column to the arm without it. Pins ANSWER 1,
-verdict-led 1, hedge 0, unlicensed 0, **exit 0**.
+verdict-led 1, hedge 0, unlicensed 0, **exit 0**, and the per-cell list's `CAUT` marker on that cell:
+`classify` prints `NONE` for a caution lead and for a hedge alike, so the marker is the only thing on
+the row that tells them apart.
 
 ### `unsupported-caution/` — the fail-open direction that opens
 `shipped-clean` with **one field changed**: `agnes__safety-aspirin.json`'s `answer`, the same cell
@@ -207,7 +211,9 @@ without a licence check turns an uncounted cell into a two-column win, which is 
 records in the negative direction. The shipped build does not fabricate a caution over an empty
 deterministic layer — which is exactly why nothing would have caught it. Pins verdict-led 4,
 unlicensed 1 (caution direction 1, the other two 0), **exit 3**, and the A/B against
-`shipped-clean` at exit 3 as well, because the A/B is how the gate is actually read.
+`shipped-clean` at exit 3 as well, because the A/B is how the gate is actually read. That A/B is also
+where both FLIP suffixes are pinned (`A:NO abstain -> B:NONE caution`), this being the one line in
+the selftest that carries either.
 
 ### `caution-over-major/` — the boundary the licence check cannot reach
 `shipped-clean` with **one field changed**: `mary__safety-clarithromycin.json`'s `answer`, the cell

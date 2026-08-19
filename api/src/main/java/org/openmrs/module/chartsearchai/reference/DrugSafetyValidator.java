@@ -2458,8 +2458,9 @@ public class DrugSafetyValidator {
 	 * question-pair finding is an INTERACTION, so it states one like every other), so a pair
 	 * finding's grounding comes from that record rather than from the promoted notes, and the
 	 * promoted-note budget is untouched. That half is worded to match
-	 * {@link DrugReferenceInjector#orderedInteractionNotes}, which this paragraph is paired with and
-	 * which said it first; the two came apart once already because only one of them was reworded.
+	 * {@link DrugReferenceInjector#orderedInteractionNotes}, which this paragraph is paired with —
+	 * each cites the other — because the two came apart once already, when only one of them was
+	 * reworded for the clause.
 	 */
 	private void addQuestionPairInteractions(List<SafetyWarning> warnings, Set<DrugReference> questionDrugs,
 			PatientClinicalContext context, int severityFloor) {

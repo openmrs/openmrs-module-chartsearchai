@@ -11,17 +11,18 @@ It also refuses to run if any directory here is asserted by no case, which is th
 matters and is the reason this paragraph no longer carries one: the header said "Seven" while there
 were eight, and #283 propagated that to "Nine" over ten.
 
-Read this file before editing a fixture. Four of the answer texts are deliberately
+Read this file before editing a fixture. Five of the answer texts are deliberately
 **counterfactual** and one chip no longer fires on `main`; both facts are load-bearing and are
-stated per file below. (`finding-no-chip/` was added by #179 and `unsupported-caution/` by #283 —
-see their sections for why the shipped build cannot produce those shapes either.)
+stated per file below. (`finding-no-chip/` was added by #179, `unsupported-caution/` and
+`caution-over-major/` by #283 — see their sections for why the shipped build cannot produce those
+shapes either.)
 
 ## Why any of it is counterfactual
 
 A regression fixture for a scoring blind spot has to contain the failure the scorer must catch. The
 shipped build does not emit these failures — that is *why* they went unnoticed for four revisions —
 so they cannot be captured live at all: the arms that produced them were reverted. Everything except
-the three answer strings marked **CONSTRUCTED** below, the one constructed context field, and the
+the four answer strings marked **CONSTRUCTED** below, the one constructed context field, and the
 one **COUNTERFACTUAL** cell is a verbatim live capture.
 
 `caution-lead/` is the exception that proves it: #283's third verdict lead is a shape the shipped
@@ -207,6 +208,26 @@ records in the negative direction. The shipped build does not fabricate a cautio
 deterministic layer — which is exactly why nothing would have caught it. Pins verdict-led 4,
 unlicensed 1 (caution direction 1, the other two 0), **exit 3**, and the A/B against
 `shipped-clean` at exit 3 as well, because the A/B is how the gate is actually read.
+
+### `caution-over-major/` — the boundary the licence check cannot reach
+`shipped-clean` with **one field changed**: `mary__safety-clarithromycin.json`'s `answer`, the cell
+whose chip is a **Major** simvastatin interaction.
+
+> **CONSTRUCTED**: `"Clarithromycin can be given, with one caution: it interacts with active order
+> Simvastatin [76], a Major problem [77]."`
+
+Written in the lead the prompt teaches, over a finding whose rating does not license it — a refusal
+degrading into a permission, which is the direction #283 carries its risk in. The shipped build was
+not observed producing it, and this arm is not asserting that it cannot; what it pins is what the
+harness can and cannot SEE, which is the same job `wrong-partner/` does one shape over.
+
+Nothing here is flagged, and that is the assertion: `adverse_finding` is satisfied (there is a chip),
+so `unsupported_caution` cannot fire, and asking whether the *rating* licenses a caution would put a
+second copy of `DrugSafetyValidator.licensesWithholding` in Python. Pins ANSWER 4, verdict-led 3,
+unlicensed 0, **exit 0** — the boundary — and, against `shipped-clean`, the A/B line that makes the
+degradation legible without any of that: `FLIP … A:NO -> B:NONE caution` with
+`verdict-led A=3 B=3` beside it. Before the flip condition compared `caution_led`, that A/B printed
+no flip and A=B on every column.
 
 ### `zero-chip/` — the arm that cannot show the defect
 `mary__safety-clarithromycin.json` with `safetyWarnings` and `references` **emptied**, which is

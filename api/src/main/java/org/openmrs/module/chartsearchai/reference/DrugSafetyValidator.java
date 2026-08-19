@@ -2453,9 +2453,13 @@ public class DrugSafetyValidator {
 	 * whichever PR owned that method next (issue #174 site 2 was it). What is NOT affected is the
 	 * invariant the sentence exists to protect, that a chip and the prose cannot describe the same
 	 * finding differently: since issue #110 the deterministic finding is itself injected as a
-	 * numbered, citable record by {@code preAnswerFindings}, carrying this chip's string verbatim, so a
-	 * pair finding's grounding comes from that record rather than from the promoted notes, and the
-	 * promoted-note budget is untouched.
+	 * numbered, citable record by {@code preAnswerFindings}, carrying this chip's string verbatim and
+	 * the strength clause after it ({@link DrugReferenceInjector#renderFinding}, issue #283 — a
+	 * question-pair finding is an INTERACTION, so it states one like every other), so a pair
+	 * finding's grounding comes from that record rather than from the promoted notes, and the
+	 * promoted-note budget is untouched. That half is worded to match
+	 * {@link DrugReferenceInjector#orderedInteractionNotes}, which this paragraph is paired with and
+	 * which said it first; the two came apart once already because only one of them was reworded.
 	 */
 	private void addQuestionPairInteractions(List<SafetyWarning> warnings, Set<DrugReference> questionDrugs,
 			PatientClinicalContext context, int severityFloor) {

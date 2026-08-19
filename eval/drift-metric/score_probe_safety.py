@@ -53,9 +53,12 @@ finding's rating licenses a caution rather than a refusal. A "No" resting on iss
 substring match — "active order opium" for a patient on tiotropium — is a licensed verdict by
 shape and indistinguishable from a correct one here, and so is a caution lead over a Major
 interaction. That belongs to a chip-versus-answer concordance check this harness does not have;
-`fixtures/probe-safety/wrong-partner` pins the current behaviour so the boundary is visible rather
-than assumed. What IS checked in every direction is that the deterministic layer raised something
-at all — see `unlicensed_verdict`.
+`fixtures/probe-safety/wrong-partner` and `caution-over-major` pin the current behaviour, one shape
+each, so the boundary is visible rather than assumed. What IS checked in every direction is that the
+deterministic layer raised something at all — see `unlicensed_verdict`. What the A/B adds, short
+of the content, is that it compares the CLASS of the lead and not only the columns the class
+feeds: `verdict_led` is a union since #283, so two arms can tie on it while one leads with a
+refusal and the other with a permission. See the flip condition in `main`.
 
 Exit codes, because a gate that only ever exits 0 is not a gate:
 
@@ -502,6 +505,19 @@ def unlicensed_verdict(cell):
     return inverted_yes(cell) or unsupported_no(cell) or unsupported_caution(cell)
 
 
+def _lead_class(cell):
+    """The class suffix a FLIP line carries after `classify`'s label.
+
+    `NONE` is not one thing since #283: it is a hedge OR the caution lead, and only one of those
+    counts as verdict-led, so a flip printed as `A:NO -> B:NONE` does not say which of them the
+    cell became. Subsumes the abstain marker it replaces at that call site rather than sitting
+    beside it, because the two cannot both apply — `caution_led` requires `not abstained`.
+    """
+    if abstained(cell):
+        return " abstain"
+    return " caution" if caution_led(cell) else ""
+
+
 def summarise(name, cells, done, expected=None):
     problems = []
     if not done:
@@ -702,6 +718,32 @@ SELFTEST_CASES = [
       "verdicts the records do not license (never a win): A=0 B=1",
       "caution lead, nothing adverse on record: A=0 B=1"],
      ["LABEL MISMATCH"]),
+    # The OTHER caution-lead boundary, and the one the licence check cannot reach: a caution lead
+    # over a chip that IS adverse but is rated Major, i.e. a refusal degrading into a permission.
+    # `adverse_finding` is satisfied, so `unsupported_caution` never fires and nothing here is
+    # flagged — the same licensed-by-shape hole `wrong-partner/` sits in, which is why this arm
+    # exits 0 and asserts that it does. Pinning it is what stops the hole being read as a pass
+    # rather than as a boundary. If the chip-versus-answer concordance check the module docstring
+    # defers ever lands, this expectation is the one that has to change.
+    (["caution-over-major"], 0,
+     ["ANSWER cells (chip for this drug, or their own drug): 4",
+      "verdict-led (YES/NO/caution): 3",
+      "of which the records do not license: 0",
+      "caution lead, nothing adverse on record: 0",
+      "stated, no verdict lead: 0"],
+     ["!!"]),
+    # And what the A/B — the way the gate is actually read — has to say about it. Counting the
+    # caution lead inside verdict_led makes this cell tie on every aggregate column with the
+    # refusal it replaced, so without a comparison that knows the CLASS the whole degradation
+    # prints as no change at all: measured before the flip condition gained caution_led, this
+    # arm against shipped-clean produced no FLIP line and A=B on every aggregate column, where
+    # the pre-#283 scorer printed `A:NO -> B:NONE` and verdict-led A=3 B=2.
+    (["shipped-clean", "caution-over-major"], 0,
+     ["FLIP mary__safety-clarithromycin (ANSWER) A:NO -> B:NONE caution",
+      "over the same 4 ANSWER cells: verdict-led A=3 B=3 abstained (defect) A=1 B=1",
+      "of which the lead is a caution, not a refusal: A=0 B=1",
+      "verdicts the records do not license (never a win): A=0 B=0"],
+     ["LABEL MISMATCH"]),
     # An arm captured with the drug-reference GPs off: every label collapses and the report reads
     # like a pass. This used to exit 0.
     (["zero-chip"], 3,
@@ -722,10 +764,12 @@ def _collapse(text):
 
 
 # The caution lead's own cases, in the shape score_directness.selftest uses for classify, and here
-# for the reason that one is there: the two fixture arms exercise the lead only in the POSITIVE
-# direction, so the failure CAUTION_LEAD_TAIL's comment is written against — a hedge reading as a
-# caution verdict — is pinned by nothing without these. Each case carries the DRUG its cell would be
-# about, resolved through the production `_aliases`, because the lead is anchored on it.
+# for the reason that one is there: every fixture arm exercises the lead in the POSITIVE direction
+# only, so the failure CAUTION_LEAD_TAIL's comment is written against — a hedge reading as a
+# caution verdict — is pinned by nothing without these. Without a count deliberately: this sentence
+# said "the two fixture arms" and went stale the moment a third was added. Each case carries the
+# DRUG its cell would be about, resolved through the production `_aliases`, because the lead is
+# anchored on it.
 #
 # The negatives are where the work is: a "Yes" that must stay a YES so inverted_yes still fires on
 # it, a caution named past the first sentence, a cell with no drug at all, and the hedges that reach
@@ -921,12 +965,23 @@ def main():
                      label(b[k]), b[k]["chips"], b[k]["own_drug"]))
         sys.exit(2)
 
+    # caution_led as well as the two columns, because since #283 verdict_led is a UNION and two
+    # cells can tie on it while leading with opposite calls. Measured on `caution-over-major/`
+    # against `shipped-clean`: a Major refusal rewritten as "Clarithromycin can be given, with one
+    # caution" ties on every aggregate column in the block below, so with the flip keyed on those
+    # columns alone the whole degradation printed as no change at all — where the pre-#283
+    # scorer printed `A:NO -> B:NONE` and moved verdict-led 3 to 2. The licence check
+    # cannot reach it (`unsupported_caution` needs the deterministic layer to have raised NOTHING,
+    # and here it raised a Major chip), and asking whether the RATING licenses a caution would put
+    # a second copy of `DrugSafetyValidator.licensesWithholding` in Python, which is the drift
+    # `adverse_finding` refuses. Naming the class needs no rating at all, so that is what this does.
     for k in both:
-        if verdict_led(a[k]) != verdict_led(b[k]) or abstained(a[k]) != abstained(b[k]):
+        if (verdict_led(a[k]) != verdict_led(b[k]) or abstained(a[k]) != abstained(b[k])
+                or caution_led(a[k]) != caution_led(b[k])):
             print("  FLIP %-28s (%s)  A:%s%s -> B:%s%s"
                   % (k, label(a[k]),
-                     classify(a[k]["answer"]), " abstain" if abstained(a[k]) else "",
-                     classify(b[k]["answer"]), " abstain" if abstained(b[k]) else ""))
+                     classify(a[k]["answer"]), _lead_class(a[k]),
+                     classify(b[k]["answer"]), _lead_class(b[k])))
             print("       A: %s" % a[k]["answer"][:96])
             print("       B: %s" % b[k]["answer"][:96])
 
@@ -937,6 +992,13 @@ def main():
     print("\nover the same %d ANSWER cells:  verdict-led A=%d B=%d   abstained (defect) A=%d B=%d"
           % (len(ans), n(ans, a, verdict_led), n(ans, b, verdict_led),
              n(ans, a, abstained), n(ans, b, abstained)))
+    # Verdict-led's own decomposition, for the reason the flip condition above names: the column is
+    # a union, so a tie on it is not a tie on the call. Not a defect count and not deducted from
+    # anything — a caution lead is the correct answer to a Minor finding, which is the whole of
+    # #283 — but a reader comparing arms has to be able to see that the total was reached a
+    # different way. `unsupported_caution` below is the flag; this is the census.
+    print("  of which the lead is a caution, not a refusal:     A=%d B=%d"
+          % (n(ans, a, caution_led), n(ans, b, caution_led)))
     print("over the same %d ABSTAIN cells: abstention held A=%d B=%d"
           % (len(abst), n(abst, a, abstained), n(abst, b, abstained)))
     print("verdicts the records do not license (never a win):  A=%d B=%d"

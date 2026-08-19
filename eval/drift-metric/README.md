@@ -451,6 +451,15 @@ empty chip list now makes a verdict more suspicious, not exempt. Both directions
 inside `verdict-led` rather than deducted from it, so every column keeps the meaning it had when
 earlier results were quoted against it.
 
+> *(2026-08-20, #283.* Three directions now, not two: the caution lead joined `YES` and `NO` as a
+> verdict lead, so `unsupported_caution` joined the two above it, on the same `adverse_finding`
+> licence test and counted inside `verdict-led` the same way. The columns quoted here are
+> unaffected. What the widening did cost is a comparison: `verdict-led` became a union, so two arms
+> can tie on it while one leads with a refusal and the other with a permission, and the A/B printed
+> that as no change at all until its flip condition compared the class too. It now does, it prints
+> `of which the lead is a caution, not a refusal` beside the column, and
+> `fixtures/probe-safety/caution-over-major/` pins it.*)
+
 **Reported-number changes to know about, since #107's and #110's numbers came out of these scripts.**
 The columns above are unchanged. What changed: the `affirming "Yes" against a chip` line is renamed
 (`inverted "Yes" against this drug's own finding`) and joined by two new lines; the YES check now

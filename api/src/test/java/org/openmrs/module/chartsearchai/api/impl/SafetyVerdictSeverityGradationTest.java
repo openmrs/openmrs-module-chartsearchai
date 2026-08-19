@@ -53,6 +53,19 @@ public class SafetyVerdictSeverityGradationTest {
 		return prompt.substring(at, end);
 	}
 
+	/** The sentence of {@code paragraph} containing {@code at}, bounded by the ". " between
+	 *  sentences. One definition because two cases below need it and a paragraph-wide read is
+	 *  satisfied by a NEIGHBOURING branch in both: the paragraph states two gated branches and a
+	 *  ranking over them, all built from the same two clauses, so which sentence a phrase sits in
+	 *  is most of what this class checks. The third case scopes to a sentence PREFIX rather than a
+	 *  sentence — the antecedent, up to the claim it gates — and stays inline for that reason:
+	 *  reading its whole sentence would let a consequent naming the clause satisfy it. */
+	private static String sentenceAround(String paragraph, int at) {
+		int start = paragraph.lastIndexOf(". ", at);
+		int end = paragraph.indexOf(". ", at);
+		return paragraph.substring(start < 0 ? 0 : start + 2, end < 0 ? paragraph.length() : end);
+	}
+
 	@Test
 	public void theEvidenceAgainstClaimIsConditionalOnTheStrengthTheFindingStates() {
 		String paragraph = safetyParagraph();
@@ -66,6 +79,23 @@ public class SafetyVerdictSeverityGradationTest {
 		assertTrue(sentence.contains("a reason to withhold it"),
 				"the claim must be gated on the finding SAYING it is a reason to withhold — "
 						+ "unconditionally, a Minor rating refuses the drug: " + sentence);
+		// "a reason to withhold it" occurs inside STRENGTH_CAUTION as well, negated ("…is a caution
+		// to note, NOT a reason to withhold it"), so the assertion above passes whichever of the two
+		// clauses the antecedent names — the same defect d016a8ab removed from the ranking sentence
+		// one sentence further down, left standing here.
+		// Measured by mutation rather than argued: swapping the two branch antecedents in
+		// LlmProvider, so the paragraph says a CAUTION is evidence against giving the drug and a
+		// withholding finding is not, left the whole api suite at 1301 tests / 0 failures — a
+		// prompt reinstating #283 and inverting every Major refusal and every contraindication on
+		// top of it. Giving branch one the caution clause alone is green too, and then NO branch
+		// matches a withholding finding, which is the fall-through the contraindication round
+		// measured at 3/3 on the standalone. Nothing else in this class reaches either mutation:
+		// bothStrengthClassesAreTaughtInTheWordsTheInjectedRecordUses and
+		// theRuleNamesTheClauseTheRecordActuallyCarries test containment in the whole paragraph.
+		assertFalse(sentence.contains(cautionClass()),
+				"and on THAT clause rather than on the phrase the caution clause also contains, "
+						+ "which is the whole of what separates this branch from the caution one: "
+						+ sentence);
 	}
 
 	@Test
@@ -114,10 +144,24 @@ public class SafetyVerdictSeverityGradationTest {
 		String paragraph = safetyParagraph();
 		int caution = paragraph.indexOf("a caution to note, not a reason to withhold it");
 		assertTrue(caution > 0, "the caution branch must be present");
-		String rest = paragraph.substring(caution);
-		assertTrue(rest.contains("can be given"),
+		// The SENTENCE carrying the clause, not everything after it. Read to the end of the
+		// paragraph this was satisfied by a lead belonging to another branch: with the two branch
+		// antecedents swapped — the mutation the case above is about — the clause sits in the
+		// sentence that opens with "No", the caution lead is still further down in the other one,
+		// and a tail check passes on it. Scoped to one sentence the clause and the lead it governs
+		// have to be the same branch.
+		String sentence = sentenceAround(paragraph, caution);
+		assertTrue(sentence.contains("can be given"),
 				"the caution branch needs a lead of its own — stating the drug can be given and "
-						+ "naming the caution: " + rest);
+						+ "naming the caution: " + sentence);
+		// Which the assertion above does not cover, and this one is pinned by its own mutation
+		// rather than added on symmetry: appending "but open with \"No\" where the mechanism is
+		// serious" to this sentence keeps the lead intact, so only this line reddens. That is the
+		// drift shape the branch is exposed to once it has a lead of its own — a refusal creeping
+		// back INTO the caution branch rather than replacing it.
+		assertFalse(sentence.contains("\"No\""),
+				"and it is the branch that must NOT open with a refusal — that lead belongs to the "
+						+ "withholding branch and to the ranking sentence: " + sentence);
 		assertTrue(LlmProvider.DEFAULT_SYSTEM_PROMPT.contains("Never open such an answer with \"Yes\""),
 				"and it must not reach that lead by dropping #107's never-\"Yes\" token, which arm C "
 						+ "measured at 5/6 inverted verdicts");
@@ -223,10 +267,7 @@ public class SafetyVerdictSeverityGradationTest {
 
 		// The sentence carrying the rule, not the paragraph — the two branch sentences above already
 		// name both clauses, so a paragraph-wide check would pass on them alone.
-		int start = paragraph.lastIndexOf(". ", at);
-		int end = paragraph.indexOf(". ", at);
-		String sentence = paragraph.substring(start < 0 ? 0 : start + 2,
-				end < 0 ? paragraph.length() : end);
+		String sentence = sentenceAround(paragraph, at);
 		assertTrue(sentence.contains("more than one finding"),
 				"the rule has to be about a SET, not a reworded restatement of the single-finding "
 						+ "branches above it: " + sentence);

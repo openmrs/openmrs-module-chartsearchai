@@ -96,6 +96,26 @@ public class SafetyFindingSeverityStrengthTest {
 	}
 
 	@Test
+	public void aModerateRatedInteractionSaysItIsAReasonToWithholdTheDrug() {
+		String finding = findingFor(DrugReferenceTestSupport.ddinterServiceWithGroups(),
+				"Is it safe to give omeprazole?", "Simvastatin");
+
+		assertTrue(finding.toLowerCase().contains("moderate"),
+				"the fixture pair must be the Moderate-rated one this case is about: " + finding);
+		// THE BOUNDARY, and the reason this case exists separately from the Major one beside it.
+		// ratingLicensesWithholding splits on `rank >= severityRank("moderate")`, and moving that to
+		// "major" — i.e. softening Moderate to a caution — left the whole suite green: Minor, Major,
+		// Unknown, unrated, the fold and the contraindication were all covered and the boundary
+		// itself was not. ADR Decision 37 decides Moderate deliberately ("moderate still refuses.
+		// Whether it should qualify instead is a clinical judgement this decision does not take"),
+		// so it is a decision, not an accident, and it is pinned here.
+		assertTrue(finding.contains(WITHHOLD),
+				"a Moderate-rated finding must say it is a reason to withhold: " + finding);
+		assertFalse(finding.contains(CAUTION),
+				"the caution side of the split is minor and unknown only: " + finding);
+	}
+
+	@Test
 	public void anUnratedCuratedRuleIsNotSoftenedToACaution() {
 		String finding = findingFor(DrugReferenceTestSupport.curatedService(),
 				"Is it safe to give ibuprofen?", "Warfarin");

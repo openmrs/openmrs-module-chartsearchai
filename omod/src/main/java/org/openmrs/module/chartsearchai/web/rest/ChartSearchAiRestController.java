@@ -1239,7 +1239,12 @@ public class ChartSearchAiRestController {
 			});
 			SseKeepAlive keepAlive = new SseKeepAlive(out, timer);
 			keepAlive.write();
-			timer.scheduleAtFixedRate(keepAlive::write, intervalMillis, intervalMillis,
+			// Fixed DELAY, not fixed rate: the question a keep-alive answers is "has anything been
+			// written lately", so the clock should start when a write finishes. A write to a slow
+			// client can block for longer than the interval, and at a fixed rate the executor then
+			// owes several runs and fires them back to back into the same congested socket, growing
+			// its queue for as long as the congestion lasts.
+			timer.scheduleWithFixedDelay(keepAlive::write, intervalMillis, intervalMillis,
 					TimeUnit.MILLISECONDS);
 			return keepAlive;
 		}

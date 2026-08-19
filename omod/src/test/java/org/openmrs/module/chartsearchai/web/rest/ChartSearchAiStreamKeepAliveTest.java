@@ -11,9 +11,11 @@ package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -92,17 +94,17 @@ public class ChartSearchAiStreamKeepAliveTest {
 
 	@Test
 	public void keepAlivesKeepArrivingWhileTheModelStaysSilent() {
-		SilentThenAnswerStub stub = new SilentThenAnswerStub(out, 300L);
+		SilentThenAnswerStub stub = SilentThenAnswerStub.awaitingComments(out, 3);
 		controller.setChartSearchService(stub);
 
-		controller.streamAnswer(out, patient(), "any allergies?", user(), false, 40L);
+		controller.streamAnswer(out, patient(), "any allergies?", user(), false, 20L);
 
 		int written = countKeepAlives(stub.writtenAtEntry);
 		assertTrue(written >= 3,
-				"a 300ms silence at a 40ms interval must carry several keep-alives, not just the "
-						+ "opening one: a proxy's read timeout restarts on every byte, so one early byte "
-						+ "does not save a prefill that outlasts the timeout — E4B's was ~194s against a "
-						+ "~120s window. Got " + written + " in " + quoted(stub.writtenAtEntry));
+				"the silence must carry several keep-alives, not just the opening one: a proxy's read "
+						+ "timeout restarts on every byte, so one early byte does not save a prefill that "
+						+ "outlasts the timeout — E4B's was ~194s against a ~120s window. Got " + written
+						+ " in " + quoted(stub.writtenAtEntry));
 	}
 
 	@Test
@@ -148,6 +150,106 @@ public class ChartSearchAiStreamKeepAliveTest {
 				"every token event must reach the client exactly once; a comment spliced into a frame "
 						+ "would split it into a malformed pair and change this count");
 		assertEveryFrameIsWellFormed(tearing.text());
+	}
+
+	@Test
+	public void aKeepAliveThatCannotBeWrittenDoesNotFailTheAnswer() {
+		RefusingSink refusing = new RefusingSink(false, 0, Integer.MAX_VALUE);
+		controller.setChartSearchService(new SilentThenAnswerStub(new ByteArrayOutputStream(), 0L));
+
+		controller.streamAnswer(refusing, patient(), "any allergies?", user(), false);
+
+		assertTrue(refusing.refused > 0,
+				"the sink must have refused a keep-alive, or this test proves nothing");
+		assertNotNull(SseEvents.ofType(refusing.sink(), "done"),
+				"a keep-alive that cannot be written means the client is probably gone, which the "
+						+ "generation loop discovers on its own next write — failing the request over a "
+						+ "comment nobody reads would abort an answer that was about to succeed");
+		assertNotNull(SseEvents.ofType(refusing.sink(), "token"),
+				"and the answer's own writes must be untouched by the keep-alive's failure");
+	}
+
+	@Test
+	public void aKeepAliveThatThrowsDoesNotCancelTheRestOfTheSchedule() {
+		// Refuse ONLY the first SCHEDULED comment, letting the synchronous one through. That is what
+		// isolates the claim in this test's name: if the refusal hit the synchronous write instead, the
+		// assertion that failed without the catch would be that one, and a silently unscheduled TIMER
+		// would go unnoticed.
+		RefusingSink refusing = new RefusingSink(true, 1, 1);
+		controller.setChartSearchService(new SilentThenAnswerStub(new ByteArrayOutputStream(), 300L));
+
+		controller.streamAnswer(refusing, patient(), "any allergies?", user(), false, 40L);
+
+		assertEquals(1, refusing.refused,
+				"a scheduled keep-alive must actually have been attempted and refused, or this test "
+						+ "proves nothing");
+		assertTrue(countKeepAlives(refusing.text()) >= 2,
+				"a keep-alive after the refused one must still arrive: a scheduled task that throws is "
+						+ "silently unscheduled, which would leave the rest of a long answer with no "
+						+ "keep-alive and nothing in the log to say why. Got "
+						+ countKeepAlives(refusing.text()) + " written");
+	}
+
+	/**
+	 * A sink that refuses keep-alive frames — recognised by the leading {@code :} of an SSE comment —
+	 * and accepts every event frame, so the keep-alive's failure paths can be driven without
+	 * disturbing the answer's own writes.
+	 *
+	 * <p>Its counters are plain fields read by the test thread after {@code streamAnswer} returns.
+	 * That is safe without further synchronization because every write here — the answer's and the
+	 * keep-alive's alike — happens inside the {@code OutputStream} monitor, and {@code stop()} takes
+	 * that same monitor before returning, which is the happens-before edge.</p>
+	 *
+	 * @param runtimeFailure throw an unchecked exception rather than an {@link IOException}, to reach
+	 *        the other of the two catches in {@code SseKeepAlive.write}
+	 * @param refuseFrom index of the first comment frame to refuse, counting from the synchronous one
+	 *        at 0, so a test can choose whether the synchronous or a scheduled write is the one denied
+	 * @param refuseCount how many comment frames to refuse from that index on
+	 */
+	private static final class RefusingSink extends OutputStream {
+
+		private final ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+		private final boolean runtimeFailure;
+
+		private final int refuseFrom;
+
+		private final int refuseCount;
+
+		private int commentsSeen;
+
+		int refused;
+
+		RefusingSink(boolean runtimeFailure, int refuseFrom, int refuseCount) {
+			this.runtimeFailure = runtimeFailure;
+			this.refuseFrom = refuseFrom;
+			this.refuseCount = refuseCount;
+		}
+
+		@Override
+		public void write(int b) {
+			sink.write(b);
+		}
+
+		@Override
+		public void write(byte[] frame, int off, int len) throws IOException {
+			if (len > 0 && frame[off] == ':' && commentsSeen++ >= refuseFrom && refused < refuseCount) {
+				refused++;
+				if (runtimeFailure) {
+					throw new IllegalStateException("response already recycled");
+				}
+				throw new IOException("client gone");
+			}
+			sink.write(frame, off, len);
+		}
+
+		ByteArrayOutputStream sink() {
+			return sink;
+		}
+
+		String text() {
+			return new String(sink.toByteArray(), StandardCharsets.UTF_8);
+		}
 	}
 
 	/**
@@ -233,11 +335,44 @@ public class ChartSearchAiStreamKeepAliveTest {
 
 		private final long silentMillis;
 
+		private final int minComments;
+
 		String writtenAtEntry = "";
 
 		SilentThenAnswerStub(ByteArrayOutputStream sink, long silentMillis) {
+			this(sink, silentMillis, 0);
+		}
+
+		/**
+		 * Stays silent until {@code wanted} keep-alive comments have actually been written, rather than
+		 * for a fixed span. Deterministic where a sleep is not: a timer starved by a loaded CI runner or
+		 * a GC pause makes a sleep-based assertion fail spuriously, while this either observes the
+		 * writes or gives up and lets the assertion report how many really arrived.
+		 */
+		static SilentThenAnswerStub awaitingComments(ByteArrayOutputStream sink, int wanted) {
+			return new SilentThenAnswerStub(sink, 0L, wanted);
+		}
+
+		private SilentThenAnswerStub(ByteArrayOutputStream sink, long silentMillis, int minComments) {
 			this.sink = sink;
 			this.silentMillis = silentMillis;
+			this.minComments = minComments;
+		}
+
+		/** @return once the sink holds {@code wanted} comments, or after a deadline far longer than any
+		 *          healthy timer needs. Never holds the stream's monitor while waiting. */
+		private void awaitComments(int wanted) {
+			long deadline = System.currentTimeMillis() + 5000L;
+			while (System.currentTimeMillis() < deadline
+					&& countKeepAlives(new String(sink.toByteArray(), StandardCharsets.UTF_8)) < wanted) {
+				try {
+					Thread.sleep(5L);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return;
+				}
+			}
 		}
 
 		@Override
@@ -256,7 +391,9 @@ public class ChartSearchAiStreamKeepAliveTest {
 				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 				Consumer<List<RecordReference>> citationsConsumer,
 				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
-			if (silentMillis > 0) {
+			if (minComments > 0) {
+				awaitComments(minComments);
+			} else if (silentMillis > 0) {
 				try {
 					Thread.sleep(silentMillis);
 				}

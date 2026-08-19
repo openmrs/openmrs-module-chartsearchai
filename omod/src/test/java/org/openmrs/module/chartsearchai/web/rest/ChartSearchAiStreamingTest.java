@@ -19,7 +19,12 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests for the streaming search endpoint controller structure.
  * Verifies that the controller writes SSE events directly to the response
- * without background threads or shared auth state.
+ * on the request thread, and shares no auth state with any other thread.
+ *
+ * <p>"On the request thread" rather than "without background threads": the SSE keep-alive runs a
+ * timer that writes comment frames, and what matters is that no thread but the request thread does
+ * OpenMRS work — see {@link #streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads}, which
+ * states and enforces that scope.</p>
  */
 public class ChartSearchAiStreamingTest {
 

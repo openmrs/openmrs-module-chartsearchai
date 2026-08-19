@@ -1,12 +1,15 @@
 # `score_probe_safety.py --selftest` fixtures — where every byte came from
 
-Nine capture directories, in the exact shape `capture_probe_safety.sh` writes (one `*.json` per
-cell, one `<slug>___context.json` per patient, a `CAPTURE_DONE` marker). `score_probe_safety.py
---selftest` runs the shipped scorer over each as a subprocess and asserts its exit code **and** its
-reported counts, so a future edit that changes what any of these arms scores fails loudly instead of
-quietly making the numbers in [#107](https://github.com/openmrs/openmrs-module-chartsearchai/issues/107)'s
-and [#110](https://github.com/openmrs/openmrs-module-chartsearchai/pull/110)'s records
-irreproducible.
+One capture directory per recorded blind spot, each in the exact shape
+`capture_probe_safety.sh` writes (one `*.json` per cell, one `<slug>___context.json` per patient, a
+`CAPTURE_DONE` marker). `score_probe_safety.py --selftest` runs the shipped scorer over each as a
+subprocess and asserts its exit code **and** its reported counts, so a future edit that changes what
+any of these arms scores fails loudly instead of quietly making the numbers in
+[#107](https://github.com/openmrs/openmrs-module-chartsearchai/issues/107)'s and
+[#110](https://github.com/openmrs/openmrs-module-chartsearchai/pull/110)'s records irreproducible.
+It also refuses to run if any directory here is asserted by no case, which is the only count that
+matters and is the reason this paragraph no longer carries one: the header said "Seven" while there
+were eight, and #283 propagated that to "Nine" over ten.
 
 Read this file before editing a fixture. Four of the answer texts are deliberately
 **counterfactual** and one chip no longer fires on `main`; both facts are load-bearing and are

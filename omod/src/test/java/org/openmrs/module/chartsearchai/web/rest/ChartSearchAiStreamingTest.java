@@ -70,9 +70,10 @@ public class ChartSearchAiStreamingTest {
 	 *
 	 * <p>So the scope is now stated instead of assumed: a thread must be created here at all, every
 	 * {@code new Thread(} and every {@code Executors} call in this controller must be the keep-alive's,
-	 * {@code SseKeepAlive} must not touch {@code Context}, and its {@code write} must READ the stop
-	 * flag that {@code stop} sets. A thread created either of those two ways and doing OpenMRS work
-	 * fails here, which is what the original assertion was protecting.</p>
+	 * {@code SseKeepAlive} must not touch {@code Context}, {@code Context} must stay QUALIFIED
+	 * throughout this file, and {@code write} must READ the stop flag that {@code stop} sets. A thread
+	 * created either of those two ways and doing OpenMRS work fails here, which is what the original
+	 * assertion was protecting.</p>
 	 *
 	 * <p>Those two spellings are named rather than "every thread this controller creates" because they
 	 * are what the scan actually reaches, and each is decided by WHERE the creation sits. Both halves of
@@ -88,6 +89,27 @@ public class ChartSearchAiStreamingTest {
 	 * ({@code new Timer()}, {@code CompletableFuture.runAsync}, a Spring-managed pool), and stating
 	 * that is the point — a guard whose message claims more than it checks is the same silent weakening
 	 * as a region that reads short.</p>
+	 *
+	 * <p>The {@code Context} scan had a third hole of the same shape, and it is a SPELLING rather than
+	 * a location: the needle is the text {@code Context.}, so a static import of
+	 * {@code Context.getAuthenticatedUser} lets the keep-alive read authentication state as a bare
+	 * {@code getAuthenticatedUser()} and the scan never sees it. Measured 2026-08-20, both directions:
+	 * that read placed after the write in {@code SseKeepAlive.write} left omod green at 85 of 85, and
+	 * the identical read spelled {@code Context.getAuthenticatedUser()} failed the scan and nothing
+	 * else — so the scan works and it was the spelling that admitted it. The remedy is the import
+	 * assertion below, which is deliberately over the WHOLE file rather than the class body, since an
+	 * import sits above it; it needs no region canary, because the positive
+	 * {@code source.contains("new Thread(")} at the top of this method already fails if the source ever
+	 * reads empty. Placement matters to the measurement and not to the hole: the same read put BEFORE
+	 * the write reddens six behavioural cases instead, because then no comment is ever written, which
+	 * is the case {@code RestControllerContext}'s javadoc records.</p>
+	 *
+	 * <p>One route past the pair of them is left, and naming it is the same discipline as naming
+	 * {@code new Timer()} above: a helper METHOD elsewhere in this controller that reads
+	 * {@code Context} and is called from inside {@code SseKeepAlive}. The qualified read then sits
+	 * outside the class body, so the scan scoped to that body does not see it, and no import is
+	 * involved for the assertion below to catch. Closing that needs a call graph rather than a text
+	 * scan, so it is stated instead.</p>
 	 *
 	 * <p>The stop-flag assertion is a text check rather than a behavioural one because the property
 	 * cannot be reddened behaviourally: with the read gone, a task parked on the {@code out} monitor
@@ -163,6 +185,11 @@ public class ChartSearchAiStreamingTest {
 		assertTrue(!keepAlive.contains("Context."),
 				"the keep-alive thread must write bytes and nothing else — reading Context off it is "
 						+ "exactly the unsafe sharing this test exists to prevent");
+		assertTrue(!source.contains("import static org.openmrs.api.context.Context"),
+				"Context must stay QUALIFIED in this controller: the assertion above matches the text "
+						+ "\"Context.\", so a static import lets the keep-alive read authentication state "
+						+ "as a bare getAuthenticatedUser() and the scan never sees it. Whole file rather "
+						+ "than the class body, because an import is file-scoped");
 
 		assertTrue(!source.contains("import org.springframework.web.servlet.mvc.method.annotation.SseEmitter"),
 				"Streaming must not import SseEmitter");

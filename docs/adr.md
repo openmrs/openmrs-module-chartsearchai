@@ -922,9 +922,9 @@ When multiple users submit queries simultaneously to the local engine, requests 
 
 1. The first request acquires the engine lock and begins inference.
 2. Subsequent requests queue on the `synchronized` block and wait.
-3. Each request times out after `chartsearchai.llm.timeoutSeconds` (default 300s).
+3. `chartsearchai.llm.timeoutSeconds` (default 300s) does not bound that wait. It is a JDK `HttpRequest.timeout()` on the call to the inference server, so it does not start until a request already holds the lock, and it stops applying the moment that server's response headers arrive: it caps the prefill and leaves both the queueing and the token stream uncapped. Measured 2026-08-20 — README's [Streaming search (SSE)](../README.md#streaming-search-sse) keep-alive paragraph carries the figures.
 
-With an 8B model on CPU, a single query typically takes 15–45 seconds. This means roughly **2–3 concurrent users** can be served before requests start timing out. Smaller models (3B) are faster but produce lower quality responses; larger models (12B) have slower inference and reduce concurrency further.
+With an 8B model on CPU, a single query typically takes 15–45 seconds, so roughly **2–3 concurrent users** can be served before the queue wait is longer than a clinician will sit through. Nothing cuts them off at that point; they wait. Smaller models (3B) are faster but produce lower quality responses; larger models (12B) have slower inference and reduce concurrency further.
 
 Embedding computation is faster (~50–200ms per patient) so the embedding lock is rarely a bottleneck. The remote engine has no client-side serialisation — concurrency limits are whatever the remote server (vLLM, Ollama, OpenAI) imposes.
 

@@ -508,12 +508,15 @@ def unlicensed_verdict(cell):
 def _lead_class(cell):
     """Which class of non-verdict lead a cell carries: `abstain`, `caution`, or neither.
 
-    `classify` alone does not say, since #283. `NONE` is a hedge OR the caution lead and only one
-    of the two counts as verdict-led, so any report printing the label without the class leaves the
-    reader to re-derive from the aggregate counts which of them a given cell was — on a 20-cell
-    capture with several `NONE` rows that is not re-derivable at all. Both printers below had that
-    gap, so the class is decided here once rather than at each of them. Mutually exclusive by
-    construction: `caution_led` requires `not abstained`.
+    `classify` is a DIFFERENT predicate from the two the counts are computed from, and it disagrees
+    with both: it calls an abstention `NO` ("The records do not address …" leads with a negative)
+    and it calls a caution lead `NONE`, which is also what it calls a hedge. So a row carrying only
+    its label cannot be attributed to the count it belongs in — `abstained (the defect)` and the
+    caution share of `verdict-led` are exactly the two the label cannot express. Reading it off the
+    answer excerpt beside the row is re-running `abstained` and `caution_led` by eye, which is the
+    work the scorer exists to have already done. Both printers below had that gap, so the class is
+    decided here once rather than at each of them. Mutually exclusive by construction:
+    `caution_led` requires `not abstained`.
 
     A bare token rather than either rendering, because the two are not the same shape and neither
     is derivable from the other: the FLIP line appends it after `classify`'s label, and the
@@ -529,9 +532,10 @@ def _lead_class(cell):
 # would have to be re-checked for collisions the next time a class is added.
 #
 # Every class the classifier can return has an entry, including the empty one, and the read below
-# INDEXES rather than `.get`s. A missing entry then raises on the first run instead of printing no
-# marker at all, which would put the row back in exactly the ambiguity this table exists to remove
-# — and silently, since nothing about a `NONE` row with no marker looks wrong.
+# INDEXES rather than `.get`s. A class added without a marker then raises the first time a cell
+# carrying it is printed, instead of printing no marker at all — which would put the row back in
+# exactly the ambiguity this table exists to remove, and silently, since nothing about a `NONE` row
+# with no marker looks wrong.
 _LEAD_MARKERS = {"": "", "abstain": "ABST ", "caution": "CAUT "}
 
 
@@ -641,10 +645,11 @@ SELFTEST_CASES = [
       "verdict-led (YES/NO/caution): 3",
       "of which the records do not license: 0",
       "abstained (the defect): 1",
-      # The per-cell list's abstain marker, which nothing pinned until the caution one joined it in
-      # `_LEAD_MARKERS` and gave a single edit two ways to drop a marker silently. `classify` prints
-      # NO for this cell — the ABSTAINED regex overrides it — so without the marker the row reads as
-      # a refusal, which is the opposite call.
+      # The per-cell list's abstain marker, unpinned since the probe was written and now reachable
+      # by two edits rather than one (`_lead_class` and `_LEAD_MARKERS`). It is the only thing on
+      # the row that reports `abstained`, which is the predicate `abstained (the defect): 1` above
+      # is counted from — `classify` says NO here, so the label cannot stand in for it. See
+      # `_lead_class`.
       "agnes__safety-aspirin ANSWER +own NO ABST The records do not address",
       "ABSTAIN cells (unconnected): 1",
       "abstention held: 1"],
@@ -719,9 +724,10 @@ SELFTEST_CASES = [
       "caution lead, nothing adverse on record: 0",
       "stated, no verdict lead: 0",
       "abstained (the defect): 0",
-      # And that the per-cell list SAYS so. `classify` prints NONE for this cell and for a hedge
-      # alike, so without the marker the one line a reader checks the counts against cannot be
-      # told apart from the #107 defect it is the fix for.
+      # And that the per-cell list SAYS so: the marker is the only thing on the row reporting
+      # `caution_led`, which is the share of `verdict-led: 1` this cell is. `classify` says NONE
+      # here and says NONE for a hedge too, so the label cannot separate the fix from the #107
+      # defect it is the fix for. See `_lead_class`.
       "mary__safety-warfarin ANSWER chip NONE CAUT Warfarin can be given"],
      ["!!"]),
     # The fail-open direction the line above opens, and the mirror of `unsupported-no` on the same

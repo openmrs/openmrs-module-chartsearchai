@@ -14,16 +14,17 @@ were eight, and #283 propagated that to "Nine" over ten.
 Read this file before editing a fixture. Five of the answer texts are deliberately
 **counterfactual** and one chip no longer fires on `main`; both facts are load-bearing and are
 stated per file below. (`finding-no-chip/` was added by #179, `unsupported-caution/` and
-`caution-over-major/` by #283 — see their sections for why the shipped build cannot produce those
-shapes either.)
+`caution-over-major/` by #283 — see their sections, which say per arm what is constructed and why.)
 
 ## Why any of it is counterfactual
 
 A regression fixture for a scoring blind spot has to contain the failure the scorer must catch. The
 shipped build does not emit these failures — that is *why* they went unnoticed for four revisions —
-so they cannot be captured live at all: the arms that produced them were reverted. Everything except
-the four answer strings marked **CONSTRUCTED** below, the one constructed context field, and the
-one **COUNTERFACTUAL** cell is a verbatim live capture.
+so they cannot be captured live at all: the arms that produced them were reverted.
+`caution-over-major/` rests on a weaker claim than that, stated in its own section: not that the
+build cannot emit the shape, only that no capture here does. Everything except the four answer
+strings marked **CONSTRUCTED** below, the one constructed context field, and the one
+**COUNTERFACTUAL** cell is a verbatim live capture.
 
 `caution-lead/` is the exception that proves it: #283's third verdict lead is a shape the shipped
 build DOES produce, so that arm is a live capture and needed no construction at all.
@@ -58,8 +59,8 @@ being re-run by hand against the one shared standalone.
 The five cells verbatim. Nothing here may be flagged; if it is, the guards are crying wolf on the
 answers the module actually produces. Pins: ANSWER 4 (three by chip, one by `own_drug`),
 verdict-led 3, unlicensed 0, abstained 1, ABSTAIN 1 held 1, and the per-cell list's `ABST` marker on
-`agnes__safety-aspirin` — `classify` calls that cell NO, so without the marker the row reads as a
-refusal rather than the abstention it is.
+`agnes__safety-aspirin`, which is the only thing on that row reporting the `abstained` predicate the
+count above it is computed from — `classify` calls the cell NO, so the label cannot stand in for it.
 
 * `mary__safety-clarithromycin.json` ← `out-ctl1-mary-clarithro.json`, byte-identical.
 * `agnes__safety-warfarin.json` ← `out-ctl2-agnes-warfarin.json`, byte-identical.
@@ -193,9 +194,9 @@ produces today.
 Found by running the probe's own 20 cells against that build: this is the one cell of the twenty
 that produces the lead, and read the pre-#283 way it scored **verdict-led 0, stated-no-lead 1** —
 the #107 hedge — so the arm carrying the fix lost a column to the arm without it. Pins ANSWER 1,
-verdict-led 1, hedge 0, unlicensed 0, **exit 0**, and the per-cell list's `CAUT` marker on that cell:
-`classify` prints `NONE` for a caution lead and for a hedge alike, so the marker is the only thing on
-the row that tells them apart.
+verdict-led 1, hedge 0, unlicensed 0, **exit 0**, and the per-cell list's `CAUT` marker on that cell,
+which is the only thing on the row reporting `caution_led` — the share of `verdict-led` this cell is.
+`classify` says `NONE` here and `NONE` for a hedge too, so the label cannot attribute the count.
 
 ### `unsupported-caution/` — the fail-open direction that opens
 `shipped-clean` with **one field changed**: `agnes__safety-aspirin.json`'s `answer`, the same cell

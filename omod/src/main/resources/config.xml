@@ -87,7 +87,7 @@
 	<globalProperty>
 		<property>chartsearchai.llm.timeoutSeconds</property>
 		<defaultValue>300</defaultValue>
-		<description>Maximum number of seconds to wait for the LLM to generate a response before timing out. Default 300s gives cold queries (model load + full-chart prefill + generation) headroom on CPU-only deployments. On GPU or remote-API setups, lower values are reasonable.</description>
+		<description>Maximum number of seconds to wait for the inference server's FIRST output. It applies to EACH call the module makes to that server, and a cold query with the on-disk KV cache enabled makes more than one. It stops applying once that server's response headers arrive, which on the streaming endpoint is when the first token is produced, so it bounds the prompt prefill and NOT the generation that follows. It does not cover starting the embedded llama-server or loading the model; that has a separate fixed bound of its own. Default 300s gives a cold full-chart prefill headroom on CPU-only deployments. On GPU or remote-API setups, lower values are reasonable.</description>
 	</globalProperty>
 
 	<globalProperty>

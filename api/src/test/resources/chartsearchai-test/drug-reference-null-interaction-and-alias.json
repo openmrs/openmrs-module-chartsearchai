@@ -1,0 +1,21 @@
+{
+ "version": "1.0",
+ "source": "test fixture — a null element in the four lists drug-reference-null-rule-and-band.json does not cover (aliases, atcCodes, warnings, interactions), on two rows that share one published name so what the drop runs BEFORE is observable",
+ "entries": [
+  {
+   "id": "ibuprofen-tablets-400",
+   "name": "Ibuprofen tablets 400mg",
+   "aliases": ["ibuprofen tablets 400mg", "ibuprofen"],
+   "warnings": [null],
+   "interactions": [null],
+   "source": "test fixture"
+  },
+  {
+   "id": "ibuprofen",
+   "name": "Ibuprofen",
+   "aliases": [null, "ibuprofen"],
+   "atcCodes": [null, "M01AE01"],
+   "source": "test fixture"
+  }
+ ]
+}

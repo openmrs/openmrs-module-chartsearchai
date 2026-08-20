@@ -81,8 +81,10 @@ public final class DrugReferenceLoad {
 
 	/**
 	 * A safety arm whose availability depends on what the loaded dataset publishes, with the key it
-	 * serializes under. The wire key lives on the constant so the endpoint's field names and this enum
-	 * cannot drift apart.
+	 * serializes under and the predicate that decides it. Both live on the constant so the endpoint's
+	 * field names and this enum cannot drift apart, and so that an arm added here without a predicate
+	 * does not compile — where a counting pass deciding capability in a chain of {@code if}s would let
+	 * the new arm report {@code absent} over a dataset publishing it.
 	 *
 	 * <p>Only arms a dataset can withhold are listed. A recorded allergy to the drug itself needs
 	 * neither a class code nor a hand-authored rule, so no dataset can take it away and reporting it
@@ -94,8 +96,26 @@ public final class DrugReferenceLoad {
 		 * A published dosing ceiling — the overdose chip, {@code SafetyWarning.TYPE_OVERDOSE}, gated by
 		 * {@code chartsearchai.drugSafety.warnOnDoseExcess}. An age band with no ceiling does not count;
 		 * see {@link DrugSafetyValidator#publishesACeiling}.
+		 *
+		 * <p>{@link DrugSafetyValidator#publishesACeiling} is the patient-independent half of that arm's
+		 * own gate, rather than whether the entry has age bands at all. Only the half is decidable here —
+		 * {@code actionableBand} additionally selects the band by AGE, and its mg/kg leg needs a WEIGHT,
+		 * neither of which exists at load time — but the half that is decidable is exactly the one that
+		 * matters: a band publishing no ceiling can never fire for any patient, so counting bands by
+		 * presence would report a dosing arm over a dataset that publishes no dosing.
 		 */
-		DOSE_CEILINGS("doseCeilings"),
+		DOSE_CEILINGS("doseCeilings") {
+
+			@Override
+			boolean publishedBy(DrugReference entry) {
+				for (DrugReference.AgeBand band : entry.getAgeBands()) {
+					if (DrugSafetyValidator.publishesACeiling(band)) {
+						return true;
+					}
+				}
+				return false;
+			}
+		},
 
 		/**
 		 * Hand-authored allergy/condition rules the module can actually put to a chart — PART of
@@ -103,8 +123,25 @@ public final class DrugReferenceLoad {
 		 * {@code chartsearchai.drugSafety.warnOnContraindications}. Part, not all: a recorded allergy to
 		 * the drug itself needs no rule and no code, so {@code absent} here does NOT mean
 		 * contraindication checking is dead.
+		 *
+		 * <p>{@link DrugSafetyValidator#evaluatesAgainstTheChart} rather than a non-empty contraindication
+		 * list, because that is the documented answer to "could the module even ask?": a rule typed neither
+		 * {@code allergy} nor {@code condition}, or carrying no matchable token, is unaskable. Counting the
+		 * list instead would publish capability the arm does not have, which is the "looks healthy, checks
+		 * nothing" state this whole report exists to remove.
 		 */
-		HAND_AUTHORED_RULES("handAuthoredRules"),
+		HAND_AUTHORED_RULES("handAuthoredRules") {
+
+			@Override
+			boolean publishedBy(DrugReference entry) {
+				for (DrugReference.Contraindication rule : entry.getContraindications()) {
+					if (DrugSafetyValidator.evaluatesAgainstTheChart(rule)) {
+						return true;
+					}
+				}
+				return false;
+			}
+		},
 
 		/**
 		 * Class codes reduced to the level-4 subgroup the class arms actually compare — the
@@ -128,7 +165,13 @@ public final class DrugReferenceLoad {
 		 * neither leg can fire on it. Read it as "the dataset publishes codes the class comparison can
 		 * use", never as "a class chip is reachable for this entry".
 		 */
-		ATC_CODES("atcCodes"),
+		ATC_CODES("atcCodes") {
+
+			@Override
+			boolean publishedBy(DrugReference entry) {
+				return !entry.atcSubgroups().isEmpty();
+			}
+		},
 
 		/**
 		 * Pairwise interaction rules published by the dataset — PART of
@@ -152,7 +195,13 @@ public final class DrugReferenceLoad {
 		 * into a report cached for the life of the module. So this count is the rows the dataset
 		 * publishes, and the floor stays where the chip is raised.
 		 */
-		INTERACTIONS("interactions");
+		INTERACTIONS("interactions") {
+
+			@Override
+			boolean publishedBy(DrugReference entry) {
+				return !entry.getInteractions().isEmpty();
+			}
+		};
 
 		private final String wireKey;
 
@@ -164,6 +213,13 @@ public final class DrugReferenceLoad {
 		public String getWireKey() {
 			return wireKey;
 		}
+
+		/**
+		 * @return whether {@code entry} publishes what this arm needs — the production predicate for each
+		 *         arm, never a local re-expression of it. Abstract, so the count and this enum cannot come
+		 *         apart: see the enum's own javadoc.
+		 */
+		abstract boolean publishedBy(DrugReference entry);
 	}
 
 	/** What the loaded dataset can do for one {@link Arm}. Three states, not two — see the class javadoc. */
@@ -230,21 +286,9 @@ public final class DrugReferenceLoad {
 	}
 
 	/**
-	 * Counts, per arm, the entries publishing what that arm needs — through the production predicate for
-	 * each, never a local re-expression of it.
-	 *
-	 * <p>{@link DrugSafetyValidator#evaluatesAgainstTheChart} rather than a non-empty contraindication
-	 * list, because that is the documented answer to "could the module even ask?": a rule typed neither
-	 * {@code allergy} nor {@code condition}, or carrying no matchable token, is unaskable. Counting the
-	 * list instead would publish capability the arm does not have, which is the "looks healthy, checks
-	 * nothing" state this whole report exists to remove.
-	 *
-	 * <p>The dosing count asks {@link DrugSafetyValidator#publishesACeiling}, the patient-independent
-	 * half of that arm's own gate, rather than whether the entry has age bands at all. Only the half is
-	 * decidable here — {@code actionableBand} additionally selects the band by AGE, and its mg/kg leg
-	 * needs a WEIGHT, neither of which exists at load time — but the half that is decidable is exactly
-	 * the one that matters: a band publishing no ceiling can never fire for any patient, so counting
-	 * bands by presence would report a dosing arm over a dataset that publishes no dosing.
+	 * Counts, per arm, the entries publishing what that arm needs — by asking each {@link Arm} its own
+	 * {@link Arm#publishedBy} predicate rather than deciding capability here, so a new arm cannot be
+	 * added without one. Which predicate each arm asks, and why that one, is on the constant.
 	 *
 	 * <p>Nothing here skips a null, and that is not an omission. A null inside an entry's own lists is
 	 * dropped at the load boundary by {@link DrugReferenceValidity#NULL_LIST_ELEMENT}, which runs over
@@ -260,17 +304,10 @@ public final class DrugReferenceLoad {
 			counts.put(arm, Integer.valueOf(0));
 		}
 		for (DrugReference entry : entries) {
-			if (publishesACeiling(entry)) {
-				increment(counts, Arm.DOSE_CEILINGS);
-			}
-			if (publishesAnAskableRule(entry)) {
-				increment(counts, Arm.HAND_AUTHORED_RULES);
-			}
-			if (!entry.atcSubgroups().isEmpty()) {
-				increment(counts, Arm.ATC_CODES);
-			}
-			if (!entry.getInteractions().isEmpty()) {
-				increment(counts, Arm.INTERACTIONS);
+			for (Arm arm : Arm.values()) {
+				if (arm.publishedBy(entry)) {
+					increment(counts, arm);
+				}
 			}
 		}
 		return Collections.unmodifiableMap(counts);
@@ -278,24 +315,6 @@ public final class DrugReferenceLoad {
 
 	private static void increment(Map<Arm, Integer> counts, Arm arm) {
 		counts.put(arm, Integer.valueOf(counts.get(arm).intValue() + 1));
-	}
-
-	private static boolean publishesACeiling(DrugReference entry) {
-		for (DrugReference.AgeBand band : entry.getAgeBands()) {
-			if (DrugSafetyValidator.publishesACeiling(band)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static boolean publishesAnAskableRule(DrugReference entry) {
-		for (DrugReference.Contraindication rule : entry.getContraindications()) {
-			if (DrugSafetyValidator.evaluatesAgainstTheChart(rule)) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	/** @return the outcome for "no load has happened", which is not a failure — see the class javadoc. */

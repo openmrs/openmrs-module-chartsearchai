@@ -1512,7 +1512,8 @@ public class DrugReference {
 
 	/**
 	 * @return EVERY occurrence of one of this entry's names in {@code foldedLowerText}, each carrying its
-	 *         distance from {@code pos} and the span it covers; empty when none of them occurs. Where
+	 *         distance from {@code pos} and the span it covers; empty — and then immutable, so a caller
+	 *         pools the answer rather than appending to it — when none of them occurs. Where
 	 *         this entry is NAMED, answered by the same rule {@link #matchesText} answers whether it is
 	 *         named at all. A distance is zero when {@code pos} falls inside that occurrence.
 	 *
@@ -1561,7 +1562,11 @@ public class DrugReference {
 		if (foldedLowerText == null) {
 			return Collections.emptyList();
 		}
-		List<NamedOccurrence> found = new ArrayList<NamedOccurrence>();
+		// Allocated on the first hit and not before: the dose arm asks this of EVERY entry in the
+		// knowledge base per stated dose, and over the real 19 MB DDInter export (2283 entries) 46 of them
+		// answer for a 140-character clause. Thrift rather than a fix — the sweep measures 1.28 ms — and
+		// the empty answer is shared with the null-text path above so both return one shape.
+		List<NamedOccurrence> found = null;
 		for (String alias : aliases) {
 			if (alias == null) {
 				continue;
@@ -1574,11 +1579,14 @@ public class DrugReference {
 				// right-hand side would be overstated. wordIndex is what keeps that true.
 				int end = idx + w.length();
 				int distance = pos < idx ? idx - pos : (pos > end ? pos - end : 0);
+				if (found == null) {
+					found = new ArrayList<NamedOccurrence>();
+				}
 				found.add(new NamedOccurrence(distance, idx, end));
 				idx = wordIndex(foldedLowerText, w, idx + 1);
 			}
 		}
-		return found;
+		return found != null ? found : Collections.<NamedOccurrence> emptyList();
 	}
 
 	/**
@@ -1609,6 +1617,12 @@ public class DrugReference {
 		 *         fact that decides a tie in the dose arm: a name present only as part of a longer name
 		 *         the same clause carries is not independently named there, whichever side of it the dose
 		 *         falls on. Strictly, so two occurrences of the same span never each contain the other.
+		 *
+		 *         <p>It answers only that. Whether the container is near the dose BY the name it contains
+		 *         is a second question — a longer name can reach the dose with a word of its own — and the
+		 *         dose arm asks it by pairing this with the two distances; see
+		 *         {@code DrugSafetyValidator.nearnessInheritedFrom}, which is where that pairing lives so
+		 *         no caller has to remember it.
 		 */
 		boolean strictlyContains(NamedOccurrence other) {
 			return start <= other.start && end >= other.end

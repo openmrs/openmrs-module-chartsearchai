@@ -1,7 +1,7 @@
 {
  "version": "1.0",
  "source": "test fixture \u2014 issue #270: substances whose published names NEST, so a stated dose ties between them",
- "description": "Four substances, each publishing a 1 mg/day ceiling so any stated dose above it must warn once it reaches the substance it belongs to. Two pairs pose the two ways the distance metric can tie. Estrone/Estrone sulfate nest at the START, which ties when the dose PRECEDES them. Clavulanate/Amoxicillin and clavulanate nest at the END, which ties when the dose FOLLOWS them \u2014 the metric is (idx - pos) on one side and (pos - end) on the other, so co-location is not the same fact on both. Estrone and Clavulanate do not nest at all and their names differ in length, which is what keeps the ambiguity control from going vacuous: a blanket longer-wins tie-breaker would silence one of them and the sub-span rule must not. Four distinct level-4 ATC subgroups so no class arm fires beside the dose warnings. No bundled dataset can pose any of this: ddinter and atc never emit ageBands, and the curated seed's twelve aliases do not nest. Two further substances publish the SAME alias, which is the shape #187/#196 describe: their occurrences are identical spans, so neither may disqualify the other. A non-strict containment test would have each discard the other's occurrence and BOTH lose the dose \u2014 a lost overdose warning, this arm's forbidden direction.",
+ "description": "Four substances, each publishing a 1 mg/day ceiling so any stated dose above it must warn once it reaches the substance it belongs to. Two pairs pose the two ways the distance metric can tie. Estrone/Estrone sulfate nest at the START, which ties when the dose PRECEDES them. Clavulanate/Amoxicillin and clavulanate nest at the END, which ties when the dose FOLLOWS them \u2014 the metric is (idx - pos) on one side and (pos - end) on the other, so co-location is not the same fact on both. Estrone and Clavulanate do not nest at all and their names differ in length, which is what keeps the ambiguity control from going vacuous: a blanket longer-wins tie-breaker would silence one of them and the sub-span rule must not. Every entry carries a distinct level-4 ATC subgroup so no class arm fires beside the dose warnings. No bundled dataset can pose any of this: ddinter and atc never emit ageBands, and the curated seed's twelve aliases do not nest. Two further substances publish the SAME alias, which is the shape #187/#196 describe: their occurrences are identical spans, so neither may disqualify the other. A non-strict containment test would have each discard the other's occurrence and BOTH lose the dose \u2014 a lost overdose warning, this arm's forbidden direction. The two LAST entries pose the shape the round-1 review of #270 found. Framycetin nests at the END of Dexamethasone and framycetin, so with the dose AFTER them the container is near only because the constituent's name is its dose-facing edge; and the container publishes NO band, so where its nearness takes the number away from a mention the clause makes on its own, nothing warns about that number at all \u2014 a lost overdose warning rather than a re-attributed one. Estrone/Estrone sulfate pose the opposite edge with the same nesting, which is what bounds the remedy: there the container's dose-facing edge is its own word, so it vetoes like any independent rival.",
  "entries": [
   {
    "id": "estrone",
@@ -126,6 +126,39 @@
      "mgPerKgMax": 0,
      "maxDailyDoseMg": 1
     }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "framycetin",
+   "name": "Framycetin",
+   "substanceName": "framycetin",
+   "aliases": [
+    "framycetin"
+   ],
+   "atcCodes": [
+    "S01AA07"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "dexamethasone-and-framycetin",
+   "name": "Dexamethasone and framycetin",
+   "substanceName": "dexamethasone and framycetin",
+   "aliases": [
+    "dexamethasone and framycetin"
+   ],
+   "atcCodes": [
+    "S02CA02"
    ],
    "source": "test fixture"
   }

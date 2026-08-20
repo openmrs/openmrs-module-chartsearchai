@@ -5252,21 +5252,22 @@ public class DrugSafetyValidator {
 	 * so it can take a dose the raw search left with the subject. That is the accented case above read
 	 * from the other side, and it is what the arm's contract asks for — the number was stated nearer the
 	 * other drug's name. The boundary half moves toward more warnings except in one case — where the
-	 * occurrence NEAREST the dose was a substring one. Then {@code mine} grows, and the dose can fall
-	 * outside {@link #MAX_ALIAS_TO_DOSE_DISTANCE} or a rival can become strictly nearer. That case is the
+	 * occurrence NEAREST the dose was a substring one. Then the substance's nearest distance grows, and the
+	 * dose can fall outside {@link #MAX_ALIAS_TO_DOSE_DISTANCE} or a rival can become strictly nearer. That case is the
 	 * defect itself: a substring is not a naming, so that dose was never this substance's to claim.
 	 *
 	 * <p>Known limitation (v1): only the literal unit {@code mg} is recognised; doses written in
 	 * grams ("1 g"), "mgs", or "milligrams" are not parsed and will not be flagged. That is the
 	 * conservative (miss, never false-positive) direction.
 	 *
-	 * <p>Known limitation, and NOT what issue #260 turned out to be (issue #270): where two substances'
-	 * published names nest and the dose precedes both ({@code 2.5 mg of estrone sulfate}), the two names
-	 * start at the same index, so neither is strictly nearer and BOTH claim the dose — the shorter
-	 * substance warning about a number stated for the longer one. The boundary rule does not touch it,
-	 * because {@code estrone} is a whole word inside {@code estrone sulfate} and the prose rule finds it
-	 * exactly where a substring search does. Measured through {@code validate} on a two-entry fixture,
-	 * and left alone here: its remedy removes an attribution where this issue's adds one.
+	 * <p>Nesting no longer double-attributes (issue #270). Where two substances' published names nest,
+	 * their occurrences can sit at the same distance from the dose — a prefix pair does when the dose
+	 * PRECEDES them (shared start), a suffix pair when it FOLLOWS them (shared end), and neither ties in
+	 * the other arrangement — so neither was strictly nearer and BOTH claimed the number. The
+	 * boundary rule never touched it, because {@code estrone} is a whole word inside {@code estrone
+	 * sulfate} and the prose rule finds it exactly where a substring search does; what closed it was
+	 * giving {@link #substanceOwnsDose} the occurrence's SPAN, so a tie can be settled by containment.
+	 * Two equally-near names neither of which contains the other remain ambiguous and both still claim.
 	 */
 	private static List<AttributedDose> attributedDoses(String lowerAnswer, List<DrugReference> rows,
 			List<DrugReference> allEntries) {
@@ -5372,25 +5373,127 @@ public class DrugSafetyValidator {
 	 * @return true when one of the substance's own aliases is the nearest drug name to the dose at
 	 *         {@code dosePos} within {@code clause} (and within {@link #MAX_ALIAS_TO_DOSE_DISTANCE}). A
 	 *         DIFFERENT substance's alias sitting strictly closer means the dose belongs to that drug,
-	 *         not this one.
+	 *         not this one — unless that rival is not independently named here either, which is issue
+	 *         #270 read from both sides. One rule does all of it: a name present only as part of a longer
+	 *         name the same clause carries is not independently named there. Applied to THIS substance's
+	 *         occurrences it drops them; applied to a RIVAL's it stops them vetoing.
+	 *
+	 *         <p>Stated once. An occurrence counts unless one of the clause's RIVAL occurrences strictly
+	 *         contains it — the subject's occurrences and a rival's alike, which is why
+	 *         {@link #containedByAny} is asked twice against the one list — and the nearest counting
+	 *         occurrence of the subject wins, within {@link #MAX_ALIAS_TO_DOSE_DISTANCE}. So the veto
+	 *         carries TWO exceptions. A rival whose span CONTAINS one of the subject's occurrences is
+	 *         exempt only where its nearness is that occurrence's ({@link #nearnessInheritedFrom}) — a
+	 *         longer name reaching the dose with a word of its OWN vetoes like any rival. A rival nested
+	 *         in ANOTHER rival's name is exempt outright, being no more independently named here than a
+	 *         sub-span of {@code mine} is.
 	 *
 	 *         <p>Compared per SUBSTANCE rather than per row since issue #245: a sibling row is not a
-	 *         rival claimant for its own substance's dose, so its alias counts toward the near side
-	 *         ({@code mine} is the minimum over {@code rows}) and same-substance rows are excluded from
-	 *         the veto. Both edits move in the same direction — a smaller {@code mine}, a shorter veto
-	 *         list — so this predicate is a superset of the per-row one for every row of a substance and
-	 *         cannot cost a warning that fires today. Between substances nothing changes at all.
+	 *         rival claimant for its own substance's dose, so its occurrences count toward the near side
+	 *         (they all join {@code mine}) and same-substance rows are excluded from the veto. Both edits
+	 *         move in the same direction — a nearer surviving occurrence, a shorter veto list — so
+	 *         AS AGAINST THE PER-ROW FORM this predicate could not cost a warning. Between substances
+	 *         nothing changes at all.
+	 *
+	 *         <p><b>That sentence is about #245's two edits and no longer about the predicate as a
+	 *         whole</b> (issue #270). The containment filter below deliberately DOES cost a warning the
+	 *         per-row form would raise: a substance loses a dose it used to claim when the occurrence
+	 *         NEAREST the number is a strict sub-span of a rival's name.
+	 *
+	 *         <p><b>Its plainest form is also the case it exists for, and it belongs here because the
+	 *         veto scoping below refuses the very same silence.</b> Where the substance's ONLY mention is
+	 *         nested it is not named in that clause at all, so it claims nothing — and where the
+	 *         container publishes no band, which is the ordinary case for a combination product, the
+	 *         number is then warned about by NOBODY ({@code Dexamethasone and framycetin 2.5 mg daily}
+	 *         against framycetin's 1 mg/day ceiling). Accepted, and what separates it from the case below
+	 *         is which question produced the silence. This filter answers whether the clause NAMES this
+	 *         substance; where it does not there is nothing to hang the number on, exactly as if the
+	 *         knowledge base carried no row for the combination. The veto answers which of two NAMED
+	 *         claimants owns the number, and silence there means the arm found a claimant standing beside
+	 *         the number and then discarded it. So "unwarned by anybody" is decisive in the second place
+	 *         and not the first — read as an absolute it would forbid the filter too.
+	 *
+	 *         <p>Beyond that, the loss is not confined to a substance whose only mention was nested. One
+	 *         named elsewhere too rests its claim on the surviving mentions and meets the ordinary rule
+	 *         from there, so a survivor can fall outside {@link #MAX_ALIAS_TO_DOSE_DISTANCE}, or can lose
+	 *         to an independent rival the nested mention would have out-ranked
+	 *         ({@code Amoxicillin and clavulanate 2.5 mg, estrone too, clavulanate later} attributes to
+	 *         the combination and no longer also to Clavulanate, because Estrone sits between the number
+	 *         and Clavulanate's surviving mention). Measured through the real {@code validate} over
+	 *         {@code drug-reference-nested-name-dose-tie.json}: this arm and the per-row form differ on
+	 *         six of the fifteen clauses {@code NestedNameDoseTieTest} carries, all six removals, and
+	 *         each of the three shapes is a case there rather than a sentence here. The scalar minimum
+	 *         lives in the local {@code nearest}, computed AFTER that filter; {@code mine} is the list of
+	 *         occurrences, and nothing here has a magnitude until the filter has run.
+	 *
+	 *         <p><b>Which is narrower than the filter alone would make it, and deliberately</b> (round-1
+	 *         review of #270). Dropping the nested occurrence RAISES {@code nearest}, so on its own the
+	 *         filter also handed the container an ordinary strictly-nearer veto over a mention that is
+	 *         not nested at all: on {@code Amoxicillin and clavulanate ok, 2.5 mg clavulanate daily} the
+	 *         combination's name ends 5 characters before the number while the surviving standalone
+	 *         mention starts 7 after it, so the substance the clause doses BY NAME lost its warning — and
+	 *         where the container publishes no band of its own, the number went unwarned by anybody.
+	 *         That is the silence the paragraph above says this predicate may not produce — a claimant the
+	 *         clause names beside the number, found and then discarded — so a rival whose nearness is
+	 *         INHERITED from one of {@code mine} does not veto ({@link #nearnessInheritedFrom}). Scoped to
+	 *         inherited nearness and not to containment, because a container can be nearer by a word of
+	 *         its OWN — measured, and barring those too would add an attribution the per-row form never
+	 *         made, which is the bound that method's javadoc states.
+	 *
+	 *         <p><b>And barring the container is not enough where THREE names nest</b> (rounds 2 and 3 of
+	 *         #270). The seam was asymmetric: the filter judged {@code mine} for being mere sub-spans
+	 *         while the veto walked every rival regardless. So a rival the clause names ONLY inside a
+	 *         longer name still vetoed the substance the clause doses BY NAME — the standalone
+	 *         {@code potassium} at the tail of {@code Amoxicillin and clavulanate potassium ok, 2.5 mg
+	 *         clavulanate potassium daily}, and the leading constituent {@code dexamethasone} of
+	 *         {@code Dexamethasone and framycetin ok, 2.5 mg was given and then framycetin later}, which
+	 *         at distance 20 took the number from the surviving mention at 26. Measured through the real
+	 *         {@code validate}: nothing else in either clause publishes a ceiling, so each raised no
+	 *         warning of any kind, which the per-row form does not do. Closed by asking a rival the same
+	 *         containment question the filter asks the subject, against the same UNFILTERED
+	 *         {@code rivals}.
+	 *
+	 *         <p>One-directional by arithmetic, and this half needs stating because barring a
+	 *         veto is the permissive direction. Containment bounds a container to no farther than what it
+	 *         contains, so a barred rival {@code R} lies inside some rival {@code C} with
+	 *         {@code distance(C) <= distance(R)}, and the chain of containers ends at a rival contained by
+	 *         no rival — which this bar never touches, so it vetoes in {@code R}'s place. The only chain
+	 *         that ends barred ends at a container barred as INHERITED, i.e. at
+	 *         {@code distance(C) == distance(m)} for some {@code m} in {@code mine}; the per-row form's
+	 *         minimum is then no greater than {@code distance(m)}, which is {@code <= distance(R)}, so
+	 *         {@code R} was not strictly nearer THERE either and never vetoed in that form. Re-measured
+	 *         over the enlarged fixture: still six of the fifteen clauses, still all six removals, and
+	 *         the round-3 clause itself is not one of them — this arm and the per-row form agree on it.
+	 *
+	 *         <p><b>What that skip gives up, since it is not free either.</b> Where the container's
+	 *         dose-facing edge IS this substance's name, the surviving mention faces no rival at all from
+	 *         that quarter — so a mention on the far side of the number keeps a dose the container
+	 *         states: on {@code Amoxicillin and clavulanate 2.5 mg daily was fine,
+	 *         clavulanate is renally cleared} Clavulanate claims the combination's 2.5 mg from 23
+	 *         characters away. Measured, that is what the per-row form does too — the choice neither
+	 *         introduces that attribution nor removes it — so it is a case this issue leaves open rather
+	 *         than one the fix creates. Closing it means a rule about the
+	 *         number's IMMEDIATE neighbour ({@code N mg <name>} outranking a nearer name before it),
+	 *         which is a different rule needing its own measurement. Pinned in both directions by
+	 *         {@code NestedNameDoseTieTest} so neither can move in silence.
 	 *
 	 *         <p><b>The two edits do not cover the same case, and it is worth being exact about which
 	 *         does the work.</b> The defect issue #245 was filed for — {@code Amoxicillin} sitting
 	 *         closer to a dose than {@code Amoxicillin (suspension)} and taking it from a row of the
-	 *         same drug — is repaired entirely by {@code mine}: every row of {@code rows} is at distance
-	 *         at least {@code mine} by construction, so the veto could never have fired for one of them
-	 *         anyway. The exclusion below covers only a row of this substance that this pass did NOT
+	 *         same drug — is repaired entirely by pooling the rows: the veto below walks
+	 *         DIFFERENT-substance rivals only, so no row of this substance can take its own substance's
+	 *         dose however near it lands. The exclusion below covers only a row of this substance that this pass did NOT
 	 *         resolve (neither in play nor named by an active order) whose alias happens to land nearer
 	 *         the dose. That is a narrower case and no bundled fixture poses it, so nothing here pins the
 	 *         exclusion — it stays because it is the same defect one step out, not because a test reaches
 	 *         it, and trimming it to what the tests happen to reach would reintroduce that defect.
+	 *
+	 *         <p>That exclusion is the veto's IDENTITY test and nothing more, because the two lists are
+	 *         drawn from different universes: {@code mine} from the rows this pass resolved,
+	 *         {@code rivals} from {@code allEntries}. An unresolved row of this substance is therefore
+	 *         absent from BOTH, so its longer name neither disqualifies a nested occurrence of the
+	 *         subject nor bars a rival nested inside it — pre-existing, and shared with the per-row
+	 *         form.
 	 *
 	 *         <p>Identity is {@link DrugReference#substanceGroupKey()}, the module's one answer to "are
 	 *         these rows one substance?", so this arm cannot merge a set of rows that the chip's subject
@@ -5399,7 +5502,7 @@ public class DrugSafetyValidator {
 	 *         every bundled dataset is in.
 	 *
 	 *         <p><b>"Named" here means what it means everywhere else</b>
-	 *         ({@link DrugReference#nearestNameDistance}, the prose rule), which it did not until issue
+	 *         ({@link DrugReference#namedOccurrences}, the prose rule), which it did not until issue
 	 *         #260: the walk below asked every entry in the knowledge base a RAW SUBSTRING question,
 	 *         which the clause gate above would have answered no to. The walk itself is unchanged — what
 	 *         changed is the question. An entry the clause does not name could take a dose away from one
@@ -5413,49 +5516,145 @@ public class DrugSafetyValidator {
 	 *         {@link DrugReference#foldedLower} is not idempotent — see there. Measured 2026-08-14
 	 *         through both production methods: an entry whose alias is {@code a}, U+1D165, U+1D16D is
 	 *         matched by the gate in a clause folded from {@code a}, U+1D16D, U+0E31, U+1D165 and is
-	 *         NOT located here, so {@code mine} is {@link Integer#MAX_VALUE} for a clause that passed.
+	 *         NOT located here, so this substance has no occurrence at all for a clause that passed.
 	 *         Unreachable from any dataset or chart string — it needs musical combining marks in a drug
 	 *         name — and closing it means changing which accessor {@link #namesSubstance} calls, which
 	 *         CLAUDE.md governs. Reported rather than taken.
 	 */
 	private static boolean substanceOwnsDose(String clause, int dosePos, List<DrugReference> rows,
 			List<DrugReference> allEntries) {
-		int mine = nearestNameDistance(clause, dosePos, rows);
-		if (mine == Integer.MAX_VALUE || mine > MAX_ALIAS_TO_DOSE_DISTANCE) {
+		List<DrugReference.NamedOccurrence> mine = namedOccurrences(clause, dosePos, rows);
+		if (mine.isEmpty()) {
 			return false;
 		}
 		Object substance = rows.get(0).substanceGroupKey();
+		// Every occurrence of a DIFFERENT substance in this clause, collected once. The identity key is
+		// still built conditionally — only for an entry whose name actually occurs here, which on a
+		// knowledge base of thousands is a handful — but the condition has moved: it used to be "lands
+		// nearer than mine", and it is now "occurs at all", because containment cannot be decided from a
+		// distance. substanceGroupKey() rebuilds a key from normalized strings on every call, so the
+		// difference is worth stating rather than leaving to be discovered.
+		List<DrugReference.NamedOccurrence> rivals = new ArrayList<DrugReference.NamedOccurrence>();
 		for (DrugReference other : allEntries) {
-			// Distance first, identity second, and not the order the per-row form used — that one led
-			// with a pointer comparison because it was genuinely the cheap half, and the identity test
-			// here is not: substanceGroupKey() rebuilds a key from normalized strings on every call.
-			// Distance is not cheap either (nearestNameDistance has no early-out; it scans the clause
-			// once per name before it can answer Integer.MAX_VALUE), so this is not "fast test first".
-			// It is that the distance test is UNCONDITIONAL either way, while ordering it first makes
-			// the key conditional — built only for the handful of entries whose name actually lands
-			// nearer the dose, instead of for every entry in the knowledge base. Both halves are pure,
-			// so the order is free to be chosen on that.
-			if (other.nearestNameDistance(clause, dosePos) < mine
-					&& !substance.equals(other.substanceGroupKey())) {
+			List<DrugReference.NamedOccurrence> theirs = other.namedOccurrences(clause, dosePos);
+			if (!theirs.isEmpty() && !substance.equals(other.substanceGroupKey())) {
+				rivals.addAll(theirs);
+			}
+		}
+		// A rival's longer name CONTAINING one of this substance's occurrences disqualifies that
+		// occurrence and not the substance (issue #270): a name present only as part of a longer name the
+		// same clause carries is not independently named there, but the same substance may also be named
+		// on its own elsewhere in the clause, and then it is. Judging the substance on one occurrence is
+		// how a dose the answer states outright gets silenced.
+		int nearest = Integer.MAX_VALUE;
+		for (DrugReference.NamedOccurrence occurrence : mine) {
+			if (!containedByAny(occurrence, rivals) && occurrence.getDistance() < nearest) {
+				nearest = occurrence.getDistance();
+			}
+		}
+		if (nearest == Integer.MAX_VALUE || nearest > MAX_ALIAS_TO_DOSE_DISTANCE) {
+			return false;
+		}
+		// And then the rule this arm always had: a different substance named strictly nearer owns the
+		// number — asked of every rival that is INDEPENDENTLY NAMED here, which is the filter's own
+		// question asked of the other operand, against the same list. A rival whose span CONTAINS one of
+		// mine is measuring the name against itself, since the filter above already took that
+		// occurrence's claim away — but only where its nearness is that occurrence's, because a longer
+		// name can reach the number by a word of its own. And a rival nested in ANOTHER RIVAL's name is
+		// a name the clause carries only inside a longer one, so it is not a claimant at all: the
+		// standalone `potassium` at the tail of "Amoxicillin and clavulanate potassium", or the leading
+		// `dexamethasone` of "Dexamethasone and framycetin". Both were lost warnings before they were
+		// scoped, with nothing publishing a ceiling for either number. Neither bar can cost a warning
+		// elsewhere; the javadoc above says why, for the second by an arithmetic that also makes it
+		// one-directional. Unchanged in effect for every clause with no nesting in it.
+		for (DrugReference.NamedOccurrence rival : rivals) {
+			if (rival.getDistance() < nearest && !nearnessInheritedFrom(rival, mine)
+					&& !containedByAny(rival, rivals)) {
 				return false;
 			}
 		}
 		return true;
 	}
 
-	/** @return the nearest {@link DrugReference#nearestNameDistance} over every row of one substance,
-	 *          i.e. how close the substance is named to {@code pos} by whichever of its rows publishes
-	 *          the name the text used. {@code text} is the folded clause {@link #attributedDoses}
-	 *          established, and {@code pos} an index into it. */
-	private static int nearestNameDistance(String text, int pos, List<DrugReference> rows) {
-		int best = Integer.MAX_VALUE;
-		for (DrugReference row : rows) {
-			int distance = row.nearestNameDistance(text, pos);
-			if (distance < best) {
-				best = distance;
+	/**
+	 * @return whether any of {@code others} strictly contains {@code occurrence} — see
+	 *         {@link DrugReference.NamedOccurrence#strictlyContains}.
+	 *
+	 *         <p>One predicate for one question — "is this occurrence only a sub-span of a name the same
+	 *         clause carries, and so not independently named here" — which {@link #substanceOwnsDose}
+	 *         asks twice against the one list, {@code rivals}: of each of the subject's occurrences, to
+	 *         decide which of them may claim the dose, and of each rival, to decide which of them may
+	 *         veto it. The occurrence being judged comes from either side, which is why the parameters
+	 *         are not named for either role.
+	 *
+	 *         <p>The rival-against-the-rivals call passes a list {@code occurrence} is ITSELF in, and
+	 *         that needs no filtering: {@code strictlyContains} requires the containing span to be
+	 *         strictly larger, so an occurrence never contains itself, and two rivals occupying the
+	 *         IDENTICAL span (two substances publishing one alias — {@code Menotrophin}) never bar each
+	 *         other. The same strictness the subject's own side depends on.
+	 */
+	private static boolean containedByAny(DrugReference.NamedOccurrence occurrence,
+			List<DrugReference.NamedOccurrence> others) {
+		for (DrugReference.NamedOccurrence other : others) {
+			if (other.strictlyContains(occurrence)) {
+				return true;
 			}
 		}
-		return best;
+		return false;
+	}
+
+	/**
+	 * @return whether {@code rival}'s distance is INHERITED from one of {@code mine} — it strictly
+	 *         contains that occurrence and sits at the SAME distance, which is to say the edge of its span
+	 *         facing the dose is this substance's own name. (Containment already bounds a container to no
+	 *         FARTHER than what it contains, so equality here is exactly "no nearer".) Such a rival cannot
+	 *         be the reason the dose is not this substance's: its nearness IS this substance's nearness,
+	 *         so vetoing with it compares the name against itself.
+	 *
+	 *         <p>{@link #containedByAny}'s relation with the operands the other way round, plus a
+	 *         distance test. That predicate answers whether an occurrence is merely a sub-span of a name
+	 *         the clause carries, and {@link #substanceOwnsDose} asks it of the subject's occurrences and
+	 *         of the rivals alike; this asks a rival the converse — whether it is what one of the
+	 *         subject's occurrences is nested IN — where the answer alone settles nothing, which is why
+	 *         the distance test is here. Containment ALONE was measured and is wrong in the other
+	 *         direction: a container can be strictly nearer than the occurrence it contains, because the
+	 *         span reaching toward the dose is the rest of its name and not this substance's. Both shapes
+	 *         are one nested pair with the dose after it, and only which EDGE faces the number differs:
+	 *         {@code Dexamethasone and framycetin ok, 2.5 mg framycetin daily} (the constituent's name is
+	 *         that edge — inherited) against {@code Estrone sulfate 2.5 mg daily, estrone was the
+	 *         metabolite} ({@code sulfate} is — not inherited, 1 character out against the contained
+	 *         occurrence's 9). Barring those too gives this substance a dose the container's own name sits beside,
+	 *         which the per-row form never did, so the fix would stop being one-directional and would add
+	 *         false attributions of exactly the kind issue #270 removes.
+	 */
+	private static boolean nearnessInheritedFrom(DrugReference.NamedOccurrence rival,
+			List<DrugReference.NamedOccurrence> mine) {
+		for (DrugReference.NamedOccurrence occurrence : mine) {
+			if (rival.strictlyContains(occurrence) && rival.getDistance() == occurrence.getDistance()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** @return every {@link DrugReference#namedOccurrences} over every row of one substance — where the
+	 *          substance is named in {@code text}, by whichever of its rows publishes the name the text
+	 *          used. Empty when no row names it. {@code text} is the folded clause
+	 *          {@link #attributedDoses} established, and {@code pos} an index into it.
+	 *
+	 *          <p>Every occurrence and not the nearest, for the reason
+	 *          {@link DrugReference#namedOccurrences} gives: whether a substance is INDEPENDENTLY named
+	 *          near a dose is a question about each occurrence, and a substance named twice — once nested
+	 *          inside a rival's longer name, once on its own — is judged wrongly by any single one of
+	 *          them. Rows compound that: a presentation row publishing {@code estrone} beside one
+	 *          publishing {@code estrone sulfate} matches different lengths at the same place. */
+	private static List<DrugReference.NamedOccurrence> namedOccurrences(String text, int pos,
+			List<DrugReference> rows) {
+		List<DrugReference.NamedOccurrence> all = new ArrayList<DrugReference.NamedOccurrence>();
+		for (DrugReference row : rows) {
+			all.addAll(row.namedOccurrences(text, pos));
+		}
+		return all;
 	}
 
 	/** @return doses-per-day implied by a frequency phrase in {@code window}, or 0 when none found.

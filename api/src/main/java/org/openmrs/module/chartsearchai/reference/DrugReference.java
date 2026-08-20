@@ -1274,7 +1274,7 @@ public class DrugReference {
 	 * is one, and since issue #260 for a sharper one: prose is now asked as a boolean
 	 * ({@link #containsWord}) and as a position ({@link #wordIndex}), and two literals would be two
 	 * decisions about which of the two boundary rules prose gets — the drift #260 was, one level up.
-	 * {@link #nearestNameDistance} also depends on it arithmetically: its {@code end} is
+	 * {@link #namedOccurrences} also depends on it arithmetically: its {@code end} is
 	 * {@code idx + w.length()}, which is the whole match only while this is zero.
 	 */
 	private static final int PROSE_TRAILING_LETTERS = 0;
@@ -1389,7 +1389,7 @@ public class DrugReference {
 	 * Whether {@code text} carries {@code token} under the boundary rule: the boolean view of
 	 * {@link #boundedTokenIndex}, which is the one scan and has three sharers — prose matching
 	 * ({@link #containsWord}) and order-name matching ({@link #matchesOrderName}) through here, and
-	 * {@link #nearestNameDistance} through {@link #wordIndex}, because since issue #260 the dose arm
+	 * {@link #namedOccurrences} through {@link #wordIndex}, because since issue #260 the dose arm
 	 * needs the POSITION rather than the answer. So the boundary rule cannot drift between them.
 	 * A match needs {@code token} to start at a word boundary in {@code text} and to end at
 	 * one, give or take up to {@code maxTrailingLetters} letters. Letters only: a digit is never an
@@ -1431,7 +1431,7 @@ public class DrugReference {
 	 * {@code json} KB may carry an accented alias, and a one-sided fold would then silently stop
 	 * matching the accented order name it was written for.
 	 *
-	 * <p>Since issue #260 one caller does its own folding — {@link #nearestNameDistance} folds its needle
+	 * <p>Since issue #260 one caller does its own folding — {@link #namedOccurrences} folds its needle
 	 * and takes its haystack already folded, because it returns a POSITION and the fold is not
 	 * length-preserving. That is a deliberate exception to "the fold lives here" and not a second copy of
 	 * the rule: both go through {@link #foldedLower}, so there is still exactly one expression of what
@@ -1516,19 +1516,36 @@ public class DrugReference {
 	}
 
 	/**
-	 * @return the character distance from {@code pos} to the nearest occurrence of one of this entry's
-	 *         names in {@code foldedLowerText}, or {@link Integer#MAX_VALUE} when none of them occurs —
-	 *         how near this entry is NAMED to a position, answered by the same rule
-	 *         {@link #matchesText} answers whether it is named at all. Zero when {@code pos} falls
-	 *         inside such an occurrence.
+	 * @return EVERY occurrence of one of this entry's names in {@code foldedLowerText}, each carrying its
+	 *         distance from {@code pos} and the span it covers; empty — and then immutable, so a caller
+	 *         pools the answer rather than appending to it — when none of them occurs. Where
+	 *         this entry is NAMED, answered by the same rule {@link #matchesText} answers whether it is
+	 *         named at all. A distance is zero when {@code pos} falls inside that occurrence.
+	 *
+	 *         <p><b>All of them, not the nearest, and that is the whole of issue #270's second half.</b>
+	 *         The dose arm has to ask whether an occurrence is a sub-span of some rival's — a name
+	 *         present only as part of a longer name the same clause carries is not independently named
+	 *         there — and that is a question about EACH occurrence. Answer it against one reported
+	 *         occurrence and a substance the clause names twice, once nested and once on its own, is
+	 *         judged on whichever the scan happened to keep: it loses a dose it plainly owns, and which
+	 *         way it goes depends on alias order. Measured on {@code amoxicillin and clavulanate was at
+	 *         2.5 mg, clavulanate was stopped} — both of Clavulanate's occurrences sit at the same
+	 *         distance, so the substance IS independently named at the minimum, and reporting the nested
+	 *         one silenced it.
+	 *
+	 *         <p><b>The span, and not merely the matched length</b> (issue #270). A caller comparing two
+	 *         substances at the same distance needs to know whether one occurrence CONTAINS the other,
+	 *         and length alone cannot answer that: the metric is {@code idx - pos} on one side and
+	 *         {@code pos - end} on the other, so with a dose sitting BETWEEN two names an equal-distance
+	 *         rival on the far side that is merely longer looks like a container and is not one.
 	 *
 	 *         <p><b>The PROSE rule</b>, through {@link #wordIndex}, which is the same binding of
 	 *         {@link #boundedTokenIndex} that {@link #containsWord} is — so this shares the rule by
 	 *         construction rather than by both spelling the same allowance. Prose gets symmetric word
 	 *         boundaries and a clinician-entered drug NAME gets {@link #matchesOrderName}'s left boundary
 	 *         plus a short tail, and widening one to serve the other was issues #86, #128, #147 and #209.
-	 *         Its caller has already gated the clause on {@link #matchesText}, so answering the WHERE by
-	 *         a different rule than the WHETHER is the same mistake one level down — which is what issue
+	 *         Its caller has already gated the clause on {@link #matchesText}, so answering the WHERE by a
+	 *         different rule than the WHETHER is the same mistake one level down — which is what issue
 	 *         #260 was.
 	 *
 	 *         <p>{@code foldedLowerText} must be in {@link #foldedLower} form and {@code pos} an index
@@ -1546,11 +1563,15 @@ public class DrugReference {
 	 *         and because keeping it beside them is what lets it share the boundary rule instead of
 	 *         restating it — the whole of the defect it closes.
 	 */
-	int nearestNameDistance(String foldedLowerText, int pos) {
+	List<NamedOccurrence> namedOccurrences(String foldedLowerText, int pos) {
 		if (foldedLowerText == null) {
-			return Integer.MAX_VALUE;
+			return Collections.emptyList();
 		}
-		int best = Integer.MAX_VALUE;
+		// Allocated on the first hit and not before: the dose arm asks this of EVERY entry in the
+		// knowledge base per stated dose, and most entries are named nowhere in the clause, so most calls
+		// allocate nothing. Thrift, not a fix for a cost anyone measured — and the empty answer is shared
+		// with the null-text path above so both return one shape.
+		List<NamedOccurrence> found = null;
 		for (String alias : aliases) {
 			if (alias == null) {
 				continue;
@@ -1563,13 +1584,55 @@ public class DrugReference {
 				// right-hand side would be overstated. wordIndex is what keeps that true.
 				int end = idx + w.length();
 				int distance = pos < idx ? idx - pos : (pos > end ? pos - end : 0);
-				if (distance < best) {
-					best = distance;
+				if (found == null) {
+					found = new ArrayList<NamedOccurrence>();
 				}
+				found.add(new NamedOccurrence(distance, idx, end));
 				idx = wordIndex(foldedLowerText, w, idx + 1);
 			}
 		}
-		return best;
+		return found != null ? found : Collections.<NamedOccurrence> emptyList();
+	}
+
+	/**
+	 * One occurrence of one of an entry's own names in a clause: how far it sits from a position, and the
+	 * span it covers there. Immutable, and package-private because the only question it answers is the
+	 * dose arm's (issue #270).
+	 */
+	static final class NamedOccurrence {
+
+		private final int distance;
+
+		private final int start;
+
+		private final int end;
+
+		NamedOccurrence(int distance, int start, int end) {
+			this.distance = distance;
+			this.start = start;
+			this.end = end;
+		}
+
+		int getDistance() {
+			return distance;
+		}
+
+		/**
+		 * @return whether this occurrence strictly CONTAINS {@code other} — covers all of it and more. The
+		 *         fact the dose arm settles a claim by: a name present only as part of a longer name the
+		 *         same clause carries is not independently named there, whichever side of it the dose
+		 *         falls on. Strictly, so two occurrences of the same span never each contain the other.
+		 *
+		 *         <p>It answers only that. Whether the container is near the dose BY the name it contains
+		 *         is a second question — a longer name can reach the dose with a word of its own — and the
+		 *         dose arm asks it by pairing this with the two distances; see
+		 *         {@code DrugSafetyValidator.nearnessInheritedFrom}, which is where that pairing lives so
+		 *         no caller has to remember it.
+		 */
+		boolean strictlyContains(NamedOccurrence other) {
+			return start <= other.start && end >= other.end
+					&& (end - start) > (other.end - other.start);
+		}
 	}
 
 	/** @return {@link #containsWord}'s rule as a POSITION — {@link #boundedTokenIndex} with the prose

@@ -68,6 +68,18 @@ import org.junit.jupiter.api.Test;
  * a case rather than an argument, because barring a rival by the relation between the two NAMES instead
  * of by containment in this clause would reverse it.
  *
+ * <p><b>And a rival can be nested in ANOTHER rival, which neither of those two bars reaches.</b>
+ * {@code dexamethasone} is the leading constituent of {@code Dexamethasone and framycetin}, so on
+ * {@link #RIVAL_NAMED_ONLY_INSIDE_ANOTHER_RIVAL} it is nested in the span the filter discarded the
+ * subject's own occurrence from while containing, and being contained by, no occurrence of the subject at
+ * all — and it vetoed the substance the clause doses by name, in a clause where nothing else publishes a
+ * ceiling. Round 2 declined that widening "for want of a case" on the argument that such a rival must
+ * share the discarded occurrence's dose-facing edge; a leading constituent is the third possibility that
+ * argument misses, and the reason no earlier round could pose it is that the fixture carried its
+ * combination rows WITHOUT their leading constituents. It carries them now, which is also what makes
+ * {@link #FAR_STANDALONE_MENTION} an assertion about the rule rather than about a row's absence: with
+ * {@code Amoxicillin} in the knowledge base that case fails without this bar.
+ *
  * <p><b>Both of the filter's other costs are cases here as well</b>, so the predicate's javadoc claims
  * nothing this file cannot show: a substance whose only mention is nested loses the dose to nobody where
  * the container publishes no band ({@link #ONLY_MENTION_NESTED_AND_NO_BAND}, the accepted cost, and the
@@ -131,7 +143,7 @@ public class NestedNameDoseTieTest {
 			"Amoxicillin and clavulanate 2.5 mg, estrone too, clavulanate later.";
 
 	/** And the cost of the other direction. The container states the dose and the constituent is named on
-	 *  its own 22 characters the far side of the number; with the container barred from vetoing, that
+	 *  its own 23 characters the far side of the number; with the container barred from vetoing, that
 	 *  mention keeps the dose. The arm did that before this issue too — the fix neither introduces the
 	 *  attribution nor removes it — and closing it means a rule about the number's IMMEDIATE neighbour
 	 *  ({@code N mg <name>} outranking a nearer name before it), which is a different rule needing its
@@ -147,6 +159,19 @@ public class NestedNameDoseTieTest {
 			"Dexamethasone and framycetin ok, 2.5 mg framycetin daily.";
 
 	private static final String FRAMYCETIN_QUESTION = "Is framycetin safe for her?";
+
+	/** The round-3 review's finding, and the shape neither earlier round's fixture could pose: a rival
+	 *  the clause names ONLY inside ANOTHER rival's longer name. {@code dexamethasone} is the leading
+	 *  constituent of the combination, so it sits nested in the very span the filter discarded the
+	 *  subject's own occurrence from — closer to the number than the subject's surviving mention, and
+	 *  neither containing nor contained by any occurrence of the subject, so neither of the earlier
+	 *  bars reaches it. Round 2 declined this widening "for want of a case", having reasoned that such
+	 *  a rival must share the discarded occurrence's dose-facing edge; a leading constituent is the
+	 *  third possibility that argument misses. Nothing here publishes a ceiling except Framycetin, so
+	 *  its veto left the clause raising no warning of any kind — and it is a rival the filter has
+	 *  already ruled cannot claim the dose, so the number it silenced reached nobody at all. */
+	private static final String RIVAL_NAMED_ONLY_INSIDE_ANOTHER_RIVAL =
+			"Dexamethasone and framycetin ok, 2.5 mg was given and then framycetin later.";
 
 	/** The SAME nesting as {@link #PREFIX_NESTING_DOSE_BEFORE} with the dose on the other side, and the
 	 *  bound on barring a container from vetoing. Here the container's dose-facing edge is its own word
@@ -334,6 +359,79 @@ public class NestedNameDoseTieTest {
 		assertEquals(150, spread.get(1).getDistance(),
 				"precondition: and once 150 characters away, outside the arm's alias-to-dose cap — trim "
 						+ "the sentence and the case silently becomes a duplicate of the rival one");
+
+		// The equal-distance case's own defining premise, which the assertions above did not reach: the
+		// two occurrences have to sit at the SAME distance, or the case silently becomes a duplicate of
+		// NAMED_NESTED_AND_INDEPENDENTLY and stops saying anything about which occurrence a
+		// single-occurrence rule would have reported.
+		String tied = DrugReference.foldedLower(NAMED_TWICE_AT_THE_SAME_DISTANCE.toLowerCase(Locale.ROOT));
+		List<DrugReference.NamedOccurrence> both = clavulanate.namedOccurrences(tied,
+				tied.indexOf("2.5"));
+
+		assertEquals(2, both.size(),
+				"precondition: the equal-distance clause names the constituent twice");
+		assertEquals(both.get(0).getDistance(), both.get(1).getDistance(),
+				"precondition: at the SAME distance from the number — edit the sentence so the standalone "
+						+ "mention is nearer and the case passes as a duplicate of the nested-and-"
+						+ "independent one instead of pinning the all-occurrences widening");
+		assertFalse(both.get(0).strictlyContains(both.get(1))
+				|| both.get(1).strictlyContains(both.get(0)),
+				"precondition: and neither of them containing the other, or the filter settles the tie "
+						+ "before the equality can matter");
+
+		// The far-mention case's geometry, which nothing asserted either and which the round-3 fixture
+		// change made load-bearing: it is the case that flips when an ordinary row (Amoxicillin) joins
+		// the knowledge base, so the distances its comment quotes have to be readable off the clause.
+		String far = DrugReference.foldedLower(FAR_STANDALONE_MENTION.toLowerCase(Locale.ROOT));
+		List<DrugReference.NamedOccurrence> farSide = clavulanate.namedOccurrences(far,
+				far.indexOf("2.5"));
+
+		assertEquals(2, farSide.size(),
+				"precondition: the far-mention clause names the constituent twice");
+		assertEquals(1, farSide.get(0).getDistance(),
+				"precondition: once nested inside the combination's name, 1 character from the number");
+		assertEquals(23, farSide.get(1).getDistance(),
+				"precondition: and once on the far side of it, 23 characters away and inside the arm's "
+						+ "alias-to-dose cap — that mention is what claims the container's dose");
+
+		// And the round-3 shape: a rival nested in ANOTHER rival. The leading constituent has to sit
+		// inside the container, strictly nearer the number than the subject's surviving mention, and
+		// clear of BOTH earlier bars — otherwise the case passes on one of them and says nothing about
+		// this one.
+		DrugReference dexamethasone = DrugReferenceTestSupport.row(entries, "Dexamethasone");
+		DrugReference container = DrugReferenceTestSupport.row(entries, "Dexamethasone and framycetin");
+		DrugReference framycetin = DrugReferenceTestSupport.row(entries, "Framycetin");
+		String outer = DrugReference
+				.foldedLower(RIVAL_NAMED_ONLY_INSIDE_ANOTHER_RIVAL.toLowerCase(Locale.ROOT));
+		int outerDose = outer.indexOf("2.5");
+		DrugReference.NamedOccurrence leading = dexamethasone.namedOccurrences(outer, outerDose).get(0);
+		DrugReference.NamedOccurrence whole = container.namedOccurrences(outer, outerDose).get(0);
+		List<DrugReference.NamedOccurrence> subject = framycetin.namedOccurrences(outer, outerDose);
+
+		assertEquals(2, subject.size(),
+				"precondition: the subject is named twice there — once nested, once on its own");
+		assertTrue(whole.strictlyContains(subject.get(0)),
+				"precondition: the first nested inside the container, or the filter never discards it and "
+						+ "the subject's nearest distance never rises above the leading constituent's");
+		assertTrue(whole.strictlyContains(leading),
+				"precondition: the leading constituent nested inside that SAME container — the relation "
+						+ "the round-3 bar reads, and the one no fixture carrying combination rows "
+						+ "without their constituents could pose");
+		assertEquals(20, leading.getDistance(),
+				"precondition: the leading constituent 20 characters from the number");
+		assertEquals(26, subject.get(1).getDistance(),
+				"precondition: and the surviving mention 26 — strictly farther, or the constituent never "
+						+ "vetoes and the case passes without exercising the bar at all");
+		assertFalse(leading.strictlyContains(subject.get(0)) || leading.strictlyContains(subject.get(1))
+				|| subject.get(0).strictlyContains(leading) || subject.get(1).strictlyContains(leading),
+				"precondition: containing NEITHER of the subject's occurrences and contained by neither, "
+						+ "or one of the two earlier bars reaches it and the case is about those instead");
+		assertNotEquals(leading.getDistance(), whole.getDistance(),
+				"precondition: and the container's own nearness is NOT the leading constituent's, or the "
+						+ "inherited-nearness bar would already cover it");
+		assertNull(dexamethasone.bandForAge(30),
+				"precondition: the leading constituent publishes no band, so its veto leaves the clause "
+						+ "with no warning of any kind rather than a re-attributed one");
 	}
 
 	@Test
@@ -426,10 +524,11 @@ public class NestedNameDoseTieTest {
 		// What barring the container does NOT do: exempt the substance from the ordinary rule. The nested
 		// mention sat one character from the number and would have out-ranked Estrone; the survivor sits
 		// twenty-one away, so Estrone takes the dose from Clavulanate. Measured against the per-row form
-		// (this arm with the containment filter and the veto scoping both disabled) this is the third of
-		// the ten clauses here where the two disagree, and the only one where the substance is named
-		// outside a rival's name as well — so the honest statement of the filter's cost is "the nearest
-		// occurrence was nested", not "every occurrence was".
+		// (this arm with the containment filter and the veto scoping both disabled) this is one of the
+		// six clauses here where the two disagree, and one of the two — SURVIVOR_OUT_OF_RANGE is the
+		// other — where the losing substance is named outside a rival's name as well, which is
+		// why those two are the filter's INDIRECT costs. So the honest statement of that cost is "the
+		// nearest occurrence was nested", not "every occurrence was".
 		assertEquals(0, DrugReferenceTestSupport.overdoseCount(warnings, "Clavulanate"),
 				"a rival that contains none of this substance's occurrences still vetoes on distance, and "
 						+ "the distance it is compared against is the SURVIVOR's");
@@ -445,7 +544,7 @@ public class NestedNameDoseTieTest {
 		List<SafetyWarning> warnings = validate(FAR_STANDALONE_MENTION);
 
 		// The price of the rule above, stated as an assertion. Here the combination is what the clause
-		// doses and the constituent is named on its own 22 characters the other side of the number; the
+		// doses and the constituent is named on its own 23 characters the other side of the number; the
 		// container cannot veto, no independent rival is named, so the constituent claims it. Measured:
 		// the per-row form attributes it exactly the same way, so this is a case #270 leaves open and not
 		// one the fix creates. It is pinned so that closing it is a deliberate change with its own
@@ -521,6 +620,31 @@ public class NestedNameDoseTieTest {
 		assertEquals(0, DrugReferenceTestSupport.overdoseCount(warnings, "Clavulanate potassium"),
 				"and the substance whose name merely contains it does not: a rival named independently "
 						+ "here vetoes on distance like any other, however its name relates to this one");
+	}
+
+	@Test
+	public void aRivalNamedOnlyInsideAnotherRivalsNameDoesNotVetoEither() throws Exception {
+		List<SafetyWarning> warnings = validate(RIVAL_NAMED_ONLY_INSIDE_ANOTHER_RIVAL,
+				FRAMYCETIN_QUESTION);
+
+		// The same principle once more, one rival further out. The subject's nested occurrence goes, the
+		// container's inherited veto goes — and what was left to veto was `dexamethasone`, a name this
+		// clause carries only inside the container's, at 20 characters against the surviving mention's 26.
+		// It is not contained by any occurrence of the subject and does not contain one, so neither of the
+		// earlier bars reaches it; it is barred because it is nested in another RIVAL, and the rival it is
+		// nested in is the container the filter already discarded the subject's occurrence from. Nothing
+		// else here publishes a ceiling, so the count was zero — and the vetoing name is one the filter
+		// had already ruled cannot claim the dose, so the number reached nobody at all.
+		assertEquals(1, DrugReferenceTestSupport.overdoseCount(warnings, "Framycetin"),
+				"the substance the clause doses by name keeps its warning: a rival the clause states only "
+						+ "inside another rival's name is not independently named here either");
+		assertEquals(0, DrugReferenceTestSupport.overdoseCount(warnings, "Dexamethasone"),
+				"and the leading constituent claims nothing — its own occurrence is the one the filter "
+						+ "discarded, which is exactly why it may not veto with it");
+		assertEquals(1, warnings.size(),
+				"and that is the whole of what this clause raises: with a rival nested in another rival "
+						+ "allowed to veto, the count was zero — a lost overdose warning, not a renamed "
+						+ "one");
 	}
 
 	@Test

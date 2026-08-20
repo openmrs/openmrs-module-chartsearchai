@@ -905,7 +905,7 @@ public class DrugReferenceService {
 			// (ADR Decision 36). A configuration finding is loud either way — see logTo.
 			validity.logTo(log, active.lastLoadOrigin());
 			DrugReferenceLoad outcome = new DrugReferenceLoad(effectiveFormat, configuredFormat,
-					configuredPath, active.lastLoadOrigin(), loaded.size(), validity.getFindings());
+					configuredPath, active.lastLoadOrigin(), loaded, validity.getFindings());
 			// A configured source that resolved to nothing is reported LOUDLY, naming both global
 			// properties: this used to print at INFO exactly like a successful load, so the whole
 			// drug-safety feature could be off with nothing at default log levels to say so

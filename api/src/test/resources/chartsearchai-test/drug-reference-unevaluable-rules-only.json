@@ -1,0 +1,34 @@
+{
+ "version": "1.0",
+ "source": "test fixture — contraindication rules the module cannot put to a chart: one typed neither allergy nor condition, one carrying no matchable token",
+ "entries": [
+  {
+   "id": "ibuprofen",
+   "name": "Ibuprofen",
+   "aliases": ["ibuprofen"],
+   "atcCodes": ["M01AE01"],
+   "contraindications": [
+    {
+     "type": "diagnosis",
+     "token": "peptic ulcer",
+     "note": "a type neither DrugSafetyValidator.isAllergyRule nor isConditionRule recognises, so no chart list exists to evaluate it against"
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "paracetamol",
+   "name": "Paracetamol",
+   "aliases": ["paracetamol"],
+   "atcCodes": ["N02BE01"],
+   "contraindications": [
+    {
+     "type": "condition",
+     "token": "   ",
+     "note": "a recognised type whose token PatientClinicalContext.matchableToken refuses, so the rule can never match anything"
+    }
+   ],
+   "source": "test fixture"
+  }
+ ]
+}

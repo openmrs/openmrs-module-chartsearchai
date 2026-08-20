@@ -51,16 +51,23 @@ public class ChartSearchAiDrugReferenceStatusTest {
 	/**
 	 * Every key the endpoint documents, in the order it serializes them.
 	 *
-	 * <p>{@code findings} is last, and joined this list for the load-time validity check (issues
+	 * <p>{@code findings} joined this list for the load-time validity check (issues
 	 * #150/#156/#196/#211). It belongs on the wire for the same reason the rest of this response does:
 	 * the endpoint answers "what is actually loaded?" after a lazy load, and "what was wrong with it, and
 	 * what did the loader do about it?" is that same question — retained in Java and withheld here, the
-	 * check would be visible to tests and invisible to the operator it protects. Appending rather than
-	 * inserting is what keeps this an ORDERED assertion instead of an order-insensitive one.
+	 * check would be visible to tests and invisible to the operator it protects.
+	 *
+	 * <p>{@code arms} joined it afterwards, for issue #285, and for that same reason: a dataset can load
+	 * 2283 entries and still leave the dosing and hand-authored-rule arms with nothing to act on. Prose
+	 * said so for the shipped DEFAULT in several places; what none of it can describe is the dataset a
+	 * given install configured for itself, which is what this field answers.
+	 *
+	 * <p>A new key is APPENDED, never inserted — that is what keeps this an ORDERED assertion instead of
+	 * an order-insensitive one, and the rule is the append rather than whichever key is last today.
 	 */
 	private static final List<String> DOCUMENTED_FIELDS = Arrays.asList("enabled", "loaded", "inert",
 			"entryCount", "sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin",
-			"findings");
+			"findings", "arms");
 
 	private AdministrationService priorAdministrationService;
 
@@ -154,6 +161,38 @@ public class ChartSearchAiDrugReferenceStatusTest {
 
 		assertThrows(RuntimeException.class, () -> controller.drugReferenceStatus(),
 				"an unprivileged caller must be refused before the drug-reference service is consulted");
+	}
+
+	/**
+	 * Every arm on the wire, and on a default installation every one of them {@code unloaded} — never
+	 * {@code absent}, which is a claim that a dataset was read and found to carry nothing for that arm.
+	 * That is the same distinction {@code inert} draws at whole-dataset scale, and the reason each arm
+	 * reports a verdict rather than only a count: {@code entriesPublishing} is 0 in both states, so a
+	 * caller reading the count alone cannot tell "nobody looked" from "we looked and there is none".
+	 */
+	@Test
+	public void drugReferenceStatus_reportsEveryArmAsUnloadedWhenNothingIsLoaded() {
+		grantPrivileges(true);
+		installAdministrationService(new HashMap<String, String>());
+
+		Map<?, ?> body = statusBody(controllerWith(new DrugReferenceService()));
+
+		Map<?, ?> arms = (Map<?, ?>) body.get("arms");
+		assertNotNull(arms, "the endpoint must report which safety arms the loaded dataset can serve");
+		assertEquals(Arrays.asList("doseCeilings", "handAuthoredRules", "atcCodes", "interactions"),
+				new ArrayList<Object>(arms.keySet()),
+				"the arm keys are what an operator reads; a renamed or dropped one leaves them reading "
+						+ "null, and a MISSING one is worse — an arm absent from this map reads as an "
+						+ "arm no dataset can withhold, which is what the map claims about the arms it "
+						+ "omits");
+		for (Object arm : arms.keySet()) {
+			Map<?, ?> reported = (Map<?, ?>) arms.get(arm);
+			assertEquals("unloaded", reported.get("coverage"),
+					arm + ": nothing was loaded, so this arm's coverage is unknown rather than empty");
+			assertEquals(Integer.valueOf(0), reported.get("entriesPublishing"),
+					arm + ": and the count is 0 in this state as well, which is why the verdict beside "
+							+ "it is what carries the meaning");
+		}
 	}
 
 	private static ChartSearchAiRestController controllerWith(DrugReferenceService service) {

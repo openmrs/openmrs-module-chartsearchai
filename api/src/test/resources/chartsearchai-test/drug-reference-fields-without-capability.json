@@ -1,0 +1,19 @@
+{
+ "version": "1.0",
+ "source": "test fixture — every arm's field is present and none of them is capability: an age band with no ceiling, an ATC code too short to reduce to a level-4 subgroup, and no interactions",
+ "entries": [
+  {
+   "id": "ibuprofen",
+   "name": "Ibuprofen",
+   "aliases": ["ibuprofen"],
+   "atcCodes": ["M01A"],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 11
+    }
+   ],
+   "source": "test fixture"
+  }
+ ]
+}

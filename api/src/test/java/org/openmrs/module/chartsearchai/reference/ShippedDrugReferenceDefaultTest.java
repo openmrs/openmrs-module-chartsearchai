@@ -98,6 +98,53 @@ public class ShippedDrugReferenceDefaultTest extends BaseModuleContextSensitiveT
 	}
 
 	/**
+	 * The bound the class javadoc pins is stated in prose in several places — {@code config.xml}'s
+	 * property description, {@link ChartSearchAiConstants#GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS}'s javadoc,
+	 * the validator's, the README, ADR Decision 36 — and none of them can speak about a dataset an
+	 * operator configured for themselves (issue #285). This asserts that the load status answers it per
+	 * arm, from the entries actually loaded.
+	 *
+	 * <p>Per arm and not per dataset, because {@link DrugReferenceLoad#isInert()} is already the
+	 * whole-dataset verdict and this dataset is not inert by it — 2283 entries load and the interaction
+	 * arms work. What no existing field can say is that two of the arms have nothing to act on while the
+	 * rest are fine.
+	 *
+	 * <p>{@code ABSENT} and not a count of zero, because {@link DrugReferenceLoad#notLoaded()} zeroes
+	 * every field: a bare zero cannot separate "the feature is off and nothing was read" from "a dataset
+	 * was read and publishes none", which is the {@code count of 0 printed as cheerfully as 2283} failure
+	 * ADR Decision 32 was written against. The count is reported beside the verdict, never instead of it.
+	 */
+	@Test
+	public void theShippedDefaultReportsWhichSafetyArmsItsDatasetCanServe() {
+		enableWithNothingElseConfigured();
+
+		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+		assertTrue(status.getEntryCount() >= WHOLE_KNOWLEDGE_BASE_ENTRIES,
+				"precondition: the whole knowledge base loaded. Asserted as a count rather than through "
+						+ "isInert(), which is loaded && entryCount == 0 and so is also false for a load "
+						+ "that never happened — it cannot establish that a dataset was read");
+		assertFalse(status.isInert(),
+				"and it is not inert at whole-dataset scale, which is exactly why a per-arm verdict is "
+						+ "needed to say anything about it");
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.DOSE_CEILINGS),
+				"DDInter publishes no age band, so warnOnDoseExcess has nothing it can ever fire on and "
+						+ "the status says so rather than leaving it to be discovered");
+		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.DOSE_CEILINGS));
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES),
+				"and no hand-authored allergy/condition rule either");
+		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES));
+		assertEquals(DrugReferenceLoad.Coverage.PUBLISHED,
+				status.coverageOf(DrugReferenceLoad.Arm.ATC_CODES),
+				"while the arms that need only a class code do have data — reporting only what is "
+						+ "missing would make this a defect list rather than an answer to 'what is this "
+						+ "install checking?'");
+		assertTrue(status.entriesPublishing(DrugReferenceLoad.Arm.ATC_CODES) > 0);
+	}
+
+	/**
 	 * The shipped default must not be LOUD, which is the same rule the untouched path already has: this is
 	 * the normal state of every install, so a WARN here is a WARN nobody can act on.
 	 *

@@ -374,15 +374,179 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	}
 
 	/**
+	 * A rule the module cannot put to a chart is not capability. The arms report counts entries through
+	 * {@link DrugSafetyValidator#evaluatesAgainstTheChart}, not through a non-empty contraindication
+	 * list, and this is the case that tells the two apart: both entries here publish a rule, and neither
+	 * rule is askable — one typed {@code diagnosis}, which is neither of the two chart lists the module
+	 * has, and one typed {@code condition} whose token is whitespace, which
+	 * {@code PatientClinicalContext.matchableToken} refuses.
+	 *
+	 * <p>Without this case the weaker predicate passes every test in the suite while publishing
+	 * capability the arm does not have — an operator reading {@code handAuthoredRules: published} would
+	 * conclude their rules are being evaluated when nothing can ever match. That is the "looks healthy,
+	 * checks nothing" state the arms report exists to remove, reintroduced by the report itself.
+	 *
+	 * <p>{@code atcCodes} is asserted alongside deliberately: it shows the dataset DID load and its other
+	 * arm is served, so the {@code ABSENT} above is a measurement rather than a fixture that could not
+	 * have produced anything.
+	 */
+	@Test
+	public void anUnaskableRuleIsNotReportedAsHandAuthoredCapability() throws IOException {
+		String path = copyToAppData("/chartsearchai-test/drug-reference-unevaluable-rules-only.json",
+				"unevaluable-rules.json");
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON, path);
+
+		DrugReferenceService service = new DrugReferenceService();
+		DrugReferenceLoad status = service.getLoadStatus();
+
+		assertEquals(2, status.getEntryCount(), "precondition: both entries load");
+		for (DrugReference entry : service.getAll()) {
+			assertFalse(entry.getContraindications().isEmpty(),
+					entry.getName() + " publishes a rule, which is what makes this case discriminating: "
+							+ "a count of non-empty lists would report capability here");
+		}
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES),
+				"neither rule can be evaluated against a chart, so the arm has nothing to act on");
+		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES));
+		assertEquals(DrugReferenceLoad.Coverage.PUBLISHED,
+				status.coverageOf(DrugReferenceLoad.Arm.ATC_CODES),
+				"while the class arms are served by the same entries, so the dataset did load");
+	}
+
+	/**
+	 * The other direction, and the only form an operator ever actually reads: a dataset that DOES serve
+	 * its arms, serialized. The curated four-drug seed the module ships carries a ceiling, an askable
+	 * rule, a level-5 class code and an interaction on every entry, so all four arms report
+	 * {@code published} — and this is the case that pins the {@code toMap} rendering of a LOADED report.
+	 *
+	 * <p>Without it, replacing both {@code arms} puts with the constants {@code "unloaded"} and {@code 0}
+	 * passes the whole suite: the wire case covers only the unloaded shape, and the cases that exercise
+	 * {@code PUBLISHED} and {@code ABSENT} call {@code coverageOf} directly and never look at the map.
+	 */
+	@Test
+	public void aDatasetThatServesItsArmsSaysSoInTheSerializedStatus() {
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON, "");
+
+		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+		assertEquals(4, status.getEntryCount(), "precondition: the curated seed loaded");
+		for (DrugReferenceLoad.Arm arm : DrugReferenceLoad.Arm.values()) {
+			assertEquals(DrugReferenceLoad.Coverage.PUBLISHED, status.coverageOf(arm),
+					arm + ": every entry of the curated seed carries what each arm needs");
+			assertEquals(4, status.entriesPublishing(arm), arm + ": on all four entries");
+		}
+
+		Map<?, ?> arms = (Map<?, ?>) status.toMap().get("arms");
+		Map<?, ?> dosing = (Map<?, ?>) arms.get(DrugReferenceLoad.Arm.DOSE_CEILINGS.getWireKey());
+		assertEquals("published", dosing.get("coverage"),
+				"the verdict reaches the map, rather than the map being able to say only 'unloaded'");
+		assertEquals(Integer.valueOf(4), dosing.get("entriesPublishing"),
+				"and so does the count");
+	}
+
+	/**
+	 * Presence of a field is not capability, on every arm that can tell the two apart. This entry
+	 * publishes an age band with no ceiling at all, an ATC code one character too short to reduce to the
+	 * level-4 subgroup the class arms compare, and no interactions — so each arm has data in its field
+	 * and nothing it can act on.
+	 *
+	 * <p>Each assertion here fails against the obvious weaker predicate: counting non-empty
+	 * {@code getAgeBands()} reports the dosing arm over bands no patient can be measured against
+	 * ({@code AgeBand}'s ceilings are primitives defaulting to 0, so such a band parses perfectly well),
+	 * and counting {@code normalizedAtcCodes()} reports the class arms over a code
+	 * {@code atcSubgroups()} discards.
+	 */
+	@Test
+	public void aFieldWithNothingActionableInItIsNotReportedAsCapability() throws IOException {
+		String path = copyToAppData("/chartsearchai-test/drug-reference-fields-without-capability.json",
+				"fields-without-capability.json");
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON, path);
+
+		DrugReferenceService service = new DrugReferenceService();
+		DrugReferenceLoad status = service.getLoadStatus();
+
+		assertEquals(1, status.getEntryCount(), "precondition: the entry loaded");
+		DrugReference entry = service.getAll().get(0);
+		assertFalse(entry.getAgeBands().isEmpty(),
+				"precondition: a band IS published, which is what makes the dosing assertion below "
+						+ "discriminating rather than trivially true");
+		assertFalse(entry.normalizedAtcCodes().isEmpty(),
+				"precondition: a code IS published, likewise");
+
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.DOSE_CEILINGS),
+				"a band with neither a daily maximum nor a per-kg maximum can never fire for any patient");
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.ATC_CODES),
+				"and a code shorter than a level-4 subgroup is one no class arm can match on");
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.INTERACTIONS),
+				"and this dataset publishes no interaction at all");
+
+		// On the WIRE as well, and not only through the accessor: mapping ABSENT onto "unloaded" inside
+		// toMap would otherwise pass the whole suite, which is the "we looked and there is none" versus
+		// "nobody looked" conflation this field exists to remove, reintroduced on the only channel an
+		// operator reads.
+		Map<?, ?> arms = (Map<?, ?>) status.toMap().get("arms");
+		Map<?, ?> dosing = (Map<?, ?>) arms.get(DrugReferenceLoad.Arm.DOSE_CEILINGS.getWireKey());
+		assertEquals("absent", dosing.get("coverage"),
+				"a dataset WAS read and publishes no ceiling — 'unloaded' here would say nobody looked");
+		assertEquals(Integer.valueOf(0), dosing.get("entriesPublishing"));
+	}
+
+	/**
+	 * A null element inside a rule or band list must not take the loader down. The parsers drop null
+	 * ENTRIES and nothing else, so {@code "contraindications": [null]} in an operator's file reaches the
+	 * capability count — which is the first thing at load time to dereference either element.
+	 *
+	 * <p>The consequence without the skips is not a bad report, it is a dead module: the throw lands
+	 * inside {@code ensureLoaded}, which has no catch, so the cache is never populated and every later
+	 * call re-throws behind the answer path's own catches. Drug safety would go silently inert and
+	 * {@code GET /chartsearchai/drugreferencestatus} — the endpoint whose purpose is diagnosing exactly
+	 * that — would 500 instead of reporting it. Nothing else in the suite reaches this shape: no other
+	 * fixture carries a null inside either list.
+	 */
+	@Test
+	public void aNullRuleOrBandDoesNotBringTheLoadDown() throws IOException {
+		String path = copyToAppData("/chartsearchai-test/drug-reference-null-rule-and-band.json",
+				"null-rule-and-band.json");
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON, path);
+
+		DrugReferenceService service = new DrugReferenceService();
+		DrugReferenceLoad status = service.getLoadStatus();
+
+		assertEquals(1, status.getEntryCount(), "the entry loads; the nulls inside it are not fatal");
+		DrugReference entry = service.getAll().get(0);
+		assertEquals(1, entry.getContraindications().size(),
+				"precondition: the null rule survives parsing, which is what makes this discriminating");
+		assertEquals(1, entry.getAgeBands().size(), "precondition: and so does the null band");
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES),
+				"a null rule is not one the module can ask");
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.DOSE_CEILINGS),
+				"and a null band publishes no ceiling");
+	}
+
+	/**
 	 * The map the {@code GET /chartsearchai/drugreferencestatus} endpoint serializes. Pinned here
 	 * because it is what an operator (or a source-flip check) actually reads, and because a
 	 * disappearing key would leave that check silently reading {@code null}.
 	 *
 	 * <p>{@code findings} joined the set for the load-time validity check (issues #150/#156/#196/#211):
 	 * the endpoint exists to answer "what is actually loaded?" after a lazy load, and a load that dropped
-	 * an alias, appended a display name or fell back to the bundled file is exactly that question. It is
-	 * appended LAST so every other key keeps its position, which is what lets the endpoint's own
-	 * documented field list stay an ORDERED assertion.
+	 * an alias, appended a display name or fell back to the bundled file is exactly that question.
+	 *
+	 * <p>{@code arms} joined it afterwards, for the same reasons (issue #285): it answers the endpoint's
+	 * own question one level down — {@code inert} says whether the dataset yielded anything, {@code arms}
+	 * says which safety arms what it yielded can actually serve.
+	 *
+	 * <p><b>A new key is APPENDED, never inserted</b> — {@code findings} was last until {@code arms}
+	 * went after it, and the rule is the append rather than which key happens to be last today. The
+	 * assertion below is a {@code Set} and so cannot see order at all; the ordered assertion the append
+	 * protects is {@code ChartSearchAiDrugReferenceStatusTest.DOCUMENTED_FIELDS}, compared as a
+	 * {@code List}. Insert a key in the middle and this case stays green while that one reddens.
 	 */
 	@Test
 	public void loadStatusSerializesTheFieldsTheStatusEndpointReturns() throws IOException {
@@ -394,7 +558,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 
 		assertEquals(new LinkedHashSet<String>(Arrays.asList("loaded", "inert", "entryCount",
 				"sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin",
-				"findings")),
+				"findings", "arms")),
 				map.keySet());
 		assertEquals(Boolean.TRUE, map.get("loaded"));
 		assertEquals(Boolean.FALSE, map.get("inert"));

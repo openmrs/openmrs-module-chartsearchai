@@ -1527,6 +1527,13 @@ public class DrugSafetyValidator {
 	 *         the record then reports the chart as NOT having. A dataset may carry any string here — the
 	 *         curated parser validates neither field, dropping an entry only for a blank id or name — so
 	 *         what the two chart lists are called has to have exactly one definition.
+	 *
+	 *         <p>A THIRD consumer since issue #285: {@code DrugReferenceLoad}'s per-arm capability
+	 *         report asks it at LOAD time, to count the entries publishing a rule the module could
+	 *         actually put to a chart. That answer reaches {@code GET /chartsearchai/drugreferencestatus},
+	 *         so tightening this predicate moves an operator-facing wire value as well as the injected
+	 *         record's unrecorded half below — which is the one other call site in main; the chip arm
+	 *         consumes {@link #recordedContraindicationKind} rather than this predicate.
 	 */
 	static boolean evaluatesAgainstTheChart(DrugReference.Contraindication c) {
 		return (isAllergyRule(c) || isConditionRule(c))
@@ -5059,10 +5066,37 @@ public class DrugSafetyValidator {
 		if (band == null) {
 			return null;
 		}
+		if (!publishesACeiling(band)) {
+			return null;
+		}
 		Double weightKg = context != null ? context.getWeightKg() : null;
 		boolean dailyArm = band.getMaxDailyDoseMg() > 0;
 		boolean weightArm = weightKg != null && weightKg > 0 && band.getMgPerKgMax() > 0;
 		return dailyArm || weightArm ? band : null;
+	}
+
+	/**
+	 * @return whether {@code band} publishes any ceiling at all — the patient-INDEPENDENT half of
+	 *         {@link #actionableBand}, and the only half a load-time reader can decide. A band carrying
+	 *         only an age range parses perfectly well, because {@code AgeBand}'s ceiling fields are
+	 *         primitives defaulting to 0, and it can then never fire for ANY patient: neither leg of the
+	 *         arm above has a number to compare a dose against.
+	 *
+	 *         <p>Named rather than left inline because {@link DrugReferenceLoad} reports whether the
+	 *         loaded dataset can serve this arm at all, and that question and this one must have a single
+	 *         answer. Counting bands by PRESENCE instead reports a dosing arm over a dataset that
+	 *         publishes no dosing — the "looks healthy, checks nothing" state that report exists to
+	 *         remove, reintroduced by the report itself.
+	 *
+	 *         <p><b>The early return below is NOT independently observable</b>, said rather than left to
+	 *         look tested: {@code publishesACeiling} is strictly weaker than {@code dailyArm ||
+	 *         weightArm}, so it fires only on inputs that already returned null, and no test can redden
+	 *         by deleting it. It is there so the arm and the load-time report read their shared premise
+	 *         from one statement — a band with neither ceiling is useless to both — not because it
+	 *         changes what this method does. Inverting it IS caught, by every dose-excess case.
+	 */
+	static boolean publishesACeiling(DrugReference.AgeBand band) {
+		return band.getMaxDailyDoseMg() > 0 || band.getMgPerKgMax() > 0;
 	}
 
 	/**

@@ -5340,14 +5340,15 @@ public class DrugSafetyValidator {
 	 *         name the same clause carries is not independently named there. Applied to THIS substance's
 	 *         occurrences it drops them; applied to a RIVAL's it stops them vetoing.
 	 *
-	 *         <p>The nesting runs either way round, so the rival side is two cases and only one of them
-	 *         is conditional. A rival whose span CONTAINS one of this substance's occurrences is exempt
-	 *         only where its nearness is that occurrence's ({@link #nearnessInheritedFrom}) — a longer
-	 *         name reaching the dose with a word of its OWN vetoes like any rival. A rival CONTAINED by
-	 *         one of them is exempt outright, and that costs nothing elsewhere for an arithmetic reason
-	 *         as well as a measured one: containment bounds a container to no farther than what it
-	 *         contains, so such a rival is never strictly nearer than the occurrence it sits inside, and
-	 *         the bar can only fire where that occurrence was itself discarded.
+	 *         <p>Stated once. An occurrence counts unless one of the clause's RIVAL occurrences strictly
+	 *         contains it — the subject's occurrences and a rival's alike, which is why
+	 *         {@link #containedByAny} is asked twice against the one list — and the nearest counting
+	 *         occurrence of the subject wins, within {@link #MAX_ALIAS_TO_DOSE_DISTANCE}. So the veto
+	 *         carries TWO exceptions. A rival whose span CONTAINS one of the subject's occurrences is
+	 *         exempt only where its nearness is that occurrence's ({@link #nearnessInheritedFrom}) — a
+	 *         longer name reaching the dose with a word of its OWN vetoes like any rival. A rival nested
+	 *         in ANOTHER rival's name is exempt outright, being no more independently named here than a
+	 *         sub-span of {@code mine} is.
 	 *
 	 *         <p>Compared per SUBSTANCE rather than per row since issue #245: a sibling row is not a
 	 *         rival claimant for its own substance's dose, so its occurrences count toward the near side
@@ -5401,57 +5402,20 @@ public class DrugSafetyValidator {
 	 *         its OWN — measured, and barring those too would add an attribution the per-row form never
 	 *         made, which is the bound that method's javadoc states.
 	 *
-	 *         <p><b>And barring the container is not enough where THREE names nest</b> (round-2 review of
+	 *         <p><b>And barring the container is not enough where THREE names nest</b> (rounds 2 and 3 of
 	 *         #270). The seam was asymmetric: the filter judged {@code mine} for being mere sub-spans
-	 *         while the veto walked every rival regardless. So on {@code Amoxicillin and clavulanate
-	 *         potassium ok, 2.5 mg clavulanate potassium daily} the subject's nested occurrence went, its
-	 *         container's inherited veto went, and the standalone {@code potassium} at that container's
-	 *         tail — a name the clause states only inside two longer ones — then vetoed the substance the
-	 *         clause doses BY NAME. Nothing else published a ceiling, so the clause raised no warning of
-	 *         any kind. Before the filter that rival was never strictly nearer and never fired; after it,
-	 *         the container was at no greater distance and vetoed alongside it, so round 1's bar on the
-	 *         container left the clause exactly as silent and the two remedies looked interchangeable.
-	 *         Closed by asking a rival the same question the filter asks the subject, against the
-	 *         UNFILTERED {@code mine} — the span such a rival is nested in is precisely one the filter
-	 *         discarded, so after filtering there would be nothing left for it to be nested in.
+	 *         while the veto walked every rival regardless. So a rival the clause names ONLY inside a
+	 *         longer name still vetoed the substance the clause doses BY NAME — the standalone
+	 *         {@code potassium} at the tail of {@code Amoxicillin and clavulanate potassium ok, 2.5 mg
+	 *         clavulanate potassium daily}, and the leading constituent {@code dexamethasone} of
+	 *         {@code Dexamethasone and framycetin ok, 2.5 mg was given and then framycetin later}, which
+	 *         at distance 20 took the number from the surviving mention at 26. Measured through the real
+	 *         {@code validate}: nothing else in either clause publishes a ceiling, so each raised no
+	 *         warning of any kind, which the per-row form does not do. Closed by asking a rival the same
+	 *         containment question the filter asks the subject, against the same UNFILTERED
+	 *         {@code rivals}.
 	 *
-	 *         <p>Scoped by arithmetic rather than by symmetry, which is what keeps this half
-	 *         one-directional as well. A rival contained by a SURVIVING occurrence of {@code mine} is
-	 *         never strictly nearer than it, so it could not have vetoed anyway: the bar is reachable
-	 *         only through a discarded span, and it cannot hand this substance a dose stated for a rival
-	 *         whose name it merely contains ({@code Potassium 2.5 mg daily, clavulanate potassium was
-	 *         stopped} still attributes to Potassium alone — a case, because barring a rival by the
-	 *         relation between the two NAMES instead would reverse it).
-	 *
-	 *         <p><b>And once more, one rival further out</b> (round-3 review of #270). The seam was
-	 *         still asymmetric: the subject's occurrences were tested against every rival, while a rival
-	 *         was tested only against {@code mine}. So a rival the clause names ONLY inside ANOTHER
-	 *         rival's longer name still vetoed — no more independently named here than a sub-span of
-	 *         {@code mine} is, which is the rule the two paragraphs above state. Round 2 declined that
-	 *         widening "for want of a case" on the argument that such a rival must share the discarded
-	 *         occurrence's dose-facing edge, and so must contain one of {@code mine} or be contained by
-	 *         one; the third possibility it misses is a rival nested in the SAME container at a GREATER
-	 *         distance than the discarded occurrence yet still nearer than the survivor — the LEADING
-	 *         CONSTITUENT of a combination name. Measured through the real {@code validate}: on
-	 *         {@code Dexamethasone and framycetin ok, 2.5 mg was given and then framycetin later} the
-	 *         subject's nested occurrence goes, the container's inherited veto goes, and
-	 *         {@code dexamethasone} at distance 20 then vetoed the surviving mention at 26 — and nothing
-	 *         in that clause publishes a ceiling, so it raised no warning of any kind, which the per-row
-	 *         form does not do. Closed by asking a rival the containment question against the RIVALS as
-	 *         well.
-	 *
-	 *         <p>Why round 2 could not see it, which is the part worth keeping. The fixture carried its
-	 *         combination rows WITHOUT their leading constituents, so no rival could be nested in the
-	 *         same container as the subject and the shape was unposable with every assertion green — the
-	 *         third round running that the previous round's measurement was real and its generalisation
-	 *         was not. It carries them now ({@code Amoxicillin}, {@code Dexamethasone}), and adding two
-	 *         ORDINARY rows showed a second thing: the pinned {@code FAR_STANDALONE_MENTION} attribution
-	 *         had been resting on {@code Amoxicillin}'s ABSENCE rather than on the rule, because with
-	 *         that row present and this bar missing the constituent loses its warning to a name it is
-	 *         itself nested in. With the bar, all fifteen clauses attribute identically over the enlarged
-	 *         knowledge base and over the one before it.
-	 *
-	 *         <p>One-directional by the same arithmetic, and this half needs stating because barring a
+	 *         <p>One-directional by arithmetic, and this half needs stating because barring a
 	 *         veto is the permissive direction. Containment bounds a container to no farther than what it
 	 *         contains, so a barred rival {@code R} lies inside some rival {@code C} with
 	 *         {@code distance(C) <= distance(R)}, and the chain of containers ends at a rival contained by
@@ -5485,6 +5449,13 @@ public class DrugSafetyValidator {
 	 *         the dose. That is a narrower case and no bundled fixture poses it, so nothing here pins the
 	 *         exclusion — it stays because it is the same defect one step out, not because a test reaches
 	 *         it, and trimming it to what the tests happen to reach would reintroduce that defect.
+	 *
+	 *         <p>That exclusion is the veto's IDENTITY test and nothing more, because the two lists are
+	 *         drawn from different universes: {@code mine} from the rows this pass resolved,
+	 *         {@code rivals} from {@code allEntries}. An unresolved row of this substance is therefore
+	 *         absent from BOTH, so its longer name neither disqualifies a nested occurrence of the
+	 *         subject nor bars a rival nested inside it — pre-existing, and shared with the per-row
+	 *         form.
 	 *
 	 *         <p>Identity is {@link DrugReference#substanceGroupKey()}, the module's one answer to "are
 	 *         these rows one substance?", so this arm cannot merge a set of rows that the chip's subject
@@ -5548,25 +5519,19 @@ public class DrugSafetyValidator {
 		}
 		// And then the rule this arm always had: a different substance named strictly nearer owns the
 		// number — asked of every rival that is INDEPENDENTLY NAMED here, which is the filter's own
-		// question asked of the other operand, and it has to be asked in every direction of the nesting.
-		// A rival whose span CONTAINS one of mine is measuring the name against itself, since the filter
-		// above already took that occurrence's claim away — but only where its nearness is that
-		// occurrence's, because a longer name can reach the number by a word of its own. A rival
-		// CONTAINED by one of mine is a name the clause carries only inside a longer one, so it is not a
-		// claimant at all; compared against the UNFILTERED mine, because the span it is nested in is
-		// precisely one the filter discarded. And a rival contained by another RIVAL is that same
-		// non-claimant reached the other way round — the leading constituent of a combination, nested in
-		// the very container the subject's discarded occurrence sat in, so neither of the first two tests
-		// sees it. All three were lost warnings before they were scoped: "Amoxicillin and clavulanate
-		// potassium ok, 2.5 mg clavulanate potassium daily" lost its warning to the standalone
-		// `potassium` at the container's tail, and "Dexamethasone and framycetin ok, 2.5 mg was given and
-		// then framycetin later" lost its warning to `dexamethasone`, with nothing publishing a ceiling
-		// for either number. No bar can cost a warning elsewhere; the javadoc above says why, for the
-		// third one by an arithmetic that also makes it one-directional. Unchanged in effect for every
-		// clause with no nesting in it.
+		// question asked of the other operand, against the same list. A rival whose span CONTAINS one of
+		// mine is measuring the name against itself, since the filter above already took that
+		// occurrence's claim away — but only where its nearness is that occurrence's, because a longer
+		// name can reach the number by a word of its own. And a rival nested in ANOTHER RIVAL's name is
+		// a name the clause carries only inside a longer one, so it is not a claimant at all: the
+		// standalone `potassium` at the tail of "Amoxicillin and clavulanate potassium", or the leading
+		// `dexamethasone` of "Dexamethasone and framycetin". Both were lost warnings before they were
+		// scoped, with nothing publishing a ceiling for either number. Neither bar can cost a warning
+		// elsewhere; the javadoc above says why, for the second by an arithmetic that also makes it
+		// one-directional. Unchanged in effect for every clause with no nesting in it.
 		for (DrugReference.NamedOccurrence rival : rivals) {
 			if (rival.getDistance() < nearest && !nearnessInheritedFrom(rival, mine)
-					&& !containedByAny(rival, mine) && !containedByAny(rival, rivals)) {
+					&& !containedByAny(rival, rivals)) {
 				return false;
 			}
 		}
@@ -5579,11 +5544,10 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>One predicate for one question — "is this occurrence only a sub-span of a name the same
 	 *         clause carries, and so not independently named here" — which {@link #substanceOwnsDose}
-	 *         asks THREE times over two operand lists: of each of the subject's occurrences against the
-	 *         rivals, to decide which of them may claim the dose, and of each rival against the
-	 *         subject's occurrences AND against the other rivals, to decide which of them may veto it.
-	 *         Neither list is "the rivals" at every call site and the subject's own list appears on both
-	 *         sides, which is why the parameters are not named for either role.
+	 *         asks twice against the one list, {@code rivals}: of each of the subject's occurrences, to
+	 *         decide which of them may claim the dose, and of each rival, to decide which of them may
+	 *         veto it. The occurrence being judged comes from either side, which is why the parameters
+	 *         are not named for either role.
 	 *
 	 *         <p>The rival-against-the-rivals call passes a list {@code occurrence} is ITSELF in, and
 	 *         that needs no filtering: {@code strictlyContains} requires the containing span to be

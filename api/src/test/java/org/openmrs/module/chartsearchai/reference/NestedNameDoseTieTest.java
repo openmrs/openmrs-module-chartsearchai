@@ -68,17 +68,18 @@ import org.junit.jupiter.api.Test;
  * a case rather than an argument, because barring a rival by the relation between the two NAMES instead
  * of by containment in this clause would reverse it.
  *
- * <p><b>And a rival can be nested in ANOTHER rival, which neither of those two bars reaches.</b>
- * {@code dexamethasone} is the leading constituent of {@code Dexamethasone and framycetin}, so on
- * {@link #RIVAL_NAMED_ONLY_INSIDE_ANOTHER_RIVAL} it is nested in the span the filter discarded the
- * subject's own occurrence from while containing, and being contained by, no occurrence of the subject at
- * all — and it vetoed the substance the clause doses by name, in a clause where nothing else publishes a
- * ceiling. Round 2 declined that widening "for want of a case" on the argument that such a rival must
- * share the discarded occurrence's dose-facing edge; a leading constituent is the third possibility that
- * argument misses, and the reason no earlier round could pose it is that the fixture carried its
- * combination rows WITHOUT their leading constituents. It carries them now, which is also what makes
- * {@link #FAR_STANDALONE_MENTION} an assertion about the rule rather than about a row's absence: with
- * {@code Amoxicillin} in the knowledge base that case fails without this bar.
+ * <p><b>And a rival can be nested in ANOTHER rival, which barring the container does not reach
+ * either.</b> {@code dexamethasone} is the leading constituent of {@code Dexamethasone and
+ * framycetin}, so on {@link #RIVAL_NAMED_ONLY_INSIDE_ANOTHER_RIVAL} it is nested in the span the filter
+ * discarded the subject's own occurrence from while containing, and being contained by, no occurrence
+ * of the subject at all — and it vetoed the substance the clause doses by name, in a clause where
+ * nothing else publishes a ceiling. Round 2 declined that widening "for want of a case" on the
+ * argument that such a rival must share the discarded occurrence's dose-facing edge; a leading
+ * constituent is the third possibility that argument misses, and the reason no earlier round could pose
+ * it is that the fixture carried its combination rows WITHOUT their leading constituents. It carries
+ * them now, which is also what makes {@link #FAR_STANDALONE_MENTION} an assertion about the rule
+ * rather than about a row's absence: with {@code Amoxicillin} in the knowledge base that case fails
+ * without this bar.
  *
  * <p><b>Both of the filter's other costs are cases here as well</b>, so the predicate's javadoc claims
  * nothing this file cannot show: a substance whose only mention is nested loses the dose to nobody where
@@ -164,9 +165,9 @@ public class NestedNameDoseTieTest {
 	 *  the clause names ONLY inside ANOTHER rival's longer name. {@code dexamethasone} is the leading
 	 *  constituent of the combination, so it sits nested in the very span the filter discarded the
 	 *  subject's own occurrence from — closer to the number than the subject's surviving mention, and
-	 *  neither containing nor contained by any occurrence of the subject, so neither of the earlier
-	 *  bars reaches it. Round 2 declined this widening "for want of a case", having reasoned that such
-	 *  a rival must share the discarded occurrence's dose-facing edge; a leading constituent is the
+	 *  neither containing nor contained by any occurrence of the subject, so the inherited-nearness
+	 *  bar does not reach it. Round 2 declined this widening "for want of a case", having reasoned
+	 *  that such a rival must share the discarded occurrence's dose-facing edge; a leading constituent is the
 	 *  third possibility that argument misses. Nothing here publishes a ceiling except Framycetin, so
 	 *  its veto left the clause raising no warning of any kind — and it is a rival the filter has
 	 *  already ruled cannot claim the dose, so the number it silenced reached nobody at all. */
@@ -396,8 +397,8 @@ public class NestedNameDoseTieTest {
 
 		// And the round-3 shape: a rival nested in ANOTHER rival. The leading constituent has to sit
 		// inside the container, strictly nearer the number than the subject's surviving mention, and
-		// clear of BOTH earlier bars — otherwise the case passes on one of them and says nothing about
-		// this one.
+		// clear of the inherited-nearness bar — otherwise the case passes on that one and says nothing
+		// about this one.
 		DrugReference dexamethasone = DrugReferenceTestSupport.row(entries, "Dexamethasone");
 		DrugReference container = DrugReferenceTestSupport.row(entries, "Dexamethasone and framycetin");
 		DrugReference framycetin = DrugReferenceTestSupport.row(entries, "Framycetin");
@@ -425,7 +426,7 @@ public class NestedNameDoseTieTest {
 		assertFalse(leading.strictlyContains(subject.get(0)) || leading.strictlyContains(subject.get(1))
 				|| subject.get(0).strictlyContains(leading) || subject.get(1).strictlyContains(leading),
 				"precondition: containing NEITHER of the subject's occurrences and contained by neither, "
-						+ "or one of the two earlier bars reaches it and the case is about those instead");
+						+ "or the inherited-nearness bar reaches it and the case is about that instead");
 		assertNotEquals(leading.getDistance(), whole.getDistance(),
 				"precondition: and the container's own nearness is NOT the leading constituent's, or the "
 						+ "inherited-nearness bar would already cover it");
@@ -609,11 +610,6 @@ public class NestedNameDoseTieTest {
 		// The bound, and the reason the bar is containment against THIS clause's spans rather than a
 		// relation between the two names. Measured: widen the bar to every rival and the second assertion
 		// here reddens — Clavulanate potassium claims a dose the clause states for potassium alone.
-		// Green before this rule as well as after, and the arithmetic is why. Containment bounds a container
-		// to no farther than what it contains, so a rival inside one of the subject's occurrences is
-		// never strictly nearer than that occurrence, and where that occurrence SURVIVES the filter the
-		// bar therefore cannot fire at all. It bites only where the occurrence it stands on was itself
-		// discarded, which is the case above.
 		assertEquals(1, DrugReferenceTestSupport.overdoseCount(warnings, "Potassium"),
 				"the clause states the number in front of the inner name, on its own, so that substance "
 						+ "owns it");
@@ -630,17 +626,14 @@ public class NestedNameDoseTieTest {
 		// The same principle once more, one rival further out. The subject's nested occurrence goes, the
 		// container's inherited veto goes — and what was left to veto was `dexamethasone`, a name this
 		// clause carries only inside the container's, at 20 characters against the surviving mention's 26.
-		// It is not contained by any occurrence of the subject and does not contain one, so neither of the
-		// earlier bars reaches it; it is barred because it is nested in another RIVAL, and the rival it is
+		// It neither contains an occurrence of the subject nor sits inside one, so the inherited-nearness
+		// bar does not reach it; it is barred because it is nested in another RIVAL, and the rival it is
 		// nested in is the container the filter already discarded the subject's occurrence from. Nothing
 		// else here publishes a ceiling, so the count was zero — and the vetoing name is one the filter
 		// had already ruled cannot claim the dose, so the number reached nobody at all.
 		assertEquals(1, DrugReferenceTestSupport.overdoseCount(warnings, "Framycetin"),
 				"the substance the clause doses by name keeps its warning: a rival the clause states only "
 						+ "inside another rival's name is not independently named here either");
-		assertEquals(0, DrugReferenceTestSupport.overdoseCount(warnings, "Dexamethasone"),
-				"and the leading constituent claims nothing — its own occurrence is the one the filter "
-						+ "discarded, which is exactly why it may not veto with it");
 		assertEquals(1, warnings.size(),
 				"and that is the whole of what this clause raises: with a rival nested in another rival "
 						+ "allowed to veto, the count was zero — a lost overdose warning, not a renamed "

@@ -321,7 +321,7 @@ public class ChartSearchAiRestController {
 	/**
 	 * Which drug-reference dataset this module is <em>actually</em> using: {@code
 	 * {enabled, loaded, inert, entryCount, sourceFormat, configuredSourceFormat,
-	 * configuredDataFilePath, origin}}.
+	 * configuredDataFilePath, origin, findings, arms}}.
 	 *
 	 * <p>Exists because the answer cannot be got from the log (issue #149). The dataset load is lazy
 	 * and cached for the life of the module, so the most recent {@code "Loaded N …"} line may belong

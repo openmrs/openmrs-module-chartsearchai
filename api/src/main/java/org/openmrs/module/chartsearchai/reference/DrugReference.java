@@ -574,6 +574,11 @@ public class DrugReference {
 	 *         every subgroup they share is one it vetoes, the class relation they really have being one
 	 *         this knowledge base does not otherwise express. That trade is a
 	 *         question about the relevance rule and belongs to its own issue, not to #151.
+	 *
+	 *         <p>A third CONSUMER since issue #285 — consumer, not caller; by call site this method has
+	 *         six. {@code DrugReferenceLoad}'s per-arm capability report counts the entries whose codes
+	 *         survive this reduction, because that is what the class comparison consumes. So this
+	 *         method's output is now an operator-facing wire value too.
 	 */
 	public Set<String> atcSubgroups() {
 		return atcSubgroups(normalizedAtcCodes());

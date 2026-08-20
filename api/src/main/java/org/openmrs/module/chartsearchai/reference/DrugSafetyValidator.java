@@ -1527,6 +1527,13 @@ public class DrugSafetyValidator {
 	 *         the record then reports the chart as NOT having. A dataset may carry any string here — the
 	 *         curated parser validates neither field, dropping an entry only for a blank id or name — so
 	 *         what the two chart lists are called has to have exactly one definition.
+	 *
+	 *         <p>A THIRD consumer since issue #285: {@code DrugReferenceLoad}'s per-arm capability
+	 *         report asks it at LOAD time, to count the entries publishing a rule the module could
+	 *         actually put to a chart. That answer reaches {@code GET /chartsearchai/drugreferencestatus},
+	 *         so tightening this predicate moves an operator-facing wire value as well as the injected
+	 *         record's unrecorded half below — which is the one other call site in main; the chip arm
+	 *         consumes {@link #recordedContraindicationKind} rather than this predicate.
 	 */
 	static boolean evaluatesAgainstTheChart(DrugReference.Contraindication c) {
 		return (isAllergyRule(c) || isConditionRule(c))
@@ -5052,6 +5059,13 @@ public class DrugSafetyValidator {
 	 *         family-level skip and the per-row skip would come to disagree, and a disagreement in the
 	 *         permissive direction costs a knowledge-base-wide scan per request while one in the
 	 *         restrictive direction costs a warning.
+	 *
+	 *         <p>The patient-INDEPENDENT half of this question — does the band publish a ceiling at all? —
+	 *         is named separately as {@link #publishesACeiling}, because a load-time reader can decide
+	 *         that half and no more (see {@link DrugReferenceLoad.Arm#DOSE_CEILINGS}). It is not asked
+	 *         here: {@code dailyArm || weightArm} below already implies it, so a guard would be a branch
+	 *         no input can reach. The shared premise is that a band with neither ceiling is useless to
+	 *         both readers, and it is stated rather than enforced twice.
 	 */
 	private static DrugReference.AgeBand actionableBand(DrugReference ref,
 			PatientClinicalContext context) {
@@ -5063,6 +5077,30 @@ public class DrugSafetyValidator {
 		boolean dailyArm = band.getMaxDailyDoseMg() > 0;
 		boolean weightArm = weightKg != null && weightKg > 0 && band.getMgPerKgMax() > 0;
 		return dailyArm || weightArm ? band : null;
+	}
+
+	/**
+	 * @return whether {@code band} publishes any ceiling at all — the patient-INDEPENDENT half of
+	 *         {@link #actionableBand}, and the only half a load-time reader can decide. A band carrying
+	 *         only an age range parses perfectly well, because {@code AgeBand}'s ceiling fields are
+	 *         primitives defaulting to 0, and it can then never fire for ANY patient: neither leg of the
+	 *         arm above has a number to compare a dose against.
+	 *
+	 *         <p>Named rather than left inline because {@link DrugReferenceLoad} reports whether the
+	 *         loaded dataset can serve this arm at all, and that question and this one must have a single
+	 *         answer. Counting bands by PRESENCE instead reports a dosing arm over a dataset that
+	 *         publishes no dosing — the "looks healthy, checks nothing" state that report exists to
+	 *         remove, reintroduced by the report itself.
+	 *
+	 *         <p><b>{@link #actionableBand} does not call this</b>, and a reader looking for the arm's
+	 *         own use of it will not find one: {@code publishesACeiling} is strictly weaker than that
+	 *         method's {@code dailyArm || weightArm}, so a guard there could only return null on inputs
+	 *         that already did. The shared premise is stated in that method's javadoc instead of being
+	 *         enforced by a branch no input reaches. So this has exactly one production caller, the
+	 *         load-time report, and it is that report's cases which pin it.
+	 */
+	static boolean publishesACeiling(DrugReference.AgeBand band) {
+		return band.getMaxDailyDoseMg() > 0 || band.getMgPerKgMax() > 0;
 	}
 
 	/**

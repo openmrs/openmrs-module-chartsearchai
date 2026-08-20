@@ -11,8 +11,10 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -45,8 +47,193 @@ import java.util.Map;
  * be raised, and every safety question answers as though there were nothing to find. That is the
  * defect, and it is loud.</li>
  * </ul>
+ *
+ * <p><b>{@link Arm} coverage is that same question at finer grain</b> (issue #285), and it is a
+ * separate one because a dataset can be entirely healthy by {@link #isInert()} and still leave whole
+ * safety arms with nothing to act on. The shipped default is exactly that: 2283 entries load, the
+ * interaction arms work, and DDInter publishes no age band and no hand-authored allergy/condition
+ * rule at all — so {@code chartsearchai.drugSafety.warnOnDoseExcess} reads {@code true} over a check
+ * that can never fire.
+ *
+ * <p>Prose already said so in several places, and one of them IS readable at runtime — a module's
+ * {@code config.xml} property descriptions are persisted to {@code global_property.description} and
+ * served by core's {@code /systemsetting}, so "nobody could read it" would be false. What no prose can
+ * say is the thing an operator actually needs: not what the shipped DEFAULT lacks, but what THIS
+ * install's configured dataset publishes. Point {@code dataFilePath} at your own file and every one of
+ * those statements is silent about it, while this report answers from the entries that were loaded.
+ *
+ * <p>Each arm reports a {@link Coverage} verdict and, beside it, the number of entries publishing what
+ * that arm needs. The verdict is not derivable from the count, which is the whole reason it exists:
+ * {@link #notLoaded()} zeroes every field, so {@code 0} is what both "nothing was read" and "a dataset
+ * was read and publishes none" look like — the {@code count of 0 printed as cheerfully as 2283}
+ * failure ADR Decision 32 was written against, one level down.
+ *
+ * <p>This is deliberately NOT a {@link DrugReferenceValidity} finding. A dataset that publishes no
+ * dosing is VALID here, and the suite says so in three places: an operator's dosing-less file must
+ * load without a WARN ({@code DrugReferenceLoadContextTest.healthyLoadIsNotReportedAtWarnOrError}),
+ * and two fixtures with no age bands must report no finding at all
+ * ({@code DrugReferenceValidityContextTest.declaringTheSubstanceKeepsEveryRuleBearingRowAndSilencesTheFinding},
+ * {@code ...theSameDocumentDeclaringAnEmptyInteractionsTableLoadsItsDrugsAndSaysNothing}). Absent
+ * dosing is inside the boundary by design — ADR Decision 24's matrix records that no free
+ * authoritative dataset publishes dosing maxima — so this reports a CAPABILITY, not a defect.
  */
 public final class DrugReferenceLoad {
+
+	/**
+	 * A safety arm whose availability depends on what the loaded dataset publishes, with the key it
+	 * serializes under and the predicate that decides it. Both live on the constant so the endpoint's
+	 * field names and this enum cannot drift apart, and so that an arm added here without a predicate
+	 * does not compile — where a counting pass deciding capability in a chain of {@code if}s would let
+	 * the new arm report {@code absent} over a dataset publishing it.
+	 *
+	 * <p>Only arms a dataset can withhold are listed. A recorded allergy to the drug itself needs
+	 * neither a class code nor a hand-authored rule, so no dataset can take it away and reporting it
+	 * would say nothing.
+	 */
+	public enum Arm {
+
+		/**
+		 * A published dosing ceiling — the overdose chip, {@code SafetyWarning.TYPE_OVERDOSE}, gated by
+		 * {@code chartsearchai.drugSafety.warnOnDoseExcess}. An age band with no ceiling does not count;
+		 * see {@link DrugSafetyValidator#publishesACeiling}.
+		 *
+		 * <p>{@link DrugSafetyValidator#publishesACeiling} is the patient-independent half of that arm's
+		 * own gate, rather than whether the entry has age bands at all. Only the half is decidable here —
+		 * {@code actionableBand} additionally selects the band by AGE, and its mg/kg leg needs a WEIGHT,
+		 * neither of which exists at load time — but the half that is decidable is exactly the one that
+		 * matters: a band publishing no ceiling can never fire for any patient, so counting bands by
+		 * presence would report a dosing arm over a dataset that publishes no dosing.
+		 */
+		DOSE_CEILINGS("doseCeilings") {
+
+			@Override
+			boolean publishedBy(DrugReference entry) {
+				for (DrugReference.AgeBand band : entry.getAgeBands()) {
+					if (DrugSafetyValidator.publishesACeiling(band)) {
+						return true;
+					}
+				}
+				return false;
+			}
+		},
+
+		/**
+		 * Hand-authored allergy/condition rules the module can actually put to a chart — PART of
+		 * {@code SafetyWarning.TYPE_CONTRAINDICATION}, gated by
+		 * {@code chartsearchai.drugSafety.warnOnContraindications}. Part, not all: a recorded allergy to
+		 * the drug itself needs no rule and no code, so {@code absent} here does NOT mean
+		 * contraindication checking is dead.
+		 *
+		 * <p>{@link DrugSafetyValidator#evaluatesAgainstTheChart} rather than a non-empty contraindication
+		 * list, because that is the documented answer to "could the module even ask?": a rule typed neither
+		 * {@code allergy} nor {@code condition}, or carrying no matchable token, is unaskable. Counting the
+		 * list instead would publish capability the arm does not have, which is the "looks healthy, checks
+		 * nothing" state this whole report exists to remove.
+		 */
+		HAND_AUTHORED_RULES("handAuthoredRules") {
+
+			@Override
+			boolean publishedBy(DrugReference entry) {
+				for (DrugReference.Contraindication rule : entry.getContraindications()) {
+					if (DrugSafetyValidator.evaluatesAgainstTheChart(rule)) {
+						return true;
+					}
+				}
+				return false;
+			}
+		},
+
+		/**
+		 * Class codes reduced to the level-4 subgroup the class arms actually compare — the
+		 * shared-subgroup contraindication arm and duplicate therapy. Counted through
+		 * {@link DrugReference#atcSubgroups()} and not the raw codes, because that reduction is what the
+		 * subgroup comparison in both arms consumes.
+		 *
+		 * <p>Issue #285's resolution named {@link DrugReference#normalizedAtcCodes()} for this arm. The
+		 * substitution is deliberate and said here rather than left to be inferred: {@code atcSubgroups()}
+		 * IS that accessor plus the level-4 reduction, so the two differ by exactly the codes too short to
+		 * reduce — which is the first of the two disagreements below, and the reason for preferring the
+		 * reduction is that a code the comparison cannot use is capability this report must not publish.
+		 *
+		 * <p>This counts what the dataset PUBLISHES for the comparison, which is not the same as
+		 * whether a chip is reachable for a given entry, and it can disagree in both directions. Under,
+		 * because those arms have a second leg that prefix-matches the RAW codes against the curated
+		 * cross-reactivity groups: an entry whose codes are all too short to reduce counts 0 here while
+		 * that leg can still match, given a deployment that added a correspondingly short prefix. Over,
+		 * because both legs then discard a shared subgroup the relevance veto rejects, so an entry whose
+		 * subgroups are all vetoed and which belongs to no curated group is counted here although
+		 * neither leg can fire on it. Read it as "the dataset publishes codes the class comparison can
+		 * use", never as "a class chip is reachable for this entry".
+		 */
+		ATC_CODES("atcCodes") {
+
+			@Override
+			boolean publishedBy(DrugReference entry) {
+				return !entry.atcSubgroups().isEmpty();
+			}
+		},
+
+		/**
+		 * Pairwise interaction rules published by the dataset — PART of
+		 * {@code SafetyWarning.TYPE_INTERACTION}, gated by
+		 * {@code chartsearchai.drugSafety.warnOnInteractions}. Part, not all, the same caveat
+		 * {@link #HAND_AUTHORED_RULES} carries: the class legs also emit that chip type, from ATC
+		 * subgroups (counted here as {@link #ATC_CODES}) and from the curated cross-reactivity groups (a
+		 * second dataset with its own file, which this report does not describe at all), so {@code absent}
+		 * here does NOT mean no interaction warning can be raised. Listed because a dataset can withhold
+		 * these outright — {@code sourceFormat=atc} sets only class codes.
+		 *
+		 * <p><b>This is the one arm counted by field presence</b>, and the asymmetry is deliberate. The
+		 * other three ask a predicate because a field can be populated with something no configuration
+		 * can act on — a band with no ceiling, a code too short to reduce, a rule typed neither
+		 * {@code allergy} nor {@code condition}. An interaction row has no such shape: the only thing
+		 * that can keep one from being raised is {@code DrugSafetyValidator.clearsSeverityFloor} against
+		 * {@code chartsearchai.drugSafety.minInteractionSeverity}, and every severity the rank
+		 * recognises — {@code unknown} included, at the floor's own lowest rank — clears SOME legitimate
+		 * setting of it. Applying the default floor here would report a row absent that the install one
+		 * global property away raises, and would put a value read from a runtime-editable global property
+		 * into a report cached for the life of the module. So this count is the rows the dataset
+		 * publishes, and the floor stays where the chip is raised.
+		 */
+		INTERACTIONS("interactions") {
+
+			@Override
+			boolean publishedBy(DrugReference entry) {
+				return !entry.getInteractions().isEmpty();
+			}
+		};
+
+		private final String wireKey;
+
+		Arm(String wireKey) {
+			this.wireKey = wireKey;
+		}
+
+		/** @return the key this arm serializes under in {@link DrugReferenceLoad#toMap()}. */
+		public String getWireKey() {
+			return wireKey;
+		}
+
+		/**
+		 * @return whether {@code entry} publishes what this arm needs — the production predicate for each
+		 *         arm, never a local re-expression of it. Abstract, so the count and this enum cannot come
+		 *         apart: see the enum's own javadoc.
+		 */
+		abstract boolean publishedBy(DrugReference entry);
+	}
+
+	/** What the loaded dataset can do for one {@link Arm}. Three states, not two — see the class javadoc. */
+	public enum Coverage {
+
+		/** Nothing was loaded, so nothing is known about this arm. Never confuse this with {@link #ABSENT}. */
+		UNLOADED,
+
+		/** A dataset was loaded and at least one entry publishes what this arm needs. */
+		PUBLISHED,
+
+		/** A dataset was loaded and NO entry publishes what this arm needs: the arm cannot fire. */
+		ABSENT
+	}
 
 	private final boolean loaded;
 
@@ -62,14 +249,24 @@ public final class DrugReferenceLoad {
 
 	private final List<DrugReferenceValidity.Finding> findings;
 
+	private final Map<Arm, Integer> armCounts;
+
+	/**
+	 * Takes the loaded entries rather than their count, so the count and the per-arm verdicts are
+	 * derived from the same list and cannot be handed in disagreeing with each other.
+	 */
 	DrugReferenceLoad(String sourceFormat, String configuredSourceFormat, String configuredDataFilePath,
-			String origin, int entryCount, List<DrugReferenceValidity.Finding> findings) {
+			String origin, List<DrugReference> entries,
+			List<DrugReferenceValidity.Finding> findings) {
+		List<DrugReference> loadedEntries = entries == null
+				? Collections.<DrugReference> emptyList() : entries;
 		this.loaded = true;
 		this.sourceFormat = sourceFormat;
 		this.configuredSourceFormat = configuredSourceFormat;
 		this.configuredDataFilePath = configuredDataFilePath;
 		this.origin = origin == null ? ReferenceDataFiles.ORIGIN_NONE : origin;
-		this.entryCount = entryCount;
+		this.entryCount = loadedEntries.size();
+		this.armCounts = countArms(loadedEntries);
 		this.findings = findings == null ? Collections.<DrugReferenceValidity.Finding> emptyList()
 				: Collections.unmodifiableList(
 						new ArrayList<DrugReferenceValidity.Finding>(findings));
@@ -83,6 +280,41 @@ public final class DrugReferenceLoad {
 		this.origin = null;
 		this.entryCount = 0;
 		this.findings = Collections.emptyList();
+		// No counts rather than four zeros: coverageOf short-circuits on !loaded, so nothing here can
+		// reach the map, and entriesPublishing answers 0 for an absent key.
+		this.armCounts = Collections.<Arm, Integer> emptyMap();
+	}
+
+	/**
+	 * Counts, per arm, the entries publishing what that arm needs — by asking each {@link Arm} its own
+	 * {@link Arm#publishedBy} predicate rather than deciding capability here, so a new arm cannot be
+	 * added without one. Which predicate each arm asks, and why that one, is on the constant.
+	 *
+	 * <p>Nothing here skips a null, and that is not an omission. A null inside an entry's own lists is
+	 * dropped at the load boundary by {@link DrugReferenceValidity#NULL_LIST_ELEMENT}, which runs over
+	 * these same entries before this constructor is reached, so this report — and every other consumer of
+	 * the loaded model — reads a list of values; a skip here would answer that question a second time and
+	 * only for the two arms that ask it. A null ENTRY cannot arrive either: the curated parser drops one
+	 * and the other two construct theirs, and the validity pass above dereferences every entry before
+	 * this runs, so a guard here would be unreachable rather than protective.
+	 */
+	private static Map<Arm, Integer> countArms(List<DrugReference> entries) {
+		Map<Arm, Integer> counts = new EnumMap<Arm, Integer>(Arm.class);
+		for (Arm arm : Arm.values()) {
+			counts.put(arm, Integer.valueOf(0));
+		}
+		for (DrugReference entry : entries) {
+			for (Arm arm : Arm.values()) {
+				if (arm.publishedBy(entry)) {
+					increment(counts, arm);
+				}
+			}
+		}
+		return Collections.unmodifiableMap(counts);
+	}
+
+	private static void increment(Map<Arm, Integer> counts, Arm arm) {
+		counts.put(arm, Integer.valueOf(counts.get(arm).intValue() + 1));
 	}
 
 	/** @return the outcome for "no load has happened", which is not a failure — see the class javadoc. */
@@ -182,10 +414,66 @@ public final class DrugReferenceLoad {
 	}
 
 	/**
+	 * @return what the loaded dataset can do for {@code arm}. {@link Coverage#UNLOADED} whenever nothing
+	 *         was loaded, so a caller can never read a zero count as "we looked and found none".
+	 */
+	public Coverage coverageOf(Arm arm) {
+		if (!loaded) {
+			return Coverage.UNLOADED;
+		}
+		return entriesPublishing(arm) > 0 ? Coverage.PUBLISHED : Coverage.ABSENT;
+	}
+
+	/**
+	 * @return how many loaded entries publish what {@code arm} needs. Zero both when nothing was loaded
+	 *         and when a dataset was loaded carrying none, which is why {@link #coverageOf(Arm)} exists
+	 *         beside this rather than callers comparing this to zero.
+	 */
+	public int entriesPublishing(Arm arm) {
+		Integer count = armCounts.get(arm);
+		return count == null ? 0 : count.intValue();
+	}
+
+	/**
+	 * @return each arm's verdict and count in one line — {@code doseCeilings=absent (0), …} — for the log
+	 *         the load writes as it happens. The same verdicts and the same {@link Coverage} vocabulary
+	 *         as {@link #toMap()}, because both call the same methods here, so the log and the endpoint
+	 *         cannot come to disagree.
+	 *
+	 *         <p>INFO at the call site, not WARN: an arm with nothing behind it is a capability the
+	 *         dataset does not have and not a defect in it — the same reason it is no
+	 *         {@link DrugReferenceValidity} finding — so ADR Decision 36's loudness rules and
+	 *         {@code DATA_RULES} are untouched by it. Which also bounds what this line is for: core's
+	 *         shipped {@code log4j2.xml} holds {@code org.openmrs} at {@code WARN}, so an unmodified
+	 *         install prints it no more than it prints the {@code Loaded N …} line beside it. It is the
+	 *         verdict in the log of a deployment that has turned INFO on, and {@link #toMap()} — not
+	 *         this — is what answers a caller who has not.
+	 */
+	public String armSummary() {
+		StringBuilder summary = new StringBuilder();
+		for (Arm arm : Arm.values()) {
+			if (summary.length() > 0) {
+				summary.append(", ");
+			}
+			summary.append(arm.getWireKey()).append('=').append(coverageToken(arm))
+					.append(" (").append(entriesPublishing(arm)).append(')');
+		}
+		return summary.toString();
+	}
+
+	/** The wire spelling of an arm's verdict, read by {@link #toMap()} and {@link #armSummary()} alike so
+	 *  the endpoint and the log cannot come to say a verdict two ways. */
+	private String coverageToken(Arm arm) {
+		return coverageOf(arm).name().toLowerCase(Locale.ROOT);
+	}
+
+	/**
 	 * @return this outcome as a JSON-serializable map, for the REST status endpoint. Insertion-ordered,
-	 *         and {@code findings} is appended LAST — deliberately, so the existing keys keep the
-	 *         positions the endpoint's frozen key list already pins and that list stays an ordered
-	 *         assertion rather than becoming order-insensitive to accommodate a new field.
+	 *         and a new key is always APPENDED — deliberately, so the existing keys keep the positions
+	 *         the endpoint's frozen key list already pins and that list stays an ordered assertion
+	 *         rather than becoming order-insensitive to accommodate a new field. {@code findings} joined
+	 *         that way and {@code arms} after it; the rule is the append, not which key happens to be
+	 *         last.
 	 */
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new LinkedHashMap<String, Object>();
@@ -202,6 +490,17 @@ public final class DrugReferenceLoad {
 			serialized.add(found.toMap());
 		}
 		map.put("findings", serialized);
+		// Appended after findings, never inserted: the endpoint's field list is asserted as an ORDERED
+		// list, and appending is what keeps that assertion order-sensitive instead of making it
+		// order-insensitive the first time a key lands in the middle.
+		Map<String, Object> arms = new LinkedHashMap<String, Object>();
+		for (Arm arm : Arm.values()) {
+			Map<String, Object> reported = new LinkedHashMap<String, Object>();
+			reported.put("coverage", coverageToken(arm));
+			reported.put("entriesPublishing", Integer.valueOf(entriesPublishing(arm)));
+			arms.put(arm.getWireKey(), reported);
+		}
+		map.put("arms", arms);
 		return map;
 	}
 

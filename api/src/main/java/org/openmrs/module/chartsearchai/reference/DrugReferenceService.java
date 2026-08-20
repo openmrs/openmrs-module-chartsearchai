@@ -905,7 +905,23 @@ public class DrugReferenceService {
 			// (ADR Decision 36). A configuration finding is loud either way — see logTo.
 			validity.logTo(log, active.lastLoadOrigin());
 			DrugReferenceLoad outcome = new DrugReferenceLoad(effectiveFormat, configuredFormat,
-					configuredPath, active.lastLoadOrigin(), loaded.size(), validity.getFindings());
+					configuredPath, active.lastLoadOrigin(), loaded, validity.getFindings());
+			// What this install is actually checking, said once at the moment of the load — stamped with
+			// the dataset it belongs to, which is what a lazily-loaded cache makes a later reader guess
+			// at. INFO because an arm with nothing behind it is a capability the dataset does not have
+			// rather than a defect in it — no validity finding, so ADR Decision 36's loudness scoping is
+			// untouched. One rendering, shared with the wire, so the log and the endpoint cannot name a
+			// verdict two ways.
+			//
+			// This is NOT the channel that removes the need to poll, and must not be justified as one:
+			// core's shipped log4j2.xml puts org.openmrs at WARN, so an unmodified install prints
+			// neither this line nor the Parsed/Loaded ones beside it, and the answer to issue #285 is
+			// the status endpoint's own arms field. Raising it to WARN is not the fix either — under the
+			// shipped default two arms are absent on EVERY install with nothing an operator can do
+			// about it, which is precisely the register ADR Decision 36 refused for that dataset's own
+			// findings.
+			log.info("Drug-reference safety arms over the {} entr(ies) read from {}: {}",
+					outcome.getEntryCount(), outcome.getOrigin(), outcome.armSummary());
 			// A configured source that resolved to nothing is reported LOUDLY, naming both global
 			// properties: this used to print at INFO exactly like a successful load, so the whole
 			// drug-safety feature could be off with nothing at default log levels to say so

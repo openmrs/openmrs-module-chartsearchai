@@ -19,6 +19,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -63,6 +64,12 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 
 	private static final String ALIAS_NAMES_ANOTHER_SUBSTANCE_FIXTURE =
 			DrugReferenceTestSupport.DDI_ALIAS_NAMES_ANOTHER_SUBSTANCE;
+
+	private static final String NULL_LIST_ELEMENT_FIXTURE =
+			"chartsearchai-test/drug-reference-null-rule-and-band.json";
+
+	private static final String NULL_INTERACTION_AND_ALIAS_FIXTURE =
+			"chartsearchai-test/drug-reference-null-interaction-and-alias.json";
 
 	private static final String DERIVATIVE_MERGED_FIXTURE =
 			"chartsearchai-test/ddi-derivative-merged-into-one-substance.json";
@@ -193,6 +200,160 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertEquals(1, found.getOccurrences());
 		assertTrue(found.getDetail().contains("Warfarin"),
 				"the finding must name the entry an operator has to fix. Detail was: " + found.getDetail());
+	}
+
+	// ------------------------------------------------------------------
+	// A null where a value should be (found reviewing #285)
+	// ------------------------------------------------------------------
+
+	/**
+	 * A {@code null} element inside one of an entry's own lists. The parsers drop null ENTRIES and
+	 * nothing inside them, so unless the loader drops it, {@code "contraindications": [null]} in an
+	 * operator's file reaches every consumer of the loaded model — and the consumers dereference their
+	 * elements: a null rule throws in {@code DrugSafetyValidator.isAllergyRule}, a null band in
+	 * {@link DrugReference#bandForAge}.
+	 *
+	 * <p>So the value is DROPPED at load, which is this loader's remedy for a bad value whose entry is
+	 * otherwise usable, and the finding tells the operator which entry to fix. What makes it a rule
+	 * rather than a null check at each of those call sites is what those call sites are: the safety
+	 * arms, whose throw lands behind {@code validate}'s own catch and answers the request with NO chips
+	 * at all — so a guard at one site leaves the others dropping every chip on the request, behind a
+	 * WARN naming an NPE rather than the dataset, while the status endpoint reports the dataset as
+	 * healthy.
+	 */
+	@Test
+	public void aNullElementInAnEntrysOwnListIsDroppedSoNoConsumerCanThrowOnIt() throws IOException {
+		DrugReferenceService service = loading(NULL_LIST_ELEMENT_FIXTURE, "h288-null-element.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"the operator's own file carries a value that is not one, and they can fix it. "
+							+ "Captured: " + capture.describeAll());
+		}
+
+		DrugReference entry = DrugReferenceTestSupport.row(service.getAll(), "Ibuprofen");
+		assertTrue(entry.getContraindications().isEmpty(),
+				"the null rule is gone from the loaded entry, so nothing downstream can dereference it");
+		assertTrue(entry.getAgeBands().isEmpty(), "and so is the null band");
+		assertEquals(1, service.getAll().size(),
+				"and the entry itself is KEPT: its name, aliases and ATC code are usable, so refusing it "
+						+ "would trade a bad value for a silent fail-closed");
+
+		DrugReferenceValidity.Finding found = finding(status,
+				DrugReferenceValidity.NULL_LIST_ELEMENT);
+		assertEquals(DrugReferenceValidity.Remedy.DROPPED, found.getRemedy());
+		assertEquals(2, found.getOccurrences(), "one per null element: the rule and the band");
+		assertTrue(found.getDetail().contains("Ibuprofen"),
+				"the finding must name the entry an operator has to fix. Detail was: " + found.getDetail());
+
+		// The runtime consequence, through the real validator on the real load. Not the assertion that
+		// fires FIRST when the drop is removed: the per-arm load report (issue #285) dereferences the
+		// same elements as the load happens, so getLoadStatus above throws before this line is reached
+		// — DrugReferenceLoadContextTest.aNullRuleOrBandDoesNotBringTheLoadDown is that path's own
+		// case. This is the arm the rule is FOR, and what still fires if that report is ever removed:
+		// the (answer, question, context) overload below has no catch, unlike the public Patient one.
+		assertNotNull(DrugReferenceTestSupport.validator(service).validate(
+				"Ibuprofen 4000 mg daily could be given.", "Is ibuprofen safe?",
+				DrugReferenceTestSupport.ctx(60, 70.0, null, null, null, null)),
+				"every safety arm must survive the dataset: the throw is caught by validate's own "
+						+ "public entry point, which answers a request with NO chips at all");
+	}
+
+	/**
+	 * The other four lists the same rule covers. {@link DrugReferenceValidity#NULL_LIST_ELEMENT} is
+	 * stated over EVERY list rather than the two that throw today, and the fixture above witnesses two of
+	 * them, so this is the case for {@code aliases}, {@code atcCodes}, {@code warnings} and
+	 * {@code interactions}.
+	 *
+	 * <p>The interactions leg has consumers that dereference an element with no null check —
+	 * {@code DrugSafetyValidator.clearsSeverityFloor} reads {@code getSeverity()} and
+	 * {@code DrugReferenceInjector.partnerLabel} reads {@code getToken()} — so a null surviving the load
+	 * reproduces what this rule exists to prevent: the throw landing behind {@code validate}'s catch, the
+	 * request losing every chip, and the status endpoint still reporting the dataset healthy. Measured by
+	 * removing that leg from the drop: the real {@code validate} at the end of this case throws at
+	 * {@code clearsSeverityFloor}, reached from {@code addInteractionWarnings} through
+	 * {@code bestRulePerPartner}.
+	 */
+	@Test
+	public void aNullInTheOtherFourListsIsDroppedAsWell() throws IOException {
+		DrugReferenceService service = loading(NULL_INTERACTION_AND_ALIAS_FIXTURE,
+				"h288-null-interaction.json", ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"the operator's own file carries four values that are not values, and they can fix "
+							+ "them. Captured: " + capture.describeAll());
+		}
+
+		DrugReference presentation = DrugReferenceTestSupport.row(service.getAll(),
+				"Ibuprofen tablets 400mg");
+		assertTrue(presentation.getInteractions().isEmpty(),
+				"the null interaction is gone from the loaded entry: clearsSeverityFloor and "
+						+ "partnerLabel both dereference an element of this list");
+		assertTrue(presentation.getWarnings().isEmpty(), "and so is the null warning");
+		DrugReference substance = DrugReferenceTestSupport.row(service.getAll(), "Ibuprofen");
+		assertEquals(Arrays.asList("ibuprofen"), substance.getAliases(),
+				"the null alias is gone and the real one is kept — a resolution key list is not the "
+						+ "place to trade a bad value for a fail-closed entry");
+		assertEquals(Arrays.asList("M01AE01"), substance.getAtcCodes(), "and so is the null code");
+
+		DrugReferenceValidity.Finding found = finding(status,
+				DrugReferenceValidity.NULL_LIST_ELEMENT);
+		assertEquals(DrugReferenceValidity.Remedy.DROPPED, found.getRemedy());
+		assertEquals(4, found.getOccurrences(),
+				"one per null element: the interaction, the warning, the alias and the code");
+		assertEquals(2, found.getDetail().split("Ibuprofen", -1).length - 1,
+				"the finding must name BOTH entries an operator has to fix — and one of the two names "
+						+ "nests inside the other, so a containment check on the shorter is satisfied by "
+						+ "the longer alone. Detail was: " + found.getDetail());
+
+		// The runtime consequence, through the real validator on the real load: the interaction arms
+		// walk this entry's own rule list against the patient's active order.
+		assertNotNull(DrugReferenceTestSupport.validator(service).validate(
+				"Ibuprofen tablets 400mg could be given.", "Are there any interactions with ibuprofen?",
+				DrugReferenceTestSupport.ctx(60, 70.0, DrugReferenceTestSupport.set("Ibuprofen"),
+						null, null, null)),
+				"every safety arm must survive the dataset: the throw is caught by validate's own "
+						+ "public entry point, which answers a request with NO chips at all");
+	}
+
+	/**
+	 * The DROP runs before every rule that reads the lists it cleans, which {@code dropNullElements}'s
+	 * own javadoc declares load-bearing in two places. Both consequences are asserted as ABSENCES,
+	 * because both are a rule below staying silent:
+	 *
+	 * <ul>
+	 * <li>{@code carriesRules} reads only whether those lists are EMPTY, so the presentation row — whose
+	 * only rule is a null — must not count as rule-bearing. It shares the published name
+	 * {@code ibuprofen} with the substance row and declares no {@code substanceName}, which is the whole
+	 * of {@code RULES_WITHOUT_A_SUBSTANCE_IDENTITY}'s shape apart from that gate, so with the drop moved
+	 * after it the finding fires — reporting rules at risk for a row that carries none.</li>
+	 * <li>a null ALIAS is reported as what it is rather than by {@code BLANK_ALIAS} as a token naming
+	 * nothing, which is only true while the drop is the first to see the list.</li>
+	 * </ul>
+	 *
+	 * <p>Measured by moving the call to the end of {@code checkEntries}: both findings appear.
+	 */
+	@Test
+	public void theNullDropRunsBeforeTheRulesThatReadTheListsItCleans() throws IOException {
+		DrugReferenceService service = loading(NULL_INTERACTION_AND_ALIAS_FIXTURE,
+				"h288-null-drop-order.json", ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
+
+		DrugReferenceLoad status = service.getLoadStatus();
+
+		assertTrue(rulesOf(status).contains(DrugReferenceValidity.NULL_LIST_ELEMENT),
+				"the case has to reach the rule it is about. Rules were: " + rulesOf(status));
+		assertFalse(rulesOf(status).contains(DrugReferenceValidity.RULES_WITHOUT_A_SUBSTANCE_IDENTITY),
+				"a row whose only rule is a null carries no rules, so it loses none by keying as its "
+						+ "own substance. Rules were: " + rulesOf(status));
+		assertFalse(rulesOf(status).contains(DrugReferenceValidity.BLANK_ALIAS),
+				"a null alias is not a token naming nothing; it is reported as the null it is. Rules "
+						+ "were: " + rulesOf(status));
 	}
 
 	// ------------------------------------------------------------------

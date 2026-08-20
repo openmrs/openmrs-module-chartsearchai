@@ -2101,7 +2101,7 @@ This is not a hypothetical operator error. It silently produced a wrong result i
 Two parts, and the second is why the first can be trusted.
 
 1. **Loud on empty.** The service warns when a load it just performed produced no entries, naming both global properties, the parser in use and the file actually read. The rule lives in the service rather than in a source adapter, so one rule covers all three formats and cannot drift per source.
-2. **Observable after the load.** `DrugReferenceLoad` retains the outcome — effective format, configured format, configured path, the origin actually read, entry count, and the inert verdict — captured at the instant the load populates the cache, so it can never describe a different dataset than the one the safety layer is using. Exposed by `GET /chartsearchai/drugreferencestatus` under core's `Get Global Properties`; no new privilege.
+2. **Observable after the load.** `DrugReferenceLoad` retains the outcome — effective format, configured format, configured path, the origin actually read, entry count, the inert verdict, the loader's own validity findings (added with the load-time check, ADR Decision 36), and since issue #285 a per-arm capability verdict saying which safety arms the loaded entries can actually serve — captured at the instant the load populates the cache, so it can never describe a different dataset than the one the safety layer is using. Exposed by `GET /chartsearchai/drugreferencestatus` under core's `Get Global Properties`; no new privilege.
 
 ### Why the status must be observable *after* a lazy load
 

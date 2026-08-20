@@ -98,6 +98,97 @@ public class ShippedDrugReferenceDefaultTest extends BaseModuleContextSensitiveT
 	}
 
 	/**
+	 * The bound the class javadoc pins is stated in prose in several places — {@code config.xml}'s
+	 * property description, {@link ChartSearchAiConstants#GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS}'s javadoc,
+	 * the validator's, the README, ADR Decision 36 — and none of them can speak about a dataset an
+	 * operator configured for themselves (issue #285). This asserts that the load status answers it per
+	 * arm, from the entries actually loaded.
+	 *
+	 * <p>Per arm and not per dataset, because {@link DrugReferenceLoad#isInert()} is already the
+	 * whole-dataset verdict and this dataset is not inert by it — 2283 entries load and the interaction
+	 * arms work. What no existing field can say is that two of the arms have nothing to act on while the
+	 * rest are fine.
+	 *
+	 * <p>{@code ABSENT} and not a count of zero, because {@link DrugReferenceLoad#notLoaded()} zeroes
+	 * every field: a bare zero cannot separate "the feature is off and nothing was read" from "a dataset
+	 * was read and publishes none", which is the {@code count of 0 printed as cheerfully as 2283} failure
+	 * ADR Decision 32 was written against. The count is reported beside the verdict, never instead of it.
+	 */
+	@Test
+	public void theShippedDefaultReportsWhichSafetyArmsItsDatasetCanServe() {
+		enableWithNothingElseConfigured();
+
+		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+		assertTrue(status.getEntryCount() >= WHOLE_KNOWLEDGE_BASE_ENTRIES,
+				"precondition: the whole knowledge base loaded. Asserted as a count rather than through "
+						+ "isInert(), which is loaded && entryCount == 0 and so is also false for a load "
+						+ "that never happened — it cannot establish that a dataset was read");
+		assertFalse(status.isInert(),
+				"and it is not inert at whole-dataset scale, which is exactly why a per-arm verdict is "
+						+ "needed to say anything about it");
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.DOSE_CEILINGS),
+				"DDInter publishes no age band, so warnOnDoseExcess has nothing it can ever fire on and "
+						+ "the status says so rather than leaving it to be discovered");
+		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.DOSE_CEILINGS));
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES),
+				"and no hand-authored allergy/condition rule either");
+		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES));
+		assertEquals(DrugReferenceLoad.Coverage.PUBLISHED,
+				status.coverageOf(DrugReferenceLoad.Arm.ATC_CODES),
+				"while the arms that need only a class code do have data — reporting only what is "
+						+ "missing would make this a defect list rather than an answer to 'what is this "
+						+ "install checking?'");
+		assertTrue(status.entriesPublishing(DrugReferenceLoad.Arm.ATC_CODES) > 0);
+	}
+
+	/**
+	 * The same verdicts, in the log line the load writes as it happens — one rendering shared with the
+	 * endpoint, so the two channels cannot name an arm's verdict two ways.
+	 *
+	 * <p><b>This does not establish that a stock install sees that line.</b> {@link LogCapture} raises
+	 * the module logger to INFO for the duration of the capture, and core's shipped {@code log4j2.xml}
+	 * holds {@code org.openmrs} at {@code WARN} — so on an unmodified deployment this line is printed no
+	 * more than the {@code Loaded N …} line beside it, and what answers issue #285 there is the status
+	 * itself — {@link #theShippedDefaultReportsWhichSafetyArmsItsDatasetCanServe}, served on
+	 * {@code GET /chartsearchai/drugreferencestatus}. What is pinned here is the line's CONTENT and its
+	 * register: the verdicts, the same counts the endpoint reports, and that nothing about an unserved
+	 * arm reaches WARN.
+	 *
+	 * <p>Asserted on the shipped default rather than on a fixture because it is the only case where the
+	 * line is MIXED: two arms served and two not, from one dataset, which is what makes it a report rather
+	 * than a constant. The WARN half matters as much as the INFO half: an arm with nothing behind it is a
+	 * capability the dataset does not have, not a defect in it, so nothing here may reach the register ADR
+	 * Decision 36 reserves for what an operator can act on.
+	 */
+	@Test
+	public void theShippedDefaultSaysWhichArmsItCanServeInTheLogAsWellAsOnTheEndpoint() {
+		enableWithNothingElseConfigured();
+
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+			assertTrue(status.getEntryCount() > 0, "precondition: a load happened");
+			String logged = capture.messagesAt(Level.INFO).toString();
+			assertTrue(logged.contains("doseCeilings=absent (0)"),
+					"the load must say the dose arm has nothing to fire on, in the log line the endpoint "
+							+ "shares its rendering with. Captured: " + capture.describeAll());
+			assertTrue(logged.contains("handAuthoredRules=absent (0)"),
+					"and the hand-authored rule arm likewise. Captured: " + capture.describeAll());
+			assertTrue(logged.contains("atcCodes=published ("
+					+ status.entriesPublishing(DrugReferenceLoad.Arm.ATC_CODES) + ")"),
+					"and it must say what IS served, with the same count the endpoint reports — one "
+							+ "rendering, or the two channels can disagree. Captured: "
+							+ capture.describeAll());
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"an unserved arm is a capability the dataset lacks, not a defect an operator can fix. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	/**
 	 * The shipped default must not be LOUD, which is the same rule the untouched path already has: this is
 	 * the normal state of every install, so a WARN here is a WARN nobody can act on.
 	 *

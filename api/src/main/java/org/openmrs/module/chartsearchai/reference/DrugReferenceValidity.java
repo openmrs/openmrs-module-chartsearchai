@@ -35,7 +35,8 @@ import org.slf4j.Logger;
  * principle applied one layer deeper, to the CONTENT: a dataset can load a plausible number of entries
  * and still violate an assumption that silently changes every safety decision taken from it (#150), drop
  * every rule-bearing row of a substance (#211), be a different dataset than the one configured (#156),
- * publish one substance's name on another, or key two substances as one (#196). One rule is a layer
+ * publish one substance's name on another, key two substances as one (#196), or carry a null where a
+ * value should be and be dereferenced for it. One rule is a layer
  * ABOVE instead, over the document rather than the entries, and for the same reason from the other
  * direction: a file can carry content and load none of it, because it omits a table the parser reading
  * it requires (#242) — an empty PARSE of a non-empty file, where #149 made an empty LOAD loud.
@@ -104,6 +105,15 @@ public final class DrugReferenceValidity {
 
 	/** An alias that names nothing, so it can only match by accident — issue #150. */
 	public static final String BLANK_ALIAS = "blank-alias";
+
+	/**
+	 * A {@code null} where one of an entry's own lists should carry a value. The parsers drop null
+	 * ENTRIES and nothing inside them, so without this rule {@code "contraindications": [null]} in an
+	 * operator's file would reach every consumer of the loaded model — and the consumers dereference
+	 * their elements: a null rule throws in {@code DrugSafetyValidator.isAllergyRule}, a null band in
+	 * {@link DrugReference#bandForAge}.
+	 */
+	public static final String NULL_LIST_ELEMENT = "null-list-element";
 
 	/** An entry that none of its own aliases names, so the ranked resolution can reach a claimant that
 	 *  is not in the candidate set — issues #210, #211. */
@@ -334,7 +344,8 @@ public final class DrugReferenceValidity {
 	 * {@link DrugReferenceService} is what makes it loud, which is where the catastrophic case belongs.
 	 */
 	private static final Set<String> DATA_RULES = Collections.unmodifiableSet(
-			new LinkedHashSet<String>(Arrays.asList(BLANK_ALIAS, ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES,
+			new LinkedHashSet<String>(Arrays.asList(BLANK_ALIAS, NULL_LIST_ELEMENT,
+					ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES,
 					RULES_WITHOUT_A_SUBSTANCE_IDENTITY, ALIAS_NAMES_ANOTHER_SUBSTANCE,
 					DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE, DATASET_MISSING_A_REQUIRED_TABLE,
 					SELF_PAIRED_INTERACTION_ROWS)));
@@ -510,10 +521,99 @@ public final class DrugReferenceValidity {
 		if (entries == null || entries.isEmpty()) {
 			return;
 		}
+		dropNullElements(entries);
 		sanitizeAliases(entries);
 		reportRulesWithoutASubstanceIdentity(entries);
 		reportAliasesNamingAnotherSubstance(entries);
 		reportDerivativesMergedWithTheirParent(entries);
+	}
+
+	/**
+	 * A {@code null} element in one of an entry's own lists is not a value — see {@link #NULL_LIST_ELEMENT}.
+	 *
+	 * <p><b>DROPPED, and here rather than at the sites that dereference one.</b> The remedy is this
+	 * loader's rule for a bad VALUE whose entry is otherwise usable: the entry's name, aliases and codes
+	 * are untouched, so nothing is fail-closed, and the operator is told which entry carries it. The
+	 * alternative is a null check per consumer, and the consumers are the safety arms — the throw lands
+	 * behind {@code DrugSafetyValidator.validate}'s own catch, which answers the request with NO chips at
+	 * all, so a guard at one site leaves the others silently dropping every chip on the request while the
+	 * status endpoint reports the dataset as healthy. One rule, one answer to what this loader considers
+	 * valid.
+	 *
+	 * <p>Every list, not the two that throw today. Which lists tolerate a null is a property of each
+	 * consumer's own code — {@link DrugReference#normalizeAtcToken} skips a null code and
+	 * {@code DrugReferenceInjector} skips a null warning, while {@link DrugReference#bandForAge} and the
+	 * contraindication arms dereference — and stating the rule over the lists that happen to throw would
+	 * make it a record of today's null-tolerance rather than of what a value is. It runs FIRST for the
+	 * same reason: every rule below reads these lists, and {@link #carriesRules} reads only whether they
+	 * are EMPTY, so an entry whose only rule is a null would otherwise count as rule-bearing.
+	 *
+	 * <p>A null ALIAS is reported here rather than by {@link #BLANK_ALIAS} above, which would otherwise
+	 * catch it as a token naming nothing. Both drop it; this one says what it is.
+	 */
+	private void dropNullElements(List<DrugReference> entries) {
+		int nulls = 0;
+		Set<String> affected = new LinkedHashSet<String>();
+		for (DrugReference entry : entries) {
+			int dropped = 0;
+			List<String> aliases = withoutNulls(entry.getAliases());
+			if (aliases != null) {
+				dropped += entry.getAliases().size() - aliases.size();
+				entry.setAliases(aliases);
+			}
+			List<String> codes = withoutNulls(entry.getAtcCodes());
+			if (codes != null) {
+				dropped += entry.getAtcCodes().size() - codes.size();
+				entry.setAtcCodes(codes);
+			}
+			List<String> warnings = withoutNulls(entry.getWarnings());
+			if (warnings != null) {
+				dropped += entry.getWarnings().size() - warnings.size();
+				entry.setWarnings(warnings);
+			}
+			List<DrugReference.AgeBand> bands = withoutNulls(entry.getAgeBands());
+			if (bands != null) {
+				dropped += entry.getAgeBands().size() - bands.size();
+				entry.setAgeBands(bands);
+			}
+			List<DrugReference.Interaction> interactions = withoutNulls(entry.getInteractions());
+			if (interactions != null) {
+				dropped += entry.getInteractions().size() - interactions.size();
+				entry.setInteractions(interactions);
+			}
+			List<DrugReference.Contraindication> rules = withoutNulls(entry.getContraindications());
+			if (rules != null) {
+				dropped += entry.getContraindications().size() - rules.size();
+				entry.setContraindications(rules);
+			}
+			if (dropped > 0) {
+				nulls += dropped;
+				affected.add(String.valueOf(entry.getName()));
+			}
+		}
+		if (nulls > 0) {
+			report(NULL_LIST_ELEMENT, Remedy.DROPPED, nulls,
+					nulls + " null element(s) inside an entry's own lists were dropped: a null is not a "
+							+ "value, and the consumers of an alias, a code, an age band or a rule "
+							+ "dereference it — the safety arms then raise no warning at all for the "
+							+ "request, rather than one fewer. The fix is in the file. Entries: "
+							+ sample(affected));
+		}
+	}
+
+	/**
+	 * @return {@code list} without its null elements, or {@code null} when it has none — so the caller
+	 *         leaves an untouched list untouched rather than replacing it with an equal copy, which is
+	 *         also how it counts what it dropped
+	 */
+	private static <T> List<T> withoutNulls(List<T> list) {
+		List<T> kept = new ArrayList<T>(list.size());
+		for (T element : list) {
+			if (element != null) {
+				kept.add(element);
+			}
+		}
+		return kept.size() == list.size() ? null : kept;
 	}
 
 	/**

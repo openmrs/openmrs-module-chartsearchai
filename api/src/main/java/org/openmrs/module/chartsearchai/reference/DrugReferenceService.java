@@ -906,6 +906,16 @@ public class DrugReferenceService {
 			validity.logTo(log, active.lastLoadOrigin());
 			DrugReferenceLoad outcome = new DrugReferenceLoad(effectiveFormat, configuredFormat,
 					configuredPath, active.lastLoadOrigin(), loaded, validity.getFindings());
+			// What this install is actually checking, said once at the moment of the load. The status
+			// endpoint answers it afterwards and is the channel a caller can poll, but #154's rule is
+			// that an operator cannot be expected to poll one: an install whose dose-excess toggle reads
+			// true over a dataset publishing no ceiling has nothing at default log levels to say so, and
+			// that is the state issue #285 is about. INFO because an arm with nothing behind it is a
+			// capability the dataset does not have rather than a defect in it — no validity finding, so
+			// ADR Decision 36's loudness scoping is untouched. One rendering, shared with the wire, so
+			// the log and the endpoint cannot name a verdict two ways.
+			log.info("Drug-reference safety arms over the {} entr(ies) read from {}: {}",
+					outcome.getEntryCount(), outcome.getOrigin(), outcome.armSummary());
 			// A configured source that resolved to nothing is reported LOUDLY, naming both global
 			// properties: this used to print at INFO exactly like a successful load, so the whole
 			// drug-safety feature could be off with nothing at default log levels to say so

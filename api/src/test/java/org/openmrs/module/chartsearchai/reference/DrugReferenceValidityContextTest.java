@@ -64,6 +64,9 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	private static final String ALIAS_NAMES_ANOTHER_SUBSTANCE_FIXTURE =
 			DrugReferenceTestSupport.DDI_ALIAS_NAMES_ANOTHER_SUBSTANCE;
 
+	private static final String NULL_LIST_ELEMENT_FIXTURE =
+			"chartsearchai-test/drug-reference-null-rule-and-band.json";
+
 	private static final String DERIVATIVE_MERGED_FIXTURE =
 			"chartsearchai-test/ddi-derivative-merged-into-one-substance.json";
 
@@ -193,6 +196,61 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertEquals(1, found.getOccurrences());
 		assertTrue(found.getDetail().contains("Warfarin"),
 				"the finding must name the entry an operator has to fix. Detail was: " + found.getDetail());
+	}
+
+	// ------------------------------------------------------------------
+	// A null where a value should be (found reviewing #285)
+	// ------------------------------------------------------------------
+
+	/**
+	 * A {@code null} element inside one of an entry's own lists. The parsers drop null ENTRIES and
+	 * nothing inside them, so unless the loader drops it, {@code "contraindications": [null]} in an
+	 * operator's file reaches every consumer of the loaded model — and the consumers dereference their
+	 * elements: a null rule throws in {@code DrugSafetyValidator.isAllergyRule}, a null band in
+	 * {@link DrugReference#bandForAge}.
+	 *
+	 * <p>So the value is DROPPED at load, which is this loader's remedy for a bad value whose entry is
+	 * otherwise usable, and the finding tells the operator which entry to fix. What makes it a rule
+	 * rather than a null check at each of those call sites is the third assertion below: the throw lands
+	 * behind {@code validate}'s own catch, so a guard at one site leaves the others silently dropping
+	 * every chip on the request — no chip, no log line at default levels, and a status endpoint
+	 * reporting the dataset as healthy.
+	 */
+	@Test
+	public void aNullElementInAnEntrysOwnListIsDroppedSoNoConsumerCanThrowOnIt() throws IOException {
+		DrugReferenceService service = loading(NULL_LIST_ELEMENT_FIXTURE, "h288-null-element.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"the operator's own file carries a value that is not one, and they can fix it. "
+							+ "Captured: " + capture.describeAll());
+		}
+
+		DrugReference entry = DrugReferenceTestSupport.row(service.getAll(), "Ibuprofen");
+		assertTrue(entry.getContraindications().isEmpty(),
+				"the null rule is gone from the loaded entry, so nothing downstream can dereference it");
+		assertTrue(entry.getAgeBands().isEmpty(), "and so is the null band");
+		assertEquals(1, service.getAll().size(),
+				"and the entry itself is KEPT: its name, aliases and ATC code are usable, so refusing it "
+						+ "would trade a bad value for a silent fail-closed");
+
+		DrugReferenceValidity.Finding found = finding(status,
+				DrugReferenceValidity.NULL_LIST_ELEMENT);
+		assertEquals(DrugReferenceValidity.Remedy.DROPPED, found.getRemedy());
+		assertEquals(2, found.getOccurrences(), "one per null element: the rule and the band");
+		assertTrue(found.getDetail().contains("Ibuprofen"),
+				"the finding must name the entry an operator has to fix. Detail was: " + found.getDetail());
+
+		// The runtime consequence, through the real validator on the real load: this is the assertion
+		// that throws NPE inside addContraindications when the nulls are left in the loaded model.
+		assertNotNull(DrugReferenceTestSupport.validator(service).validate(
+				"Ibuprofen 4000 mg daily could be given.", "Is ibuprofen safe?",
+				DrugReferenceTestSupport.ctx(60, 70.0, null, null, null, null)),
+				"every safety arm must survive the dataset: the throw is caught by validate's own "
+						+ "public entry point, which answers a request with NO chips at all");
 	}
 
 	// ------------------------------------------------------------------

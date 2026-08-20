@@ -128,10 +128,23 @@ public final class DrugReferenceLoad {
 		 * Pairwise interaction rules published by the dataset — PART of
 		 * {@code SafetyWarning.TYPE_INTERACTION}, gated by
 		 * {@code chartsearchai.drugSafety.warnOnInteractions}. Part, not all, the same caveat
-		 * {@link #HAND_AUTHORED_RULES} carries: the class legs also emit that chip type from ATC
-		 * subgroups and the curated cross-reactivity groups, so {@code absent} here does NOT mean no
-		 * interaction warning can be raised. Listed because a dataset can withhold these outright —
-		 * {@code sourceFormat=atc} sets only class codes.
+		 * {@link #HAND_AUTHORED_RULES} carries: the class legs also emit that chip type, from ATC
+		 * subgroups (counted here as {@link #ATC_CODES}) and from the curated cross-reactivity groups (a
+		 * second dataset with its own file, which this report does not describe at all), so {@code absent}
+		 * here does NOT mean no interaction warning can be raised. Listed because a dataset can withhold
+		 * these outright — {@code sourceFormat=atc} sets only class codes.
+		 *
+		 * <p><b>This is the one arm counted by field presence</b>, and the asymmetry is deliberate. The
+		 * other three ask a predicate because a field can be populated with something no configuration
+		 * can act on — a band with no ceiling, a code too short to reduce, a rule typed neither
+		 * {@code allergy} nor {@code condition}. An interaction row has no such shape: the only thing
+		 * that can keep one from being raised is {@code DrugSafetyValidator.clearsSeverityFloor} against
+		 * {@code chartsearchai.drugSafety.minInteractionSeverity}, and every severity the rank
+		 * recognises — {@code unknown} included, at the floor's own lowest rank — clears SOME legitimate
+		 * setting of it. Applying the default floor here would report a row absent that the install one
+		 * global property away raises, and would put a value read from a runtime-editable global property
+		 * into a report cached for the life of the module. So this count is the rows the dataset
+		 * publishes, and the floor stays where the chip is raised.
 		 */
 		INTERACTIONS("interactions");
 
@@ -157,7 +170,7 @@ public final class DrugReferenceLoad {
 		PUBLISHED,
 
 		/** A dataset was loaded and NO entry publishes what this arm needs: the arm cannot fire. */
-		ABSENT;
+		ABSENT
 	}
 
 	private final boolean loaded;
@@ -205,7 +218,9 @@ public final class DrugReferenceLoad {
 		this.origin = null;
 		this.entryCount = 0;
 		this.findings = Collections.emptyList();
-		this.armCounts = countArms(Collections.<DrugReference> emptyList());
+		// No counts rather than four zeros: coverageOf short-circuits on !loaded, so nothing here can
+		// reach the map, and entriesPublishing answers 0 for an absent key.
+		this.armCounts = Collections.<Arm, Integer> emptyMap();
 	}
 
 	/**
@@ -224,6 +239,14 @@ public final class DrugReferenceLoad {
 	 * needs a WEIGHT, neither of which exists at load time — but the half that is decidable is exactly
 	 * the one that matters: a band publishing no ceiling can never fire for any patient, so counting
 	 * bands by presence would report a dosing arm over a dataset that publishes no dosing.
+	 *
+	 * <p>Nothing here skips a null, and that is not an omission. A null inside an entry's own lists is
+	 * dropped at the load boundary by {@link DrugReferenceValidity#NULL_LIST_ELEMENT}, which runs over
+	 * these same entries before this constructor is reached, so this report — and every other consumer of
+	 * the loaded model — reads a list of values; a skip here would answer that question a second time and
+	 * only for the two arms that ask it. A null ENTRY cannot arrive either: the curated parser drops one
+	 * and the other two construct theirs, and the validity pass above dereferences every entry before
+	 * this runs, so a guard here would be unreachable rather than protective.
 	 */
 	private static Map<Arm, Integer> countArms(List<DrugReference> entries) {
 		Map<Arm, Integer> counts = new EnumMap<Arm, Integer>(Arm.class);
@@ -231,9 +254,6 @@ public final class DrugReferenceLoad {
 			counts.put(arm, Integer.valueOf(0));
 		}
 		for (DrugReference entry : entries) {
-			if (entry == null) {
-				continue;
-			}
 			if (publishesACeiling(entry)) {
 				increment(counts, Arm.DOSE_CEILINGS);
 			}
@@ -256,24 +276,16 @@ public final class DrugReferenceLoad {
 
 	private static boolean publishesACeiling(DrugReference entry) {
 		for (DrugReference.AgeBand band : entry.getAgeBands()) {
-			if (band != null && DrugSafetyValidator.publishesACeiling(band)) {
+			if (DrugSafetyValidator.publishesACeiling(band)) {
 				return true;
 			}
 		}
 		return false;
 	}
 
-	/**
-	 * The null-element skip is not defensive noise: this is the first thing to dereference a
-	 * contraindication ELEMENT at load time, and the parsers drop only null ENTRIES, so an operator file
-	 * containing {@code "contraindications": [null]} reaches here. Without the check it throws inside
-	 * {@code ensureLoaded}, which has no catch — the cache stays null, every later call re-throws behind
-	 * the answer path's own catches, and the status endpoint that exists to diagnose a bad load 500s
-	 * instead. A null rule is also, plainly, not one the module can ask.
-	 */
 	private static boolean publishesAnAskableRule(DrugReference entry) {
 		for (DrugReference.Contraindication rule : entry.getContraindications()) {
-			if (rule != null && DrugSafetyValidator.evaluatesAgainstTheChart(rule)) {
+			if (DrugSafetyValidator.evaluatesAgainstTheChart(rule)) {
 				return true;
 			}
 		}
@@ -398,6 +410,35 @@ public final class DrugReferenceLoad {
 	}
 
 	/**
+	 * @return each arm's verdict and count in one line — {@code doseCeilings=absent (0), …} — for the log
+	 *         the load writes as it happens. The status endpoint answers this after the fact, and #154's
+	 *         rule is that an operator cannot be expected to poll it; the two read the same verdicts and
+	 *         the same {@link Coverage} vocabulary because they call the same methods here.
+	 *
+	 *         <p>INFO at the call site, not WARN: an arm with nothing behind it is a capability the
+	 *         dataset does not have and not a defect in it — the same reason it is no
+	 *         {@link DrugReferenceValidity} finding — so ADR Decision 36's loudness rules and
+	 *         {@code DATA_RULES} are untouched by it.
+	 */
+	public String armSummary() {
+		StringBuilder summary = new StringBuilder();
+		for (Arm arm : Arm.values()) {
+			if (summary.length() > 0) {
+				summary.append(", ");
+			}
+			summary.append(arm.getWireKey()).append('=').append(coverageToken(arm))
+					.append(" (").append(entriesPublishing(arm)).append(')');
+		}
+		return summary.toString();
+	}
+
+	/** The wire spelling of an arm's verdict, read by {@link #toMap()} and {@link #armSummary()} alike so
+	 *  the endpoint and the log cannot come to say a verdict two ways. */
+	private String coverageToken(Arm arm) {
+		return coverageOf(arm).name().toLowerCase(Locale.ROOT);
+	}
+
+	/**
 	 * @return this outcome as a JSON-serializable map, for the REST status endpoint. Insertion-ordered,
 	 *         and a new key is always APPENDED — deliberately, so the existing keys keep the positions
 	 *         the endpoint's frozen key list already pins and that list stays an ordered assertion
@@ -426,7 +467,7 @@ public final class DrugReferenceLoad {
 		Map<String, Object> arms = new LinkedHashMap<String, Object>();
 		for (Arm arm : Arm.values()) {
 			Map<String, Object> reported = new LinkedHashMap<String, Object>();
-			reported.put("coverage", coverageOf(arm).name().toLowerCase(Locale.ROOT));
+			reported.put("coverage", coverageToken(arm));
 			reported.put("entriesPublishing", Integer.valueOf(entriesPublishing(arm)));
 			arms.put(arm.getWireKey(), reported);
 		}

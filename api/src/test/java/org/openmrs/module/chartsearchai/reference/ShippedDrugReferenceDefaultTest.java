@@ -145,6 +145,43 @@ public class ShippedDrugReferenceDefaultTest extends BaseModuleContextSensitiveT
 	}
 
 	/**
+	 * The same verdicts, in the channel that arrives without being asked for. The status endpoint answers
+	 * this after the fact and issue #154's rule is that an operator cannot be expected to poll one — so an
+	 * install running the shipped default, whose {@code warnOnDoseExcess} reads {@code true} over a
+	 * dataset publishing no ceiling, must be able to see that from its log.
+	 *
+	 * <p>Asserted on the shipped default rather than on a fixture because it is the only case where the
+	 * line is MIXED: two arms served and two not, from one dataset, which is what makes it a report rather
+	 * than a constant. At INFO, and the WARN half is asserted too: an arm with nothing behind it is a
+	 * capability the dataset does not have, not a defect in it, so nothing here may reach the register ADR
+	 * Decision 36 reserves for what an operator can act on.
+	 */
+	@Test
+	public void theShippedDefaultSaysWhichArmsItCanServeInTheLogAsWellAsOnTheEndpoint() {
+		enableWithNothingElseConfigured();
+
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+			assertTrue(status.getEntryCount() > 0, "precondition: a load happened");
+			String logged = capture.messagesAt(Level.INFO).toString();
+			assertTrue(logged.contains("doseCeilings=absent (0)"),
+					"the load must say the dose arm has nothing to fire on, in the channel that does not "
+							+ "have to be polled. Captured: " + capture.describeAll());
+			assertTrue(logged.contains("handAuthoredRules=absent (0)"),
+					"and the hand-authored rule arm likewise. Captured: " + capture.describeAll());
+			assertTrue(logged.contains("atcCodes=published ("
+					+ status.entriesPublishing(DrugReferenceLoad.Arm.ATC_CODES) + ")"),
+					"and it must say what IS served, with the same count the endpoint reports — one "
+							+ "rendering, or the two channels can disagree. Captured: "
+							+ capture.describeAll());
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"an unserved arm is a capability the dataset lacks, not a defect an operator can fix. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	/**
 	 * The shipped default must not be LOUD, which is the same rule the untouched path already has: this is
 	 * the normal state of every install, so a WARN here is a WARN nobody can act on.
 	 *

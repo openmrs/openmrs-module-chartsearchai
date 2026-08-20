@@ -420,9 +420,14 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	 * rule, a level-5 class code and an interaction on every entry, so all four arms report
 	 * {@code published} — and this is the case that pins the {@code toMap} rendering of a LOADED report.
 	 *
-	 * <p>Without it, replacing both {@code arms} puts with the constants {@code "unloaded"} and {@code 0}
-	 * passes the whole suite: the wire case covers only the unloaded shape, and the cases that exercise
-	 * {@code PUBLISHED} and {@code ABSENT} call {@code coverageOf} directly and never look at the map.
+	 * <p>It is the only case in the suite that reddens when the {@code PUBLISHED} rendering breaks.
+	 * Measured by mutating {@code toMap}: rendering a {@code PUBLISHED} arm as {@code "unloaded"} fails
+	 * this case alone, while hardcoding BOTH puts to {@code "unloaded"} and {@code 0} fails this case and
+	 * {@link #aFieldWithNothingActionableInItIsNotReportedAsCapability} together — that sibling reads the
+	 * map too, and asserts {@code "absent"} on it. Only these two do; the other arm cases call
+	 * {@code coverageOf} directly, and the endpoint's own case
+	 * ({@code ChartSearchAiDrugReferenceStatusTest.drugReferenceStatus_reportsEveryArmAsUnloadedWhenNothingIsLoaded})
+	 * asserts the unloaded shape, which no mutation of a loaded verdict can reach.
 	 */
 	@Test
 	public void aDatasetThatServesItsArmsSaysSoInTheSerializedStatus() {
@@ -497,15 +502,19 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 
 	/**
 	 * A null element inside a rule or band list must not take the loader down. The parsers drop null
-	 * ENTRIES and nothing else, so {@code "contraindications": [null]} in an operator's file reaches the
-	 * capability count — which is the first thing at load time to dereference either element.
+	 * ENTRIES and nothing else, so {@code "contraindications": [null]} in an operator's file would reach
+	 * this report — the first thing at load time to dereference either element — if the loader did not
+	 * drop it first.
 	 *
-	 * <p>The consequence without the skips is not a bad report, it is a dead module: the throw lands
-	 * inside {@code ensureLoaded}, which has no catch, so the cache is never populated and every later
-	 * call re-throws behind the answer path's own catches. Drug safety would go silently inert and
-	 * {@code GET /chartsearchai/drugreferencestatus} — the endpoint whose purpose is diagnosing exactly
-	 * that — would 500 instead of reporting it. Nothing else in the suite reaches this shape: no other
-	 * fixture carries a null inside either list.
+	 * <p>What keeps it from throwing is not a skip here: it is
+	 * {@link DrugReferenceValidity#NULL_LIST_ELEMENT}, which drops the null at the load boundary so no
+	 * consumer of the loaded model sees one — the whole reason it belongs there being that this report is
+	 * not the only consumer that dereferences an element, and the others fail behind
+	 * {@code DrugSafetyValidator.validate}'s catch. That rule's own case
+	 * ({@code DrugReferenceValidityContextTest.aNullElementInAnEntrysOwnListIsDroppedSoNoConsumerCanThrowOnIt})
+	 * asserts the drop, the finding and the surviving safety pass; this asserts what the ARMS then report
+	 * over such a file, and it is what fails — with a thrown NPE inside {@code ensureLoaded}, which has
+	 * no catch — if the drop is removed.
 	 */
 	@Test
 	public void aNullRuleOrBandDoesNotBringTheLoadDown() throws IOException {
@@ -518,15 +527,16 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 
 		assertEquals(1, status.getEntryCount(), "the entry loads; the nulls inside it are not fatal");
 		DrugReference entry = service.getAll().get(0);
-		assertEquals(1, entry.getContraindications().size(),
-				"precondition: the null rule survives parsing, which is what makes this discriminating");
-		assertEquals(1, entry.getAgeBands().size(), "precondition: and so does the null band");
+		assertTrue(entry.getContraindications().isEmpty(),
+				"the null rule is dropped at the load boundary, not carried into the model and skipped "
+						+ "by each reader of it");
+		assertTrue(entry.getAgeBands().isEmpty(), "and so is the null band");
 		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
 				status.coverageOf(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES),
-				"a null rule is not one the module can ask");
+				"so the arm has no rule it can ask");
 		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
 				status.coverageOf(DrugReferenceLoad.Arm.DOSE_CEILINGS),
-				"and a null band publishes no ceiling");
+				"and no band publishing a ceiling");
 	}
 
 	/**

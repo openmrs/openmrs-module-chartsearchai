@@ -1,0 +1,133 @@
+{
+ "version": "1.0",
+ "source": "test fixture \u2014 issue #270: substances whose published names NEST, so a stated dose ties between them",
+ "description": "Four substances, each publishing a 1 mg/day ceiling so any stated dose above it must warn once it reaches the substance it belongs to. Two pairs pose the two ways the distance metric can tie. Estrone/Estrone sulfate nest at the START, which ties when the dose PRECEDES them. Clavulanate/Amoxicillin and clavulanate nest at the END, which ties when the dose FOLLOWS them \u2014 the metric is (idx - pos) on one side and (pos - end) on the other, so co-location is not the same fact on both. Estrone and Clavulanate do not nest at all and their names differ in length, which is what keeps the ambiguity control from going vacuous: a blanket longer-wins tie-breaker would silence one of them and the sub-span rule must not. Four distinct level-4 ATC subgroups so no class arm fires beside the dose warnings. No bundled dataset can pose any of this: ddinter and atc never emit ageBands, and the curated seed's twelve aliases do not nest. Two further substances publish the SAME alias, which is the shape #187/#196 describe: their occurrences are identical spans, so neither may disqualify the other. A non-strict containment test would have each discard the other's occurrence and BOTH lose the dose \u2014 a lost overdose warning, this arm's forbidden direction.",
+ "entries": [
+  {
+   "id": "estrone",
+   "name": "Estrone",
+   "substanceName": "estrone",
+   "aliases": [
+    "estrone"
+   ],
+   "atcCodes": [
+    "G03CA07"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "estrone-sulfate",
+   "name": "Estrone sulfate",
+   "substanceName": "estrone sulfate",
+   "aliases": [
+    "estrone sulfate"
+   ],
+   "atcCodes": [
+    "J01CE01"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "clavulanate",
+   "name": "Clavulanate",
+   "substanceName": "clavulanate",
+   "aliases": [
+    "clavulanate"
+   ],
+   "atcCodes": [
+    "J01CR02"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "amoxicillin-and-clavulanate",
+   "name": "Amoxicillin and clavulanate",
+   "substanceName": "amoxicillin and clavulanate",
+   "aliases": [
+    "amoxicillin and clavulanate"
+   ],
+   "atcCodes": [
+    "A10BA02"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "menotrophin-a",
+   "name": "Menotrophin A",
+   "substanceName": "menotrophin a",
+   "aliases": [
+    "menotrophin"
+   ],
+   "atcCodes": [
+    "G03GA02"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "menotrophin-b",
+   "name": "Menotrophin B",
+   "substanceName": "menotrophin b",
+   "aliases": [
+    "menotrophin"
+   ],
+   "atcCodes": [
+    "H01CB02"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  }
+ ]
+}

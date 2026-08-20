@@ -44,7 +44,8 @@ import org.junit.jupiter.api.Test;
  * the example. That example is not this defect: {@code estrone} is a whole word inside {@code estrone
  * sulfate}, so the prose rule finds it exactly where {@code indexOf} does and the boundary rule changes
  * nothing about it. The blocking direction above is the one the raw locator actually produces, and it is
- * what these cases pin. The nested-name shape is real for a different reason and is issue #270.
+ * what these cases pin. The nested-name shape is real for a different reason and was issue #270, closed
+ * by settling a distance tie on containment; {@code NestedNameDoseTieTest} covers it.
  *
  * <p><b>And one case here is not about the boundary at all.</b>
  * {@link #aSubstanceNamedTwiceInOneClauseIsLocatedByItsNearestMention} pins the scan over an alias's

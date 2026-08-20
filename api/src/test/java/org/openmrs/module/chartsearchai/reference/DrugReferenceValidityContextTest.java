@@ -211,10 +211,11 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 *
 	 * <p>So the value is DROPPED at load, which is this loader's remedy for a bad value whose entry is
 	 * otherwise usable, and the finding tells the operator which entry to fix. What makes it a rule
-	 * rather than a null check at each of those call sites is the third assertion below: the throw lands
-	 * behind {@code validate}'s own catch, so a guard at one site leaves the others silently dropping
-	 * every chip on the request — no chip, no log line at default levels, and a status endpoint
-	 * reporting the dataset as healthy.
+	 * rather than a null check at each of those call sites is what those call sites are: the safety
+	 * arms, whose throw lands behind {@code validate}'s own catch and answers the request with NO chips
+	 * at all — so a guard at one site leaves the others dropping every chip on the request, behind a
+	 * WARN naming an NPE rather than the dataset, while the status endpoint reports the dataset as
+	 * healthy.
 	 */
 	@Test
 	public void aNullElementInAnEntrysOwnListIsDroppedSoNoConsumerCanThrowOnIt() throws IOException {
@@ -244,8 +245,12 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertTrue(found.getDetail().contains("Ibuprofen"),
 				"the finding must name the entry an operator has to fix. Detail was: " + found.getDetail());
 
-		// The runtime consequence, through the real validator on the real load: this is the assertion
-		// that throws NPE inside addContraindications when the nulls are left in the loaded model.
+		// The runtime consequence, through the real validator on the real load. Not the assertion that
+		// fires FIRST when the drop is removed: the per-arm load report (issue #285) dereferences the
+		// same elements as the load happens, so getLoadStatus above throws before this line is reached
+		// — DrugReferenceLoadContextTest.aNullRuleOrBandDoesNotBringTheLoadDown is that path's own
+		// case. This is the arm the rule is FOR, and what still fires if that report is ever removed:
+		// the (answer, question, context) overload below has no catch, unlike the public Patient one.
 		assertNotNull(DrugReferenceTestSupport.validator(service).validate(
 				"Ibuprofen 4000 mg daily could be given.", "Is ibuprofen safe?",
 				DrugReferenceTestSupport.ctx(60, 70.0, null, null, null, null)),

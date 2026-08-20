@@ -112,6 +112,12 @@ public final class DrugReferenceLoad {
 		 * {@link DrugReference#atcSubgroups()} and not the raw codes, because that reduction is what the
 		 * subgroup comparison in both arms consumes.
 		 *
+		 * <p>Issue #285's resolution named {@link DrugReference#normalizedAtcCodes()} for this arm. The
+		 * substitution is deliberate and said here rather than left to be inferred: {@code atcSubgroups()}
+		 * IS that accessor plus the level-4 reduction, so the two differ by exactly the codes too short to
+		 * reduce — which is the first of the two disagreements below, and the reason for preferring the
+		 * reduction is that a code the comparison cannot use is capability this report must not publish.
+		 *
 		 * <p>This counts what the dataset PUBLISHES for the comparison, which is not the same as
 		 * whether a chip is reachable for a given entry, and it can disagree in both directions. Under,
 		 * because those arms have a second leg that prefix-matches the RAW codes against the curated
@@ -411,14 +417,18 @@ public final class DrugReferenceLoad {
 
 	/**
 	 * @return each arm's verdict and count in one line — {@code doseCeilings=absent (0), …} — for the log
-	 *         the load writes as it happens. The status endpoint answers this after the fact, and #154's
-	 *         rule is that an operator cannot be expected to poll it; the two read the same verdicts and
-	 *         the same {@link Coverage} vocabulary because they call the same methods here.
+	 *         the load writes as it happens. The same verdicts and the same {@link Coverage} vocabulary
+	 *         as {@link #toMap()}, because both call the same methods here, so the log and the endpoint
+	 *         cannot come to disagree.
 	 *
 	 *         <p>INFO at the call site, not WARN: an arm with nothing behind it is a capability the
 	 *         dataset does not have and not a defect in it — the same reason it is no
 	 *         {@link DrugReferenceValidity} finding — so ADR Decision 36's loudness rules and
-	 *         {@code DATA_RULES} are untouched by it.
+	 *         {@code DATA_RULES} are untouched by it. Which also bounds what this line is for: core's
+	 *         shipped {@code log4j2.xml} holds {@code org.openmrs} at {@code WARN}, so an unmodified
+	 *         install prints it no more than it prints the {@code Loaded N …} line beside it. It is the
+	 *         verdict in the log of a deployment that has turned INFO on, and {@link #toMap()} — not
+	 *         this — is what answers a caller who has not.
 	 */
 	public String armSummary() {
 		StringBuilder summary = new StringBuilder();

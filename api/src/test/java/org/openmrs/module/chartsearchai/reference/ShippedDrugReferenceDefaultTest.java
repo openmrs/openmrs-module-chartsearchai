@@ -145,14 +145,21 @@ public class ShippedDrugReferenceDefaultTest extends BaseModuleContextSensitiveT
 	}
 
 	/**
-	 * The same verdicts, in the channel that arrives without being asked for. The status endpoint answers
-	 * this after the fact and issue #154's rule is that an operator cannot be expected to poll one — so an
-	 * install running the shipped default, whose {@code warnOnDoseExcess} reads {@code true} over a
-	 * dataset publishing no ceiling, must be able to see that from its log.
+	 * The same verdicts, in the log line the load writes as it happens — one rendering shared with the
+	 * endpoint, so the two channels cannot name an arm's verdict two ways.
+	 *
+	 * <p><b>This does not establish that a stock install sees that line.</b> {@link LogCapture} raises
+	 * the module logger to INFO for the duration of the capture, and core's shipped {@code log4j2.xml}
+	 * holds {@code org.openmrs} at {@code WARN} — so on an unmodified deployment this line is printed no
+	 * more than the {@code Loaded N …} line beside it, and what answers issue #285 there is the status
+	 * itself — {@link #theShippedDefaultReportsWhichSafetyArmsItsDatasetCanServe}, served on
+	 * {@code GET /chartsearchai/drugreferencestatus}. What is pinned here is the line's CONTENT and its
+	 * register: the verdicts, the same counts the endpoint reports, and that nothing about an unserved
+	 * arm reaches WARN.
 	 *
 	 * <p>Asserted on the shipped default rather than on a fixture because it is the only case where the
 	 * line is MIXED: two arms served and two not, from one dataset, which is what makes it a report rather
-	 * than a constant. At INFO, and the WARN half is asserted too: an arm with nothing behind it is a
+	 * than a constant. The WARN half matters as much as the INFO half: an arm with nothing behind it is a
 	 * capability the dataset does not have, not a defect in it, so nothing here may reach the register ADR
 	 * Decision 36 reserves for what an operator can act on.
 	 */
@@ -166,8 +173,8 @@ public class ShippedDrugReferenceDefaultTest extends BaseModuleContextSensitiveT
 			assertTrue(status.getEntryCount() > 0, "precondition: a load happened");
 			String logged = capture.messagesAt(Level.INFO).toString();
 			assertTrue(logged.contains("doseCeilings=absent (0)"),
-					"the load must say the dose arm has nothing to fire on, in the channel that does not "
-							+ "have to be polled. Captured: " + capture.describeAll());
+					"the load must say the dose arm has nothing to fire on, in the log line the endpoint "
+							+ "shares its rendering with. Captured: " + capture.describeAll());
 			assertTrue(logged.contains("handAuthoredRules=absent (0)"),
 					"and the hand-authored rule arm likewise. Captured: " + capture.describeAll());
 			assertTrue(logged.contains("atcCodes=published ("

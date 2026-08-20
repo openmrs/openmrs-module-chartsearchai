@@ -536,9 +536,9 @@ public final class DrugReferenceValidity {
 	 * are untouched, so nothing is fail-closed, and the operator is told which entry carries it. The
 	 * alternative is a null check per consumer, and the consumers are the safety arms — the throw lands
 	 * behind {@code DrugSafetyValidator.validate}'s own catch, which answers the request with NO chips at
-	 * all, so a guard at one site leaves the others silently dropping every chip on the request while the
-	 * status endpoint reports the dataset as healthy. One rule, one answer to what this loader considers
-	 * valid.
+	 * all, so a guard at one site leaves the others dropping every chip on the request behind a WARN
+	 * naming an NPE rather than the dataset, while the status endpoint reports the dataset as healthy.
+	 * One rule, one answer to what this loader considers valid.
 	 *
 	 * <p>Every list, not the two that throw today. Which lists tolerate a null is a property of each
 	 * consumer's own code — {@link DrugReference#normalizeAtcToken} skips a null code and

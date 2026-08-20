@@ -5059,14 +5059,18 @@ public class DrugSafetyValidator {
 	 *         family-level skip and the per-row skip would come to disagree, and a disagreement in the
 	 *         permissive direction costs a knowledge-base-wide scan per request while one in the
 	 *         restrictive direction costs a warning.
+	 *
+	 *         <p>The patient-INDEPENDENT half of this question — does the band publish a ceiling at all? —
+	 *         is named separately as {@link #publishesACeiling}, because a load-time reader can decide
+	 *         that half and no more (see {@link DrugReferenceLoad.Arm#DOSE_CEILINGS}). It is not asked
+	 *         here: {@code dailyArm || weightArm} below already implies it, so a guard would be a branch
+	 *         no input can reach. The shared premise is that a band with neither ceiling is useless to
+	 *         both readers, and it is stated rather than enforced twice.
 	 */
 	private static DrugReference.AgeBand actionableBand(DrugReference ref,
 			PatientClinicalContext context) {
 		DrugReference.AgeBand band = ref.bandForAge(context != null ? context.getAgeYears() : null);
 		if (band == null) {
-			return null;
-		}
-		if (!publishesACeiling(band)) {
 			return null;
 		}
 		Double weightKg = context != null ? context.getWeightKg() : null;
@@ -5088,12 +5092,12 @@ public class DrugSafetyValidator {
 	 *         publishes no dosing — the "looks healthy, checks nothing" state that report exists to
 	 *         remove, reintroduced by the report itself.
 	 *
-	 *         <p><b>The early return below is NOT independently observable</b>, said rather than left to
-	 *         look tested: {@code publishesACeiling} is strictly weaker than {@code dailyArm ||
-	 *         weightArm}, so it fires only on inputs that already returned null, and no test can redden
-	 *         by deleting it. It is there so the arm and the load-time report read their shared premise
-	 *         from one statement — a band with neither ceiling is useless to both — not because it
-	 *         changes what this method does. Inverting it IS caught, by every dose-excess case.
+	 *         <p><b>{@link #actionableBand} does not call this</b>, and a reader looking for the arm's
+	 *         own use of it will not find one: {@code publishesACeiling} is strictly weaker than that
+	 *         method's {@code dailyArm || weightArm}, so a guard there could only return null on inputs
+	 *         that already did. The shared premise is stated in that method's javadoc instead of being
+	 *         enforced by a branch no input reaches. So this has exactly one production caller, the
+	 *         load-time report, and it is that report's cases which pin it.
 	 */
 	static boolean publishesACeiling(DrugReference.AgeBand band) {
 		return band.getMaxDailyDoseMg() > 0 || band.getMgPerKgMax() > 0;

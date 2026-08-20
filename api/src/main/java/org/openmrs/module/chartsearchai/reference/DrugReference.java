@@ -1563,9 +1563,9 @@ public class DrugReference {
 			return Collections.emptyList();
 		}
 		// Allocated on the first hit and not before: the dose arm asks this of EVERY entry in the
-		// knowledge base per stated dose, and over the real 19 MB DDInter export (2283 entries) 46 of them
-		// answer for a 140-character clause. Thrift rather than a fix — the sweep measures 1.28 ms — and
-		// the empty answer is shared with the null-text path above so both return one shape.
+		// knowledge base per stated dose, and most entries are named nowhere in the clause, so most calls
+		// allocate nothing. Thrift, not a fix for a cost anyone measured — and the empty answer is shared
+		// with the null-text path above so both return one shape.
 		List<NamedOccurrence> found = null;
 		for (String alias : aliases) {
 			if (alias == null) {
@@ -1614,8 +1614,8 @@ public class DrugReference {
 
 		/**
 		 * @return whether this occurrence strictly CONTAINS {@code other} — covers all of it and more. The
-		 *         fact that decides a tie in the dose arm: a name present only as part of a longer name
-		 *         the same clause carries is not independently named there, whichever side of it the dose
+		 *         fact the dose arm settles a claim by: a name present only as part of a longer name the
+		 *         same clause carries is not independently named there, whichever side of it the dose
 		 *         falls on. Strictly, so two occurrences of the same span never each contain the other.
 		 *
 		 *         <p>It answers only that. Whether the container is near the dose BY the name it contains

@@ -12,6 +12,8 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -56,6 +58,21 @@ import org.junit.jupiter.api.Test;
  * would hand this substance a dose the per-row form never gave it. What the rule gives up
  * ({@link #FAR_STANDALONE_MENTION}) and what it does not exempt the substance from
  * ({@link #INDEPENDENT_RIVAL_BETWEEN}) are cases here rather than sentences in a comment.
+ *
+ * <p><b>And it disqualifies a veto from the OTHER side of the nesting too, which barring the container
+ * does not reach.</b> With three names nested ({@code potassium} inside {@code clavulanate potassium}
+ * inside the combination) the innermost is a rival standing on a span the filter has already discarded:
+ * on {@link #RIVAL_NAMED_ONLY_INSIDE_THIS_SUBSTANCE} it vetoed the substance the clause doses by name and
+ * nothing else published a ceiling, so that clause raised nothing at all. The bound is
+ * {@link #DOSE_STATED_FOR_THE_INNER_NAME}, where the inner name IS stated on its own and keeps the dose —
+ * a case rather than an argument, because barring a rival by the relation between the two NAMES instead
+ * of by containment in this clause would reverse it.
+ *
+ * <p><b>Both of the filter's other costs are cases here as well</b>, so the predicate's javadoc claims
+ * nothing this file cannot show: a substance whose only mention is nested loses the dose to nobody where
+ * the container publishes no band ({@link #ONLY_MENTION_NESTED_AND_NO_BAND}, the accepted cost, and the
+ * one that has to be told apart from the silence the veto scoping refuses), and a survivor can simply be
+ * out of range ({@link #SURVIVOR_OUT_OF_RANGE}).
  *
  * <p>Every case runs the REAL production path: the fixture parsed by the real
  * {@link JsonDrugReferenceSource}, the real {@code validate} entry point, real question and answer strings.
@@ -141,6 +158,49 @@ public class NestedNameDoseTieTest {
 	private static final String CONTAINER_NEAR_BY_ITS_OWN_WORD =
 			"Estrone sulfate 2.5 mg daily, estrone was the metabolite.";
 
+	/** The round-2 review's finding: the sub-span rule read off the RIVAL rather than off the subject.
+	 *  {@code potassium} nests inside {@code clavulanate potassium}, which nests inside the combination,
+	 *  so this clause carries the innermost name ONLY inside two longer ones. Dropping the subject's
+	 *  nested occurrence raises its nearest distance past the standalone {@code potassium} at the
+	 *  container's tail, and the container's own veto is then barred as inherited — so what was left to
+	 *  veto the substance the clause doses BY NAME was that {@code potassium}, a name the clause never
+	 *  states on its own. The outermost publishes no band, so the number went unwarned by anybody. */
+	private static final String RIVAL_NAMED_ONLY_INSIDE_THIS_SUBSTANCE =
+			"Amoxicillin and clavulanate potassium ok, 2.5 mg clavulanate potassium daily.";
+
+	/** The BOUND on that rule, and the reason it is containment against THIS clause's occurrences rather
+	 *  than anything about the two names. Here {@code potassium} is stated on its own, directly in front
+	 *  of the number, and the substance whose name contains it is named later: the inner name is
+	 *  independently named here, so it takes the dose and the containing substance does not get it. Bar a
+	 *  rival by the relation between the two NAMES instead and this reverses — which is the maximalist
+	 *  reading of the finding, and a false attribution of exactly the kind issue #270 removes. */
+	private static final String DOSE_STATED_FOR_THE_INNER_NAME =
+			"Potassium 2.5 mg daily, clavulanate potassium was stopped.";
+
+	private static final String POTASSIUM_QUESTION =
+			"Is potassium or clavulanate potassium safe for her?";
+
+	/** What the containment filter costs in its PLAINEST form, which is also the case it exists for: the
+	 *  substance's only mention is nested, so the clause does not name it and it claims nothing — and the
+	 *  container publishes no band, so the number is warned about by nobody. Accepted, unlike the same
+	 *  silence in {@link #CONTAINER_PUBLISHES_NO_BAND}, because there the clause states the number in
+	 *  front of the substance's own name and here it does not. Pinned so the two cannot be confused for
+	 *  one, and so that closing this one — which would undo the whole of issue #270 — cannot be done
+	 *  quietly. */
+	private static final String ONLY_MENTION_NESTED_AND_NO_BAND =
+			"Dexamethasone and framycetin 2.5 mg daily is the plan.";
+
+	/** The second of the filter's two indirect costs ({@link #INDEPENDENT_RIVAL_BETWEEN} is the other),
+	 *  and the one nothing pinned. The nested mention sits
+	 *  1 character from the number; the surviving mention is 150 characters away in the same clause,
+	 *  which is outside {@code MAX_ALIAS_TO_DOSE_DISTANCE}, so the substance loses the dose to the range
+	 *  check rather than to a rival. Commas are not clause delimiters, which is what lets one clause run
+	 *  that long. */
+	private static final String SURVIVOR_OUT_OF_RANGE =
+			"Amoxicillin and clavulanate 2.5 mg was continued through the admission and the ward team "
+					+ "reviewed the chart with pharmacy on the following morning without changing "
+					+ "anything, and clavulanate stayed on it.";
+
 	private static List<SafetyWarning> validate(String answer) throws Exception {
 		return validate(answer, QUESTION);
 	}
@@ -216,6 +276,64 @@ public class NestedNameDoseTieTest {
 				"precondition: and they must differ in LENGTH — the fixture publishes each display name "
 						+ "as that substance's one alias — or a blanket longer-wins rule would leave both "
 						+ "standing here too and the case could not tell the two rules apart");
+
+		// And the THREE-level nest the round-2 cases rest on, read the same way: the innermost name has
+		// to be nested inside the middle one, which has to be nested inside the outermost, IN THIS
+		// CLAUSE. A pair would not pose it — the finding is about a rival standing on a span the filter
+		// has already discarded, and it takes two levels of nesting to discard one.
+		DrugReference potassium = DrugReferenceTestSupport.row(entries, "Potassium");
+		DrugReference clavPotassium = DrugReferenceTestSupport.row(entries, "Clavulanate potassium");
+		DrugReference coAmoxiclavPotassium = DrugReferenceTestSupport.row(entries,
+				"Amoxicillin and clavulanate potassium");
+		String nest = DrugReference
+				.foldedLower(RIVAL_NAMED_ONLY_INSIDE_THIS_SUBSTANCE.toLowerCase(Locale.ROOT));
+		int nestDose = nest.indexOf("2.5");
+		DrugReference.NamedOccurrence innermost = potassium.namedOccurrences(nest, nestDose).get(0);
+		List<DrugReference.NamedOccurrence> middles = clavPotassium.namedOccurrences(nest, nestDose);
+		DrugReference.NamedOccurrence outermost = coAmoxiclavPotassium.namedOccurrences(nest, nestDose)
+				.get(0);
+
+		assertEquals(2, middles.size(),
+				"precondition: the subject is named twice in that clause — once nested, once on its own");
+		assertTrue(outermost.strictlyContains(middles.get(0)),
+				"precondition: the first of them nested inside the outermost name, or the filter never "
+						+ "discards it and the subject's nearest distance never rises above the rival's");
+		assertFalse(outermost.strictlyContains(middles.get(1)),
+				"precondition: and the second not, or the subject has no surviving occurrence and the "
+						+ "case is about the filter rather than about the veto");
+		assertTrue(middles.get(0).strictlyContains(innermost),
+				"precondition: the rival's occurrence must be a strict sub-span of the DISCARDED one, or "
+						+ "the veto it wins is its own and there is nothing to bar");
+		assertTrue(innermost.getDistance() < middles.get(1).getDistance(),
+				"precondition: and strictly nearer the number than the surviving occurrence, or it never "
+						+ "vetoes and the case passes without exercising the bar at all");
+		assertNotNull(potassium.bandForAge(30),
+				"precondition: the innermost substance must publish a band of its own, or the assertion "
+						+ "that it does not warn passes on the fixture rather than on the nesting");
+		assertNull(coAmoxiclavPotassium.bandForAge(30),
+				"precondition: while the outermost publishes none, which is what makes the lost warning a "
+						+ "loss rather than a re-attribution");
+		assertNull(
+				DrugReferenceTestSupport.row(entries, "Dexamethasone and framycetin").bandForAge(30),
+				"precondition: and likewise for the pair the filter's plainest cost is measured over");
+
+		// And the geometry the out-of-range case rests on, which is a property of the SENTENCE and so
+		// the one thing an editor could break without noticing. That both mentions are in ONE clause is
+		// not asserted here — CLAUSE_DELIMITER is the validator's own and commas are not in it — but it
+		// is shown: raise MAX_ALIAS_TO_DOSE_DISTANCE and that case reddens, which it could not do if the
+		// far mention were in a clause of its own.
+		String longClause = DrugReference.foldedLower(SURVIVOR_OUT_OF_RANGE.toLowerCase(Locale.ROOT));
+		List<DrugReference.NamedOccurrence> spread = clavulanate.namedOccurrences(longClause,
+				longClause.indexOf("2.5"));
+
+		assertEquals(2, spread.size(),
+				"precondition: the long clause names the constituent twice");
+		assertEquals(1, spread.get(0).getDistance(),
+				"precondition: once one character from the number, nested inside the combination's name, "
+						+ "which is the occurrence the filter discards");
+		assertEquals(150, spread.get(1).getDistance(),
+				"precondition: and once 150 characters away, outside the arm's alias-to-dose cap — trim "
+						+ "the sentence and the case silently becomes a duplicate of the rival one");
 	}
 
 	@Test
@@ -361,6 +479,84 @@ public class NestedNameDoseTieTest {
 				"one published name naming two substances is ambiguous, not nested: both keep the dose");
 		assertEquals(1, DrugReferenceTestSupport.overdoseCount(warnings, "Menotrophin B"),
 				"and the second, which a non-strict containment test would silence along with the first");
+	}
+
+	@Test
+	public void aRivalNamedOnlyInsideThisSubstancesOwnNameDoesNotVetoEither() throws Exception {
+		List<SafetyWarning> warnings = validate(RIVAL_NAMED_ONLY_INSIDE_THIS_SUBSTANCE,
+				POTASSIUM_QUESTION);
+
+		// The same principle as the case above, read off the RIVAL. Three names nest here, so barring the
+		// container's veto is not enough on its own: the subject's nested occurrence goes, the container's
+		// inherited veto goes, and the standalone `potassium` at the container's tail — a name this clause
+		// carries only inside two longer ones — was left to veto the substance the clause doses by name.
+		// Nothing else could pick the number up, because the outermost publishes no band, so the count
+		// here was zero.
+		assertEquals(1, DrugReferenceTestSupport.overdoseCount(warnings, "Clavulanate potassium"),
+				"the substance the clause states the dose for keeps its warning");
+		assertEquals(0, DrugReferenceTestSupport.overdoseCount(warnings, "Potassium"),
+				"and the innermost name claims nothing: the clause never states it outside a longer name, "
+						+ "so it is not independently named here — the same rule that dropped the "
+						+ "subject's nested occurrence, applied to a rival's");
+		assertEquals(1, warnings.size(),
+				"and that is the whole of what this clause raises: with the sub-span rival allowed to "
+						+ "veto, the count was zero — a lost overdose warning, not a renamed one");
+	}
+
+	@Test
+	public void aDoseStatedForTheInnerNameStaysWithItAndNotWithTheNameThatContainsIt() throws Exception {
+		List<SafetyWarning> warnings = validate(DOSE_STATED_FOR_THE_INNER_NAME, POTASSIUM_QUESTION);
+
+		// The bound, and the reason the bar is containment against THIS clause's spans rather than a
+		// relation between the two names. Measured: widen the bar to every rival and the second assertion
+		// here reddens — Clavulanate potassium claims a dose the clause states for potassium alone.
+		// Green before this rule as well as after, and the arithmetic is why. Containment bounds a container
+		// to no farther than what it contains, so a rival inside one of the subject's occurrences is
+		// never strictly nearer than that occurrence, and where that occurrence SURVIVES the filter the
+		// bar therefore cannot fire at all. It bites only where the occurrence it stands on was itself
+		// discarded, which is the case above.
+		assertEquals(1, DrugReferenceTestSupport.overdoseCount(warnings, "Potassium"),
+				"the clause states the number in front of the inner name, on its own, so that substance "
+						+ "owns it");
+		assertEquals(0, DrugReferenceTestSupport.overdoseCount(warnings, "Clavulanate potassium"),
+				"and the substance whose name merely contains it does not: a rival named independently "
+						+ "here vetoes on distance like any other, however its name relates to this one");
+	}
+
+	@Test
+	public void aSubstanceWhoseOnlyMentionIsNestedLosesTheDoseToNobody() throws Exception {
+		List<SafetyWarning> warnings = validate(ONLY_MENTION_NESTED_AND_NO_BAND, FRAMYCETIN_QUESTION);
+
+		// What the containment filter costs in its plainest form, which is also the case it exists for.
+		// The clause doses the combination; the constituent is present only inside that name, so it is
+		// not named here and claims nothing. The combination publishes no band, so nothing warns —
+		// deliberately, and it is worth pinning because it is the SAME silence the veto scoping refuses
+		// two cases up. What separates them is the question that produced it: the filter answers whether
+		// the clause names this substance at all, and where it does not there is nothing to hang the
+		// number on, exactly as if the knowledge base carried no row for the combination. The veto
+		// answers which of two NAMED claimants owns the number, and silence there means the arm found a
+		// claimant beside the number and then discarded it.
+		assertEquals(0, DrugReferenceTestSupport.overdoseCount(warnings, "Framycetin"),
+				"the constituent is named only inside the combination's name, so this clause does not "
+						+ "dose it");
+		assertEquals(0, warnings.size(),
+				"and the combination publishes no ceiling, so the number is warned about by nobody — the "
+						+ "filter's intended cost, not a defect in it");
+	}
+
+	@Test
+	public void aSurvivingMentionOutsideTheDistanceCapLosesTheDoseToo() throws Exception {
+		List<SafetyWarning> warnings = validate(SURVIVOR_OUT_OF_RANGE);
+
+		// The filter's other indirect cost, and the one nothing pinned. The nested mention sits 1
+		// character from the number and the surviving one 150 away in the same clause, which is outside
+		// MAX_ALIAS_TO_DOSE_DISTANCE — so the substance loses the dose to the range check rather than to
+		// a rival, which is the branch the predicate's javadoc claims and could not previously show.
+		// Raising that cap would re-attribute this number and redden here.
+		assertEquals(0, DrugReferenceTestSupport.overdoseCount(warnings, "Clavulanate"),
+				"its nested mention is gone and its surviving one is out of range, so it claims nothing");
+		assertEquals(1, DrugReferenceTestSupport.overdoseCount(warnings, "Amoxicillin and clavulanate"),
+				"while the combination the clause really doses keeps the warning");
 	}
 
 	@Test

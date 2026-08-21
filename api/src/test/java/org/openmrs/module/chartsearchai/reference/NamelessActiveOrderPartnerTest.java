@@ -41,8 +41,10 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * arrangement, made nameless the only way the platform allows.
  *
  * <p><b>Why the names are voided by SQL and the ATC map is not.</b> {@code Concept.getName()} returns
- * null in only two shapes — a concept with no non-voided names, and an index-term-only concept — and
- * neither can be SAVED: {@code ConceptValidator} rejects a concept with no fully specified name, and
+ * null only for a concept none of whose non-voided names is a preferred name, a fully specified name or
+ * a synonym. No count is given: the builder's own comment declines to enumerate the shapes, and a
+ * SHORT-typed name is one this file's earlier "two shapes" wording missed. No such concept can be
+ * SAVED: {@code ConceptValidator} rejects a concept with no fully specified name, and
  * {@code Concept.addName} coerces the first name added to {@code FULLY_SPECIFIED}, so the index-term
  * route cannot even be built. The order is therefore made nameless after the fact. The ATC mapping is
  * applied FIRST, through the real {@code ConceptService}, while the concept still has its name and
@@ -99,16 +101,6 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 					false);
 		Context.flushSession();
 		Context.clearSession();
-	}
-
-	private static List<String> crossReactivityChipDetails(List<SafetyWarning> warnings) {
-		List<String> out = new ArrayList<String>();
-		for (SafetyWarning w : warnings) {
-			if (w.getDetail() != null && w.getDetail().contains("is in the same cross-reactivity group")) {
-				out.add(w.getDetail());
-			}
-		}
-		return out;
 	}
 
 	private static List<String> atcClassChipDetails(List<SafetyWarning> warnings) {
@@ -317,9 +309,10 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 *
 	 * <p>The code-only display is not only a chip label: {@code DrugReferenceInjector.renderActiveOrder}
 	 * puts it into the chart as a citable record, so this pins the exact string a clinician and the
-	 * model both read. Before issue #290 such an order reached neither the chip nor this record — it was
-	 * absent from the list the reconciliation walks — so the model could deny a medication the chart
-	 * held, which is the #118 divergence the reconciliation exists to repair.
+	 * model both read. Before issue #290 such an order DID reach the chips — one per code, each naming a
+	 * bare code, which is the defect this class exists for — but never this record, because it was absent
+	 * from the list the reconciliation walks. So the model could deny a medication the chart held, which
+	 * is the #118 divergence the reconciliation exists to repair.
 	 *
 	 * <p><b>The exposure this records rather than fixes.</b> {@code RESOURCE_TYPE_ACTIVE_DRUG_ORDER}
 	 * groups as {@code REFERENCE_GROUP_CHART}, so unlike {@code drug_reference} and

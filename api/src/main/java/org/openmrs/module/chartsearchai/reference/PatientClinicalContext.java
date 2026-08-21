@@ -469,9 +469,9 @@ public class PatientClinicalContext {
 	 *
 	 * <p><b>One class of order is identified LESS well than the above, deliberately</b> (issue #290):
 	 * {@link #namedByCodesOnly} stands in for an order no name could be read for, so its display is a
-	 * list of its own ATC codes and it has no names at all. Two of the three sentences above do not hold
-	 * for it — it carries no name identifying it in record text, so the reconciliation can only match it
-	 * by uuid, and its display carries no strength because it is not a drug name. Ask
+	 * list of its own ATC codes and it has no names at all. Of the identity described above it carries
+	 * only the uuid: no name identifies it in record text, so the reconciliation can match it by uuid
+	 * alone, and its display carries no strength because it is not a drug name. Ask
 	 * {@link #hasKnownName()} before letting the display DISPLACE a name some other source supplied;
 	 * labelling something that has no other name is what the display is for. It is still far
 	 * better than the alternative it replaced: such an order used to be omitted entirely while its codes

@@ -106,14 +106,13 @@ final class PatientClinicalContextBuilder {
 				// (issue #132). The flattened union is still assembled here — the class arms and
 				// findByActiveOrders want exactly that. Since issue #290 it no longer holds codes that
 				// no ActiveDrugOrder accounts for: an order the module cannot NAME reaches the
-				// per-order list below too, and one whose codes are all unusable contributes to
-				// neither (normalizeAtcTokens drops those here as well).
+				// per-order list below too, and one carrying no ATC code at all contributes to neither.
 				Set<String> orderAtcCodes = new LinkedHashSet<String>();
 				addAtcCodes(orderAtcCodes, concept);
 				atcCodes.addAll(orderAtcCodes);
 				// Resolved once and read by both the skip test and the label below, so the two cannot
-				// answer differently about which of this order's codes are usable.
-				Set<String> usableCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
+				// answer differently about which codes this order has.
+				Set<String> normalizedCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
 				// An order the module cannot NAME still reaches this list, labelled by the ATC codes it
 				// carries (issue #290). Skipping it was the one outcome that reproduced issue #118
 				// rather than repairing it: addAtcCodes above needs no name, so a skipped order left
@@ -167,8 +166,8 @@ final class PatientClinicalContextBuilder {
 				if (!orderNames.isEmpty()) {
 					activeOrders.add(new PatientClinicalContext.ActiveDrugOrder(drugOrder.getUuid(),
 							orderNames.iterator().next(), orderNames, orderAtcCodes));
-				} else if (!usableCodes.isEmpty()) {
-					String codeOnlyDisplay = codeOnlyDisplay(usableCodes);
+				} else if (!normalizedCodes.isEmpty()) {
+					String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
 					log.warn("Active drug order {} has no readable name; it will be named by its ATC "
 							+ "codes as {}. A safety chip for this order names the codes rather than a "
 							+ "drug, and the order cannot be matched against chart text.",
@@ -334,8 +333,8 @@ final class PatientClinicalContextBuilder {
 	 * {@code "Active drug order: <label>."}. The same {@code "ATC "}-then-comma-joined shape
 	 * {@code DrugReferenceInjector} renders a reference row's codes in.
 	 */
-	private static String codeOnlyDisplay(Set<String> usableCodes) {
-		return "[ATC " + String.join(", ", new TreeSet<String>(usableCodes)) + "]";
+	private static String codeOnlyDisplay(Set<String> normalizedCodes) {
+		return "[ATC " + String.join(", ", new TreeSet<String>(normalizedCodes)) + "]";
 	}
 
 	private static void addRaw(Set<String> set, String value) {

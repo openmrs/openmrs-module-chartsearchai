@@ -3168,12 +3168,16 @@ public class DrugSafetyValidator {
 	 *         carries it too, because removal from a flattened set cannot tell contributors apart: a
 	 *         patient on both a combination and a separate order of one of its constituents keeps that
 	 *         (genuine, duplicate-therapy) pair, which the pre-#132 reduction had to give up whenever
-	 *         only the shared code witnessed it. Codes that no per-order set claims are left alone —
-	 *         they are a real second order's and a legitimate witness. Since issue #290 the BUILDER
-	 *         produces no such code: an order it cannot name still reaches the per-order list, and one
-	 *         with no codes contributes none to the union either, so in production every code here has
-	 *         an order behind it. What remains is a context built from the flattened sets alone, which
-	 *         issue #118 deliberately kept.
+	 *         only the shared code witnessed it. Codes that no per-order set claims are left alone.
+	 *         Since issue #290 the BUILDER produces no such code: an order it cannot name still reaches
+	 *         the per-order list, and one with no codes contributes none to the union either, so in
+	 *         production every code here has an order behind it. What remains is a HAND-BUILT context
+	 *         that supplies an order list AND a wider flattened set — not the flattened-only shape of
+	 *         issue #118, which never reaches this block at all (the guard below requires a non-empty
+	 *         order list, and the flattened fallback further down is where that residual lives). For a
+	 *         hand-built disagreement, leaving the code alone is a choice rather than a property:
+	 *         nothing there establishes a second order, which is why the {@code otherCodes.retainAll}
+	 *         below treats such a disagreement as untrusted.
 	 *
 	 *         <p>Restoration reaches every order EXCEPT one that is itself the subject's own, and that
 	 *         bounds what this can find: when every order carrying one member of a pair also carries the
@@ -3257,7 +3261,8 @@ public class DrugSafetyValidator {
 				// esomeprazole — Minor" off a single tablet, which the pre-#132 code suppressed. What the
 				// proxy removes is restored below whenever another order IN THE PER-ORDER LIST carries it.
 				// Every order the builder reads is in that list since issue #290, nameless ones
-				// included, so the only codes outside it now come from a flattened-only context (#118).
+				// included, so a code outside it means a hand-built context supplied one — this branch
+				// only runs when the order list is non-empty, so #118's flattened-only shape is not it.
 				for (DrugReference coResolved : orderDrugs) {
 					if (!subjectRows.contains(coResolved) && resolvesFrom(coResolved, order)) {
 						ownCodes.addAll(coResolved.normalizedAtcCodes());
@@ -4724,8 +4729,9 @@ public class DrugSafetyValidator {
 	 *         nameless order and by a named one, taking the first would let {@code [ATC N02BA99]}
 	 *         displace {@code Aspirin 81mg} on a clinician-facing chip, decided by nothing but the
 	 *         sequence {@code OrderService} returned the prescriptions in — the same sequence
-	 *         dependence issue #185 removed from the skip. It also hands {@link #soleSubstanceOf} the
-	 *         order whose codes can still resolve to a substance, so the two codes reach ONE partner.
+	 *         dependence issue #185 removed from the skip. It selects on nothing but the NAME: whether
+	 *         the carrier it prefers is also the one whose codes resolve to a substance depends on the
+	 *         dataset's coverage, so invert the shape and {@link #soleSubstanceOf} still answers null.
 	 *         With every carrier named this returns the first, exactly as before; with none named it
 	 *         falls back to the first, because then there is nothing better to pick.
 	 */
@@ -4749,7 +4755,8 @@ public class DrugSafetyValidator {
 	 *         a partner is named after one order. Naming it after the first WAS a presentation choice,
 	 *         while every carrier had a name to offer; since issue #290 one may have none, so that
 	 *         method prefers a carrier that can name itself and the choice is no longer between
-	 *         equals. What the partner is known to CONTAIN was never a presentation choice: with two orders carrying one code
+	 *         equals. What the partner is known to CONTAIN was never a presentation
+	 *         choice: with two orders carrying one code
 	 *         the dataset cannot name, reading only the first one's names made
 	 *         {@code classRelationships}'s restating-existing-therapy skip a function of the sequence
 	 *         {@code OrderService} returned the prescriptions in — the same patient told two different

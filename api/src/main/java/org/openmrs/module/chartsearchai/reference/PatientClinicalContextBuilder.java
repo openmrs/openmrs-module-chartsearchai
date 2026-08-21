@@ -14,6 +14,7 @@ import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.openmrs.Allergy;
 import org.openmrs.Concept;
@@ -103,32 +104,77 @@ final class PatientClinicalContextBuilder {
 				// same concept: flattened, a code cannot be attributed to the order carrying it, so ONE
 				// order's two codes read as two orders and the order witnesses its own interaction
 				// (issue #132). The flattened union is still assembled here — the class arms and
-				// findByActiveOrders want exactly that, and the nameless-order gap below contributes to
-				// it without contributing an ActiveDrugOrder.
+				// findByActiveOrders want exactly that. Since issue #290 it no longer holds codes that
+				// no ActiveDrugOrder accounts for: an order the module cannot NAME reaches the
+				// per-order list below too, and one whose codes are all unusable contributes to
+				// neither (normalizeAtcTokens drops those here as well).
 				Set<String> orderAtcCodes = new LinkedHashSet<String>();
 				addAtcCodes(orderAtcCodes, concept);
 				atcCodes.addAll(orderAtcCodes);
-				// An order with no readable name at all is skipped: it can be neither rendered as a
-				// record nor matched against chart text, and injecting it would put a nameless line
-				// ("Active drug order: null") in front of a clinician.
+				// Resolved once and read by both the skip test and the label below, so the two cannot
+				// answer differently about which of this order's codes are usable.
+				Set<String> usableCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
+				// An order the module cannot NAME still reaches this list, labelled by the ATC codes it
+				// carries (issue #290). Skipping it was the one outcome that reproduced issue #118
+				// rather than repairing it: addAtcCodes above needs no name, so a skipped order left
+				// its codes in the flattened union with no order behind them — and DrugSafetyValidator
+				// .orderPartners keys such a code on the raw code string, so ONE prescription became
+				// one duplicate-therapy chip PER CODE, each naming an unlabelled code. Measured
+				// through the real validate: 2 chips for a 2-code order, 1 once the same order has a
+				// name. Issue #155's ladder could not help — an order skipped here never enters
+				// getActiveDrugOrders(), so there was no display name for it to fall back to.
 				//
-				// KNOWN GAP, to follow with the reconciliation's other corpus issue: skipping is the
-				// one outcome that reproduces issue #118 rather than repairing it. addAtcCodes above
-				// needs no name, and a safety chip's drug name comes from the KB entry the ATC code
-				// resolves to (DrugSafetyValidator's orderPartners), not from the order — so a
-				// nameless order can still raise a chip reading "as active order simvastatin" while
-				// being invisible to the reconciliation that exists to substantiate it. Issue #155
-				// gave that resolution a fallback to the ORDER's display name, which does not reach
-				// this shape: an order skipped here never enters getActiveDrugOrders(), so there is no
-				// display name to fall back to and the chip still speaks only for the KB entry. Reachable, not
-				// theoretical: addConceptName swallows a RuntimeException from concept.getName() (a
-				// detached/lazy-init proxy) in its own try, and addAtcCodes then runs in a separate
-				// one and can still succeed; likewise a concept named only outside the current locale
-				// yields a null name with its ATC mappings intact. The fix is a fallback display
-				// rather than a skip, so the record can be injected with the order's real uuid.
+				// Reachable whenever no non-blank name can be READ, which is not the same question as
+				// Concept.getName() returning null and is deliberately not enumerated as a closed list.
+				// One thing about getName() is worth stating because issue #290's first plan was built
+				// on getting it wrong: a concept named only outside the current locale does NOT yield
+				// null, since getName() walks LocaleUtility.getLocalesInOrder(), then falls back to the
+				// first fully-specified name in ANY locale, then to any synonym. Shapes that do reach
+				// here include addConceptName swallowing a RuntimeException from concept.getName() (a
+				// detached/lazy-init proxy) in its own try while addAtcCodes succeeds in a separate
+				// one, a dictionary whose names have been voided, and a recorded name that is blank
+				// (addRaw drops it, so getName() need not be null at all).
+				//
+				// Three things about the placeholder, each load-bearing:
+				//
+				// The display names the codes AS codes, through the same shared normalizer the
+				// order's own code set and the ladder's last rung use (DrugReference
+				// .normalizeAtcTokens) — otherwise a dictionary storing "c10aa01" would print a
+				// lower-case code where every other surface prints "C10AA01", and the label would
+				// drift from what it keys on.
+				//
+				// The name set stays EMPTY. It is lowercased and matched against chart prose
+				// (ActiveDrugOrder.namedIn, and four getNames() consumers in DrugSafetyValidator), so
+				// seeding it with a code would let an ATC code match free text — a new defect for an
+				// old one. Empty is also the honest answer: the order's name is unknown, so it matches
+				// nothing. The consequence is that this order class is uuid-only for the #118
+				// reconciliation, since namedIn can never be true for it.
+				//
+				// An order with no name and no code is still skipped: nothing can name it and no chip
+				// can be raised for it, so adding it would only put an unnameable line in front of a
+				// clinician — which is what the old skip was right about.
+				//
+				// The test reads the normalized set because that is the set the label is built from and
+				// the same normalization ActiveDrugOrder will store, so the three cannot disagree about
+				// which codes this order has. It is not a defence against a blank code: addAtcCodes
+				// appends through addRaw, which drops blank and null values, so at this site the
+				// normalized set is empty exactly when orderAtcCodes is.
+				//
+				// The WARN is the only trace that a chip is speaking for an order the module could not
+				// name. It deliberately does NOT distinguish a name that could not be READ from a
+				// concept that has none — the distinction contraindicationRecordsRead() keeps for the
+				// chart reads — because no consumer behaves differently on it today.
 				if (!orderNames.isEmpty()) {
 					activeOrders.add(new PatientClinicalContext.ActiveDrugOrder(drugOrder.getUuid(),
 							orderNames.iterator().next(), orderNames, orderAtcCodes));
+				} else if (!usableCodes.isEmpty()) {
+					String codeOnlyDisplay = codeOnlyDisplay(usableCodes);
+					log.warn("Active drug order {} has no readable name; it will be named by its ATC "
+							+ "codes as {}. A safety chip for this order names the codes rather than a "
+							+ "drug, and the order cannot be matched against chart text.",
+						drugOrder.getUuid(), codeOnlyDisplay);
+					activeOrders.add(PatientClinicalContext.ActiveDrugOrder
+							.namedByCodesOnly(drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes));
 				}
 			}
 		}
@@ -272,6 +318,24 @@ final class PatientClinicalContextBuilder {
 		catch (RuntimeException e) {
 			log.debug("Could not read concept mappings for ATC codes", e);
 		}
+	}
+
+	/**
+	 * The display for an order no name could be read for: the codes it carries, labelled as codes.
+	 *
+	 * <p>Takes the ALREADY-normalized set the caller tested for emptiness, so the label and that test
+	 * read one set rather than agreeing because the same function was run twice. Sorted, so the label
+	 * does not depend on the order the dictionary returned the mappings in — and it names ALL of them,
+	 * because the label identifies the ORDER rather than whichever of its codes a particular chip
+	 * matched on.
+	 *
+	 * <p>Rendered so it reads correctly in both templates that consume a display: the chip's
+	 * {@code "as active order <label>"} and {@code DrugReferenceInjector.renderActiveOrder}'s
+	 * {@code "Active drug order: <label>."}. The same {@code "ATC "}-then-comma-joined shape
+	 * {@code DrugReferenceInjector} renders a reference row's codes in.
+	 */
+	private static String codeOnlyDisplay(Set<String> usableCodes) {
+		return "[ATC " + String.join(", ", new TreeSet<String>(usableCodes)) + "]";
 	}
 
 	private static void addRaw(Set<String> set, String value) {

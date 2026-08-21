@@ -214,10 +214,11 @@ public class PatientClinicalContext {
 	 *         order, which is what the class-based arms and
 	 *         {@link DrugReferenceService#findByActiveOrders} want (neither asks which order a code came
 	 *         from). Held independently rather than derived from {@link #getActiveDrugOrders()}: a
-	 *         caller may supply only the flattened sets (issue #118 deliberately kept that fallback),
-	 *         and even in production the per-order list can be narrower than this set — an order with no
-	 *         readable name is skipped there while its codes still land here (the builder's KNOWN GAP).
-	 *         Deriving this from the list would silently drop those codes; a caller that needs to know
+	 *         caller may supply only the flattened sets (issue #118 deliberately kept that fallback), so
+	 *         this set can hold codes no {@link ActiveDrugOrder} accounts for. In production it no
+	 *         longer can: since issue #290 an order the module cannot name still reaches the per-order
+	 *         list, and one with no codes contributes none here either, so the two agree. Deriving this
+	 *         from the list would still drop the flattened caller's codes; one that needs to know
 	 *         WHICH order a code belongs to reads {@link ActiveDrugOrder#getAtcCodes()} instead.
 	 */
 	public Set<String> getActiveDrugAtcCodes() {
@@ -465,6 +466,16 @@ public class PatientClinicalContext {
 	 * must not hold one fact and present it two ways, and a second dose-rendering path beside
 	 * querystore's is exactly that. The display name already carries the strength in real data
 	 * ("Simvastatin Co 20mg"), and the citation resolves to the order itself for the rest.
+	 *
+	 * <p><b>One class of order is identified LESS well than the above, deliberately</b> (issue #290):
+	 * {@link #namedByCodesOnly} stands in for an order no name could be read for, so its display is a
+	 * list of its own ATC codes and it has no names at all. Two of the three sentences above do not hold
+	 * for it — it carries no name identifying it in record text, so the reconciliation can only match it
+	 * by uuid, and its display carries no strength because it is not a drug name. Ask
+	 * {@link #hasKnownName()} before letting the display DISPLACE a name some other source supplied;
+	 * labelling something that has no other name is what the display is for. It is still far
+	 * better than the alternative it replaced: such an order used to be omitted entirely while its codes
+	 * still reached {@link #getActiveDrugAtcCodes()}, which made one prescription look like one per code.
 	 */
 	public static final class ActiveDrugOrder {
 
@@ -476,6 +487,13 @@ public class PatientClinicalContext {
 
 		private final Set<String> atcCodes;
 
+		/** Whether {@link #display} is a name for this order, as opposed to a stand-in the module
+		 *  synthesized because it could not read one — see {@link #namedByCodesOnly}. Asked, rather
+		 *  than inferred from {@link #names} being empty, because that is a PROXY: a caller may hand
+		 *  this a real display with no match tokens, and the answer decides whether a real drug name
+		 *  gets displaced on a chip (issue #290, {@code OrderPartner.nameByOrder}). */
+		private final boolean nameKnown;
+
 		/** An order whose concept carries no ATC map — the majority in practice: only 85 of the 616
 		 *  Drug-class concepts in the 3.7.1 reference demo dictionary carry one (measured 2026-08-04,
 		 *  the same count {@code DrugReferenceService.findForActiveOrders} cites) — so the code-carrying
@@ -485,6 +503,25 @@ public class PatientClinicalContext {
 		}
 
 		public ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes) {
+			this(uuid, display, names, atcCodes, true);
+		}
+
+		/**
+		 * An order the module could not read a name for, standing in with its ATC codes (issue #290).
+		 *
+		 * <p>Its {@link #getNames()} is empty on purpose — that set is matched against chart prose, and
+		 * a code in it would match free text — so this order cannot be found by name anywhere, and the
+		 * #118 reconciliation substantiates it by uuid alone. A separate factory rather than a fifth
+		 * argument on the public constructor, so that no existing caller can produce this state by
+		 * accident and the one place that does is named.
+		 */
+		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes) {
+			return new ActiveDrugOrder(uuid, display, null, atcCodes, false);
+		}
+
+		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				boolean nameKnown) {
+			this.nameKnown = nameKnown;
 			this.uuid = uuid;
 			this.display = display;
 			this.names = lower(names);
@@ -502,6 +539,16 @@ public class PatientClinicalContext {
 		/** @return the order's display name, as a record renders it. */
 		public String getDisplay() {
 			return display;
+		}
+
+		/** @return true when {@link #getDisplay()} is a name this order actually carries, false when it
+		 *          is the code-only stand-in {@link #namedByCodesOnly} builds. Ask this before letting
+		 *          the display DISPLACE a name another source supplied — that is the one decision it
+		 *          exists for ({@code DrugSafetyValidator.OrderPartner.nameByOrder}). Using the display
+		 *          to label something that has no other name does NOT need this test, and the chip's
+		 *          own "as active order &lt;label&gt;" is that case. */
+		public boolean hasKnownName() {
+			return nameKnown;
 		}
 
 		/** @return lowercased names identifying this order (drug name and/or concept name). */

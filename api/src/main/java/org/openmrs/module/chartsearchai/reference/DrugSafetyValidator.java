@@ -2177,7 +2177,9 @@ public class DrugSafetyValidator {
 	 * <p>One definition, because the chip detail renders it and {@link #bestRulePerPartner} groups on it
 	 * wherever the dataset identifies no partner entry: on that branch the grouping is only correct
 	 * while the key IS the label the chip says, and two copies of the same coalesce could drift into
-	 * grouping rules by something a clinician never sees.
+	 * grouping rules by something a clinician never sees. Since issue #292 that identity holds for every
+	 * UNFOLDED chip and no longer for a folded one — {@link #foldedPartnerLabel} states which folded
+	 * chips depart from it and what it costs.
 	 *
 	 * <p>Trimmed to fold the way the MATCH folds. {@link PatientClinicalContext#hasActiveDrug} trims
 	 * the rule's token and matches it case-insensitively against the order name, so two rows whose
@@ -2236,9 +2238,24 @@ public class DrugSafetyValidator {
 	 * <p>So {@code partnerLabel} becomes the ladder's last-but-one rung rather than a second, independent
 	 * ladder. Nothing outside a folded chip moves: an unfolded rule chip, the grouping keys
 	 * ({@link SubjectRule#partnerKey}, {@code DrugReferenceInjector.onePerPartner}) and the injected
-	 * {@code drug_reference} note list all keep {@code partnerLabel} itself, so issue #121's invariant —
-	 * on the branch where the dataset identifies no partner entry, the key IS the label the chip says —
-	 * holds exactly as before.
+	 * {@code drug_reference} note list all keep {@code partnerLabel} itself.
+	 *
+	 * <p><b>Issue #121's invariant is therefore SCOPED by this method, not preserved by it.</b> On the
+	 * branch where the dataset identifies no partner entry the grouping key is {@code partnerLabel}
+	 * case-folded, and every UNFOLDED chip still renders exactly that key. A FOLDED chip on that same
+	 * branch can render the ladder's name instead — reachable where the ladder named the order and the
+	 * dataset resolved no entry for it, which is
+	 * {@code ClassChipPartnerLabelTest.anOrderTheDatasetDoesNotCoverIsNamedByItsOwnDisplayName}: the key
+	 * is {@code aspirin}, the chip says {@code Aspirin 81mg}.
+	 *
+	 * <p>What that costs, stated rather than left to be found: the grouping still merges rules about one
+	 * partner by the token, which is the right key when no entry resolves, but the name a clinician sees
+	 * is no longer that key. So two rules about one order carrying DIFFERENT tokens still produce two
+	 * chips, and one of them may now name the order by the display while the other names it by its own
+	 * token. Two names for one order across two chips is not new — that is issue #136's shape on this
+	 * branch, where before this change both chips named it by their tokens — but the asymmetry is. It is
+	 * left standing because the alternative is refusing to reconcile exactly the shape the ticket's own
+	 * live case is drawn from, and because this ticket is scoped to ONE chip detail.
 	 *
 	 * <p><b>Two conditions, and both are refusals rather than preferences.</b>
 	 * <ul>
@@ -2275,6 +2292,14 @@ public class DrugSafetyValidator {
 	 * the token to be confused with. On a {@code ddinter}-parsed knowledge base it cannot arise: that
 	 * parser writes a rule's {@code atc} from its partner row's own first code, so an entry publishing it
 	 * exists and the ladder would have found it.
+	 *
+	 * <p>The converse pairing — the ladder named the order but resolved no entry, while the rule DID
+	 * resolve one — is refused, and not merely out of caution: {@link #activeOrderEntryFor} scans
+	 * {@code DrugReferenceService.findForActiveOrders}, which is every entry ANY of the patient's active
+	 * orders resolved, so the entry it answers with need not belong to the order this partner is. Naming
+	 * such a rule after this order's display would attach one order's name to a rule about another's
+	 * drug. The cost is a folded chip that keeps two names where one would have been safe; the direction
+	 * is the same one the second condition takes.
 	 *
 	 * <p>What this deliberately does NOT decide is which co-medication a folded class sentence is about
 	 * when the ladder has no name for it: a partner holding several codes the dataset cannot name may
@@ -2360,7 +2385,10 @@ public class DrugSafetyValidator {
 	 * dataset itself says they name one drug, with the same alias-collision limit {@link #pairKeyNames}
 	 * records for the question side (an entry whose alias list claims another drug's name). Where the
 	 * dataset carries no entry for the order's substance the label is still the key, and there #121's
-	 * invariant holds unchanged: the key IS what the chip says.
+	 * invariant holds for every UNFOLDED chip: the key IS what the chip says. A folded chip can name that
+	 * partner by the class arm's ladder instead since issue #292 — the grouping is unaffected, since it
+	 * runs before the fold and on this same key, but the rendered name and the key can differ. See
+	 * {@link #foldedPartnerLabel}, which is where that departure and its cost are recorded.
 	 *
 	 * <p><b>Which row wins.</b> The most severe rating, then — since issue #162 — the row naming no
 	 * route, then the longer note; longer in prose, not in whitespace, see {@link #noteLength}. The full
@@ -2995,7 +3023,9 @@ public class DrugSafetyValidator {
 		// there #121's grouping is only correct while the key IS the label the chip says. A FOLDED chip
 		// passes foldedPartnerLabel's answer instead, so its two sentences cannot name one order two
 		// ways (issue #292); that method is where the conditions under which the ladder's name may
-		// displace this one are stated, and it never displaces on the branch #121's invariant binds.
+		// displace this one are stated, along with the one place #121's invariant is scoped by it — a
+		// folded chip on the no-entry branch can say the ladder's name while the grouping key stays this
+		// one.
 		String detail = ref.displayLabel() + " interacts with active order " + partnerName;
 		if (i.getNote() != null && !i.getNote().isEmpty()) {
 			detail += " — " + i.getNote();

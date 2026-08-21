@@ -239,6 +239,50 @@ public class FoldedChipOnePartnerNameTest {
 	}
 
 	/**
+	 * A display that is BLANK is not a name either, however the order answers {@code hasKnownName()}.
+	 *
+	 * <p>{@code OrderPartner.nameByOrder} used to be gated on {@code hasKnownName()} alone while the
+	 * label it was handed was {@code firstNonBlank(order.getDisplay(), orderCode)} — so an order that
+	 * claims a known name and carries a blank display renamed a partner the dataset HAD named after the
+	 * bare ATC code, which is what issue #155 exists to remove. Before issue #292 that only reached the
+	 * class sentence; with the fold reconciling the two, an unguarded rename would put the code in BOTH
+	 * sentences and make this shape worse than the defect being repaired. Both write sites therefore ask
+	 * one guard, {@code displayNamesADrug}.
+	 *
+	 * <p>Partly covered on purpose, which is the only arrangement that can see it: {@code N02BA01}
+	 * resolves the dataset's aspirin row so the partner is created with the ENTRY's name, and only
+	 * {@code nameByOrder} can replace it. The builder produces no such order — it takes the display from
+	 * a non-blank name and routes the nameless case through {@code namedByCodesOnly} — but the public
+	 * constructor defaults {@code nameKnown} to true, which is the latitude this case uses and which
+	 * {@code NamelessActiveOrderPartnerTest.aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName}
+	 * relies on for the opposite direction.
+	 */
+	@Test
+	public void aBlankDisplayNeverDisplacesTheDatasetName() {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.ddinterServiceWithGroups());
+		PatientClinicalContext.ActiveDrugOrder blankDisplay = new PatientClinicalContext.ActiveDrugOrder(
+				"order-blank-display", "   ", DrugReferenceTestSupport.set("aspirin 81mg"),
+				DrugReferenceTestSupport.set("N02BA01", "N02BA99"));
+
+		List<SafetyWarning> warnings = validator.validate("", QUESTION,
+			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("aspirin 81mg"),
+				DrugReferenceTestSupport.set("N02BA01", "N02BA99"), null, null,
+				Arrays.asList(blankDisplay)));
+
+		assertEquals(1, warnings.size(), "one order, one folded chip, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertEquals(DrugReferenceTestSupport.set("Acetylsalicylic acid (aspirin)"),
+			orderNamesIn(detail),
+			"the dataset's name must survive a blank display — and once, in both sentences, was: "
+					+ detail);
+		assertFalse(detail.contains("N02BA"),
+			"an ATC code must not reach either sentence: it is what a blank display resolves to, and"
+					+ " naming an active order by its code is the defect issue #155 removed, was: "
+					+ detail);
+	}
+
+	/**
 	 * The invariant itself, over every folded arrangement this file builds plus the note-less one, which
 	 * no other case here reaches.
 	 *

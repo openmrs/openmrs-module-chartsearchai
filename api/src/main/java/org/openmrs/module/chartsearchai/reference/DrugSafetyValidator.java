@@ -4632,12 +4632,14 @@ public class DrugSafetyValidator {
 			namingOrder = order;
 			// Redundant today and deliberately written anyway: the only path that reaches here has already
 			// set namesADrug through its entry (the null-namingOrder guard above admits only the entry
-			// rung), so DELETING this line leaves all 1347 api tests green — re-measured on this head by
-			// deleting it and running the suite, the count having gone stale twice already. Say deleting and not
-			// "mutating": NEGATING it reddens two, because
-			// aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName and
-			// aCodeOnlyOrderDoesNotTakeTheNamingOfAPartnerFromANamedOne both observe the flag's true
-			// value here. It is written so that a future rung renaming a partner whose label was NOT
+			// rung), so DELETING this line leaves the api suite green. Say deleting and not "mutating":
+			// NEGATING it REDDENS, because several cases observe the flag's true value here — the two
+			// nameless-order ladder pins, and, since the ORDER path began reconciling, the folded chip
+			// that reads the display. No count and no list of them is given on purpose: this comment
+			// carried an exhaustive pair twice, and both times it went stale in the very round that added
+			// another observer. An enumeration that is wrong is worse than none, because it invites the
+			// next reader to treat the extra red as a regression they caused — so mutate the line and read
+			// the failures. It is written so that a future rung renaming a partner whose label was NOT
 			// entry-derived cannot leave the flag stale.
 			namesADrug = true;
 		}

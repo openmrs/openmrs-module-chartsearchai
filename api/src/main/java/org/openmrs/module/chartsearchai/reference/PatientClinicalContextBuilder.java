@@ -118,9 +118,12 @@ final class PatientClinicalContextBuilder {
 				// rather than repairing it: addAtcCodes above needs no name, so a skipped order left
 				// its codes in the flattened union with no order behind them — and DrugSafetyValidator
 				// .orderPartners keys such a code on the raw code string, so ONE prescription became
-				// one duplicate-therapy chip PER CODE, each naming an unlabelled code. Measured
-				// through the real validate: 2 chips for a 2-code order, 1 once the same order has a
-				// name. Issue #155's ladder could not help — an order skipped here never enters
+				// one duplicate-therapy chip PER CODE, each named by whatever the reference data could
+				// resolve that code to alone — the substance where the code is covered, an unlabelled
+				// code where it is not, so on the shipped KB the usual symptom is one prescription
+				// presented as several medications. Measured through the real validate over the CURATED
+				// SEED, which carries neither code: 2 chips for a 2-code order, 1 once the same order
+				// has a name. Issue #155's ladder could not help — an order skipped here never enters
 				// getActiveDrugOrders(), so there was no display name for it to fall back to.
 				//
 				// Reachable whenever no non-blank name can be READ, which is not the same question as

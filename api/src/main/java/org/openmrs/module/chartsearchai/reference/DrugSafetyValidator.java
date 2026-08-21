@@ -4355,7 +4355,8 @@ public class DrugSafetyValidator {
 				// Except where the order has no name of its own either. Since issue #290 such an order
 				// still reaches the list, labelled by its ATC codes, and that label is the ABSENCE of a
 				// name rather than the order's own — so substituting it here discards a real drug name
-				// for none. Measured through the real validate on a partly-covered nameless order: the
+				// for none. Measured through the real validate over the bundled DDInter sample plus the
+				// curated cross-reactivity groups, on a partly-covered nameless order: the
 				// issue #88 fold puts the rule arm's sentence and the class arm's in ONE chip detail,
 				// and the rule arm names its partner from the RULE's token (partnerLabel), which the
 				// builder cannot reach — so the chip read "interacts with active order aspirin …

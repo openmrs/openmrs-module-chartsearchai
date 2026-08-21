@@ -1647,8 +1647,9 @@ public class DrugSafetyValidator {
 	 * measurement that #108 has already moved once.
 	 *
 	 * <p>The fold leads with the RULE sentence: an explicit rule about this pair is the more specific
-	 * finding, its mechanism note is the actionable half, and it names the partner by the label
-	 * {@link #bestRulePerPartner} groups on — where the class arm names it by whatever
+	 * finding and its mechanism note is the actionable half. It used to name the partner by the label
+	 * {@link #bestRulePerPartner} groups on, and since issue #292 a folded chip names it by
+	 * {@link #foldedPartnerLabel} instead — where the class arm names it by whatever
 	 * {@link #orderPartners} resolves the order's codes to, which since issue #155 is the dataset's
 	 * name for the substance, else the order's own display name, and only then the bare code. Those two
 	 * ladders used to disagree inside one detail, and since issue #292 they do not: the fold names the
@@ -2404,6 +2405,25 @@ public class DrugSafetyValidator {
 	 *         {@code ketoconazole} …). A hand-written JSON fixture gives each row one self-name and so
 	 *         refuses the displacement for a reason the default dataset does not share, which is why
 	 *         {@code FoldedChipOnePartnerNameTest} pins this in DDINTER shape, through the real parser.
+	 *
+	 *         <p><b>What "substance" means here depends on the source.</b> {@link DrugReference#substanceGroupKey()}
+	 *         falls back to the ENTRY where a source publishes no substance name — the curated {@code json}
+	 *         and {@code atc} adapters — so on those this reads as "no other ROW names it", which is
+	 *         strictly stricter and refuses more. Identity is the right comparison for that fallback
+	 *         because every {@code labelEntry} comes from {@code getAll()}'s own cached objects and
+	 *         {@link DrugReference} defines no {@code equals}.
+	 *
+	 *         <p><b>The over-refusal is live on the shipped KB and is not closed here.</b> Measured through
+	 *         the real parser and the real {@code validate}: 72 above-floor rules carry an ambiguous token
+	 *         whose subject shares an ATC subgroup with an entry that token names, so a patient on
+	 *         ketoconazole asked about osilodrostat still reads
+	 *         {@code … interacts with active order ketoconazole — Major. … is in the same ATC class (H02CA)
+	 *         as active order Ketoconazole — possible duplicate therapy} — issue #292's own defect,
+	 *         refused only because {@code ketoconazole} is also an alias of the separate
+	 *         {@code Levoketoconazole} row, which the patient is not on. No clean narrowing is available:
+	 *         {@code Levoketoconazole} publishes the same four codes, so a code-scoped test refuses too.
+	 *         Whether an ambiguity the patient's own orders resolve should still refuse is a decision on
+	 *         its own evidence, not a tightening of this one.
 	 *
 	 *         <p>A sweep of {@code getAll()} per folded chip whose ladder resolved an entry, deliberately
 	 *         uncached: the immediately preceding {@link #ruleAbout} in the same iteration already calls
@@ -4552,10 +4572,13 @@ public class DrugSafetyValidator {
 			}
 			label = order.getDisplay();
 			namedByOrder = true;
-			// Redundant today and deliberately written anyway: the only path that reaches here has
-			// already set namesADrug through its entry (the !namedByOrder guard above admits only the
-			// entry rung), so mutating this line changes no test. It is here so that a future rung
-			// renaming a partner whose label was NOT entry-derived cannot leave the flag stale.
+			// Redundant today and deliberately written anyway: the only path that reaches here has already
+			// set namesADrug through its entry (the !namedByOrder guard above admits only the entry rung),
+			// so DELETING this line leaves all 1342 tests green. Say deleting and not "mutating": NEGATING
+			// it reddens two, because aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName and
+			// aCodeOnlyOrderDoesNotTakeTheNamingOfAPartnerFromANamedOne both observe the flag's true
+			// value here. It is written so that a future rung renaming a partner whose label was NOT
+			// entry-derived cannot leave the flag stale.
 			namesADrug = true;
 		}
 	}
@@ -4913,6 +4936,12 @@ public class DrugSafetyValidator {
 	 * co-medication the second sentence is about. Left standing rather than given machinery: it needs
 	 * that shared-code pair AND both substances prescribed AND a rated rule, and correlating on the
 	 * partner's SUBSTANCE instead is a change to issue #88's fold rather than to this leg.
+	 *
+	 * <p><b>Since issue #292 that fold depends on this paragraph</b>, so closing the bound here is no
+	 * longer a local change: {@link #foldedPartnerLabel}'s second refusal cites exactly this reasoning
+	 * for why it will not let the class arm's label displace a rule's own token, and
+	 * {@code FoldedChipOnePartnerNameTest.aRuleAboutAnotherSubstanceSharingTheCodeKeepsItsOwnToken}
+	 * pins the behaviour that follows from it. Read that method before narrowing this.
 	 */
 	private void addPartnersForUnmappedOrders(Map<Object, OrderPartner> byIdentity,
 			PatientClinicalContext context,

@@ -239,8 +239,16 @@ public class FoldedChipOnePartnerNameTest {
 	 *
 	 * <p>So the guard asks {@code unambiguouslyNames}: one substance, not merely this one among several.
 	 * This fixture reproduces the collision through the real parser — two rows publishing
-	 * {@code A02BC05} with different {@code drugbank_id}s and the same {@code rxnorm_name}, so
-	 * {@code substanceGroupKey} separates them while the token names both.
+	 * {@code A02BC05} and sharing the {@code rxnorm_name} the token is, while remaining two substances.
+	 *
+	 * <p>What separates them is the DISPLAY STEM, not the {@code drugbank_id}, and the difference matters
+	 * to anyone regenerating this slice. Measured through the real parser, the two keys are
+	 * {@code [esomeprazole, omeprazole]} and {@code [esomeprazole, esomeprazole]}: because the substance
+	 * family {@code esomeprazole} names two DrugBank ids, {@code substanceKey} withholds the id and falls
+	 * back to the stem of each row's own display name (contrast this fixture's {@code Pantoprazole},
+	 * whose key keeps its id, {@code [pantoprazole, db00213]}). So keeping the ids distinct but letting
+	 * the two display names share a stem collapses them into ONE substance and the ambiguity half of the
+	 * guard silently stops being tested.
 	 */
 	@Test
 	public void aRuleWhoseTokenNamesTwoSubstancesKeepsItsOwnToken() throws IOException {

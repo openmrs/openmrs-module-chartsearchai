@@ -2394,6 +2394,8 @@ One prescription therefore became one duplicate-therapy chip **per ATC code**, e
 
 Issue #155's label ladder could not reach it — an order skipped by the builder never enters `getActiveDrugOrders()`, so there was no display name to fall back to. The builder's own comment had named this a known gap and prescribed the fix as "a fallback display rather than a skip".
 
+**How often a real dictionary produces such an order is not measured**, and nothing here claims a frequency: the reachability argument is the builder's own — `addConceptName` swallows a `RuntimeException` from `concept.getName()` (a detached or lazy-init proxy) in its own try while `addAtcCodes` succeeds in a separate one, a dictionary's names can be voided, and a recorded name can be blank (`addRaw` drops it, so `getName()` need not be null at all). The order must also carry at least one ATC code to reach any of this, since the defect is one chip per code; on the 3.7.1 reference demo dictionary only 16 of 43 active drug orders carry a code at all (the complement of the measurement recorded for issue #228).
+
 ### Decision
 
 Such an order reaches the per-order list through `PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly`, carrying:

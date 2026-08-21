@@ -811,9 +811,11 @@ public final class DrugReferenceTestSupport {
 		Context.flushSession();
 	}
 
-	/** The injected ACTIVE-ORDER records of {@code chart} — the one matcher for it, beside
-	 *  {@link #injectedFindings} and for the same reason: several files assert HOW MANY records the
-	 *  reconciliation yields, and a copied filter can drift into two answers about what it counted. */
+	/** The injected ACTIVE-ORDER records of {@code chart}, for the files that use it. Shaped like
+	 *  {@link #injectedFindings} deliberately, but NOT yet the only matcher for this resource type —
+	 *  {@code ActiveOrderReconciliationTest}, {@code ActiveOrderReconciliationContextTest} and
+	 *  {@code DrugSafetyDiacriticOrderNameTest} each still carry their own — so the drift hazard
+	 *  {@code injectedFindings} names is live here, and pointing those at this would close it. */
 	static List<RecordMapping> injectedActiveOrders(PatientChart chart) {
 		List<RecordMapping> found = new ArrayList<RecordMapping>();
 		for (RecordMapping mapping : chart.getMappings()) {

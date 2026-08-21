@@ -3260,8 +3260,9 @@ public class DrugSafetyValidator {
 				// omeprazole" order mapped to N02BA01 reported "interacts with active order
 				// esomeprazole — Minor" off a single tablet, which the pre-#132 code suppressed. What the
 				// proxy removes is restored below whenever another order IN THE PER-ORDER LIST carries it.
-				// Every order the builder reads is in that list since issue #290, nameless ones
-				// included, so a code outside it means a hand-built context supplied one — this branch
+				// Every order the builder reads that CONTRIBUTES a code is in that list since issue
+				// #290, nameless ones included (one with no name and no code reaches neither), so a
+				// code outside it means a hand-built context supplied one — this branch
 				// only runs when the order list is non-empty, so #118's flattened-only shape is not it.
 				for (DrugReference coResolved : orderDrugs) {
 					if (!subjectRows.contains(coResolved) && resolvesFrom(coResolved, order)) {
@@ -4096,9 +4097,14 @@ public class DrugSafetyValidator {
 		 * {@link DrugSafetyValidator#classRelationships}'s restating-existing-therapy skip; nothing
 		 * here is rendered, so a partner may be named one thing and known to contain several.
 		 *
-		 * <p><b>Added only where {@link #nameByOrder} is</b>, and that is the whole of the scoping
-		 * rule. A partner the DATASET named stands for one substance; a partner named after an order
-		 * stands for that order, so what the order names is what it holds. Attaching the order's whole
+		 * <p><b>Added on the same BRANCH as {@link #nameByOrder}</b> — but since issue #290 not under
+		 * the same condition: the naming leg is withheld for a synthesized display and this one is not,
+		 * so for an order the module could not name the substances leg runs where the naming does not.
+		 * A partner the DATASET named stands for one substance; a partner named after an order stands
+		 * for that order, so what the order names is what it holds. That rationale does not reach the
+		 * one case #290 added — a partly-covered nameless order keeps the dataset's name and still
+		 * collects substances — and it is safe there only because such an order has no names to
+		 * resolve, so the leg contributes nothing. Attaching the order's whole
 		 * set to every partner it produced instead silences a real finding: one order whose two codes
 		 * both resolve is TWO partners, and a question about the first constituent would then skip the
 		 * second — {@code Metronidazole and secnidazole} losing "Metronidazole is in the same ATC
@@ -4228,10 +4234,13 @@ public class DrugSafetyValidator {
 	 * codes was its own partner — one prescription, one chip per code. Issue #290 closed it where this
 	 * javadoc said it had to be closed: {@link PatientClinicalContextBuilder} gives such an order a
 	 * code-only fallback display so it reaches the list, and the grouping here then keys on the ORDER.
-	 * The GROUPING needed nothing on this side; the NAMING needed two things, both because a display
-	 * that is not a name had never reached here before — it is withheld from
-	 * {@link OrderPartner#nameByOrder}, and {@link #orderCarrying} prefers a carrier that can name
-	 * itself.
+	 * For a SINGLE order the grouping needed nothing on this side — the issue #186 rung already keys on
+	 * the order. Admitting an order with no name added a second hazard that is not about naming at all:
+	 * where two orders carry one dataset-unnameable code, {@link #orderCarrying}'s answer becomes this
+	 * loop's {@code identity}, so preferring a carrier that can name itself decides which order the
+	 * partner is KEYED on as well as what it is called — without it this change's own test observes TWO
+	 * partners for one prescription. The naming needed one thing beside that: a display that is not a
+	 * name is withheld from {@link OrderPartner#nameByOrder}.
 	 *
 	 * <p>What remains is a context built from the flattened sets alone (issue #118), where there is no
 	 * order identity to group BY and grouping every unclaimed code together would merge the whole
@@ -4244,7 +4253,7 @@ public class DrugSafetyValidator {
 	 * the unnameable code alone, the covered constituent's name stays, which is issue #161's shape.
 	 *
 	 * <p><b>What each partner is known to CONTAIN is a separate answer</b> (issue #185), collected on
-	 * the same rung the ladder takes the order's NAME from and under the same condition:
+	 * the same rung the ladder takes the order's NAME from:
 	 * {@link OrderPartner#substances} holds what the order's own recorded names imply
 	 * ({@link #substancesNamedBy}), added on the same BRANCH as {@link OrderPartner#nameByOrder} — but
 	 * since issue #290 no longer under the same condition: the substances leg runs for every carrier,

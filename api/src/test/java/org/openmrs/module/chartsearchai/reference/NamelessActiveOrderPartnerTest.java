@@ -31,7 +31,10 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * <p>Before the fix {@code PatientClinicalContextBuilder} contributed such an order's ATC codes to the
  * flattened union and then skipped the order itself, so {@code DrugSafetyValidator.orderPartners} keyed
  * each of its codes on the raw code string ({@code identity = order != null ? order : (Object) orderCode})
- * and ONE prescription became one duplicate-therapy chip per code, each naming an unlabelled ATC code.
+ * and ONE prescription became one duplicate-therapy chip per code — each named by whatever the reference
+ * data could resolve that code to alone, which is an unlabelled code only where the dataset carries none
+ * of them. That is this file's arrangement, since the curated seed carries neither M01AE code; on the
+ * shipped knowledge base a covered code took the entry rung and the chip named the substance.
  *
  * <p>Context-sensitive on purpose, and driven through the real
  * {@link PatientClinicalContextBuilder#build(Patient)} then the real
@@ -197,7 +200,7 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 *
 	 * <p>The guard was first written as {@code !order.getNames().isEmpty()} — a PROXY for "the display
 	 * was synthesized". The public constructor lets a caller supply a real display with no match tokens,
-	 * a shape the builder never produces but a hand-built or #118 context can, and under the proxy such
+	 * a shape the builder never produces but a hand-built context can, and under the proxy such
 	 * an order would silently lose its name on the chip: the inverse of issue #155's ladder.
 	 *
 	 * <p>The arrangement has to be PARTLY covered for that to be visible, which is the whole difficulty.
@@ -309,8 +312,8 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 *
 	 * <p>The code-only display is not only a chip label: {@code DrugReferenceInjector.renderActiveOrder}
 	 * puts it into the chart as a citable record, so this pins the exact string a clinician and the
-	 * model both read. Before issue #290 such an order DID reach the chips — one per code, each naming a
-	 * bare code, which is the defect this class exists for — but never this record, because it was absent
+	 * model both read. Before issue #290 such an order DID reach the chips — one per code, which is the
+	 * defect this class exists for — but never this record, because it was absent
 	 * from the list the reconciliation walks. So the model could deny a medication the chart held, which
 	 * is the #118 divergence the reconciliation exists to repair.
 	 *

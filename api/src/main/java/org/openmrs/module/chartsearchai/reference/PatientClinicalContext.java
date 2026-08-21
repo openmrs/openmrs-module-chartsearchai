@@ -475,7 +475,9 @@ public class PatientClinicalContext {
 	 * {@link #hasKnownName()} before letting the display DISPLACE a name some other source supplied;
 	 * labelling something that has no other name is what the display is for. It is still far
 	 * better than the alternative it replaced: such an order used to be omitted entirely while its codes
-	 * still reached {@link #getActiveDrugAtcCodes()}, which made one prescription look like one per code.
+	 * still reached {@link #getActiveDrugAtcCodes()}, which made one prescription look like one partner
+	 * per code the loaded dataset could not name — a covered code is keyed on its substance either way,
+	 * so that half is unchanged and deliberate.
 	 */
 	public static final class ActiveDrugOrder {
 
@@ -536,7 +538,9 @@ public class PatientClinicalContext {
 			return uuid;
 		}
 
-		/** @return the order's display name, as a record renders it. */
+		/** @return the order's display name, as a record renders it — or, since issue #290, the code-only
+		 *          stand-in {@link #namedByCodesOnly} builds for an order no name could be read for, which
+		 *          is not a name at all. Ask {@link #hasKnownName()} before treating it as one. */
 		public String getDisplay() {
 			return display;
 		}

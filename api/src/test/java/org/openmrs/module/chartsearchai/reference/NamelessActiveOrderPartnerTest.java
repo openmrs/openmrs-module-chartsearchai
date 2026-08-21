@@ -143,6 +143,11 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 
 		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
 
+		assertEquals(1, context.getActiveDrugOrders().size(),
+				"precondition: the nameless order must reach the per-order list before anything can be"
+						+ " asserted about its names — without this the case below fails as an"
+						+ " IndexOutOfBoundsException instead of as its own assertion, was: "
+						+ context.getActiveDrugOrders());
 		PatientClinicalContext.ActiveDrugOrder order = context.getActiveDrugOrders().get(0);
 		assertTrue(order.getNames().isEmpty(),
 				"the synthesized display must not become a match token — this set is lowercased and"

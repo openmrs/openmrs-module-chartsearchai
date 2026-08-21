@@ -116,12 +116,14 @@ final class PatientClinicalContextBuilder {
 				// An order the module cannot NAME still reaches this list, labelled by the ATC codes it
 				// carries (issue #290). Skipping it left its codes in the flattened union with no order
 				// behind them, and DrugSafetyValidator.orderPartners keys such a code on the raw code
-				// string, so ONE prescription became one duplicate-therapy chip PER CODE — each named by
-				// whatever the reference data could resolve that code to alone, so on the shipped KB the
-				// usual symptom was one prescription presented as several medications. Measured through
-				// the real validate over the CURATED SEED, which carries neither code: 2 chips for a
-				// 2-code order, 1 once the same order has a name. The decision, and the three trades it
-				// accepts, are ADR Decision 38.
+				// string — but ONLY a code the dataset cannot NAME, since a covered one takes the entry
+				// rung above that and is keyed on substanceGroupKey(). So the defect was one chip per
+				// UNNAMEABLE code, each labelled by the bare code; a fully covered order is one partner
+				// per covered substance before and after, which is deliberate (see OrderPartner.substances
+				// — two covered codes must stay two partners). Measured through the real validate over the
+				// CURATED SEED, which carries neither code: 2 chips for a 2-code order, 1 once the same
+				// order has a name; and over a fixture that covers BOTH codes, 2 chips either way. The
+				// decision, and the three trades it accepts, are ADR Decision 38.
 				//
 				// One thing about getName() belongs HERE rather than in the ADR, because issue #290's
 				// first plan was built on getting it wrong: a concept named only outside the current
@@ -140,7 +142,16 @@ final class PatientClinicalContextBuilder {
 				// nothing can name it and no chip can be raised for it, which is what the old skip was
 				// right about. The WARN is the only trace that a chip is speaking for an order the module
 				// could not name; it does not distinguish a name that could not be read from a concept
-				// that has none, because no consumer behaves differently on that today.
+				// that has none, because no consumer behaves differently on that today. It REPEATS, and
+				// that is accepted rather than overlooked: build() is called once by
+				// DrugReferenceInjector.inject and once by DrugSafetyValidator.validate, so one such
+				// order emits two identical lines per /search for as long as the dictionary defect
+				// stands. Not deduped, because the only dedup available here is a JVM-lifetime set of
+				// order uuids — unbounded on per-patient keys, and it would answer for whoever asked
+				// first, so an operator who turns to the log later would find no trace at all. The
+				// neighbouring reconciliation WARN (DrugReferenceInjector) repeats on the same terms:
+				// its condition, a querystore index behind the OrderService read, also persists until
+				// someone acts on it.
 				if (!orderNames.isEmpty()) {
 					activeOrders.add(new PatientClinicalContext.ActiveDrugOrder(drugOrder.getUuid(),
 							orderNames.iterator().next(), orderNames, orderAtcCodes));

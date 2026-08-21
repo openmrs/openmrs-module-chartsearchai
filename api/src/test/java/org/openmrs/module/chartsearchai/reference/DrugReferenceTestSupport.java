@@ -26,6 +26,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.openmrs.Concept;
+import org.openmrs.ConceptMap;
+import org.openmrs.ConceptReferenceTerm;
+import org.openmrs.ConceptSource;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -776,6 +781,49 @@ public final class DrugReferenceTestSupport {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * Maps {@code codes} onto {@code conceptId} through a source whose name carries "ATC" — the
+	 * predicate {@link PatientClinicalContextBuilder} applies, and the shape the reference demo
+	 * dictionary uses ({@code WHOATC}).
+	 *
+	 * <p>Here rather than in each file for the reason this class exists: it was written twice, javadoc
+	 * included, and the arrangement encodes which concept-reference-source names the builder
+	 * recognises — so a change to that predicate must not have to be found in two test files.
+	 */
+	static void mapConceptToAtc(int conceptId, String... codes) {
+		ConceptSource whoAtc = new ConceptSource();
+		whoAtc.setName("WHOATC");
+		whoAtc.setDescription("WHO ATC classification (test)");
+		Context.getConceptService().saveConceptSource(whoAtc);
+		Concept concept = Context.getConceptService().getConcept(conceptId);
+		for (String code : codes) {
+			ConceptReferenceTerm term = new ConceptReferenceTerm();
+			term.setName(code);
+			term.setCode(code);
+			term.setConceptSource(whoAtc);
+			Context.getConceptService().saveConceptReferenceTerm(term);
+			concept.addConceptMapping(
+					new ConceptMap(term, Context.getConceptService().getDefaultConceptMapType()));
+		}
+		Context.getConceptService().saveConcept(concept);
+		Context.flushSession();
+	}
+
+	/** The injected ACTIVE-ORDER records of {@code chart}, for the files that use it. Shaped like
+	 *  {@link #injectedFindings} deliberately, but NOT yet the only matcher for this resource type —
+	 *  {@code ActiveOrderReconciliationTest}, {@code ActiveOrderReconciliationContextTest} and
+	 *  {@code DrugSafetyDiacriticOrderNameTest} each still carry their own — so the drift hazard
+	 *  {@code injectedFindings} names is live here, and pointing those at this would close it. */
+	static List<RecordMapping> injectedActiveOrders(PatientChart chart) {
+		List<RecordMapping> found = new ArrayList<RecordMapping>();
+		for (RecordMapping mapping : chart.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER.equals(mapping.getResourceType())) {
+				found.add(mapping);
+			}
+		}
+		return found;
 	}
 
 	/** @return the entries' own {@code name}s. {@link DrugReference} defines no {@code toString}, so a

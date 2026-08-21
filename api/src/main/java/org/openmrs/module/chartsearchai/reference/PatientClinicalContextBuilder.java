@@ -14,6 +14,7 @@ import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.openmrs.Allergy;
 import org.openmrs.Concept;
@@ -103,32 +104,65 @@ final class PatientClinicalContextBuilder {
 				// same concept: flattened, a code cannot be attributed to the order carrying it, so ONE
 				// order's two codes read as two orders and the order witnesses its own interaction
 				// (issue #132). The flattened union is still assembled here — the class arms and
-				// findByActiveOrders want exactly that, and the nameless-order gap below contributes to
-				// it without contributing an ActiveDrugOrder.
+				// findByActiveOrders want exactly that. Since issue #290 it no longer holds codes that
+				// no ActiveDrugOrder accounts for: an order the module cannot NAME reaches the
+				// per-order list below too, and one carrying no ATC code at all contributes to neither.
 				Set<String> orderAtcCodes = new LinkedHashSet<String>();
 				addAtcCodes(orderAtcCodes, concept);
 				atcCodes.addAll(orderAtcCodes);
-				// An order with no readable name at all is skipped: it can be neither rendered as a
-				// record nor matched against chart text, and injecting it would put a nameless line
-				// ("Active drug order: null") in front of a clinician.
+				// Resolved once and read by both the skip test and the label below, so the two cannot
+				// answer differently about which codes this order has.
+				Set<String> normalizedCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
+				// An order the module cannot NAME still reaches this list, labelled by the ATC codes it
+				// carries (issue #290). Skipping it left its codes in the flattened union with no order
+				// behind them, and DrugSafetyValidator.orderPartners keys such a code on the raw code
+				// string — but ONLY a code the dataset cannot NAME, since a covered one takes the entry
+				// rung above that and is keyed on substanceGroupKey(). So the defect was one chip per
+				// UNNAMEABLE code, each labelled by the bare code; a fully covered order is one partner
+				// per covered substance before and after, which is deliberate (see OrderPartner.substances
+				// — two covered codes must stay two partners). Measured through the real validate over the
+				// CURATED SEED, which carries neither code: 2 chips for a 2-code order, 1 once the same
+				// order has a name; and over a fixture that covers BOTH codes, 2 chips either way. The
+				// decision, and the three trades it accepts, are ADR Decision 38.
 				//
-				// KNOWN GAP, to follow with the reconciliation's other corpus issue: skipping is the
-				// one outcome that reproduces issue #118 rather than repairing it. addAtcCodes above
-				// needs no name, and a safety chip's drug name comes from the KB entry the ATC code
-				// resolves to (DrugSafetyValidator's orderPartners), not from the order — so a
-				// nameless order can still raise a chip reading "as active order simvastatin" while
-				// being invisible to the reconciliation that exists to substantiate it. Issue #155
-				// gave that resolution a fallback to the ORDER's display name, which does not reach
-				// this shape: an order skipped here never enters getActiveDrugOrders(), so there is no
-				// display name to fall back to and the chip still speaks only for the KB entry. Reachable, not
-				// theoretical: addConceptName swallows a RuntimeException from concept.getName() (a
-				// detached/lazy-init proxy) in its own try, and addAtcCodes then runs in a separate
-				// one and can still succeed; likewise a concept named only outside the current locale
-				// yields a null name with its ATC mappings intact. The fix is a fallback display
-				// rather than a skip, so the record can be injected with the order's real uuid.
+				// One thing about getName() belongs HERE rather than in the ADR, because issue #290's
+				// first plan was built on getting it wrong: a concept named only outside the current
+				// locale does NOT yield null. getName() walks LocaleUtility.getLocalesInOrder(), then
+				// falls back to the first fully-specified name in ANY locale, then to any synonym. What
+				// reaches this branch is a name that could not be READ — addConceptName swallowing a
+				// RuntimeException from a detached or lazy-init proxy while addAtcCodes succeeds in a
+				// separate try, voided names, or a blank recorded name (addRaw drops it, so getName()
+				// need not be null at all).
+				//
+				// The name set stays EMPTY because it is matched against chart prose, so a code in it
+				// would match free text; the cost of that is in the ADR. The display is built from the
+				// normalized codes rather than the raw ones so that the label, the test below and the
+				// codes ActiveDrugOrder stores cannot disagree — NOT as a defence against a blank code,
+				// which addRaw already dropped. An order with no name and no code is still skipped:
+				// nothing can name it and no chip can be raised for it, which is what the old skip was
+				// right about. The WARN is the only trace that a chip is speaking for an order the module
+				// could not name; it does not distinguish a name that could not be read from a concept
+				// that has none, because no consumer behaves differently on that today. It REPEATS, and
+				// that is accepted rather than overlooked: build() is called once by
+				// DrugReferenceInjector.inject and once by DrugSafetyValidator.validate, so one such
+				// order emits two identical lines per /search for as long as the dictionary defect
+				// stands. Not deduped, because the only dedup available here is a JVM-lifetime set of
+				// order uuids — unbounded on per-patient keys, and it would answer for whoever asked
+				// first, so an operator who turns to the log later would find no trace at all. The
+				// neighbouring reconciliation WARN (DrugReferenceInjector) repeats on the same terms:
+				// its condition, a querystore index behind the OrderService read, also persists until
+				// someone acts on it.
 				if (!orderNames.isEmpty()) {
 					activeOrders.add(new PatientClinicalContext.ActiveDrugOrder(drugOrder.getUuid(),
 							orderNames.iterator().next(), orderNames, orderAtcCodes));
+				} else if (!normalizedCodes.isEmpty()) {
+					String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
+					log.warn("Active drug order {} has no readable name; it will be identified by its ATC "
+							+ "codes as {}. A safety chip for it is labelled that way unless the reference "
+							+ "data can name one of those codes, and the order cannot be matched against "
+							+ "chart text at all.", drugOrder.getUuid(), codeOnlyDisplay);
+					activeOrders.add(PatientClinicalContext.ActiveDrugOrder
+							.namedByCodesOnly(drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes));
 				}
 			}
 		}
@@ -272,6 +306,24 @@ final class PatientClinicalContextBuilder {
 		catch (RuntimeException e) {
 			log.debug("Could not read concept mappings for ATC codes", e);
 		}
+	}
+
+	/**
+	 * The display for an order no name could be read for: the codes it carries, labelled as codes.
+	 *
+	 * <p>Takes the ALREADY-normalized set the caller tested for emptiness, so the label and that test
+	 * read one set rather than agreeing because the same function was run twice. Sorted, so the label
+	 * does not depend on the order the dictionary returned the mappings in — and it names ALL of them,
+	 * because the label identifies the ORDER rather than whichever of its codes a particular chip
+	 * matched on.
+	 *
+	 * <p>Rendered so it reads correctly in both templates that consume a display: the chip's
+	 * {@code "as active order <label>"} and {@code DrugReferenceInjector.renderActiveOrder}'s
+	 * {@code "Active drug order: <label>."}. The same {@code "ATC "}-then-comma-joined shape
+	 * {@code DrugReferenceInjector} renders a reference row's codes in.
+	 */
+	private static String codeOnlyDisplay(Set<String> normalizedCodes) {
+		return "[ATC " + String.join(", ", new TreeSet<String>(normalizedCodes)) + "]";
 	}
 
 	private static void addRaw(Set<String> set, String value) {

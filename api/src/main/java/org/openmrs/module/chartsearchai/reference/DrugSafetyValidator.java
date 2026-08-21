@@ -3168,19 +3168,33 @@ public class DrugSafetyValidator {
 	 *         carries it too, because removal from a flattened set cannot tell contributors apart: a
 	 *         patient on both a combination and a separate order of one of its constituents keeps that
 	 *         (genuine, duplicate-therapy) pair, which the pre-#132 reduction had to give up whenever
-	 *         only the shared code witnessed it. Codes that no per-order set claims are left alone —
-	 *         they come from an order the per-order list omits (the builder's nameless-order KNOWN GAP),
-	 *         which is a real second order and a legitimate witness.
+	 *         only the shared code witnessed it. Codes that no per-order set claims are left alone.
+	 *         Since issue #290 the BUILDER produces no such code: an order it cannot name still reaches
+	 *         the per-order list, and one with no codes contributes none to the union either, so in
+	 *         production every code here has an order behind it. What remains is a HAND-BUILT context
+	 *         that supplies an order list AND a wider flattened set — not the flattened-only shape of
+	 *         issue #118, which never reaches this block at all (the guard below requires a non-empty
+	 *         order list, and the flattened fallback further down is where that residual lives). For a
+	 *         hand-built disagreement, leaving the code alone is a choice rather than a property:
+	 *         nothing there establishes a second order, which is why the {@code otherCodes.retainAll}
+	 *         below treats such a disagreement as untrusted.
 	 *
 	 *         <p>Restoration reaches every order EXCEPT one that is itself the subject's own, and that
 	 *         bounds what this can find: when every order carrying one member of a pair also carries the
 	 *         other's code, both members' orders are own-classified from both sides and the pair goes
 	 *         unreported — two brand-named, ATC-mapped multi-substance orders covering the same two
 	 *         substances (measured shape: two differently-named orders both mapped to
-	 *         {@code C10AA01} + {@code J01FA09}). Same for a code shared with a list-omitted nameless
-	 *         order, which claims nothing and so cannot restore it. Both are the safe direction — a pair
-	 *         missed, never one invented — and neither can be told from the one-order case without more
-	 *         order structure than a code set carries, which is why the one-order suppression wins.
+	 *         {@code C10AA01} + {@code J01FA09}). That is the safe direction — a pair missed, never one
+	 *         invented — and it cannot be told from the one-order case without more order structure than
+	 *         a code set carries, which is why the one-order suppression wins.
+	 *
+	 *         <p>A nameless order used to be a second such bound, its codes reaching the union while it
+	 *         was itself absent from the list so nothing could restore them. Issue #290 removed it, and
+	 *         the effect here runs in BOTH directions rather than only widening: such an order now
+	 *         either classifies as the subject's own — its other codes joining {@code ownCodes} and
+	 *         being removed, suppressing pairs that fired before — or as another order, restoring codes
+	 *         that were stuck. It also gains the #136 reference-NAME leg below, which only the per-order
+	 *         branch collects, so this is a new witness path and not merely a wider code set.
 	 *
 	 *         <p>The flattened fallback below cannot do any of this, and that is where the residual now
 	 *         lives: with orders reduced to one name set and one code set, "one order carrying two
@@ -3245,9 +3259,11 @@ public class DrugSafetyValidator {
 				// order carrying SOME. Measured both: with only the exact removal, one "Aspirin and
 				// omeprazole" order mapped to N02BA01 reported "interacts with active order
 				// esomeprazole — Minor" off a single tablet, which the pre-#132 code suppressed. What the
-				// proxy removes is restored below whenever another order IN THE PER-ORDER LIST carries it;
-				// a code shared only with a list-omitted nameless order is not, which is the missed-pair
-				// direction the method javadoc bounds.
+				// proxy removes is restored below whenever another order IN THE PER-ORDER LIST carries it.
+				// Every order the builder reads that CONTRIBUTES a code is in that list since issue
+				// #290, nameless ones included (one with no name and no code reaches neither), so a
+				// code outside it means a hand-built context supplied one — this branch
+				// only runs when the order list is non-empty, so #118's flattened-only shape is not it.
 				for (DrugReference coResolved : orderDrugs) {
 					if (!subjectRows.contains(coResolved) && resolvesFrom(coResolved, order)) {
 						ownCodes.addAll(coResolved.normalizedAtcCodes());
@@ -4081,9 +4097,14 @@ public class DrugSafetyValidator {
 		 * {@link DrugSafetyValidator#classRelationships}'s restating-existing-therapy skip; nothing
 		 * here is rendered, so a partner may be named one thing and known to contain several.
 		 *
-		 * <p><b>Added only where {@link #nameByOrder} is</b>, and that is the whole of the scoping
-		 * rule. A partner the DATASET named stands for one substance; a partner named after an order
-		 * stands for that order, so what the order names is what it holds. Attaching the order's whole
+		 * <p><b>Added on the same BRANCH as {@link #nameByOrder}</b> — but since issue #290 not under
+		 * the same condition: the naming leg is withheld for a synthesized display and this one is not,
+		 * so for an order the module could not name the substances leg runs where the naming does not.
+		 * A partner the DATASET named stands for one substance; a partner named after an order stands
+		 * for that order, so what the order names is what it holds. That rationale does not reach the
+		 * one case #290 added — a partly-covered nameless order keeps the dataset's name and still
+		 * collects substances — and it is safe there only because such an order has no names to
+		 * resolve, so the leg contributes nothing. Attaching the order's whole
 		 * set to every partner it produced instead silences a real finding: one order whose two codes
 		 * both resolve is TWO partners, and a question about the first constituent would then skip the
 		 * second — {@code Metronidazole and secnidazole} losing "Metronidazole is in the same ATC
@@ -4185,8 +4206,9 @@ public class DrugSafetyValidator {
 	 * different labels ("… as active order Metronidazole" beside "… as active order Metronidazole
 	 * 500mg"). An uncovered code now first asks whether the order carrying it resolves, as a whole,
 	 * to exactly ONE substance, and joins that substance's partner when it does
-	 * ({@link #soleSubstanceOf}) — carrying the ORDER's name onto that partner as it goes, because
-	 * the dataset's name speaks only for the codes it covers (see {@link OrderPartner#nameByOrder}).
+	 * ({@link #soleSubstanceOf}) — carrying the ORDER's name onto that partner as it goes where the
+	 * order HAS a name, because the dataset's name speaks only for the codes it covers (see
+	 * {@link OrderPartner#nameByOrder}, and issue #290 for why a synthesized display is withheld).
 	 *
 	 * <p>Grouping by the order OUTRIGHT would have been wrong in both directions, which is why the
 	 * order is consulted only for the codes the dataset cannot speak for. What the order NAMES is a
@@ -4206,22 +4228,36 @@ public class DrugSafetyValidator {
 	 * scoping, the naming and the deliberate asymmetry with this loop are recorded. Nothing here changes:
 	 * an order this loop walks is grouped, named and skipped exactly as before.
 	 *
-	 * <p><b>Where the ladder still does not hold its promise.</b> The builder's KNOWN GAP: a nameless
-	 * order reaches {@link PatientClinicalContext#getActiveDrugAtcCodes()} without reaching
-	 * {@code getActiveDrugOrders()}, so {@link #orderCarrying} finds nothing, the new rung cannot
-	 * fire either, and each of its uncovered codes is its own partner. Issue #228's leg does not
-	 * reach it either and cannot: it walks {@code getActiveDrugOrders()}, and a nameless order is
-	 * absent from that list by construction — with no name there is nothing to resolve. Nothing here can close that —
-	 * with no order identity there is nothing to group BY, and grouping every unclaimed code together
-	 * would merge two genuinely different orders (and, on the flattened fallback of issue #118, merge
-	 * the whole medication list into one partner). Closing it means giving such an order a fallback
-	 * display in {@link PatientClinicalContextBuilder} so it reaches the list at all, which is that
-	 * gap's own fix and has its own consequences for the injected record.
+	 * <p><b>Where the ladder did not hold its promise, and why it now does.</b> A nameless order used
+	 * to reach {@link PatientClinicalContext#getActiveDrugAtcCodes()} without reaching
+	 * {@code getActiveDrugOrders()}, so {@link #orderCarrying} found nothing and each of its uncovered
+	 * codes was its own partner — one prescription, one chip per code. Issue #290 closed it where this
+	 * javadoc said it had to be closed: {@link PatientClinicalContextBuilder} gives such an order a
+	 * code-only fallback display so it reaches the list, and the grouping here then keys on the ORDER.
+	 * For a SINGLE order the grouping needed nothing on this side — the issue #186 rung already keys on
+	 * the order. Admitting an order with no name added a second hazard that is not about naming at all:
+	 * where two orders carry one dataset-unnameable code, {@link #orderCarrying}'s answer becomes this
+	 * loop's {@code identity}, so preferring a carrier that can name itself decides which order the
+	 * partner is KEYED on as well as what it is called — without it this change's own test observes TWO
+	 * partners for one prescription. The naming needed one thing beside that: a display that is not a
+	 * name is withheld from {@link OrderPartner#nameByOrder}.
+	 *
+	 * <p>What remains is a context built from the flattened sets alone (issue #118), where there is no
+	 * order identity to group BY and grouping every unclaimed code together would merge the whole
+	 * medication list into one partner. That residue is deliberate.
+	 *
+	 * <p>What the fallback does NOT do is rename anything the dataset could name: the code-only display
+	 * labels a partner only where no entry resolved (the else branch below), and it is withheld from
+	 * {@link OrderPartner#nameByOrder}, so it can never replace a dataset name on a partly-covered
+	 * order. What that costs is stated on the guard itself — where the shared class was matched through
+	 * the unnameable code alone, the covered constituent's name stays, which is issue #161's shape.
 	 *
 	 * <p><b>What each partner is known to CONTAIN is a separate answer</b> (issue #185), collected on
-	 * the same rung the ladder takes the order's NAME from and under the same condition:
+	 * the same rung the ladder takes the order's NAME from:
 	 * {@link OrderPartner#substances} holds what the order's own recorded names imply
-	 * ({@link #substancesNamedBy}), added exactly where {@link OrderPartner#nameByOrder} is applied.
+	 * ({@link #substancesNamedBy}), added on the same BRANCH as {@link OrderPartner#nameByOrder} — but
+	 * since issue #290 no longer under the same condition: the substances leg runs for every carrier,
+	 * while the naming leg is withheld when the order's display is synthesized.
 	 * The two answers are deliberately not the same thing: the ladder picks ONE identity so the
 	 * clinician sees one partner named one way, while the skip that reads this has to know about
 	 * every substance in the tablet.
@@ -4324,8 +4360,32 @@ public class DrugSafetyValidator {
 			if (unnameableCode && order != null) {
 				// This partner holds a code the dataset cannot name, so the dataset's name for its
 				// other codes does not speak for the whole of it — see OrderPartner.nameByOrder.
-				partner.nameByOrder(ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode));
-				// And, for the same reason and under the same condition, what the orders carrying this
+				//
+				// Except where the order has no name of its own either. Since issue #290 such an order
+				// still reaches the list, labelled by its ATC codes, and that label is the ABSENCE of a
+				// name rather than the order's own — so substituting it here discards a real drug name
+				// for none. Measured through the real validate over the bundled DDInter sample plus the
+				// curated cross-reactivity groups, on a partly-covered nameless order: the
+				// issue #88 fold puts the rule arm's sentence and the class arm's in ONE chip detail,
+				// and the rule arm names its partner from the RULE's token (partnerLabel), which the
+				// builder cannot reach — so the chip read "interacts with active order aspirin …
+				// is in the same cross-reactivity group (NSAID) as active order [ATC N02BA01, N02BA99]",
+				// naming one order two ways in one sentence. Asked of the ORDER (hasKnownName) rather
+				// than of its names being empty: that would be a proxy, since a caller may hand a real
+				// display no match tokens, and this decides whether a real drug name is displaced.
+				//
+				// The residue this accepts, stated because it is the reason nameByOrder prefers the
+				// order: where the shared class was matched through the UNNAMEABLE code alone, keeping
+				// the dataset's name for the covered one gives a chip whose stated class need not
+				// classify the drug it names — issue #161's shape. Reachable only for an order the
+				// module could not name AND that is partly covered; the alternative was measured to
+				// contradict itself on the same chip, so this trades a narrower fault for a
+				// demonstrated one.
+				if (order.hasKnownName()) {
+					partner.nameByOrder(ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode));
+				}
+				// And, for the same reason though no longer under the same condition (the naming above
+				// is withheld for a synthesized display, this is not), what the orders carrying this
 				// code NAME is what this partner is known to contain (issue #185). Inside this branch
 				// and not beside it: the condition is exactly "the dataset could not name this code,
 				// and an order carries it", so what is read here belongs to this code. Reading the
@@ -4529,8 +4589,9 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>What it cannot see is a partner keyed on a bare CODE — the context has no order
 	 *         there, so nothing says which substance it is. That needs a code the flattened set holds
-	 *         and no listed order carries, which {@link PatientClinicalContextBuilder} produces only
-	 *         through its KNOWN GAP (a nameless order) and a hand-built context can produce at will.
+	 *         and no listed order carries, which since issue #290 {@link PatientClinicalContextBuilder}
+	 *         never produces (a nameless order reaches the list too) and a hand-built or flattened-only
+	 *         context can produce at will.
 	 */
 	private static boolean alreadyACoMedication(Map<Object, OrderPartner> byIdentity, Object substance) {
 		if (byIdentity.containsKey(substance)) {
@@ -4667,12 +4728,31 @@ public class DrugSafetyValidator {
 	/**
 	 * @return the patient's active order whose own concept maps to {@code upperCode} (issue #132's
 	 *         per-order codes), or null — which is the normal answer for a context built from the
-	 *         flattened sets alone, and also for the builder's KNOWN GAP, an order with no readable
-	 *         name whose codes reach the union without the order reaching the list.
+	 *         flattened sets alone (issue #118). It is no longer the answer for an order the module
+	 *         could not name: since issue #290 such an order is in the list, labelled by its codes.
+	 *
+	 *         <p><b>A carrier that can NAME itself is preferred over one that cannot</b>, and that
+	 *         preference arrived with issue #290. This answer decides a partner's label and its
+	 *         identity, and {@link #ordersCarrying} records that naming a partner after the FIRST
+	 *         carrier is merely a presentation choice — which held while every carrier had a name. A
+	 *         code-only order breaks it: where one dataset-unnameable code is carried both by a
+	 *         nameless order and by a named one, taking the first would let {@code [ATC N02BA99]}
+	 *         displace {@code Aspirin 81mg} on a clinician-facing chip, decided by nothing but the
+	 *         sequence {@code OrderService} returned the prescriptions in — the same sequence
+	 *         dependence issue #185 removed from the skip. It selects on nothing but the NAME: whether
+	 *         the carrier it prefers is also the one whose codes resolve to a substance depends on the
+	 *         dataset's coverage, so invert the shape and {@link #soleSubstanceOf} still answers null.
+	 *         With every carrier named this returns the first, exactly as before; with none named it
+	 *         falls back to the first, because then there is nothing better to pick.
 	 */
 	private static PatientClinicalContext.ActiveDrugOrder orderCarrying(String upperCode,
 			PatientClinicalContext context) {
 		List<PatientClinicalContext.ActiveDrugOrder> carriers = ordersCarrying(upperCode, context);
+		for (PatientClinicalContext.ActiveDrugOrder carrier : carriers) {
+			if (carrier.hasKnownName()) {
+				return carrier;
+			}
+		}
 		return carriers.isEmpty() ? null : carriers.get(0);
 	}
 
@@ -4682,8 +4762,11 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>The set form, because a SKIP may not depend on which carrier came back first. The
 	 *         identity/label ladder takes {@link #orderCarrying}'s single answer and always has —
-	 *         a partner is named after one order, and naming it after the first is a presentation
-	 *         choice. What the partner is known to CONTAIN is not: with two orders carrying one code
+	 *         a partner is named after one order. Naming it after the first WAS a presentation choice,
+	 *         while every carrier had a name to offer; since issue #290 one may have none, so that
+	 *         method prefers a carrier that can name itself and the choice is no longer between
+	 *         equals. What the partner is known to CONTAIN was never a presentation
+	 *         choice: with two orders carrying one code
 	 *         the dataset cannot name, reading only the first one's names made
 	 *         {@code classRelationships}'s restating-existing-therapy skip a function of the sequence
 	 *         {@code OrderService} returned the prescriptions in — the same patient told two different

@@ -16,10 +16,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.openmrs.Concept;
-import org.openmrs.ConceptMap;
-import org.openmrs.ConceptReferenceTerm;
-import org.openmrs.ConceptSource;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -78,22 +74,7 @@ public class ActiveOrderAtcContextTest extends BaseModuleContextSensitiveTest {
 	 * {@link PatientClinicalContextBuilder} recognises.
 	 */
 	private void mapOrderedConceptToAtc(String... codes) {
-		ConceptSource whoAtc = new ConceptSource();
-		whoAtc.setName("WHOATC");
-		whoAtc.setDescription("WHO ATC classification (test)");
-		Context.getConceptService().saveConceptSource(whoAtc);
-		Concept concept = Context.getConceptService().getConcept(ORDERED_CONCEPT);
-		for (String code : codes) {
-			ConceptReferenceTerm term = new ConceptReferenceTerm();
-			term.setName(code);
-			term.setCode(code);
-			term.setConceptSource(whoAtc);
-			Context.getConceptService().saveConceptReferenceTerm(term);
-			concept.addConceptMapping(
-					new ConceptMap(term, Context.getConceptService().getDefaultConceptMapType()));
-		}
-		Context.getConceptService().saveConcept(concept);
-		Context.flushSession();
+		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, codes);
 	}
 
 	private static long interactionChips(List<SafetyWarning> warnings) {

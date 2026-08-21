@@ -374,6 +374,13 @@ public class DrugReferenceInjector {
 	 * <em>live</em> drug-order record naming the drug already tells the model the patient has an
 	 * order for it, so there is nothing for the answer to deny and nothing to repair.
 	 *
+	 * <p>That insurance is unavailable for one class of order, and it is worth naming because the
+	 * failure it guards against would be silent for it: an order no name could be read for
+	 * ({@code ActiveDrugOrder.namedByCodesOnly}, issue #290) carries no names, so {@code namedIn} can
+	 * never be true and it is matched by uuid ALONE. It is still reconciled — before #290 it never
+	 * reached this list at all — but if the uuid contract drifts, this class of order is where the
+	 * drift shows up as a permanent repair rather than as a caught discrepancy.
+	 *
 	 * <p><strong>Two ways that fallback used to over-match, both fixed, both of which suppressed the
 	 * WARN as well as the repair</strong> — so the discrepancy became invisible rather than merely
 	 * unrepaired, which is worse than not having the check.

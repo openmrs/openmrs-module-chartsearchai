@@ -291,6 +291,11 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 * render "Active drug order: [ATC ]." into the chart. Patient 7's order with its concept left
 	 * unmapped is that shape.
 	 *
+	 * <p>Like {@code aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName} and unlike the other six,
+	 * this case passes on pre-change code as well — it pins behaviour the change KEEPS, not behaviour it
+	 * introduces. That is the point of it: the skip was right about this input and had to survive a
+	 * change whose whole subject is removing the skip.
+	 *
 	 * <p>There is no second, blank-code shape for this case to miss: {@code addAtcCodes} appends through
 	 * {@code addRaw}, which drops blank and null values, so a blank ATC code never enters the order's
 	 * code set in the first place and the normalized set is empty exactly when the raw one is. An
@@ -364,6 +369,12 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 * <p>Hand-built context deliberately: the defect is in {@code orderPartners}' choice among carriers,
 	 * not in the builder, and one patient with two active orders of this exact shape is what the arrangement
 	 * needs. The real {@code validate} runs over it.
+	 *
+	 * <p><b>Observed, not predicted.</b> With the carrier preference absent this case produced TWO chips —
+	 * {@code "… as active order Acetylsalicylic acid (aspirin)"} from the covered code and
+	 * {@code "… as active order [ATC N02BA99]"} from the uncovered one — because {@code orderCarrying}
+	 * returned the nameless carrier, {@code soleSubstanceOf} answered null for it, and the code became its
+	 * own partner. That is what this case fails as.
 	 */
 	@Test
 	public void aCodeOnlyOrderDoesNotTakeTheNamingOfAPartnerFromANamedOne() {

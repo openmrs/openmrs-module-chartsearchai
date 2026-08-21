@@ -4195,8 +4195,9 @@ public class DrugSafetyValidator {
 	 * different labels ("… as active order Metronidazole" beside "… as active order Metronidazole
 	 * 500mg"). An uncovered code now first asks whether the order carrying it resolves, as a whole,
 	 * to exactly ONE substance, and joins that substance's partner when it does
-	 * ({@link #soleSubstanceOf}) — carrying the ORDER's name onto that partner as it goes, because
-	 * the dataset's name speaks only for the codes it covers (see {@link OrderPartner#nameByOrder}).
+	 * ({@link #soleSubstanceOf}) — carrying the ORDER's name onto that partner as it goes where the
+	 * order HAS a name, because the dataset's name speaks only for the codes it covers (see
+	 * {@link OrderPartner#nameByOrder}, and issue #290 for why a synthesized display is withheld).
 	 *
 	 * <p>Grouping by the order OUTRIGHT would have been wrong in both directions, which is why the
 	 * order is consulted only for the codes the dataset cannot speak for. What the order NAMES is a
@@ -4221,8 +4222,11 @@ public class DrugSafetyValidator {
 	 * {@code getActiveDrugOrders()}, so {@link #orderCarrying} found nothing and each of its uncovered
 	 * codes was its own partner — one prescription, one chip per code. Issue #290 closed it where this
 	 * javadoc said it had to be closed: {@link PatientClinicalContextBuilder} gives such an order a
-	 * code-only fallback display so it reaches the list, and the grouping here then keys on the ORDER
-	 * with nothing changed on this side.
+	 * code-only fallback display so it reaches the list, and the grouping here then keys on the ORDER.
+	 * The GROUPING needed nothing on this side; the NAMING needed two things, both because a display
+	 * that is not a name had never reached here before — it is withheld from
+	 * {@link OrderPartner#nameByOrder}, and {@link #orderCarrying} prefers a carrier that can name
+	 * itself.
 	 *
 	 * <p>What remains is a context built from the flattened sets alone (issue #118), where there is no
 	 * order identity to group BY and grouping every unclaimed code together would merge the whole

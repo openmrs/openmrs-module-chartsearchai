@@ -2313,8 +2313,9 @@ public class DrugSafetyValidator {
 	 *
 	 * @param partner the co-medication the class arm resolved, carrying the ladder's answer
 	 *        ({@link OrderPartner#label}), whether that answer is a name at all
-	 *        ({@link OrderPartner#namesADrug}), the ORDER that supplied it if one did
-	 *        ({@link OrderPartner#namingOrder}) and the entry it was resolved from
+	 *        ({@link OrderPartner#namesADrug}), the order it was taken from where one was consulted —
+	 *        which is NOT the same as the label being a name, see that field
+	 *        ({@link OrderPartner#namingOrder}) — and the entry it was resolved from
 	 *        ({@link OrderPartner#labelEntry})
 	 * @param rule the matched rule the class sentence is folding onto. Its {@link SubjectRule} wrapper is
 	 *        deliberately NOT taken: the entry {@link #activeOrderEntryFor} resolved for that rule is not
@@ -4428,14 +4429,28 @@ public class DrugSafetyValidator {
 		private String label;
 
 		/**
-		 * The ACTIVE ORDER whose display became {@link #label}, or null where the label came from the
-		 * dataset or is a bare code — see {@link #nameByOrder}.
+		 * The ACTIVE ORDER this partner's {@link #label} was taken from, where one was consulted at all —
+		 * null on the entry rung and on issue #118's bare-code rung. See {@link #nameByOrder}.
 		 *
 		 * <p>The order itself and not a boolean saying that one supplied the name, because
 		 * {@link DrugSafetyValidator#foldedPartnerLabel} asks a question OF that order — whether the rule
-		 * about to be folded onto this partner names it — and a flag beside a nullable reference is two
-		 * states that can come to disagree. Carrying the order makes "named by an order" and "which
-		 * order" one fact, so the fold cannot be handed a name with nothing to validate it against.
+		 * about to be folded onto this partner names it — so carrying the order makes "named by an order"
+		 * and "which order" one fact, and the fold cannot be handed a name with nothing to validate it
+		 * against.
+		 *
+		 * <p><b>It does NOT mean {@link #label} is a name.</b> An earlier form of this javadoc said the
+		 * field is null "where the label … is a bare code", and that is false: the order rung sets it
+		 * whenever an order was consulted, while {@link #namesADrug} comes from
+		 * {@link DrugSafetyValidator#displayNamesADrug}, so a {@code namedByCodesOnly} or blank-display
+		 * order yields a non-null value here beside an {@code [ATC …]} or bare-code label. That state is
+		 * reachable and is reached by {@code FoldedChipOnePartnerNameTest}'s own nameless-order
+		 * arrangement. What keeps {@code foldedPartnerLabel} safe there is the ORDER OF ITS BRANCHES —
+		 * {@code !namesADrug} tested first — and not this field: measured by swapping those two branches,
+		 * which reddens {@code theTicketsLiveCaseNamesTheOrderOnce},
+		 * {@code noFoldedChipNamesOneActiveOrderTwoWays} and
+		 * {@code aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug}. So do not
+		 * read a non-null value here as licence to hand out {@link #label}; ask {@link #namesADrug} first,
+		 * as that method does.
 		 */
 		private PatientClinicalContext.ActiveDrugOrder namingOrder;
 
@@ -4715,7 +4730,7 @@ public class DrugSafetyValidator {
 	 * {@link OrderPartner#substances} holds what the order's own recorded names imply
 	 * ({@link #substancesNamedBy}), added on the same BRANCH as {@link OrderPartner#nameByOrder} — but
 	 * since issue #290 no longer under the same condition: the substances leg runs for every carrier,
-	 * while the naming leg is withheld when the order's display is synthesized.
+	 * while the naming leg is withheld when the order's display is synthesized OR blank — since issue #292 both, through {@link #displayNamesADrug}, which is why one unfolded class-only chip's text moves in that change.
 	 * The two answers are deliberately not the same thing: the ladder picks ONE identity so the
 	 * clinician sees one partner named one way, while the skip that reads this has to know about
 	 * every substance in the tablet.

@@ -114,58 +114,33 @@ final class PatientClinicalContextBuilder {
 				// answer differently about which codes this order has.
 				Set<String> normalizedCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
 				// An order the module cannot NAME still reaches this list, labelled by the ATC codes it
-				// carries (issue #290). Skipping it was the one outcome that reproduced issue #118
-				// rather than repairing it: addAtcCodes above needs no name, so a skipped order left
-				// its codes in the flattened union with no order behind them — and DrugSafetyValidator
-				// .orderPartners keys such a code on the raw code string, so ONE prescription became
-				// one duplicate-therapy chip PER CODE, each named by whatever the reference data could
-				// resolve that code to alone — the substance where the code is covered, an unlabelled
-				// code where it is not, so on the shipped KB the usual symptom is one prescription
-				// presented as several medications. Measured through the real validate over the CURATED
-				// SEED, which carries neither code: 2 chips for a 2-code order, 1 once the same order
-				// has a name. Issue #155's ladder could not help — an order skipped here never enters
-				// getActiveDrugOrders(), so there was no display name for it to fall back to.
+				// carries (issue #290). Skipping it left its codes in the flattened union with no order
+				// behind them, and DrugSafetyValidator.orderPartners keys such a code on the raw code
+				// string, so ONE prescription became one duplicate-therapy chip PER CODE — each named by
+				// whatever the reference data could resolve that code to alone, so on the shipped KB the
+				// usual symptom was one prescription presented as several medications. Measured through
+				// the real validate over the CURATED SEED, which carries neither code: 2 chips for a
+				// 2-code order, 1 once the same order has a name. The decision, and the three trades it
+				// accepts, are ADR Decision 38.
 				//
-				// Reachable whenever no non-blank name can be READ, which is not the same question as
-				// Concept.getName() returning null and is deliberately not enumerated as a closed list.
-				// One thing about getName() is worth stating because issue #290's first plan was built
-				// on getting it wrong: a concept named only outside the current locale does NOT yield
-				// null, since getName() walks LocaleUtility.getLocalesInOrder(), then falls back to the
-				// first fully-specified name in ANY locale, then to any synonym. Shapes that do reach
-				// here include addConceptName swallowing a RuntimeException from concept.getName() (a
-				// detached/lazy-init proxy) in its own try while addAtcCodes succeeds in a separate
-				// one, a dictionary whose names have been voided, and a recorded name that is blank
-				// (addRaw drops it, so getName() need not be null at all).
+				// One thing about getName() belongs HERE rather than in the ADR, because issue #290's
+				// first plan was built on getting it wrong: a concept named only outside the current
+				// locale does NOT yield null. getName() walks LocaleUtility.getLocalesInOrder(), then
+				// falls back to the first fully-specified name in ANY locale, then to any synonym. What
+				// reaches this branch is a name that could not be READ — addConceptName swallowing a
+				// RuntimeException from a detached or lazy-init proxy while addAtcCodes succeeds in a
+				// separate try, voided names, or a blank recorded name (addRaw drops it, so getName()
+				// need not be null at all).
 				//
-				// What is load-bearing about the placeholder, one paragraph each:
-				//
-				// The display names the codes AS codes, through the same shared normalizer the
-				// order's own code set and the ladder's last rung use (DrugReference
-				// .normalizeAtcTokens) — otherwise a dictionary storing "c10aa01" would print a
-				// lower-case code where every other surface prints "C10AA01", and the label would
-				// drift from what it keys on.
-				//
-				// The name set stays EMPTY. It is lowercased and matched against chart prose
-				// (ActiveDrugOrder.namedIn, and every getNames() consumer in DrugSafetyValidator), so
-				// seeding it with a code would let an ATC code match free text — a new defect for an
-				// old one. Empty is also the honest answer: the order's name is unknown, so it matches
-				// nothing. The consequence is that this order class is uuid-only for the #118
-				// reconciliation, since namedIn can never be true for it.
-				//
-				// An order with no name and no code is still skipped: nothing can name it and no chip
-				// can be raised for it, so adding it would only put an unnameable line in front of a
-				// clinician — which is what the old skip was right about.
-				//
-				// The test reads the normalized set because that is the set the label is built from and
-				// the same normalization ActiveDrugOrder will store, so the three cannot disagree about
-				// which codes this order has. It is not a defence against a blank code: addAtcCodes
-				// appends through addRaw, which drops blank and null values, so at this site the
-				// normalized set is empty exactly when orderAtcCodes is.
-				//
-				// The WARN is the only trace that a chip is speaking for an order the module could not
-				// name. It deliberately does NOT distinguish a name that could not be READ from a
-				// concept that has none — the distinction contraindicationRecordsRead() keeps for the
-				// chart reads — because no consumer behaves differently on it today.
+				// The name set stays EMPTY because it is matched against chart prose, so a code in it
+				// would match free text; the cost of that is in the ADR. The display is built from the
+				// normalized codes rather than the raw ones so that the label, the test below and the
+				// codes ActiveDrugOrder stores cannot disagree — NOT as a defence against a blank code,
+				// which addRaw already dropped. An order with no name and no code is still skipped:
+				// nothing can name it and no chip can be raised for it, which is what the old skip was
+				// right about. The WARN is the only trace that a chip is speaking for an order the module
+				// could not name; it does not distinguish a name that could not be read from a concept
+				// that has none, because no consumer behaves differently on that today.
 				if (!orderNames.isEmpty()) {
 					activeOrders.add(new PatientClinicalContext.ActiveDrugOrder(drugOrder.getUuid(),
 							orderNames.iterator().next(), orderNames, orderAtcCodes));

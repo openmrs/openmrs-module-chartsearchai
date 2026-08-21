@@ -773,6 +773,16 @@ public final class DrugReferenceTestSupport {
 	 *         verbatim between two of them, javadoc included, and a shared filter cannot drift into two
 	 *         answers about which chips a case is counting.
 	 */
+	static List<String> classChipDetails(List<SafetyWarning> warnings) {
+		List<String> out = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())) {
+				out.add(warning.getDetail());
+			}
+		}
+		return out;
+	}
+
 	/**
 	 * Maps {@code codes} onto {@code conceptId} through a source whose name carries "ATC" — the
 	 * predicate {@link PatientClinicalContextBuilder} applies, and the shape the reference demo
@@ -812,16 +822,6 @@ public final class DrugReferenceTestSupport {
 			}
 		}
 		return found;
-	}
-
-	static List<String> classChipDetails(List<SafetyWarning> warnings) {
-		List<String> out = new ArrayList<String>();
-		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())) {
-				out.add(warning.getDetail());
-			}
-		}
-		return out;
 	}
 
 	/** @return the entries' own {@code name}s. {@link DrugReference} defines no {@code toString}, so a

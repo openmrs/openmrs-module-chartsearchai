@@ -107,11 +107,14 @@ public class DuplicateInteractionChipTest {
 						DrugReferenceTestSupport.set("aspirin 81mg"),
 						DrugReferenceTestSupport.set("N02BA01"), null, null));
 
-		assertEquals("Ibuprofen interacts with active order aspirin — Major. Ibuprofen blunts the "
-				+ "irreversible platelet inhibition of low-dose aspirin. Ibuprofen is in the same "
-				+ "cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin) — "
-				+ "possible additive or duplicate-class therapy", onlyDetail(warnings),
-				"one chip must carry the rule's partner, its mechanism and the class relationship");
+		assertEquals("Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major. "
+				+ "Ibuprofen blunts the irreversible platelet inhibition of low-dose aspirin. Ibuprofen "
+				+ "is in the same cross-reactivity group (NSAID) as active order Acetylsalicylic acid "
+				+ "(aspirin) — possible additive or duplicate-class therapy", onlyDetail(warnings),
+				"one chip must carry the rule's partner, its mechanism and the class relationship — and"
+						+ " name that partner ONCE (issue #292): the rule sentence read \"active order"
+						+ " aspirin\" beside the class sentence's resolved entry name until the fold"
+						+ " reconciled them");
 	}
 
 	@Test
@@ -145,12 +148,15 @@ public class DuplicateInteractionChipTest {
 
 		assertEquals("Acetylsalicylic acid (aspirin)", warnings.get(0).getDrug(),
 				"the chip's drug must keep the dual-vocabulary display label");
-		assertEquals("Acetylsalicylic acid (aspirin) interacts with active order ibuprofen — Major. "
+		assertEquals("Acetylsalicylic acid (aspirin) interacts with active order Ibuprofen — Major. "
 				+ "Ibuprofen blunts the irreversible platelet inhibition of low-dose aspirin. "
 				+ "Acetylsalicylic acid (aspirin) is in the same cross-reactivity group (NSAID) as "
 				+ "active order Ibuprofen — possible additive or duplicate-class therapy",
 				onlyDetail(warnings),
-				"both sentences of the folded detail must use the display label");
+				"both sentences of the folded detail must use the display label — for the SUBJECT, which"
+						+ " is what this case is about, and since issue #292 for the PARTNER too, which"
+						+ " the rule sentence used to call \"ibuprofen\" beside the class sentence's"
+						+ " \"Ibuprofen\"");
 	}
 
 	@Test
@@ -203,10 +209,12 @@ public class DuplicateInteractionChipTest {
 						DrugReferenceTestSupport.set("ibuprofen 400mg", "aspirin 81mg"),
 						DrugReferenceTestSupport.set("M01AE01", "N02BA01"), null, null));
 
-		assertEquals("Ibuprofen interacts with active order aspirin — Major. Ibuprofen blunts the "
-				+ "irreversible platelet inhibition of low-dose aspirin. Ibuprofen is in the same "
-				+ "cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin) — "
-				+ "possible additive or duplicate-class therapy", onlyDetail(warnings),
-				"one chip for the one pair, and it is the FOLDED one — not the screen's plainer chip");
+		assertEquals("Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major. "
+				+ "Ibuprofen blunts the irreversible platelet inhibition of low-dose aspirin. Ibuprofen "
+				+ "is in the same cross-reactivity group (NSAID) as active order Acetylsalicylic acid "
+				+ "(aspirin) — possible additive or duplicate-class therapy", onlyDetail(warnings),
+				"one chip for the one pair, and it is the FOLDED one — not the screen's plainer chip."
+						+ " Its partner is named once since issue #292; the suppression itself keys on"
+						+ " the PAIR and not on this text, which is why InteractionPairs exists");
 	}
 }

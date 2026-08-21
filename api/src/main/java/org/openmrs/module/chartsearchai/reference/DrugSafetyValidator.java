@@ -1704,14 +1704,23 @@ public class DrugSafetyValidator {
 		// (Re-measured for issue #164's widening: still 0 divergent, at 129 families rather than 121.)
 		// Reading the group instead would produce one sentence per row, each naming its own label, which
 		// is the duplication being removed.
-		Map<SubjectRule, String> folded = new LinkedHashMap<SubjectRule, String>();
+		Map<SubjectRule, FoldedClassSentence> folded =
+				new LinkedHashMap<SubjectRule, FoldedClassSentence>();
 		List<String> classOnly = new ArrayList<String>();
-		for (Map.Entry<OrderPartner, String> hit : classRelationships(ref, context).entrySet()) {
+		for (Map.Entry<OrderPartner, ClassRelationship> hit : classRelationships(ref, context).entrySet()) {
 			SubjectRule rule = ruleAbout(hit.getKey().codes, rules);
 			if (rule == null) {
-				classOnly.add(hit.getValue());
+				// No rule to reconcile with, so the ladder's own name is the only one there is.
+				classOnly.add(hit.getValue().sentence(ref, hit.getKey().label));
 			} else if (!folded.containsKey(rule)) {
-				folded.put(rule, hit.getValue());
+				// One name for the two sentences about to share a detail — see foldedPartnerLabel. Both
+				// are worded from it here rather than each arm wording its own, which is what let them
+				// disagree (issue #292).
+				String reconciled = foldedPartnerLabel(hit.getKey(), rule);
+				folded.put(rule, new FoldedClassSentence(
+						reconciled != null ? reconciled : partnerLabel(rule.rule),
+						hit.getValue().sentence(ref,
+							reconciled != null ? reconciled : hit.getKey().label)));
 			}
 			// else: a SECOND co-medication that the same rule is about. The relationship is already
 			// stated on that chip; emitting it again, standalone or appended, would put one pair's
@@ -1728,7 +1737,10 @@ public class DrugSafetyValidator {
 		// before they were coordinated — a folded chip therefore keeps the rule chip's position and no
 		// client sees the chip sequence reshuffle.
 		for (SubjectRule rule : rules) {
-			warnings.add(interactionWarning(ref, rule.rule, folded.get(rule)));
+			FoldedClassSentence fold = folded.get(rule);
+			warnings.add(interactionWarning(ref, rule.rule,
+					fold != null ? fold.partnerName : partnerLabel(rule.rule),
+					fold != null ? fold.sentence : null));
 			// Recorded as the pair it is, not as the string it renders, so the screening arm can recognise
 			// it whatever either arm calls the substance — see InteractionPairs.
 			pairs.add(ref, rule.partnerKey());
@@ -2186,6 +2198,15 @@ public class DrugSafetyValidator {
 	 * the partner is CALLED as well as on which of them is which — one method rather than two
 	 * coalesces, for the same reason the grouping key and the rendered label have to be one string.
 	 *
+	 * <p><b>Since issue #292 that agreement no longer extends to a FOLDED chip</b>, and the exception is
+	 * this method's alone to state: a folded chip's two sentences take
+	 * {@link #foldedPartnerLabel}'s single answer, which may be the class arm's ladder name, while
+	 * {@code orderedInteractionNotes} keeps this coalesce. So chip and record can call one partner two
+	 * things there. Deliberate — see {@link #foldedPartnerLabel} for why, and ADR Decision 39 for what
+	 * it costs. Nothing about the GROUPING changed: both surfaces still key on this label case-folded
+	 * wherever the dataset identifies no partner entry, which is the only claim issue #121's invariant
+	 * makes and the reason it still holds.
+	 *
 	 * @return the label, or null when the rule carries neither — which a rule that matched an active
 	 *         order cannot ({@code hasActiveDrug} needs a non-blank token or a non-blank ATC), so
 	 *         callers inside the matched loop never see it
@@ -2193,6 +2214,101 @@ public class DrugSafetyValidator {
 	static String partnerLabel(DrugReference.Interaction interaction) {
 		String label = ChartSearchAiUtils.firstNonBlank(interaction.getToken(), interaction.getAtc());
 		return label == null ? null : label.trim();
+	}
+
+	/**
+	 * The one name a FOLDED chip calls an active order by (issue #292) — the class arm's ladder where
+	 * that ladder found a name it may keep, else the rule's own {@link #partnerLabel}.
+	 *
+	 * <p><b>The defect.</b> Issue #88's fold puts both arms' sentences into one detail and each arm named
+	 * the partner from its own source: the class arm from issue #155/#186/#290's ladder in
+	 * {@link #orderPartners}, the rule arm from {@link #partnerLabel}, which is the rule's match token
+	 * and reaches nothing the context carries. So one prescription appeared under two names in one
+	 * sentence. Observed live on the 3.7.0-rc.2 standalone at {@code b0a24a96} over the curated seed, one
+	 * active order the module could read no name for, asked "Can she be given ibuprofen?":
+	 * {@code Ibuprofen interacts with active order aspirin — additive GI and bleeding risk. Ibuprofen is
+	 * in the same cross-reactivity group (NSAID) as active order [ATC A01AD05, B01AC06, N02BA01] —
+	 * possible additive or duplicate-class therapy}. It is not caused by the code-only display; that
+	 * display only makes it obvious. The divergence is systematic for a formulation, because the
+	 * {@code ddinter} parser lower-cases every token it writes from the partner row's RxNorm generic
+	 * while the class arm prints that row's {@link DrugReference#displayLabel()}.
+	 *
+	 * <p>So {@code partnerLabel} becomes the ladder's last-but-one rung rather than a second, independent
+	 * ladder. Nothing outside a folded chip moves: an unfolded rule chip, the grouping keys
+	 * ({@link SubjectRule#partnerKey}, {@code DrugReferenceInjector.onePerPartner}) and the injected
+	 * {@code drug_reference} note list all keep {@code partnerLabel} itself, so issue #121's invariant —
+	 * on the branch where the dataset identifies no partner entry, the key IS the label the chip says —
+	 * holds exactly as before.
+	 *
+	 * <p><b>Two conditions, and both are refusals rather than preferences.</b>
+	 * <ul>
+	 *   <li>The ladder's answer must BE a name ({@link OrderPartner#namesADrug}). A bare code and the
+	 *       {@code [ATC …]} stand-in are the absence of one, and ADR Decision 38 measured what letting
+	 *       one win costs: it "put {@code [ATC N02BA01, N02BA99]} beside the rule arm's {@code aspirin}
+	 *       inside ONE folded chip detail". The rule's token is then the only name either arm holds and
+	 *       both sentences take it.</li>
+	 *   <li>The rule must NAME the entry the ladder resolved. {@link #ruleAbout} correlates the two arms
+	 *       through {@link #entryForAtcCode}, which answers with the canonical row publishing a code, and
+	 *       a level-5 code can be published by two substances in this knowledge base ({@code Omeprazole}
+	 *       and {@code Esomeprazole} share {@code A02BC05}) — so the class arm's sentence about one can
+	 *       fold onto a rated rule about the other. {@link #addPartnersForUnmappedOrders} records that
+	 *       standing bound and says both sentences stay true, "what is lost is which co-medication the
+	 *       second sentence is about" — which holds only while the two NAMES differ, because those two
+	 *       names are the only evidence a reader has that two partners are in play. Displacing the token
+	 *       there would render one substance's mechanism under the other's name: the #161/#187/#194
+	 *       failure, and strictly worse than the legibility cost this method exists to remove. That same
+	 *       javadoc names this locus for the fix — "correlating on the partner's SUBSTANCE instead is a
+	 *       change to issue #88's fold rather than to this leg".</li>
+	 * </ul>
+	 *
+	 * <p><b>A NAME-identity test, deliberately not a comparison of the two arms' resolved substances.</b>
+	 * {@link #identifies} accepts a bare shared ATC code as well as a token, so on that very shape
+	 * {@link #activeOrderEntryFor} and {@link #entryForAtcCode} both answer {@code Omeprazole} and a
+	 * substance comparison would agree spuriously — it would license exactly the displacement it was
+	 * added to refuse. Asking whether the rule's own TOKEN is one of the entry's aliases is
+	 * {@link DrugReference#isNamed}, which CLAUDE.md names for identity between two reference strings and
+	 * which is what both operands here are.
+	 *
+	 * <p>Where the ladder resolved no entry at all, the rule must have resolved none either. That pairing
+	 * is the curated seed's own shape — a hand-authored rule whose {@code atc} matches no loaded entry,
+	 * so {@link #ruleAbout}'s exact-code leg is what correlated the arms and there is no rival entry for
+	 * the token to be confused with. On a {@code ddinter}-parsed knowledge base it cannot arise: that
+	 * parser writes a rule's {@code atc} from its partner row's own first code, so an entry publishing it
+	 * exists and the ladder would have found it.
+	 *
+	 * <p>What this deliberately does NOT decide is which co-medication a folded class sentence is about
+	 * when the ladder has no name for it: a partner holding several codes the dataset cannot name may
+	 * hold codes of two substances, and the rule's token then names one constituent of a combination
+	 * while the shared class was matched through another. That is issue #161's shape, already an accepted
+	 * "−" of ADR Decision 38, and it is not closable here — bounding it to "the rule's own code accounts
+	 * for the class match" refuses the live case above (the seed's rule cites {@code B01AC06} while the
+	 * NSAID group matches {@code N02BA01}), and asking whether the codes are all one substance is
+	 * undecidable on a branch entered only because none of them resolved an entry. What bounds it instead
+	 * is that the RULE sentence already names that constituent today, so the chip does not begin
+	 * asserting a substance it was silent about; the class sentence merely stops introducing a second
+	 * name.
+	 *
+	 * @param rule the matched rule the class sentence is folding onto, carrying the partner entry
+	 *        {@link #activeOrderEntryFor} resolved for it — the bridge, rather than a second resolution
+	 * @return the one name both sentences of the folded chip take, or <b>null</b> when the two arms must
+	 *         not be reconciled at all because they are about different co-medications — each sentence
+	 *         then keeps the name its own arm resolved, which is what the chip has always said and is
+	 *         deliberately two names for two partners
+	 */
+	private static String foldedPartnerLabel(OrderPartner partner, SubjectRule rule) {
+		if (!partner.namesADrug) {
+			// The ladder has no name to keep, so the rule's token is the only one either arm holds.
+			return partnerLabel(rule.rule);
+		}
+		boolean agree = partner.labelEntry != null
+				? namesEntry(rule.rule.getToken(), partner.labelEntry)
+				: rule.partner == null;
+		// null and NOT the rule's token: where the two arms are about different co-medications, each
+		// sentence keeps its own name. Making the class sentence adopt the rule's token here would move
+		// the mis-attribution rather than refuse it — "Pantoprazole is in the same ATC class (A02BC) as
+		// active order esomeprazole" states the class relationship the arm found for Omeprazole about a
+		// drug it did not resolve, which is the same defect in the other direction.
+		return agree ? partner.label : null;
 	}
 
 	/**
@@ -2858,23 +2974,29 @@ public class DrugSafetyValidator {
 	 * wording alone — see {@link SafetyWarning#carriesUnratedRelationship()}.
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i) {
-		return interactionWarning(ref, i, null);
+		return interactionWarning(ref, i, partnerLabel(i), null);
 	}
 
 	/**
 	 * As {@link #interactionWarning(DrugReference, DrugReference.Interaction)}, additionally folding
 	 * the class arm's finding about the SAME active order into this one chip (issue #88).
 	 *
+	 * @param partnerName what this chip calls the active order: {@link #partnerLabel} for a chip no fold
+	 *        applies to, and {@link #foldedPartnerLabel}'s single answer for a folded one, so the two
+	 *        sentences of one detail cannot name one order two ways (issue #292)
 	 * @param alsoSameClass the class arm's own sentence about that order ({@link #classRelationships}),
 	 *        or null when the class arm says nothing about this partner — in which case the detail is
 	 *        byte-identical to what it has always been, so no single-arm chip changes
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
-			String alsoSameClass) {
-		// partnerLabel, not a second coalesce: it is the label bestRulePerPartner GROUPS on where the
-		// dataset identifies no partner entry, and there #121's grouping is only correct while the key
-		// IS the label the chip says.
-		String detail = ref.displayLabel() + " interacts with active order " + partnerLabel(i);
+			String partnerName, String alsoSameClass) {
+		// partnerName is partnerLabel(i) for every chip no fold applies to — not a second coalesce: it
+		// is the label bestRulePerPartner GROUPS on where the dataset identifies no partner entry, and
+		// there #121's grouping is only correct while the key IS the label the chip says. A FOLDED chip
+		// passes foldedPartnerLabel's answer instead, so its two sentences cannot name one order two
+		// ways (issue #292); that method is where the conditions under which the ladder's name may
+		// displace this one are stated, and it never displaces on the branch #121's invariant binds.
+		String detail = ref.displayLabel() + " interacts with active order " + partnerName;
 		if (i.getNote() != null && !i.getNote().isEmpty()) {
 			detail += " — " + i.getNote();
 		}
@@ -4005,8 +4127,9 @@ public class DrugSafetyValidator {
 	 *         places. Stated rather than smoothed over, because "chip order is unchanged" was the
 	 *         previous promise here and is no longer one that can be kept.
 	 */
-	private Map<OrderPartner, String> classRelationships(DrugReference ref, PatientClinicalContext context) {
-		Map<OrderPartner, String> out = new LinkedHashMap<OrderPartner, String>();
+	private Map<OrderPartner, ClassRelationship> classRelationships(DrugReference ref,
+			PatientClinicalContext context) {
+		Map<OrderPartner, ClassRelationship> out = new LinkedHashMap<OrderPartner, ClassRelationship>();
 		if (context == null) {
 			return out;
 		}
@@ -4031,18 +4154,77 @@ public class DrugSafetyValidator {
 			}
 			String shared = sharedTherapyClass(refClasses, DrugReference.atcSubgroups(partner.codes));
 			if (shared != null) {
-				out.put(partner, ref.displayLabel() + " is in the same ATC class (" + shared
-						+ ") as active order " + partner.label + " — possible duplicate therapy");
+				out.put(partner, new ClassRelationship("ATC class (" + shared + ")",
+						"possible duplicate therapy"));
 				continue;
 			}
 			CrossReactivityGroup group = CrossReactivityGroup.sharedGroupForCodes(refGroups, partner.codes);
 			if (group != null) {
-				out.put(partner, ref.displayLabel() + " is in the same cross-reactivity group ("
-						+ group.getName() + ") as active order " + partner.label
-						+ " — possible additive or duplicate-class therapy");
+				out.put(partner, new ClassRelationship("cross-reactivity group (" + group.getName() + ")",
+						"possible additive or duplicate-class therapy"));
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * One class relationship the arm above found, as its two authored parts rather than as a finished
+	 * sentence — what the drugs share, and what sharing it may mean.
+	 *
+	 * <p><b>Still one wording, which is what issue #108 requires of this sentence.</b> It reads
+	 * identically whether it is the whole detail of a class-only chip or the second sentence of a folded
+	 * one, because {@link #sentence} is the only thing that words it; before issue #292 that was
+	 * achieved by returning the finished string, and the template was written out twice here, once per
+	 * family. The two shortenings issue #108 rejected are untouched: nothing refers back to "that order"
+	 * (which dropped the synonym-augmented order label) and nothing prefixes "also" (which broke the
+	 * "X is in the same …" wording).
+	 *
+	 * <p>What the parts buy is that the partner's NAME becomes an argument. A folded chip has to name
+	 * one order once (issue #292) and only the fold knows both arms' names for it, so the name cannot be
+	 * baked in here — see {@link #foldedPartnerLabel}.
+	 */
+	private static final class ClassRelationship {
+
+		/** What the two drugs share, worded and parenthesised as the chip says it — {@code "ATC class
+		 *  (A04AA)"}, {@code "cross-reactivity group (NSAID)"}. */
+		private final String shared;
+
+		/** What sharing it may mean — the clause after the dash. */
+		private final String consequence;
+
+		ClassRelationship(String shared, String consequence) {
+			this.shared = shared;
+			this.consequence = consequence;
+		}
+
+		/** @param partnerName what this chip calls the active order — the class arm's own ladder
+		 *        ({@link OrderPartner#label}) for a class-only chip, and {@link #foldedPartnerLabel}'s
+		 *        answer for a folded one, which is the same string wherever the ladder found a name it
+		 *        may keep */
+		String sentence(DrugReference subject, String partnerName) {
+			return subject.displayLabel() + " is in the same " + shared + " as active order "
+					+ partnerName + " — " + consequence;
+		}
+	}
+
+	/**
+	 * A class sentence that has been folded onto a rule chip, together with the ONE name both of that
+	 * chip's sentences call the active order by ({@link #foldedPartnerLabel}).
+	 *
+	 * <p>The name travels with the sentence rather than being recomputed for the rule half, because the
+	 * two are one decision: recomputing is how the two sentences came to disagree in the first place
+	 * (issue #292), and the chip is assembled in a different loop from the one that folds.
+	 */
+	private static final class FoldedClassSentence {
+
+		private final String partnerName;
+
+		private final String sentence;
+
+		FoldedClassSentence(String partnerName, String sentence) {
+			this.partnerName = partnerName;
+			this.sentence = sentence;
+		}
 	}
 
 	/**
@@ -4158,9 +4340,52 @@ public class DrugSafetyValidator {
 		 */
 		private final Set<Object> substances = new LinkedHashSet<Object>();
 
-		private OrderPartner(String label, boolean namedByOrder) {
+		/**
+		 * The reference entry this partner's label was RESOLVED from — the top rung of the ladder in
+		 * {@link DrugSafetyValidator#orderPartners} — or null on the order and code rungs, where no
+		 * entry named it.
+		 *
+		 * <p>Kept across {@link #nameByOrder}, deliberately: it records which substance the dataset
+		 * IDENTIFIED this co-medication as, not what the chip ends up calling it. So a partly-covered
+		 * order renamed after itself still knows the entry its codes resolved.
+		 *
+		 * <p>Read by ONE thing, {@link DrugSafetyValidator#foldedPartnerLabel}, which asks whether the
+		 * rule about to be folded onto this partner NAMES that entry before letting this label displace
+		 * the rule's own token. Not the same question as {@link #substances}, which is what an ORDER is
+		 * known to contain and is populated on one rung only — conflating the two would widen a
+		 * suppression that decides which chips are silenced (see that field).
+		 */
+		private final DrugReference labelEntry;
+
+		/**
+		 * Whether {@link #label} is a drug NAME rather than a code standing in for one.
+		 *
+		 * <p>False on two rungs: the bare {@code orderCode} of issue #118's flattened fallback, and the
+		 * {@code [ATC …]} stand-in {@link PatientClinicalContext.ActiveDrugOrder#namedByCodesOnly}
+		 * builds for an order no name could be read for (issue #290), which is the ABSENCE of a name.
+		 *
+		 * <p>Read by {@link DrugSafetyValidator#foldedPartnerLabel}: a code may not displace the name
+		 * the rule arm supplies, which is the direction ADR Decision 38 measured — letting the code list
+		 * win "put {@code [ATC N02BA01, N02BA99]} beside the rule arm's {@code aspirin} inside ONE
+		 * folded chip detail".
+		 *
+		 * <p>A property of the LABEL and not of the order, which is why it is set where the label is
+		 * chosen rather than derived from {@link PatientClinicalContext.ActiveDrugOrder#hasKnownName()}
+		 * alone: on the order rung the label is
+		 * {@code firstNonBlank(order.getDisplay(), orderCode)}, so an order that answers
+		 * {@code hasKnownName()} but carries a BLANK display is labelled by the bare code — and a chip
+		 * naming an active order {@code N02BA01} is what issue #155 exists to remove. Both write sites
+		 * therefore gate on {@link DrugSafetyValidator#displayNamesADrug}, once, rather than one of them
+		 * inferring it from the label being non-blank.
+		 */
+		private boolean namesADrug;
+
+		private OrderPartner(String label, boolean namedByOrder, DrugReference labelEntry,
+				boolean namesADrug) {
 			this.label = label;
 			this.namedByOrder = namedByOrder;
+			this.labelEntry = labelEntry;
+			this.namesADrug = namesADrug;
 		}
 
 		/**
@@ -4183,6 +4408,12 @@ public class DrugSafetyValidator {
 			if (!namedByOrder && !ChartSearchAiUtils.isBlank(orderLabel)) {
 				label = orderLabel;
 				namedByOrder = true;
+				// The caller has already asked displayNamesADrug, so what lands here is a display the
+				// order really carries — never the [ATC …] stand-in and never a bare code. Recorded
+				// rather than re-derived, for the reason namesADrug states: this method REPLACES an
+				// entry-derived label, so a label that stopped being a name here would leave a folded
+				// chip printing a code in BOTH of its sentences where today only one carries it.
+				namesADrug = true;
 			}
 		}
 	}
@@ -4302,6 +4533,28 @@ public class DrugSafetyValidator {
 	 * than because the repeat is free. No TIME is claimed for any of it — the sentence above says how
 	 * to measure one.
 	 */
+	/**
+	 * @return whether {@code order}'s display is a drug NAME — the one question both
+	 *         {@link OrderPartner} write sites ask before letting a display stand as a partner's name,
+	 *         written once so they cannot drift (issue #292).
+	 *
+	 *         <p>Two conditions, neither sufficient alone.
+	 *         {@link PatientClinicalContext.ActiveDrugOrder#hasKnownName()} separates a display the order
+	 *         really carries from the {@code [ATC …]} stand-in issue #290 synthesizes — asked of the
+	 *         ORDER, never re-derived as "are its names empty", which is a proxy the public constructor
+	 *         lets a caller falsify. And the display must be non-blank, because the label a blank one
+	 *         produces is the bare ATC code
+	 *         ({@code firstNonBlank(order.getDisplay(), orderCode)}), and a chip naming an active order
+	 *         {@code N02BA01} is what issue #155 exists to remove. The builder produces no such order
+	 *         ({@code PatientClinicalContextBuilder} takes the display from a non-blank name and routes
+	 *         the nameless case through {@code namedByCodesOnly}) but the public constructor defaults
+	 *         {@code nameKnown} to true, and hand-built contexts are how much of this behaviour is
+	 *         pinned.
+	 */
+	private static boolean displayNamesADrug(PatientClinicalContext.ActiveDrugOrder order) {
+		return order != null && order.hasKnownName() && !ChartSearchAiUtils.isBlank(order.getDisplay());
+	}
+
 	private List<OrderPartner> orderPartners(PatientClinicalContext context) {
 		Map<Object, OrderPartner> byIdentity = new LinkedHashMap<Object, OrderPartner>();
 		// Per-CALL memos, never fields. Each covers a dataset sweep this loop would otherwise repeat:
@@ -4354,7 +4607,12 @@ public class DrugSafetyValidator {
 			}
 			OrderPartner partner = byIdentity.get(identity);
 			if (partner == null) {
-				partner = new OrderPartner(label, namedByOrder);
+				// namesADrug is a property of the LABEL just chosen, not of the order: an entry name
+				// always is one, and an order's display is one only where displayNamesADrug says so —
+				// the same guard nameByOrder's call site below asks, written once. Everything else on
+				// this rung is a code standing in for a name.
+				partner = new OrderPartner(label, namedByOrder, entry,
+						entry != null || displayNamesADrug(order));
 				byIdentity.put(identity, partner);
 			}
 			if (unnameableCode && order != null) {
@@ -4381,8 +4639,12 @@ public class DrugSafetyValidator {
 				// module could not name AND that is partly covered; the alternative was measured to
 				// contradict itself on the same chip, so this trades a narrower fault for a
 				// demonstrated one.
-				if (order.hasKnownName()) {
-					partner.nameByOrder(ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode));
+				if (displayNamesADrug(order)) {
+					// The display and not firstNonBlank(display, orderCode): the guard has already
+					// established the display is non-blank, so the code fallback can no longer fire —
+					// and it must not, because a label that is a code is exactly what the guard is
+					// refusing to let displace a name (see OrderPartner.namesADrug).
+					partner.nameByOrder(order.getDisplay());
 				}
 				// And, for the same reason though no longer under the same condition (the naming above
 				// is withheld for a synthesized display, this is not), what the orders carrying this
@@ -4533,7 +4795,7 @@ public class DrugSafetyValidator {
 					continue;
 				}
 				DrugReference row = interactionSubject(named.getValue(), order.getNames());
-				OrderPartner partner = new OrderPartner(row.displayLabel(), false);
+				OrderPartner partner = new OrderPartner(row.displayLabel(), false, row, true);
 				partner.codes.addAll(row.normalizedAtcCodes());
 				partner.codesFromDataset = true;
 				// This partner IS this substance, so restating it is not duplicating it — and with the

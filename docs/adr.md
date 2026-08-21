@@ -44,6 +44,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 36: The shipped default is the whole DDInter knowledge base](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base)
 - [Decision 37: A safety answer's call is as strong as the finding's rating](#decision-37-a-safety-answers-call-is-as-strong-as-the-findings-rating)
 - [Decision 38: An active order the module cannot name is still one co-medication](#decision-38-an-active-order-the-module-cannot-name-is-still-one-co-medication)
+- [Decision 39: A folded chip names one active order once](#decision-39-a-folded-chip-names-one-active-order-once)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -2416,4 +2417,44 @@ Two guards keep a synthesized display from behaving like a name. It is withheld 
 - **−** Where the shared class is matched through the **unnameable** code alone, the covered constituent's name stays on the chip, so its stated class need not classify the drug it names — issue #161's shape, now reachable for a partly-covered nameless order. Accepted because the alternative was measured to contradict itself: letting the code list win put `[ATC N02BA01, N02BA99]` beside the rule arm's `aspirin` inside **one** folded chip detail.
 - **−** This order class is **uuid-only** for the #118 reconciliation. With no names, `namedIn` can never be true, so the name fallback that `DrugReferenceInjector` documents as insurance against uuid-contract drift is unavailable exactly here.
 - **−** `RESOURCE_TYPE_ACTIVE_DRUG_ORDER` groups as `REFERENCE_GROUP_CHART`, so unlike `drug_reference` and `safety_finding` its grounding verdict **is** published on the wire, and a record naming no drug may not entail a medication claim. A false `Unsupported` can therefore reach a client. Accepted because the alternative is the order being invisible; carried forward as [#294](https://github.com/openmrs/openmrs-module-chartsearchai/issues/294), which asks for the measurement first — nobody has yet observed a published verdict for one of these records.
-- **−** Not fixed: the rule arm names its partner from the **rule's** own token (`partnerLabel`), which nothing the builder supplies can reach, so the rule arm and the class arm can still name one order differently. That needs a change to the interaction arm and is [#292](https://github.com/openmrs/openmrs-module-chartsearchai/issues/292), where the folded chip detail that shows it is recorded verbatim from a live run.
+- **−** Not fixed: the rule arm names its partner from the **rule's** own token (`partnerLabel`), which nothing the builder supplies can reach, so the rule arm and the class arm can still name one order differently. That needs a change to the interaction arm and is [#292](https://github.com/openmrs/openmrs-module-chartsearchai/issues/292), where the folded chip detail that shows it is recorded verbatim from a live run. **Closed by Decision 39**, which reconciles the two arms at the fold; the trade that replaces it is that record's own note list, stated there.
+
+## Decision 39: A folded chip names one active order once
+
+**Status: Accepted** (August 2026) — implemented, issue [#292](https://github.com/openmrs/openmrs-module-chartsearchai/issues/292). Supersedes Decision 38's last **−**.
+
+### Context
+
+Issue #88's fold puts both interaction arms' sentences into a single chip detail, and each arm named the partner from its own source. The class arm uses the ladder in `DrugSafetyValidator.orderPartners` (Decisions from #155/#186/#290: the dataset entry's display label, else the ORDER's own display where a code is dataset-unnameable, else the bare code or the `[ATC …]` stand-in). The rule arm uses `partnerLabel`, which is `firstNonBlank(interaction.getToken(), interaction.getAtc())` — the rule's own match token, read off the reference row, and reaching nothing the context carries. So one prescription appeared under two names in one sentence.
+
+Observed live on the 3.7.0-rc.2 standalone at `b0a24a96`, curated seed, one active order the module could read no name for, asked *"Can she be given ibuprofen?"* — one chip, verbatim:
+
+```
+Ibuprofen interacts with active order aspirin — additive GI and bleeding risk.
+Ibuprofen is in the same cross-reactivity group (NSAID) as active order
+[ATC A01AD05, B01AC06, N02BA01] — possible additive or duplicate-class therapy
+```
+
+The code-only display only makes it obvious. The divergence is systematic for a formulation, because the `ddinter` parser lower-cases every token it writes from the partner row's `rxnorm_name` while the class arm prints that row's `displayLabel()` — `cyclosporine` beside `Cyclosporine`, `aspirin` beside `Acetylsalicylic acid (aspirin)`. Both names are true of the order, so no claim is false; it reads as two co-medications where there is one.
+
+### Decision
+
+`partnerLabel` becomes the ladder's last-but-one rung instead of a second, independent ladder. `DrugSafetyValidator.foldedPartnerLabel` decides the one name both sentences of a folded chip take, and the fold is the only place that can: it is where both arms' answers exist. Two conditions, and both are **refusals** rather than preferences.
+
+- The ladder's answer must BE a name (`OrderPartner.namesADrug`). A bare code and the `[ATC …]` stand-in are the absence of one, so the rule's token is then the only name either arm holds and both sentences take it. That is the live case above.
+- The rule must NAME the entry the ladder resolved — `DrugReference.isNamed`, the accessor `CLAUDE.md` names for identity between two reference strings, which is what both operands are. Otherwise the two arms are about different co-medications and **each sentence keeps its own name**, which is what the chip has always said.
+
+Nothing outside a folded chip moves: an unfolded rule chip, a class-only chip, the grouping keys (`SubjectRule.partnerKey`, `DrugReferenceInjector.onePerPartner`) and the injected `drug_reference` note list all keep `partnerLabel` itself, so issue #121's invariant — on the branch where the dataset identifies no partner entry, the key IS the label the chip says — holds unchanged.
+
+The second condition is the one that needed the machinery. `ruleAbout` correlates the two arms through `entryForAtcCode`, which answers with the canonical row publishing a code, and a level-5 code can be published by two substances in this knowledge base (`Omeprazole` and `Esomeprazole` share `A02BC05`). `addPartnersForUnmappedOrders` already recorded that bound and said both sentences stay true, "what is lost is which co-medication the second sentence is about" — which holds only while the two NAMES differ, because those two names are the only evidence a reader has that two partners are in play. That javadoc also named this locus for the fix: "correlating on the partner's SUBSTANCE instead is a change to issue #88's fold rather than to this leg."
+
+It is a name-identity test and deliberately **not** a comparison of the two arms' resolved substances: `identifies` accepts a bare shared ATC code as well as a token, so on that very shape `activeOrderEntryFor` and `entryForAtcCode` both answer `Omeprazole` and a substance comparison would agree spuriously — licensing exactly the displacement it was added to refuse. Measured by mutating the gate to always displace: the chip reads `Pantoprazole interacts with active order Omeprazole — Major. Esomeprazole competes for CYP2C19 …`, one substance's rated mechanism under another's name. `FoldedChipOnePartnerNameTest.aRuleAboutAnotherSubstanceSharingTheCodeKeepsItsOwnToken` is what reddens on it.
+
+### Trade-offs
+
+- **+** One prescription is named once in the sentence a clinician reads. Decision 38's last **−** is closed.
+- **+** The class sentence's wording is now one template rather than two (`ClassRelationship.sentence`), so the string a class-only chip and a folded chip's second sentence share cannot drift. The two shortenings issue #108 rejected are untouched.
+- **−** The `drug_reference` record's interaction-note list still names the partner by `partnerLabel`, so where the fold takes the ladder's name the chip and that record name one partner two ways — the property `CLAUDE.md` states for `partnerLabel` and which #292 asked a fix to keep. Deliberately traded, and NOT because the plumbing is missing: `DrugReferenceInjector` holds the validator bean and the service, and `orderedInteractionNotes` already receives `orderEntries`. The reason is that the note is PROMPT text — keeping the property turns `aspirin (Major. …)` into `Acetylsalicylic acid (Major. …)` for every active-order partner across the whole knowledge base, and `displayLabel()` forbids itself there anyway ("Never used in prompt text — record rendering keeps `getName()`"), so the two surfaces could not share one string even if they moved together. This repo has rejected four prompt changes on the eval gate for stronger motives than legibility. What bounds the trade: the prompt's NAME UNION for that partner is unchanged, because the chip already carried both names and the record carried the rule's — the chip goes from two names to one and the record is untouched, so the model reads no name it does not read today. Not carried forward as an issue yet; it needs the measurement first.
+- **−** The `safety_finding` record's wording DOES move for folded chips, since `renderFinding` carries the chip detail verbatim and `preAnswerFindings` runs the drug-in-play arm pre-answer. Accepted on the same union argument: every name it can now carry is one the same prompt already contained.
+- **−** Where the ladder has no name at all and the partner holds several codes the dataset cannot name, those codes may belong to two substances, so the rule's token can name one constituent of a combination while the shared class was matched through another — issue #161's shape, already an accepted **−** of Decision 38. Not closable here: bounding it to "the rule's own code accounts for the class match" refuses the live case above (the seed's rule cites `B01AC06` while the NSAID group matches `N02BA01`), and asking whether the codes are all one substance is undecidable on a branch entered only because none of them resolved an entry. What bounds it is that the RULE sentence already names that constituent today, so the chip does not begin asserting a substance it was silent about; the class sentence merely stops introducing a second name.
+- **−** Chips of DIFFERENT subjects can still name one order differently — a class-only chip by the ladder, an unfolded rule chip by the token. Out of scope by the ticket's own framing, which is about one chip detail, and unchanged by this decision.

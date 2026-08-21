@@ -59,9 +59,14 @@ public class ClassChipPartnerLabelTest {
 	 *  the fixture publish — which is what makes "the entry carrying this code" ambiguous at all. */
 	private static final String CYCLOSPORINE_ORDER_CODE = "L04AD01";
 
-	/** The curated seed's own aspirin rule, unrated and so exempt from the severity floor, which is
-	 *  why both these cases carry it. Its ATC is {@code B01AC06} — one of the aspirin order's three
-	 *  codes, but not the one the NSAID group matches. */
+	/** The curated seed's own aspirin rule, unrated and so exempt from the severity floor, which is why
+	 *  these cases can carry it at all. Its ATC is {@code B01AC06} — one of the aspirin order's three
+	 *  codes, but not the one the NSAID group matches.
+	 *
+	 *  <p>Read by the UNFOLDED case alone since issue #292. Both cases shared it while the rule sentence
+	 *  named its partner from the rule's own token whether the chip folded or not; a folded chip now
+	 *  names the one order once, so the folded case states its whole detail itself rather than composing
+	 *  it from a constant whose text is only correct unfolded. */
 	private static final String CURATED_ASPIRIN_RULE_SENTENCE =
 			"Ibuprofen interacts with active order aspirin — additive GI and bleeding risk";
 
@@ -85,8 +90,14 @@ public class ClassChipPartnerLabelTest {
 								DrugReferenceTestSupport.set("aspirin 81mg"), ASPIRIN_ORDER_CODES))));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
-		assertEquals(CURATED_ASPIRIN_RULE_SENTENCE + ". Ibuprofen is in the same cross-reactivity group"
-				+ " (NSAID) as active order Aspirin 81mg — possible additive or duplicate-class therapy",
+		// Issue #292: the folded detail names this one prescription ONCE. The ladder found a name here —
+		// the order's own display — and the curated seed resolves no entry for any of the order's codes,
+		// so the rule resolves no partner entry either and there is nothing for the two arms to disagree
+		// about; the rule sentence therefore takes the ladder's name too. Before that it read
+		// "…active order aspirin — additive GI and bleeding risk. …as active order Aspirin 81mg…".
+		assertEquals("Ibuprofen interacts with active order Aspirin 81mg — additive GI and bleeding"
+				+ " risk. Ibuprofen is in the same cross-reactivity group (NSAID) as active order"
+				+ " Aspirin 81mg — possible additive or duplicate-class therapy",
 				warnings.get(0).getDetail());
 	}
 
@@ -149,7 +160,7 @@ public class ClassChipPartnerLabelTest {
 						DrugReferenceTestSupport.set(CYCLOSPORINE_ORDER_CODE), null, null));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
-		assertEquals("Tacrolimus interacts with active order cyclosporine — Major. Coadministration of"
+		assertEquals("Tacrolimus interacts with active order Cyclosporine — Major. Coadministration of"
 				+ " tacrolimus and cyclosporine may increase the risk and severity of nephrotoxicity due"
 				+ " to additive effects on the kidney. Clinical experience indicates that the combination"
 				+ " is associated with increased renal toxicity as evidenced by increased serum"

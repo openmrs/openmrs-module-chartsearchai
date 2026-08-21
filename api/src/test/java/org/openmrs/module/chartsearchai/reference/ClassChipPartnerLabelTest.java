@@ -63,10 +63,11 @@ public class ClassChipPartnerLabelTest {
 	 *  these cases can carry it at all. Its ATC is {@code B01AC06} — one of the aspirin order's three
 	 *  codes, but not the one the NSAID group matches.
 	 *
-	 *  <p>Read by the UNFOLDED case alone since issue #292. Both cases shared it while the rule sentence
-	 *  named its partner from the rule's own token whether the chip folded or not; a folded chip now
-	 *  names the one order once, so the folded case states its whole detail itself rather than composing
-	 *  it from a constant whose text is only correct unfolded. */
+	 *  <p>Read by both cases, folded and unfolded alike, and that is a fact about issue #292's scope
+	 *  rather than an accident: a folded chip names its one order once only where the ladder's name came
+	 *  from the DATASET, and the partner in both of these cases is named after the ORDER, which
+	 *  {@code foldedPartnerLabel} refuses to hand out. So the rule sentence still carries the rule's own
+	 *  token in both. */
 	private static final String CURATED_ASPIRIN_RULE_SENTENCE =
 			"Ibuprofen interacts with active order aspirin — additive GI and bleeding risk";
 
@@ -90,14 +91,14 @@ public class ClassChipPartnerLabelTest {
 								DrugReferenceTestSupport.set("aspirin 81mg"), ASPIRIN_ORDER_CODES))));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
-		// Issue #292: the folded detail names this one prescription ONCE. The ladder found a name here —
-		// the order's own display — and the curated seed resolves no entry for any of the order's codes,
-		// so the rule resolves no partner entry either and there is nothing for the two arms to disagree
-		// about; the rule sentence therefore takes the ladder's name too. Before that it read
-		// "…active order aspirin — additive GI and bleeding risk. …as active order Aspirin 81mg…".
-		assertEquals("Ibuprofen interacts with active order Aspirin 81mg — additive GI and bleeding"
-				+ " risk. Ibuprofen is in the same cross-reactivity group (NSAID) as active order"
-				+ " Aspirin 81mg — possible additive or duplicate-class therapy",
+		// Two names for one prescription, and issue #292 deliberately does NOT reconcile them here. The
+		// ladder's name came from the ORDER, and an order is not a substance: DrugSafetyValidator's
+		// foldedPartnerLabel refuses to hand out an order-supplied name because what it can validate is
+		// the entry the DATASET resolved, and on a partner renamed after an order the two need not
+		// denote the same drug. So the rule sentence keeps the rule's own token. This assertion is
+		// therefore byte-identical to what it was before that change.
+		assertEquals(CURATED_ASPIRIN_RULE_SENTENCE + ". Ibuprofen is in the same cross-reactivity group"
+				+ " (NSAID) as active order Aspirin 81mg — possible additive or duplicate-class therapy",
 				warnings.get(0).getDetail());
 	}
 

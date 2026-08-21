@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "source": "test fixture — a token-less rule citing a code the dataset cannot name",
+  "description": "As drug-reference-fold-tokenless-rule.json, but the code the rule cites is carried by no entry, so the class arm's ladder falls past the entry rung. With the order nameless too, NEITHER arm holds a name: the ladder has only the [ATC …] stand-in and the rule has only its code. The branch that lets the rule's token stand in for a missing ladder name must therefore yield nothing, or the class sentence would trade a list labelled as codes for a bare code reading as a drug name (issue #155).",
+  "entries": [
+    {
+      "id": "lisinopril",
+      "name": "Lisinopril",
+      "aliases": ["lisinopril"],
+      "atcCodes": ["C09AA03"],
+      "interactions": [
+        { "atc": "C09AA99", "note": "additive hyperkalemia and renal impairment risk" }
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

@@ -2207,10 +2207,10 @@ public class DrugSafetyValidator {
 	 * coalesces, for the same reason the grouping key and the rendered label have to be one string.
 	 *
 	 * <p><b>Since issue #292 that agreement no longer extends to a FOLDED chip</b>, and the exception is
-	 * this method's alone to state: a folded chip's two sentences take
-	 * {@link #foldedPartnerLabel}'s single answer, which may be the class arm's ladder name, while
-	 * {@code orderedInteractionNotes} keeps this coalesce. So chip and record can call one partner two
-	 * things there. Deliberate — see {@link #foldedPartnerLabel} for why, and ADR Decision 39 for what
+	 * this method's alone to state: where {@link #foldedPartnerLabel} reconciles a folded chip's two
+	 * sentences it may name the partner by the class arm's ladder, while {@code orderedInteractionNotes}
+	 * keeps this coalesce. So chip and record can call one partner two things there. Where that method
+	 * refuses, the rule sentence is this label again and the record agrees with it as before. Deliberate — see {@link #foldedPartnerLabel} for why, and ADR Decision 39 for what
 	 * it costs. Nothing about the GROUPING changed: both surfaces still key on this label case-folded
 	 * wherever the dataset identifies no partner entry. What DID change is the second half of issue
 	 * #121's invariant, that the key is also what the chip says — true of every unfolded chip and not of
@@ -2226,152 +2226,110 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The one name a FOLDED chip calls an active order by (issue #292) — the class arm's ladder where
-	 * that ladder found a name it may keep, else the rule's own {@link #partnerLabel}.
+	 * The one name a FOLDED chip calls an active order by (issue #292), or null when the two arms must
+	 * not be reconciled at all.
 	 *
 	 * <p><b>The defect.</b> Issue #88's fold puts both arms' sentences into one detail and each arm named
 	 * the partner from its own source: the class arm from issue #155/#186/#290's ladder in
-	 * {@link #orderPartners}, the rule arm from {@link #partnerLabel}, which is the rule's match token
-	 * and reaches nothing the context carries. So one prescription appeared under two names in one
-	 * sentence. Observed live on the 3.7.0-rc.2 standalone at {@code b0a24a96} over the curated seed, one
-	 * active order the module could read no name for, asked "Can she be given ibuprofen?":
+	 * {@link #orderPartners}, the rule arm from {@link #partnerLabel}, which is the rule's match token and
+	 * reaches nothing the context carries. So one prescription appeared under two names in one sentence.
+	 * Observed live on the 3.7.0-rc.2 standalone at {@code b0a24a96} over the curated seed, one active
+	 * order the module could read no name for, asked "Can she be given ibuprofen?":
 	 * {@code Ibuprofen interacts with active order aspirin — additive GI and bleeding risk. Ibuprofen is
 	 * in the same cross-reactivity group (NSAID) as active order [ATC A01AD05, B01AC06, N02BA01] —
-	 * possible additive or duplicate-class therapy}. It is not caused by the code-only display; that
-	 * display only makes it obvious. The divergence is systematic for a formulation, because the
-	 * {@code ddinter} parser lower-cases every token it writes from the partner row's RxNorm generic
-	 * while the class arm prints that row's {@link DrugReference#displayLabel()}.
+	 * possible additive or duplicate-class therapy}. The divergence is systematic for a formulation,
+	 * because the {@code ddinter} parser lower-cases every token it writes from the partner row's RxNorm
+	 * generic while the class arm prints that row's {@link DrugReference#displayLabel()}.
 	 *
-	 * <p>So {@code partnerLabel} becomes the ladder's last-but-one rung rather than a second, independent
-	 * ladder. Nothing outside a folded chip moves: an unfolded rule chip, the grouping keys
-	 * ({@link SubjectRule#partnerKey}, {@code DrugReferenceInjector.onePerPartner}) and the injected
-	 * {@code drug_reference} note list all keep {@code partnerLabel} itself.
+	 * <p><b>Four outcomes, and three of them are refusals.</b> Reconciling two names means asserting they
+	 * denote one drug, so this method reconciles only where that is provable and otherwise leaves the
+	 * chip saying what it has always said.
+	 * <ol>
+	 *   <li><b>The ladder found no name</b> ({@code !namesADrug}) — a bare code or the {@code [ATC …]}
+	 *       stand-in is the ABSENCE of a name (issue #290) and may not displace one, so both sentences
+	 *       take the rule's own TOKEN. ADR Decision 38 measured the other direction: letting the code
+	 *       list win "put {@code [ATC N02BA01, N02BA99]} beside the rule arm's {@code aspirin} inside ONE
+	 *       folded chip detail". Asked of the token and not of {@link #partnerLabel}, which falls back to
+	 *       the ATC code: with no token either, nothing here is a name and this yields null too.</li>
+	 *   <li><b>The label came from an ORDER</b> ({@link OrderPartner#namedByOrder}) — refused, because an
+	 *       order is not a substance. What can be validated is {@link OrderPartner#labelEntry}, the entry
+	 *       the DATASET resolved, and {@link OrderPartner#nameByOrder} deliberately does not update that
+	 *       field, so the guard would prove a fact about one drug and hand out a name for another.
+	 *       Measured two ways, both reproduced through the real {@code validate}: a partner keyed on
+	 *       {@code Naproxen} but renamed after an {@code Esomeprazole} order carrying naproxen's code
+	 *       printed an NSAID duplicate-therapy finding under the PPI order's name with {@code naproxen}
+	 *       nowhere in the detail; and one order carrying codes of two substances lets {@link #ruleAbout}
+	 *       pick a rule by whichever code sorts first, so a WARFARIN rule was printed under
+	 *       {@code Aspirin 81mg}. Both are the #161/#187/#194 failure, and the second reaches the prompt
+	 *       through {@code DrugReferenceInjector.renderFinding} carrying {@code STRENGTH_WITHHOLD}.</li>
+	 *   <li><b>The rule's token does not name the ladder's entry unambiguously</b> — see
+	 *       {@link #unambiguouslyNames}, which carries the measurement. Refused for the same reason: the
+	 *       two arms may be about different co-medications.</li>
+	 *   <li>Otherwise the ladder's label is handed to both sentences.</li>
+	 * </ol>
 	 *
-	 * <p><b>Issue #121's invariant is therefore SCOPED by this method, not preserved by it.</b> On the
-	 * branch where the dataset identifies no partner entry the grouping key is {@code partnerLabel}
-	 * case-folded, and every UNFOLDED chip still renders exactly that key. A FOLDED chip on that same
-	 * branch can render the ladder's name instead — reachable where the ladder named the order and the
-	 * dataset resolved no entry for it, which is
-	 * {@code ClassChipPartnerLabelTest.anOrderTheDatasetDoesNotCoverIsNamedByItsOwnDisplayName}: the key
-	 * is {@code aspirin}, the chip says {@code Aspirin 81mg}.
+	 * <p>So {@code partnerLabel} becomes the ladder's last-but-one rung on the paths that reconcile,
+	 * rather than a second independent ladder. Outside a folded chip nothing here applies: an unfolded
+	 * rule chip and both grouping keys ({@link SubjectRule#partnerKey},
+	 * {@code DrugReferenceInjector.onePerPartner}) keep {@link #partnerLabel}, and a class-only chip keeps
+	 * the ladder's own label, which is what it always used.
 	 *
-	 * <p>What that costs, stated rather than left to be found: the grouping still merges rules about one
-	 * partner by the token, which is the right key when no entry resolves, but the name a clinician sees
-	 * is no longer that key. So two rules about one order carrying DIFFERENT tokens still produce two
-	 * chips, and one of them may now name the order by the display while the other names it by its own
-	 * token. Two names for one order across two chips is not new — that is issue #136's shape on this
-	 * branch, where before this change both chips named it by their tokens — but the asymmetry is. It is
-	 * left standing because the alternative is refusing to reconcile exactly the shape the ticket's own
-	 * live case is drawn from, and because this ticket is scoped to ONE chip detail.
+	 * <p><b>Issue #121's invariant is SCOPED by this method, not preserved by it.</b> On the branch where
+	 * the dataset identifies no partner entry the grouping key is {@code partnerLabel} case-folded, and
+	 * every UNFOLDED chip still renders exactly that key; a folded chip on that branch can render the
+	 * ladder's name instead. The grouping itself is unaffected, running before the fold and on that key.
+	 * The cost is that two rules about one order carrying DIFFERENT tokens still produce two chips, one of
+	 * which may now name the order by the ladder while the other names it by its token — two names across
+	 * two chips being issue #136's pre-existing shape here, the asymmetry new.
 	 *
-	 * <p><b>Two conditions, and both are refusals rather than preferences.</b>
-	 * <ul>
-	 *   <li>The ladder's answer must BE a name ({@link OrderPartner#namesADrug}). A bare code and the
-	 *       {@code [ATC …]} stand-in are the absence of one, and ADR Decision 38 measured what letting
-	 *       one win costs: it "put {@code [ATC N02BA01, N02BA99]} beside the rule arm's {@code aspirin}
-	 *       inside ONE folded chip detail". The rule's token is then the only name either arm holds and
-	 *       both sentences take it.</li>
-	 *   <li>The rule must NAME the entry the ladder resolved. {@link #ruleAbout} correlates the two arms
-	 *       through {@link #entryForAtcCode}, which answers with the canonical row publishing a code, and
-	 *       a level-5 code can be published by two substances in this knowledge base ({@code Omeprazole}
-	 *       and {@code Esomeprazole} share {@code A02BC05}) — so the class arm's sentence about one can
-	 *       fold onto a rated rule about the other. {@link #addPartnersForUnmappedOrders} records that
-	 *       standing bound and says both sentences stay true, "what is lost is which co-medication the
-	 *       second sentence is about" — which holds only while the two NAMES differ, because those two
-	 *       names are the only evidence a reader has that two partners are in play. Displacing the token
-	 *       there would render one substance's mechanism under the other's name: the #161/#187/#194
-	 *       failure, and strictly worse than the legibility cost this method exists to remove. That same
-	 *       javadoc names this locus for the fix — "correlating on the partner's SUBSTANCE instead is a
-	 *       change to issue #88's fold rather than to this leg".</li>
-	 * </ul>
-	 *
-	 * <p><b>A NAME-identity test, deliberately not a comparison of the two arms' resolved substances.</b>
-	 * {@link #identifies} accepts a bare shared ATC code as well as a token, so on that very shape
-	 * {@link #activeOrderEntryFor} and {@link #entryForAtcCode} both answer {@code Omeprazole} and a
-	 * substance comparison would agree spuriously — it would license exactly the displacement it was
-	 * added to refuse. Asking whether the rule's own TOKEN is one of the entry's aliases is
-	 * {@link DrugReference#isNamed}, which CLAUDE.md names for identity between two reference strings and
-	 * which is what both operands here are — and it must name it UNAMBIGUOUSLY, one substance and not
-	 * merely this one among several. {@link #unambiguouslyNames} is that test and carries the measurement
-	 * behind the second half: identity alone is false-permissive on the shipped knowledge base, whose row
-	 * named {@code Omeprazole} publishes {@code rxnorm_name: esomeprazole} and so IS named by the very
-	 * token this guard was written to refuse.
-	 *
-	 * <p>Where the ladder resolved no entry at all, the rule must have resolved none either. That pairing
-	 * is the curated seed's own shape — a hand-authored rule whose {@code atc} matches no loaded entry,
-	 * so {@link #ruleAbout}'s exact-code leg is what correlated the arms and there is no rival entry for
-	 * the token to be confused with. On a {@code ddinter}-parsed knowledge base it cannot arise: that
-	 * parser writes a rule's {@code atc} from its partner row's own first code, so an entry publishing it
-	 * exists and the ladder would have found it.
-	 *
-	 * <p>The converse pairing — the ladder named the order but resolved no entry, while the rule DID
-	 * resolve one — is refused, and not merely out of caution: {@link #activeOrderEntryFor} scans
-	 * {@code DrugReferenceService.findForActiveOrders}, which is every entry ANY of the patient's active
-	 * orders resolved, so the entry it answers with need not belong to the order this partner is. Naming
-	 * such a rule after this order's display would attach one order's name to a rule about another's
-	 * drug. The cost is a folded chip that keeps two names where one would have been safe; the direction
-	 * is the same one the second condition takes.
-	 *
-	 * <p><b>A third case, and it is a residue rather than a refusal of anything.</b> A rule carrying NO
-	 * token but a matching ATC code — which {@link PatientClinicalContext#hasActiveDrug} joins on, and
-	 * which {@link #partnerLabel}'s own {@code @return} contemplates — reaches
-	 * {@link #unambiguouslyNames} with a null token, which {@link DrugReference#isNamed} answers false
-	 * for, so this method returns null and the chip keeps two names, one of them a raw ATC code:
-	 * {@code Lisinopril interacts with active order C09AA05 — … Lisinopril is in the same ATC class
-	 * (C09AA) as active order Ramipril — …}. Reproduced through the real {@code validate} on a curated
-	 * {@code sourceFormat=json} dataset, and pinned by
-	 * {@code FoldedChipOnePartnerNameTest.aRuleThatCarriesOnlyAnAtcCodeKeepsBothNames}.
-	 *
-	 * <p>The null is therefore doing double duty, and the two reasons are NOT the same: for the pairs
-	 * above it means "these arms are about different co-medications", here it means "the rule has no name
-	 * to compare". The outcome is the same and the reason for keeping it is not the one stated above:
-	 * here {@link #ruleAbout} correlated the arms through its exact-code leg, so they are demonstrably
-	 * about ONE co-medication and the divergence is not protecting against a mis-attribution. What it
-	 * protects against is asserting a substance a bare code does not license — a level-5 code can be
-	 * published by two substances in this KB, which is the same fact the second condition rests on. So
-	 * the symptom issue #292 exists to remove survives on this shape, unchanged from before the fix
-	 * rather than introduced by it, and closing it means giving a token-less rule a NAME, which is a
-	 * change to {@link #partnerLabel} and therefore to the injected record as well.
-	 *
-	 * <p>What this deliberately does NOT decide is which co-medication a folded class sentence is about
-	 * when the ladder has no name for it: a partner holding several codes the dataset cannot name may
-	 * hold codes of two substances, and the rule's token then names one constituent of a combination
-	 * while the shared class was matched through another. That is issue #161's shape, already an accepted
-	 * "−" of ADR Decision 38, and it is not closable here — bounding it to "the rule's own code accounts
-	 * for the class match" refuses the live case above (the seed's rule cites {@code B01AC06} while the
-	 * NSAID group matches {@code N02BA01}), and asking whether the codes are all one substance is
-	 * undecidable on a branch entered only because none of them resolved an entry. What bounds it instead
-	 * is that the RULE sentence already names that constituent today, so the chip does not begin
-	 * asserting a substance it was silent about; the class sentence merely stops introducing a second
-	 * name.
+	 * <p><b>What is NOT closed</b>, each recorded in ADR Decision 39's trade-offs with its measurement:
+	 * outcome 1 can name one constituent of a combination and then say something false ABOUT it, since
+	 * the class sentence's subject moves from the prescription to that constituent; outcome 3 is
+	 * over-cautious on 72 above-floor rules of the shipped KB; a rule carrying only an ATC code keeps
+	 * naming its partner by that code; and chips of DIFFERENT subjects can still name one order two ways,
+	 * which is outside this ticket.
 	 *
 	 * @param partner the co-medication the class arm resolved, carrying the ladder's answer
 	 *        ({@link OrderPartner#label}), whether that answer is a name at all
-	 *        ({@link OrderPartner#namesADrug}) and the entry it came from ({@link OrderPartner#labelEntry})
+	 *        ({@link OrderPartner#namesADrug}), whether it came from an order
+	 *        ({@link OrderPartner#namedByOrder}) and the entry it was resolved from
+	 *        ({@link OrderPartner#labelEntry})
 	 * @param rule the matched rule the class sentence is folding onto, carrying the partner entry
 	 *        {@link #activeOrderEntryFor} resolved for it — the bridge, rather than a second resolution
-	 * @return the one name both sentences of the folded chip take, or <b>null</b> when they must not be
-	 *         reconciled — each sentence then keeps the name its own arm resolved, which is what the chip
-	 *         has always said. The caller reads null as "use each arm's own name", so it must not be
-	 *         confused with {@link #partnerLabel}'s own nullability: that returns null only for a rule
-	 *         carrying neither token nor code, which a rule inside the matched loop cannot be, and the
-	 *         {@code !namesADrug} branch here returns it directly — so the two coincide harmlessly today
-	 *         and a future caller reaching this from outside that loop must not assume so.
+	 * @return the one name both sentences take, or <b>null</b> when they must not be reconciled — each
+	 *         sentence then keeps the name its own arm resolved, which is what the chip has always said.
+	 *         The caller reads null as "use each arm's own name", so it must not be confused with
+	 *         {@link #partnerLabel}'s own nullability: that returns null only for a rule carrying neither
+	 *         token nor code, which a rule inside the matched loop cannot be.
 	 */
 	private String foldedPartnerLabel(OrderPartner partner, SubjectRule rule) {
 		if (!partner.namesADrug) {
-			// The ladder has no name to keep, so the rule's token is the only one either arm holds.
-			return partnerLabel(rule.rule);
+			// The ladder has no name to keep, so the rule's own token is the only one either arm holds —
+			// unless the rule has no token either, when nothing here is a name and neither sentence
+			// yields. Asked of the TOKEN and not of partnerLabel, which falls back to the ATC code: a
+			// chip naming an active order N02BA01 is the very thing namesADrug refuses on the other side,
+			// and returning it here would put a bare code where the class sentence had at least labelled
+			// its codes AS codes.
+			return ChartSearchAiUtils.isBlank(rule.rule.getToken()) ? null : partnerLabel(rule.rule);
 		}
-		boolean agree = partner.labelEntry != null
-				? unambiguouslyNames(rule.rule, partner.labelEntry)
-				: rule.partner == null;
-		// null and NOT the rule's token: where the two arms are about different co-medications, each
+		if (partner.namedByOrder) {
+			// The label names the ORDER, and an order is not a substance. Refused because the guard below
+			// can only validate labelEntry — the entry the DATASET resolved — while what would be handed
+			// out is a name some order supplied, and the two need not denote the same drug: measured on a
+			// partner keyed on Naproxen but renamed after an Esomeprazole order that carries naproxen's
+			// code, where displacing printed an NSAID duplicate-therapy finding under the PPI order's
+			// name and the word naproxen appeared nowhere in the chip. Also the shape where one order
+			// carries codes of two substances: ruleAbout then picks a rule by whichever code sorts first,
+			// so the label names the prescription while the rule is about one constituent of it.
+			return null;
+		}
+		// null and NOT the rule's token: where the two arms may be about different co-medications, each
 		// sentence keeps its own name. Making the class sentence adopt the rule's token here would move
 		// the mis-attribution rather than refuse it — "Pantoprazole is in the same ATC class (A02BC) as
 		// active order esomeprazole" states the class relationship the arm found for Omeprazole about a
 		// drug it did not resolve, which is the same defect in the other direction.
-		return agree ? partner.label : null;
+		return partner.labelEntry != null && unambiguouslyNames(rule.rule, partner.labelEntry)
+				? partner.label : null;
 	}
 
 	/**
@@ -3120,8 +3078,9 @@ public class DrugSafetyValidator {
 	 * the class arm's finding about the SAME active order into this one chip (issue #88).
 	 *
 	 * @param partnerName what this chip calls the active order: {@link #partnerLabel} for a chip no fold
-	 *        applies to, and {@link #foldedPartnerLabel}'s single answer for a folded one, so the two
-	 *        sentences of one detail cannot name one order two ways (issue #292)
+	 *        applies to, and for a folded one {@link #foldedPartnerLabel}'s answer where it reconciled the
+	 *        two arms — where it refused, this is {@link #partnerLabel} again and the class sentence keeps
+	 *        the ladder's label, so such a detail still names one order two ways, deliberately (issue #292)
 	 * @param alsoSameClass the class arm's own sentence about that order ({@link #classRelationships}),
 	 *        or null when the class arm says nothing about this partner — in which case the detail is
 	 *        byte-identical to what it has always been, so no single-arm chip changes
@@ -4343,9 +4302,8 @@ public class DrugSafetyValidator {
 		}
 
 		/** @param partnerName what this chip calls the active order — the class arm's own ladder
-		 *        ({@link OrderPartner#label}) for a class-only chip, and {@link #foldedPartnerLabel}'s
-		 *        answer for a folded one, which is the same string wherever the ladder found a name it
-		 *        may keep */
+		 *        ({@link OrderPartner#label}) for a class-only chip AND for a folded chip whose arms
+		 *        {@link #foldedPartnerLabel} refused to reconcile, else that method's answer */
 		String sentence(DrugReference subject, String partnerName) {
 			return subject.displayLabel() + " is in the same " + shared + " as active order "
 					+ partnerName + " — " + consequence;
@@ -4490,13 +4448,12 @@ public class DrugSafetyValidator {
 		 * {@link DrugSafetyValidator#orderPartners} — or null on the order and code rungs, where no
 		 * entry named it.
 		 *
-		 * <p>Kept across {@link #nameByOrder}, deliberately: it records which substance the dataset
-		 * IDENTIFIED this co-medication as, not what the chip ends up calling it. So a partly-covered
-		 * order renamed after itself still knows the entry its codes resolved.
-		 *
 		 * <p>Read by ONE thing, {@link DrugSafetyValidator#foldedPartnerLabel}, which asks whether the
 		 * rule about to be folded onto this partner NAMES that entry before letting this label displace
-		 * the rule's own token. Not the same question as {@link #substances}, which is what an ORDER is
+		 * the rule's own token — and only on the branch where {@link #label} is still this entry's own
+		 * display label, because {@link #nameByOrder} does not update this field and a renamed partner's
+		 * label can therefore name a different drug from the one validated here. That is why the renamed
+		 * case is refused outright rather than validated against this field. Not the same question as {@link #substances}, which is what an ORDER is
 		 * known to contain and is populated on one rung only — conflating the two would widen a
 		 * suppression that decides which chips are silenced (see that field).
 		 */

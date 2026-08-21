@@ -70,6 +70,15 @@ public class FoldedChipOnePartnerNameTest {
 	private static final String TOKENLESS_RULE_FIXTURE =
 			"chartsearchai-test/drug-reference-fold-tokenless-rule.json";
 
+	/** As above, but the code the token-less rule cites is carried by no entry, so NEITHER arm holds a
+	 *  name — see the fixture. */
+	private static final String TOKENLESS_UNCOVERED_FIXTURE =
+			"chartsearchai-test/drug-reference-fold-tokenless-uncovered.json";
+
+	/** A partner keyed on one substance and then renamed after a DIFFERENT order — see the fixture. */
+	private static final String RENAMED_PARTNER_FIXTURE =
+			"chartsearchai-test/drug-reference-fold-order-renamed-partner.json";
+
 	/** Lisinopril and enalapril each interact with ramipril and all three share subgroup C09AA;
 	 *  enalapril's rule carries NO mechanism note, which is the shape the extraction below has to cope
 	 *  with. */
@@ -248,7 +257,10 @@ public class FoldedChipOnePartnerNameTest {
 	 * back to the stem of each row's own display name (contrast this fixture's {@code Pantoprazole},
 	 * whose key keeps its id, {@code [pantoprazole, db00213]}). So keeping the ids distinct but letting
 	 * the two display names share a stem collapses them into ONE substance and the ambiguity half of the
-	 * guard silently stops being tested.
+	 * guard stops being tested. Measured: renaming the second row to {@code Omeprazole (magnesium)} does
+	 * collapse the keys, and this case then fails LOUDLY rather than passing — which is the good
+	 * direction, and is why the warning is about a regenerated fixture reading as green elsewhere rather
+	 * than about this case going quiet.
 	 */
 	@Test
 	public void aRuleWhoseTokenNamesTwoSubstancesKeepsItsOwnToken() throws IOException {
@@ -309,9 +321,139 @@ public class FoldedChipOnePartnerNameTest {
 					+ " residue, pinned so a change that closes it is visible here, was: " + detail);
 	}
 
-	/** A chip no fold applies to must be byte-identical to what it always was: the rule arm keeps
-	 *  {@code partnerLabel}, which is also the label the injected {@code drug_reference} note and the
-	 *  grouping keys read, and the class arm keeps its ladder. */
+	/**
+	 * An order-supplied name is never handed to the rule sentence, because an ORDER is not a substance.
+	 *
+	 * <p>The guard that lets the ladder's label displace the rule's token can only validate
+	 * {@code OrderPartner.labelEntry} — the entry the DATASET resolved — and
+	 * {@code OrderPartner.nameByOrder} deliberately does not update that field when it renames a
+	 * partner. So on a renamed partner the guard proves a fact about one drug and the label names
+	 * another. Here the partner is keyed on Naproxen (through the covered {@code M01AE02}) and then
+	 * renamed after an order whose display says esomeprazole, because that order also carries
+	 * {@code A02BC05}, which the dataset cannot name, and {@code soleSubstanceOf} resolves its codes
+	 * back to Naproxen.
+	 *
+	 * <p>Without the refusal the chip reads {@code Ibuprofen interacts with active order Esomeprazole
+	 * 20mg — Moderate. Duplicate NSAID therapy …}: an NSAID duplicate-therapy finding printed entirely
+	 * under a PPI order's name, with the prescription it is actually about — {@code Naproxen 500mg} —
+	 * named nowhere in the detail. That is the #161/#187/#194 failure, and it is strictly worse than the
+	 * legibility cost issue #292 removes, so this shape keeps two names.
+	 */
+	@Test
+	public void anOrderSuppliedNameIsNeverHandedToTheRuleSentence() throws IOException {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.fixtureEntries(RENAMED_PARTNER_FIXTURE)));
+		PatientClinicalContext.ActiveDrugOrder naproxen = DrugReferenceTestSupport.activeOrder(
+			"order-naproxen", "Naproxen 500mg", DrugReferenceTestSupport.set("naproxen 500mg"),
+			DrugReferenceTestSupport.set("M01AE02"));
+		PatientClinicalContext.ActiveDrugOrder esomeprazole = DrugReferenceTestSupport.activeOrder(
+			"order-esomeprazole", "Esomeprazole 20mg", DrugReferenceTestSupport.set("esomeprazole 20mg"),
+			DrugReferenceTestSupport.set("A02BC05", "M01AE02"));
+
+		List<SafetyWarning> warnings = validator.validate("", QUESTION,
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("naproxen 500mg", "esomeprazole 20mg"),
+				DrugReferenceTestSupport.set("M01AE02", "A02BC05"), null, null,
+				Arrays.asList(naproxen, esomeprazole)));
+
+		assertEquals(1, warnings.size(), "one partner, one folded chip, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertTrue(detail.contains("interacts with active order naproxen "),
+			"the rule's finding must stay under the name the RULE names — the label here was supplied by"
+					+ " a DIFFERENT order and naming the finding after it loses the prescription the"
+					+ " finding is about, was: " + detail);
+	}
+
+	/**
+	 * The same refusal reached the other way: ONE order carrying codes of two different substances.
+	 *
+	 * <p>{@code ruleAbout} correlates the arms through whichever of the partner's codes sorts first, so
+	 * the rule it picks can be about one constituent while the ladder's label names the prescription.
+	 * Here the bundled curated seed carries neither {@code B01AA03} nor {@code N02BA01}, so the partner
+	 * is keyed on the ORDER and labelled {@code Aspirin 81mg}, while {@code B01AA03} sorts first and
+	 * selects the seed's WARFARIN rule.
+	 *
+	 * <p>Without the refusal the chip reads {@code Ibuprofen interacts with active order Aspirin 81mg —
+	 * increased risk of GI bleeding}, leaving {@code warfarin} nowhere but inside the mechanism prose —
+	 * and since {@code DrugReferenceInjector.renderFinding} copies the detail verbatim, the model reads
+	 * that same sentence as citable evidence.
+	 *
+	 * <p><b>This case guards the CONJUNCTION, not either condition alone</b>, and says so rather than
+	 * looking better defended than it is: removing only the order-named refusal leaves it green, because
+	 * this partner resolved no entry and the unambiguity branch then refuses anyway; removing only that
+	 * branch leaves it green for the mirror reason. It reddens against the pre-issue-#292 gate, both
+	 * conditions gone, which is the state it exists to keep the code out of.
+	 */
+	@Test
+	public void oneOrderCarryingTwoSubstancesCodesKeepsTheRulesOwnName() {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.curatedService());
+		PatientClinicalContext.ActiveDrugOrder mixed = DrugReferenceTestSupport.activeOrder(
+			"order-mixed", "Aspirin 81mg", DrugReferenceTestSupport.set("aspirin"),
+			DrugReferenceTestSupport.set("B01AA03", "N02BA01"));
+
+		List<SafetyWarning> warnings = validator.validate("", QUESTION,
+			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("aspirin"),
+				DrugReferenceTestSupport.set("B01AA03", "N02BA01"), null, null,
+				Arrays.asList(mixed)));
+
+		// TWO chips, and that is the arrangement rather than a surprise: the seed's ibuprofen entry also
+		// carries an aspirin rule, which the order's own name matches, so bestRulePerPartner groups a
+		// second partner. The folded one is the warfarin chip — the class sentence rides on it because
+		// B01AA03 sorts first — and it is the one this case is about.
+		assertEquals(2, warnings.size(), "the folded warfarin chip and the seed's own aspirin chip, was: "
+				+ warnings);
+		String detail = DrugReferenceTestSupport.classChipDetails(warnings).get(0);
+		assertTrue(detail.contains("is in the same cross-reactivity group"),
+			"precondition: the first chip must be the FOLDED one, was: " + detail);
+		assertTrue(detail.contains("interacts with active order warfarin "),
+			"the rule the fold picked is the WARFARIN rule, so its finding must stay under that name —"
+					+ " the label names the whole prescription and the rule is about one code of it,"
+					+ " was: " + detail);
+	}
+
+	/**
+	 * Where the ladder has no name AND the rule has no token, neither sentence yields.
+	 *
+	 * <p>The branch that lets the rule's token stand in for a missing ladder name asks for the TOKEN and
+	 * not for {@code partnerLabel}, which falls back to the ATC code. Otherwise a nameless order beside a
+	 * token-less rule would move the class sentence from {@code [ATC C09AA05]} — a code list explicitly
+	 * labelled as codes — to a bare {@code C09AA05} reading as a drug name, which is the issue #155 shape
+	 * the same change refuses on the other write site.
+	 */
+	@Test
+	public void aTokenlessRuleBesideANamelessOrderLeavesTheCodeListLabelled() throws IOException {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.fixtureEntries(TOKENLESS_UNCOVERED_FIXTURE)));
+
+		List<SafetyWarning> warnings = validator.validate("", "Is lisinopril safe here?",
+			DrugReferenceTestSupport.ctx(60, null, null, DrugReferenceTestSupport.set("C09AA99"),
+				null, null,
+				Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
+					"order-nameless-uncovered", "[ATC C09AA99]",
+					DrugReferenceTestSupport.set("C09AA99")))));
+
+		assertEquals(1, warnings.size(), "one order, one folded chip, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertTrue(detail.contains("as active order [ATC C09AA99] "),
+			"the class sentence must keep its codes labelled AS codes: the rule has no token to lend it,"
+					+ " and a bare code reads as a drug name, was: " + detail);
+	}
+
+	/**
+	 * A chip no fold applies to must be byte-identical to what it always was: the rule arm keeps
+	 * {@code partnerLabel}, which is also the label the injected {@code drug_reference} note and the
+	 * grouping keys read, and the class arm keeps its ladder.
+	 *
+	 * <p>Byte-identical for THESE arrangements, which is narrower than the method name reads. The same
+	 * change moved the guard on {@code OrderPartner.nameByOrder} into that method, so an unfolded
+	 * class-only chip for a partly-covered order whose display is BLANK does change — from the bare code
+	 * to the dataset's name, which is issue #155's defect being removed rather than a regression. That
+	 * shape is {@link #aBlankDisplayNeverDisplacesTheDatasetName}'s, folded there; no arrangement here
+	 * reaches it.
+	 */
 	@Test
 	public void chipsOutsideTheFoldAreUnchanged() {
 		DrugSafetyValidator curated = DrugReferenceTestSupport

@@ -1049,11 +1049,12 @@ public class DrugReferenceInjector {
 	 * and inside the collapse below) — so a partner that raises a DRUG-IN-PLAY chip is exactly a
 	 * partner promoted here, and WHICH partners this text names cannot drift from that chip.
 	 *
-	 * <p>Which is a claim about the SET and, since issue #292, no longer about the NAME. A folded chip
-	 * (issue #88) takes {@code DrugSafetyValidator.foldedPartnerLabel}'s single answer for both of its
-	 * sentences, which may be the class arm's ladder name, while the note below keeps
+	 * <p>Which is a claim about the SET and, since issue #292, no longer about the NAME. Where
+	 * {@code DrugSafetyValidator.foldedPartnerLabel} reconciles a folded chip's two sentences it may name
+	 * the partner by the class arm's ladder, while the note below keeps
 	 * {@code DrugSafetyValidator.partnerLabel} — so for such a partner the chip and this record can call
-	 * one active order two things. Deliberate, and the trade is stated on that method and in ADR
+	 * one active order two things. Where that method refuses, the chip's rule sentence is
+	 * {@code partnerLabel} again and this record agrees with it as before. Deliberate, and the trade is stated on that method and in ADR
 	 * Decision 39: closing it would move this record's text, which is PROMPT text and needs its own
 	 * measurement, and {@code DrugReference.displayLabel()} forbids itself here in any case. What is
 	 * unchanged is that every name this record can carry for that partner is one the same prompt already

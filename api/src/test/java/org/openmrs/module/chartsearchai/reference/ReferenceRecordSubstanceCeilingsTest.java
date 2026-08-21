@@ -367,8 +367,11 @@ public class ReferenceRecordSubstanceCeilingsTest {
 
 	@Test
 	public void theSectionNamesTheRowsTheRecordDoesAndNotTheirChipLabels() throws IOException {
-		// DrugReference.displayLabel's javadoc says verbatim: "Never used in prompt text — record
-		// rendering keeps getName() — so this is a chip-display concern only", and
+		// DrugReference.displayLabel's javadoc used to say "Never used in prompt text — record rendering
+		// keeps getName()", and issue #292 measured that false and deleted it: renderFinding carries a
+		// chip detail, subject label and all, verbatim into a safety_finding record. What survives, and
+		// what this case is about, is the narrower property that IS pinned — THIS record's text keeps
+		// getName() — and
 		// DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText pins that for the rest
 		// of the record but cannot reach here (its aspirin entry is a one-row substance, so no sibling is
 		// ever named). This section names a row, which is exactly where the synonym-augmented label
@@ -387,7 +390,7 @@ public class ReferenceRecordSubstanceCeilingsTest {
 				+ "dose, maximum 300 mg/day (ages 0-120)."),
 				"the section names the row the way the record names rows, was: " + record);
 		assertFalse(record.contains("(aspirin)"),
-				"a chip label must not reach prompt text, was: " + record);
+				"a chip label must not reach THIS record's text, was: " + record);
 	}
 
 	@Test

@@ -170,8 +170,12 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 * <p>Measured, and the reason the guard in {@code orderPartners} exists: without it the issue #88
 	 * fold produced ONE detail reading "interacts with active order aspirin … is in the same
 	 * cross-reactivity group (NSAID) as active order [ATC N02BA01, N02BA99]" — the same order named two
-	 * ways in one sentence, because the rule arm names its partner from the RULE's own token
-	 * ({@code partnerLabel}) and nothing the builder supplies can reach it.
+	 * ways in one sentence, because the rule arm then named its partner from the RULE's own token
+	 * ({@code partnerLabel}) and nothing the builder supplies could reach it. Since issue #292 that is no
+	 * longer the mechanism this arrangement sits on: it folds through {@code foldedPartnerLabel}'s entry
+	 * path, so the rule arm names the partner {@code Acetylsalicylic acid (aspirin)} too. What this case
+	 * still pins is unchanged and is the reason it is here — the synthesized {@code [ATC …]} display must
+	 * not displace the dataset's name, whichever arm renders it.
 	 *
 	 * <p>What this deliberately accepts is recorded on the guard: where the shared class is matched
 	 * through the unnameable code alone, keeping the covered substance's name gives a chip whose stated

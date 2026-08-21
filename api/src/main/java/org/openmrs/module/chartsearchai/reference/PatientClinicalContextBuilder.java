@@ -134,7 +134,7 @@ final class PatientClinicalContextBuilder {
 				// one, a dictionary whose names have been voided, and a recorded name that is blank
 				// (addRaw drops it, so getName() need not be null at all).
 				//
-				// Three things about the placeholder, each load-bearing:
+				// What is load-bearing about the placeholder, one paragraph each:
 				//
 				// The display names the codes AS codes, through the same shared normalizer the
 				// order's own code set and the ladder's last rung use (DrugReference
@@ -143,7 +143,7 @@ final class PatientClinicalContextBuilder {
 				// drift from what it keys on.
 				//
 				// The name set stays EMPTY. It is lowercased and matched against chart prose
-				// (ActiveDrugOrder.namedIn, and four getNames() consumers in DrugSafetyValidator), so
+				// (ActiveDrugOrder.namedIn, and every getNames() consumer in DrugSafetyValidator), so
 				// seeding it with a code would let an ATC code match free text — a new defect for an
 				// old one. Empty is also the honest answer: the order's name is unknown, so it matches
 				// nothing. The consequence is that this order class is uuid-only for the #118

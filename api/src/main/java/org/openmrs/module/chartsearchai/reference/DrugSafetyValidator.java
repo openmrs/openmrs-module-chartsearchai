@@ -2284,8 +2284,11 @@ public class DrugSafetyValidator {
 	 * two chips being issue #136's pre-existing shape here, the asymmetry new.
 	 *
 	 * <p><b>What is NOT closed</b>, each recorded in ADR Decision 39's trade-offs with its measurement:
-	 * outcome 1 can name one constituent of a combination and then say something false ABOUT it, since
-	 * the class sentence's subject moves from the prescription to that constituent; outcome 3 is
+	 * outcome 1 can name a substance the prescription need not contain at all and then say something
+	 * false ABOUT it, since the class sentence's subject moves from the prescription to whatever the
+	 * token names — pinned AS WRONG by {@code FoldedChipOnePartnerNameTest}'s
+	 * {@code aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug}, so a
+	 * change that closes it fails there rather than passing in silence; outcome 3 is
 	 * over-cautious on 72 above-floor rules of the shipped KB; a rule carrying only an ATC code keeps
 	 * naming its partner by that code; and chips of DIFFERENT subjects can still name one order two ways,
 	 * which is outside this ticket.
@@ -4534,12 +4537,26 @@ public class DrugSafetyValidator {
 			if (namedByOrder || !displayNamesADrug(order)) {
 				return;
 			}
+			// The display itself, and no longer firstNonBlank(display, orderCode): the guard above has
+			// refused a blank display, and a label that is a code is what it refuses to let displace a
+			// name (see namesADrug). Together those two DO move UNFOLDED class-only chip text, which is
+			// more than the fold this ticket is about — a blank-display order used to rename its partner
+			// after the bare ATC code, and Decision 39 measures the repair introducing a false claim in
+			// one direction (`as active order M01AE03` becoming `as active order Omeprazole` under an
+			// M01AE class). But the shape is PRODUCTION-UNREACHABLE, and that is said here rather than
+			// only in the ADR: PatientClinicalContextBuilder takes an order's display from a recorded
+			// name addRaw has already trimmed and dropped if blank, and routes the nameless case through
+			// namedByCodesOnly, so no order it builds answers hasKnownName() with a blank display. Only
+			// the public constructor's latitude reaches the difference, which is the latitude
+			// FoldedChipOnePartnerNameTest.aBlankDisplayNeverDisplacesTheDatasetName uses.
 			label = order.getDisplay();
 			namedByOrder = true;
 			// Redundant today and deliberately written anyway: the only path that reaches here has already
 			// set namesADrug through its entry (the !namedByOrder guard above admits only the entry rung),
-			// so DELETING this line leaves all 1342 tests green. Say deleting and not "mutating": NEGATING
-			// it reddens two, because aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName and
+			// so DELETING this line leaves all 1346 api tests green — re-measured on this head by deleting
+			// it and running the suite, the count having gone stale once already. Say deleting and not
+			// "mutating": NEGATING it reddens two, because
+			// aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName and
 			// aCodeOnlyOrderDoesNotTakeTheNamingOfAPartnerFromANamedOne both observe the flag's true
 			// value here. It is written so that a future rung renaming a partner whose label was NOT
 			// entry-derived cannot leave the flag stale.

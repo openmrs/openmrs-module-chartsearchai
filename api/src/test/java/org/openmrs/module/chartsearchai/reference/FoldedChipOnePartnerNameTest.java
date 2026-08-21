@@ -414,6 +414,74 @@ public class FoldedChipOnePartnerNameTest {
 	}
 
 	/**
+	 * <b>A pinned FALSE claim, not desired behaviour.</b> The residue of the branch that lets the rule's
+	 * token stand in for a missing ladder name: where the nameless order carries codes of two
+	 * substances, the class sentence ends up asserting a class relationship about the substance the
+	 * RULE's token names rather than about the one the class-matched code classifies.
+	 *
+	 * <p>The arrangement is {@link #oneOrderCarryingTwoSubstancesCodesKeepsTheRulesOwnName}'s, with the
+	 * order NAMELESS. {@code B01AA03} sorts first, so {@code ruleAbout} picks the curated seed's WARFARIN
+	 * rule; the NSAID group's prefixes are {@code M01AE} and {@code N02BA}, so the class arm matched on
+	 * {@code N02BA01} — aspirin — and warfarin is in no cross-reactivity group at all. The premise is
+	 * asserted below rather than reasoned about: the same nameless order carrying {@code B01AA03} ALONE
+	 * raises the rule sentence and no class sentence. The partner IS named by its order here — its label
+	 * is the code list — but the {@code !namesADrug} branch is reached first, so the order-named refusal
+	 * below it never runs and the token is handed to both sentences. The chip therefore states
+	 * {@code Ibuprofen is in the same cross-reactivity group (NSAID) as active order warfarin}, which is
+	 * false of warfarin. {@code DrugReferenceInjector.renderFinding} copies the detail verbatim, so it
+	 * reaches the prompt as citable {@code safety_finding} evidence too.
+	 *
+	 * <p>Before issue #292 the same arrangement read {@code as active order [ATC B01AA03, N02BA01]} —
+	 * vague, and true of the prescription. Measured, by returning null unconditionally from
+	 * {@code foldedPartnerLabel}. So this is the trade ADR Decision 39 records as its outcome-1
+	 * trade-off — the class sentence's subject moving from the prescription to whatever the rule's token
+	 * names — and it is pinned here rather than left to that prose. No clean narrowing exists on this
+	 * branch: the ladder holds no entry to put the token to, and a "the token's own substance publishes
+	 * the class-matched code" test would refuse the ticket's own live case, whose three codes the curated
+	 * seed carries none of. <b>A change that closes it must fail here</b>, which is the whole point of
+	 * pinning an output nobody wants.
+	 *
+	 * <p>Deliberately NOT swept by {@link #noFoldedChipNamesOneActiveOrderTwoWays}, and it would pass
+	 * there: it names its one order ONCE, which is exactly the invariant that sweep asserts. That is why
+	 * it is kept beside it — the sweep's count reads as the number of arrangements whose single name is
+	 * the RIGHT one, and admitting a false name into it would make a residue look like a clean
+	 * reconciliation.
+	 */
+	@Test
+	public void aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug() {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.curatedService());
+		Set<String> mixedCodes = DrugReferenceTestSupport.set("B01AA03", "N02BA01");
+
+		List<SafetyWarning> warnings = validator.validate("", QUESTION,
+			DrugReferenceTestSupport.ctx(60, null, null, mixedCodes, null, null,
+				Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
+					"order-nameless-mixed", "[ATC B01AA03, N02BA01]", mixedCodes))));
+
+		Set<String> anticoagulantOnly = DrugReferenceTestSupport.set("B01AA03");
+		List<String> ruleCodeAlone = DrugReferenceTestSupport.classChipDetails(validator.validate("",
+			QUESTION, DrugReferenceTestSupport.ctx(60, null, null, anticoagulantOnly, null, null,
+				Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
+					"order-nameless-anticoagulant", "[ATC B01AA03]", anticoagulantOnly)))));
+		assertEquals(Arrays.asList("Ibuprofen interacts with active order warfarin"
+				+ " — increased risk of GI bleeding"), ruleCodeAlone,
+			"premise: the code the picked rule is filed under classifies NOTHING here, so the class"
+					+ " sentence below cannot be about the drug that rule names");
+
+		assertEquals(1, warnings.size(), "one prescription, one folded chip, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertEquals("Ibuprofen interacts with active order warfarin — increased risk of GI bleeding."
+				+ " Ibuprofen is in the same cross-reactivity group (NSAID) as active order warfarin"
+				+ " — possible additive or duplicate-class therapy", detail,
+			"the residue, pinned as WRONG so a change that closes it is visible here: the class sentence"
+					+ " names warfarin, which is in no cross-reactivity group — the NSAID group was"
+					+ " matched through the order's OTHER code");
+		assertEquals(1, orderNamesIn(detail).size(),
+			"one name, which is why the sweep would accept this arrangement and why it is pinned here"
+					+ " instead, was: " + detail);
+	}
+
+	/**
 	 * Where the ladder has no name AND the rule has no token, neither sentence yields.
 	 *
 	 * <p>The branch that lets the rule's token stand in for a missing ladder name asks for the TOKEN and
@@ -540,6 +608,12 @@ public class FoldedChipOnePartnerNameTest {
 	 * different co-medications, or about a rule with no name of its own, is MEANT to carry two names, so
 	 * including them would make this assertion false for the right reason. Each has its own case above,
 	 * and the count below is what stops a missing arrangement from passing as a clean sweep.
+	 *
+	 * <p>One RECONCILING arrangement is excluded too, and for the opposite reason:
+	 * {@link #aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug} names its
+	 * one order once and would pass, but the name it settles on is false of the class relationship, so
+	 * counting it here would read as one more clean reconciliation. So the count below is the number of
+	 * arrangements whose single name is the RIGHT one, not of every folded chip this file builds.
 	 */
 	@Test
 	public void noFoldedChipNamesOneActiveOrderTwoWays() throws IOException {

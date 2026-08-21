@@ -147,10 +147,12 @@ public class ClassChipPartnerLabelTest {
 	public void anOrderTheDatasetFilesAsSeveralRowsIsNamedBySubstance() throws IOException {
 		// Issue #174 site 1. The class sentence rides inside the folded chip here, which is what a
 		// systemic cyclosporine order actually produces: the KB rates the tacrolimus pair Major, so the
-		// rule arm reaches it too and names the partner by the rule's own match token ("cyclosporine",
-		// lowercased by the ddinter parser), while the class sentence names it by the resolved entry.
-		// A first-wins resolution prints "Cyclosporine (ophthalmic)" there — an ophthalmic preparation
-		// the chart does not record.
+		// rule arm reaches it too. Both sentences now name the partner by the resolved entry — until
+		// issue #292 the rule arm named it by the rule's own match token ("cyclosporine", lowercased by
+		// the ddinter parser) while the class sentence named it by that entry, so this one chip called
+		// one prescription two things. A first-wins resolution prints "Cyclosporine (ophthalmic)" there
+		// — an ophthalmic preparation the chart does not record — which is what this case is about, and
+		// it is now asserted on both sentences rather than one.
 		DrugSafetyValidator validator = DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE));
 

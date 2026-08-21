@@ -61,34 +61,40 @@ public class FoldedChipOnePartnerNameTest {
 	private static final String SHARED_CODE_FIXTURE =
 			"chartsearchai-test/drug-reference-fold-shared-code.json";
 
+	/** The same collision as {@link #SHARED_CODE_FIXTURE} but in DDINTER shape, so the real parser
+	 *  produces the alias overlap itself rather than a hand-written alias list standing in for it. */
+	private static final String AMBIGUOUS_TOKEN_FIXTURE =
+			"chartsearchai-test/ddi-fold-ambiguous-token.json";
+
+	/** A rule filed under an ATC code with no match token at all. */
+	private static final String TOKENLESS_RULE_FIXTURE =
+			"chartsearchai-test/drug-reference-fold-tokenless-rule.json";
+
 	/** Lisinopril and enalapril each interact with ramipril and all three share subgroup C09AA;
 	 *  enalapril's rule carries NO mechanism note, which is the shape the extraction below has to cope
 	 *  with. */
 	private static final String SAME_CLASS_FIXTURE = "chartsearchai-test/drug-reference-sameclass.json";
 
-	private static List<String> details(List<SafetyWarning> warnings) {
-		List<String> out = new ArrayList<String>();
-		for (SafetyWarning w : warnings) {
-			if (SafetyWarning.TYPE_INTERACTION.equals(w.getType()) && w.getDetail() != null) {
-				out.add(w.getDetail());
-			}
-		}
-		return out;
-	}
-
 	/**
 	 * Every name a detail calls an active order by: each {@code "active order "} occurrence's following
 	 * name, taken to the first of {@code " — "}, {@code "."} or the end of the detail.
 	 *
-	 * <p>All three terminators are needed and none is redundant. {@code interactionWarning} appends
-	 * {@code " — "} only when the rule carries a note, and a note-less rule is exactly what
-	 * {@link #SAME_CLASS_FIXTURE}'s enalapril row is, so a scan keyed on the dash alone would silently
-	 * skip the shape this invariant most needs to see; {@code endSentence} then closes that sentence
-	 * with a full stop. The class sentence ends the detail with no full stop at all, so without the
-	 * end-of-detail case its name would come back as
-	 * {@code "Ramipril — possible duplicate therapy"} — a distinct string that would fail this
-	 * invariant for a reason that is not the defect, and that a later reader would loosen rather than
-	 * tighten.
+	 * <p>Two of the three terminators are load-bearing over the arrangements in this file, and which
+	 * does what was measured by dropping each in turn rather than reasoned about. Dropping {@code "."}
+	 * reddens {@code noFoldedChipNamesOneActiveOrderTwoWays} on {@link #SAME_CLASS_FIXTURE}'s note-less
+	 * enalapril rule, whose sentence {@code interactionWarning} ends on the partner name and
+	 * {@code endSentence} closes with a full stop — loudly, not silently. Dropping {@code " — "} yields
+	 * {@code "Ramipril — possible duplicate therapy"} for the class sentence. The end-of-detail case is
+	 * reached by NO arrangement here — mutating it to throw leaves every case green — and is kept only
+	 * so a future detail that ends on a name does not read past its end.
+	 *
+	 * <p><b>The hazard it does not close</b>, stated because a silent pass is worse than a loud fail: a
+	 * partner NAME containing a full stop is cut at that stop in both sentences, so two genuinely
+	 * different names could reduce to one string and the invariant would pass on a detail that really
+	 * does name the order twice ({@code St. John's Wort extract} and {@code St. John's Wort} both
+	 * reducing to {@code St}). The shipped knowledge base carries such names. No arrangement here
+	 * reaches it, and closing it needs a terminator that is not a sentence boundary — which the chip
+	 * format does not offer, the class sentence's own dash being the only structural marker.
 	 */
 	private static Set<String> orderNamesIn(String detail) {
 		Set<String> names = new LinkedHashSet<String>();
@@ -183,11 +189,18 @@ public class FoldedChipOnePartnerNameTest {
 	 * which is the #161/#187/#194 failure ("right finding, wrong reason") and strictly worse than the
 	 * legibility cost issue #292 exists to remove.
 	 *
-	 * <p>So the gate is a NAME-identity test — does the rule's own token name the entry the class arm's
-	 * label came from ({@code DrugReference.isNamed}, the accessor CLAUDE.md names for identity between
-	 * two reference strings) — and deliberately not a comparison of the two arms' resolved substances:
+	 * <p>So the gate is a NAME test — does the rule's own token name the entry the class arm's label came
+	 * from — and deliberately not a comparison of the two arms' resolved substances:
 	 * {@code identifies} accepts a bare shared ATC code, so on this very fixture both arms resolve
 	 * {@code Omeprazole} and a substance comparison would agree spuriously.
+	 *
+	 * <p>This fixture exercises the IDENTITY half of that test only ({@code DrugReference.isNamed}). Its
+	 * three rows are hand-written with one self-name each, so the token names exactly the row it belongs
+	 * to and the refusal comes from that identity answering false. The shipped knowledge base is not like
+	 * that, and {@link #aRuleWhoseTokenNamesTwoSubstancesKeepsItsOwnToken} is the case for the half this
+	 * one cannot reach — kept separate rather than merged, because a fixture that refuses for the wrong
+	 * reason is how the guard first came to be written with a premise the default dataset does not
+	 * satisfy.
 	 */
 	@Test
 	public void aRuleAboutAnotherSubstanceSharingTheCodeKeepsItsOwnToken() throws IOException {
@@ -209,6 +222,85 @@ public class FoldedChipOnePartnerNameTest {
 					+ " the one the class arm resolved — two partners, two names, was: " + detail);
 	}
 
+	/**
+	 * The refusal's real premise, in DDINTER shape — and the case that showed a hand-written fixture
+	 * cannot stand in for it.
+	 *
+	 * <p>{@link #SHARED_CODE_FIXTURE} refuses the displacement because each of its three curated rows
+	 * carries one self-name, so the rule's token names exactly the row it belongs to. The shipped
+	 * knowledge base is not like that: the {@code ddinter} parser writes each entry's aliases from its
+	 * name AND its {@code rxnorm_name}, and its row named {@code Omeprazole} carries
+	 * {@code rxnorm_name: esomeprazole} — measured on the pinned excerpt, that row really is
+	 * {@code name=Omeprazole, rxnorm_name=esomeprazole}. A bare {@code isNamed} test therefore answers
+	 * TRUE for the token {@code esomeprazole} against the {@code Omeprazole} row and would license the
+	 * displacement on exactly the pair the guard exists to refuse — a rated mechanism about one substance
+	 * printed under the other's name, and 25 of the shipped KB's 2093 rule tokens are named by more than
+	 * one substance ({@code hydrocortisone}, {@code trastuzumab}, {@code gabapentin} …).
+	 *
+	 * <p>So the guard asks {@code unambiguouslyNames}: one substance, not merely this one among several.
+	 * This fixture reproduces the collision through the real parser — two rows publishing
+	 * {@code A02BC05} with different {@code drugbank_id}s and the same {@code rxnorm_name}, so
+	 * {@code substanceGroupKey} separates them while the token names both.
+	 */
+	@Test
+	public void aRuleWhoseTokenNamesTwoSubstancesKeepsItsOwnToken() throws IOException {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.ddiFixtureEntries(AMBIGUOUS_TOKEN_FIXTURE)));
+
+		List<SafetyWarning> warnings = validator.validate("", "Is pantoprazole safe here?",
+			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("omeprazole 20mg"),
+				DrugReferenceTestSupport.set("A02BC05"), null, null));
+
+		assertEquals(1, warnings.size(), "one folded chip, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertTrue(detail.contains("interacts with active order") && detail.contains("is in the same"),
+			"precondition: the two arms must have folded, or there is no displacement to refuse, was: "
+					+ detail);
+		assertTrue(detail.contains("interacts with active order esomeprazole "),
+			"the rule's mechanism must stay under the name the RULE names: its token is named by two"
+					+ " substances here, so it cannot tell the fold which of them the rule is about,"
+					+ " was: " + detail);
+		assertEquals(2, orderNamesIn(detail).size(),
+			"two partners, two names — collapsing them would print one substance's rated mechanism"
+					+ " under the other's name, was: " + detail);
+	}
+
+	/**
+	 * The residue {@code foldedPartnerLabel} records as its third case: a rule carrying no match token at
+	 * all still names its partner by a raw ATC code, so the folded detail keeps two names.
+	 *
+	 * <p>{@code hasActiveDrug} joins such a rule on its ATC code and {@code partnerLabel} then renders
+	 * that code, while the class arm resolves the same order to its dataset entry and renders a name.
+	 * {@code DrugReference.isNamed} answers false for a null token, so the gate refuses and neither
+	 * sentence yields. Unchanged from before issue #292 rather than introduced by it — and NOT protecting
+	 * against a mis-attribution here, since {@code ruleAbout} correlated these arms through its
+	 * exact-code leg, so they are demonstrably about one co-medication. What it protects against is
+	 * asserting a substance a bare code does not license, a level-5 code being publishable by two
+	 * substances in this KB. Closing it means giving a token-less rule a NAME, which is a change to
+	 * {@code partnerLabel} and therefore to the injected record too.
+	 *
+	 * <p>Pinned so the residue is visible rather than latent: the sweep below cannot see it, because its
+	 * anti-vacuity guard counts the arrangements it was given and a missing one is exactly what it cannot
+	 * notice.
+	 */
+	@Test
+	public void aRuleThatCarriesOnlyAnAtcCodeKeepsBothNames() throws IOException {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.fixtureEntries(TOKENLESS_RULE_FIXTURE)));
+
+		List<SafetyWarning> warnings = validator.validate("", "Is lisinopril safe here?",
+			DrugReferenceTestSupport.ctx(60, null, null, DrugReferenceTestSupport.set("C09AA05"),
+				null, null));
+
+		assertEquals(1, warnings.size(), "one folded chip, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertEquals(DrugReferenceTestSupport.set("C09AA05", "Ramipril"), orderNamesIn(detail),
+			"the code the rule carries and the name the class arm resolved, both still standing — the"
+					+ " residue, pinned so a change that closes it is visible here, was: " + detail);
+	}
+
 	/** A chip no fold applies to must be byte-identical to what it always was: the rule arm keeps
 	 *  {@code partnerLabel}, which is also the label the injected {@code drug_reference} note and the
 	 *  grouping keys read, and the class arm keeps its ladder. */
@@ -220,7 +312,7 @@ public class FoldedChipOnePartnerNameTest {
 		List<SafetyWarning> ruleOnly = curated.validate("", QUESTION, DrugReferenceTestSupport.ctx(60,
 			null, DrugReferenceTestSupport.set("aspirin 81mg"), null, null, null));
 		assertEquals(Arrays.asList("Ibuprofen interacts with active order aspirin"
-				+ " — additive GI and bleeding risk"), details(ruleOnly),
+				+ " — additive GI and bleeding risk"), DrugReferenceTestSupport.classChipDetails(ruleOnly),
 			"a rule-only chip carries the rule's own token, as it always has");
 
 		// The seed carries no naproxen entry, so this exercises the ladder's MIDDLE rung — the order's
@@ -234,7 +326,7 @@ public class FoldedChipOnePartnerNameTest {
 					DrugReferenceTestSupport.set("naproxen 500mg"),
 					DrugReferenceTestSupport.set("M01AE02")))));
 		assertEquals(Arrays.asList("Ibuprofen is in the same ATC class (M01AE) as active order"
-				+ " Naproxen 500mg — possible duplicate therapy"), details(classOnly),
+				+ " Naproxen 500mg — possible duplicate therapy"), DrugReferenceTestSupport.classChipDetails(classOnly),
 			"a class-only chip keeps the ladder's own name — there is no rule to borrow a token from");
 	}
 
@@ -290,6 +382,11 @@ public class FoldedChipOnePartnerNameTest {
 	 * ends on the partner name and {@code endSentence} closes it with a full stop rather than with the
 	 * {@code " — "} every other arrangement here has. Both of that fixture's subjects are in play from
 	 * one question, so this asserts the invariant over two chips at once.
+	 *
+	 * <p>The three REFUSAL arrangements are deliberately not swept here: a folded chip about two
+	 * different co-medications, or about a rule with no name of its own, is MEANT to carry two names, so
+	 * including them would make this assertion false for the right reason. Each has its own case above,
+	 * and the count below is what stops a missing arrangement from passing as a clean sweep.
 	 */
 	@Test
 	public void noFoldedChipNamesOneActiveOrderTwoWays() throws IOException {
@@ -310,7 +407,7 @@ public class FoldedChipOnePartnerNameTest {
 
 		int foldedSeen = 0;
 		for (List<SafetyWarning> warnings : runs) {
-			for (String detail : details(warnings)) {
+			for (String detail : DrugReferenceTestSupport.classChipDetails(warnings)) {
 				if (!detail.contains("interacts with active order") || !detail.contains("is in the same")) {
 					continue;
 				}

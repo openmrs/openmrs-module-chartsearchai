@@ -1225,9 +1225,12 @@ public class DrugReferenceInjector {
 	 *               {@code (type, drug, detail)} triple, which stopped recognising a repeat the moment
 	 *               either arm reworded its chip (see {@code DrugSafetyValidator.InteractionPairs}). A
 	 *               partner's own coalesced, trimmed name is not that: it is the atomic unit of the
-	 *               grouping, and issue #121's invariant — the key IS what the RECORD says, which for
-	 *               this method's own notes is still exactly true, {@code partnerLabel} being what it
-	 *               both keys and renders — is deliberate rather than incidental. The chip half of that
+	 *               grouping, and issue #121's invariant — the key IS what the RECORD says, which
+	 *               wherever the dataset identifies no partner entry is still exactly true of this
+	 *               method's own notes, {@code partnerLabel} being what it both keys and renders on that
+	 *               branch — is deliberate rather than incidental. (On the other branch
+	 *               {@link #onePerPartner} keys on the ENTRY while still rendering
+	 *               {@code partnerLabel}, which is the residue the next paragraph is about.) The chip half of that
 	 *               invariant is scoped since issue #292 (see
 	 *               {@code DrugSafetyValidator.foldedPartnerLabel}); this key is not, and does not
 	 *               follow the chip's rendered name.</li>

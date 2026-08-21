@@ -34,13 +34,15 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The fix makes `partnerLabel` the ladder's last-but-one rung instead of a second, independent
  * ladder: a folded chip names the partner by the class arm's label where that ladder found a NAME and
- * the two arms provably agree about which substance it is, and by the rule's own token where it did
- * not. Unfolded rule chips, class-only chips, the grouping keys and the injected
+ * the two arms are provably about one prescription — the rule's own token naming the ladder's ENTRY
+ * unambiguously, or naming the very ORDER the label came from — and each arm keeps its own name where
+ * they are not. Unfolded rule chips, class-only chips, the grouping keys and the injected
  * {@code drug_reference} note list are untouched — see {@code foldedPartnerLabel}.
  *
  * <p>Driven through the real {@link DrugSafetyValidator#validate} over datasets read by the real
  * parsers, because the defect is in what the two arms make of a real context: the bundled curated seed
- * through its real load path, the pinned DDInter excerpt, and two verbatim-shaped json fixtures.
+ * through its real load path, the bundled DDInter sample, a pinned DDInter excerpt, and the five json
+ * fixtures named below.
  */
 public class FoldedChipOnePartnerNameTest {
 
@@ -322,16 +324,23 @@ public class FoldedChipOnePartnerNameTest {
 	}
 
 	/**
-	 * An order-supplied name is never handed to the rule sentence, because an ORDER is not a substance.
+	 * A name supplied by an order the rule's token does NOT name is never handed to the rule sentence,
+	 * because an ORDER is not a substance.
 	 *
-	 * <p>The guard that lets the ladder's label displace the rule's token can only validate
-	 * {@code OrderPartner.labelEntry} — the entry the DATASET resolved — and
-	 * {@code OrderPartner.nameByOrder} deliberately does not update that field when it renames a
-	 * partner. So on a renamed partner the guard proves a fact about one drug and the label names
-	 * another. Here the partner is keyed on Naproxen (through the covered {@code M01AE02}) and then
-	 * renamed after an order whose display says esomeprazole, because that order also carries
+	 * <p>Named for the condition rather than for the rung: the gate on this rung is
+	 * {@code DrugSafetyValidator.namesNamingOrder} — the ladder's label goes to the rule sentence where
+	 * the RULE's own token names the very order that supplied it, and
+	 * {@link #anOrderSuppliedNameTheRulesTokenNamesIsHandedToBothSentences} is that half. Here it does
+	 * not: the partner is keyed on Naproxen (through the covered {@code M01AE02}) and then renamed after
+	 * a DIFFERENT order whose display says esomeprazole, because that order also carries
 	 * {@code A02BC05}, which the dataset cannot name, and {@code soleSubstanceOf} resolves its codes
-	 * back to Naproxen.
+	 * back to Naproxen. Token {@code naproxen} against naming order names {@code {esomeprazole 20mg}},
+	 * so the gate answers false.
+	 *
+	 * <p>{@code OrderPartner.labelEntry} is deliberately not what decides it, and this arrangement is
+	 * why: {@code nameByOrder} does not update that field, so here it still identifies Naproxen — the
+	 * drug the rule IS about — while the label names esomeprazole. Validating against it would prove a
+	 * fact about one drug and hand out the name of another.
 	 *
 	 * <p>Without the refusal the chip reads {@code Ibuprofen interacts with active order Esomeprazole
 	 * 20mg — Moderate. Duplicate NSAID therapy …}: an NSAID duplicate-therapy finding printed entirely
@@ -340,7 +349,8 @@ public class FoldedChipOnePartnerNameTest {
 	 * legibility cost issue #292 removes, so this shape keeps two names.
 	 */
 	@Test
-	public void anOrderSuppliedNameIsNeverHandedToTheRuleSentence() throws IOException {
+	public void anOrderSuppliedNameTheRulesTokenDoesNotNameIsNeverHandedToTheRuleSentence()
+			throws IOException {
 		DrugSafetyValidator validator = DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.serviceWith(
 					DrugReferenceTestSupport.fixtureEntries(RENAMED_PARTNER_FIXTURE)));
@@ -380,10 +390,12 @@ public class FoldedChipOnePartnerNameTest {
 	 * that same sentence as citable evidence.
 	 *
 	 * <p><b>This case guards the CONJUNCTION, not either condition alone</b>, and says so rather than
-	 * looking better defended than it is: removing only the order-named refusal leaves it green, because
+	 * looking better defended than it is: removing only the order-rung branch leaves it green, because
 	 * this partner resolved no entry and the unambiguity branch then refuses anyway; removing only that
-	 * branch leaves it green for the mirror reason. It reddens against the pre-issue-#292 gate, both
-	 * conditions gone, which is the state it exists to keep the code out of.
+	 * branch leaves it green for the mirror reason, the order-rung gate answering false here (token
+	 * {@code warfarin}, naming order names {@code {aspirin}}). It reddens against the pre-issue-#292 gate,
+	 * both conditions gone, and against a mutation making {@code namesNamingOrder} always permit — which
+	 * is what pins the ORDER rung's half of it now that that rung is a gate rather than a refusal.
 	 */
 	@Test
 	public void oneOrderCarryingTwoSubstancesCodesKeepsTheRulesOwnName() {
@@ -411,6 +423,72 @@ public class FoldedChipOnePartnerNameTest {
 			"the rule the fold picked is the WARFARIN rule, so its finding must stay under that name —"
 					+ " the label names the whole prescription and the rule is about one code of it,"
 					+ " was: " + detail);
+	}
+
+	/**
+	 * The reconciling half of the ORDER rung: where the rule's own token DOES name the order the label
+	 * came from, the folded chip names that one prescription once.
+	 *
+	 * <p>Added by round 2 of the review on this change, which measured the first version's refusal as
+	 * broader than its evidence. Both measurements behind that refusal are cases where the order-supplied
+	 * name does not name the rule's drug —
+	 * {@link #anOrderSuppliedNameTheRulesTokenDoesNotNameIsNeverHandedToTheRuleSentence}
+	 * (token {@code naproxen}, naming order {@code Esomeprazole 20mg}) and
+	 * {@link #oneOrderCarryingTwoSubstancesCodesKeepsTheRulesOwnName} (token {@code warfarin}, naming
+	 * order names {@code {aspirin}}) — so a blanket refusal also declined the ticket's second named shape,
+	 * the ordinary formulation ({@code naproxen} / {@code Naproxen 500mg}). The gate is now
+	 * {@code DrugSafetyValidator.namesNamingOrder}: {@code DrugReference.matchesOrderName} over the naming
+	 * order's own names, the same predicate {@code PatientClinicalContext.hasActiveDrug} used to admit the
+	 * rule, narrowed from the patient's flattened name list to that one prescription. Both refusals above
+	 * stay green and redden when the predicate is mutated to always permit.
+	 *
+	 * <p>The SAME fixture as that first refusal and the same rung — a partner keyed on {@code Naproxen}
+	 * through the covered {@code M01AE02} and then renamed by {@code OrderPartner.nameByOrder} because it
+	 * also holds {@code A02BC05}, which the fixture cannot name — with the two codes on ONE order instead
+	 * of two. That is the whole difference between reconciling and refusing here.
+	 *
+	 * <p>Before this narrowing the same arrangement read {@code Ibuprofen interacts with active order
+	 * naproxen — Moderate. … as active order Naproxen 500mg — …}: two names for one prescription, in the
+	 * ticket's own shape.
+	 *
+	 * <p><b>What this case does NOT pin</b>, said rather than left to look better defended than it is:
+	 * that the ORDER rung is what reconciled it. Deleting that rung outright leaves this green, because
+	 * the branch below it then reads {@code labelEntry} — {@code Naproxen} here, which the token names
+	 * unambiguously — and hands out the same label. Measured by disabling the rung and running the file.
+	 * What pins the rung's reconciling half is
+	 * {@code ClassChipPartnerLabelTest.anOrderTheDatasetDoesNotCoverIsNamedByItsOwnDisplayName}, whose
+	 * ladder resolved no entry at all, so nothing else can hand out its label; and what pins its refusing
+	 * half is the case above, which reddens with the rung gone. This case is the one that shows the
+	 * reconciled OUTPUT on a partner that carries an entry as well.
+	 */
+	@Test
+	public void anOrderSuppliedNameTheRulesTokenNamesIsHandedToBothSentences() throws IOException {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.fixtureEntries(RENAMED_PARTNER_FIXTURE)));
+
+		List<SafetyWarning> warnings = validator.validate("", QUESTION,
+			renamedByItsOwnNaproxenOrder());
+
+		assertEquals(1, warnings.size(), "one partner, one folded chip, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertEquals("Ibuprofen interacts with active order Naproxen 500mg — Moderate. Duplicate NSAID"
+				+ " therapy: additive gastrointestinal toxicity. Ibuprofen is in the same ATC class"
+				+ " (M01AE) as active order Naproxen 500mg — possible duplicate therapy", detail,
+			"the rule's token names this very order, so the order's own display is the one name both"
+					+ " sentences take");
+		assertEquals(1, orderNamesIn(detail).size(), "one prescription, one name, was: " + detail);
+	}
+
+	/** One order carrying a code the fixture covers ({@code M01AE02}, resolving {@code Naproxen}) and one
+	 *  it cannot name ({@code A02BC05}), so the partner is keyed on that substance and then renamed after
+	 *  this order — the issue #186 rung, reached by the prescription the rule is actually about. */
+	private static PatientClinicalContext renamedByItsOwnNaproxenOrder() {
+		Set<String> codes = DrugReferenceTestSupport.set("M01AE02", "A02BC05");
+		return DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set("naproxen 500mg"), codes, null, null,
+			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-naproxen", "Naproxen 500mg",
+				DrugReferenceTestSupport.set("naproxen 500mg"), codes)));
 	}
 
 	/**
@@ -604,10 +682,20 @@ public class FoldedChipOnePartnerNameTest {
 	 * {@code " — "} every other arrangement here has. Both of that fixture's subjects are in play from
 	 * one question, so this asserts the invariant over two chips at once.
 	 *
-	 * <p>The three REFUSAL arrangements are deliberately not swept here: a folded chip about two
-	 * different co-medications, or about a rule with no name of its own, is MEANT to carry two names, so
-	 * including them would make this assertion false for the right reason. Each has its own case above,
-	 * and the count below is what stops a missing arrangement from passing as a clean sweep.
+	 * <p>The REFUSAL arrangements are deliberately not swept here: a folded chip about two different
+	 * co-medications, or about a rule with no name of its own, is MEANT to carry two names, so including
+	 * them would make this assertion false for the right reason. There are FIVE of them, not the three an
+	 * earlier form of this javadoc counted — the shared code, the ambiguous token, the token-less rule,
+	 * and the two shapes on the ORDER rung where the rule's token does not name the naming order. Each
+	 * has its own case above, and the count below is what stops a missing arrangement from passing as a
+	 * clean sweep.
+	 *
+	 * <p>The fifth SWEPT arrangement is the ORDER rung's reconciling half
+	 * ({@link #anOrderSuppliedNameTheRulesTokenNamesIsHandedToBothSentences}), which the first version of
+	 * this change refused along with those two. The other arrangement on that rung lives in
+	 * {@code ClassChipPartnerLabelTest.anOrderTheDatasetDoesNotCoverIsNamedByItsOwnDisplayName} — the
+	 * curated seed, where the ladder resolved no entry at all — and is asserted byte-exact there rather
+	 * than swept here.
 	 *
 	 * <p>One RECONCILING arrangement is excluded too, and for the opposite reason:
 	 * {@link #aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug} names its
@@ -631,6 +719,10 @@ public class FoldedChipOnePartnerNameTest {
 				.validate("Lisinopril and enalapril are both options.",
 					"Is lisinopril or enalapril safe here?", DrugReferenceTestSupport.ctx(60, null, null,
 						DrugReferenceTestSupport.set("C09AA05"), null, null)));
+		runs.add(DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.fixtureEntries(RENAMED_PARTNER_FIXTURE)))
+				.validate("", QUESTION, renamedByItsOwnNaproxenOrder()));
 
 		int foldedSeen = 0;
 		for (List<SafetyWarning> warnings : runs) {
@@ -643,9 +735,9 @@ public class FoldedChipOnePartnerNameTest {
 					"a folded detail must name its one active order once, was: " + detail);
 			}
 		}
-		assertEquals(4, foldedSeen,
-			"precondition: all four folded chips must have been reached, or this invariant passed by"
-					+ " vacuity — the nameless order, the DDInter formulation, and both subjects of the"
-					+ " note-less same-class fixture");
+		assertEquals(5, foldedSeen,
+			"precondition: all five folded chips must have been reached, or this invariant passed by"
+					+ " vacuity — the nameless order, the DDInter formulation, both subjects of the"
+					+ " note-less same-class fixture, and the order-named partner the rule's token names");
 	}
 }

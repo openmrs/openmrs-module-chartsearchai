@@ -2210,9 +2210,10 @@ public class DrugSafetyValidator {
 	 * this method's alone to state: where {@link #foldedPartnerLabel} reconciles a folded chip's two
 	 * sentences it may name the partner by the class arm's ladder, while {@code orderedInteractionNotes}
 	 * keeps this coalesce. So chip and record can call one partner two things there. Where that method
-	 * refuses, the rule sentence is this label again and the record agrees with it as before. Deliberate — see {@link #foldedPartnerLabel} for why, and ADR Decision 39 for what
-	 * it costs. Nothing about the GROUPING changed: both surfaces still key on this label case-folded
-	 * wherever the dataset identifies no partner entry. What DID change is the second half of issue
+	 * refuses, the rule sentence is this label again and the record agrees with it as before. Deliberate
+	 * — see {@link #foldedPartnerLabel} for why, and ADR Decision 39 for what it costs. Nothing about the
+	 * GROUPING changed: both surfaces still key on this label case-folded wherever the dataset identifies
+	 * no partner entry. What DID change is the second half of issue
 	 * #121's invariant, that the key is also what the chip says — true of every unfolded chip and not of
 	 * a folded one, exactly as the paragraph above states it.
 	 *
@@ -2241,10 +2242,11 @@ public class DrugSafetyValidator {
 	 * because the {@code ddinter} parser lower-cases every token it writes from the partner row's RxNorm
 	 * generic while the class arm prints that row's {@link DrugReference#displayLabel()}.
 	 *
-	 * <p><b>It reconciles on two paths and refuses on the rest.</b> Reconciling two names means asserting
-	 * they denote one drug, so it does so only where that is provable and otherwise leaves the chip
-	 * saying what it has always said. Deliberately not stated as a count: the first item below both
-	 * reconciles and refuses depending on whether the rule has a token at all.
+	 * <p><b>It reconciles where the two names are provably one drug's and refuses on the rest.</b>
+	 * Reconciling two names means asserting they denote one drug, so it does so only where that is
+	 * provable and otherwise leaves the chip saying what it has always said. Deliberately not stated as a
+	 * count of paths: two of the three items below both reconcile and refuse, on a condition of their
+	 * own.
 	 * <ol>
 	 *   <li><b>The ladder found no name</b> ({@code !namesADrug}) — a bare code or the {@code [ATC …]}
 	 *       stand-in is the ABSENCE of a name (issue #290) and may not displace one, so both sentences
@@ -2252,17 +2254,25 @@ public class DrugSafetyValidator {
 	 *       list win "put {@code [ATC N02BA01, N02BA99]} beside the rule arm's {@code aspirin} inside ONE
 	 *       folded chip detail". Asked of the token and not of {@link #partnerLabel}, which falls back to
 	 *       the ATC code: with no token either, nothing here is a name and this yields null too.</li>
-	 *   <li><b>The label came from an ORDER</b> ({@link OrderPartner#namedByOrder}) — refused, because an
-	 *       order is not a substance. What can be validated is {@link OrderPartner#labelEntry}, the entry
-	 *       the DATASET resolved, and {@link OrderPartner#nameByOrder} deliberately does not update that
-	 *       field, so the guard would prove a fact about one drug and hand out a name for another.
-	 *       Measured two ways, both reproduced through the real {@code validate}: a partner keyed on
-	 *       {@code Naproxen} but renamed after an {@code Esomeprazole} order carrying naproxen's code
-	 *       printed an NSAID duplicate-therapy finding under the PPI order's name with {@code naproxen}
-	 *       nowhere in the detail; and one order carrying codes of two substances lets {@link #ruleAbout}
-	 *       pick a rule by whichever code sorts first, so a WARFARIN rule was printed under
-	 *       {@code Aspirin 81mg}. Both are the #161/#187/#194 failure, and the second reaches the prompt
-	 *       through {@code DrugReferenceInjector.renderFinding} carrying {@code STRENGTH_WITHHOLD}.</li>
+	 *   <li><b>The label came from an ORDER</b> ({@link OrderPartner#namingOrder}) — reconciled only where
+	 *       the RULE's own token names that very order ({@link #namesNamingOrder}), because an order is
+	 *       not a substance and the name it supplied may be a different drug's. Not validated against
+	 *       {@link OrderPartner#labelEntry}: {@link OrderPartner#nameByOrder} deliberately does not update
+	 *       that field, so on a renamed partner it identifies one drug while the label names another, and
+	 *       {@link #unambiguouslyNames} would prove a fact about the first and hand out the second. The
+	 *       ORDER is what the label came from, so the order is what it is put to — by the same predicate
+	 *       {@link PatientClinicalContext#hasActiveDrug} used to admit the rule, narrowed to that one
+	 *       prescription. Both shapes measured through the real {@code validate} refuse on it: a partner
+	 *       keyed on {@code Naproxen} but renamed after an {@code Esomeprazole} order carrying naproxen's
+	 *       code (token {@code naproxen}, naming order {@code Esomeprazole 20mg}) printed an NSAID
+	 *       duplicate-therapy finding under the PPI order's name with {@code naproxen} nowhere in the
+	 *       detail; and one order carrying codes of two substances lets {@link #ruleAbout} pick a rule by
+	 *       whichever code sorts first, so a WARFARIN rule was printed under {@code Aspirin 81mg} (token
+	 *       {@code warfarin}, naming order names {@code {aspirin}}). Both are the #161/#187/#194 failure,
+	 *       and the second reaches the prompt through {@code DrugReferenceInjector.renderFinding} carrying
+	 *       {@code STRENGTH_WITHHOLD}. What the gate ADMITS is the ticket's second named shape, where the
+	 *       order the dataset cannot name is the very drug the rule is about: token {@code aspirin} beside
+	 *       an {@code Aspirin 81mg} order, one name in both sentences.</li>
 	 *   <li><b>The rule's token does not name the ladder's entry unambiguously</b> — see
 	 *       {@link #unambiguouslyNames}, which carries the measurement. Refused for the same reason: the
 	 *       two arms may be about different co-medications.</li>
@@ -2283,6 +2293,14 @@ public class DrugSafetyValidator {
 	 * which may now name the order by the ladder while the other names it by its token — two names across
 	 * two chips being issue #136's pre-existing shape here, the asymmetry new.
 	 *
+	 * <p>A cost really incurred rather than one recorded defensively, and it is the ORDER path above that
+	 * incurs it: the entry paths cannot, because a rule reconciled there names an entry of the patient's
+	 * own orders, which {@link #activeOrderEntryFor} then resolves, so {@link SubjectRule#partnerKey} is
+	 * that entry and this branch is not in play. The witness is
+	 * {@code ClassChipPartnerLabelTest.anOrderTheDatasetDoesNotCoverIsNamedByItsOwnDisplayName}: the
+	 * curated seed carries no aspirin entry at all, so the key is {@code aspirin} while the chip says
+	 * {@code Aspirin 81mg}.
+	 *
 	 * <p><b>What is NOT closed</b>, each recorded in ADR Decision 39's trade-offs with its measurement:
 	 * outcome 1 can name a substance the prescription need not contain at all and then say something
 	 * false ABOUT it, since the class sentence's subject moves from the prescription to whatever the
@@ -2295,14 +2313,15 @@ public class DrugSafetyValidator {
 	 *
 	 * @param partner the co-medication the class arm resolved, carrying the ladder's answer
 	 *        ({@link OrderPartner#label}), whether that answer is a name at all
-	 *        ({@link OrderPartner#namesADrug}), whether it came from an order
-	 *        ({@link OrderPartner#namedByOrder}) and the entry it was resolved from
+	 *        ({@link OrderPartner#namesADrug}), the ORDER that supplied it if one did
+	 *        ({@link OrderPartner#namingOrder}) and the entry it was resolved from
 	 *        ({@link OrderPartner#labelEntry})
 	 * @param rule the matched rule the class sentence is folding onto. Its {@link SubjectRule} wrapper is
 	 *        deliberately NOT taken: the entry {@link #activeOrderEntryFor} resolved for that rule is not
 	 *        consulted, because {@link #identifies} accepts a bare shared ATC code, so comparing the two
 	 *        arms' resolved substances agrees spuriously on exactly the shape this refuses (see
-	 *        {@link #unambiguouslyNames}). What decides is the rule's own token against the ladder's entry
+	 *        {@link #unambiguouslyNames}). What decides is the rule's own token — against the ladder's
+	 *        entry on the entry rung, and against the naming ORDER where the label came from one
 	 * @return the one name both sentences take, or <b>null</b> when they must not be reconciled — each
 	 *         sentence then keeps the name its own arm resolved, which is what the chip has always said.
 	 *         The caller reads null as "use each arm's own name", so it must not be confused with
@@ -2319,27 +2338,78 @@ public class DrugSafetyValidator {
 			// its codes AS codes.
 			return ChartSearchAiUtils.isBlank(rule.getToken()) ? null : partnerLabel(rule);
 		}
-		if (partner.namedByOrder) {
-			// The label names the ORDER, and an order is not a substance. Refused because the guard below
-			// can only validate labelEntry — the entry the DATASET resolved — while what would be handed
-			// out is a name some order supplied, and the two need not denote the same drug: measured on a
-			// partner keyed on Naproxen but renamed after an Esomeprazole order that carries naproxen's
-			// code, where displacing printed an NSAID duplicate-therapy finding under the PPI order's
-			// name and the word naproxen appeared nowhere in the chip. Also the shape where one order
-			// carries codes of two substances: ruleAbout then picks a rule by whichever code sorts first,
-			// so the label names the prescription while the rule is about one constituent of it.
-			return null;
+		if (partner.namingOrder != null) {
+			// The label names an ORDER, and an order is not a substance — so it goes to the rule sentence
+			// only where the RULE's own token names that very order. What must not happen is a name some
+			// order supplied being printed over a finding about a different drug: measured on a partner
+			// keyed on Naproxen but renamed after an Esomeprazole order that carries naproxen's code,
+			// where displacing printed an NSAID duplicate-therapy finding under the PPI order's name with
+			// the word naproxen nowhere in the chip; and on one order carrying codes of two substances,
+			// where ruleAbout picks a rule by whichever code sorts first, so a WARFARIN rule was printed
+			// under Aspirin 81mg. Both still refuse, and for the reason they always did — neither naming
+			// order's names carry the rule's token. labelEntry is deliberately not the operand:
+			// nameByOrder does not update it, so on a renamed partner it identifies a different drug from
+			// the label being handed out, which is why this branch cannot use unambiguouslyNames.
+			return namesNamingOrder(rule, partner.namingOrder) ? partner.label : null;
 		}
 		// null and NOT the rule's token: where the two arms may be about different co-medications, each
 		// sentence keeps its own name. Making the class sentence adopt the rule's token here would move
 		// the mis-attribution rather than refuse it — "Pantoprazole is in the same ATC class (A02BC) as
 		// active order esomeprazole" states the class relationship the arm found for Omeprazole about a
 		// drug it did not resolve, which is the same defect in the other direction.
-		// The labelEntry null test is defensive and unreachable as written: namesADrug with !namedByOrder
-		// is the entry rung, whose constructor always supplies one. Kept because a future rung could
+		// The labelEntry null test is defensive and unreachable as written: namesADrug with no naming
+		// order is the entry rung, whose constructor always supplies one. Kept because a future rung could
 		// answer namesADrug true without an entry, and this way it refuses rather than dereferences.
 		return partner.labelEntry != null && unambiguouslyNames(rule, partner.labelEntry)
 				? partner.label : null;
+	}
+
+	/**
+	 * @return whether {@code rule}'s own match TOKEN names {@code order} — the test
+	 *         {@link #foldedPartnerLabel} needs before it lets a name an ORDER supplied stand in the rule
+	 *         sentence.
+	 *
+	 *         <p>Through {@link DrugReference#matchesOrderName} over that order's own
+	 *         {@link PatientClinicalContext.ActiveDrugOrder#getNames()}, which is exactly the predicate
+	 *         {@link PatientClinicalContext#hasActiveDrug} applied to admit this rule in the first place.
+	 *         So this asks no new question about the pair — it asks that SAME question of one order
+	 *         instead of the patient's flattened name list, and the narrowing is the whole of it: a rule
+	 *         admitted because some OTHER prescription carries its token must not be printed under this
+	 *         one's name, which is the {@code Naproxen}-renamed-after-{@code Esomeprazole} shape
+	 *         {@link #foldedPartnerLabel} records. It cannot widen anything by accident either, since the
+	 *         flattened set is a superset of any one order's names: whatever this admits, the rule match
+	 *         already admitted of that order.
+	 *
+	 *         <p><b>Asked of the ORDER whose display is about to be handed out</b>, which is the one
+	 *         {@link OrderPartner#namingOrder} carries — not of every order that merged into the partner.
+	 *         A partner can be reached by several orders ({@link #ordersCarrying}) and
+	 *         {@link OrderPartner#nameByOrder} is monotone, so the first carrier that can name itself is
+	 *         both the one the label came from and the one this validates. Asking the whole carrier set
+	 *         would prove a fact about one prescription and print another's name.
+	 *
+	 *         <p>Two shapes have nothing to compare, and both refuse rather than count as agreement. A
+	 *         rule with no token carries no name for its partner at all ({@link #partnerLabel} falls back
+	 *         to the ATC code), so nothing about the order can license one — which is why a token-less
+	 *         rule keeps naming its partner by that code. And an order with no names offers no name to
+	 *         put the token to. The {@code namedByCodesOnly} stand-in of issue #290 is the shape with no
+	 *         names at all and it cannot reach here — {@link #displayNamesADrug} answers false for it, so
+	 *         {@link #foldedPartnerLabel}'s {@code !namesADrug} branch returns first — but a caller may
+	 *         hand a real display over with no match tokens
+	 *         ({@code NamelessActiveOrderPartnerTest.aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName}'s
+	 *         latitude), and the empty answer is the honest one there too.
+	 */
+	private static boolean namesNamingOrder(DrugReference.Interaction rule,
+			PatientClinicalContext.ActiveDrugOrder order) {
+		if (ChartSearchAiUtils.isBlank(rule.getToken())) {
+			return false;
+		}
+		String token = rule.getToken().trim();
+		for (String name : order.getNames()) {
+			if (DrugReference.matchesOrderName(name, token)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -4357,9 +4427,17 @@ public class DrugSafetyValidator {
 
 		private String label;
 
-		/** Whether {@link #label} came from an ORDER rather than from the dataset — see
-		 *  {@link #nameByOrder}. */
-		private boolean namedByOrder;
+		/**
+		 * The ACTIVE ORDER whose display became {@link #label}, or null where the label came from the
+		 * dataset or is a bare code — see {@link #nameByOrder}.
+		 *
+		 * <p>The order itself and not a boolean saying that one supplied the name, because
+		 * {@link DrugSafetyValidator#foldedPartnerLabel} asks a question OF that order — whether the rule
+		 * about to be folded onto this partner names it — and a flag beside a nullable reference is two
+		 * states that can come to disagree. Carrying the order makes "named by an order" and "which
+		 * order" one fact, so the fold cannot be handed a name with nothing to validate it against.
+		 */
+		private PatientClinicalContext.ActiveDrugOrder namingOrder;
 
 		private final Set<String> codes = new LinkedHashSet<String>();
 
@@ -4462,10 +4540,11 @@ public class DrugSafetyValidator {
 		 * rule about to be folded onto this partner NAMES that entry before letting this label displace
 		 * the rule's own token — and only on the branch where {@link #label} is still this entry's own
 		 * display label, because {@link #nameByOrder} does not update this field and a renamed partner's
-		 * label can therefore name a different drug from the one validated here. That is why the renamed
-		 * case is refused outright rather than validated against this field. Not the same question as {@link #substances}, which is what an ORDER is
-		 * known to contain and is populated on one rung only — conflating the two would widen a
-		 * suppression that decides which chips are silenced (see that field).
+		 * label can therefore name a different drug from the one validated here. So a renamed partner is
+		 * validated against {@link #namingOrder} instead, which is the order the label actually came from;
+		 * this field is not consulted there at all. Not the same question as {@link #substances}, which is
+		 * what an ORDER is known to contain and is populated on one rung only — conflating the two would
+		 * widen a suppression that decides which chips are silenced (see that field).
 		 */
 		private final DrugReference labelEntry;
 
@@ -4499,13 +4578,13 @@ public class DrugSafetyValidator {
 		 *  the entry that supplied it, and that it IS a name. Stated once so the two sites that take
 		 *  this rung cannot come to disagree about what an entry-named partner is. */
 		private OrderPartner(DrugReference entry) {
-			this(entry.displayLabel(), false, entry, true);
+			this(entry.displayLabel(), null, entry, true);
 		}
 
-		private OrderPartner(String label, boolean namedByOrder, DrugReference labelEntry,
-				boolean namesADrug) {
+		private OrderPartner(String label, PatientClinicalContext.ActiveDrugOrder namingOrder,
+				DrugReference labelEntry, boolean namesADrug) {
 			this.label = label;
-			this.namedByOrder = namedByOrder;
+			this.namingOrder = namingOrder;
 			this.labelEntry = labelEntry;
 			this.namesADrug = namesADrug;
 		}
@@ -4534,7 +4613,7 @@ public class DrugSafetyValidator {
 			// the caller had checked. A second caller added later would then set namesADrug for a code
 			// list and put [ATC …] in BOTH sentences of a folded chip, the failure ADR Decision 38
 			// measured, made worse by the fold.
-			if (namedByOrder || !displayNamesADrug(order)) {
+			if (namingOrder != null || !displayNamesADrug(order)) {
 				return;
 			}
 			// The display itself, and no longer firstNonBlank(display, orderCode): the guard above has
@@ -4550,11 +4629,11 @@ public class DrugSafetyValidator {
 			// the public constructor's latitude reaches the difference, which is the latitude
 			// FoldedChipOnePartnerNameTest.aBlankDisplayNeverDisplacesTheDatasetName uses.
 			label = order.getDisplay();
-			namedByOrder = true;
+			namingOrder = order;
 			// Redundant today and deliberately written anyway: the only path that reaches here has already
-			// set namesADrug through its entry (the !namedByOrder guard above admits only the entry rung),
-			// so DELETING this line leaves all 1346 api tests green — re-measured on this head by deleting
-			// it and running the suite, the count having gone stale once already. Say deleting and not
+			// set namesADrug through its entry (the null-namingOrder guard above admits only the entry
+			// rung), so DELETING this line leaves all 1347 api tests green — re-measured on this head by
+			// deleting it and running the suite, the count having gone stale twice already. Say deleting and not
 			// "mutating": NEGATING it reddens two, because
 			// aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName and
 			// aCodeOnlyOrderDoesNotTakeTheNamingOfAPartnerFromANamedOne both observe the flag's true
@@ -4729,7 +4808,7 @@ public class DrugSafetyValidator {
 							order != null
 									? ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode)
 									: orderCode,
-							order != null, null, displayNamesADrug(order));
+							order, null, displayNamesADrug(order));
 				byIdentity.put(identity, partner);
 			}
 			if (unnameableCode && order != null) {
@@ -4766,7 +4845,7 @@ public class DrugSafetyValidator {
 				// code NAME is what this partner is known to contain (issue #185). Inside this branch
 				// and not beside it: the condition is exactly "the dataset could not name this code,
 				// and an order carries it", so what is read here belongs to this code. Reading the
-				// partner's namedByOrder flag instead would let a LATER code of a DIFFERENT order pass
+				// partner's naming order instead would let a LATER code of a DIFFERENT order pass
 				// and attribute that order's constituents here. EVERY carrier and not just the one the
 				// label came from, for the mirror reason — see ordersCarrying. Both are the same
 				// hazard: a suppression that depends on the sequence OrderService returned the

@@ -1054,11 +1054,11 @@ public class DrugReferenceInjector {
 	 * the partner by the class arm's ladder, while the note below keeps
 	 * {@code DrugSafetyValidator.partnerLabel} — so for such a partner the chip and this record can call
 	 * one active order two things. Where that method refuses, the chip's rule sentence is
-	 * {@code partnerLabel} again and this record agrees with it as before. Deliberate, and the trade is stated on that method and in ADR
-	 * Decision 39: closing it would move this record's text, which is PROMPT text and needs its own
-	 * measurement, and {@code DrugReference.displayLabel()} forbids itself here in any case. What is
-	 * unchanged is that every name this record can carry for that partner is one the same prompt already
-	 * contained, because the chip used to carry both.
+	 * {@code partnerLabel} again and this record agrees with it as before. Deliberate, and the trade is
+	 * stated on that method and in ADR Decision 39: closing it would move this record's text, which is
+	 * PROMPT text and needs its own measurement. What is unchanged is that every name this record can
+	 * carry for that partner is one the same prompt already contained, because the chip used to carry
+	 * both.
 	 *
 	 * <p>Scoped to that arm deliberately, and the scope is the correction
 	 * {@link DrugSafetyValidator#addQuestionPairInteractions} asks for: across the whole chip set the
@@ -1698,12 +1698,13 @@ public class DrugReferenceInjector {
 		if (subject == null || ref.substanceKey() == null) {
 			return "";
 		}
-		// getName(), NEVER displayLabel(): the synonym-augmented label is a chip-display concern and is
-		// documented on DrugReference.displayLabel as never entering prompt text, which
-		// DrugSafetyQuestionPairInteractionTest's sibling
-		// DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText pins for the rest of
-		// this record. This clause is prompt text like the rest of it, and it must name the rows the way
-		// the header above names them or the sentence would contrast a name the record never uses.
+		// getName(), NEVER displayLabel(): the synonym-augmented label is that method's chip-display
+		// vocabulary, and DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText pins it
+		// out of THIS record's text — which is the property to cite, not "it never enters prompt text",
+		// a claim displayLabel's own javadoc used to make and which the safety_finding record falsifies
+		// (renderFinding copies a chip detail verbatim). This clause is prompt text like the rest of it,
+		// and it must name the rows the way the header above names them or the sentence would contrast a
+		// name the record never uses.
 		// (That is why worthNamingApart takes two strings rather than two rows: the chip supplies its
 		// display vocabulary and the record its prompt vocabulary, and only the comparison is shared.)
 		String rendered = ref.getName();

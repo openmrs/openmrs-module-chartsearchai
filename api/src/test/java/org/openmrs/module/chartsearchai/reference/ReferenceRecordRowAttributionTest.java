@@ -333,9 +333,11 @@ public class ReferenceRecordRowAttributionTest {
 	@Test
 	public void theClauseNamesTheRowsTheRecordDoesAndNotTheirChipLabels() throws IOException {
 		// Found by mutation, not by design: {@link DrugReference#displayLabel} is the synonym-augmented
-		// CHIP label and its javadoc says it is "never used in prompt text — record rendering keeps
-		// getName()", which DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText pins
-		// for the REST of this record. That test cannot reach this clause — its aspirin entry is a
+		// CHIP label, and this record renders getName() instead —
+		// DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText pins that for the REST
+		// of this record. Scoped to THIS record deliberately: displayLabel's javadoc used to claim it was
+		// "never used in prompt text", which is false of the safety_finding record (renderFinding copies a
+		// chip detail verbatim) and is corrected there. That test cannot reach this clause — its aspirin entry is a
 		// one-row substance, so nothing is ever attributed — so the leak would have shipped: every other
 		// case in this file uses rows whose two vocabularies coincide.
 		DrugReferenceService service =
@@ -366,7 +368,7 @@ public class ReferenceRecordRowAttributionTest {
 				+ "separately for the same substance."),
 				"the clause names the rows as the record's own header names them, was: " + record);
 		assertFalse(record.contains("(aspirin)"),
-				"and the synonym-augmented chip label never enters prompt text, was: " + record);
+				"and the synonym-augmented chip label does not enter THIS record's text, was: " + record);
 	}
 
 	@Test

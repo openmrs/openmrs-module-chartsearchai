@@ -103,9 +103,19 @@ public class DrugReference {
 	 * renders only when the two genuinely diverge (neither contains the other, case-insensitive):
 	 * route variants like {@code Lidocaine (topical)} and redundancy like
 	 * {@code Kava (kava preparation)} render unchanged — the check lives here, not only in the
-	 * ddinter parser, because a curated json file can bind {@code genericName} directly. Never
-	 * used in prompt text — record rendering keeps {@link #getName()} — so this is a
-	 * chip-display concern only.
+	 * ddinter parser, because a curated json file can bind {@code genericName} directly.
+	 *
+	 * <p><b>It DOES reach prompt text, and this javadoc said otherwise until August 2026.</b> The
+	 * claim was "never used in prompt text — record rendering keeps {@code getName()}", and what is
+	 * true is the narrower half of it: the {@code drug_reference} record's own text keeps
+	 * {@link #getName()}, which {@code DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText}
+	 * pins. The {@code safety_finding} record does not: {@code DrugSafetyValidator.interactionWarning}
+	 * builds both a chip's drug and its detail from this label, and
+	 * {@code DrugReferenceInjector.renderFinding} copies both verbatim into prompt text — measured
+	 * through the real {@code validate} over the bundled DDInter sample,
+	 * {@code Safety finding — Acetylsalicylic acid (aspirin): Acetylsalicylic acid (aspirin) interacts
+	 * with active order warfarin — Major. …}. So do not cite the old sentence as a reason two surfaces
+	 * cannot share a string; say which RECORD is meant.
 	 */
 	public String displayLabel() {
 		if (genericName == null || genericName.isEmpty() || name == null) {

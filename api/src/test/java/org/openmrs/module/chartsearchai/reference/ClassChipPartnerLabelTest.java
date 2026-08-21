@@ -59,15 +59,16 @@ public class ClassChipPartnerLabelTest {
 	 *  the fixture publish — which is what makes "the entry carrying this code" ambiguous at all. */
 	private static final String CYCLOSPORINE_ORDER_CODE = "L04AD01";
 
-	/** The curated seed's own aspirin rule, unrated and so exempt from the severity floor, which is why
-	 *  these cases can carry it at all. Its ATC is {@code B01AC06} — one of the aspirin order's three
-	 *  codes, but not the one the NSAID group matches.
+	/** The curated seed's own aspirin rule as the RULE's own token words it, unrated and so exempt from
+	 *  the severity floor, which is why these cases can carry it at all. Its ATC is {@code B01AC06} — one
+	 *  of the aspirin order's three codes, but not the one the NSAID group matches.
 	 *
-	 *  <p>Read by both cases, folded and unfolded alike, and that is a fact about issue #292's scope
-	 *  rather than an accident: a folded chip names its one order once only where the ladder's name came
-	 *  from the DATASET, and the partner in both of these cases is named after the ORDER, which
-	 *  {@code foldedPartnerLabel} refuses to hand out. So the rule sentence still carries the rule's own
-	 *  token in both. */
+	 *  <p>Read by ONE case now, and that is issue #292's scope rather than an accident. It used to be
+	 *  shared with the folded case below, whose partner is named after the ORDER — and a folded chip
+	 *  reconciles such a partner where the RULE's own token names that very order
+	 *  ({@code DrugSafetyValidator.foldedPartnerLabel}), which {@code aspirin} does of an
+	 *  {@code Aspirin 81mg} order. So that case now words its rule sentence with the order's display and
+	 *  this constant is the unfolded wording only. */
 	private static final String CURATED_ASPIRIN_RULE_SENTENCE =
 			"Ibuprofen interacts with active order aspirin — additive GI and bleeding risk";
 
@@ -91,14 +92,19 @@ public class ClassChipPartnerLabelTest {
 								DrugReferenceTestSupport.set("aspirin 81mg"), ASPIRIN_ORDER_CODES))));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
-		// Two names for one prescription, and issue #292 deliberately does NOT reconcile them here. The
-		// ladder's name came from the ORDER, and an order is not a substance: DrugSafetyValidator's
-		// foldedPartnerLabel refuses to hand out an order-supplied name because what it can validate is
-		// the entry the DATASET resolved, and on a partner renamed after an order the two need not
-		// denote the same drug. So the rule sentence keeps the rule's own token. This assertion is
-		// therefore byte-identical to what it was before that change.
-		assertEquals(CURATED_ASPIRIN_RULE_SENTENCE + ". Ibuprofen is in the same cross-reactivity group"
-				+ " (NSAID) as active order Aspirin 81mg — possible additive or duplicate-class therapy",
+		// ONE name for one prescription, which is issue #292's own spec change and this string is where it
+		// shows: this assertion used to read the rule's token ("active order aspirin") beside the ladder's
+		// order name ("active order Aspirin 81mg"), one prescription under two names in one detail, which
+		// is the defect the ticket opens with. The ladder's name came from the ORDER here — the seed
+		// carries none of the order's three codes — and an order is not a substance, so
+		// DrugSafetyValidator.foldedPartnerLabel hands that name to the rule sentence only where the
+		// RULE's own token names that very order. It does: token `aspirin` against an order whose names
+		// are {aspirin 81mg}, the same predicate PatientClinicalContext.hasActiveDrug used to admit the
+		// rule. Where it does not — a partner renamed after a DIFFERENT order, or one order carrying two
+		// substances' codes — the two names stay, and FoldedChipOnePartnerNameTest pins both.
+		assertEquals("Ibuprofen interacts with active order Aspirin 81mg — additive GI and bleeding"
+				+ " risk. Ibuprofen is in the same cross-reactivity group (NSAID) as active order"
+				+ " Aspirin 81mg — possible additive or duplicate-class therapy",
 				warnings.get(0).getDetail());
 	}
 

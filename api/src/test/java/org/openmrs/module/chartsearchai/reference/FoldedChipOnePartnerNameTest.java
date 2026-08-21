@@ -450,9 +450,12 @@ public class FoldedChipOnePartnerNameTest {
 	 * <p>Byte-identical for THESE arrangements, which is narrower than the method name reads. The same
 	 * change moved the guard on {@code OrderPartner.nameByOrder} into that method, so an unfolded
 	 * class-only chip for a partly-covered order whose display is BLANK does change — from the bare code
-	 * to the dataset's name, which is issue #155's defect being removed rather than a regression. That
-	 * shape is {@link #aBlankDisplayNeverDisplacesTheDatasetName}'s, folded there; no arrangement here
-	 * reaches it.
+	 * to the dataset's name. That is issue #155's defect being removed where the shared class was matched
+	 * through a code the dataset COVERS, and issue #161's shape where it was matched through the
+	 * uncovered code alone, because the covered constituent's name then does not classify the drug the
+	 * sentence names. Both directions are stated in ADR Decision 39; the shape is
+	 * {@link #aBlankDisplayNeverDisplacesTheDatasetName}'s, folded and covered there, and no arrangement
+	 * here reaches the uncovered one.
 	 */
 	@Test
 	public void chipsOutsideTheFoldAreUnchanged() {

@@ -1718,7 +1718,7 @@ public class DrugSafetyValidator {
 				// One name for the two sentences about to share a detail — see foldedPartnerLabel. Both
 				// are worded from it here rather than each arm wording its own, which is what let them
 				// disagree (issue #292).
-				String reconciled = foldedPartnerLabel(hit.getKey(), rule);
+				String reconciled = foldedPartnerLabel(hit.getKey(), rule.rule);
 				folded.put(rule, new FoldedClassSentence(
 						reconciled != null ? reconciled : partnerLabel(rule.rule),
 						hit.getValue().sentence(ref,
@@ -2295,15 +2295,18 @@ public class DrugSafetyValidator {
 	 *        ({@link OrderPartner#namesADrug}), whether it came from an order
 	 *        ({@link OrderPartner#namedByOrder}) and the entry it was resolved from
 	 *        ({@link OrderPartner#labelEntry})
-	 * @param rule the matched rule the class sentence is folding onto, carrying the partner entry
-	 *        {@link #activeOrderEntryFor} resolved for it — the bridge, rather than a second resolution
+	 * @param rule the matched rule the class sentence is folding onto. Its {@link SubjectRule} wrapper is
+	 *        deliberately NOT taken: the entry {@link #activeOrderEntryFor} resolved for that rule is not
+	 *        consulted, because {@link #identifies} accepts a bare shared ATC code, so comparing the two
+	 *        arms' resolved substances agrees spuriously on exactly the shape this refuses (see
+	 *        {@link #unambiguouslyNames}). What decides is the rule's own token against the ladder's entry
 	 * @return the one name both sentences take, or <b>null</b> when they must not be reconciled — each
 	 *         sentence then keeps the name its own arm resolved, which is what the chip has always said.
 	 *         The caller reads null as "use each arm's own name", so it must not be confused with
 	 *         {@link #partnerLabel}'s own nullability: that returns null only for a rule carrying neither
 	 *         token nor code, which a rule inside the matched loop cannot be.
 	 */
-	private String foldedPartnerLabel(OrderPartner partner, SubjectRule rule) {
+	private String foldedPartnerLabel(OrderPartner partner, DrugReference.Interaction rule) {
 		if (!partner.namesADrug) {
 			// The ladder has no name to keep, so the rule's own token is the only one either arm holds —
 			// unless the rule has no token either, when nothing here is a name and neither sentence
@@ -2311,7 +2314,7 @@ public class DrugSafetyValidator {
 			// chip naming an active order N02BA01 is the very thing namesADrug refuses on the other side,
 			// and returning it here would put a bare code where the class sentence had at least labelled
 			// its codes AS codes.
-			return ChartSearchAiUtils.isBlank(rule.rule.getToken()) ? null : partnerLabel(rule.rule);
+			return ChartSearchAiUtils.isBlank(rule.getToken()) ? null : partnerLabel(rule);
 		}
 		if (partner.namedByOrder) {
 			// The label names the ORDER, and an order is not a substance. Refused because the guard below
@@ -2332,7 +2335,7 @@ public class DrugSafetyValidator {
 		// The labelEntry null test is defensive and unreachable as written: namesADrug with !namedByOrder
 		// is the entry rung, whose constructor always supplies one. Kept because a future rung could
 		// answer namesADrug true without an entry, and this way it refuses rather than dereferences.
-		return partner.labelEntry != null && unambiguouslyNames(rule.rule, partner.labelEntry)
+		return partner.labelEntry != null && unambiguouslyNames(rule, partner.labelEntry)
 				? partner.label : null;
 	}
 

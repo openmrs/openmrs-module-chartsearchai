@@ -43,6 +43,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 35: A class code in the answer must come from a record the answer cites](#decision-35-a-class-code-in-the-answer-must-come-from-a-record-the-answer-cites)
 - [Decision 36: The shipped default is the whole DDInter knowledge base](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base)
 - [Decision 37: A safety answer's call is as strong as the finding's rating](#decision-37-a-safety-answers-call-is-as-strong-as-the-findings-rating)
+- [Decision 38: An active order the module cannot name is still one co-medication](#decision-38-an-active-order-the-module-cannot-name-is-still-one-co-medication)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -2380,3 +2381,36 @@ Because a "Yes" here was measured wrong before. Issue #107's arm C let the addre
 - **−** `moderate` still refuses. Whether it should qualify instead is a clinical judgement this decision deliberately does not take: the reported defect is Minor, and DDInter's own Moderate tier carries mechanisms that a refusal does not misrepresent.
 - **−** The prompt grows. The few-shot gains one record and one demonstration, and every finding carries an extra sentence. Measured on the standalone against a 32768-token context, `main` @ `b0cfe545` to this branch: the gentamicin question **8009 → 8309** (audit rows 6460, 6499–6501) and the ibuprofen control **11905 → 12254** (rows 6449/6451, 6502). The fixed few-shot is most of both and is paid on every query, safety-related or not, so its size is stated as its own measurement rather than derived from those deltas: read off `LlmProvider.DEFAULT_SYSTEM_PROMPT.length()` (a throwaway case in the api module, three builds compiled in turn), the constant is **6256** characters on `main` @ `b0cfe545` and **7637** here, so it grows by **1381**. That corrects the **1065** this bullet published, which no version of the constant produces: the growth to the build the token deltas were taken on was already **1173** (7429 characters, the prompt unchanged between that commit and the one before this round), and the mixed-set rule adds the remaining 208. The per-finding cost is 10 tokens, measured directly rather than divided out — Betty's ibuprofen question, which injects exactly one more clause than before, went **8474 → 8484**. Neither figure moved when the clause was extended to contraindications, because both questions inject only interaction findings *before* the answer exists — the contraindication chips beside them are raised by the post-answer pass and are never rendered into the prompt. **The three token figures predate the mixed-set rule** and are 208 characters of fixed prompt light; re-measuring them needs the standalone, and it has not been re-run, so they are left attributed to the build that produced them rather than adjusted on paper.
 - **−** The guarantee is that the **evidence states its own strength**, not that the answer obeys it. The model can still write a refusal over a caution clause; what changed is that doing so now contradicts a sentence in the record it cites, which the answer-quality gate and a reader can both see.
+
+## Decision 38: An active order the module cannot name is still one co-medication
+
+**Status: Accepted** (August 2026) — implemented, issue [#290](https://github.com/openmrs/openmrs-module-chartsearchai/issues/290).
+
+### Context
+
+`PatientClinicalContextBuilder` skipped an active drug order it could read no name for — it can be neither rendered as a record nor matched against chart text, and a nameless line in front of a clinician is worse than silence. But `addAtcCodes` runs above that skip and needs no name, so the order's ATC codes reached the flattened union with **no order behind them**, and `DrugSafetyValidator.orderPartners` keys such a code on the raw code string (`identity = order != null ? order : (Object) orderCode`).
+
+One prescription therefore became one duplicate-therapy chip **per ATC code**, each naming an unlabelled code. Measured through the real `validate` with the curated seed: a nameless order carrying `M01AE02` and `M01AE04`, asked about ibuprofen, raised **2 chips**; the same order with a display name raised **1**.
+
+Issue #155's label ladder could not reach it — an order skipped by the builder never enters `getActiveDrugOrders()`, so there was no display name to fall back to. The builder's own comment had named this a known gap and prescribed the fix as "a fallback display rather than a skip".
+
+### Decision
+
+Such an order reaches the per-order list through `PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly`, carrying:
+
+- a **display of its own ATC codes labelled as codes** — `[ATC C10AA01, J01FA09]` — built from the shared normalizer so the label cannot disagree with the codes it keys on;
+- an **empty name set**, because that set is lowercased and matched against chart prose, so a code in it would match free text;
+- the order's **real uuid**, so the injected record stays citable.
+
+An order with no name *and* no ATC code is still skipped: nothing can name it and no chip can be raised for it.
+
+Two guards keep a synthesized display from behaving like a name. It is withheld from `OrderPartner.nameByOrder`, so it can never displace a name the reference data supplied — asked of the order (`hasKnownName()`), never re-derived as "are its names empty", which is a proxy the public constructor lets a caller falsify. And `orderCarrying` prefers a carrier that can name itself, because it picks **one** carrier of a dataset-unnameable code and that pick decides the partner's label; taking the first would let a code list displace a real drug name on the strength of the sequence `OrderService` returned the prescriptions in.
+
+### Trade-offs
+
+- **+** A nameless order can no longer witness its **own** interaction. Issue #132's per-order exclusion needs the order to be *in* the per-order list; without it only the flattened fallback applied, which cannot tell one order carrying two codes from two orders carrying one. Reverting only the builder makes the pinned case report `Simvastatin interacts with active order clarithromycin — Major` off a single tablet. A false positive removed, not a wording change.
+- **+** One chip per prescription instead of one per code, and the order becomes a citable chart record instead of being invisible to the reconciliation that exists to substantiate the chip.
+- **−** Where the shared class is matched through the **unnameable** code alone, the covered constituent's name stays on the chip, so its stated class need not classify the drug it names — issue #161's shape, now reachable for a partly-covered nameless order. Accepted because the alternative was measured to contradict itself: letting the code list win put `[ATC N02BA01, N02BA99]` beside the rule arm's `aspirin` inside **one** folded chip detail.
+- **−** This order class is **uuid-only** for the #118 reconciliation. With no names, `namedIn` can never be true, so the name fallback that `DrugReferenceInjector` documents as insurance against uuid-contract drift is unavailable exactly here.
+- **−** `RESOURCE_TYPE_ACTIVE_DRUG_ORDER` groups as `REFERENCE_GROUP_CHART`, so unlike `drug_reference` and `safety_finding` its grounding verdict **is** published on the wire, and a record naming no drug may not entail a medication claim. A false `Unsupported` can therefore reach a client. Accepted because the alternative is the order being invisible; carried forward rather than measured here.
+- **−** Not fixed: the rule arm names its partner from the **rule's** own token (`partnerLabel`), which nothing the builder supplies can reach, so the rule arm and the class arm can still name one order differently. That needs a change to the interaction arm and is filed separately.

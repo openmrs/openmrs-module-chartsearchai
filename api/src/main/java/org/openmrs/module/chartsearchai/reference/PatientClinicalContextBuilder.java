@@ -168,10 +168,10 @@ final class PatientClinicalContextBuilder {
 							orderNames.iterator().next(), orderNames, orderAtcCodes));
 				} else if (!normalizedCodes.isEmpty()) {
 					String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
-					log.warn("Active drug order {} has no readable name; it will be named by its ATC "
-							+ "codes as {}. A safety chip for this order names the codes rather than a "
-							+ "drug, and the order cannot be matched against chart text.",
-						drugOrder.getUuid(), codeOnlyDisplay);
+					log.warn("Active drug order {} has no readable name; it will be identified by its ATC "
+							+ "codes as {}. A safety chip for it is labelled that way unless the reference "
+							+ "data can name one of those codes, and the order cannot be matched against "
+							+ "chart text at all.", drugOrder.getUuid(), codeOnlyDisplay);
 					activeOrders.add(PatientClinicalContext.ActiveDrugOrder
 							.namedByCodesOnly(drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes));
 				}

@@ -2241,9 +2241,10 @@ public class DrugSafetyValidator {
 	 * because the {@code ddinter} parser lower-cases every token it writes from the partner row's RxNorm
 	 * generic while the class arm prints that row's {@link DrugReference#displayLabel()}.
 	 *
-	 * <p><b>Four outcomes, and three of them are refusals.</b> Reconciling two names means asserting they
-	 * denote one drug, so this method reconciles only where that is provable and otherwise leaves the
-	 * chip saying what it has always said.
+	 * <p><b>It reconciles on two paths and refuses on the rest.</b> Reconciling two names means asserting
+	 * they denote one drug, so it does so only where that is provable and otherwise leaves the chip
+	 * saying what it has always said. Deliberately not stated as a count: the first item below both
+	 * reconciles and refuses depending on whether the rule has a token at all.
 	 * <ol>
 	 *   <li><b>The ladder found no name</b> ({@code !namesADrug}) — a bare code or the {@code [ATC …]}
 	 *       stand-in is the ABSENCE of a name (issue #290) and may not displace one, so both sentences
@@ -2328,6 +2329,9 @@ public class DrugSafetyValidator {
 		// the mis-attribution rather than refuse it — "Pantoprazole is in the same ATC class (A02BC) as
 		// active order esomeprazole" states the class relationship the arm found for Omeprazole about a
 		// drug it did not resolve, which is the same defect in the other direction.
+		// The labelEntry null test is defensive and unreachable as written: namesADrug with !namedByOrder
+		// is the entry rung, whose constructor always supplies one. Kept because a future rung could
+		// answer namesADrug true without an entry, and this way it refuses rather than dereferences.
 		return partner.labelEntry != null && unambiguouslyNames(rule.rule, partner.labelEntry)
 				? partner.label : null;
 	}

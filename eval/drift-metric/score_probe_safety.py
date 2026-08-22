@@ -653,11 +653,12 @@ def discordant_severity(cell):
     naming a rating over an empty deterministic layer is already `unsupported_no`'s or
     `unsupported_caution`'s cell. Two shapes reach it, and they want opposite treatment. A cell whose
     chips are all UNRATED — a contraindication-only cell, or a class-only duplicate-therapy join — is
-    a legitimate silence: the rating cannot have come from a chip, so the only place left is a cited
-    record about some other partner, the residual false alarm below. A cell whose RULE chip simply
-    could not be PARSED is not: the comparison did not run, and `summarise`'s collapse flag is what
-    says so out loud rather than letting the 0 read as a pass. Measured over the 20 live cells
-    captured for #299, the gate changes nothing — 2 of the 7 ANSWER cells carry no readable rating,
+    a legitimate silence: the rating cannot have come from a chip OF THIS DRUG, so every place left
+    is about something else — the residual false alarms below, all three of them. A cell whose RULE
+    chip simply could not be PARSED is not: the comparison did not run, and `summarise`'s collapse
+    flag is what says so out loud rather than letting the 0 read as a pass. Measured over the 20
+    live cells captured for #299, the gate changes nothing — 2 of the 7 ANSWER cells carry no
+    readable rating,
     but neither NAMES a rating either, so neither is silenced by the gate rather than by having
     nothing to compare; and the collapse flag does not fire there, both being cells with no rule
     interaction chip at all. So `severity-unrated-chip/` and `severity-chip-reworded/` pin these,
@@ -679,9 +680,21 @@ def discordant_severity(cell):
     combines it with a rated chip, so the shape is reasoned rather than observed and no fixture
     pins it. An injected `safety_finding` about a DIFFERENT drug is the same shape — the screening
     arm raises findings whose subject is another active order, and `renderFinding` puts each one's
-    rating word into the prompt as a numbered citation. Left un-narrowed for
-    `ClassCodeFidelityCheck`'s reason: the narrowing available is clause scoping, which this harness
-    does not do, and the capture carries no record text to subtract.
+    rating word into the prompt as a numbered citation. And the NEAREST source is a third of the
+    same shape: another CHIP in this very response, for a different drug. `load` narrows the chip
+    side to `mine` on purpose — the validator also raises warnings for drugs the answer happens to
+    name, and one of those must not label this cell — but those warnings are on the wire in
+    `safetyWarnings` and can be rated, so an answer correctly quoting one is reported with nothing
+    misstated. Its epistemic status is the other two's, reasoned and not observed: read it off the
+    fixtures rather than off a count here — group each capture's `safetyWarnings` by their `drug`
+    field and look for a cell naming more than one — which is the same scan the narrowing itself
+    would have to be justified by. Left un-narrowed for
+    `ClassCodeFidelityCheck`'s reason: for all three the narrowing available is clause scoping —
+    attributing the rating to the clause it sits in — which this harness does not do, and for the
+    two record-borne shapes the capture carries no record text to subtract in the first place.
+    Widening the chip side to every chip is NOT the narrowing for the third: it is fail-open, since
+    an answer overstating THIS drug's Moderate as Major would then be excused by any other drug's
+    Major chip. `mine` stays as it is.
     """
     return has_readable_chip_rating(cell) and bool(
         answer_ratings(cell) - set(cell["chip_ratings"]))
@@ -1097,10 +1110,12 @@ SELFTEST_CASES = [
     # The gate that keeps #299's class apart from its neighbours: an ANSWER cell whose chips carry
     # NO rating (a cross-reactivity contraindication rates
     # nothing) and whose answer names one anyway. `discordant_severity` stays silent, because with
-    # nothing to be discordant WITH the rating did not come from a chip and the only other place it
-    # can have come from is a cited `drug_reference` record about some other partner — the residual
-    # false alarm the gate exists to hold out. No live number stands behind that: measured over the
-    # 20 cells captured for #299 the gate changes nothing, because no ANSWER cell there names a
+    # nothing to be discordant WITH the rating did not come from a chip of this drug, and every
+    # place left is about something else — a cited `drug_reference` record or `safety_finding` about
+    # another partner, or another drug's own chip in the same response. Those are the residual false
+    # alarms the gate exists to hold out; `discordant_severity`'s docstring lists them. No live
+    # number stands behind that: measured over the 20 cells captured for #299 the gate changes
+    # nothing, because no ANSWER cell there names a
     # rating over unrated chips (`betty__safety-clarithromycin` and `betty__safety-warfarin` do name
     # one over no chip at all, but both label ABSTAIN and this column counts ANSWER cells). The
     # shape is real and unobserved live, which is exactly what a constructed fixture is for. Delete

@@ -51,7 +51,7 @@ port 8081, `sourceFormat=ddinter`, full 19MB KB, `minInteractionSeverity=minor`,
 | `out-i112-r1-B3.json` | Agnes Adams — *"Is it safe to give her aspirin?"* | 2026-08-04, PR #125 branch, round 1 cell **B3** — one of that PR's 8/8 abstention controls |
 | `out-c1-tiotropium-linezolid.json` | Susan Young `763e6e5f…` — *"Is it safe to give linezolid?"* | 2026-08-04, PR #125 branch, cell **C1** |
 | `caution-lead/mary__safety-warfarin.json` | Mary Smith — *"Can this patient take warfarin?"* | 2026-08-19, #283 branch — the probe's own phrasing, captured by running its 20 cells |
-| `severity-overstated/steven__safety-rifabutin.json` | Steven White `cbc1658d…` — *"Can I give rifabutin?"* | 2026-08-22, merged `main` @ `47b6aa0d` — issue #299's own question, not the probe's phrasing, so it was taken by the same `POST /chartsearchai/search` `capture_probe_safety.sh` makes rather than by running the probe |
+| `severity-overstated/steven__safety-rifabutin.json` | Steven White `cbc1658d…` — *"Can I give rifabutin?"* | 2026-08-22, merged `main` @ `47b6aa0d` — issue #299's own question, and neither its patient nor its drug nor its phrasing is one of the probe's DEFAULTS, so it was taken by the same `POST /chartsearchai/search` `capture_probe_safety.sh` makes rather than by running the probe. The probe can produce this cell now — see that arm's section |
 
 Patient states (verified live by the sessions that captured the above): Mary — Simvastatin 20mg;
 Agnes — Aspirin 81mg; Joshua — Lisinopril 10mg + aspirin allergy; Susan — Tiotropium 18mg;
@@ -237,6 +237,20 @@ Pins ANSWER 1, verdict-led 1, unlicensed 0 (the "No" is correct — #299 is expl
 a #283 violation), **`named a severity no chip carries` 1**, the census `1 of 1`, and **exit 3**.
 Before `discordant_severity` it scored exit 0 with every column clean.
 
+**Reproducing the arm needs no hand-made request any more.** `capture_probe_safety.sh` takes
+`PROBE_PATIENTS` / `PROBE_DRUGS` beside `CAPTURE_PHRASING`, so
+
+```
+PROBE_PATIENTS=steven:cbc1658d-d77e-42e6-bfa8-35ed42882dfc PROBE_DRUGS=rifabutin \
+  CAPTURE_PHRASING='Can I give {drug}?' ./capture_probe_safety.sh out-299-A
+```
+
+writes this arm's shape against a live standalone. That matters for what this directory can and
+cannot be used for: frozen bytes pin the SCORER and cannot move when the MODULE moves, so a check
+that a remedy for #299 actually removes the defect has to be run over a fresh capture of that
+command. Scoring this directory before and after such a remedy proves only that the scorer was left
+alone.
+
 ### `severity-concordant/` — the same cell with the one word right
 `severity-overstated/` with **one field changed**, and the arm a remedy for #299 would produce.
 
@@ -286,10 +300,12 @@ written, which is the defect this file's own header records twice.
 
 `joshua___context.json` ← `shipped-clean/`, verbatim.
 
-Why the expected result is **silence**, not a flag: the rating cannot have come from a chip, so the
-only place left is a cited `drug_reference` record about some other partner, and that is the
-residual false alarm the gate exists to hold out. This arm exists because no live capture shows the
-shape — over the 20 cells captured for #299 the gate changes nothing, no ANSWER cell there naming a
+Why the expected result is **silence**, not a flag: the rating cannot have come from a chip of this
+drug, so every place left is about something else — a cited `drug_reference` record or
+`safety_finding` about another partner, or another drug's own chip in the same response — and those
+are the residual false alarms the gate exists to hold out. This arm exists because no live capture
+shows the shape — over the 20 cells captured for #299 the gate changes nothing, no ANSWER cell
+there naming a
 rating over unrated chips — so the silence had nothing pinning it. Pins `named a severity no chip
 carries` 0, the census **0 of 1** (the direction the two `1 of 1` assertions cannot reach), and
 **exit 0**. Delete the `has_readable_chip_rating(cell) and` from `discordant_severity` and read the

@@ -511,8 +511,10 @@ to change.
 > Naming the rating needs no such judgement, which is why this half could land and those cannot.
 >
 > **It is silent when the chips for that drug carry no rating at all.** The rating cannot then have
-> come from a chip, and the only place left is a cited `drug_reference` record about some other
-> partner — the shape a contraindication-only cell has, since a contraindication rates nothing.
+> come from a chip of that drug, and every place left is about something else — a cited
+> `drug_reference` record or `safety_finding` about another partner, or another drug's own chip in
+> the same response. That is the shape a contraindication-only cell has, since a contraindication
+> rates nothing.
 > No live number stands behind that gate: over the same 20 cells it changes nothing either way.
 > `fixtures/probe-safety/severity-unrated-chip/` is what pins it; delete the gate and read the
 > failures rather than trusting a tally here, which went stale the first time another arm exercised
@@ -554,6 +556,26 @@ to change.
 > `fixtures/probe-safety/severity-overstated/` — a verbatim capture of #299's own cell, not a
 > constructed one — flags 1 and exits 3, where before it scored an ordinary verdict-led win at
 > exit 0.
+>
+> **That 0 of 7 is not evidence the module is clean, and the reproducing cell is now producible
+> rather than only frozen.** #299's cell is Steven White asked about rifabutin, and neither the
+> patient nor the drug is among the defaults — so the issue's own cell is not one of the twenty,
+> and on the capture behind that 0 of 7 no cell of the twenty showed the defect either.
+> `capture_probe_safety.sh` therefore takes `PROBE_PATIENTS` / `PROBE_DRUGS`, whitespace-separated
+> and both defaulting to the 4 × 5 arrays, so every figure above and in ADR Decision 37 is still
+> read under the matrix that produced it:
+>
+> ```
+> PROBE_PATIENTS=steven:cbc1658d-d77e-42e6-bfa8-35ed42882dfc PROBE_DRUGS=rifabutin \
+>   CAPTURE_PHRASING='Can I give {drug}?' ./capture_probe_safety.sh out-299-A
+> ```
+>
+> Without that, the only thing holding the cell is `fixtures/probe-safety/severity-overstated/`, a
+> frozen capture — it pins the SCORER and cannot move when the MODULE moves. An A/B gating either
+> remedy #299 names, run over the default cells, would then read `named a severity no chip carries:
+> A=0 B=0` — arm A already does — print no FLIP row and exit 0 on both arms, so the remedy ships
+> either ungated or judged ineffective on a harness whose cells do not carry the defect. Run it over
+> a capture of the command above as well, and read that column there.
 >
 > Two collisions worth knowing, both stated as accepted costs at `ANSWER_SEVERITY`. OpenMRS's
 > ALLERGY severity vocabulary overlaps DDInter's on `Moderate` and `Unknown` and the chart renders

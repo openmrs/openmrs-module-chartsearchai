@@ -358,12 +358,9 @@ def _blank_cell(aliases, unreadable):
     no fixture exists.
 
     Keys must stay the full set the real construction below produces, and **a green suite is not
-    evidence that one is unused**. Pop each key in turn and run `--selftest`: several leave it green,
-    `refs` among them, which nothing in this file reads at all. `chip_ratings` is the one whose
-    omission the suite does catch — through `stray-file + stray-file`, because `main`'s flip loop
-    asks `discordant_severity` about EVERY shared cell rather than only the ANSWER ones. Two earlier
-    revisions of this paragraph tried to state a rule for which keys are load-bearing and both were
-    measured false; the measurement is one command, so take it rather than a rule.
+    evidence that one is unused**: pop each key in turn and run `--selftest`, and read the result.
+    Earlier revisions of this paragraph each asserted a rule for which keys are load-bearing, and
+    each was measured false, which is why this one gives the command instead.
     """
     return {"answer": "", "unreadable": unreadable, "chips": [], "all_chips": [],
             "own_drug": False, "ctx_ok": False, "refs": [], "findings": [],

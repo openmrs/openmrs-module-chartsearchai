@@ -517,14 +517,35 @@ to change.
 > `fixtures/probe-safety/severity-unrated-chip/` is what pins it, and deleting the gate reddens that
 > case and no other.
 >
+> **The census is a gate, not just a number.** The chip side has to parse the chip `detail` —
+> `serializeSafetyWarnings` puts type/drug/detail on the wire and no severity field — and every
+> fixture here is a frozen capture, so a reword in `DrugSafetyValidator.interactionWarning` or
+> `DdiDrugReferenceSource.noteFor` cannot redden any of them while every live arm reports a clean
+> zero for the wrong reason. Measured: reword `severity-overstated/`'s chip clause to
+> `(Moderate severity):` and leave its answer at *"a Major problem"*, and the arm that exists to
+> fail scored 0 and exited 0. So an arm whose ANSWER cells carry interaction chips and yield NOT ONE
+> readable rating is now flagged, arm-level like the ZERO-chips rule it copies;
+> `severity-chip-reworded/` pins it. A PARTIAL reword is still only visible in the census number.
+>
+> **What it does not catch**, pinned rather than assumed: it is a set difference over ALL of the
+> drug's chips, so on a cell with two rated chips an answer may name the wrong one and pass —
+> `severity-wrong-chip/` is #299's own capture calling its **Moderate** rifapentine interaction
+> *"a Minor problem"*, which is that cell's other chip, and it exits 0.
+>
 > Measured when it landed: **0 of the 20 live cells** of this probe flag it (capture 2026-08-22
-> against the 3.7.1 standalone on merged `main` @ `47b6aa0d`), with the census reading **5 of 7**
-> ANSWER cells carrying a readable chip rating; `fixtures/probe-safety/severity-overstated/` — a
-> verbatim capture of #299's own cell, not a constructed one — flags 1 and exits 3, where before it
-> scored an ordinary verdict-led win at exit 0. The chip side parses the chip `detail`, because
-> `serializeSafetyWarnings` puts type/drug/detail on the wire and no severity field, so the census
-> is printed beside the column: a rewording of that clause shows as the census collapsing rather
-> than as a metric silently passing everywhere.*)
+> against the 3.7.1 standalone on merged `main` @ `47b6aa0d`; that arm exits 3 in its own right,
+> because betty's drug-order query 400s on this demo DB (a null route) and her context reads
+> `ok:false` — her active orders are bupivacaine and lidocaine, neither a probe drug, and her one
+> simvastatin order expired 2026-08-04, so no label and neither figure moves), with the
+> census reading **5 of 7** ANSWER cells carrying a readable chip rating;
+> `fixtures/probe-safety/severity-overstated/` — a verbatim capture of #299's own cell, not a
+> constructed one — flags 1 and exits 3, where before it scored an ordinary verdict-led win at
+> exit 0.
+>
+> Two collisions worth knowing, both stated at `ANSWER_SEVERITY`: OpenMRS's ALLERGY severity
+> vocabulary overlaps DDInter's on `Moderate` and `Unknown`, so a rating directly following
+> `Severity: ` is refused; and the default `minInteractionSeverity=minor` filters exactly DDInter's
+> Unknown rows, so no chip on a default-configured capture can carry `Unknown`.*)
 
 **The same fault in the Java side of the harness.** `LlmAnswerQualityTest.buildPromptVariations()`
 anchored an arm on `"Answer ONLY the specific question asked."` while the prompt says *"Answer ONLY

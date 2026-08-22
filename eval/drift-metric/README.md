@@ -523,16 +523,20 @@ to change.
 > `DdiDrugReferenceSource.noteFor` cannot redden any of them while every live arm reports a clean
 > zero for the wrong reason. Measured: reword `severity-overstated/`'s chip clause to
 > `(Moderate severity):` and leave its answer at *"a Major problem"*, and the arm that exists to
-> fail scored 0 and exited 0. So an arm whose ANSWER cells carry interaction chips and yield NOT ONE
-> readable rating is now flagged, arm-level like the ZERO-chips rule it copies;
-> `severity-chip-reworded/` pins it. A PARTIAL reword is still only visible in the census number.
+> fail scored 0 and exited 0. So a cell carrying a RULE interaction chip that yields no readable
+> rating is now flagged — per cell, because an arm-level form let one intact cell mask a reworded
+> one, and keyed on the rule chip's own "interacts with" wording rather than on the chip TYPE,
+> because a class-only duplicate-therapy join is `TYPE_INTERACTION` and unrated by design, so on
+> `sourceFormat=atc` a type-keyed rule fired on every healthy arm. `severity-chip-reworded/` pins
+> both halves: it is a partial reword, so making the flag arm-level again turns it green.
 >
 > **What it does not catch**, pinned rather than assumed: it is a set difference over ALL of the
 > drug's chips, so on a cell with two rated chips an answer may name the wrong one and pass —
 > `severity-wrong-chip/` is #299's own capture calling its **Moderate** rifapentine interaction
 > *"a Minor problem"*, which is that cell's other chip, and it exits 0.
 >
-> Measured when it landed: **0 of the 20 live cells** of this probe flag it (capture 2026-08-22
+> Measured when it landed: **0 of the 7 ANSWER cells** (of 20 captured — the column's base is the
+> ANSWER cells, which is what it is computed over) flag it (capture 2026-08-22
 > against the 3.7.1 standalone on merged `main` @ `47b6aa0d`; that arm exits 3 in its own right,
 > because betty's drug-order query 400s on this demo DB (a null route) and her context reads
 > `ok:false` — her active orders are bupivacaine and lidocaine, neither a probe drug, and her one

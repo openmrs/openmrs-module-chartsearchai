@@ -255,9 +255,9 @@ was added to the flip condition for. The A/B case also pins the flip row's `seve
 read `A:NO -> B:NO` with nothing on it saying what moved.
 
 ### `severity-unrated-chip/` — the gate that keeps #299's class off its neighbours' ground
-`shipped-clean/joshua__safety-ibuprofen.json` with **two fields changed**, and the only arm that
-exercises `discordant_severity`'s silence gate: an ANSWER cell whose chips carry no rating at all
-and whose answer names one.
+`shipped-clean/joshua__safety-ibuprofen.json` with **three fields changed**, and the arm that pins
+`discordant_severity`'s silence gate: an ANSWER cell whose chips carry no rating at all and whose
+answer names one.
 
 > **CONSTRUCTED**: its `safetyWarnings` are that cell's own two chips with the **interaction** one
 > removed, leaving only the cross-reactivity contraindication — which rates nothing, as every
@@ -266,6 +266,11 @@ and whose answer names one.
 > **CONSTRUCTED**: the `answer`, `"No — Ibuprofen should not be given: Ibuprofen is in the same
 > cross-reactivity group as the patient's allergy to Acetylsalicylic acid [41], a Major problem
 > [41]."` — the same closing frame #299's own cell reproduces, over a chip that rates nothing.
+
+> **CONSTRUCTED**: `references` with index 42 dropped — the `safety_finding` for the interaction
+> chip removed above. A capture whose answer cites neither it nor its chip would not carry it, and
+> leaving it made this arm quietly also `finding-no-chip/`'s shape. Scorer output is byte-identical
+> either way; it is dropped for coherence, not for effect.
 
 `joshua___context.json` ← `shipped-clean/`, verbatim.
 
@@ -276,8 +281,9 @@ shape — over the 20 cells captured for #299 the gate changes nothing, no ANSWE
 rating over unrated chips — so the silence had nothing pinning it. Pins `named a severity no chip
 carries` 0,
 the census **0 of 1** (the direction the two `1 of 1` assertions cannot reach), and **exit 0**.
-Delete the `bool(cell["chip_ratings"]) and` from `discordant_severity` and this is the only case
-here that reddens.
+Delete the `has_readable_chip_rating(cell) and` from `discordant_severity` and read the failures —
+this arm is one of them, and a tally here went stale the first time another arm exercised the same
+gate.
 
 ### `severity-wrong-chip/` — the boundary in the under-stating direction
 `severity-overstated/` with **one field changed**, and the counterpart of `wrong-partner/` for the
@@ -296,19 +302,26 @@ visible rather than assumed, and when a per-chip attribution lands this is the e
 to change.
 
 ### `severity-chip-reworded/` — the arm that proves the census had to be a gate
-`severity-overstated/` with the CHIP side reworded and the answer untouched.
+`severity-overstated/` with the CHIP side reworded and the answer untouched, PLUS
+`shipped-clean/`'s mary cell untouched beside it.
 
-> **CONSTRUCTED**: both chip `detail` strings, `— Moderate.` → `(Moderate severity):` and
-> `— Minor.` → `(Minor severity):`. The `answer` still says *"a Major problem [293]"*.
+> **CONSTRUCTED**: both of steven's chip `detail` strings, `— Moderate.` → `(Moderate severity):`
+> and `— Minor.` → `(Minor severity):`. His `answer` still says *"a Major problem [293]"*.
+
+* `mary__safety-clarithromycin.json` and `mary___context.json` ← `shipped-clean/`, verbatim. They are
+  what make this a PARTIAL reword: her chip still yields `Major`, so an arm-level flag would see one
+  readable cell and stay silent while steven's cell carries a real overstatement. That is why the
+  flag is per cell.
 
 `CHIP_SEVERITY` parses a clause the module renders, and every fixture here is a frozen capture — so a
 reword in `DrugSafetyValidator.interactionWarning` or `DdiDrugReferenceSource.noteFor` cannot redden
 any of them, while every LIVE arm would report a clean zero for the wrong reason. Measured on this
 arm before `summarise` gained the collapse check: `named a severity no chip carries` 0, census
 `0 of 1`, **exit 0** — the arm that exists to fail #299 scoring a pass. That is #207's own fault
-("left … green while it asserted nothing at all"). Now pins **exit 3** with the census at `0 of 1`
+("left … green while it asserted nothing at all"). Now pins **exit 3** with the census at `1 of 2`
 and the column still at 0, so a reader cannot mistake "could not run" for "passed". Delete the
-`if unratable and not readable:` branch in `summarise` and this is the only case here that reddens.
+`unratable` computation in `summarise`, or make its flag arm-level again
+(`if unratable and not readable:`), and read the failures.
 
 ### `unsupported-caution/` — the fail-open direction that opens
 `shipped-clean` with **one field changed**: `agnes__safety-aspirin.json`'s `answer`, the same cell

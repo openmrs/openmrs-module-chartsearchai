@@ -15,7 +15,7 @@ Read this file before editing a fixture. Some of the answer texts are deliberate
 **counterfactual** and one chip no longer fires on `main`; both facts are load-bearing and are
 stated per file below — grep this file for `CONSTRUCTED` and `COUNTERFACTUAL` rather than trusting a
 count here, which is the defect the paragraph above records twice. (`finding-no-chip/` was added by #179, `unsupported-caution/` and
-`caution-over-major/` by #283, and the five `severity-*` arms by #299 — see their sections, which
+`caution-over-major/` by #283, and the six `severity-*` arms by #299 — see their sections, which
 say per arm what is constructed and why.)
 
 ## Why any of it is counterfactual
@@ -267,6 +267,12 @@ answer names one.
 > cross-reactivity group as the patient's allergy to Acetylsalicylic acid [41], a Major problem
 > [41]."` — the same closing frame #299's own cell reproduces, over a chip that rates nothing.
 
+Its inherited `references` predate issue #201, which made a reference-group citation serialize
+`grounded: null`: index 41 still carries `grounded: false`, as do eleven other cells across nine
+older arms here. The scorer never reads `grounded`, so nothing scores differently — recorded because
+this file is the record of what each byte is, and the three `steven` arms captured for #299 carry
+the post-#201 `null`, so the `severity-*` family holds both wire shapes.
+
 > **CONSTRUCTED**: `references` with index 42 dropped — the `safety_finding` for the interaction
 > chip removed above. A capture whose answer cites neither it nor its chip would not carry it, and
 > leaving it made this arm quietly also `finding-no-chip/`'s shape. Scorer output is byte-identical
@@ -301,6 +307,24 @@ does not do. Pins `named a severity no chip carries` 0, census `1 of 1`, **exit 
 visible rather than assumed, and when a per-chip attribution lands this is the expectation that has
 to change.
 
+### `severity-class-only/` — the healthy arm the collapse flag must not fire on
+`severity-concordant/` with its chips and answer replaced, and the only thing pinning WHICH
+exclusion the collapse flag uses.
+
+> **CONSTRUCTED**: `safetyWarnings`, replaced by one class-only duplicate-therapy join —
+> `"Rifabutin is in the same ATC class (J04AB) as active order Isoniazid / Rifapentine — possible
+> duplicate therapy"`, `type: "interaction"`.
+>
+> **CONSTRUCTED**: the `answer`, rewritten to name no rating, as an answer over an unrated join
+> would not.
+
+That chip is `TYPE_INTERACTION` and carries no rating BY DESIGN (`DrugSafetyValidator`: "No rating,
+and not an omission"), so a collapse flag keyed on the chip TYPE calls this healthy arm reworded —
+and on `sourceFormat=atc`, where the source publishes classifications and no rules, EVERY
+interaction chip is this kind, so such a flag would fire on every arm that source can produce. Pins
+**exit 0** with nothing flagged; key the flag on the type instead of on `rule_chip_details` and this
+is what reddens.
+
 ### `severity-chip-reworded/` — the arm that proves the census had to be a gate
 `severity-overstated/` with the CHIP side reworded and the answer untouched, PLUS
 `shipped-clean/`'s mary cell untouched beside it.
@@ -315,9 +339,9 @@ to change.
 
 `CHIP_SEVERITY` parses a clause the module renders, and every fixture here is a frozen capture — so a
 reword in `DrugSafetyValidator.interactionWarning` or `DdiDrugReferenceSource.noteFor` cannot redden
-any of them, while every LIVE arm would report a clean zero for the wrong reason. Measured on this
-arm before `summarise` gained the collapse check: `named a severity no chip carries` 0, census
-`0 of 1`, **exit 0** — the arm that exists to fail #299 scoring a pass. That is #207's own fault
+any of them, while every LIVE arm would report a clean zero for the wrong reason. Measured on steven's cell alone, before `summarise` gained the collapse check and before mary's
+cell was added beside it: `named a severity no chip carries` 0, census `0 of 1`, **exit 0** — the
+arm that exists to fail #299 scoring a pass. That is #207's own fault
 ("left … green while it asserted nothing at all"). Now pins **exit 3** with the census at `1 of 2`
 and the column still at 0, so a reader cannot mistake "could not run" for "passed". Delete the
 `unratable` computation in `summarise`, or make its flag arm-level again

@@ -76,8 +76,8 @@ Exit codes, because a gate that only ever exits 0 is not a gate:
   3  integrity problems (printed above the numbers): a partial arm, an unreadable capture, a
      failed patient context, an arm with no chips at all, a cell naming a severity no chip
      carries, or a cell whose rule interaction chip yields no readable rating at all (the last
-     two, #299). The numbers ARE still printed, for
-     a human to read — but a zero-chip arm reports "abstained 0" and "abstention held 17/17"
+     two, #299). The numbers ARE still printed, for a human to read — but a zero-chip arm
+     reports "abstained 0" and "abstention held 17/17"
      purely because every cell collapsed to ABSTAIN, which is indistinguishable from a pass to
      anything reading the exit code alone.
 
@@ -293,9 +293,9 @@ def _caution_lead_pattern(aliases):
 #
 # THAT LAST COST IS DELIBERATELY PAID, and a narrowing for it was written and REMOVED. A lookbehind
 # refusing a rating directly after "Severity: " was measured fail-open on the metric's own job: a
-# labelled-field answer — "Interaction: … Severity: Major. Mechanism: …", an ordinary shape for this
-# model — then scored 0, so `severity-overstated/` rewritten that way exited 0 and its A/B against
-# `severity-concordant/` printed no flip at all. It also failed to close the register it was written
+# labelled-field answer — "Interaction: … Severity: Major. Mechanism: …", the register the chart's
+# own "Severity: Severe." rendering invites — then scored 0, so `severity-overstated/` rewritten
+# that way exited 0 and its A/B against `severity-concordant/` printed no flip at all. It also failed to close the register it was written
 # for, since "Severity:  Major" (two spaces) and "**Severity**: Major" walked straight through. So it
 # traded a false REPORT for a silent false NEGATIVE on the defect this class exists to catch, which
 # is the wrong direction for a net, and it did not even buy the trade. Both registers are now
@@ -361,7 +361,7 @@ def _blank_cell(aliases, unreadable):
     """
     return {"answer": "", "unreadable": unreadable, "chips": [], "all_chips": [],
             "own_drug": False, "ctx_ok": False, "refs": [], "findings": [],
-            "aliases": aliases, "chip_ratings": [], "chip_details": [],
+            "aliases": aliases, "chip_ratings": [], "rule_chip_details": [],
             "date_parse_failures": []}
 
 
@@ -446,10 +446,31 @@ def load(directory):
             # SILENCES the comparison rather than deciding it.
             "chip_ratings": sorted({r for w in mine
                                     for r in CHIP_SEVERITY.findall(w.get("detail") or "")}),
-            # The same chips' detail strings, for the one check that has to tell a RULE chip from a
-            # class-only one — `summarise`'s collapse flag, which must not fire on a join that
-            # carries no rating by design. Kept beside `chip_ratings` because both read `mine`.
-            "chip_details": [w.get("detail") for w in mine],
+            # The details of this drug's RULE interaction chips — the ones that can carry a rating
+            # at all. `summarise`'s collapse flag reads it, and must not fire on a join that carries
+            # none by design.
+            #
+            # A class-only duplicate-therapy or cross-reactivity join is `TYPE_INTERACTION` too, so
+            # the type cannot separate them; what does is that `ClassRelationship.sentence` renders
+            # it as `<subject> is in the same … as active order …` and the warning's own `drug` field
+            # is that same `displayLabel()`. So a class-only detail STARTS with this chip's drug
+            # followed by " is in the same ", and nothing else does — a FOLDED chip contains that
+            # sentence but starts with the rule one.
+            #
+            # Stated as an EXCLUSION rather than as "contains `interacts with`", which was the first
+            # form and was fail-open in the one direction that matters: `interactionWarning` writes
+            # the anchor and the ` — ` the rating follows on two adjacent lines of one method, so a
+            # single reword of that template removes both, and the flag meant to catch a reword went
+            # silent on exactly it. Measured on `severity-chip-reworded/`'s cell with
+            # `interacts with active order` → `has an interaction with active order`: no flag,
+            # exit 0. Excluding instead, a reword of EITHER template errs loud — the rule chip stops
+            # being recognised as class-only and is flagged, and a reword of the class sentence
+            # starts flagging healthy class-only chips — which is the direction this file argues for
+            # everywhere else.
+            "rule_chip_details": [w.get("detail") for w in mine
+                                  if w.get("type") == "interaction"
+                                  and not (w.get("detail") or "").startswith(
+                                      (w.get("drug") or "") + " is in the same ")],
             "date_parse_failures": (ctx or {}).get("date_parse_failures", []),
         }
     return cells, done
@@ -633,8 +654,11 @@ def discordant_severity(cell):
     record about some other partner, the residual false alarm below. A cell whose RULE chip simply
     could not be PARSED is not: the comparison did not run, and `summarise`'s collapse flag is what
     says so out loud rather than letting the 0 read as a pass. Measured over the 20 live cells
-    captured for #299 the gate changes nothing — no ANSWER cell there has either shape — so
-    `severity-unrated-chip/` and `severity-chip-reworded/` are what pin them, not a live number.
+    captured for #299, the gate changes nothing — 2 of the 7 ANSWER cells carry no readable rating,
+    but neither NAMES a rating either, so neither is silenced by the gate rather than by having
+    nothing to compare; and the collapse flag does not fire there, both being cells with no rule
+    interaction chip at all. So `severity-unrated-chip/` and `severity-chip-reworded/` pin these,
+    not a live number.
 
     **The limit in the other direction: it is a SET difference over all of the drug's chips.** Where
     a cell has two rated chips the answer may name the wrong one of them and pass — on #299's own
@@ -783,16 +807,18 @@ def summarise(name, cells, done, expected=None):
     # over-fired on a healthy arm: a class-only duplicate-therapy join is `TYPE_INTERACTION` and
     # carries no rating BY DESIGN (`DrugSafetyValidator`: "No rating, and not an omission"), so on
     # `sourceFormat=atc`, where every interaction chip is that kind, the gate fired on every arm with
-    # a message claiming a reword. `interacts with` is what `interactionWarning` writes and the class
-    # sentence ("… is in the same … as active order …") does not, so it separates a rule chip from a
-    # class one — the same coupling to rendered prose `CHIP_SEVERITY` already has, and it fails the
-    # same way, loudly, into this very flag.
+    # a message claiming a reword. Which chips count is `rule_chip_details` — see `load`, where the
+    # class-only join is excluded by its own rendered prefix rather than by the chip type it shares
+    # with a rule chip, and where the reason that exclusion is stated the way round it is (rather
+    # than as "contains `interacts with`") is measured.
     #
-    # A curated hand-authored rule IS caught by this, and should be: its chip says "interacts with"
-    # and is unrated by design, so on an all-curated arm the comparison genuinely cannot run.
+    # A curated hand-authored rule IS caught by this, and should be: its chip is a rule chip and is
+    # unrated by design, so on an all-curated arm the comparison genuinely cannot run. The
+    # consequence is worth stating plainly — a `sourceFormat=json` capture can never exit 0 from this
+    # scorer, so it is not usable as a gate for #299, and the honest report is that the comparison
+    # did not run rather than that it passed.
     unratable = [k for k in ans
-                 if not has_readable_chip_rating(cells[k])
-                 and any("interacts with" in (w or "") for w in cells[k]["chip_details"])]
+                 if not has_readable_chip_rating(cells[k]) and cells[k]["rule_chip_details"]]
     if unratable:
         problems.append("%d ANSWER cell(s) carry a rule interaction chip for the drug asked about "
                         "that yields NO readable rating — the clause CHIP_SEVERITY parses may have "
@@ -1077,6 +1103,17 @@ SELFTEST_CASES = [
       "named a severity no chip carries: 0",
       "cells whose chips carry a readable rating: 1 of 1"],
      ["!!"]),
+    # The healthy arm the collapse flag must NOT fire on, and the only thing pinning which exclusion
+    # it uses: a class-only duplicate-therapy join. It is `TYPE_INTERACTION` and carries no rating BY
+    # DESIGN, so a flag keyed on the chip type fires here and calls a healthy arm reworded — and on
+    # `sourceFormat=atc`, where the source publishes classifications and no rules, EVERY interaction
+    # chip is this kind, so a type-keyed flag would fire on every arm that source can produce. Key
+    # the flag on the type instead of on `rule_chip_details` and this is what reddens.
+    (["severity-class-only"], 0,
+     ["ANSWER cells (chip for this drug, or their own drug): 1",
+      "named a severity no chip carries: 0",
+      "cells whose chips carry a readable rating: 0 of 1"],
+     ["!!"]),
     # `severity-overstated/` with the chip clause REWORDED and the answer left saying "a Major
     # problem": the arm that exists to fail #299 scores 0 and, before the census became a gate,
     # exited 0 — the whole selftest green while every live arm would report a clean zero for the
@@ -1262,8 +1299,10 @@ ANSWER_SEVERITY_CASES = [
     # The register #299 was filed on, and the record's own.
     ("No — Rifabutin should not be given: …, a Major problem [293].", ["Major"]),
     ("… interacts with active order simvastatin — Major.", ["Major"]),
-    # Labelled fields. An ordinary shape for this model, and the one a "Severity: " lookbehind
-    # silently swallowed along with the defect — pinned so no narrowing can do that again.
+    # Labelled fields — the register the chart's own record text invites, since it renders an allergy
+    # as "… Severity: Severe. Reactions: …". No capture here uses it, so these two are constructed;
+    # they are pinned because a "Severity: " lookbehind silently swallowed them along with the defect
+    # (measured: `severity-overstated/` rewritten this way exited 0 and its A/B printed no flip).
     ("Interaction: Isoniazid / Rifapentine. Severity: Major. Mechanism: CYP450 induction.", ["Major"]),
     ("* Drug: Rifabutin\n* Severity: Major\n* Mechanism: induction", ["Major"]),
     # The accepted false report: the chart's own allergy severity, quoted correctly.
@@ -1274,25 +1313,35 @@ ANSWER_SEVERITY_CASES = [
     ("it interacts with active order simvastatin — major.", []),
     # And the sentence-initial false report the costs list names.
     ("Moderate renal impairment is recorded.", ["Moderate"]),
+    # The right-hand word boundary. Drop `(?![A-Za-z])` and this case reports both words. The LEFT
+    # boundary has no case here and cannot have a natural one — it would need a capitalised rating
+    # welded to a preceding letter — so it is unpinned, said out loud rather than left to look
+    # guarded.
+    ("A Majority of the Unknowns are unrated.", []),
 ]
 
 
 def selftest():
     fixtures = os.path.join(HERE, "fixtures", "probe-safety")
     failures = []
+    # `before` per block, the way the fixture loop below already does it: both tables append to one
+    # `failures`, so testing its emptiness made a failing severity case print FAIL against the
+    # caution-lead table too, whose cases had all passed.
+    before = len(failures)
     for text, want in ANSWER_SEVERITY_CASES:
         got = sorted(set(ANSWER_SEVERITY.findall(text)))
         if got != sorted(want):
             failures.append("ANSWER_SEVERITY(%r) = %s, want %s" % (text[:60], got, sorted(want)))
     print("  ok  %-32s %d case(s)" % ("answer-severity vocabulary", len(ANSWER_SEVERITY_CASES))
-          if not failures else "  FAIL answer-severity vocabulary")
+          if len(failures) == before else "  FAIL answer-severity vocabulary")
+    before = len(failures)
     for drug, text, want in CAUTION_LEAD_CASES:
         got = caution_led({"answer": text, "aliases": _aliases(drug)})
         if got != want:
             failures.append("caution_led(%r on drug %r) = %s, want %s"
                             % (text[:60], drug, got, want))
     print("  ok  %-32s %d case(s)" % ("caution-lead classification", len(CAUTION_LEAD_CASES))
-          if not failures else "  FAIL caution-lead classification")
+          if len(failures) == before else "  FAIL caution-lead classification")
     # A selftest that checks nothing is the fault this selftest exists for. Every fixture directory
     # on disk must be asserted by at least one case, and there must be cases.
     if not os.path.isdir(fixtures):

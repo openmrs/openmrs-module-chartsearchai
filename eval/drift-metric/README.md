@@ -514,8 +514,9 @@ to change.
 > come from a chip, and the only place left is a cited `drug_reference` record about some other
 > partner — the shape a contraindication-only cell has, since a contraindication rates nothing.
 > No live number stands behind that gate: over the same 20 cells it changes nothing either way.
-> `fixtures/probe-safety/severity-unrated-chip/` is what pins it, and deleting the gate reddens that
-> case and no other.
+> `fixtures/probe-safety/severity-unrated-chip/` is what pins it; delete the gate and read the
+> failures rather than trusting a tally here, which went stale the first time another arm exercised
+> the same gate.
 >
 > **The census is a gate, not just a number.** The chip side has to parse the chip `detail` —
 > `serializeSafetyWarnings` puts type/drug/detail on the wire and no severity field — and every
@@ -524,11 +525,18 @@ to change.
 > zero for the wrong reason. Measured: reword `severity-overstated/`'s chip clause to
 > `(Moderate severity):` and leave its answer at *"a Major problem"*, and the arm that exists to
 > fail scored 0 and exited 0. So a cell carrying a RULE interaction chip that yields no readable
-> rating is now flagged — per cell, because an arm-level form let one intact cell mask a reworded
-> one, and keyed on the rule chip's own "interacts with" wording rather than on the chip TYPE,
-> because a class-only duplicate-therapy join is `TYPE_INTERACTION` and unrated by design, so on
-> `sourceFormat=atc` a type-keyed rule fired on every healthy arm. `severity-chip-reworded/` pins
-> both halves: it is a partial reword, so making the flag arm-level again turns it green.
+> rating is now flagged. Per cell, because an arm-level form let one intact cell mask a reworded one
+> — `severity-chip-reworded/` is a partial reword and pins that. And "rule chip" is decided by
+> EXCLUDING the class-only join, which is `TYPE_INTERACTION` and unrated by design (so a type-keyed
+> flag fires on every healthy `sourceFormat=atc` arm — `severity-class-only/` pins that), by its own
+> rendered prefix `<drug> is in the same …` rather than by requiring `interacts with`. The
+> requiring form was fail-open on the one edit that matters: `interactionWarning` writes the anchor
+> and the ` — ` before the rating two lines apart, so one reword removes both and the flag went
+> silent on exactly the reword it guards. Excluding errs loud in both directions instead.
+>
+> What it still cannot do: a `sourceFormat=json` capture, whose curated rules are unrated by design,
+> trips the flag on every cell and so can never exit 0 from this scorer — such an arm is not usable
+> as a gate for #299, and the honest report is that the comparison did not run.
 >
 > **What it does not catch**, pinned rather than assumed: it is a set difference over ALL of the
 > drug's chips, so on a cell with two rated chips an answer may name the wrong one and pass —
@@ -546,10 +554,16 @@ to change.
 > constructed one — flags 1 and exits 3, where before it scored an ordinary verdict-led win at
 > exit 0.
 >
-> Two collisions worth knowing, both stated at `ANSWER_SEVERITY`: OpenMRS's ALLERGY severity
-> vocabulary overlaps DDInter's on `Moderate` and `Unknown`, so a rating directly following
-> `Severity: ` is refused; and the default `minInteractionSeverity=minor` filters exactly DDInter's
-> Unknown rows, so no chip on a default-configured capture can carry `Unknown`.*)
+> Two collisions worth knowing, both stated as accepted costs at `ANSWER_SEVERITY`. OpenMRS's
+> ALLERGY severity vocabulary overlaps DDInter's on `Moderate` and `Unknown` and the chart renders
+> `Severity: Moderate.`, so an answer quoting a chart allergy correctly is REPORTED. A lookbehind
+> refusing a rating after `Severity: ` was written for that and then removed: it also swallowed
+> `Interaction: … Severity: Major. Mechanism: …`, so `severity-overstated/` rewritten that way
+> exited 0 with no flip line — a false report traded for a silent false negative, the wrong
+> direction, and it did not even close its own register (`Severity:  Major`, `**Severity**: Major`
+> walked through). `ANSWER_SEVERITY_CASES` now pins which registers are read. The second collision:
+> the default `minInteractionSeverity=minor` filters exactly DDInter's Unknown rows, so no chip on a
+> default-configured capture can carry `Unknown`.*)
 
 **The same fault in the Java side of the harness.** `LlmAnswerQualityTest.buildPromptVariations()`
 anchored an arm on `"Answer ONLY the specific question asked."` while the prompt says *"Answer ONLY

@@ -268,9 +268,10 @@ answer names one.
 > [41]."` — the same closing frame #299's own cell reproduces, over a chip that rates nothing.
 
 Its inherited `references` predate issue #201, which made a reference-group citation serialize
-`grounded: null`: index 41 still carries `grounded: false`, as do the reference-group citations of
-every arm captured before that change. The `steven` arms captured for #299 carry the post-#201
-`null`, so the `severity-*` family holds both wire shapes. The scorer never reads `grounded`, so
+`grounded: null` unconditionally: index 41 still carries the verifier's own verdict, `false`. Arms
+captured before that change carry a MIX of `true`, `false` and `null` on such citations — index 42
+of this very cell was `true` before it was dropped — and that mix is exactly what #201 removed. The
+`steven` cells captured for #299 carry `null`, so the fixtures hold both wire shapes. The scorer never reads `grounded`, so
 nothing scores differently — recorded because this file is the record of what each byte is. Grep
 `\"grounded\": false` and read which citations are `\"group\": \"reference\"` rather than trusting a
 count here; the two counts that first stood in this paragraph were both wrong on the day they were
@@ -288,11 +289,10 @@ only place left is a cited `drug_reference` record about some other partner, and
 residual false alarm the gate exists to hold out. This arm exists because no live capture shows the
 shape — over the 20 cells captured for #299 the gate changes nothing, no ANSWER cell there naming a
 rating over unrated chips — so the silence had nothing pinning it. Pins `named a severity no chip
-carries` 0,
-the census **0 of 1** (the direction the two `1 of 1` assertions cannot reach), and **exit 0**.
-Delete the `has_readable_chip_rating(cell) and` from `discordant_severity` and read the failures —
-this arm is one of them, and a tally here went stale the first time another arm exercised the same
-gate.
+carries` 0, the census **0 of 1** (the direction the two `1 of 1` assertions cannot reach), and
+**exit 0**. Delete the `has_readable_chip_rating(cell) and` from `discordant_severity` and read the
+failures — this arm is one of them, and a tally here went stale the first time another arm exercised
+the same gate.
 
 ### `severity-wrong-chip/` — the boundary in the under-stating direction
 `severity-overstated/` with **one field changed**, and the counterpart of `wrong-partner/` for the

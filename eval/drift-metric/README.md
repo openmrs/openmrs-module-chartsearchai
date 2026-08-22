@@ -522,9 +522,9 @@ to change.
 > `serializeSafetyWarnings` puts type/drug/detail on the wire and no severity field — and every
 > fixture here is a frozen capture, so a reword in `DrugSafetyValidator.interactionWarning` or
 > `DdiDrugReferenceSource.noteFor` cannot redden any of them while every live arm reports a clean
-> zero for the wrong reason. Measured: reword `severity-overstated/`'s chip clause to
-> `(Moderate severity):` and leave its answer at *"a Major problem"*, and the arm that exists to
-> fail scored 0 and exited 0. So a cell carrying a RULE interaction chip that yields no readable
+> zero for the wrong reason. Measured: reword BOTH of `severity-overstated/`'s chip clauses to
+> `(Moderate severity):` / `(Minor severity):` and leave its answer at *"a Major problem"*, and the
+> arm that exists to fail scored 0 and exited 0 — that arm is `severity-chip-reworded/`. So a cell carrying a RULE interaction chip that yields no readable
 > rating is now flagged. Per cell, because an arm-level form let one intact cell mask a reworded one
 > — `severity-chip-reworded/` is a partial reword and pins that. And "rule chip" is decided by
 > EXCLUDING the class-only join, which is `TYPE_INTERACTION` and unrated by design (so a type-keyed

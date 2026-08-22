@@ -65,9 +65,8 @@ Naming the rating needs no such judgement, which is why THAT half could land and
 
 What IS checked in every direction is that the deterministic layer raised something at all — see
 `unlicensed_verdict`. What the A/B adds, short of the content, is that it compares the CLASS of the
-lead and not only the columns the class
-feeds: `verdict_led` is a union since #283, so two arms can tie on it while one leads with a
-refusal and the other with a permission. See the flip condition in `main`.
+lead and not only the columns the class feeds: `verdict_led` is a union since #283, so two arms can
+tie on it while one leads with a refusal and the other with a permission. See the flip condition in `main`.
 
 Exit codes, because a gate that only ever exits 0 is not a gate:
 
@@ -76,10 +75,9 @@ Exit codes, because a gate that only ever exits 0 is not a gate:
   3  integrity problems (printed above the numbers): a partial arm, an unreadable capture, a
      failed patient context, an arm with no chips at all, a cell naming a severity no chip
      carries, or a cell whose rule interaction chip yields no readable rating at all (the last
-     two, #299). The numbers ARE still printed, for a human to read — but a zero-chip arm
-     reports "abstained 0" and "abstention held 17/17"
-     purely because every cell collapsed to ABSTAIN, which is indistinguishable from a pass to
-     anything reading the exit code alone.
+     two, #299). The numbers ARE still printed, for a human to read — but a zero-chip arm reports
+     "abstained 0" and "abstention held 17/17" purely because every cell collapsed to ABSTAIN,
+     which is indistinguishable from a pass to anything reading the exit code alone.
 
 Usage: score_probe_safety.py <capture_dir> [<other_capture_dir>]
        score_probe_safety.py --selftest      (the blind-spot regression fixtures; no live server)
@@ -809,10 +807,13 @@ def summarise(name, cells, done, expected=None):
     # The census as a GATE, not just a number. `CHIP_SEVERITY` parses a clause the module renders,
     # and the committed fixtures are frozen captures — so a reword in `DrugSafetyValidator` or in
     # `DdiDrugReferenceSource.noteFor` leaves the whole selftest green while every LIVE arm reports a
-    # clean zero for the wrong reason. Measured: rewrite `severity-overstated/`'s chip detail from
-    # `— Moderate.` to `(Moderate severity):`, leave its answer saying "a Major problem", and the arm
-    # that exists to fail scores 0 and exits 0. That is #207's fault exactly ("left … green while it
-    # asserted nothing at all"), and a printed number no exit code reads does not close it.
+    # clean zero for the wrong reason. Measured: reword BOTH of `severity-overstated/`'s chip details
+    # (`— Moderate.` → `(Moderate severity):` and `— Minor.` → `(Minor severity):`), leave its answer
+    # saying "a Major problem", and the arm that exists to fail scores 0 and exits 0 — which is what
+    # `severity-chip-reworded/` is. Both, not one: leave the Minor chip intact and it still yields a
+    # rating, so the column fires and the arm exits 3 for the right reason. That is #207's fault
+    # exactly ("left … green while it asserted nothing at all"), and a printed number no exit code
+    # reads does not close it.
     #
     # PER CELL, and keyed on the RULE chip's own wording rather than on the chip type. Both halves
     # were arm-level first and both were measured wrong. Arm-level missed a PARTIAL reword — one cell

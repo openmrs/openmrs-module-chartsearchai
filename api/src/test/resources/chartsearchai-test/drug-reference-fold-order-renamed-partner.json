@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "source": "test fixture — a partner keyed on one substance and renamed after a different order",
+  "description": "DrugSafetyValidator.orderPartners keys a partner on the substance a covered code resolves, then OrderPartner.nameByOrder renames it after an order carrying a code the dataset cannot name (issue #186). Where that order is a DIFFERENT prescription from the one the partner was keyed on, the label names a drug the folded rule is not about — so the fold must not hand that label to the rule sentence. Ibuprofen's only rule is about naproxen; the second order's display says esomeprazole while its codes carry naproxen's, which is the mis-mapped-concept shape soleSubstanceOf merges on.",
+  "entries": [
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": ["ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "interactions": [
+        {
+          "token": "naproxen",
+          "atc": "M01AE02",
+          "severity": "Moderate",
+          "note": "Moderate. Duplicate NSAID therapy: additive gastrointestinal toxicity."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "naproxen",
+      "name": "Naproxen",
+      "aliases": ["naproxen"],
+      "atcCodes": ["M01AE02"],
+      "source": "test fixture"
+    }
+  ]
+}

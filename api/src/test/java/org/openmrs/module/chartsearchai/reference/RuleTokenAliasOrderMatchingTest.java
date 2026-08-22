@@ -127,7 +127,12 @@ public class RuleTokenAliasOrderMatchingTest {
 	@Test
 	public void theChipStillNamesTheRulesOwnTokenNotTheAliasItMatched() throws IOException {
 		// The label decision issue #136 records: a rule matched THROUGH an alias still says the token,
-		// which is what partnerLabel renders, so no client sees a partner's spelling change under it.
+		// which is what partnerLabel renders. That last clause — "so no
+	// client sees a partner's spelling change under it" — stopped being true at issue #292: a FOLDED
+	// chip renders foldedPartnerLabel's answer, so this same pair reads "active order aspirin" unfolded
+	// and "active order Acetylsalicylic acid (aspirin)" folded, which ADR Decision 39 records as its
+	// two-names-across-two-chips cost. This case is unaffected — its context carries names only, so
+	// orderPartners produces no partner and nothing folds — and what it pins is unchanged.
 		// Which alias the order matched is not part of the chip; the grouping key is a separate
 		// decision (bestRulePerPartner keys on the partner ENTRY, see its javadoc).
 		List<SafetyWarning> warnings = validator().validate(WARFARIN_ANSWER, WARFARIN_QUESTION,

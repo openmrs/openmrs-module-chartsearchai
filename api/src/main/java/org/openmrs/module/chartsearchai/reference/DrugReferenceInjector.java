@@ -1047,7 +1047,18 @@ public class DrugReferenceInjector {
 	 * predicate {@link DrugSafetyValidator} uses to decide an interaction concerns this patient (see
 	 * {@link #promotable}, which is that predicate and the severity floor together, applied both here
 	 * and inside the collapse below) — so a partner that raises a DRUG-IN-PLAY chip is exactly a
-	 * partner promoted here, and the rendered text cannot drift from that chip.
+	 * partner promoted here, and WHICH partners this text names cannot drift from that chip.
+	 *
+	 * <p>Which is a claim about the SET and, since issue #292, no longer about the NAME. Where
+	 * {@code DrugSafetyValidator.foldedPartnerLabel} reconciles a folded chip's two sentences it may name
+	 * the partner by the class arm's ladder, while the note below keeps
+	 * {@code DrugSafetyValidator.partnerLabel} — so for such a partner the chip and this record can call
+	 * one active order two things. Where that method refuses, the chip's rule sentence is
+	 * {@code partnerLabel} again and this record agrees with it as before. Deliberate, and the trade is
+	 * stated on that method and in ADR Decision 39: closing it would move this record's text, which is
+	 * PROMPT text and needs its own measurement. What is unchanged is that every name this record can
+	 * carry for that partner is one the same prompt already contained, because the chip used to carry
+	 * both.
 	 *
 	 * <p>Scoped to that arm deliberately, and the scope is the correction
 	 * {@link DrugSafetyValidator#addQuestionPairInteractions} asks for: across the whole chip set the
@@ -1215,8 +1226,15 @@ public class DrugReferenceInjector {
 	 *               {@code (type, drug, detail)} triple, which stopped recognising a repeat the moment
 	 *               either arm reworded its chip (see {@code DrugSafetyValidator.InteractionPairs}). A
 	 *               partner's own coalesced, trimmed name is not that: it is the atomic unit of the
-	 *               grouping, and issue #121's invariant — the key IS what the chip says — is
-	 *               deliberate rather than incidental.</li>
+	 *               grouping, and issue #121's invariant — the key IS what the RECORD says, which
+	 *               wherever the dataset identifies no partner entry is still exactly true of this
+	 *               method's own notes, {@code partnerLabel} being what it both keys and renders on that
+	 *               branch — is deliberate rather than incidental. (On the other branch
+	 *               {@link #onePerPartner} keys on the ENTRY while still rendering
+	 *               {@code partnerLabel}, which is the residue the next paragraph is about.) The chip half of that
+	 *               invariant is scoped since issue #292 (see
+	 *               {@code DrugSafetyValidator.foldedPartnerLabel}); this key is not, and does not
+	 *               follow the chip's rendered name.</li>
 	 *         </ul>
 	 *
 	 *         <p><b>Issue #190 item 2</b> is the residue the label key left where an identity WAS to be
@@ -1680,12 +1698,13 @@ public class DrugReferenceInjector {
 		if (subject == null || ref.substanceKey() == null) {
 			return "";
 		}
-		// getName(), NEVER displayLabel(): the synonym-augmented label is a chip-display concern and is
-		// documented on DrugReference.displayLabel as never entering prompt text, which
-		// DrugSafetyQuestionPairInteractionTest's sibling
-		// DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText pins for the rest of
-		// this record. This clause is prompt text like the rest of it, and it must name the rows the way
-		// the header above names them or the sentence would contrast a name the record never uses.
+		// getName(), NEVER displayLabel(): the synonym-augmented label is that method's chip-display
+		// vocabulary, and DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText pins it
+		// out of THIS record's text — which is the property to cite, not "it never enters prompt text",
+		// a claim displayLabel's own javadoc used to make and which the safety_finding record falsifies
+		// (renderFinding copies a chip detail verbatim). This clause is prompt text like the rest of it,
+		// and it must name the rows the way the header above names them or the sentence would contrast a
+		// name the record never uses.
 		// (That is why worthNamingApart takes two strings rather than two rows: the chip supplies its
 		// display vocabulary and the record its prompt vocabulary, and only the comparison is shared.)
 		String rendered = ref.getName();

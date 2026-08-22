@@ -129,7 +129,7 @@ public class MultiCodeClassChipTest {
 						DrugReferenceTestSupport.set("M02AA13", "M01AE01"), null, null));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
-		assertEquals("Ketoprofen interacts with active order ibuprofen — Moderate. Concomitant use of"
+		assertEquals("Ketoprofen interacts with active order Ibuprofen — Moderate. Concomitant use of"
 				+ " more than one nonsteroidal anti-inflammatory drug (NSAID) at a time may increase the"
 				+ " potential for serious gastrointestinal toxicity including inflammation, bleeding,"
 				+ " ulceration, and perforation of the esophagus, stomach, or intestines. These events"

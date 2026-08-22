@@ -59,9 +59,16 @@ public class ClassChipPartnerLabelTest {
 	 *  the fixture publish — which is what makes "the entry carrying this code" ambiguous at all. */
 	private static final String CYCLOSPORINE_ORDER_CODE = "L04AD01";
 
-	/** The curated seed's own aspirin rule, unrated and so exempt from the severity floor, which is
-	 *  why both these cases carry it. Its ATC is {@code B01AC06} — one of the aspirin order's three
-	 *  codes, but not the one the NSAID group matches. */
+	/** The curated seed's own aspirin rule as the RULE's own token words it, unrated and so exempt from
+	 *  the severity floor, which is why these cases can carry it at all. Its ATC is {@code B01AC06} — one
+	 *  of the aspirin order's three codes, but not the one the NSAID group matches.
+	 *
+	 *  <p>Read by ONE case now, and that is issue #292's scope rather than an accident. It used to be
+	 *  shared with the folded case below, whose partner is named after the ORDER — and a folded chip
+	 *  reconciles such a partner where the RULE's own token names that very order
+	 *  ({@code DrugSafetyValidator.foldedPartnerLabel}), which {@code aspirin} does of an
+	 *  {@code Aspirin 81mg} order. So that case now words its rule sentence with the order's display and
+	 *  this constant is the unfolded wording only. */
 	private static final String CURATED_ASPIRIN_RULE_SENTENCE =
 			"Ibuprofen interacts with active order aspirin — additive GI and bleeding risk";
 
@@ -85,8 +92,19 @@ public class ClassChipPartnerLabelTest {
 								DrugReferenceTestSupport.set("aspirin 81mg"), ASPIRIN_ORDER_CODES))));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
-		assertEquals(CURATED_ASPIRIN_RULE_SENTENCE + ". Ibuprofen is in the same cross-reactivity group"
-				+ " (NSAID) as active order Aspirin 81mg — possible additive or duplicate-class therapy",
+		// ONE name for one prescription, which is issue #292's own spec change and this string is where it
+		// shows: this assertion used to read the rule's token ("active order aspirin") beside the ladder's
+		// order name ("active order Aspirin 81mg"), one prescription under two names in one detail, which
+		// is the defect the ticket opens with. The ladder's name came from the ORDER here — the seed
+		// carries none of the order's three codes — and an order is not a substance, so
+		// DrugSafetyValidator.foldedPartnerLabel hands that name to the rule sentence only where the
+		// RULE's own token names that very order. It does: token `aspirin` against an order whose names
+		// are {aspirin 81mg}, the same predicate PatientClinicalContext.hasActiveDrug used to admit the
+		// rule. Where it does not — a partner renamed after a DIFFERENT order, or one order carrying two
+		// substances' codes — the two names stay, and FoldedChipOnePartnerNameTest pins both.
+		assertEquals("Ibuprofen interacts with active order Aspirin 81mg — additive GI and bleeding"
+				+ " risk. Ibuprofen is in the same cross-reactivity group (NSAID) as active order"
+				+ " Aspirin 81mg — possible additive or duplicate-class therapy",
 				warnings.get(0).getDetail());
 	}
 
@@ -136,10 +154,12 @@ public class ClassChipPartnerLabelTest {
 	public void anOrderTheDatasetFilesAsSeveralRowsIsNamedBySubstance() throws IOException {
 		// Issue #174 site 1. The class sentence rides inside the folded chip here, which is what a
 		// systemic cyclosporine order actually produces: the KB rates the tacrolimus pair Major, so the
-		// rule arm reaches it too and names the partner by the rule's own match token ("cyclosporine",
-		// lowercased by the ddinter parser), while the class sentence names it by the resolved entry.
-		// A first-wins resolution prints "Cyclosporine (ophthalmic)" there — an ophthalmic preparation
-		// the chart does not record.
+		// rule arm reaches it too. Both sentences now name the partner by the resolved entry — until
+		// issue #292 the rule arm named it by the rule's own match token ("cyclosporine", lowercased by
+		// the ddinter parser) while the class sentence named it by that entry, so this one chip called
+		// one prescription two things. A first-wins resolution prints "Cyclosporine (ophthalmic)" there
+		// — an ophthalmic preparation the chart does not record — which is what this case is about, and
+		// it is now asserted on both sentences rather than one.
 		DrugSafetyValidator validator = DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE));
 
@@ -149,7 +169,7 @@ public class ClassChipPartnerLabelTest {
 						DrugReferenceTestSupport.set(CYCLOSPORINE_ORDER_CODE), null, null));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
-		assertEquals("Tacrolimus interacts with active order cyclosporine — Major. Coadministration of"
+		assertEquals("Tacrolimus interacts with active order Cyclosporine — Major. Coadministration of"
 				+ " tacrolimus and cyclosporine may increase the risk and severity of nephrotoxicity due"
 				+ " to additive effects on the kidney. Clinical experience indicates that the combination"
 				+ " is associated with increased renal toxicity as evidenced by increased serum"

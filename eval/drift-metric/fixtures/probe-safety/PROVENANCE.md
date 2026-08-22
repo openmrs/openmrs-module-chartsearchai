@@ -247,12 +247,14 @@ Before `discordant_severity` it scored exit 0 with every column clean.
 
 Its own case pins the class in the silent direction (`named a severity no chip carries` 0, census
 `1 of 1`, exit 0). Its real work is the A/B against `severity-overstated/`, which is why the two
-exist as a pair rather than as one arm: measured before `discordant_severity` was added to the flip
-condition, these two arms — one carrying #299's defect, one carrying its fix — printed **no FLIP
-line and A=B on every aggregate column, exit 0 on both**. That is the same fail-open `caution_led`
-was added to the flip condition for. The A/B case also pins the flip row's `severity:` line, because
-`classify` renders both sides `NO` and neither carries a lead class, so without it the row would
-read `A:NO -> B:NO` with nothing on it saying what moved.
+exist as a pair rather than as one arm: measured against `main`, with the class absent entirely,
+these two arms — one carrying #299's defect, one carrying its fix — printed **no FLIP line and A=B
+on every aggregate column, exit 0 on both**. That is the same fail-open `caution_led` was added to
+the flip condition for, and it is the COLUMN and the exit code that close it. The flip clause closes
+the smaller gap after it: with the class present but not in the flip condition the A/B says an arm
+moved (`A=0 B=1`, exit 3) without saying which cell or how. The case also pins the flip row's
+`severity:` line, because `classify` renders both sides `NO` and neither carries a lead class, so
+without it the row would read `A:NO -> B:NO` with nothing on it saying what moved.
 
 ### `severity-unrated-chip/` — the gate that keeps #299's class off its neighbours' ground
 `shipped-clean/joshua__safety-ibuprofen.json` with **three fields changed**, and the arm that pins

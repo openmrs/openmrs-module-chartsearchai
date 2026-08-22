@@ -315,8 +315,9 @@ ANSWER_SEVERITY = re.compile(r"(?<![A-Za-z])(" + _SEVERITY_ALT + r")(?![A-Za-z])
 #
 # Two things follow and both are stated rather than hidden. On `sourceFormat=json` the same position
 # holds free operator text, so a curated note opening "Major bleeding risk…" would read as a Major
-# rating for a rule the module rates as null; measured harmless for the shipped curated seed, whose
-# notes are "increased risk of GI bleeding" and "additive GI and bleeding risk". And this parses
+# rating for a rule the module rates as null; measured harmless for the shipped curated seed, no
+# interaction note of which opens with a rating word (read them, rather than trusting a list here —
+# an earlier revision named two of the five). And this parses
 # clinician-facing prose the module may reword, which is the fault issue #207 exists to have
 # removed — so `summarise` reports a census of how many cells carry a READABLE chip rating AND flags
 # an arm where that census collapses to zero over interaction chips, because a printed number no
@@ -355,8 +356,9 @@ def _blank_cell(aliases, unreadable):
     selftest case caught the branch that would have been forgotten; a factory makes the omission
     unconstructible instead, which is the fix that also covers the unparseable-JSON branch, for which
     no fixture exists. Keys must stay the full set the real construction below produces: every
-    predicate here indexes rather than `.get`s, and `main`'s flip loop asks them about EVERY shared
-    cell, not only the ANSWER ones.
+    predicate here indexes rather than `.get`s — except `caution_led`, which `.get`s `aliases`, so
+    that one key alone can be dropped from here and leave the suite green — and `main`'s flip loop
+    asks them about EVERY shared cell, not only the ANSWER ones.
     """
     return {"answer": "", "unreadable": unreadable, "chips": [], "all_chips": [],
             "own_drug": False, "ctx_ok": False, "refs": [], "findings": [],
@@ -1073,10 +1075,12 @@ SELFTEST_CASES = [
       "named a severity no chip carries: 0",
       "cells whose chips carry a readable rating: 1 of 1"],
      ["!!"]),
-    # And the A/B, which is the whole point of the class and the reason it is in the flip condition.
-    # Measured before it was: these two arms tie on EVERY aggregate column, print no FLIP line and
-    # both exit 0 — a remedy for #299 and the defect itself, indistinguishable. That is the same
-    # fail-open `caution_led` was added to the flip condition for, one metric along.
+    # And the A/B, which is what the class is for. Against `main` — the class absent — these two
+    # arms, one carrying #299's defect and one carrying its remedy, tie on EVERY aggregate column,
+    # print no FLIP line and both exit 0: indistinguishable, the same fail-open `caution_led` was
+    # added to the flip condition for. The column and the exit code are what close that; the flip
+    # CLAUSE closes the smaller gap after it, that the A/B says an arm moved without saying which
+    # cell moved or how.
     (["severity-concordant", "severity-overstated"], 3,
      ["FLIP steven__safety-rifabutin",
       # The flip line's own reason. Without it the row reads "A:NO -> B:NO" — `classify` cannot
@@ -1448,12 +1452,17 @@ def main():
         severity_moved = discordant_severity(a[k]) != discordant_severity(b[k])
         if (verdict_led(a[k]) != verdict_led(b[k]) or abstained(a[k]) != abstained(b[k])
                 or caution_led(a[k]) != caution_led(b[k])
-                # And the rating NAMED, for the same reason one metric along (issue #299): a cell
-                # whose only change is Major -> Moderate keeps its verdict, its class and every
-                # aggregate column, so without this the arm that fixes #299 and the arm that has it
-                # print as no change at all. Measured on `severity-concordant/` against
-                # `severity-overstated/` before this clause: no FLIP line, A=B everywhere, exit 0
-                # on both.
+                # And the rating NAMED (issue #299): a cell whose only change is Major -> Moderate
+                # keeps its verdict, its class and every aggregate column those three predicates
+                # feed, so nothing above notices it. Measured on `severity-concordant/` against
+                # `severity-overstated/` against `main`, i.e. with the class absent entirely: no
+                # FLIP line, A=B on every column, exit 0 on both.
+                #
+                # What THIS clause buys is narrower than that, and worth stating exactly: with the
+                # class present but not in the flip condition, the column already reads A=0 B=1 and
+                # the A/B already exits 3 — what is missing is the per-cell row, so a reader is told
+                # the arm differs and not WHICH cell or how. The clause restores that, and the
+                # `severity:` line below is the half that says how.
                 or severity_moved):
             a_lead, b_lead = _lead_class(a[k]), _lead_class(b[k])
             print("  FLIP %-28s (%s)  A:%s%s -> B:%s%s"

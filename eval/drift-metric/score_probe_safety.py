@@ -47,15 +47,24 @@ things keep a hedge out of the class without enumerating hedge wordings, and CAU
 where both are argued: the lead is anchored on the cell's OWN drug, and between that and the modal
 only name material may stand.
 
-What it still does NOT check is the verdict's CONTENT: that the partner named is one the patient
-actually has, and that the severity is proportionate — including the one #283 adds, whether the
-finding's rating licenses a caution rather than a refusal. A "No" resting on issue #86's unanchored
-substring match — "active order opium" for a patient on tiotropium — is a licensed verdict by
-shape and indistinguishable from a correct one here, and so is a caution lead over a Major
-interaction. That belongs to a chip-versus-answer concordance check this harness does not have;
-`fixtures/probe-safety/wrong-partner` and `caution-over-major` pin the current behaviour, one shape
-each, so the boundary is visible rather than assumed. What IS checked in every direction is that the
-deterministic layer raised something at all — see `unlicensed_verdict`. What the A/B adds, short
+What it checks of the verdict's CONTENT is one thing, and #299 is where that started: whether the
+answer NAMES the severity the deterministic layer assigned — `discordant_severity`. It is the first
+piece of the chip-versus-answer concordance check this module long deferred, and deliberately the
+smallest: it compares two words and makes no judgement about either.
+
+What it still does NOT check is the rest of that content. That the partner named is one the patient
+actually has: a "No" resting on issue #86's unanchored substring match — "active order opium" for a
+patient on tiotropium — is a licensed verdict by shape and indistinguishable from a correct one
+here. And whether the finding's rating LICENSES the call made over it (the one #283 adds), so a
+caution lead over a Major interaction still passes. Both are boundaries rather than oversights:
+`fixtures/probe-safety/wrong-partner` and `caution-over-major` pin them, one shape each, so what is
+unchecked is visible rather than assumed. The second is deliberately unreachable from here — asking
+whether a rating licenses a caution would put a second copy of
+`DrugSafetyValidator.licensesWithholding` in Python, which is the drift `adverse_finding` refuses.
+Naming the rating needs no such judgement, which is why that half could land and this one cannot.
+
+What IS checked in every direction is that the deterministic layer raised something at all — see
+`unlicensed_verdict`. What the A/B adds, short
 of the content, is that it compares the CLASS of the lead and not only the columns the class
 feeds: `verdict_led` is a union since #283, so two arms can tie on it while one leads with a
 refusal and the other with a permission. See the flip condition in `main`.
@@ -65,7 +74,8 @@ Exit codes, because a gate that only ever exits 0 is not a gate:
   0  clean read — the numbers can be used
   2  incomparable: the arms disagree about a cell's expected shape, so no margin is meaningful
   3  integrity problems (printed above the numbers): a partial arm, an unreadable capture, a
-     failed patient context, or an arm with no chips at all. The numbers ARE still printed, for
+     failed patient context, an arm with no chips at all, or a cell naming a severity no chip
+     carries (#299). The numbers ARE still printed, for
      a human to read — but a zero-chip arm reports "abstained 0" and "abstention held 17/17"
      purely because every cell collapsed to ABSTAIN, which is indistinguishable from a pass to
      anything reading the exit code alone.
@@ -247,6 +257,44 @@ def _caution_lead_pattern(aliases):
     return _CAUTION_PATTERNS[key]
 
 
+# Issue #299. The four ratings DDInter publishes, read on BOTH sides of one comparison — what the
+# answer states, and what the chip states — so the two can never be read by different rules.
+#
+# CAPITALISED, and that is a property of the shipped DATA rather than a guarantee of the code:
+# nothing capitalises the rating on the way out (`DdiDrugReferenceSource` carries the KB row's
+# `severity` verbatim into the note, and `DrugSafetyValidator.severityRank` lower-cases before
+# comparing, so any casing is supported production-side). Measured through the real
+# `DdiDrugReferenceSource.parse` of the shipped 19MB KB (never a re-expression of it): over the
+# 590,312 interaction links it publishes — the same base CLAUDE.md's own "24,690 Minor-rated
+# interaction ROWS" is quoted on, and this measurement reproduces that figure — the severities are
+# {Moderate 378,830; Major 101,962; Unknown 84,830; Minor 24,690} and NONE is uncapitalised. That is
+# `sourceFormat=ddinter` only. The reason to keep the capital anyway is the answer side: ordinary
+# clinical prose says "moderate renal impairment", so a case-folded match would report on a
+# resemblance. The two accepted costs are stated in both directions, as `ClassCodeFidelityCheck`
+# states its own: a lower-cased miscopy in an answer is a silent pass, and a sentence-initial
+# "Moderate …" in an answer is a false report. Over the 20 live cells of this probe captured
+# 2026-08-22, seven answers state a capitalised rating and none states a lower-case one.
+ANSWER_SEVERITY = re.compile(r"(?<![A-Za-z])(Major|Moderate|Minor|Unknown)(?![A-Za-z])")
+
+# The chip's own rating, which is NOT on the wire: `serializeSafetyWarnings` emits type/drug/detail,
+# and `SafetyWarning.getSeverity()` is not serialized. It is read from the detail, where
+# `DrugSafetyValidator.interactionWarning` puts the rule's note straight after an em dash and
+# `DdiDrugReferenceSource.noteFor` builds that note as `severity + ". " + mechanism` — so the
+# leading token after the dash IS the rating, for `sourceFormat=ddinter`.
+#
+# Two things follow and both are stated rather than hidden. On `sourceFormat=json` the same position
+# holds free operator text, so a curated note opening "Major bleeding risk…" would read as a Major
+# rating for a rule the module rates as null; measured harmless for the shipped curated seed, whose
+# notes are "increased risk of GI bleeding" and "additive GI and bleeding risk". And this parses
+# clinician-facing prose the module may reword, which is the fault issue #207 exists to have
+# removed — so `summarise` prints how many cells carry a READABLE chip rating, and a rewording shows
+# up as that census collapsing rather than as a metric that silently passes everywhere. Do not read
+# #207's "not serialized onto the REST response" as licence for the parse; the reason there is no
+# field to read is that every capture and every fixture here predates one, so a wire-based read
+# would be inert on all of them.
+CHIP_SEVERITY = re.compile(r"—\s*(Major|Moderate|Minor|Unknown)(?![A-Za-z])")
+
+
 # The probe's drug names to the aliases the KB resolves them through, so an order written
 # "Acetaminophen" counts as already taking "paracetamol".
 DRUG_ALIASES = {
@@ -298,7 +346,7 @@ def load(directory):
             # branch exists to stop, one predicate over.
             cells[key] = {"answer": "", "chips": [], "all_chips": [], "own_drug": False,
                           "ctx_ok": False, "refs": [], "findings": [], "date_parse_failures": [],
-                          "aliases": (),
+                          "aliases": (), "chip_ratings": [],
                           "unreadable": "not a probe cell: no '__safety-<drug>' in the filename, "
                                         "so there is no drug to match this capture against"}
             continue
@@ -307,7 +355,8 @@ def load(directory):
         except Exception as e:
             cells[key] = {"answer": "", "unreadable": str(e), "chips": [], "all_chips": [],
                           "own_drug": False, "ctx_ok": False, "refs": [], "findings": [],
-                          "aliases": _aliases(drug), "date_parse_failures": []}
+                          "aliases": _aliases(drug), "chip_ratings": [],
+                          "date_parse_failures": []}
             continue
 
         ctx = context.get(slug)
@@ -340,6 +389,18 @@ def load(directory):
             # The drug this cell is about, resolved through the same accessor the three filters
             # above use, because caution_led anchors its lead on it (see CAUTION_LEAD_TAIL).
             "aliases": _aliases(drug),
+            # The ratings the chips for THIS drug carry (issue #299). Read off the same
+            # alias-filtered warnings `chips` is counted from rather than off all of them: the
+            # validator also raises warnings for drugs the answer happens to name, and one of those
+            # must not supply a rating this cell's answer is then judged against. A chip that
+            # carries none — a contraindication, a class-only duplicate-therapy chip, a curated
+            # unrated rule — contributes nothing, which is what silences the comparison rather than
+            # deciding it.
+            "chip_ratings": sorted({r
+                                    for w in warnings
+                                    if any(a in (w.get("drug") or "").lower()
+                                           for a in _aliases(drug))
+                                    for r in CHIP_SEVERITY.findall(w.get("detail") or "")}),
             "date_parse_failures": (ctx or {}).get("date_parse_failures", []),
         }
     return cells, done
@@ -500,6 +561,58 @@ def unsupported_caution(cell):
     return caution_led(cell) and not adverse_finding(cell)
 
 
+def discordant_severity(cell):
+    """Issue #299: the answer names a severity that no chip for this cell's drug carries.
+
+    The first piece of the chip-versus-answer concordance check the module docstring long deferred,
+    and the only piece that needs no judgement: two words, compared. The reported shape is a Moderate-rated
+    rifabutin interaction the answer called "a Major problem" — the chip right, the record right, the
+    citation right, and the rating a clinician reads wrong.
+
+    **Not a verdict defect, and deliberately not counted as one.** #299 is explicit that this is not
+    an issue #283 violation: `moderate` withholds, so "should not be given" was the correct call and
+    the cell stays in `verdict_led`. What is wrong is the rating NAMED beside it, which is why this
+    is its own column rather than a deduction from that one and why it is not folded into
+    `unlicensed_verdict` — that column is about the verdict's direction.
+
+    **Silent when the chips carry no readable rating**, which is the gate that keeps this apart from
+    its neighbours: with nothing to be discordant WITH there is nothing to compare, and an answer
+    naming a rating over an empty deterministic layer is already `unsupported_no`'s or
+    `unsupported_caution`'s cell. The shape it reaches is an ANSWER cell whose chips are all UNRATED
+    — a contraindication-only cell — whose answer names a rating anyway: that rating cannot have
+    come from a chip, so the only place left is a cited `drug_reference` record about some other
+    partner, which is the residual false alarm below. Measured over the 20 live cells captured for
+    #299, the gate changes nothing — no ANSWER cell there has that shape, and the arm reports 0
+    either way — so `severity-unrated-chip/` is what pins it rather than a live number.
+
+    **The residual false-alarm shape, named rather than narrowed.** The chip side is scoped to the
+    drug asked about; the answer side is the whole answer. So a cell whose chips ARE rated, whose
+    answer names one of those ratings correctly and ALSO names another it read off a cited
+    `drug_reference` record about a different partner, is reported with nothing misstated. That the
+    answers do read ratings off those records is measured — `betty__safety-clarithromycin` states
+    *"a Major interaction [238]"* about ivosidenib, citing a `drug_reference` — but no live cell
+    combines it with a rated chip, so the shape is reasoned rather than observed and no fixture
+    pins it. Left un-narrowed for `ClassCodeFidelityCheck`'s reason: the narrowing available is
+    clause scoping, which this harness does not do, and the capture carries no record text to
+    subtract.
+    """
+    return bool(cell["chip_ratings"]) and bool(
+        set(ANSWER_SEVERITY.findall(cell["answer"])) - set(cell["chip_ratings"]))
+
+
+def rates_a_chip(cell):
+    """Whether this cell has a chip rating for `discordant_severity` to compare against.
+
+    The census behind that column, and not a defect count. It exists because the chip side parses
+    prose (see `CHIP_SEVERITY`): if the module rewords the clause, every cell answers False here and
+    the column reads a clean zero for the wrong reason. Printed beside the column so that reads as a
+    census collapse instead — the same failure `SafetyWarning.getSeverity`'s javadoc records for
+    `thePairChipsAreOrderedBySeverityAndBounded`, which "stayed green while it asserted nothing at
+    all".
+    """
+    return bool(cell["chip_ratings"])
+
+
 def unlicensed_verdict(cell):
     """Any direction: a verdict the records do not license. None is ever a win."""
     return inverted_yes(cell) or unsupported_no(cell) or unsupported_caution(cell)
@@ -593,6 +706,12 @@ def summarise(name, cells, done, expected=None):
                         "do not license it (they address the drug only through the patient's own "
                         "order), so this is a fabricated prohibition or a mis-scoped absence "
                         "statement. NOT a verdict-led win: %s" % (len(unsafe_no), unsafe_no[:4]))
+    discordant = [k for k in ans if discordant_severity(cells[k])]
+    if discordant:
+        problems.append("%d cell(s) named a severity the deterministic layer did not assign — the "
+                        "answer states a rating that no chip for that drug carries. The verdict can "
+                        "be right and the rating still wrong (issue #299), so these are NOT deducted "
+                        "from verdict-led: %s" % (len(discordant), discordant[:4]))
     absd = [k for k in ans if abstained(cells[k])]
     hedge = [k for k in ans if k not in led and k not in absd]
     held = [k for k in abst if abstained(cells[k])]
@@ -608,6 +727,9 @@ def summarise(name, cells, done, expected=None):
     print("      caution lead, nothing adverse on record:        %d" % len(unsafe_caution))
     print("  stated, no verdict lead:    %d" % len(hedge))
     print("  abstained (the defect):     %d" % len(absd))
+    print("  named a severity no chip carries: %d" % len(discordant))
+    print("  cells whose chips carry a readable rating: %d of %d"
+          % (len([k for k in ans if rates_a_chip(cells[k])]), len(ans)))
     print("ABSTAIN cells (unconnected): %d" % len(abst))
     print("  abstention held:            %d" % len(held))
     print("  led with a verdict instead: %d" % (len(abst) - len(held)))
@@ -684,8 +806,10 @@ SELFTEST_CASES = [
      ["ZERO chips"]),
     # The gap #126 deliberately does NOT close: a verdict whose partner is wrong (issue #86's
     # unanchored substring match — "active order opium" is really tiotropium). The chip exists, so
-    # the verdict is licensed by SHAPE and this scorer passes it. When a chip-versus-answer
-    # concordance check lands, this expectation is the one that has to change.
+    # the verdict is licensed by SHAPE and this scorer passes it. #299 landed the SEVERITY half of
+    # the concordance check and this arm is untouched by it — its answer names no rating at all, so
+    # `discordant_severity` has nothing to compare and the cell stays unflagged. The PARTNER half is
+    # what would change this expectation, and it has not landed.
     (["wrong-partner"], 0,
      ["ANSWER cells (chip for this drug, or their own drug): 1",
       "verdict-led (YES/NO/caution): 1",
@@ -759,8 +883,11 @@ SELFTEST_CASES = [
     # `adverse_finding` is satisfied, so `unsupported_caution` never fires and nothing here is
     # flagged — the same licensed-by-shape hole `wrong-partner/` sits in, which is why this arm
     # exits 0 and asserts that it does. Pinning it is what stops the hole being read as a pass
-    # rather than as a boundary. If the chip-versus-answer concordance check the module docstring
-    # defers ever lands, this expectation is the one that has to change.
+    # rather than as a boundary. #299's `discordant_severity` does NOT reach it and this expectation
+    # is unchanged: the constructed answer names "a Major problem" over a Major chip, so the rating
+    # it states is the chip's own — what is disproportionate is the CALL made over that rating, and
+    # asking whether a rating licenses a caution is the copy of `licensesWithholding` this harness
+    # refuses. Only a licence-aware half of the concordance check changes this line.
     (["caution-over-major"], 0,
      ["ANSWER cells (chip for this drug, or their own drug): 4",
       "verdict-led (YES/NO/caution): 3",
@@ -780,12 +907,86 @@ SELFTEST_CASES = [
       "of which the lead is a caution, not a refusal: A=0 B=1",
       "verdicts the records do not license (never a win): A=0 B=0"],
      ["LABEL MISMATCH"]),
+    # Issue #299: the severity half of that deferred concordance check, and the arm it lands on.
+    # A LIVE capture (see PROVENANCE) of the cell the issue was filed for — a Moderate-rated
+    # rifabutin interaction the answer calls "a Major problem". The verdict is right, the chip is
+    # right, the citation is right, and the rating a clinician reads is not; before this class the
+    # arm scored an ordinary verdict-led win at exit 0, which is what "nothing pins that the answer
+    # does not overstate the rating it was given" means as data.
+    (["severity-overstated"], 3,
+     ["ANSWER cells (chip for this drug, or their own drug): 1",
+      "verdict-led (YES/NO/caution): 1",
+      # Not deducted from verdict-led, and the two must be asserted together: #299 is explicit that
+      # this is not a #283 violation, so a class that quietly moved the cell out of the verdict-led
+      # column would be answering a different issue.
+      "of which the records do not license: 0",
+      "named a severity no chip carries: 1",
+      "cells whose chips carry a readable rating: 1 of 1",
+      "steven__safety-rifabutin"],
+     ["ZERO chips"]),
+    # The same capture with the one word corrected — the arm a remedy would produce. Exit 0 and
+    # nothing flagged, so the class is pinned in both directions rather than only where it fires.
+    (["severity-concordant"], 0,
+     ["ANSWER cells (chip for this drug, or their own drug): 1",
+      "verdict-led (YES/NO/caution): 1",
+      "named a severity no chip carries: 0",
+      "cells whose chips carry a readable rating: 1 of 1"],
+     ["!!"]),
+    # And the A/B, which is the whole point of the class and the reason it is in the flip condition.
+    # Measured before it was: these two arms tie on EVERY aggregate column, print no FLIP line and
+    # both exit 0 — a remedy for #299 and the defect itself, indistinguishable. That is the same
+    # fail-open `caution_led` was added to the flip condition for, one metric along.
+    (["severity-concordant", "severity-overstated"], 3,
+     ["FLIP steven__safety-rifabutin",
+      # The flip line's own reason. Without it the row reads "A:NO -> B:NO" — `classify` cannot
+      # see this predicate and neither arm carries a lead class — so a flip would print with
+      # nothing on the row explaining it.
+      "severity: chips carry ['Minor', 'Moderate']; A states ['Moderate'], B states ['Major']",
+      "over the same 1 ANSWER cells: verdict-led A=1 B=1 abstained (defect) A=0 B=0",
+      "named a severity no chip carries (never a win): A=0 B=1",
+      "cells whose chips carry a readable rating: A=1 B=1"],
+     ["LABEL MISMATCH"]),
+    # The gate that keeps #299's class apart from its neighbours, and the only case that exercises
+    # it: an ANSWER cell whose chips carry NO rating (a cross-reactivity contraindication rates
+    # nothing) and whose answer names one anyway. `discordant_severity` stays silent, because with
+    # nothing to be discordant WITH the rating did not come from a chip and the only other place it
+    # can have come from is a cited `drug_reference` record about some other partner — the residual
+    # false alarm the gate exists to hold out. No live number stands behind that: measured over the
+    # 20 cells captured for #299 the gate changes nothing, because no ANSWER cell there names a
+    # rating over unrated chips (`betty__safety-clarithromycin` and `betty__safety-warfarin` do name
+    # one over no chip at all, but both label ABSTAIN and this column counts ANSWER cells). The
+    # shape is real and unobserved live, which is exactly what a constructed fixture is for. Delete
+    # the `bool(cell["chip_ratings"]) and` from `discordant_severity` and this is the only case that
+    # reddens; every other arm here has a rated chip wherever its answer names a rating.
+    # It also pins the census in the direction the two `1 of 1` assertions cannot reach — a cell
+    # that carries no readable rating at all — and its chip detail carries an em dash NOT followed
+    # by a rating ("— possible cross-reactivity"), which is what `CHIP_SEVERITY` must not read as
+    # one.
+    (["severity-unrated-chip"], 0,
+     ["ANSWER cells (chip for this drug, or their own drug): 1",
+      "verdict-led (YES/NO/caution): 1",
+      "named a severity no chip carries: 0",
+      "cells whose chips carry a readable rating: 0 of 1"],
+     ["!!"]),
     # An arm captured with the drug-reference GPs off: every label collapses and the report reads
     # like a pass. This used to exit 0.
     (["zero-chip"], 3,
      ["ZERO chips anywhere in this arm",
       "ANSWER cells (chip for this drug, or their own drug): 0"],
      []),
+    # The same arm read as an A/B against itself, which is the ONLY case here that runs a predicate
+    # over a cell `load` short-circuited. The flip loop iterates every SHARED cell, not the ANSWER
+    # ones — `both = set(a) & set(b)` — so `discordant_severity` is asked about the stray entry too,
+    # and it indexes `cell["chip_ratings"]` the way every predicate here indexes its key. Measured
+    # by mutation: drop that key from `load`'s not-a-cell branch and the run raises
+    # `KeyError: 'chip_ratings'`, which this case reports as `exit 1, want 3` — and it is the ONLY
+    # case that reddens, because no other A/B pairs an arm holding a cell that branch produced. Two identical arms rather than a new fixture: the
+    # point is which cells the loop reaches, and identical arms flip nothing, so the case asserts
+    # the run completes and prints no flip at all.
+    (["stray-file", "stray-file"], 3,
+     ["not a probe cell",
+      "A/B over 3 shared cells"],
+     ["FLIP", "LABEL MISMATCH"]),
     # A `.d.json` left behind by a killed context loop: with no drug in the filename the alias
     # needle is empty and matched everything, so it counted as an ANSWER cell in every arm.
     (["stray-file"], 3,
@@ -1013,7 +1214,14 @@ def main():
     # `adverse_finding` refuses. Naming the class needs no rating at all, so that is what this does.
     for k in both:
         if (verdict_led(a[k]) != verdict_led(b[k]) or abstained(a[k]) != abstained(b[k])
-                or caution_led(a[k]) != caution_led(b[k])):
+                or caution_led(a[k]) != caution_led(b[k])
+                # And the rating NAMED, for the same reason one metric along (issue #299): a cell
+                # whose only change is Major -> Moderate keeps its verdict, its class and every
+                # aggregate column, so without this the arm that fixes #299 and the arm that has it
+                # print as no change at all. Measured on `severity-concordant/` against
+                # `severity-overstated/` before this clause: no FLIP line, A=B everywhere, exit 0
+                # on both.
+                or discordant_severity(a[k]) != discordant_severity(b[k])):
             a_lead, b_lead = _lead_class(a[k]), _lead_class(b[k])
             print("  FLIP %-28s (%s)  A:%s%s -> B:%s%s"
                   % (k, label(a[k]),
@@ -1021,6 +1229,17 @@ def main():
                      classify(b[k]["answer"]), " " + b_lead if b_lead else ""))
             print("       A: %s" % a[k]["answer"][:96])
             print("       B: %s" % b[k]["answer"][:96])
+            # A severity-only flip moves NOTHING the line above renders — `classify` says NO on both
+            # sides and neither carries a lead class — so the row would read `A:NO -> B:NO` and look
+            # like a flip printed for no reason. This is the same gap `_lead_class` closes for the
+            # other two predicates: a row that cannot say which predicate moved sends the reader
+            # back to comparing the two answer excerpts by eye, which is the work the scorer exists
+            # to have done. Printed only when that predicate is what moved.
+            if discordant_severity(a[k]) != discordant_severity(b[k]):
+                print("       severity: chips carry %s; A states %s, B states %s"
+                      % (sorted(set(a[k]["chip_ratings"]) | set(b[k]["chip_ratings"])),
+                         sorted(set(ANSWER_SEVERITY.findall(a[k]["answer"]))),
+                         sorted(set(ANSWER_SEVERITY.findall(b[k]["answer"])))))
 
     ans = [k for k in both if label(a[k]) == "ANSWER"]
     abst = [k for k in both if label(a[k]) == "ABSTAIN"]
@@ -1046,6 +1265,12 @@ def main():
           % (n(ans, a, unsupported_no), n(ans, b, unsupported_no)))
     print("  caution lead, nothing adverse on record:           A=%d B=%d"
           % (n(ans, a, unsupported_caution), n(ans, b, unsupported_caution)))
+    # Its own line rather than a member of the block above: that block decomposes
+    # `unlicensed_verdict`, and this is not one — the verdict can be correct and the rating wrong.
+    print("named a severity no chip carries (never a win):     A=%d B=%d"
+          % (n(ans, a, discordant_severity), n(ans, b, discordant_severity)))
+    print("  cells whose chips carry a readable rating:        A=%d B=%d"
+          % (n(ans, a, rates_a_chip), n(ans, b, rates_a_chip)))
     if sa["problems"] or sb["problems"]:
         print("\n!! one or both arms reported integrity problems above — read them before "
               "treating this as a gate result. Exiting 3 so automation cannot mistake this "

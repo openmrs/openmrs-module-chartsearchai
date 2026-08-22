@@ -495,6 +495,37 @@ correct "No" here. `fixtures/probe-safety/wrong-partner` pins that as **exit 0**
 visible rather than assumed; it is the expectation a chip-versus-answer concordance check would have
 to change.
 
+> *(2026-08-22, #299.* One piece of that concordance check has landed, and it is the smallest:
+> `discordant_severity` asks whether the answer NAMES the severity the deterministic layer assigned,
+> comparing the rating in the answer against the ratings the chips for that drug carry. It is its own
+> column (`named a severity no chip carries`), it is in the flip condition, it appends a problem so
+> the arm exits 3, and it is **not** deducted from `verdict-led` — #299 is explicit that a Moderate
+> interaction reported as *"a Major problem"* is not a #283 violation: `moderate` withholds, so the
+> "No" was right and only the rating was wrong.
+>
+> It changes neither expectation above. `wrong-partner` names no rating at all, so there is nothing
+> to compare — the PARTNER half is still unchecked. `caution-over-major` names the chip's own
+> `Major`, so what is disproportionate there is the CALL made over the rating rather than the rating
+> stated, and asking whether a rating licenses a caution would put a second copy of
+> `DrugSafetyValidator.licensesWithholding` in Python, which is the drift `adverse_finding` refuses.
+> Naming the rating needs no such judgement, which is why this half could land and those cannot.
+>
+> **It is silent when the chips for that drug carry no rating at all.** The rating cannot then have
+> come from a chip, and the only place left is a cited `drug_reference` record about some other
+> partner — the shape a contraindication-only cell has, since a contraindication rates nothing.
+> No live number stands behind that gate: over the same 20 cells it changes nothing either way.
+> `fixtures/probe-safety/severity-unrated-chip/` is what pins it, and deleting the gate reddens that
+> case and no other.
+>
+> Measured when it landed: **0 of the 20 live cells** of this probe flag it (capture 2026-08-22
+> against the 3.7.1 standalone on merged `main` @ `47b6aa0d`), with the census reading **5 of 7**
+> ANSWER cells carrying a readable chip rating; `fixtures/probe-safety/severity-overstated/` — a
+> verbatim capture of #299's own cell, not a constructed one — flags 1 and exits 3, where before it
+> scored an ordinary verdict-led win at exit 0. The chip side parses the chip `detail`, because
+> `serializeSafetyWarnings` puts type/drug/detail on the wire and no severity field, so the census
+> is printed beside the column: a rewording of that clause shows as the census collapsing rather
+> than as a metric silently passing everywhere.*)
+
 **The same fault in the Java side of the harness.** `LlmAnswerQualityTest.buildPromptVariations()`
 anchored an arm on `"Answer ONLY the specific question asked."` while the prompt says *"Answer ONLY
 the specific query."*, so `String.replace` returned the original and that arm's trend instruction

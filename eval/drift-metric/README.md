@@ -534,9 +534,10 @@ to change.
 > and the ` — ` before the rating two lines apart, so one reword removes both and the flag went
 > silent on exactly the reword it guards. Excluding errs loud in both directions instead.
 >
-> What it still cannot do: a `sourceFormat=json` capture, whose curated rules are unrated by design,
-> trips the flag on every cell and so can never exit 0 from this scorer — such an arm is not usable
-> as a gate for #299, and the honest report is that the comparison did not run.
+> What it still cannot do: on a `sourceFormat=json` capture, whose curated rules are unrated by
+> design, every ANSWER cell raising a curated rule chip trips the flag — so such a capture cannot be
+> relied on to exit 0 and is not a gate for #299, the honest report being that the comparison did
+> not run rather than that it passed.
 >
 > **What it does not catch**, pinned rather than assumed: it is a set difference over ALL of the
 > drug's chips, so on a cell with two rated chips an answer may name the wrong one and pass —

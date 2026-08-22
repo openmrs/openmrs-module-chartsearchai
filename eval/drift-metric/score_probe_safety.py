@@ -288,8 +288,8 @@ def _caution_lead_pattern(aliases):
 #     DDInter's on `Moderate` and `Unknown`, and the chart renders an allergy as
 #     "… Severity: Moderate. Reactions: …" (docs/adr.md, TestDatasetHelper). Every ANSWER cell here is
 #     a drug question about a patient whose allergies are in the prompt, so this is a real register,
-#     demonstrated on `shipped-clean/joshua__safety-ibuprofen` with an answer naming
-#     "(Severity: Unknown)".
+#     demonstrated on `shipped-clean/joshua__safety-ibuprofen` with its answer REPLACED by one naming
+#     "(Severity: Unknown)" — the committed fixture's own answer names no rating at all.
 #
 # THAT LAST COST IS DELIBERATELY PAID, and a narrowing for it was written and REMOVED. A lookbehind
 # refusing a rating directly after "Severity: " was measured fail-open on the metric's own job: a
@@ -682,7 +682,20 @@ def discordant_severity(cell):
     does not do, and the capture carries no record text to subtract.
     """
     return has_readable_chip_rating(cell) and bool(
-        set(ANSWER_SEVERITY.findall(cell["answer"])) - set(cell["chip_ratings"]))
+        answer_ratings(cell) - set(cell["chip_ratings"]))
+
+
+def answer_ratings(cell):
+    """The severity ratings this cell's ANSWER states — the answer side of #299's comparison.
+
+    One expression, for the reason `load` reads the chip side once into `chip_ratings`: the column
+    and the FLIP row's `severity:` line both need it, and spelled separately a narrowing applied to
+    one would leave the row printing a different set from the column it exists to explain — a row
+    declaring a flip whose own evidence line says both arms state the same thing, which is the
+    ambiguity `_lead_class` was added to remove. `ANSWER_SEVERITY_CASES` still tests the pattern
+    directly, because what those cases pin is the vocabulary, not this accessor.
+    """
+    return set(ANSWER_SEVERITY.findall(cell["answer"]))
 
 
 def has_readable_chip_rating(cell):
@@ -815,9 +828,17 @@ def summarise(name, cells, done, expected=None):
     #
     # A curated hand-authored rule IS caught by this, and should be: its chip is a rule chip and is
     # unrated by design, so on an all-curated arm the comparison genuinely cannot run. The
-    # consequence is worth stating plainly — a `sourceFormat=json` capture can never exit 0 from this
-    # scorer, so it is not usable as a gate for #299, and the honest report is that the comparison
-    # did not run rather than that it passed.
+    # consequence is worth stating plainly: every ANSWER cell of a `sourceFormat=json` capture that
+    # raises a curated rule chip trips this, so such a capture cannot be relied on to exit 0 and is
+    # not a gate for #299 — the honest report being that the comparison did not run, not that it
+    # passed. A json arm whose ANSWER cells raise no rule chip at all (contraindication-only,
+    # class-only, own-drug) is unaffected.
+    #
+    # PER CELL is not per CHIP, and the residue is here rather than left to be found: a cell holding
+    # one readable rule chip beside one unreadable one is silent, and `discordant_severity` then
+    # compares against the readable subset alone. A uniform reword — which is what this flag guards —
+    # cannot produce that, but it is the within-cell form of the cross-cell masking
+    # `severity-chip-reworded/` exists to close, and nothing pins its survival.
     unratable = [k for k in ans
                  if not has_readable_chip_rating(cells[k]) and cells[k]["rule_chip_details"]]
     if unratable:
@@ -1457,8 +1478,8 @@ def main():
             # that had just declared a flip.
             if severity_moved:
                 print("       severity: A chips %s states %s; B chips %s states %s"
-                      % (a[k]["chip_ratings"], sorted(set(ANSWER_SEVERITY.findall(a[k]["answer"]))),
-                         b[k]["chip_ratings"], sorted(set(ANSWER_SEVERITY.findall(b[k]["answer"])))))
+                      % (a[k]["chip_ratings"], sorted(answer_ratings(a[k])),
+                         b[k]["chip_ratings"], sorted(answer_ratings(b[k]))))
 
     ans = [k for k in both if label(a[k]) == "ANSWER"]
     abst = [k for k in both if label(a[k]) == "ABSTAIN"]

@@ -268,10 +268,13 @@ answer names one.
 > [41]."` — the same closing frame #299's own cell reproduces, over a chip that rates nothing.
 
 Its inherited `references` predate issue #201, which made a reference-group citation serialize
-`grounded: null`: index 41 still carries `grounded: false`, as do eleven other cells across nine
-older arms here. The scorer never reads `grounded`, so nothing scores differently — recorded because
-this file is the record of what each byte is, and the three `steven` arms captured for #299 carry
-the post-#201 `null`, so the `severity-*` family holds both wire shapes.
+`grounded: null`: index 41 still carries `grounded: false`, as do the reference-group citations of
+every arm captured before that change. The `steven` arms captured for #299 carry the post-#201
+`null`, so the `severity-*` family holds both wire shapes. The scorer never reads `grounded`, so
+nothing scores differently — recorded because this file is the record of what each byte is. Grep
+`\"grounded\": false` and read which citations are `\"group\": \"reference\"` rather than trusting a
+count here; the two counts that first stood in this paragraph were both wrong on the day they were
+written, which is the defect this file's own header records twice.
 
 > **CONSTRUCTED**: `references` with index 42 dropped — the `safety_finding` for the interaction
 > chip removed above. A capture whose answer cites neither it nor its chip would not carry it, and

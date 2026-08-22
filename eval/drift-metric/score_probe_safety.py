@@ -72,12 +72,17 @@ Exit codes, because a gate that only ever exits 0 is not a gate:
 
   0  clean read — the numbers can be used
   2  incomparable: the arms disagree about a cell's expected shape, so no margin is meaningful
-  3  integrity problems (printed above the numbers): a partial arm, an unreadable capture, a
-     failed patient context, an arm with no chips at all, a cell naming a severity no chip
-     carries, or a cell whose rule interaction chip yields no readable rating at all (the last
-     two, #299). The numbers ARE still printed, for a human to read — but a zero-chip arm reports
-     "abstained 0" and "abstention held 17/17" purely because every cell collapsed to ABSTAIN,
-     which is indistinguishable from a pass to anything reading the exit code alone.
+  3  anything `summarise` put in `problems` — read the `!!` lines, do not infer the cause from a
+     list here. They are of two kinds and exit 3 does NOT say which: the capture is unusable (a
+     partial arm, an unreadable capture, a failed patient context, an arm with no chips at all,
+     a rule interaction chip whose rating will not parse), or the capture is fine and the MODEL
+     did something the records do not license (`inverted_yes`, `unsupported_no`,
+     `unsupported_caution`, or an answer naming a severity no chip carries). An enumeration was
+     kept here and was incomplete on the day #299 extended it, which is why this now names the
+     two kinds and points at the output. The numbers ARE still printed, for a human to read —
+     but a zero-chip arm reports "abstained 0" and "abstention held 17/17" purely because every
+     cell collapsed to ABSTAIN, which is indistinguishable from a pass to anything reading the
+     exit code alone.
 
 Usage: score_probe_safety.py <capture_dir> [<other_capture_dir>]
        score_probe_safety.py --selftest      (the blind-spot regression fixtures; no live server)

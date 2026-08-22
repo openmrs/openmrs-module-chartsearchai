@@ -355,10 +355,15 @@ def _blank_cell(aliases, unreadable):
     They were two literals, and #299 had to add its key to both. The `stray-file + stray-file`
     selftest case caught the branch that would have been forgotten; a factory makes the omission
     unconstructible instead, which is the fix that also covers the unparseable-JSON branch, for which
-    no fixture exists. Keys must stay the full set the real construction below produces: every
-    predicate here indexes rather than `.get`s — except `caution_led`, which `.get`s `aliases`, so
-    that one key alone can be dropped from here and leave the suite green — and `main`'s flip loop
-    asks them about EVERY shared cell, not only the ANSWER ones.
+    no fixture exists.
+
+    Keys must stay the full set the real construction below produces, and **a green suite is not
+    evidence that one is unused**. Pop each key in turn and run `--selftest`: several leave it green,
+    `refs` among them, which nothing in this file reads at all. `chip_ratings` is the one whose
+    omission the suite does catch — through `stray-file + stray-file`, because `main`'s flip loop
+    asks `discordant_severity` about EVERY shared cell rather than only the ANSWER ones. Two earlier
+    revisions of this paragraph tried to state a rule for which keys are load-bearing and both were
+    measured false; the measurement is one command, so take it rather than a rule.
     """
     return {"answer": "", "unreadable": unreadable, "chips": [], "all_chips": [],
             "own_drug": False, "ctx_ok": False, "refs": [], "findings": [],

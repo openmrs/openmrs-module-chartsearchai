@@ -295,8 +295,9 @@ def _caution_lead_pattern(aliases):
 # refusing a rating directly after "Severity: " was measured fail-open on the metric's own job: a
 # labelled-field answer — "Interaction: … Severity: Major. Mechanism: …", the register the chart's
 # own "Severity: Severe." rendering invites — then scored 0, so `severity-overstated/` rewritten
-# that way exited 0 and its A/B against `severity-concordant/` printed no flip at all. It also failed to close the register it was written
-# for, since "Severity:  Major" (two spaces) and "**Severity**: Major" walked straight through. So it
+# that way exited 0 and its A/B against `severity-concordant/` printed no flip at all. It also
+# failed to close the register it was written for, since "Severity:  Major" (two spaces) and
+# "**Severity**: Major" walked straight through. So it
 # traded a false REPORT for a silent false NEGATIVE on the defect this class exists to catch, which
 # is the wrong direction for a net, and it did not even buy the trade. Both registers are now
 # reported; `ANSWER_SEVERITY_CASES` pins which is which, including the allergy quote as an accepted

@@ -1750,6 +1750,33 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
+	public void compoundClaim_outranksTheReferenceGroupRuleWhereBothApply() {
+		// The precedence between the two dispositions, which nothing pinned. A reference-group citation
+		// inside a compound claim unit is UNVERIFIABLE, not merely DEMOTE_ONLY: reference material keeps
+		// its cosine FAIL, a compound unit does not, and where both apply the stronger rule wins. Swap
+		// the two arms of the Pass-1 ternary and the whole api suite stays green while this citation
+		// publishes false and spends an embedding pass — so the ordering was prose, defended only by
+		// #201 happening to withhold reference-group verdicts at the wire, which is a coincidence at
+		// another layer rather than a guard.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		// record 2's text is left unregistered, so its cosine is 0 — a Tier-1 FAIL that the
+		// reference-group rule would publish and the compound rule withholds.
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(),
+				Arrays.asList(mapping(1, "Drug order: Salicylic acid"),
+						drugReferenceMapping(2, "warfarin reference record")),
+				FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(1).getGrounded(),
+				"the compound rule outranks demote-only, so even the off-topic FAIL is withheld");
+		assertEquals(0, embeddings.embedCalls, "and no cosine is computed to produce it");
+		assertEquals(0, judge.statementsPerCall.size());
+	}
+
+	@Test
 	public void compoundClaim_spendsNoEmbeddingOnAVerdictItWillNotPublish() {
 		// The cost half of the same decision. Publishing nothing means the cosine is never needed, so
 		// the lazy Tier-1 block skips these references entirely — which is what keeps the rule from

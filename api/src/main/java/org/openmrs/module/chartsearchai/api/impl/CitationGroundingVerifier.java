@@ -159,6 +159,17 @@ import org.springframework.stereotype.Service;
  * it would send an array-only citation to the judge against the whole conjunction — the shape issue
  * #284 is about.
  *
+ * <p><strong>A residual the selection creates, stated rather than closed.</strong> Where one record is
+ * cited by BOTH a compound claim unit and a single-claim sentence, {@link #selectClaim}'s cosine
+ * argmax decides which it is asked about — and if it lands on the compound one, the citation is
+ * withheld although a claim unit that IS its own claim was a candidate. Measured: the same answer and
+ * the same citation publish {@code null} with no judge pair, or {@code true} with one, depending only
+ * on which candidate the record's vector is nearer. Preferring a non-compound candidate would close it
+ * and was NOT taken here: {@link #selectClaim} documents that its argmax runs exactly as
+ * {@link #verdictTier1} would so the chosen statement is byte-identical across modes, and restricting
+ * the candidate set under entailment alone breaks that parity — a change that needs its own evidence.
+ * The cost of leaving it is a verdict withheld, not a wrong one.
+ *
  * <p><strong>Cost: this rule only removes work.</strong> Nothing is published for these citations, so
  * the judge is never asked and the lazy Tier-1 fallback never runs. Claim SELECTION still embeds where
  * several sentences cite one record and the cosine argmax has to choose between them — that predates
@@ -252,7 +263,6 @@ public class CitationGroundingVerifier {
 		return null;
 	}
 
-	/** Accumulates embedding failures across a run so they are logged once, not per citation. */
 	/**
 	 * How much of a verdict a citation may be given, decided once per reference in Pass 1 and read
 	 * everywhere else. One value rather than two booleans because the three cases are exclusive and
@@ -276,12 +286,15 @@ public class CitationGroundingVerifier {
 		 * A compound claim unit under entailment (#302): neither tier is asked a question that is this
 		 * citation's own, so nothing is published in either direction and no embedding is spent. Ranks
 		 * above {@link #DEMOTE_ONLY} — a reference-group citation inside a compound unit is
-		 * unverifiable, not merely demotable — and that precedence is why this is an ordered choice
-		 * rather than two independent flags.
+		 * unverifiable, not merely demotable. That precedence is why this is one ordered choice rather
+		 * than two independent flags — though the ordering lives in the arms of the Pass-1 ternary, not
+		 * in this declaration order, which nothing reads. It is pinned by
+		 * {@code compoundClaim_outranksTheReferenceGroupRuleWhereBothApply}.
 		 */
 		UNVERIFIABLE
 	}
 
+	/** Accumulates embedding failures across a run so they are logged once, not per citation. */
 	private static final class GroundingStats {
 
 		int embedFailures;

@@ -681,12 +681,13 @@ public class FoldedChipOnePartnerNameTest {
 	 * The shape issue #298's invariant actually closes, and the only case here that reaches it.
 	 *
 	 * <p>An order on the ladder's ORDER rung — the curated seed carries none of its three codes — whose
-	 * display is BLANK but whose names are not. So its label is a bare ATC code, and unlike
+	 * display is BLANK but whose names are not. Its label is therefore a bare ATC code (the blank display
+	 * resolves to the code), and unlike
 	 * {@code namedByCodesOnly} it has names for {@code namesNamingOrder} to match: the one combination in
 	 * which the order-named branch can say YES about a partner whose label is not a name. Under issue
-	 * #298 it cannot arise —{@code OrderPartner.recordNameSource} derives the name source from the flag,
-	 * the flag is false for a blank display ({@code displayNamesADrug}), so {@code namingOrder} is null
-	 * and the branch is not entered — and the rule's own token is handed to both sentences, exactly as
+	 * #298 it cannot arise — {@code displayNamesADrug} answers false for a blank display, and
+	 * {@code OrderPartner.recordNameSource} admits an order only where that answer is true, so
+	 * {@code namingOrder} is null and the branch is not entered — and the rule's own token is handed to both sentences, exactly as
 	 * for the nameless order in {@link #theTicketsLiveCaseNamesTheOrderOnce}.
 	 *
 	 * <p><b>Why it is worth a case of its own.</b> The three arrangements that redden when
@@ -706,17 +707,15 @@ public class FoldedChipOnePartnerNameTest {
 	public void aBlankDisplayWithNamesNeverHandsItsCodeToBothSentences() {
 		DrugSafetyValidator validator = DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.curatedService());
-		Set<String> names = DrugReferenceTestSupport.set("aspirin 81mg");
-		PatientClinicalContext.ActiveDrugOrder blankButNamed =
-				new PatientClinicalContext.ActiveDrugOrder("order-blank-but-named", "   ", names,
-						ASPIRIN_ORDER_CODES);
-
-		List<SafetyWarning> warnings = validator.validate("", QUESTION,
-			DrugReferenceTestSupport.ctx(60, null, names, ASPIRIN_ORDER_CODES, null, null,
-				Arrays.asList(blankButNamed)));
+		List<SafetyWarning> warnings = validator.validate("", QUESTION, blankDisplayWithNames());
 
 		assertEquals(1, warnings.size(), "one prescription, one folded chip, was: " + warnings);
 		String detail = warnings.get(0).getDetail();
+		assertEquals("Ibuprofen interacts with active order aspirin — additive GI and bleeding risk."
+				+ " Ibuprofen is in the same cross-reactivity group (NSAID) as active order aspirin"
+				+ " — possible additive or duplicate-class therapy", detail,
+			"the whole detail and not just its names: both sentences must be PRESENT as well as agreeing,"
+					+ " or a fold that stopped firing would satisfy the name assertion below by vacuity");
 		assertEquals(DrugReferenceTestSupport.set("aspirin"), orderNamesIn(detail),
 			"the rule's own token is the only name either arm holds, and it must be the only one the"
 					+ " detail carries, was: " + detail);
@@ -725,6 +724,16 @@ public class FoldedChipOnePartnerNameTest {
 			"a bare ATC code is the label a blank display resolves to on this rung, and it must reach"
 					+ " NEITHER sentence — handing it to both is the defect issue #298 closes, was: "
 					+ detail);
+	}
+
+	/** An order on the ladder's ORDER rung whose display is blank and whose names are not — the one shape
+	 *  where {@code namesNamingOrder} can answer yes for a partner whose label is a bare code. Shared
+	 *  with {@link #noFoldedChipNamesOneActiveOrderTwoWays} so the sweep covers it too (issue #298). */
+	private static PatientClinicalContext blankDisplayWithNames() {
+		Set<String> names = DrugReferenceTestSupport.set("aspirin 81mg");
+		return DrugReferenceTestSupport.ctx(60, null, names, ASPIRIN_ORDER_CODES, null, null,
+			Arrays.asList(new PatientClinicalContext.ActiveDrugOrder("order-blank-but-named", "   ",
+				names, ASPIRIN_ORDER_CODES)));
 	}
 
 	/**
@@ -750,6 +759,13 @@ public class FoldedChipOnePartnerNameTest {
 	 * {@code ClassChipPartnerLabelTest.anOrderTheDatasetDoesNotCoverIsNamedByItsOwnDisplayName} — the
 	 * curated seed, where the ladder resolved no entry at all — and is asserted byte-exact there rather
 	 * than swept here.
+	 *
+	 * <p>The sixth is the blank-display order of
+	 * {@link #aBlankDisplayWithNamesNeverHandsItsCodeToBothSentences} (issue #298), whose label is a bare
+	 * ATC code and whose single name therefore comes from the rule's token. It is swept as well as
+	 * asserted byte-exact there, because it is the one arrangement in this file where the ORDER-named
+	 * branch could answer yes for a label that is not a name — so if the invariant it rests on regresses,
+	 * this sweep must see it rather than leave one case to notice alone.
 	 *
 	 * <p>One RECONCILING arrangement is excluded too, and for the opposite reason:
 	 * {@link #aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug} names its
@@ -777,6 +793,8 @@ public class FoldedChipOnePartnerNameTest {
 				.validator(DrugReferenceTestSupport.serviceWith(
 					DrugReferenceTestSupport.fixtureEntries(RENAMED_PARTNER_FIXTURE)))
 				.validate("", QUESTION, renamedByItsOwnNaproxenOrder()));
+		runs.add(DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService())
+				.validate("", QUESTION, blankDisplayWithNames()));
 
 		int foldedSeen = 0;
 		for (List<SafetyWarning> warnings : runs) {
@@ -789,9 +807,10 @@ public class FoldedChipOnePartnerNameTest {
 					"a folded detail must name its one active order once, was: " + detail);
 			}
 		}
-		assertEquals(5, foldedSeen,
-			"precondition: all five folded chips must have been reached, or this invariant passed by"
+		assertEquals(6, foldedSeen,
+			"precondition: all six folded chips must have been reached, or this invariant passed by"
 					+ " vacuity — the nameless order, the DDInter formulation, both subjects of the"
-					+ " note-less same-class fixture, and the order-named partner the rule's token names");
+					+ " note-less same-class fixture, the order-named partner the rule's token names, and"
+					+ " the blank display whose label is a bare code");
 	}
 }

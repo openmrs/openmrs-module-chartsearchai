@@ -2248,13 +2248,9 @@ public class DrugSafetyValidator {
 	 * count of paths: two of the three items below both reconcile and refuse, on a condition of their
 	 * own.
 	 *
-	 * <p><b>The numbers are identifiers, not the order the code asks them in.</b> They are cited as
-	 * names elsewhere ("outcome 1", ADR Decision 39's "outcome-1 trade-off"), so they are stable while
-	 * the branch order is not: since issue #298 the method tests item 2 FIRST, because
-	 * {@link OrderPartner#namingOrder} is now non-null only where the label is a name and the value no
-	 * longer needs a branch ahead of it to be safe. Do not renumber this list to match the code: grep
-	 * {@code outcome 1}/{@code outcome-1} before touching it, and do not read the order as a claim about
-	 * which condition wins, which is what the items themselves state.
+	 * <p><b>The numbers are identifiers, not the order the code asks them in</b> — since issue #298 the
+	 * method tests item 2 first. Do not renumber to match the code: the ordinals are cited as names
+	 * elsewhere (grep {@code outcome 1}/{@code outcome-1}). ADR Decision 40 says why the order moved.
 	 * <ol>
 	 *   <li><b>The ladder found no name</b> ({@code !namesADrug}) — a bare code or the {@code [ATC …]}
 	 *       stand-in is the ABSENCE of a name (issue #290) and may not displace one, so both sentences
@@ -2321,10 +2317,10 @@ public class DrugSafetyValidator {
 	 *
 	 * @param partner the co-medication the class arm resolved, carrying the ladder's answer
 	 *        ({@link OrderPartner#label}), whether that answer is a name at all
-	 *        ({@link OrderPartner#namesADrug}), the ORDER that supplied it where one did — non-null only
-	 *        where the label is that order's name, which is why this method may read it first
-	 *        (issue #298, {@link OrderPartner#recordNameSource})
-	 *        ({@link OrderPartner#namingOrder}) — and the entry it was resolved from
+	 *        ({@link OrderPartner#namesADrug}), the ORDER that supplied it where one did
+	 *        ({@link OrderPartner#namingOrder}) — non-null only where the label is that order's name,
+	 *        which is why this method may read it first (issue #298,
+	 *        {@link OrderPartner#recordNameSource}) — and the entry it was resolved from
 	 *        ({@link OrderPartner#labelEntry})
 	 * @param rule the matched rule the class sentence is folding onto. Its {@link SubjectRule} wrapper is
 	 *        deliberately NOT taken: the entry {@link #activeOrderEntryFor} resolved for that rule is not
@@ -2405,8 +2401,9 @@ public class DrugSafetyValidator {
 	 *         names at all and it cannot reach here — {@link #displayNamesADrug} answers false for it, so
 	 *         {@link OrderPartner#recordNameSource} leaves its {@link OrderPartner#namingOrder} null and
 	 *         the branch that calls this is not entered at all. Since issue #298 that is the reason, and
-	 *         it is a stronger one than the reason it replaced ({@code !namesADrug} being tested first),
-	 *         because it does not depend on the order of two branches — but a caller may
+	 *         it MOVED rather than strengthened — out of {@code foldedPartnerLabel}'s statement order
+	 *         and into the value, which ADR Decision 40 records as a trade and not as a pure win —
+	 *         but a caller may
 	 *         hand a real display over with no match tokens
 	 *         ({@code NamelessActiveOrderPartnerTest.aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName}'s
 	 *         latitude), and the empty answer is the honest one there too.
@@ -4453,28 +4450,23 @@ public class DrugSafetyValidator {
 		 * and "which order" one fact, and the fold cannot be handed a name with nothing to validate it
 		 * against.
 		 *
-		 * <p><b>A non-null value means {@link #label} IS a name</b> (issue #298). That is an invariant of
-		 * this class and not a property of any one caller: {@link #recordNameSource} is the only thing
-		 * that writes this field, it writes {@link #namesADrug} in the same expression, and it admits an
-		 * order here only where that flag is true. So the pair cannot come apart, and
-		 * {@link DrugSafetyValidator#foldedPartnerLabel} may read this field FIRST — which it does.
+		 * <p><b>A non-null value means {@link #label} is that order's name</b> (issue #298), and that is a
+		 * property of this class rather than of any one caller. Two things make it so, and it takes both:
+		 * {@link #recordNameSource} is the only thing that writes this field or {@link #namesADrug}, and it
+		 * admits an order only where that flag is true; and no constructor takes the label and the flag as
+		 * separate arguments any more, so neither can be supplied disagreeing with the other. That is what
+		 * lets {@link DrugSafetyValidator#foldedPartnerLabel} read this field FIRST — which it does.
 		 *
 		 * <p>Until issue #298 it could not. The order rung set this whenever an order was consulted while
 		 * {@link #namesADrug} came from {@link DrugSafetyValidator#displayNamesADrug}, so a
 		 * {@code namedByCodesOnly} or blank-display order left a non-null value here beside an
 		 * {@code [ATC …]} or bare-code label, and what kept the fold safe was the ORDER OF
 		 * {@code foldedPartnerLabel}'s BRANCHES rather than this value. That guarantee has been retired
-		 * deliberately, which is the trade ADR Decision 40 records: the branches now read this field
-		 * first, so the invariant is load-bearing and the suite pins it — mutate
-		 * {@link #recordNameSource} to admit the order unconditionally and read the failures. They fail in
-		 * TWO different ways, and the distinction is worth keeping: an order with no names cannot satisfy
-		 * {@link DrugSafetyValidator#namesNamingOrder}, so those arrangements reconcile nothing and name
-		 * one prescription twice, which is issue #292's defect rather than this one's. The failure THIS
-		 * invariant closes needs the branch to answer yes, which needs an order that HAS names beside a
-		 * label that is not one — a blank display on the ladder's order rung — and then the bare ATC code
-		 * goes to BOTH sentences, issue #155's defect twice over. That one is
-		 * {@code FoldedChipOnePartnerNameTest.aBlankDisplayWithNamesNeverHandsItsCodeToBothSentences},
-		 * which reads {@code active order A01AD05} in both halves of the detail under the mutation.
+		 * deliberately: the branches now read this field first, so the invariant is load-bearing and the
+		 * suite pins it. Mutate {@link #recordNameSource} to admit the order unconditionally and read the
+		 * failures — they come in two kinds, and
+		 * {@code FoldedChipOnePartnerNameTest.aBlankDisplayWithNamesNeverHandsItsCodeToBothSentences} is
+		 * where the two are told apart. ADR Decision 40 records the trade and what it leaves open.
 		 *
 		 * <p>What it still does NOT mean is that this order is the ONLY prescription behind the partner:
 		 * several can reach one ({@link DrugSafetyValidator#ordersCarrying}), and this is the one whose
@@ -4628,14 +4620,31 @@ public class DrugSafetyValidator {
 		 *  the entry that supplied it, and that it IS a name. Stated once so the two sites that take
 		 *  this rung cannot come to disagree about what an entry-named partner is. */
 		private OrderPartner(DrugReference entry) {
-			this(entry.displayLabel(), null, entry, true);
+			this.label = entry.displayLabel();
+			this.labelEntry = entry;
+			recordNameSource(null, true);
 		}
 
-		private OrderPartner(String label, PatientClinicalContext.ActiveDrugOrder namingOrder,
-				DrugReference labelEntry, boolean namesADrug) {
-			this.label = label;
-			this.labelEntry = labelEntry;
-			recordNameSource(namingOrder, namesADrug);
+		/**
+		 * The ladder's last two rungs, whose three facts travel together for the same reason the entry
+		 * rung's do (issue #298): the label an ORDER supplies, the order that supplied it, and whether
+		 * that label is a name at all. One constructor for both because the difference between them is
+		 * only whether an order was reached — a context carrying nothing but the flattened code set
+		 * (issue #118) has none, and then the code IS the label.
+		 *
+		 * <p><b>It takes the order, not the three facts.</b> A caller that passed them separately could
+		 * pass a label it did not take from this order beside a flag saying it did, and
+		 * {@link DrugSafetyValidator#foldedPartnerLabel}'s first branch then validates the RULE against
+		 * that order and hands out the other label — the mis-attribution that branch exists to refuse.
+		 * Deriving all three here is what makes "a non-null {@link #namingOrder} means {@link #label} is
+		 * that order's name" a property of the class rather than of one call site's discipline.
+		 */
+		private OrderPartner(PatientClinicalContext.ActiveDrugOrder order, String orderCode) {
+			this.label = order != null
+					? ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode)
+					: orderCode;
+			this.labelEntry = null;
+			recordNameSource(order, displayNamesADrug(order));
 		}
 
 		/**
@@ -4645,28 +4654,22 @@ public class DrugSafetyValidator {
 		 * therefore be set without the other, which is what lets {@code foldedPartnerLabel} ask the
 		 * order question first.
 		 *
-		 * <p>Written this way and not as a gate on the constructor's ARGUMENT, which was the shape issue
-		 * #298 proposed and which does not hold: {@link #namingOrder} is not final and
-		 * {@link #nameByOrder} already assigns it, so a constructor gate binds constructor callers only
-		 * and leaves the write {@code nameByOrder} already is unbound. A rung added later that assigns
-		 * either field directly, bypassing this method, is bound by this javadoc and by nothing
-		 * structural — the residue ADR Decision 40 records, in exchange for the branch order it retires.
+		 * <p>Two shapes were rejected to get here — a gate on the constructor's ARGUMENT, and re-asking
+		 * {@link DrugSafetyValidator#displayNamesADrug} here instead of taking the flag.
+		 * <b>ADR Decision 40 is where that reasoning lives</b>, and it is deliberately not restated here:
+		 * three copies of a rejected-alternative argument is how this repo has repeatedly come to
+		 * contradict itself. What a future author needs from this method is the rule — write both fields
+		 * through it, and derive one from the other rather than asking a second question.
 		 *
-		 * <p><b>The operand is the FLAG, never {@link DrugSafetyValidator#displayNamesADrug} re-asked
-		 * here.</b> At the ladder's own call site the two are literally equal, so the predicate form
-		 * compiles, reads more like CLAUDE.md's "ask it of yourself" rule and leaves the suite green —
-		 * and it silently destroys the invariant. It re-derives the answer from the ORDER while
-		 * {@link #label} came from the CALLER, so a caller passing {@code false} beside a named order
-		 * keeps a non-null value here next to a label it did not take from that order — the two facts
-		 * apart again, which is the whole of issue #298. It would ship green precisely because the one
-		 * call site that exists today passes the two in agreement, so nothing observable moves until a
-		 * second caller exists. What the rule asks of the object is that it not trust a caller to have
-		 * applied the guard; this method does not — it derives one field from the other, so there is no
-		 * second question to ask.
+		 * <p>What it does NOT enforce: a rung added later that assigns either field directly, bypassing
+		 * this method. {@link #namingOrder} cannot be final while {@link #nameByOrder} renames a partner,
+		 * so the single write path is a convention this class states rather than one the compiler checks —
+		 * the residue Decision 40 records, in exchange for the branch order it retires.
 		 *
-		 * <p>{@link #label} is deliberately not part of the pair. On the constructor's own path a label
-		 * that is a bare code is CORRECT precisely when {@code namesADrug} is false, so folding it in
-		 * would have to reject the very state the ladder's last rung exists to express.
+		 * <p>{@link #label} is deliberately not a third parameter. On the order rung a label that is a bare
+		 * code is CORRECT precisely when {@code namesADrug} is false, so folding it in would have to reject
+		 * the very state the ladder's last rung exists to express; what stops the label and the flag
+		 * disagreeing is that both constructors derive them from one source.
 		 */
 		private void recordNameSource(PatientClinicalContext.ActiveDrugOrder order, boolean namesADrug) {
 			this.namesADrug = namesADrug;
@@ -4894,11 +4897,7 @@ public class DrugSafetyValidator {
 				// this site states the condition once and cannot hand out a name source for a label that
 				// is a bare code (issue #298).
 				partner = entry != null ? new OrderPartner(entry)
-						: new OrderPartner(
-							order != null
-									? ChartSearchAiUtils.firstNonBlank(order.getDisplay(), orderCode)
-									: orderCode,
-							order, null, displayNamesADrug(order));
+						: new OrderPartner(order, orderCode);
 				byIdentity.put(identity, partner);
 			}
 			if (unnameableCode && order != null) {

@@ -1022,7 +1022,8 @@ public class ChartSearchAiRestController {
 	 * final {@code done} event (grounded) and the trailing {@code grounded} event of the async
 	 * path. One implementation so a field added here cannot reach some clients and not others.
 	 *
-	 * <p>{@code grounded} is null when grounding is disabled or could not run — clients must render
+	 * <p>{@code grounded} is null when grounding is disabled, could not run, or ran and could not
+	 * certify the citation (a compound claim unit under entailment, issue #302) — clients must render
 	 * null as "unverified", never as "verified". It is ALSO null, unconditionally, for a
 	 * {@code reference}-group citation: see {@link #groundedForWire}.
 	 *

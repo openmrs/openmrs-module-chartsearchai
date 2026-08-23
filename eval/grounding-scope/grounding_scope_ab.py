@@ -17,6 +17,48 @@ baseline. Versus it:
     "any feeding problems?" cite [5], a provisional-diagnosis false negative);
   * a False->True flip is a WIN candidate (e.g. "any ear problems?" cite [89]).
 
+Since issue #302 a chart citation's null has a NEW CAUSE on the sentence-scope
+side (null was always publishable -- see the caveat below -- so what changed is
+why), and a gate that reads a verdict has to know about it or it fails open. A COMPOUND claim unit -- more than one citation
+with claim text between two of its markers -- publishes no verdict at all: it
+skips Tier-2, no Tier-1 cosine is computed for publication, and the cell reads
+null whichever way either tier would have answered. So the sentence column now carries null for
+exactly the population clause-scoping targets. That includes this harness's own
+named win case, cite [89] on "any ear problems?", if the model answers it in the
+compound-sentence form the clauseScoped setting is documented against -- run it
+and read the cell rather than assuming, since the answer is regenerated each
+time. Read for True/False flips alone, a tally would go to zero wherever that
+happens and the gate would print a pass it had not measured. Hence the null-side
+classes below -- three counted and a fourth deliberately not -- printed separately
+rather than folded in:
+  * null->True is a WIN of the demoted kind (sentence scope could not certify
+    the citation, clause scope can);
+  * True->null is a REGRESSION of the demoted kind;
+  * null->False is a REGRESSION too, and it is the one that matters most here:
+    it is the candidate scoping PUBLISHING the unsupported badge that #302
+    removed. Expect it on the two medication cases below, whose clause-scoped
+    cumulative prefix for the second citation still names the first drug -- so
+    without this class a scoping that reinstates #302's own symptom scores
+    demoted_wins=1, demoted_regressions=0 and the gate prints a pass.
+  * False->null is left UNCOUNTED on purpose: sentence scope published a flag
+    and clause scope withheld it, which is a loss of signal rather than a wrong
+    verdict. Note it can no longer arise from a COMPOUND unit -- that cell is
+    null on the sentence side now, not False -- so what remains here is the
+    other causes of a sentence-side False.
+
+The #302 withholding is gated on entailment, and the module ships
+chartsearchai.grounding.entailment.enabled=false. With it off, none of the three
+null-side classes can fire for that reason at all and the demoted tallies are
+measuring something else, so the harness reads both grounding properties at
+startup, prints them beside the baseline line, and says so in the output rather
+than leaving a reader to assume which regime produced the numbers.
+
+What the wire cannot tell you even with entailment on: a chart null may also mean
+"not checked" -- no record text, an embedding failure, Tier-2 cap overflow with no
+Tier-1 verdict. This harness does not separate those from a #302 withholding, so read
+a null-side count as an upper bound on the demoted kind, not as a measurement of
+it.
+
 Only CHART-group citations are measurable here: a reference-group citation
 publishes no verdict at all (issue #201), so its cells read `withheld` and a
 scoping flip on one cannot be seen from the wire. The gate below is therefore a
@@ -38,6 +80,8 @@ AUTH = base64.b64encode(
     ("%s:%s" % (os.environ.get("OMRS_USER", "admin"),
                os.environ.get("OMRS_PASS", "Admin123"))).encode()).decode()
 GP = "chartsearchai.grounding.clauseScoped"
+GROUNDING_GP = "chartsearchai.grounding.enabled"
+ENTAILMENT_GP = "chartsearchai.grounding.entailment.enabled"
 
 # (patient, question). 165497e8 = Sarah Taylor: malnutrition recorded as BOTH an
 # active condition AND a provisional primary diagnosis (the compound-sentence
@@ -49,6 +93,10 @@ CASES = [
     ("165497e8-13e0-4fa4-8190-8e6fa067c4b7", "what are the patient's diagnoses?"),
     ("165497e8-13e0-4fa4-8190-8e6fa067c4b7", "any mouth or swallowing problems?"),
     ("165497e8-13e0-4fa4-8190-8e6fa067c4b7", "what active conditions does the patient have?"),
+    # Issue #302's own population and question: two patients whose medication answer is a
+    # colon-less list of two active orders, which is a compound claim unit in sentence scope.
+    ("83f95445-d471-4e9c-b10e-a89b6632dbe8", "What medications is this patient currently taking?"),
+    ("e30bc8f0-08bb-406c-986a-2b153a495603", "What medications is this patient currently taking?"),
 ]
 
 
@@ -81,8 +129,11 @@ def search(patient, question):
     # concluded (issue #201), so a clause-scope flip on one is NOT observable from here. Those
     # cells are tagged `withheld` rather than printed as None, which would read as "unverified"
     # and let this harness's gate be quoted over citations it is structurally blind to.
-    # The two tallies below are unaffected either way: both require a True on one side, and a
-    # reference-group citation can never be True (demote-only, issue #106).
+    # The tallies below are unaffected because `withheld` is a STRING: the True/False classes cannot
+    # match it, and the #302 null-side classes test `is None`. Do not change the tag to None — the
+    # null->False class would then start counting withheld reference citations as #302 regressions.
+    # ("every class needs a True on one side" was the old reason and it is no longer true: null->False
+    # needs none.)
     d = req("/chartsearchai/search", {"patient": patient, "question": question}, "POST")
     verdicts = {}
     for r in (d.get("references") or []):
@@ -93,8 +144,19 @@ def search(patient, question):
 
 def run():
     orig_uuid, orig = get_gp(GP)
-    print("harness BASE=%s  %s baseline value=%r\n" % (BASE, GP, orig))
+    grounding = (get_gp(GROUNDING_GP)[1] or "").strip().lower()
+    entailment = (get_gp(ENTAILMENT_GP)[1] or "").strip().lower()
+    print("harness BASE=%s  %s baseline value=%r" % (BASE, GP, orig))
+    print("regime: %s=%s  %s=%s" % (GROUNDING_GP, grounding or "unset",
+                                    ENTAILMENT_GP, entailment or "unset"))
+    if grounding != "true":
+        print("!! grounding is OFF — every verdict below is null and no class here can fire.")
+    elif entailment != "true":
+        print("!! entailment is OFF — the #302 withholding is gated on it, so the withheld tallies")
+        print("   below are NOT measuring it. Turn it on to exercise these classes.")
+    print("")
     regressions, wins = 0, 0
+    demoted_wins, demoted_regressions = 0, 0
     try:
         for patient, q in CASES:
             set_gp(GP, "false")
@@ -114,6 +176,15 @@ def run():
                 elif s.get(i) is False and c.get(i) is True:
                     tag = "<win"
                     wins += 1
+                elif s.get(i) is None and c.get(i) is True and i in s:
+                    tag = "<win(demoted)"
+                    demoted_wins += 1
+                elif s.get(i) is True and c.get(i) is None and i in c:
+                    tag = "<REGRESSION(demoted)"
+                    demoted_regressions += 1
+                elif s.get(i) is None and c.get(i) is False and i in s:
+                    tag = "<REGRESSION(publishes unsupported)"
+                    demoted_regressions += 1
                 cells.append("[%s] sent=%s clause=%s %s" % (i, s.get(i), c.get(i), tag))
             print("  " + ("\n  ".join(cells) if cells else "(no citations)"))
             print("  answer: %s\n" % (c_ans[:160] + ("…" if len(c_ans) > 160 else "")))
@@ -123,8 +194,11 @@ def run():
             print("restored %s -> %r" % (GP, get_gp(GP)[1]))
     print("\nTALLY across %d queries: clause-scope WINS=%d  REGRESSIONS=%d (vs sentence-scope safe baseline)"
           % (len(CASES), wins, regressions))
-    print("GATE for a candidate scoping: must ground [89] on 'any ear problems?' AND produce ZERO")
-    print("True->False regressions across all cases (i.e. wins>=1 on the ear case, regressions==0).")
+    print("  of the demoted kind (sentence-scope null, see #302): WINS=%d  REGRESSIONS=%d"
+          % (demoted_wins, demoted_regressions))
+    print("GATE for a candidate scoping: must ground [89] on 'any ear problems?' — as a win of EITHER")
+    print("kind, since #302 makes that compound sentence's sentence-scope cell null rather than false —")
+    print("AND produce ZERO regressions of either kind across all cases.")
 
 
 if __name__ == "__main__":

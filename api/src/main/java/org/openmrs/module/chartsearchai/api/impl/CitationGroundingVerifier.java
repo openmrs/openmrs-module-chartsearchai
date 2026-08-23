@@ -1068,17 +1068,14 @@ public class CitationGroundingVerifier {
 	 * fragment would let an item pass as "names something" while the statement handed to the judge
 	 * still carried the joining words, silently, in the method that decides whether a TRUE citation is
 	 * published as unsupported.
+	 *
+	 * <p>The slice keeps its citation marker, because {@link #splitEnumeration} builds the published
+	 * fragment text from it; both readers that want the item's BARE text put
+	 * {@link #stripCitationMarkers} over the result, and an empty answer there means the item names
+	 * nothing beyond its marker.
 	 */
 	private static String itemSlice(String text, int fromIndex, int toIndex) {
 		return LEADING_ITEM_SEPARATOR.matcher(text.substring(fromIndex, toIndex)).replaceFirst("").trim();
-	}
-
-	/**
-	 * The text an item contributes of its OWN: {@link #itemSlice} with its citation marker removed.
-	 * Empty means the item names nothing beyond that marker.
-	 */
-	private static String ownItemText(String text, int fromIndex, int toIndex) {
-		return stripCitationMarkers(itemSlice(text, fromIndex, toIndex));
 	}
 
 	/**
@@ -1099,7 +1096,7 @@ public class CitationGroundingVerifier {
 		}
 		int previousEnd = marker.end();
 		while (marker.find()) {
-			if (!ownItemText(text, previousEnd, marker.end()).isEmpty()) {
+			if (!stripCitationMarkers(itemSlice(text, previousEnd, marker.end())).isEmpty()) {
 				return true;
 			}
 			previousEnd = marker.end();

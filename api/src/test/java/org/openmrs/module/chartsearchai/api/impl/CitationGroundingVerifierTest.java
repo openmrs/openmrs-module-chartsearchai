@@ -1806,9 +1806,10 @@ public class CitationGroundingVerifierTest {
 		// so it is the one least likely to be edited away — and pinning only it leaves the
 		// coordinating-conjunction half of LEADING_ITEM_SEPARATOR unguarded: replacing that strip with
 		// a plain punctuation strip reclassifies this sentence as a compound claim and silences its
-		// Tier-2 verdict entirely. Mutate ownItemText that way and read the failures — this case is
-		// the one that speaks for the co-citation property; the others that redden are
-		// splitEnumeration's, which share the definition.
+		// Tier-2 verdict entirely. Mutate itemSlice that way — that is where the separator lives since
+		// the boundary was factored out — and read the failures: this case is the one that speaks for
+		// the co-citation property, and splitEnumeration's own cases redden beside it because they
+		// read the same boundary — which is the whole point of factoring it out.
 		String answer = "The patient has recurrent infections [1] and [2].";
 		embeddings.register(answer, AXIS_A);
 		embeddings.register("record one", AXIS_A);
@@ -1832,19 +1833,26 @@ public class CitationGroundingVerifierTest {
 		// markers, so every record is cited for the same whole statement — that statement IS each
 		// citation's own claim, the judge's question is well-formed, and both directions of its answer
 		// must still be published. A predicate keyed on "more than one citation" would silence it.
+		// Stubbed TRUE, not FALSE: a FALSE is untouched by the demotion either way, so only a TRUE
+		// actually puts "co-citation is not demoted" under test. This is the COLON-LESS register —
+		// splitEnumeration never looks at this sentence, where the sub-shape case below reaches its
+		// no-own-text guard — so the two pin the same property on the two different paths that can
+		// leave adjacent markers in one claim unit.
 		String answer = "The patient has recurrent infections [1], [2].";
 		embeddings.register(answer, AXIS_A);
 		embeddings.register("record one", AXIS_A);
 		embeddings.register("record two", AXIS_A);
-		llm.verdict = Boolean.FALSE;
+		llm.verdict = Boolean.TRUE;
 
 		List<RecordReference> result = verifier.verify(answer, twoRefs(),
 				Arrays.asList(mapping(1, "record one"), mapping(2, "record two")),
 				FLOOR, TIER2_ON, false);
 
 		assertEquals(2, llm.calls, "co-cited records are each asked their own well-formed question");
-		assertEquals(Boolean.FALSE, result.get(0).getGrounded(), "and the answer is published");
-		assertEquals(Boolean.FALSE, result.get(1).getGrounded());
+		assertEquals(1, llm.batches, "one claim unit, so its citations co-batch rather than isolate");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"and a TRUE is published — co-citation is not demote-only");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
 	}
 
 	@Test

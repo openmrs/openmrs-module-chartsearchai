@@ -1699,11 +1699,15 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
-	public void compoundClaim_isDemoteOnlyOnTheTier1OnlyPathToo() {
-		// Mode-uniform, like the reference-group demote-only contract beside it: the rule is about what
-		// the claim unit can support, not about which tier is switched on. Cosine against a conjunction
-		// cannot separate the subject/polarity flips Tier-2 exists for, so a pass here is not assurance
-		// that THIS record backs the piece it is cited for.
+	public void compoundClaim_leavesTheTier1OnlyPathUntouched() {
+		// The demotion is deliberately NOT mode-uniform, unlike the reference-group one beside it.
+		// #302's defect is Tier-2's refusal of a conjunction, which does not exist when entailment is
+		// off: there every verdict is cosine against the claim text, a compound unit's is no different
+		// in kind, and sentence scope has always compared against the whole compound sentence
+		// (clauseScoped is this module's remedy for that, and #302 does not change it). Demoting here
+		// would suppress the PASS of a comparison whose FAIL the module still publishes — see
+		// compoundClaim_anOffTopicCitationIsStillFlagged — and cost a correct citation its verdict for
+		// no defect removed.
 		embeddings.register(COLON_LESS_LIST, AXIS_A);
 		embeddings.register("Drug order: Salicylic acid", AXIS_A);
 		embeddings.register("Drug order: Methotrexate", AXIS_A);
@@ -1711,8 +1715,9 @@ public class CitationGroundingVerifierTest {
 		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(),
 				FLOOR, TIER1_ONLY, false);
 
-		assertNull(result.get(0).getGrounded(), "a cosine pass on a compound claim renders unverified");
-		assertNull(result.get(1).getGrounded(), "and so does the second citation's");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"with no Tier-2 refusal to withhold, the cosine pass still verifies");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "and so does the second citation's");
 	}
 
 	@Test
@@ -1739,6 +1744,50 @@ public class CitationGroundingVerifierTest {
 		assertEquals(Boolean.TRUE, result.get(refs.size() - 1).getGrounded(),
 				"the last single-claim citation must still get its Tier-2 verdict — two consumed slots "
 						+ "would leave it on its Tier-1 FALSE");
+	}
+
+	@Test
+	public void compoundClaim_withNoTier1EmbedderGetsNoVerdictFromEitherTier() {
+		// The combination nothing pinned. Both this class and the entailment GP's own description say
+		// entailment grounding works with no Tier-1 embedding model — true for a single-claim citation
+		// (tier2_absentEmbedder_singleCitingSentenceStillGetsTier2Verdict) and NOT for a compound one,
+		// which #302 keeps out of Tier-2 and which therefore has only the absent tier left. It renders
+		// unverified, which is the honest answer, but it is a real loss on that deployment and it is
+		// pinned here so it cannot change unnoticed.
+		verifier.setEmbedder(null);
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(0, judge.statementsPerCall.size(), "Tier-2 is not asked for a compound claim");
+		assertNull(result.get(0).getGrounded(), "and Tier-1 cannot answer with no embedder");
+		assertNull(result.get(1).getGrounded());
+	}
+
+	@Test
+	public void coCitationJoinedByAConjunctionIsAlsoStillGraded() {
+		// The comma register below is the one LlmAnswerExtractor.normalizeSlashCitations manufactures,
+		// so it is the one least likely to be edited away — and pinning only it leaves the
+		// coordinating-conjunction half of LEADING_ITEM_SEPARATOR unguarded: replacing that strip with
+		// a plain punctuation strip reclassifies this sentence as a compound claim and silences its
+		// Tier-2 verdict entirely. Mutate ownItemText that way and read the failures — this case is
+		// the one that speaks for the co-citation property; the others that redden are
+		// splitEnumeration's, which share the definition.
+		String answer = "The patient has recurrent infections [1] and [2].";
+		embeddings.register(answer, AXIS_A);
+		embeddings.register("record one", AXIS_A);
+		embeddings.register("record two", AXIS_A);
+		llm.verdict = Boolean.FALSE;
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(),
+				Arrays.asList(mapping(1, "record one"), mapping(2, "record two")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(2, llm.calls, "markers joined by 'and' with no claim text between are co-citation");
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded());
+		assertEquals(Boolean.FALSE, result.get(1).getGrounded());
 	}
 
 	@Test

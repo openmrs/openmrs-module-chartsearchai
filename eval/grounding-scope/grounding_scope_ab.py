@@ -17,9 +17,9 @@ baseline. Versus it:
     "any feeding problems?" cite [5], a provisional-diagnosis false negative);
   * a False->True flip is a WIN candidate (e.g. "any ear problems?" cite [89]).
 
-Since issue #302 a chart citation has a THIRD publishable value on the
-sentence-scope side, and a gate that reads a verdict has to know about a new
-verdict class or it fails open. A COMPOUND claim unit -- more than one citation
+Since issue #302 a chart citation's null has a NEW CAUSE on the sentence-scope
+side (null was always publishable -- see the caveat below -- so what changed is
+why), and a gate that reads a verdict has to know about it or it fails open. A COMPOUND claim unit -- more than one citation
 with claim text between two of its markers -- is demote-only: it skips Tier-2
 and a Tier-1 pass renders null. So the sentence column now carries null for
 exactly the population clause-scoping targets. That includes this harness's own
@@ -31,7 +31,16 @@ happens and the gate would print a pass it had not measured. Hence the two
 null-side classes below, counted and printed separately rather than folded in:
   * null->True is a WIN of the demoted kind (sentence scope could not certify
     the citation, clause scope can);
-  * True->null is a REGRESSION of the demoted kind.
+  * True->null is a REGRESSION of the demoted kind;
+  * null->False is a REGRESSION too, and it is the one that matters most here:
+    it is the candidate scoping PUBLISHING the unsupported badge that #302
+    removed. Expect it on the two medication cases below, whose clause-scoped
+    cumulative prefix for the second citation still names the first drug -- so
+    without this class a scoping that reinstates #302's own symptom scores
+    demoted_wins=1, demoted_regressions=0 and the gate prints a pass.
+  * False->null is left UNCOUNTED on purpose: sentence scope published a flag
+    and clause scope withheld it, which is a loss of signal rather than a wrong
+    verdict, and it is the direction #302 itself deliberately takes.
 
 What the wire cannot tell you: a chart null may also mean "not checked" -- no
 record text, an embedding failure, Tier-2 cap overflow with no Tier-1 verdict.
@@ -146,6 +155,9 @@ def run():
                     demoted_wins += 1
                 elif s.get(i) is True and c.get(i) is None and i in c:
                     tag = "<REGRESSION(demoted)"
+                    demoted_regressions += 1
+                elif s.get(i) is None and c.get(i) is False and i in s:
+                    tag = "<REGRESSION(publishes unsupported)"
                     demoted_regressions += 1
                 cells.append("[%s] sent=%s clause=%s %s" % (i, s.get(i), c.get(i), tag))
             print("  " + ("\n  ".join(cells) if cells else "(no citations)"))

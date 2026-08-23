@@ -120,19 +120,31 @@ import org.springframework.stereotype.Service;
  * replies "no" whether the citation is right or wrong, so the verdict says nothing about the
  * citation; published, that is what marked correct, active, unvoided medication citations as
  * unsupported on the module's most common question — 8 of the 30 chart citations in #302's own
- * 12-patient sweep, and all 8 of them in this shape. Such citations therefore never enter Tier-2
+ * 12-patient sweep, all 8 in the colon-less multi-citation row. This rule reaches those of them whose
+ * markers are separated by claim text; #302's closing sub-shape ({@code Salicylic acid [1], [2].}) is
+ * co-citation by the definition below and stays graded, so the fix is not all 8. Such citations therefore never enter Tier-2
  * nor consume its cap, and a Tier-1 cosine pass renders {@code null}, because cosine against a
  * conjunction cannot separate the subject/polarity flips Tier-2 exists for. A cosine FAIL is still
  * published: that is the sentence-scope verdict this class already specifies for a compound
  * sentence, and {@code chartsearchai.grounding.clauseScoped} is its existing remedy — what #302
  * removes is Tier-2's negative alone. Note the two demote-only rules are independent and neither
  * subsumes the other: this one is about the SHAPE of the claim, the reference-group one about the
- * PROVENANCE of the record. Accepted cost, stated as the carve-out above states its own: these
- * references now take the lazy Tier-1 path that the amortized Tier-2 batch spared them, an
- * embedding pass per record and per claim unit on CPU deployments. Where no Tier-1 embedder is
- * configured at all — a deployment this class otherwise supports, entailment carrying the whole pass
- * — these citations therefore render {@code null} and are counted in the run's embedding-failure
- * summary, rather than taking the Tier-2 verdict they used to.
+ * PROVENANCE of the record. It applies under entailment only: with Tier-2 off there is no refusal to
+ * withhold, every verdict is cosine against the claim text, and demoting a compound unit's pass while
+ * still publishing its fail would cost a correct citation its verdict for no defect removed.
+ *
+ * <p><strong>Accepted cost, measured, and it is not a swap on the shape that matters.</strong> A/B
+ * through the 6-arg {@link #verify} over a 12-citation answer, entailment on, counting the real
+ * {@link TextEmbedder} and {@link LlmProvider} calls: where the answer is ONE compound line citing all
+ * 12, the batch goes away (1 {@code entailsBatch} call to 0, 12 pairs to 0) and 13 embedding forward
+ * passes arrive in its place. Where it is 8 sentences of which 4 are compound, covering 9 of the 12
+ * citations, the batch runs anyway for the rest (1 call to 1, 12 pairs to 3) and the same 13 passes
+ * are paid ON TOP — purely additive, on the mixed shape that produced #302's own citations. Those
+ * passes serialize: querystore's provider synchronizes {@code embed} and has no batch override. In
+ * Tier-1-only mode the count is unchanged, and under {@code clauseScoped} nothing moves at all. Where
+ * no Tier-1 embedder is configured — a deployment the entailment setting otherwise supports — these
+ * citations render {@code null} instead of taking the Tier-2 verdict they used to, and are counted in
+ * the run's embedding-failure summary.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"
@@ -172,7 +184,9 @@ public class CitationGroundingVerifier {
 	 * (the same e5/ONNX model that built the index), so the verifier embeds with the same model
 	 * as retrieval and no separate chartsearchai embedding model has to be installed. Returns
 	 * {@code null} when querystore's provider can't be resolved — Tier-1 cosine checks are then
-	 * skipped and Tier-2 entailment (the authoritative pass) still applies. Never throws.
+	 * skipped and Tier-2 entailment (the authoritative pass) still applies to every citation it is
+	 * asked about. Since issue #302 it is not asked about a citation of a compound claim unit, which
+	 * on an embedder-less deployment therefore has no tier left and renders unverified. Never throws.
 	 *
 	 * <p>chartsearchai's own ONNX embedding provider was removed in the querystore migration (#51);
 	 * querystore is now the only grounding embedder. querystore is a {@code provided}-scope
@@ -354,14 +368,23 @@ public class CitationGroundingVerifier {
 		int entailmentBudget = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
 		int cappedCount = 0;
 		Tier1Result[] tier1Results = new Tier1Result[references.size()];
-		// Decided ONCE per reference, at claim selection, and read from here afterwards — never off
-		// tier1Results, which cosineVerdict REBUILDS for every reference reaching the lazy Tier-1
-		// block — under entailment mode that is every compound-claim reference whose claim sentence
-		// was unambiguous, the common case (one citing sentence defers its cosine; several make
-		// selectClaim compute it eagerly instead). A flag lost in a rebuild fails OPEN: the Pass-2
-		// demotion stops firing and a cosine pass publishes true where the module used to publish
-		// false.
-		boolean[] compoundClaim = new boolean[references.size()];
+		// ONE disposition — skip Tier-2, and render a Tier-1 TRUE as null — reached for two
+		// independent reasons, decided ONCE per reference so the exclusion and the demotion cannot
+		// come apart. Wiring a new reason into only one of them is not hypothetical: #110's
+		// safety_finding was left out of the reference-group set and spent Tier-2 cap slots meant for
+		// chart claims for two releases (#122).
+		//   * the RECORD is module-supplied reference material, in either mode (issue #106/#122);
+		//   * its CLAIM UNIT is compound, and only under entailment (issue #302) — there the verdict
+		//     withheld is a Tier-2 confirmation that never happened, whereas with entailment off every
+		//     verdict is cosine against the claim text and a compound unit's is no different in kind,
+		//     so demoting there would suppress the PASS of a comparison whose FAIL is still published.
+		//     Sentence scope always compared against the whole compound sentence; clauseScoped is this
+		//     module's remedy for that, and #302 does not change it.
+		// Decided from the value claim selection returned, never re-read off tier1Results, which
+		// cosineVerdict REBUILDS for every reference reaching the lazy Tier-1 block. A flag lost in a
+		// rebuild would fail OPEN: the demotion stops firing and a cosine pass publishes true where
+		// the module used to publish false.
+		boolean[] demoteOnly = new boolean[references.size()];
 		// Non-isolate candidates share ONE batch. That is safe for the citations of DIFFERENT claim
 		// units, whose statements are different text. It is a known residue for CO-CITATION — several
 		// citations of one claim unit with nothing but a list separator between their markers
@@ -389,7 +412,8 @@ public class CitationGroundingVerifier {
 					: verdictTier1(reference.getIndex(), textByIndex, sentences,
 							floor, recordVectors, sentenceVectors, embedder, stats);
 			tier1Results[i] = tier1;
-			compoundClaim[i] = tier1.compoundClaim;
+			demoteOnly[i] = demoteOnlyIndexes.contains(Integer.valueOf(reference.getIndex()))
+					|| (entailmentEnabled && tier1.compoundClaim);
 			// Tier-2 candidate: needs a concrete claim sentence to fact-check against the record.
 			// Candidacy deliberately does NOT require a Tier-1 verdict: for an unambiguous claim
 			// sentence the verdict is deferred (and may never be needed), and a broken Tier-1
@@ -398,17 +422,16 @@ public class CitationGroundingVerifier {
 			// is false assurance on recited reference prose (issue #106), and the skipped pair must
 			// not consume the per-answer entailment cap that chart citations rely on — which the
 			// safety findings were doing until issue #122, several per polypharmacy answer.
-			// A COMPOUND claim unit is excluded on the same footing and for a parallel reason (issue
-			// #302): its statement attaches different citations to different pieces of itself, so the
-			// record is asked to entail a conjunction it answers for only part of, and a correct judge
-			// replies "no" whether the citation is right or wrong. Published, that is what marked
-			// correct medication citations as unsupported. The exclusion sits OUTSIDE the
-			// budget branch below, like the reference-group one, so the skipped pairs do not spend the
-			// per-answer cap that single-claim citations rely on.
+			// A COMPOUND claim unit is excluded for the parallel reason (issue #302): its statement
+			// attaches different citations to different pieces of itself, so the record is asked to
+			// entail a conjunction it answers for only part of, and a correct judge replies "no"
+			// whether the citation is right or wrong. Published, that is what marked correct
+			// medication citations as unsupported. Both exclusions sit OUTSIDE the budget branch
+			// below, so the skipped pairs do not spend the per-answer cap single-claim citations rely
+			// on.
 			if (entailmentEnabled && tier1.bestSentence != null
 					&& tier1.recordText != null
-					&& !compoundClaim[i]
-					&& !demoteOnlyIndexes.contains(Integer.valueOf(reference.getIndex()))) {
+					&& !demoteOnly[i]) {
 				if (entailmentBudget > 0) {
 					entailmentBudget--;
 					String statement = stripCitationMarkers(tier1.bestSentence);
@@ -472,27 +495,20 @@ public class CitationGroundingVerifier {
 			if (llmVerdict != null) {
 				verdict = llmVerdict; // authoritative; null (no Tier-2 or unverifiable) -> keep Tier-1
 			}
-			if (Boolean.TRUE.equals(verdict)
-					&& demoteOnlyIndexes.contains(Integer.valueOf(references.get(i).getIndex()))) {
-				// Demote-only: a cosine pass on a recited reference record carries no faithfulness
-				// signal, so it renders unverified rather than verified; a fail (an off-topic
-				// citation) still flags. Reference content is verified deterministically by the
-				// DrugSafetyValidator, not by this pass.
-				verdict = null;
-			}
-			if (Boolean.TRUE.equals(verdict) && compoundClaim[i]) {
-				// Demote-only for the OTHER reason (issue #302). With Tier-2 skipped above, the verdict
-				// standing here is Tier-1's cosine against the whole conjunction, and that cannot
-				// separate the subject/polarity flips Tier-2 exists for — so a pass is not assurance
-				// that THIS record backs the piece it is cited for, and it renders unverified.
+			if (Boolean.TRUE.equals(verdict) && demoteOnly[i]) {
+				// A cosine pass carries no assurance for either reason this array is set. On recited
+				// reference prose it carries no faithfulness signal (#106); on a compound claim unit it
+				// is cosine against the whole conjunction, which cannot separate the subject/polarity
+				// flips Tier-2 exists for, so it is not assurance that THIS record backs the piece it
+				// is cited for (#302). Either way it renders unverified rather than verified.
 				//
-				// A cosine FAIL is deliberately still published. That is not a softer version of the
-				// same question: it is the sentence-scope verdict this module already specifies for a
-				// compound sentence, pinned by
-				// CitationGroundingVerifierTest.clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence,
-				// whose point is that sentence scope flags such a citation and clauseScoped is the
-				// remedy for it. What #302 removes is Tier-2's negative, which fired on every citation
-				// of a compound claim regardless of the evidence.
+				// A cosine FAIL is deliberately still published in both cases — for reference prose it
+				// says the citation is not about the record at all (verified deterministically by the
+				// DrugSafetyValidator instead), and for a compound claim it is the sentence-scope
+				// verdict this module already specifies, pinned by
+				// clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence. What #302
+				// removes is Tier-2's negative, which fired on every citation of a compound claim
+				// regardless of the evidence.
 				verdict = null;
 			}
 			annotated.add(references.get(i).withGrounded(verdict));
@@ -507,7 +523,8 @@ public class CitationGroundingVerifier {
 		if (stats.embedFailures > 0) {
 			log.warn("Citation grounding: could not verify {} of {} citation(s) — querystore's embedding "
 					+ "provider failed ({}); those citations are left unverified (Tier-2 entailment still "
-					+ "applies). Ensure querystore's embedding model is configured.",
+					+ "applies wherever it was asked — it is not asked for a compound claim unit, issue "
+					+ "#302). Ensure querystore's embedding model is configured.",
 					stats.embedFailures, references.size(), stats.firstError);
 		}
 		return annotated;
@@ -995,9 +1012,10 @@ public class CitationGroundingVerifier {
 		while (marker.find()) {
 			String item = LEADING_ITEM_SEPARATOR.matcher(
 					sentence.text.substring(itemStart, marker.end())).replaceFirst("").trim();
-			// stripCitationMarkers already trims, so the item's own leading separator (stripped above)
-			// and the marker are both gone by here — `named` is the item's bare text.
-			String named = stripCitationMarkers(item);
+			// `item` keeps its marker because the fragment's text is built from it below; `named` is
+			// the item's bare text, and it comes from the shared definition so this guard and
+			// claimTextSeparatesCitations cannot drift about what an item contributes of its own.
+			String named = ownItemText(sentence.text, itemStart, marker.end());
 			if (named.isEmpty() || named.split("\\s+").length > MAX_ENUMERATION_ITEM_WORDS
 					|| CLAUSE_MARKER.matcher(named).find()) {
 				return null;
@@ -1022,6 +1040,23 @@ public class CitationGroundingVerifier {
 	 * Sentence#compoundClaim()} is the only caller and it guards this with the attributed count for
 	 * exactly that reason.
 	 */
+	/**
+	 * The text an item contributes of its OWN between {@code fromIndex} and {@code toIndex}: the
+	 * leading separator that joins it to its siblings is stripped ({@link #LEADING_ITEM_SEPARATOR})
+	 * and so is its citation marker, leaving the bare claim text. Empty means the item names nothing
+	 * beyond its marker.
+	 *
+	 * <p>Two callers ask one question of this and must agree on the answer: {@link #splitEnumeration},
+	 * deciding whether an item is a named item at all, and {@link #claimTextSeparatesCitations},
+	 * deciding whether two citations are attached to different pieces of one statement. A slice one
+	 * called empty and the other non-empty would either grade a citation against a conjunction (the
+	 * #302 defect) or demote one whose question was well-formed, and both are silent.
+	 */
+	private static String ownItemText(String text, int fromIndex, int toIndex) {
+		return stripCitationMarkers(LEADING_ITEM_SEPARATOR
+				.matcher(text.substring(fromIndex, toIndex)).replaceFirst("").trim());
+	}
+
 	private static boolean claimTextSeparatesCitations(String text) {
 		Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(text);
 		if (!marker.find()) {
@@ -1029,9 +1064,7 @@ public class CitationGroundingVerifier {
 		}
 		int previousEnd = marker.end();
 		while (marker.find()) {
-			String between = LEADING_ITEM_SEPARATOR.matcher(text.substring(previousEnd, marker.start()))
-					.replaceFirst("").trim();
-			if (!between.isEmpty()) {
+			if (!ownItemText(text, previousEnd, marker.end()).isEmpty()) {
 				return true;
 			}
 			previousEnd = marker.end();

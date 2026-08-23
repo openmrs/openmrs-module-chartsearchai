@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
 
@@ -58,9 +59,16 @@ public class FoldedChipOnePartnerNameTest {
 
 	private static final String QUESTION = "Can I give ibuprofen?";
 
-	/** An ATC code as the ladder renders one when it has no name — {@code A01AD05}, {@code N02BA01}. */
-	private static final java.util.regex.Pattern ATC_CODE_SHAPED =
-			java.util.regex.Pattern.compile("[A-Z]\\d{2}[A-Z]{2}\\d{2}");
+	/**
+	 * An ATC code as the ladder renders one when it has no name — {@code A01AD05}, {@code N02BA01},
+	 * and the level-4 form {@code M01AE} that a dictionary may map an order to instead.
+	 *
+	 * <p><b>Level 3 is deliberately NOT matched</b> ({@code [A-Z]\d{2}}), because that is also the shape
+	 * of a real drug name: an order for vitamin {@code B12} would be rejected as a code by any pattern
+	 * loose enough to catch {@code A01}. So the check is narrower than "looks like an ATC code" and is
+	 * exactly the two levels the ladder is known to be handed.
+	 */
+	private static final Pattern ATC_CODE_SHAPED = Pattern.compile("[A-Z]\\d{2}[A-Z]{2}\\d{0,2}");
 
 	/** A fold whose two arms resolve one shared ATC code to two DIFFERENT substances — see the
 	 *  fixture's own description. */
@@ -774,7 +782,8 @@ public class FoldedChipOnePartnerNameTest {
 	 * name in both sentences, so the count below still passes. Measured, by a mutation that breaks only
 	 * this arrangement — the byte-exact case reddened and this sweep did not. So the sweep also asserts
 	 * that the name it counted is not ATC-CODE-SHAPED, which is what makes a code-for-name substitution
-	 * visible here rather than in one case alone.
+	 * visible here rather than in one case alone. {@link #ATC_CODE_SHAPED} says which shapes that covers
+	 * and which it deliberately does not.
 	 *
 	 * <p>One RECONCILING arrangement is excluded too, and for the opposite reason:
 	 * {@link #aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug} names its

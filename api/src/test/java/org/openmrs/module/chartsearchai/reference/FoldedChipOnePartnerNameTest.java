@@ -63,7 +63,10 @@ public class FoldedChipOnePartnerNameTest {
 	 * An ATC code as the ladder renders one when it has no name. It matches a code carrying a LETTER
 	 * group after its leading digits — level 5 {@code A01AD05}, level 4 {@code M01AE}, level 3
 	 * {@code V03A} — and that letter group is the whole discrimination: it is what separates a code from
-	 * a name-shaped {@code B12}, which is a real drug and which any looser pattern would reject.
+	 * a name-shaped {@code B12}, which is a real drug and which any pattern loose enough to DROP that
+	 * letter group would reject. Loose in the trailing digits instead and nothing about names changes:
+	 * {@code [A-Z]\d{2}[A-Z]{1,2}\d{0,2}} admits {@code B12} no more than this does — it only re-admits
+	 * the non-level {@code M01AE0}. So the qualifier is the dimension, not looseness as such.
 	 *
 	 * <p><b>So the shorter forms are a hole this check cannot close</b>, and it is named rather than left
 	 * as an exhaustiveness claim, which is what an earlier version of this javadoc had — wrongly twice

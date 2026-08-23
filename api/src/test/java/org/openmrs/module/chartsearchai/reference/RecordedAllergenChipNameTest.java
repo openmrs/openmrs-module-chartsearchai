@@ -35,8 +35,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p><b>The rule.</b> A row may be named only where the recorded name NAMES it: it is the unique
  * strongest claimant of the whole recorded name, or a name the printed label is built from occurs in
- * the recorded string, or the recorded name's combination constituent / parent moiety names it.
- * Otherwise the chip states the allergy in the chart's own name.
+ * the recorded string, or a combination constituent of the recorded name resolves to its SUBSTANCE.
+ * Otherwise the chip states the allergy in the chart's own name. Each case below mutates one clause
+ * away and is the one that reddens; the fourth, the unique claim, is pinned by five cases that were
+ * already in the suite (Opium under a `papaveretum` allergy among them).
  */
 public class RecordedAllergenChipNameTest {
 

@@ -789,6 +789,15 @@ public class DrugReferenceService {
 	 *         row would then refuse to name a substance the recorded string demonstrably asserts.
 	 *         Resolved once per recorded name rather than once per row, since it does not depend on
 	 *         which row is being asked about.
+	 *
+	 *         <p><b>The moiety leg is currently redundant here, and is kept deliberately.</b> Measured
+	 *         2026-08-24: deleting it changes no naming decision over the shipped KB and reddens no
+	 *         test, because {@link DrugReference#parentMoietyName} returns a PREFIX of the recorded name
+	 *         and that leg admits a row only where the prefix IS its display name — so
+	 *         {@link DrugReference#labelNameOccursIn} has already said yes. That is a coincidence of
+	 *         three rules in two classes, not a property of this one: it stops holding the moment a
+	 *         moiety is derived as anything but a prefix. Do not delete it as dead code, and do not
+	 *         write a test for it — there is no input on which it decides anything.
 	 */
 	private Set<Object> derivedSubstances(String drugName) {
 		Set<Object> out = new HashSet<Object>();

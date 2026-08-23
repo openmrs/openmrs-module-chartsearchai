@@ -4058,9 +4058,9 @@ public class DrugSafetyValidator {
 	 * chip needs all three at once — it reports THAT record, so it may print a row's label only where
 	 * the record names it and must otherwise quote the chart.
 	 *
-	 * <p>Private to this class and built once per {@code validate} pass by the caller that already
-	 * resolves the allergy list, so nothing is resolved twice and nothing outlives the pass (issue
-	 * #172: this bean is a Spring singleton and this memo is keyed on nothing at all).
+	 * <p>Private to this class and built once per {@code validate} pass, by the caller that already
+	 * resolves the allergy list — so nothing here outlives the pass (issue #172: this bean is a Spring
+	 * singleton and this memo is keyed on nothing at all).
 	 */
 	private static final class RecordedAllergen {
 

@@ -605,8 +605,15 @@ public class CitationGroundingVerifier {
 				// against that same conjunction. Withholding only the pass and keeping the fail was
 				// measured to reintroduce the issue's own harm — a correct citation whose diluted
 				// cosine failed while the judge's yes had rescued it under main went from true to a
-				// published false. Guarded by
-				// compoundClaim_publishesNothingWhicheverWayTheJudgeWouldHaveAnswered.
+				// published false.
+				//
+				// The guard for THIS branch is compoundClaim_anEagerlyScoredCosineFailIsWithheldToo,
+				// and only that one — weaken the test to `&& Boolean.TRUE.equals(verdict)` and it is
+				// the single case in the suite that reddens. NOT
+				// compoundClaim_publishesNothingWhicheverWayTheJudgeWouldHaveAnswered: its citations
+				// take the deferred path, where no cosine is computed at all and the null it asserts
+				// comes from the lazy-Tier-1 skip above rather than from here, so it stays green under
+				// that mutation. Its own comment says as much; this one used to name it anyway.
 				verdict = null;
 			} else if (Boolean.TRUE.equals(verdict) && disposition[i] == Disposition.DEMOTE_ONLY) {
 				// Demote-only: a cosine pass on a recited reference record carries no faithfulness

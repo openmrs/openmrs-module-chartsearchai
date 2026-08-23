@@ -4650,7 +4650,7 @@ public class DrugSafetyValidator {
 		/**
 		 * The ONE write path for {@link #namingOrder} and {@link #namesADrug} (issue #298), which are two
 		 * fields carrying one fact — that {@link #label} is a drug NAME, and which order supplied it.
-		 * Both write sites take this: the constructor above and {@link #nameByOrder}. Neither field can
+		 * All three sites take this — both constructors and {@link #nameByOrder}. Neither field can
 		 * therefore be set without the other, which is what lets {@code foldedPartnerLabel} ask the
 		 * order question first.
 		 *
@@ -4669,7 +4669,9 @@ public class DrugSafetyValidator {
 		 * <p>{@link #label} is deliberately not a third parameter. On the order rung a label that is a bare
 		 * code is CORRECT precisely when {@code namesADrug} is false, so folding it in would have to reject
 		 * the very state the ladder's last rung exists to express; what stops the label and the flag
-		 * disagreeing is that both constructors derive them from one source.
+		 * disagreeing is that each constructor computes BOTH itself, from its own arguments, so no caller
+		 * supplies them independently. (Not "from one source": the order rung takes the order AND the
+		 * code, and labels from the code whenever the display is blank.)
 		 */
 		private void recordNameSource(PatientClinicalContext.ActiveDrugOrder order, boolean namesADrug) {
 			this.namesADrug = namesADrug;

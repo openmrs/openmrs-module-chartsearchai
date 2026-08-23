@@ -60,15 +60,28 @@ public class FoldedChipOnePartnerNameTest {
 	private static final String QUESTION = "Can I give ibuprofen?";
 
 	/**
-	 * An ATC code as the ladder renders one when it has no name — {@code A01AD05}, {@code N02BA01},
-	 * and the level-4 form {@code M01AE} that a dictionary may map an order to instead.
+	 * An ATC code as the ladder renders one when it has no name — the level-5 {@code A01AD05}, and the
+	 * shorter groups a dictionary may map an order to instead: level 4 ({@code M01AE},
+	 * {@value DrugReference#ATC_SUBGROUP_PREFIX_LENGTH} characters) and level 3 ({@code V03A}).
 	 *
-	 * <p><b>Level 3 is deliberately NOT matched</b> ({@code [A-Z]\d{2}}), because that is also the shape
+	 * <p><b>Level 2 is deliberately NOT matched</b> ({@code [A-Z]\d{2}}), because that is also the shape
 	 * of a real drug name: an order for vitamin {@code B12} would be rejected as a code by any pattern
-	 * loose enough to catch {@code A01}. So the check is narrower than "looks like an ATC code" and is
-	 * exactly the two levels the ladder is known to be handed.
+	 * loose enough to catch {@code A01}. So one shape of "no name" is invisible to this check, and it is
+	 * named here rather than left as an exhaustiveness claim — an earlier version of this javadoc said
+	 * the pattern covered "exactly the two levels the ladder is known to be handed", which was wrong
+	 * twice: it called level 2 "level 3", and it left the REAL level 3 unmatched, where a mutation
+	 * demonstrated the #298 defect passing this guard as {@code active order A01A}.
+	 *
+	 * <p>"Known to be handed" was not a property of the path either, which is why the claim is gone:
+	 * nothing validates a code's shape between the dictionary and here.
+	 * {@code PatientClinicalContextBuilder.addAtcCodes} admits any code from a concept-reference source
+	 * whose name contains {@code ATC}, {@code DrugReference.normalizeAtcToken} only trims and
+	 * upper-cases, and {@code DrugReference.atcSubgroups} explicitly anticipates codes shorter than a
+	 * subgroup. So this pattern is a net for the shapes that ARE a code and not a name, and level 2 is
+	 * the hole it cannot close without rejecting real names.
 	 */
-	private static final Pattern ATC_CODE_SHAPED = Pattern.compile("[A-Z]\\d{2}[A-Z]{2}\\d{0,2}");
+	private static final Pattern ATC_CODE_SHAPED =
+			Pattern.compile("[A-Z]\\d{2}[A-Z]{1,2}(\\d{2})?");
 
 	/** A fold whose two arms resolve one shared ATC code to two DIFFERENT substances — see the
 	 *  fixture's own description. */

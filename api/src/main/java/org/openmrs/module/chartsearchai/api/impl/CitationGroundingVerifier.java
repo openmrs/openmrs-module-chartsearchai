@@ -53,9 +53,11 @@ import org.springframework.stereotype.Service;
  *
  * <p><strong>Tier-2 (optional).</strong> When
  * {@code chartsearchai.grounding.entailment.enabled} is set, the cited references are
- * confirmed by a yes/no LLM entailment verdict that is authoritative. This is what
- * catches the subject/polarity flips cosine cannot — for chart records; two kinds of citation are
- * excepted and both are below, module-supplied reference material and a COMPOUND claim unit. It runs on Tier-1 passes
+ * confirmed by a yes/no LLM entailment verdict that is authoritative, except where its answer is
+ * decided by the pairing rather than earned by the record. This is what
+ * catches the subject/polarity flips cosine cannot — for chart records; three kinds of citation are
+ * excepted and all three are below: module-supplied reference material, a COMPOUND claim unit, and
+ * — for its NEGATIVE only — a COMPOSITE claim. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
  * citation) is a Tier-1 pass, so confirming only failures would miss it. References are verified
  * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except for the citations of ONE
@@ -191,7 +193,83 @@ import org.springframework.stereotype.Service;
  * signal it replaces did not discriminate — the judge refuses every conjunction, and cosine against a
  * conjunction is diluted for the correct record too, which is the sweep's finding that all 8 published
  * {@code false} sat on correct, active records. It is a real loss all the same, and it is stated here
- * because this is the paragraph a reader consults for what the rule costs.
+ * because this is the paragraph a reader consults for what the rule costs. *
+ * <p><strong>The two rules above and below are disjoint by construction, and the difference between
+ * them is which half of the claim the record is missing.</strong> A COMPOUND unit asserts several
+ * things and cites a different record for each, so no record answers for the rest of its own unit;
+ * a COMPOSITE claim asserts ONE thing that two records jointly support, so the chart record is
+ * missing the relationship its co-citation supplies. A compound unit never reaches the judge at
+ * all, so it can carry no Tier-2 negative for the composite rule to withhold.
+ * <p><strong>A COMPOSITE claim cannot be denied by entailment.</strong> A drug-safety answer's claim
+ * rests on TWO records: the chart record for the co-medication or the allergen, and the module's own
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_SAFETY_FINDING} for the RELATIONSHIP between them
+ * ("Gentamicin interacts with active order lidocaine [4], a Minor problem [239]"). The composite
+ * CLAIM — two records, one sentence, both cited — is what the safety few-shot in {@link LlmProvider}
+ * demonstrates, so it is expected output rather than an exotic case; the few-shot writes it with a
+ * pronoun, which decides whether {@link #splitEnumeration} takes the sentence apart but not whether
+ * the claim is composite. No single record entails that statement, so a correct judge answers "no" for the chart half
+ * BY CONSTRUCTION, and the verdict published was {@code false} — which a client renders as
+ * <em>Unsupported</em>, in red, on a correct citation (issue #284, measured live on two shapes). So
+ * where a chart citation's claim statement rests on module-supplied reference material, a Tier-2
+ * NEGATIVE is withheld and the citation renders {@code null} ("could not verify") — the
+ * distinction issue #201 was filed over.
+ *
+ * <p>Splitting the statement further is not the alternative, and that was measured rather than
+ * assumed: an enumerating answer of this shape is ALREADY split per item by
+ * {@link #splitEnumeration}, in either mode, and the minimal item still asserts the relationship,
+ * because the chart record supplies the co-medication and the finding supplies the relation. The
+ * composition is semantic, not syntactic, so this is not another instance of #278's wrong-sized
+ * claim to be cut down further.
+ *
+ * <p>What the rule does and does not reach:
+ *
+ * <ul>
+ * <li><strong>Only the negative.</strong> The composition guarantees the "no"; it does not guarantee
+ * the "yes", so a positive verdict still verifies the citation. That is the check the demote-only
+ * carve-out is deliberately NOT extended to for
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} — the record issue #118 injected for
+ * reconciliation, kept gradable by the carve-out comment in {@link #verify} — and it is why a
+ * composite citation is not simply made demote-only. Whether the judge's "yes" is INFORMATIVE on a
+ * composite statement is not measured; it is kept because nothing about the composition makes it
+ * uninformative.</li>
+ * <li><strong>Only where a judge spoke.</strong> With no Tier-2 verdict there is nothing guaranteed
+ * to withhold, so Tier-1-only mode is unchanged — including its off-topic {@code false}. Deliberate:
+ * every measurement on #284 was taken with entailment enabled, and no claim is made here about what a
+ * cosine floor does to a composite statement. The other two ways a judge reaches no verdict are not
+ * modes but per-answer accidents, and they leave the defect standing where they happen: a composite
+ * claim past
+ * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS}, or one whose engine call failed,
+ * falls to Tier-1 and can publish {@code false} — so two citations of ONE composite sentence can
+ * publish differently depending on where the cap fell between them.</li>
+ * <li><strong>Not decided by the model's punctuation.</strong> Either side of the pairing can be
+ * cited in the structured array with no inline marker; #284 measured the chart side that way and the
+ * reference side is the same shape reversed. So a chart citation nothing anchors has its statement —
+ * and what that statement rests on — read out of the whole answer, and an UNANCHORED reference
+ * citation counts toward every claim, because it was offered in support of the answer without saying
+ * where. See {@link AnswerCitations}.</li>
+ * </ul>
+ *
+ * <p>The cost, stated rather than implied: a chart citation the model attached to the WRONG record
+ * now renders unverified instead of unsupported wherever its graded statement rests on reference
+ * material, so the mis-attribution signal #122 deliberately kept for reference citations has no
+ * counterpart here. Read "its graded statement", not "its sentence", and not "a safety sentence" —
+ * both are wider than they look. An enumeration ITEM is graded on its own text but rests on its
+ * parent sentence's citations, so one item citing a finding withholds every sibling item's negative;
+ * and an UNANCHORED finding rests on the whole answer, so it withholds the negative of every chart
+ * citation in it, including ones in sentences about something else entirely. Both follow from the
+ * proxy this rule uses — see the last bullet above — and neither is separable from the cases it was
+ * written for: the same syntactic shape carries the gentamicin claim, which must be withheld, and a
+ * recorded-allergy list beside a finding, which need not be. The alternative —
+ * falling back to Tier-1 after withholding — was rejected because it makes the fix a function of
+ * {@code chartsearchai.grounding.minCosine}, which this module's own global-property text says to
+ * raise to ~0.82 on an e5 querystore deployment: at that floor a composite statement — carrying the
+ * other record's words as well as its own — is PREDICTED to fall below it and re-publish
+ * {@code false}, returning #284 for any operator who followed the advice. Predicted and not measured,
+ * because under entailment a single-candidate claim defers Tier-1 entirely, so no cosine was computed
+ * for #284's cells at any floor. Faithfulness of this
+ * answer class is checked deterministically instead, by the {@code DrugSafetyValidator} chips and
+ * {@link ClassCodeFidelityCheck} — which is #106's own remedy for material a semantic check cannot
+ * grade.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"
@@ -357,7 +435,9 @@ public class CitationGroundingVerifier {
 	 * Tier-2 LLM entailment verdict that is authoritative
 	 * (cosine errs in both directions, and the dangerous error — a high-overlap
 	 * but unsupported citation — is exactly the case Tier-1 cannot self-detect,
-	 * so the LLM must see Tier-1 passes too, not only failures). They are confirmed in a batched
+	 * so the LLM must see Tier-1 passes too, not only failures). Authoritative in both directions
+	 * except one: a chart citation whose claim also rests on module-supplied reference material has
+	 * its NEGATIVE withheld, because the composition guarantees it (issue #284, class javadoc). They are confirmed in a batched
 	 * call ({@link LlmProvider#entailsBatch}), capped at
 	 * {@link ChartSearchAiConstants#GROUNDING_ENTAILMENT_MAX_CHECKS} pairs per answer; references
 	 * beyond the cap keep their Tier-1 verdict (but see the clause-scoped exception below).
@@ -400,11 +480,13 @@ public class CitationGroundingVerifier {
 				// one finding flipping across runs of a single probe (issue #122). Since issue #201 the
 				// REST serializer withholds the whole verdict for a reference-group citation, derived
 				// from the same classification, so a type left out HERE no longer reaches a client as
-				// grounded=true — but do not read that as cover. Two consequences are still this set's
-				// alone and neither is visible downstream: the omitted type spends Tier-2 cap slots
-				// meant for chart claims, and it records an entailment verdict on its RecordReference
-				// that the judge cannot competently give on recited prose. Nor is the
-				// wire a reason to relax it on the assumption that a client re-filters by group —
+				// grounded=true — but do not read that as cover. Two consequences are this set's
+				// alone: the omitted type spends Tier-2 cap slots meant for chart claims, and it
+				// records an entailment verdict on its RecordReference that the judge cannot
+				// competently give on recited prose. A THIRD is visible downstream, since issue
+				// #284: a CHART citation co-cited with this record has its Tier-2 negative withheld,
+				// so a type left out of the group leaves #284 open for every answer citing it. Nor
+				// is the wire a reason to relax it on the assumption that a client re-filters by group —
 				// `group` is a provenance DISCLOSURE, not a second gate, which is why the withholding
 				// is stated server-side in README's reference contract.
 				//
@@ -424,6 +506,7 @@ public class CitationGroundingVerifier {
 		List<Sentence> sentences = clauseScoped
 				? splitIntoClauseScopedSentences(answer)
 				: splitIntoCitedSentences(answer);
+		AnswerCitations citations = new AnswerCitations(sentences, references);
 		TextEmbedder embedder = resolveEmbedder();
 
 		// Embedding caches: each record and each sentence is embedded at most
@@ -506,9 +589,9 @@ public class CitationGroundingVerifier {
 		for (int i = 0; i < references.size(); i++) {
 			RecordReference reference = references.get(i);
 			Tier1Result tier1 = entailmentEnabled
-					? selectClaim(reference.getIndex(), textByIndex, sentences,
+					? selectClaim(reference.getIndex(), textByIndex, sentences, citations,
 							floor, recordVectors, sentenceVectors, embedder, stats)
-					: verdictTier1(reference.getIndex(), textByIndex, sentences,
+					: verdictTier1(reference.getIndex(), textByIndex, sentences, citations,
 							floor, recordVectors, sentenceVectors, embedder, stats);
 			tier1Results[i] = tier1;
 			disposition[i] = entailmentEnabled && tier1.compoundClaim ? Disposition.UNVERIFIABLE
@@ -590,13 +673,33 @@ public class CitationGroundingVerifier {
 			}
 		}
 
-		// Pass 2: assemble — Tier-2 is authoritative when it reached a verdict, else keep Tier-1.
+		// Pass 2: assemble — Tier-2 is authoritative when it reached a verdict, else keep Tier-1. The
+		// one exception is a chart citation whose claim is COMPOSITE, where Tier-2's negative is
+		// withheld rather than published (issue #284, below).
 		List<RecordReference> annotated = new ArrayList<RecordReference>(references.size());
+		int withheldNegatives = 0;
 		for (int i = 0; i < references.size(); i++) {
 			Boolean verdict = tier1Results[i].verdict;
 			Boolean llmVerdict = tier2Verdict[i];
 			if (llmVerdict != null) {
 				verdict = llmVerdict; // authoritative; null (no Tier-2 or unverifiable) -> keep Tier-1
+			}
+			// Composite claim (issue #284): the statement this chart record was graded against also
+			// rests on a module-supplied finding, which supplies the RELATIONSHIP the record cannot
+			// carry — so the judge's "no" is guaranteed by the composition and is a statement about
+			// the question, not about the citation. It renders "could not verify" rather than "not
+			// supported", the distinction #201 was filed over. Only the NEGATIVE is guaranteed, so a
+			// "yes" still verifies; and with no Tier-2 verdict there is nothing guaranteed to
+			// withhold, which is why Tier-1-only mode is untouched.
+			//
+			// GRADED is what scopes it to a chart citation, and it is redundant twice over rather
+			// than load-bearing: neither of the other dispositions can carry an llmVerdict at all,
+			// since both are excluded from Tier-2 candidacy in Pass 1. Kept because this rule is
+			// about chart citations and should say so where it is applied.
+			if (Boolean.FALSE.equals(llmVerdict) && disposition[i] == Disposition.GRADED
+					&& restsOnReferenceMaterial(tier1Results[i].claimRestsOn, demoteOnlyIndexes)) {
+				verdict = null;
+				withheldNegatives++;
 			}
 			if (disposition[i] == Disposition.UNVERIFIABLE) {
 				// A compound claim unit under entailment publishes nothing (issue #302). Neither tier
@@ -627,6 +730,16 @@ public class CitationGroundingVerifier {
 		if (cappedCount > 0) {
 			log.info("Tier-2 entailment cap ({}) reached; {} citation(s) kept their Tier-1 verdict only",
 					ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS, cappedCount);
+		}
+		// The withheld negative is the one verdict this pass computes and keeps nowhere: unlike the
+		// reference-group false, which #201 leaves on the RecordReference and withholds at the wire,
+		// this one is overwritten here. Without a line, a genuinely mis-attached chart citation in a
+		// safety answer produces no signal on a running server — which is how #122 and #178 each
+		// survived two releases.
+		if (withheldNegatives > 0) {
+			log.info("Citation grounding: withheld {} not-entailed verdict(s) whose claim also rested on "
+					+ "module-supplied reference material; those citations render unverified (issue #284)",
+					withheldNegatives);
 		}
 		// One summary line instead of a per-citation stacktrace: the usual cause is a
 		// misconfigured/absent embedding model, which would otherwise spam the log once
@@ -659,7 +772,7 @@ public class CitationGroundingVerifier {
 	 * {@code null}-verdict, no-claim result (no Tier-2 candidate), mirroring the eager path.
 	 */
 	private Tier1Result selectClaim(int index, Map<Integer, String> textByIndex,
-			List<Sentence> sentences, double floor,
+			List<Sentence> sentences, AnswerCitations citations, double floor,
 			Map<Integer, float[]> recordVectors, Map<Integer, float[]> sentenceVectors,
 			TextEmbedder embedder, GroundingStats stats) {
 		String recordText = textByIndex.get(index);
@@ -675,7 +788,13 @@ public class CitationGroundingVerifier {
 				candidates.add(Integer.valueOf(s));
 			}
 		}
-		if (candidates.isEmpty()) {
+		// No sentence attributed this record to anything, so whatever statement is selected below is
+		// the module's GUESS out of the whole answer — which is what AnswerCitations.restsOn widens
+		// for: otherwise the composite-claim rule in Pass 2 would turn on which sentence the cosine
+		// argmax happened to land on, and the same answer written as two sentences instead of one
+		// would grade differently (issue #284).
+		boolean guessed = candidates.isEmpty();
+		if (guessed) {
 			for (int s = 0; s < sentences.size(); s++) {
 				candidates.add(Integer.valueOf(s));
 			}
@@ -687,7 +806,7 @@ public class CitationGroundingVerifier {
 			int only = candidates.get(0).intValue();
 			Sentence claim = sentences.get(only);
 			return new Tier1Result(null, claim.text, recordText, claim.isolate, claim.compoundClaim(),
-					only, true);
+					only, true, citations.restsOn(claim, guessed));
 		}
 		try {
 			float[] recordVector = embedRecord(index, recordText, recordVectors, embedder);
@@ -703,12 +822,81 @@ public class CitationGroundingVerifier {
 			}
 			Sentence claim = sentences.get(bestIdx);
 			return new Tier1Result(Boolean.valueOf(best >= floor), claim.text, recordText,
-					claim.isolate, claim.compoundClaim(), bestIdx, false);
+					claim.isolate, claim.compoundClaim(), bestIdx, false,
+					citations.restsOn(claim, guessed));
 		}
 		catch (RuntimeException e) {
 			stats.recordFailure(e);
 			return new Tier1Result(null, null, recordText, false);
 		}
+	}
+
+	/**
+	 * The citations one answer carries, split by whether any sentence ANCHORS them with an inline
+	 * {@code [N]} marker — computed once per {@link #verify} call and the input to every
+	 * {@link Tier1Result#claimRestsOn}.
+	 *
+	 * <p>The split matters because an UNANCHORED citation — one the model listed only in the
+	 * structured {@code citations} array — is attached to no statement in particular, so it is
+	 * evidence offered for the answer as a whole. Either side of a composite claim can be unanchored.
+	 * #284 measured the CHART side that way (its second live shape puts the allergy record in the
+	 * array only); the reference side is the same shape reversed and is covered by symmetry, not by
+	 * a measurement. Reading markers alone would make the verdict turn on which half the model
+	 * happened to punctuate.
+	 */
+	private static final class AnswerCitations {
+
+		/** Every index the prose marks up, from the sentences' own carried sets rather than a
+		 *  re-parse of the answer. */
+		final Set<Integer> anchored;
+
+		/** Every cited index no sentence marks up. Belongs to no statement, therefore to all. */
+		final Set<Integer> unanchored;
+
+		AnswerCitations(List<Sentence> sentences, List<RecordReference> references) {
+			anchored = new HashSet<Integer>();
+			for (Sentence sentence : sentences) {
+				anchored.addAll(sentence.sourceCitedIndexes);
+			}
+			unanchored = new HashSet<Integer>();
+			for (RecordReference reference : references) {
+				Integer index = Integer.valueOf(reference.getIndex());
+				if (!anchored.contains(index)) {
+					unanchored.add(index);
+				}
+			}
+		}
+
+		/**
+		 * What the statement selected for one citation rests on: its claim sentence's own source
+		 * citations — or, where the pairing was GUESSED because nothing anchored this record, every
+		 * anchored citation, since the statement was then chosen out of the whole answer. The
+		 * unanchored citations join either case, for the reason above.
+		 */
+		Set<Integer> restsOn(Sentence claim, boolean guessed) {
+			Set<Integer> restsOn = new HashSet<Integer>(unanchored);
+			restsOn.addAll(guessed ? anchored : claim.sourceCitedIndexes);
+			return restsOn;
+		}
+	}
+
+	/**
+	 * Whether one citation's claim statement rests on module-supplied reference material as well as
+	 * on its own record — a COMPOSITE claim, whose Tier-2 negative is guaranteed by the composition
+	 * and therefore says nothing about the citation (issue #284; see the class javadoc).
+	 *
+	 * <p>Membership is the caller's {@code demoteOnlyIndexes}, derived once per call through
+	 * {@link ChartSearchAiUtils#isGroundingDemoteOnly} — never a resource type compared here, which
+	 * is the mistake #122 exists to stop being made a second time.
+	 */
+	private static boolean restsOnReferenceMaterial(Set<Integer> claimRestsOn,
+			Set<Integer> demoteOnlyIndexes) {
+		for (Integer cited : claimRestsOn) {
+			if (demoteOnlyIndexes.contains(cited)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -719,6 +907,11 @@ public class CitationGroundingVerifier {
 	 * record/sentence vector caches, so the work and the result are exactly what the eager path
 	 * would have produced for the same (record, claim sentence) pair. Never throws: an embedding
 	 * failure degrades to a {@code null} ("could not verify") verdict.
+	 *
+	 * <p>{@link Tier1Result#claimRestsOn} is carried across because it is part of the selection this
+	 * copy replaces, not because a caller reads it afterwards: the composite-claim rule fires only
+	 * where Tier-2 DID reach a verdict, which is the one case this method is not called in. Dropping
+	 * it on the copy would be invisible today and wrong the moment that gate widens.
 	 */
 	private Tier1Result cosineVerdict(Tier1Result selected, double floor, int index,
 			List<Sentence> sentences, Map<Integer, float[]> recordVectors,
@@ -729,12 +922,13 @@ public class CitationGroundingVerifier {
 					sentenceVectors, embedder);
 			return new Tier1Result(Boolean.valueOf(sim >= floor), selected.bestSentence,
 					selected.recordText, selected.isolate, selected.compoundClaim,
-					selected.bestSentenceIdx, false);
+					selected.bestSentenceIdx, false, selected.claimRestsOn);
 		}
 		catch (RuntimeException e) {
 			stats.recordFailure(e);
 			return new Tier1Result(null, selected.bestSentence, selected.recordText,
-					selected.isolate, selected.compoundClaim, selected.bestSentenceIdx, false);
+					selected.isolate, selected.compoundClaim, selected.bestSentenceIdx, false,
+					selected.claimRestsOn);
 		}
 	}
 
@@ -744,7 +938,7 @@ public class CitationGroundingVerifier {
 	 * enumeration — used as the Tier-2 entailment target. Never throws: an embedding failure yields a {@code null} verdict.
 	 */
 	private Tier1Result verdictTier1(int index, Map<Integer, String> textByIndex,
-			List<Sentence> sentences, double floor,
+			List<Sentence> sentences, AnswerCitations citations, double floor,
 			Map<Integer, float[]> recordVectors, Map<Integer, float[]> sentenceVectors,
 			TextEmbedder embedder, GroundingStats stats) {
 		String recordText = textByIndex.get(index);
@@ -760,6 +954,7 @@ public class CitationGroundingVerifier {
 			double best = -Double.MAX_VALUE;
 			String bestSentence = null;
 			boolean bestIsolate = false;
+			int bestIdx = -1;
 			boolean compared = false;
 			boolean anyInlineCite = false;
 			for (int s = 0; s < sentences.size(); s++) {
@@ -771,6 +966,7 @@ public class CitationGroundingVerifier {
 						best = sim;
 						bestSentence = sentences.get(s).text;
 						bestIsolate = sentences.get(s).isolate;
+						bestIdx = s;
 					}
 				}
 			}
@@ -786,6 +982,7 @@ public class CitationGroundingVerifier {
 						best = sim;
 						bestSentence = sentences.get(s).text;
 						bestIsolate = sentences.get(s).isolate;
+						bestIdx = s;
 					}
 				}
 			}
@@ -803,8 +1000,21 @@ public class CitationGroundingVerifier {
 			// CitationGroundingVerifierTest green and only breaking BOTH reddens
 			// compoundClaim_leavesTheTier1OnlyPathUntouched. Do not read that case as a guard on this
 			// line. If the gate is ever deliberately removed, both places have to move together.
+			if (bestIdx < 0) {
+				// Compared, but no comparison ever won: only a non-finite similarity does that, and
+				// then there is no claim sentence to record. Returned without one rather than
+				// indexing on -1, which would throw into the catch below and report an embedding
+				// failure for an arithmetic edge — turning this branch's FALSE into a null.
+				return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText,
+						bestIsolate, false, -1, false, Collections.<Integer> emptySet());
+			}
+			// claimRestsOn is recorded on this path too, though nothing reads it here: the
+			// composite-claim rule fires only on a Tier-2 negative and this is the Tier-1-only path.
+			// Populated anyway so the field means the same thing wherever a claim was selected — an
+			// empty set is "no claim", not "a claim that rests on nothing", and the difference is
+			// fail-OPEN if the rule's gate ever widens.
 			return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText, bestIsolate,
-					false, -1, false);
+					false, bestIdx, false, citations.restsOn(sentences.get(bestIdx), !anyInlineCite));
 		}
 		catch (RuntimeException e) {
 			// Never break the search path on a verification failure; count it for the
@@ -875,12 +1085,25 @@ public class CitationGroundingVerifier {
 		 *  not what correctness rests on. */
 		final boolean compoundClaim;
 
+		/** Every citation the SELECTED statement rests on — the claim sentence's own
+		 *  {@link Sentence#sourceCitedIndexes}, or every citation in the answer where the pairing was
+		 *  GUESSED (see {@link #selectClaim}). Empty where no claim sentence was selected. Read by
+		 *  the composite-claim rule in Pass 2 of {@link #verify}. */
+		final Set<Integer> claimRestsOn;
+
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate) {
 			this(verdict, bestSentence, recordText, isolate, false, -1, false);
 		}
 
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate,
 				boolean compoundClaim, int bestSentenceIdx, boolean deferred) {
+			this(verdict, bestSentence, recordText, isolate, compoundClaim, bestSentenceIdx, deferred,
+					Collections.<Integer> emptySet());
+		}
+
+		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate,
+				boolean compoundClaim, int bestSentenceIdx, boolean deferred,
+				Set<Integer> claimRestsOn) {
 			this.verdict = verdict;
 			this.bestSentence = bestSentence;
 			this.recordText = recordText;
@@ -888,6 +1111,7 @@ public class CitationGroundingVerifier {
 			this.compoundClaim = compoundClaim;
 			this.bestSentenceIdx = bestSentenceIdx;
 			this.deferred = deferred;
+			this.claimRestsOn = claimRestsOn;
 		}
 	}
 
@@ -929,8 +1153,7 @@ public class CitationGroundingVerifier {
 			if (raw.trim().isEmpty()) {
 				continue;
 			}
-			Sentence sentence = new Sentence(raw);
-			sentence.citedIndexes.addAll(ChartSearchAiUtils.citedIndexes(raw));
+			Sentence sentence = new Sentence(raw, ChartSearchAiUtils.citedIndexes(raw), false);
 			List<Sentence> items = splitEnumeration(sentence);
 			if (items != null) {
 				sentences.addAll(items);
@@ -1143,7 +1366,8 @@ public class CitationGroundingVerifier {
 				return null;
 			}
 			items.add(new Sentence(preamble + " " + item,
-					Collections.singleton(Integer.valueOf(marker.group(1))), true));
+					Collections.singleton(Integer.valueOf(marker.group(1))), true,
+					sentence.sourceCitedIndexes));
 			itemStart = marker.end();
 		}
 		return items;
@@ -1228,7 +1452,7 @@ public class CitationGroundingVerifier {
 			while (marker.find()) {
 				Integer idx = Integer.valueOf(marker.group(1));
 				clauses.add(new Sentence(sentence.text.substring(0, marker.end()),
-						Collections.singleton(idx), true));
+						Collections.singleton(idx), true, sentence.sourceCitedIndexes));
 			}
 		}
 		return clauses;
@@ -1250,6 +1474,21 @@ public class CitationGroundingVerifier {
 		final java.util.Set<Integer> citedIndexes = new java.util.HashSet<Integer>();
 
 		/**
+		 * Every citation of the SENTENCE this unit was split from — identical to
+		 * {@link #citedIndexes} for a whole sentence, and the full set for a fragment, whose own
+		 * {@code citedIndexes} is the single citation it is attributed to. It answers "what else does
+		 * the statement this citation is graded against rest on?", which a fragment cannot answer
+		 * about itself: an enumeration item's set is a singleton by construction, so the co-citation
+		 * that makes its claim composite is invisible from the item alone (issue #284).
+		 *
+		 * <p>Carried from the parent, never re-derived by re-parsing the text — same reason as
+		 * {@code citedIndexes}, and sharper here, because a clause-scoped fragment's text contains
+		 * EARLIER markers and an enumeration item's contains only its own, so re-parsing would give
+		 * two different wrong answers.
+		 */
+		final java.util.Set<Integer> sourceCitedIndexes = new java.util.HashSet<Integer>();
+
+		/**
 		 * True when this is a per-citation FRAGMENT of a multi-citation sentence, so its citation must
 		 * be Tier-2 verified ALONE — not co-batched with the sentence's other citations, whose
 		 * statements overlap (they share text) and would otherwise couple the (not
@@ -1261,18 +1500,23 @@ public class CitationGroundingVerifier {
 		 */
 		final boolean isolate;
 
-		Sentence(String text) {
-			this(text, java.util.Collections.<Integer> emptySet(), false);
+		/** Whole-sentence constructor: the unit is its own source, so {@link #sourceCitedIndexes}
+		 *  mirrors {@code citedIndexes}. */
+		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate) {
+			this(text, citedIndexes, isolate, citedIndexes);
 		}
 
-		/** Fragment constructor: text, an explicit cited-index set, and whether the fragment must be
-		 *  Tier-2 verified in isolation. Used by BOTH splitters — clause-scoped splitting, whose text
-		 *  may contain earlier markers while being attributed to one citation only, and enumeration
-		 *  splitting, whose text is a preamble plus one item. */
-		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate) {
+		/** Fragment constructor: text, an explicit cited-index set, whether the fragment must be
+		 *  Tier-2 verified in isolation, and the citations of the sentence it was split from. Used by
+		 *  BOTH splitters — clause-scoped splitting, whose text may contain earlier markers while
+		 *  being attributed to one citation only, and enumeration splitting, whose text is a preamble
+		 *  plus one item. */
+		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate,
+				java.util.Set<Integer> sourceCitedIndexes) {
 			this.text = text;
 			this.citedIndexes.addAll(citedIndexes);
 			this.isolate = isolate;
+			this.sourceCitedIndexes.addAll(sourceCitedIndexes);
 		}
 
 		boolean cites(int index) {

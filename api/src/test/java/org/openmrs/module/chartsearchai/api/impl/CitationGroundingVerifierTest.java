@@ -2066,4 +2066,319 @@ public class CitationGroundingVerifierTest {
 		assertEquals("Recorded allergies: not sulfa [2]", clauses.get(1).text,
 				"the separator strip must not eat the negation");
 	}
+
+	// ---- composite claims: a chart citation whose statement also rests on module-supplied
+	// ---- reference material (issue #284) ----
+
+	/**
+	 * The chart half of a drug-safety answer's claim, as the REAL pipeline renders it: the injected
+	 * active-order record for the co-medication the finding names. Numbered just after the finding so
+	 * the two citation numberings cannot collide, exactly as the cap-boundary tests above do.
+	 */
+	private static RecordMapping coMedicationRecord(RecordMapping finding) {
+		return activeDrugOrderMapping(finding.getIndex() + 1, "order-uuid-simvastatin",
+				realActiveOrderRecordText("order-uuid-simvastatin", "Simvastatin 20mg"));
+	}
+
+	/**
+	 * The judge as it behaved on the live cells in issue #284: the co-medication record names its own
+	 * drug and not the one being asked about, so it does not entail a statement asserting an
+	 * interaction between the two. A correct judge answers "no" here — that is the whole point, and
+	 * why the "no" says nothing about the CITATION.
+	 */
+	private ConjunctionAwareJudge useInteractionJudge() {
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("clarithromycin", "simvastatin");
+		verifier.setLlmProvider(judge);
+		return judge;
+	}
+
+	/** The enumerating answer of issue #284's shape A, in the wording the current head produces
+	 *  (the drug name repeated rather than a pronoun, so {@code CLAUSE_MARKER} does not veto the
+	 *  split). */
+	private static String compositeEnumeration(RecordMapping order, RecordMapping finding) {
+		return "Clarithromycin can be given, with one caution: Clarithromycin interacts with "
+				+ "active order Simvastatin [" + order.getIndex() + "], a Major problem ["
+				+ finding.getIndex() + "].";
+	}
+
+	private static List<RecordReference> refsFor(RecordMapping order, RecordMapping finding) {
+		return new ArrayList<RecordReference>(
+				Arrays.asList(reference(order.getIndex()), reference(finding.getIndex())));
+	}
+
+	@Test
+	public void compositeClaim_chartCitationCoCitedWithAFindingRendersUnverifiedNotUnsupported() {
+		// Issue #284 shape A, measured live: the answer's claim rests on TWO records — the chart record
+		// for the co-medication and the module's own finding for the RELATIONSHIP — so no single record
+		// entails it and a correct judge answers "no" for the chart half BY CONSTRUCTION. Publishing
+		// that "no" renders the correct citation as "Unsupported", in red. The claim unit here is
+		// already the minimal one: splitEnumeration hands [order] its own item, and issue #284's
+		// comment measured that narrowing no further removes the reference-supplied half.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		// The finding's own citation recites it, so its lazy Tier-1 pass demotes to null — the live
+		// table this case reproduces, where [239] published null and only the chart cite was false.
+		embeddings.register("Clarithromycin can be given, with one caution: a Major problem ["
+				+ finding.getIndex() + "]", AXIS_A);
+		embeddings.register(finding.getText(), AXIS_A);
+		useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(compositeEnumeration(order, finding),
+				refsFor(order, finding), Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(),
+				"a negative guaranteed by the composition is not a statement about the citation, "
+						+ "so it must render unverified rather than unsupported");
+		assertNull(result.get(1).getGrounded(), "the finding's own demote-only verdict is unchanged");
+	}
+
+	@Test
+	public void compositeClaim_aCitationOnlyInTheCitationsArrayRendersUnverifiedNotUnsupported() {
+		// Issue #284 shape B, also measured live: the chart record carries no inline marker, so the
+		// claim statement is chosen by the whole-answer fallback — and the sentence it lands on is the
+		// one citing the finding. Same composition, reached by the other path.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(findingCitingSentence(finding),
+				refsFor(order, finding), Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(),
+				"a guessed pairing whose statement rests on the finding cannot publish a denial");
+	}
+
+	@Test
+	public void compositeClaim_aGuessedPairingLooksAtEveryCitationInTheAnswer() {
+		// The fallback picks its statement out of the WHOLE answer, so the sentence it lands on need
+		// not be the one citing the finding — here the cosine argmax lands on a sentence citing
+		// nothing at all. Reading only that sentence's citations would leave the defect standing on a
+		// wording detail, which is the fragility issue #284's comment warns about ("a wording detail,
+		// deciding which of two grounding paths runs"). So for a guessed pairing the question is asked
+		// of every citation in the answer.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String verdictSentence = "No — clarithromycin should not be given.";
+		String reasonSentence = "It interacts with the patient's active simvastatin order ["
+				+ finding.getIndex() + "].";
+		embeddings.register(verdictSentence, AXIS_A);
+		embeddings.register(reasonSentence, AXIS_B);
+		embeddings.register(order.getText(), AXIS_A); // argmax lands on the citation-free sentence
+		ConjunctionAwareJudge judge = useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(verdictSentence + " " + reasonSentence,
+				refsFor(order, finding), Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertEquals(Arrays.asList(Arrays.asList(verdictSentence)), judge.statementsPerCall,
+				"premise of this case: the guessed statement is the sentence that cites nothing");
+		assertNull(result.get(0).getGrounded(),
+				"the rule must not turn on which sentence the cosine argmax happened to pick");
+	}
+
+	@Test
+	public void compositeClaim_aPronounCompoundIsWithheldByTheCompoundRuleInstead() {
+		// Where the two rules meet, and the case that pins them disjoint. The wording the module's own
+		// safety few-shot demonstrates ("it spoils the oranges already in store [2], a Major problem
+		// [4]", in LlmProvider's safety demonstration) trips CLAUSE_MARKER, so splitEnumeration
+		// refuses and the whole compound sentence stays ONE claim unit citing both records — which
+		// makes it a compound claim unit (#302), not a composite claim this rule can reach: it never
+		// enters Tier-2, so it carries no negative to withhold. The citation is still not published
+		// as unsupported, which is what matters clinically; it is the OTHER rule that gets it there.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String answer = "Clarithromycin can be given, with one caution: it interacts with "
+				+ "active order Simvastatin [" + order.getIndex() + "], a Major problem ["
+				+ finding.getIndex() + "].";
+		ConjunctionAwareJudge judge = useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertEquals(0, judge.statementsPerCall.size(),
+				"a compound claim unit is never asked, so this rule has nothing to withhold");
+		assertNull(result.get(0).getGrounded(),
+				"and the citation is withheld all the same, by the compound-claim rule");
+	}
+
+	@Test
+	public void compositeClaim_isCoveredUnderClauseScopedGroundingToo() {
+		// The other fragment factory: under clause scope the same compound is cut into cumulative
+		// prefixes, so the chart citation's unit cites only itself while the SENTENCE it came from
+		// cites the finding too. Issue #284's comment measured both modes, so both are pinned.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String answer = "Clarithromycin can be given, with one caution: it interacts with "
+				+ "active order Simvastatin [" + order.getIndex() + "], a Major problem ["
+				+ finding.getIndex() + "].";
+		useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER2_ON, true);
+
+		assertNull(result.get(0).getGrounded(),
+				"clause scope splits the sentence differently but does not change what the claim "
+						+ "rests on");
+	}
+
+	@Test
+	public void compositeClaim_stillPublishesTheJudgesPositiveVerdict() {
+		// Only the negative is guaranteed by the composition. A "yes" is not, so it still verifies the
+		// citation — which is the check issue #118 injected the active-order record to keep, and the
+		// reason this rule does not simply make a composite citation demote-only.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(compositeEnumeration(order, finding),
+				refsFor(order, finding), Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"the rule withholds the guaranteed verdict, it does not blank the citation");
+	}
+
+	@Test
+	public void compositeClaim_leavesTier1OnlyModeUnchanged() {
+		// Scoped to the judge's negative: with no Tier-2 verdict there is nothing guaranteed to
+		// withhold, and every measurement on issue #284 was taken with entailment enabled. So Tier-1
+		// -only mode keeps both of its verdicts here, including the off-topic FALSE.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String answer = compositeEnumeration(order, finding);
+		String item = "Clarithromycin can be given, with one caution: Clarithromycin interacts with "
+				+ "active order Simvastatin [" + order.getIndex() + "]";
+		embeddings.register(item, AXIS_A);
+		embeddings.register(order.getText(), AXIS_A);
+
+		assertEquals(Boolean.TRUE, verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER1_ONLY).get(0).getGrounded(),
+				"a cosine pass still verifies a chart citation when no judge has spoken");
+
+		embeddings.register(order.getText(), AXIS_B); // now orthogonal to its own claim item
+
+		assertEquals(Boolean.FALSE, verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER1_ONLY).get(0).getGrounded(),
+				"and a cosine fail still flags it — this rule never reaches Tier-1-only mode");
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aFragmentCarriesItsParentsCitations() {
+		// The premise the composite-claim rule (issue #284) rests on: an enumeration item's own
+		// citedIndexes is a singleton, so the co-citation that makes its claim composite is only
+		// visible through the set carried down from the sentence it was split from.
+		List<CitationGroundingVerifier.Sentence> items = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: Lidocaine [1], Aspirin [2].");
+
+		assertEquals(2, items.size());
+		for (CitationGroundingVerifier.Sentence item : items) {
+			assertEquals(1, item.citedIndexes.size(), "an item is attributed to one citation");
+			assertEquals(new java.util.HashSet<Integer>(Arrays.asList(1, 2)), item.sourceCitedIndexes,
+					"and carries what the sentence it came from cited");
+		}
+	}
+
+	@Test
+	public void splitIntoClauseScopedSentences_aClauseCarriesItsParentsCitations() {
+		// Same for the other fragment factory, whose text already contains the earlier markers but
+		// whose citedIndexes deliberately does not.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoClauseScopedSentences("A condition [1] and a diagnosis [2].");
+
+		assertEquals(2, clauses.size());
+		for (CitationGroundingVerifier.Sentence clause : clauses) {
+			assertEquals(1, clause.citedIndexes.size());
+			assertEquals(new java.util.HashSet<Integer>(Arrays.asList(1, 2)),
+					clause.sourceCitedIndexes);
+		}
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aWholeSentenceIsItsOwnSource() {
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("A condition [1] and a diagnosis [2].");
+
+		assertEquals(1, sentences.size());
+		assertEquals(sentences.get(0).citedIndexes, sentences.get(0).sourceCitedIndexes,
+				"an unsplit sentence rests on exactly what it cites");
+	}
+
+	@Test
+	public void compositeClaim_aChartCitationWhoseOwnClaimRestsOnNoFindingIsStillFlagged() {
+		// The scope of the rule, and the case that discriminates it from "the answer mentions a
+		// finding somewhere". Here the chart citation has its own sentence and that sentence rests on
+		// the chart record alone; the finding is a claim of its own, in a sentence of its own. The
+		// judge's "no" is then earned by the record rather than guaranteed by a composition, so it
+		// must still publish. Without this case, replacing the whole claimRestsOn mechanism with
+		// "does this answer cite reference material anywhere" passes the entire suite.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String chartSentence = "The patient is on clarithromycin [" + order.getIndex() + "].";
+		String findingSentence = "Simvastatin is a Major problem [" + finding.getIndex() + "].";
+		useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(chartSentence + " " + findingSentence,
+				refsFor(order, finding), Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"a claim that rests on the chart record alone keeps its denial — the rule is about "
+						+ "what the STATEMENT rests on, not about what the answer mentions");
+	}
+
+	@Test
+	public void compositeClaim_aFindingCitedOnlyInTheCitationsArrayStillMakesTheClaimComposite() {
+		// The mirror of shape B, and the half inline markers cannot see: the model marks up the chart
+		// record and leaves the finding to the structured citations array. The claim is the same
+		// composition, so anchoring the rule on the model's punctuation would publish the same wrong
+		// denial for the same sentence written the other way round.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String answer = "Clarithromycin interacts with active order Simvastatin ["
+				+ order.getIndex() + "], a Major problem.";
+		useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(),
+				"a finding the model listed without a marker is still what the relationship rests on");
+	}
+
+	@Test
+	public void compositeClaim_theWithheldNegativeIsReportedOncePerAnswer() {
+		// The withheld negative is the one verdict this pass computes and keeps nowhere — unlike the
+		// reference-group false, which #201 leaves on the RecordReference and withholds only at the
+		// wire. Without a line it is unobservable on a running server, which is how a grading defect
+		// on this path would survive the way #122's did.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		useInteractionJudge();
+
+		List<String> lines;
+		try (org.openmrs.module.chartsearchai.LogCapture capture = org.openmrs.module.chartsearchai.LogCapture
+				.on(CitationGroundingVerifier.class.getName())) {
+			verifier.verify(compositeEnumeration(order, finding), refsFor(order, finding),
+					Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+			lines = capture.messagesAt(org.apache.logging.log4j.Level.INFO);
+		}
+
+		assertEquals(1, lines.size(), "one summary per answer, not one line per citation: " + lines);
+		assertTrue(lines.get(0).contains("withheld 1"), "the line names how many: " + lines.get(0));
+	}
+
+	@Test
+	public void verify_aNonFiniteSimilarityStillFlagsRatherThanReportingAnEmbeddingFailure() {
+		// Guard on the claim-selection bookkeeping the composite rule added to the Tier-1-only path:
+		// when every comparison is non-finite no candidate ever wins, and indexing the sentence list
+		// on the unset best would throw into the embedding-failure catch — turning this branch's
+		// FALSE into a null and blaming querystore for an arithmetic edge.
+		String sentence = "Patient has diabetes [1].";
+		embeddings.register(sentence, new float[] { Float.NaN, 0f });
+		embeddings.register("type 2 diabetes mellitus", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1))),
+				Arrays.asList(mapping(1, "type 2 diabetes mellitus")), FLOOR, TIER1_ONLY);
+
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"nothing cleared the floor, so the citation is not grounded — and no failure is claimed");
+	}
 }

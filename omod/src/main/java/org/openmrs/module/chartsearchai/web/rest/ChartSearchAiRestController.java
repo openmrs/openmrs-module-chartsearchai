@@ -1023,7 +1023,8 @@ public class ChartSearchAiRestController {
 	 * path. One implementation so a field added here cannot reach some clients and not others.
 	 *
 	 * <p>{@code grounded} is null when grounding is disabled, could not run, or ran and could not
-	 * certify the citation (a compound claim unit under entailment, issue #302) — clients must render
+	 * certify the citation (a compound claim unit under entailment, issue #302; or the judge's
+	 * negative on a composite claim, issue #284) — clients must render
 	 * null as "unverified", never as "verified". It is ALSO null, unconditionally, for a
 	 * {@code reference}-group citation: see {@link #groundedForWire}.
 	 *

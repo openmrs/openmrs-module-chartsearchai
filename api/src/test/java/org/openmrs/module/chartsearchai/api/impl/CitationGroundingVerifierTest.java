@@ -1658,6 +1658,14 @@ public class CitationGroundingVerifierTest {
 		// a later reader's sake and NOTHING in this suite fails if that is dropped. The hazard the
 		// snapshot removes is real (reading the flag back off the rebuild instead would fail OPEN,
 		// certifying where the module used to flag) and it is removed structurally, not pinned.
+		//
+		// Kept for what it IS rather than for what it uniquely catches: a kill-set measurement over
+		// the api suite found every mutation this case detects is detected by a sibling too, mostly
+		// because demoteOnly is one decision feeding both the Tier-2 exclusion and the Pass-2
+		// demotion, so any mutation of the flag also moves the judge-call count a sibling asserts on.
+		// It is #302's own reported arrangement and its regression case, which is reason enough — but
+		// do not cite it as the guard for anything; the exclusive guards are named on the cases that
+		// hold them.
 		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
 		verifier.setLlmProvider(judge);
 		embeddings.register(COLON_LESS_LIST, AXIS_A);

@@ -1661,8 +1661,8 @@ public class CitationGroundingVerifierTest {
 		//
 		// Kept for what it IS rather than for what it uniquely catches: a kill-set measurement over
 		// the api suite found every mutation this case detects is detected by a sibling too, mostly
-		// because demoteOnly is one decision feeding both the Tier-2 exclusion and the Pass-2
-		// demotion, so any mutation of the flag also moves the judge-call count a sibling asserts on.
+		// because one Disposition drives both the Tier-2 exclusion and what Pass 2 publishes, so any
+		// mutation of it also moves the judge-call count a sibling asserts on.
 		// It is #302's own reported arrangement and its regression case, which is reason enough — but
 		// do not cite it as the guard for anything; the exclusive guards are named on the cases that
 		// hold them.
@@ -1769,7 +1769,7 @@ public class CitationGroundingVerifierTest {
 
 	@Test
 	public void compoundClaim_leavesTheTier1OnlyPathUntouched() {
-		// The demotion is deliberately NOT mode-uniform, unlike the reference-group one beside it.
+		// The withholding is deliberately NOT mode-uniform, unlike the reference-group rule beside it.
 		// #302's defect is Tier-2's refusal of a conjunction, which does not exist when entailment is
 		// off: there every verdict is cosine against the claim text, a compound unit's is no different
 		// in kind, and sentence scope has always compared against the whole compound sentence

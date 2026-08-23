@@ -775,7 +775,7 @@ public class CitationGroundingVerifier {
 			// flag feeds is gated on entailment being ON, so nothing can read a value computed here.
 			//
 			// The mode restriction is therefore guarded TWICE — here and by `entailmentEnabled &&` in
-			// verify's unverifiable[] fill — and each guard alone is sufficient, which means neither is
+			// verify's Disposition fill — and each guard alone is sufficient, which means neither is
 			// individually observable: measured, breaking either one leaves all of
 			// CitationGroundingVerifierTest green and only breaking BOTH reddens
 			// compoundClaim_leavesTheTier1OnlyPathUntouched. Do not read that case as a guard on this
@@ -845,9 +845,8 @@ public class CitationGroundingVerifier {
 
 		/** True when the selected claim unit is a COMPOUND claim ({@link Sentence#compoundClaim()}).
 		 *  {@link #verify} reads it once, at claim selection, folding it with the entailment mode into
-		 *  its {@code unverifiable} array (and, with the reference-group reason, into {@code noTier2}),
-		 *  and decides from those afterwards — so {@link #cosineVerdict} rebuilding a Tier1Result
-		 *  cannot drop it. A flag lost in that rebuild would fail OPEN: the withholding silently
+		 *  the reference's {@link Disposition}, and decides from that afterwards — so
+		 *  {@link #cosineVerdict} rebuilding a Tier1Result cannot drop it. A flag lost in that rebuild would fail OPEN: the withholding silently
 		 *  ceases and whatever cosine verdict exists is published, in either direction. The rebuild
 		 *  carries it anyway, so the field is not stale for a later reader; that is belt-and-braces,
 		 *  not what correctness rests on. */

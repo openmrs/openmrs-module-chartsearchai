@@ -123,7 +123,9 @@ public class ChartSearchAiUtils {
 	 * Whether a cited record of {@code resourceType} is DEMOTE-ONLY for citation grounding: its
 	 * verdict may render {@code false} (an off-topic citation) or {@code null} (unverified), never
 	 * {@code true}, and it never enters — nor consumes the per-answer cap of — the Tier-2 entailment
-	 * pass. True exactly for {@link ChartSearchAiConstants#REFERENCE_GROUP_REFERENCE} material: this
+	 * pass. (The {@code false} survives except where such a citation also sits inside a compound claim
+	 * unit under entailment, where the stronger #302 rule withholds even that; nothing downstream sees
+	 * the difference, since #201 withholds every reference-group verdict at the wire.) True exactly for {@link ChartSearchAiConstants#REFERENCE_GROUP_REFERENCE} material: this
 	 * is a named view of {@link #referenceGroup}, not a second classification, so there is no list of
 	 * type names here to fall out of step with that one.
 	 *
@@ -139,9 +141,9 @@ public class ChartSearchAiUtils {
 	 * the only thing that holds a verdict back: {@code CitationGroundingVerifier} treats a COMPOUND
 	 * claim unit (issue #302) — a fact about the shape of the claim rather than the provenance of the
 	 * record — more strictly still. That one publishes nothing in either direction and skips Tier-1 as
-	 * well as Tier-2, under entailment only, where this predicate demotes in either mode and keeps its
-	 * cosine FAIL. So the two are not the same treatment, and a citation can be held back without this
-	 * predicate being true of it.
+	 * well as Tier-2, under entailment only, where this predicate demotes in either mode and — except
+	 * where the two overlap, and the stronger rule wins — keeps its cosine FAIL. So the two are not the
+	 * same treatment, and a citation can be held back without this predicate being true of it.
 	 *
 	 * <p><strong>Why module-supplied material cannot be verified.</strong> An answer sentence citing
 	 * module-rendered reference prose is typically a recitation of it, and a recitation embeds
@@ -174,7 +176,7 @@ public class ChartSearchAiUtils {
 	 * {@code DrugReferenceInjector}'s class javadoc warns against exactly that.
 	 *
 	 * @param resourceType the cited record's resource type, may be null
-	 * @return true when a grounding pass may only demote this record's citation
+	 * @return true when a grounding pass may at most demote this record's citation
 	 */
 	public static boolean isGroundingDemoteOnly(String resourceType) {
 		return ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(referenceGroup(resourceType));

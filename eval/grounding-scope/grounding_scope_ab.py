@@ -46,7 +46,7 @@ rather than folded in:
     null on the sentence side now, not False -- so what remains here is the
     other causes of a sentence-side False.
 
-The #302 demotion is gated on entailment, and the module ships
+The #302 withholding is gated on entailment, and the module ships
 chartsearchai.grounding.entailment.enabled=false. With it off, none of the three
 null-side classes can fire for that reason at all and the demoted tallies are
 measuring something else, so the harness reads both grounding properties at
@@ -55,7 +55,7 @@ than leaving a reader to assume which regime produced the numbers.
 
 What the wire cannot tell you even with entailment on: a chart null may also mean
 "not checked" -- no record text, an embedding failure, Tier-2 cap overflow with no
-Tier-1 verdict. This harness does not separate those from a #302 demotion, so read
+Tier-1 verdict. This harness does not separate those from a #302 withholding, so read
 a null-side count as an upper bound on the demoted kind, not as a measurement of
 it.
 
@@ -152,7 +152,7 @@ def run():
     if grounding != "true":
         print("!! grounding is OFF — every verdict below is null and no class here can fire.")
     elif entailment != "true":
-        print("!! entailment is OFF — the #302 demotion is gated on it, so the demoted tallies")
+        print("!! entailment is OFF — the #302 withholding is gated on it, so the demoted tallies")
         print("   below are NOT measuring that demotion. Turn it on to exercise these classes.")
     print("")
     regressions, wins = 0, 0

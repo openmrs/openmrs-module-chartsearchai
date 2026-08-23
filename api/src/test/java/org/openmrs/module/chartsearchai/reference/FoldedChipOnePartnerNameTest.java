@@ -60,24 +60,21 @@ public class FoldedChipOnePartnerNameTest {
 	private static final String QUESTION = "Can I give ibuprofen?";
 
 	/**
-	 * An ATC code as the ladder renders one when it has no name. It matches a code carrying a LETTER
-	 * group after its leading digits — level 5 {@code A01AD05}, level 4 {@code M01AE}, level 3
-	 * {@code V03A} — and that letter group is the whole discrimination: it is what separates a code from
-	 * a name-shaped {@code B12}, which is a real drug and which any pattern loose enough to DROP that
-	 * letter group would reject. Loose in the trailing digits instead and nothing about names changes:
-	 * {@code [A-Z]\d{2}[A-Z]{1,2}\d{0,2}} admits {@code B12} no more than this does — it only re-admits
-	 * the non-level {@code M01AE0}. So the qualifier is the dimension, not looseness as such.
+	 * An ATC code as the ladder renders one when it has no name: a code carrying a LETTER group after its
+	 * leading digits — level 5 {@code A01AD05}, level 4 {@code M01AE}, level 3 {@code V03A}.
 	 *
-	 * <p><b>So the shorter forms are a hole this check cannot close</b>, and it is named rather than left
-	 * as an exhaustiveness claim, which is what an earlier version of this javadoc had — wrongly twice
-	 * over, calling level 2 "level 3" and leaving the real level 3 unmatched, where a mutation showed the
-	 * issue #298 defect passing as {@code active order A01A}.
+	 * <p>Requiring that letter group is what keeps a real drug NAME out, and it is the reason the shorter
+	 * forms are a hole this check does not close: vitamin {@code B12} has the level-2 shape
+	 * {@code [A-Z]\d{2}}, so a pattern admitting that would call a name a code.
 	 *
-	 * <p>Nor is "the levels the ladder is handed" a property of the path: nothing validates a code's
-	 * shape between the dictionary and here — {@code PatientClinicalContextBuilder.addAtcCodes} admits
-	 * any code from a concept-reference source whose name contains {@code ATC},
+	 * <p>An earlier form required TWO letters in that group, so it did not see a level-3 code, and a
+	 * mutation showed the issue #298 defect passing it as {@code active order A01A}.
+	 *
+	 * <p>No exhaustiveness claim about what the ladder can be handed, deliberately: nothing between the
+	 * dictionary and here validates a code's shape — {@code PatientClinicalContextBuilder.addAtcCodes}
+	 * admits any code from a concept-reference source whose name contains {@code ATC},
 	 * {@code DrugReference.normalizeAtcToken} only trims and upper-cases, and
-	 * {@code DrugReference.atcSubgroups} anticipates codes shorter than a subgroup. This is a net for the
+	 * {@code DrugReference.atcSubgroups} anticipates codes shorter than a subgroup. This is a net for
 	 * shapes that are a code and not a name, not a decision procedure for either.
 	 */
 	private static final Pattern ATC_CODE_SHAPED =

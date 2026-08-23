@@ -1681,8 +1681,10 @@ public class CitationGroundingVerifierTest {
 		// The demotion must not become a rubber stamp. Only a cosine PASS is demoted; record 2 is
 		// orthogonal to the answer, so the surviving Tier-1 verdict still flags it. That FALSE is the
 		// specified sentence-scope behaviour for a compound sentence — see
-		// clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence, whose whole point is
-		// that sentence scope flags such a citation and clause scope is the remedy for it.
+		// clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence — which demonstrates
+		// that pre-existing behaviour but does NOT guard this branch, since it runs Tier-1-only where
+		// the demotion is gated off. This case is the guard: mutate the demotion to swallow FALSE as
+		// well as TRUE and it is this one that reddens.
 		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
 		verifier.setLlmProvider(judge);
 		embeddings.register(COLON_LESS_LIST, AXIS_A);
@@ -1835,6 +1837,16 @@ public class CitationGroundingVerifierTest {
 		assertEquals(2, llm.calls, "adjacent markers are co-citation, not a compound claim");
 		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
 		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+		// Pin the refusal itself, not just its downstream verdict: unsplit, the two citations share
+		// ONE claim unit, so they are non-isolate and share one batch carrying one statement twice.
+		// A split would make them isolate fragments — two calls, and two different statements, the
+		// second of them preamble-only. Delete splitEnumeration's no-own-text guard and this reddens;
+		// the verdict assertions above do not, because each fragment would still cite one record and
+		// the stub would still say TRUE.
+		assertEquals(1, llm.batches, "a refused split leaves one claim unit, so its citations co-batch");
+		assertEquals(2, llm.statementsPerCall.get(0).size());
+		assertEquals(llm.statementsPerCall.get(0).get(0), llm.statementsPerCall.get(0).get(1),
+				"both citations are asked about the same whole sentence");
 	}
 
 	@Test

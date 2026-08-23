@@ -127,8 +127,11 @@ import org.springframework.stereotype.Service;
  * <p>Such citations never enter Tier-2 nor consume its cap, and a Tier-1 cosine pass renders
  * {@code null}, because cosine against a conjunction cannot separate the subject/polarity flips
  * Tier-2 exists for. A cosine FAIL is still published: that is the sentence-scope verdict this class
- * already specifies for a compound sentence, and {@code chartsearchai.grounding.clauseScoped} is its
- * existing remedy — what #302 removes is Tier-2's negative alone.
+ * already specifies for a compound sentence — what #302 removes is Tier-2's negative alone.
+ * {@code chartsearchai.grounding.clauseScoped} narrows the FIRST citation's claim to its own clause
+ * and is the existing remedy for that one; it does not extend to the rest, whose cumulative prefix
+ * still names the earlier items, and turning it on removes this rule rather than adding to it
+ * (a single-cited fragment is not a compound claim unit).
  *
  * <p>The rule applies under ENTAILMENT ONLY. With Tier-2 off there is no refusal to withhold: every
  * verdict is then cosine against the claim text, a compound unit's is no different in kind, and
@@ -149,7 +152,13 @@ import org.springframework.stereotype.Service;
  * Tier-1-only mode the count is unchanged, and under {@code clauseScoped} nothing moves at all. Where
  * no Tier-1 embedder is configured — a deployment the entailment setting otherwise supports — these
  * citations render {@code null} instead of taking the Tier-2 verdict they used to, and are counted in
- * the run's embedding-failure summary.
+ * the run's embedding-failure summary. A second degraded deployment has the same shape — entailment
+ * enabled but the judge unavailable, where every other citation falls back to a published cosine
+ * verdict while a compound unit's pass is still demoted. The gate keys on the CONFIGURED mode rather
+ * than on whether the judge answered, because with entailment on the promise is a judge-backed
+ * verdict and a compound claim can never obtain one; conditioning on "Tier-2 reached some verdict for
+ * this answer" instead would switch the rule off for a single-compound-sentence answer, which is
+ * #302's own headline case.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"
@@ -512,10 +521,14 @@ public class CitationGroundingVerifier {
 				// A cosine FAIL is deliberately still published in both cases — for reference prose it
 				// says the citation is not about the record at all (verified deterministically by the
 				// DrugSafetyValidator instead), and for a compound claim it is the sentence-scope
-				// verdict this module already specifies, pinned by
-				// clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence. What #302
-				// removes is Tier-2's negative, which fired on every citation of a compound claim
-				// regardless of the evidence.
+				// verdict this module already specifies. What guards the FAIL surviving is
+				// compoundClaim_anOffTopicCitationIsStillFlagged, and nothing else: mutate this branch
+				// to swallow FALSE as well and
+				// clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence stays GREEN,
+				// because it runs Tier-1-only where demoteOnly is false throughout. That test
+				// demonstrates the pre-existing sentence-scope behaviour; it does not defend this
+				// branch. What #302 removes is Tier-2's negative, which fired on every citation of a
+				// compound claim regardless of the evidence.
 				verdict = null;
 			}
 			annotated.add(references.get(i).withGrounded(verdict));

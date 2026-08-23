@@ -58,12 +58,51 @@ import org.junit.jupiter.api.Test;
  * value smuggled in some other way it would not). It scans one file, which is the whole scope the
  * compiler leaves open: both fields are private members of a private nested class, so only
  * {@code DrugSafetyValidator.java} can compile a write to either, and the compiler covers every other
- * file. It says nothing about whether the gate is the RIGHT way round — {@code namesADrug ? null : order}
- * still names the flag and would pass here, and is caught behaviourally instead, by every case that
- * reads a folded chip's partner name (measured: an inverted gate passes here and reddens two of them).
- * And it is a statement about the source as WRITTEN, so a refactor
- * that renames either field must update the needles; that failure is loud rather than silent, which is
- * the next paragraph.
+ * file. It reads ASSIGNMENTS and never CALLS, so it says nothing about a caller that hands
+ * {@code recordNameSource} a pair that is consistent and FALSE — a rung added later that writes
+ * {@code label} itself and then records an order that label was not taken from. That residue is
+ * semantic, it is of the same class as the defect issue #298 removed, and nothing in this repo pins it;
+ * ADR Decision 40's trade-offs are where it is recorded. And it is a statement about the source as
+ * WRITTEN, so a refactor that renames either field — or {@code recordNameSource}'s {@code order}
+ * parameter, or one of its two statements re-expressed in a form that means the same thing — must
+ * update the needles; that failure is loud rather than silent, which is the last paragraph below.
+ *
+ * <p><b>The two statements are pinned by SHAPE, because the weaker form of that forbade nothing.</b>
+ * Until round 2 of issue #298's review the gate case asserted only that the assigned expression
+ * CONTAINED the token {@code namesADrug}, and this javadoc said an ungated write "is caught
+ * behaviourally instead". Both halves were wrong together, which is what made it invisible:
+ * {@code this.namingOrder = order != null || namesADrug ? order : null} and
+ * {@code this.namingOrder = namesADrug || true ? order : null} each name the flag, so each passed that
+ * check, and each means exactly {@code this.namingOrder = order} for every non-null order — the pre-#298
+ * state, an order recorded beside a label that is a bare ATC code or an {@code [ATC …]} stand-in. The
+ * plausible slip is an {@code &&}/{@code ||} typo in a defensive null check, not a contrived edit.
+ * Both of {@code recordNameSource}'s statements are therefore compared to the expression they must BE,
+ * with whitespace removed and nothing else normalized.
+ *
+ * <p><b>Which channel catches which shape</b>, so that neither is credited with the other's coverage.
+ * Measured on this branch (head {@code 38b5b508}, this change applied), each shape written into
+ * {@code recordNameSource} alone and the whole build run:
+ *
+ * <ul>
+ *   <li>{@code this.namingOrder = order} — <b>one</b> failure, this class's shape assertion.</li>
+ *   <li>Both flag-naming forms above — <b>one</b> failure each, this class's shape assertion. The token
+ *       check that assertion replaced caught only the bare {@code order} above; these two passed it, so
+ *       two ways of writing the pre-#298 state were green until this round.</li>
+ *   <li>The INVERTED {@code namesADrug ? null : order} — this class, <b>and</b>
+ *       {@code ClassChipPartnerLabelTest.anOrderTheDatasetDoesNotCoverIsNamedByItsOwnDisplayName} and
+ *       {@code FoldedChipOnePartnerNameTest}
+ *       {@code .anOrderSuppliedNameTheRulesTokenDoesNotNameIsNeverHandedToTheRuleSentence}, because an
+ *       order-rung partner then carries no naming order and the fold refuses where it should
+ *       reconcile.</li>
+ *   <li>{@code this.namesADrug = true}, a flag write that ignores its parameter — this class, <b>and</b>
+ *       four cases in {@code FoldedChipOnePartnerNameTest}. This class's flag assertion is not what
+ *       stands between that shape and a green build; it is added for symmetry, and because nothing
+ *       checked that statement's right-hand side at all.</li>
+ * </ul>
+ *
+ * <p>So the shapes that make the recorded order UNCONDITIONAL are the ones nothing else sees, and they
+ * are why this class exists. The other two it catches first and more legibly, which is not the same
+ * claim and must not be reported as one.
  *
  * <p><b>Why it cannot pass vacuously</b>, which is the failure the cited precedent exists to prevent —
  * a guard that finds nothing and reports success. Every assertion about the assignments is preceded by
@@ -82,6 +121,15 @@ public class OrderPartnerNameSourceWritePathTest {
 	private static final String NAMES_A_DRUG = "namesADrug";
 
 	private static final String WRITER = "recordNameSource";
+
+	/**
+	 * The one expression {@link #NAMING_ORDER} may be assigned. Its companion is {@link #NAMES_A_DRUG}
+	 * itself — the flag's whole permitted right-hand side is the parameter of that name. Both are
+	 * compared with whitespace removed, so a re-wrap or a re-indent is not a failure; anything else
+	 * fails, including a rewrite that means the same thing, which is a false alarm and the safe direction
+	 * for a rule nothing behavioural can see.
+	 */
+	private static final String GATE = NAMES_A_DRUG + " ? order : null";
 
 	/**
 	 * An assignment to either field, however qualified: {@code this.namingOrder =},
@@ -137,6 +185,14 @@ public class OrderPartnerNameSourceWritePathTest {
 	 * than storing the order unconditionally. It is the gate, not the single write path, that makes "a
 	 * non-null naming order means the label is that order's name" true — the write path only makes it
 	 * true everywhere.
+	 *
+	 * <p>Both statements are compared to the expression they must BE ({@link #GATE}, and the flag to its
+	 * own parameter), not searched for a token: a token check on the gate permits two expressions that
+	 * name the flag and store the order unconditionally anyway, and nothing else in the build sees them —
+	 * this class's javadoc has the measurement, and names the residue no shape assertion can reach. The
+	 * flag's statement is held to the same standard for symmetry rather than because a slip there was
+	 * observed: nothing checked its right-hand side at all, though unlike the gate a flag write that
+	 * ignores its parameter does redden behavioural cases as well.
 	 */
 	@Test
 	public void theRecordedOrderIsGatedOnTheFlag() throws IOException {
@@ -146,26 +202,54 @@ public class OrderPartnerNameSourceWritePathTest {
 		assertDeclarationsFound(source, partner);
 
 		int gatesSeen = 0;
+		int flagWritesSeen = 0;
 		for (Assignment assignment : assignmentsIn(source)) {
-			if (!NAMING_ORDER.equals(assignment.field) || !writer.contains(assignment.at)) {
+			if (!writer.contains(assignment.at)) {
 				continue;
 			}
-			gatesSeen++;
-			assertTrue(assignment.rightHandSide().contains(NAMES_A_DRUG),
-				"the order recorded by " + WRITER + " must be derived from the " + NAMES_A_DRUG + " flag,"
-						+ " and \"" + assignment.statement + "\" does not name it. Storing the order"
-						+ " unconditionally is exactly the pre-issue-#298 state: the ladder's order rung then"
-						+ " records an order beside a label that is a bare ATC code or an [ATC …] stand-in,"
-						+ " and every reader of " + NAMING_ORDER + " has to know foldedPartnerLabel's branch"
-						+ " order to stay safe. (This assertion checks that the flag is CONSULTED, not that"
-						+ " the gate is the right way round; an inverted gate is caught behaviourally, by the"
-						+ " folded-chip cases.)");
+			if (NAMING_ORDER.equals(assignment.field)) {
+				gatesSeen++;
+				assertEquals(withoutWhitespace(GATE), assignment.assignedExpression(),
+					"the order recorded by " + WRITER + " must be assigned exactly \"" + GATE + "\", and \""
+							+ assignment.statement + "\" is not that expression (whitespace aside). Naming the"
+							+ " flag is not enough, which is what this assertion used to ask: \"order != null ||"
+							+ " " + NAMES_A_DRUG + " ? order : null\" and \"" + NAMES_A_DRUG + " || true ? order"
+							+ " : null\" both name it and both mean \"" + NAMING_ORDER + " = order\" for every"
+							+ " non-null order, and measured on this head each leaves every OTHER test in the"
+							+ " build green. Recording the order unconditionally is exactly the pre-issue-#298"
+							+ " state: the ladder's order"
+							+ " rung then records an order beside a label that is a bare ATC code or an"
+							+ " [ATC …] stand-in, and every reader of " + NAMING_ORDER + " has to know"
+							+ " foldedPartnerLabel's branch order to stay safe. If the expression here is a"
+							+ " deliberate rewrite that means the same thing, update this needle in the same"
+							+ " change — an equivalent form fails here, which is a false alarm and the safe"
+							+ " direction for a rule nothing behavioural can see.");
+			}
+			else {
+				flagWritesSeen++;
+				assertEquals(NAMES_A_DRUG, assignment.assignedExpression(),
+					"the flag recorded by " + WRITER + " must be its own " + NAMES_A_DRUG + " parameter, and \""
+							+ assignment.statement + "\" assigns something else. The two fields carry one fact:"
+							+ " a flag decided by anything but the argument can disagree with the order this"
+							+ " method records from that same argument, and the fold then reads a pair no caller"
+							+ " asked for (issue #298).");
+			}
 		}
 		assertEquals(1, gatesSeen,
 			"exactly one assignment to " + NAMING_ORDER + " must sit inside " + WRITER + ", and " + gatesSeen
 					+ " were found. None means there is no gate here to check, which is a failure and not a"
 					+ " pass; more than one means the field is decided in two places inside the one method"
 					+ " that is allowed to decide it.");
+		assertEquals(1, flagWritesSeen,
+			"exactly one assignment to " + NAMES_A_DRUG + " must sit inside " + WRITER + ", and "
+					+ flagWritesSeen + " were found. None means the shape assertion above ran on nothing,"
+					+ " which is a failure and not a pass; more than one means the flag is decided in two"
+					+ " places inside the one method that is allowed to decide it.");
+	}
+
+	/** {@code text} with every whitespace character removed — the only normalization applied. */
+	private static String withoutWhitespace(String text) {
+		return text.replaceAll("\\s+", "");
 	}
 
 	/**
@@ -384,10 +468,22 @@ public class OrderPartnerNameSourceWritePathTest {
 			this.statement = source.substring(begin, semicolon < 0 ? source.length() : semicolon + 1).trim();
 		}
 
-		/** Everything between the {@code =} and the statement's {@code ;} — the gate, where there is one. */
-		private String rightHandSide() {
+		/**
+		 * The EXPRESSION assigned — everything between the {@code =} and the statement's {@code ;}, with
+		 * whitespace removed so that a re-wrap or a re-indent is not a difference. Empty where there is no
+		 * {@code =} to split on, which the assignment pattern makes unreachable and which would fail the
+		 * shape comparison rather than pass it.
+		 */
+		private String assignedExpression() {
 			int equals = statement.indexOf('=');
-			return equals < 0 ? "" : statement.substring(equals + 1);
+			if (equals < 0) {
+				return "";
+			}
+			String assigned = statement.substring(equals + 1).trim();
+			if (assigned.endsWith(";")) {
+				assigned = assigned.substring(0, assigned.length() - 1);
+			}
+			return withoutWhitespace(assigned);
 		}
 
 		@Override

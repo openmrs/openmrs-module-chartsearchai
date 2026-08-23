@@ -4671,7 +4671,10 @@ public class DrugSafetyValidator {
 		 * <p>The compiler cannot enforce this — {@link #namingOrder} cannot be final while
 		 * {@link #nameByOrder} renames a partner — so the rule is pinned by a build-time source scan
 		 * instead: {@code OrderPartnerNameSourceWritePathTest} fails if either field is assigned anywhere
-		 * but here, and if the assignment here stops being gated on the flag. A behavioural test cannot
+		 * but here, and if either statement here stops being the expression it must be. It asks for the
+		 * SHAPE and not merely that the flag is mentioned, because its first version asked the latter and
+		 * a right-hand side naming the flag while storing the order unconditionally was green under it.
+		 * A behavioural test cannot
 		 * see either, the change being behaviour-neutral; the scan's own javadoc says what it does not
 		 * cover.
 		 *

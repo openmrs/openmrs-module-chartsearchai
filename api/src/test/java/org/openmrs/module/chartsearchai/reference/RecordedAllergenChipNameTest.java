@@ -238,14 +238,19 @@ public class RecordedAllergenChipNameTest {
 	}
 
 	@Test
-	public void aFreeTextAllergenCannotReachTheChartsOwnWording() throws IOException {
-		// The bound on what can be printed. Reaching the chart-wording branch needs the WHOLE recorded
-		// string to be claimed by more than one substance at DrugReference.NAME_IS_ANOTHER_NAME or
-		// better — the equal-claimant leg's own gate — which on this parser means the string is a name
-		// the reference data itself publishes. A non-coded allergen, which PatientClinicalContextBuilder
-		// files verbatim and which PatientClinicalContext.containsToken's javadoc calls genuinely free
-		// text, resolves only by CONTAINMENT, a rank that leg never runs at — so however the chart words
-		// it, the chip goes on naming the row.
+	public void aFreeTextAllergenResolvingToOneSubstanceKeepsTheRowsName() throws IOException {
+		// What it takes to be quoted at all: a row is quoted only where some OTHER implied substance
+		// competes with it for the recorded name, since with no competitor the row is the unique
+		// strongest claimant whatever rank it claims at. A non-coded allergen — which
+		// PatientClinicalContextBuilder files verbatim and PatientClinicalContext.containsToken's
+		// javadoc calls genuinely free text — resolves by CONTAINMENT, and the equal-claimant leg never
+		// runs at that rank, so free text of this shape puts no competitor in play and the chip goes on
+		// naming the row.
+		//
+		// NOT a general claim that free text can never be printed: a free-text string carrying a
+		// combination separator can put a second substance in play through the constituent leg, and
+		// this case does not cover that. What it covers is the ordinary shape — a drug name with a
+		// reaction written after it.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(SHARED_CIEL_LIST);
 		String freeText = "trastuzumab infusion \u2014 rash and fever";
 		assertEquals("[Trastuzumab]",

@@ -1,0 +1,84 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #268 — real shipped rows, unedited. All three rows carry the rxnorm_name `gallium`, and `gallium` is none of their display names, so a recorded allergy spelled that way is claimed EQUALLY by three different substances and DrugReferenceService.lookupByToken breaks the tie by earliest dataset entry. That is the shape issue #268 is about arriving without any borrowed CIEL name: the arm used to publish 'The patient has a recorded allergy to Gallium citrate ga-67.' — a radiodiagnostic the chart never records — beside the same sentence for the other two. Kept as a slice rather than hand-authored so the tie is the shipped data's and not a fixture's invention."
+ },
+ "mechanisms": {},
+ "drugs": [
+  {
+   "id": "DDInter2125",
+   "name": "Gallium citrate ga-67",
+   "rxcui": "1310124",
+   "rxnorm_name": "gallium",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": [
+    {
+     "code": "76768",
+     "uuid": "76768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gallium 67 citrate"
+    },
+    {
+     "code": "76769",
+     "uuid": "76769AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gallium chloride,GA-67"
+    },
+    {
+     "code": "76770",
+     "uuid": "76770AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gallium nitrate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter803",
+   "name": "Gallium chloride Ga-67",
+   "rxcui": "1310124",
+   "rxnorm_name": "gallium",
+   "drugbank_id": "DB14550",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "76768",
+     "uuid": "76768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gallium 67 citrate"
+    },
+    {
+     "code": "76769",
+     "uuid": "76769AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gallium chloride,GA-67"
+    },
+    {
+     "code": "76770",
+     "uuid": "76770AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gallium nitrate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter804",
+   "name": "Gallium nitrate",
+   "rxcui": "1310124",
+   "rxnorm_name": "gallium",
+   "drugbank_id": "DB05260",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "76768",
+     "uuid": "76768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gallium 67 citrate"
+    },
+    {
+     "code": "76769",
+     "uuid": "76769AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gallium chloride,GA-67"
+    },
+    {
+     "code": "76770",
+     "uuid": "76770AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gallium nitrate"
+    }
+   ]
+  }
+ ],
+ "interactions": []
+}

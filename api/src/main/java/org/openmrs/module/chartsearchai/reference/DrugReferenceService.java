@@ -680,6 +680,99 @@ public class DrugReferenceService {
 		return new ArrayList<DrugReference>(bySubstance.values());
 	}
 
+	/**
+	 * Of the substances {@link #findImpliedSubstances} reads out of a recorded drug NAME, the ones that
+	 * name itself NAMES — the question a caller about to QUOTE the chart asks, and deliberately a
+	 * narrower one than which substances the name implies (issue #268).
+	 *
+	 * <p><b>Why the two differ, and must.</b> That resolution is additive on purpose (issues
+	 * #193/#195): a recorded name reaches every substance it could denote, so the class and
+	 * cross-reactivity comparisons see all of them. Narrowing it would trade a false positive for a
+	 * false NEGATIVE in a safety net. But its equal-claimant leg admits a row on a rank TIE, and a tie
+	 * is satisfied by two quite different things — a combination the KB spells without a separator
+	 * ({@code amoxicillin and clavulanic acid}, that leg's own reason for existing) and two substances
+	 * sharing one name that is neither's display name. The second is a row the recorded name does not
+	 * name, and a chip saying "The patient has a recorded allergy to X." about it states something the
+	 * chart does not.
+	 *
+	 * <p><b>Three ways a name names a row</b>, and no leg is exempt AS a leg:
+	 * <ul>
+	 *   <li>it is the <b>unique strongest claimant</b> — every other implied substance claims the whole
+	 *       recorded name strictly less strongly. Asked of the implied SET rather than of the dataset,
+	 *       because that is where the harm is: a substance nothing else in play competes with is what
+	 *       the name is about, however weakly it claims it, which is what keeps an allergy recorded as
+	 *       free text or as one of a row's own aliases ({@code papaveretum} → {@code Opium}) naming its
+	 *       row. Deliberately NOT "the first element": {@link #lookupByToken} breaks a tie by earliest
+	 *       dataset entry, which carries no clinical meaning, so on a tie the first row has no
+	 *       privilege — three shipped rows publish {@code gallium} as their {@code rxnorm_name} and
+	 *       exempting the earliest would announce a radiodiagnostic the chart never mentions while
+	 *       correcting its two co-tied rivals in the same payload;</li>
+	 *   <li>a name its printed label is built from OCCURS in the recorded string
+	 *       ({@link DrugReference#labelNameOccursIn}) — what a separator-less combination asserts
+	 *       ({@code Amoxicillin} in {@code amoxicillin and clavulanic acid}, {@code Trastuzumab
+	 *       emtansine} in {@code ado-trastuzumab emtansine}) and what a shared alias does not;</li>
+	 *   <li>a combination CONSTITUENT or the parent MOIETY of the recorded name names it, at those two
+	 *       legs' OWN ranks — so every row {@link #findImpliedSubstances} admits through them is named
+	 *       by construction. The moiety rank stays {@link DrugReference#NAME_IS_THE_DISPLAY_NAME}: that
+	 *       leg's javadoc records why it is stricter than the constituent gate, and relaxing it here
+	 *       would license printing the name of exactly the rows it refuses.</li>
+	 * </ul>
+	 *
+	 * <p><b>What it gives up.</b> A recorded name spelling out several ingredients, whose ingredient
+	 * this KB files under a SYNONYM, is not named by any of the three — {@code atovaquone /
+	 * chloroguanide} does not carry {@code Proguanil}, and no constituent of it resolves there — so the
+	 * caller falls back to the chart's own words. That is a TRUE sentence replacing a true and more
+	 * specific one, which is the safe direction for something that quotes a record; the defect it
+	 * replaces is a FALSE one.
+	 *
+	 * @param drugName the recorded name, as the chart holds it
+	 * @param implied  that name's substances, as {@link #findImpliedSubstances} resolved them — passed
+	 *                 in rather than re-resolved, so this cannot become a second resolution rule and
+	 *                 costs no further sweep of the dataset
+	 * @return the sublist of {@code implied} the name names, in the same order; the rows are the very
+	 *         objects handed in, so a caller may test membership by identity
+	 */
+	public List<DrugReference> findNamedSubstances(String drugName, List<DrugReference> implied) {
+		List<DrugReference> named = new ArrayList<DrugReference>(implied.size());
+		for (DrugReference row : implied) {
+			if (row.labelNameOccursIn(drugName) || uniqueStrongestClaimant(drugName, row, implied)
+					|| derivedNameNames(drugName, row)) {
+				named.add(row);
+			}
+		}
+		return named;
+	}
+
+	/** @return whether {@code row} claims the whole of {@code drugName} strictly more strongly than
+	 *          every other substance in {@code implied} — {@link #findNamedSubstances}'s first clause. */
+	private static boolean uniqueStrongestClaimant(String drugName, DrugReference row,
+			List<DrugReference> implied) {
+		int claim = row.nameMatchStrength(drugName);
+		if (claim == DrugReference.NAME_NO_MATCH) {
+			return false;
+		}
+		for (DrugReference other : implied) {
+			if (other != row && other.nameMatchStrength(drugName) >= claim) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** @return whether a combination constituent or the parent moiety of {@code drugName} names
+	 *          {@code row}, at the ranks {@link #findImpliedSubstances} admits each of them by — the
+	 *          mirror of its third and fourth legs, kept beside them so the two cannot drift. */
+	private static boolean derivedNameNames(String drugName, DrugReference row) {
+		for (String constituent : DrugReference.combinationConstituents(drugName)) {
+			if (row.nameMatchStrength(constituent) >= DrugReference.NAME_IS_ANOTHER_NAME) {
+				return true;
+			}
+		}
+		String moiety = DrugReference.parentMoietyName(drugName);
+		return moiety != null
+				&& row.nameMatchStrength(moiety) == DrugReference.NAME_IS_THE_DISPLAY_NAME;
+	}
+
 	/** Adds the substance {@code candidate} resolves to, when an entry claims it at {@code minimumClaim}
 	 *  or better — through {@link #lookupByToken}, so a candidate string is resolved by the SAME ranking
 	 *  as the recorded name it was derived from and this cannot become a second resolution rule. */

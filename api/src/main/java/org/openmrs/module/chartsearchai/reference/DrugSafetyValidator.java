@@ -418,8 +418,8 @@ public class DrugSafetyValidator {
 		// of that a functional case can see — a memo outliving the entries it was resolved from — and
 		// before it nothing pinned even that. Reassigning a FIELD here once per pass stays green on it;
 		// see that test's javadoc, which names what it does not cover.
-		List<List<DrugReference>> recordedAllergens = warnContra
-				? recordedAllergens(context) : Collections.<List<DrugReference>> emptyList();
+		List<RecordedAllergen> recordedAllergens = warnContra
+				? recordedAllergens(context) : Collections.<RecordedAllergen> emptyList();
 
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
@@ -3885,7 +3885,7 @@ public class DrugSafetyValidator {
 	 * {@code PresentationMoietyAllergenTest} for the bound pinned as a test.
 	 */
 	private void addAllergyContraindications(ContraindicationChips chips, DrugReference ref,
-			List<List<DrugReference>> recordedAllergens) {
+			List<RecordedAllergen> recordedAllergens) {
 		if (recordedAllergens.isEmpty()) {
 			return;
 		}
@@ -3912,7 +3912,8 @@ public class DrugSafetyValidator {
 		// name a drug that publishes no such code. Re-measure it on a refresh — the instruction lives with
 		// the measurement, and this is one more thing that now depends on it.
 		DrugReference subject = chips.subjectOf(ref);
-		for (List<DrugReference> allergen : recordedAllergens) {
+		for (RecordedAllergen recorded : recordedAllergens) {
+			List<DrugReference> allergen = recorded.substances();
 			// Identity FIRST, over every substance the recorded name implies, and only then the class
 			// comparisons over the same set: precedence belongs to the recorded allergy as a whole, so a
 			// weaker relationship with one implied substance must not pre-empt a stronger one with
@@ -3935,10 +3936,20 @@ public class DrugSafetyValidator {
 				// chip does not read the resolver at all, so a later change to SubstanceSubjects cannot
 				// reach a chip that must not move — which is #187, and #187 is not a thing to leave resting
 				// on two expressions happening to be equal.
+				//
+				// WHICH NAME the sentence may use is a second question, and not the same one (issue
+				// #268). The row above is a row of ref's substance, which is what makes the CHIP about
+				// the right drug; it is not necessarily a row the recorded name NAMES, because
+				// findImpliedSubstances reaches every substance a name could denote and its
+				// equal-claimant leg admits a row on a rank TIE. Where the record does not name the row,
+				// the sentence quotes the chart instead — see DrugReferenceService.findNamedSubstances
+				// for the three ways a name names a row and for what that fallback gives up. The chip's
+				// DRUG stays the row: the chip is still about that substance, and only the quotation
+				// moves.
 				chips.add(sameSubstance, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION,
 								sameSubstance.displayLabel(), "The patient has a recorded allergy to "
-										+ sameSubstance.displayLabel() + "."));
+										+ recorded.quotedAs(sameSubstance) + "."));
 				continue;
 			}
 			if (refClasses.isEmpty() && refGroups.isEmpty()) {
@@ -4011,18 +4022,75 @@ public class DrugSafetyValidator {
 	 *         A free-text allergen can, and the ledger then collapses the identity chip but not
 	 *         necessarily the class one.
 	 */
-	private List<List<DrugReference>> recordedAllergens(PatientClinicalContext context) {
+	private List<RecordedAllergen> recordedAllergens(PatientClinicalContext context) {
 		if (context == null) {
 			return Collections.emptyList();
 		}
-		List<List<DrugReference>> out = new ArrayList<List<DrugReference>>();
+		List<RecordedAllergen> out = new ArrayList<RecordedAllergen>();
 		for (String allergyToken : context.getAllergyTokens()) {
 			List<DrugReference> implied = drugReferenceService.findImpliedSubstances(allergyToken);
-			if (!implied.isEmpty() && !out.contains(implied)) {
-				out.add(implied);
+			if (implied.isEmpty() || alreadyResolved(out, implied)) {
+				continue;
 			}
+			out.add(new RecordedAllergen(allergyToken, implied,
+					drugReferenceService.findNamedSubstances(allergyToken, implied)));
 		}
 		return out;
+	}
+
+	/** @return whether one of {@code out} already resolved to exactly {@code implied} — the
+	 *          de-duplication above, unchanged in what it compares: the whole resolved LIST, never the
+	 *          recorded token beside it, because two spellings of one allergy are one record and the
+	 *          rule that says so is stated on {@link #recordedAllergens}. */
+	private static boolean alreadyResolved(List<RecordedAllergen> out, List<DrugReference> implied) {
+		for (RecordedAllergen seen : out) {
+			if (seen.substances().equals(implied)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * One of the patient's recorded allergies: the chart's own string, the substances it implies, and
+	 * the ones it NAMES (issue #268). Three facts about one record, held together because the identity
+	 * chip needs all three at once — it reports THAT record, so it may print a row's label only where
+	 * the record names it and must otherwise quote the chart.
+	 *
+	 * <p>Private to this class and built once per {@code validate} pass by the caller that already
+	 * resolves the allergy list, so nothing is resolved twice and nothing outlives the pass (issue
+	 * #172: this bean is a Spring singleton and this memo is keyed on nothing at all).
+	 */
+	private static final class RecordedAllergen {
+
+		private final String token;
+
+		private final List<DrugReference> substances;
+
+		private final List<DrugReference> named;
+
+		private RecordedAllergen(String token, List<DrugReference> substances,
+				List<DrugReference> named) {
+			this.token = token;
+			this.substances = substances;
+			this.named = named;
+		}
+
+		/** The substances this recorded name implies — what the class comparisons reason over, and the
+		 *  de-duplication key. Unchanged by issue #268: no substance is withheld from any arm. */
+		private List<DrugReference> substances() {
+			return substances;
+		}
+
+		/**
+		 * @return what a chip quoting this record may call {@code row} — the row's own clinician-facing
+		 *         label where this recorded name names it, and otherwise the chart's own words. Membership
+		 *         is by identity, which is what {@link DrugReferenceService#findNamedSubstances} returns a
+		 *         sublist of the very rows it was handed for.
+		 */
+		private String quotedAs(DrugReference row) {
+			return named.contains(row) ? row.displayLabel() : token;
+		}
 	}
 
 	/**
@@ -4129,7 +4197,7 @@ public class DrugSafetyValidator {
 	 */
 	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries,
-			List<List<DrugReference>> recordedAllergens, SubjectMatter askedAbout) {
+			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout) {
 		if (!hasContraindicationRecords(context)) {
 			return;
 		}
@@ -4138,7 +4206,7 @@ public class DrugSafetyValidator {
 		// varies inside the loop. A per-call local and never a field, for issue #172's reason — this
 		// bean is a Spring singleton, so a field here is one unsynchronized structure shared by every
 		// concurrent request, and this one is keyed on nothing at all.
-		List<List<DrugReference>> allergensAskedAbout = null;
+		List<RecordedAllergen> allergensAskedAbout = null;
 		for (DrugReference ref : orderEntries) {
 			if (inPlay.contains(ref)) {
 				continue;
@@ -4209,11 +4277,11 @@ public class DrugSafetyValidator {
 	 *         #145/#193/#195), so admitting the allergy on any of its entries keeps the identity and
 	 *         cross-reactivity arms reasoning over the same finding they always did.
 	 */
-	private static List<List<DrugReference>> recordedAllergensAskedAbout(
-			List<List<DrugReference>> recordedAllergens, SubjectMatter askedAbout) {
-		List<List<DrugReference>> out = new ArrayList<List<DrugReference>>();
-		for (List<DrugReference> allergen : recordedAllergens) {
-			if (askedAbout.namesRecordedAllergen(allergen)) {
+	private static List<RecordedAllergen> recordedAllergensAskedAbout(
+			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout) {
+		List<RecordedAllergen> out = new ArrayList<RecordedAllergen>();
+		for (RecordedAllergen allergen : recordedAllergens) {
+			if (askedAbout.namesRecordedAllergen(allergen.substances())) {
 				out.add(allergen);
 			}
 		}

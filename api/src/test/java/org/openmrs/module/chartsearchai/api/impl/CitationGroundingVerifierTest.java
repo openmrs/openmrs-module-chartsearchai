@@ -1864,10 +1864,16 @@ public class CitationGroundingVerifierTest {
 		// citation's own claim, the judge's question is well-formed, and both directions of its answer
 		// must still be published. A predicate keyed on "more than one citation" would silence it.
 		// Stubbed TRUE, not FALSE: a FALSE is untouched by the demotion either way, so only a TRUE
-		// actually puts "co-citation is not demoted" under test. This is the COLON-LESS register —
-		// splitEnumeration never looks at this sentence, where the sub-shape case below reaches its
-		// no-own-text guard — so the two pin the same property on the two different paths that can
-		// leave adjacent markers in one claim unit.
+		// actually puts "co-citation is not demoted" under test.
+		//
+		// Honest about what this case is worth: it is DOMINATED by the sub-shape case below, which
+		// reddens on every mutation this one does and on one more. compoundClaim() reaches the same
+		// answer by the same route for both — the inter-marker text is ", " either way, and
+		// splitEnumeration's differing exit (no colon here, the no-own-text guard there) has no
+		// bearing on the classification. It is kept for the register rather than the coverage: this
+		// is the exact shape LlmAnswerExtractor.normalizeSlashCitations emits, which never carries a
+		// colon, so the case that documents the manufactured shape is this one. Do not cite it as a
+		// second guard.
 		String answer = "The patient has recurrent infections [1], [2].";
 		embeddings.register(answer, AXIS_A);
 		embeddings.register("record one", AXIS_A);

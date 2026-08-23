@@ -1695,8 +1695,13 @@ public class CitationGroundingVerifierTest {
 		// items this record is not cited for. An earlier draft of #302 skipped Tier-2 and kept the
 		// cosine FAIL, which turned that cell into a published FALSE — Unsupported on a correct, active
 		// citation, the very harm #302 exists to remove. So a compound claim unit publishes nothing in
-		// either direction, and this case pins it from the side no other reaches: records orthogonal to
-		// the answer, so Tier-1 would FAIL, and a judge that would have said yes.
+		// either direction. It does NOT earn an exclusive kill, and says so rather than implying one: a
+		// mutation table over the api suite found it never reddens alone, because its assertions need a
+		// published verdict, a verdict needs an embed or a judge call, and the siblings on this same
+		// arrangement assert both counts are zero. What it is for is the historical regression — restore
+		// the lazy cosine and publish it demote-only and this reddens, with two siblings — and for
+		// carrying the lenient-judge stub that showed the premise "a correct judge says no" was never
+		// exercised.
 		StubLlmProvider lenient = new StubLlmProvider(Boolean.TRUE);
 		verifier.setLlmProvider(lenient);
 		embeddings.register(COLON_LESS_LIST, AXIS_A);

@@ -253,6 +253,35 @@ public class CitationGroundingVerifier {
 	}
 
 	/** Accumulates embedding failures across a run so they are logged once, not per citation. */
+	/**
+	 * How much of a verdict a citation may be given, decided once per reference in Pass 1 and read
+	 * everywhere else. One value rather than two booleans because the three cases are exclusive and
+	 * ordered, and because expressing judge candidacy as {@code == GRADED} keeps any disposition added
+	 * later out of Tier-2 by construction — which is the property #110/#122 lost when a new reference
+	 * type was remembered at one of two sites and not the other.
+	 */
+	private enum Disposition {
+
+		/** Both tiers apply and whatever they conclude is published. */
+		GRADED,
+
+		/**
+		 * Module-supplied reference material (#106/#122): Tier-2 is not asked because its yes is false
+		 * assurance on recited prose, Tier-1 still runs, and its FAIL is kept while a PASS renders
+		 * {@code null}.
+		 */
+		DEMOTE_ONLY,
+
+		/**
+		 * A compound claim unit under entailment (#302): neither tier is asked a question that is this
+		 * citation's own, so nothing is published in either direction and no embedding is spent. Ranks
+		 * above {@link #DEMOTE_ONLY} — a reference-group citation inside a compound unit is
+		 * unverifiable, not merely demotable — and that precedence is why this is an ordered choice
+		 * rather than two independent flags.
+		 */
+		UNVERIFIABLE
+	}
+
 	private static final class GroundingStats {
 
 		int embedFailures;
@@ -408,8 +437,10 @@ public class CitationGroundingVerifier {
 		int entailmentBudget = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
 		int cappedCount = 0;
 		Tier1Result[] tier1Results = new Tier1Result[references.size()];
-		// Two reasons a citation is kept away from the judge, and they do NOT share a disposition —
-		// which is why there are two arrays and not one. Both are decided ONCE per reference, from the
+		// How much of a verdict each citation may be given: one ordered Disposition, decided ONCE per
+		// reference and read at all three sites below (judge candidacy, the lazy Tier-1 skip, and what
+		// Pass 2 publishes). Two reasons feed it and they do NOT share a treatment, which is why this
+		// is a three-valued choice rather than a boolean. Decided from the
 		// value claim selection returned, never re-read off tier1Results (cosineVerdict REBUILDS those
 		// for every reference reaching the lazy Tier-1 block, and a flag lost in a rebuild would fail
 		// open). Wiring a new reason into only one site is not hypothetical: #110's safety_finding was
@@ -436,8 +467,10 @@ public class CitationGroundingVerifier {
 		//     by verdictTier1 reporting the flag false; each alone suffices, so neither is individually
 		//     observable to the suite — see the note at that method. clauseScoped remains this module's
 		//     remedy for sentence-scope dilution, unchanged by #302.
-		boolean[] noTier2 = new boolean[references.size()];
-		boolean[] unverifiable = new boolean[references.size()];
+		//
+		// UNVERIFIABLE outranks DEMOTE_ONLY where both apply, and one value makes that explicit where
+		// two booleans left it implicit in the order of Pass 2's branches.
+		Disposition[] disposition = new Disposition[references.size()];
 		// Non-isolate candidates share ONE batch. That is safe for the citations of DIFFERENT claim
 		// units, whose statements are different text. It is a known residue for CO-CITATION — several
 		// citations of one claim unit with nothing but a list separator between their markers
@@ -465,9 +498,10 @@ public class CitationGroundingVerifier {
 					: verdictTier1(reference.getIndex(), textByIndex, sentences,
 							floor, recordVectors, sentenceVectors, embedder, stats);
 			tier1Results[i] = tier1;
-			unverifiable[i] = entailmentEnabled && tier1.compoundClaim;
-			noTier2[i] = unverifiable[i]
-					|| demoteOnlyIndexes.contains(Integer.valueOf(reference.getIndex()));
+			disposition[i] = entailmentEnabled && tier1.compoundClaim ? Disposition.UNVERIFIABLE
+					: demoteOnlyIndexes.contains(Integer.valueOf(reference.getIndex()))
+							? Disposition.DEMOTE_ONLY
+							: Disposition.GRADED;
 			// Tier-2 candidate: needs a concrete claim sentence to fact-check against the record.
 			// Candidacy deliberately does NOT require a Tier-1 verdict: for an unambiguous claim
 			// sentence the verdict is deferred (and may never be needed), and a broken Tier-1
@@ -485,7 +519,7 @@ public class CitationGroundingVerifier {
 			// on.
 			if (entailmentEnabled && tier1.bestSentence != null
 					&& tier1.recordText != null
-					&& !noTier2[i]) {
+					&& disposition[i] == Disposition.GRADED) {
 				if (entailmentBudget > 0) {
 					entailmentBudget--;
 					String statement = stripCitationMarkers(tier1.bestSentence);
@@ -536,7 +570,8 @@ public class CitationGroundingVerifier {
 		// that one publishes nothing either way, so computing the cosine would spend the pass this
 		// block exists to avoid on a verdict Pass 2 discards.
 		for (int i = 0; i < references.size(); i++) {
-			if (tier2Verdict[i] == null && tier1Results[i].deferred && !unverifiable[i]) {
+			if (tier2Verdict[i] == null && tier1Results[i].deferred
+					&& disposition[i] != Disposition.UNVERIFIABLE) {
 				tier1Results[i] = cosineVerdict(tier1Results[i], floor, references.get(i).getIndex(),
 						sentences, recordVectors, sentenceVectors, embedder, stats);
 			}
@@ -550,7 +585,7 @@ public class CitationGroundingVerifier {
 			if (llmVerdict != null) {
 				verdict = llmVerdict; // authoritative; null (no Tier-2 or unverifiable) -> keep Tier-1
 			}
-			if (unverifiable[i]) {
+			if (disposition[i] == Disposition.UNVERIFIABLE) {
 				// A compound claim unit under entailment publishes nothing (issue #302). Neither tier
 				// asked a question about THIS citation: the judge was handed a conjunction the record
 				// answers for only part of, and the cosine that would stand in for it is measured
@@ -560,8 +595,7 @@ public class CitationGroundingVerifier {
 				// published false. Guarded by
 				// compoundClaim_publishesNothingWhicheverWayTheJudgeWouldHaveAnswered.
 				verdict = null;
-			} else if (Boolean.TRUE.equals(verdict)
-					&& demoteOnlyIndexes.contains(Integer.valueOf(references.get(i).getIndex()))) {
+			} else if (Boolean.TRUE.equals(verdict) && disposition[i] == Disposition.DEMOTE_ONLY) {
 				// Demote-only: a cosine pass on a recited reference record carries no faithfulness
 				// signal, so it renders unverified rather than verified; a fail (an off-topic
 				// citation) still flags. Reference content is verified deterministically by the

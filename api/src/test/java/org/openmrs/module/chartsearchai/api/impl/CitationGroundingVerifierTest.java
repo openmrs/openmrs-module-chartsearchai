@@ -1892,11 +1892,11 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
-	public void anArrayOnlyCitationAttributedToACompoundClaimIsDemotedWithIt() {
+	public void anArrayOnlyCitationAttributedToACompoundClaimIsWithheldWithIt() {
 		// A citation the model put only in the structured citations array has no marker of its own, so
 		// selectClaim attributes it to whichever sentence matches best. Where that is a compound claim
 		// unit, its statement asserts more than this record is responsible for exactly as it does for
-		// the inline citations, so the judge's refusal is as uninformative here — and it is demoted
+		// the inline citations, so the judge's refusal is as uninformative here — and it is withheld
 		// with them. Gating the rule on "does this claim unit cite ME" instead would send an array-only
 		// citation back to the judge against the whole conjunction, which is the shape #284 exists to
 		// complain about. What IS given up is stated rather than denied: under entailment nothing is
@@ -1921,7 +1921,7 @@ public class CitationGroundingVerifierTest {
 				"the array-only citation reaches the judge only through the compound claim unit, so it "
 						+ "is excluded with the rest of them");
 		assertNull(result.get(2).getGrounded(),
-				"[3], cited only in the array: demoted, not published unsupported");
+				"[3], cited only in the array: withheld, not published unsupported");
 	}
 
 	@Test
@@ -1957,8 +1957,10 @@ public class CitationGroundingVerifierTest {
 		// markers, so every record is cited for the same whole statement — that statement IS each
 		// citation's own claim, the judge's question is well-formed, and both directions of its answer
 		// must still be published. A predicate keyed on "more than one citation" would silence it.
-		// Stubbed TRUE, not FALSE: a FALSE is untouched by the demotion either way, so only a TRUE
-		// actually puts "co-citation is not demoted" under test.
+		// Stubbed TRUE deliberately, and the sibling above stubs FALSE: since the reversal a compound
+		// unit withholds in BOTH directions, so either stub would redden if co-citation were
+		// misclassified. TRUE is the direction that also proves the verdict is published rather than
+		// merely not-flagged.
 		//
 		// Honest about what this case is worth: it is DOMINATED by the sub-shape case below, which
 		// reddens on every mutation this one does and on one more. compoundClaim() reaches the same

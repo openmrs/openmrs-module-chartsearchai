@@ -152,7 +152,7 @@ import org.springframework.stereotype.Service;
  * that one about the PROVENANCE of the record, and it demotes in both modes because recited prose is
  * unverifiable by either tier.
  *
- * <p>A citation the model put only in the structured citations array is demoted with the rest when
+ * <p>A citation the model put only in the structured citations array is withheld with the rest when
  * {@link #selectClaim}'s no-inline-cite fallback attributes it to a compound claim unit. That is
  * deliberate and is pinned: the statement asserts more than THAT record is responsible for too, so
  * the judge's refusal is no more informative for it, and asking instead whether the claim unit cites
@@ -636,7 +636,10 @@ public class CitationGroundingVerifier {
 	/**
 	 * Claim selection for entailment-enabled grounding: identifies the claim sentence Tier-2 will
 	 * fact-check for one cited index — or, where that sentence turns out to be a COMPOUND claim unit,
-	 * the one Tier-1 alone will score, since {@link #verify} then asks Tier-2 nothing (issue #302).
+	 * the one whose verdict {@link #verify} will discard, since it asks Tier-2 nothing about such a
+	 * citation and publishes nothing for it (issue #302). The choice still has to be made: this method
+	 * runs before the disposition is known, and on the ambiguous branch its argmax is what computes the
+	 * cosine that Pass 2 then throws away.
 	 * Runs Tier-1 embeds ONLY when the choice is ambiguous.
 	 * The common case — exactly one candidate sentence (a list-style answer where each line cites
 	 * its own record, a clause under clause-scope, or an enumeration item in either mode) — selects

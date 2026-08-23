@@ -68,7 +68,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * {@code [A-Z]\d{2}}, so a pattern admitting that would call a name a code.
 	 *
 	 * <p>An earlier form required TWO letters in that group, so it did not see a level-3 code, and a
-	 * mutation showed the issue #298 defect passing it as {@code active order A01A}.
+	 * mutation showed a code-for-name substitution passing it as {@code active order A01A}.
 	 *
 	 * <p>No exhaustiveness claim about what the ladder can be handed, deliberately: nothing between the
 	 * dictionary and here validates a code's shape — {@code PatientClinicalContextBuilder.addAtcCodes}
@@ -524,13 +524,11 @@ public class FoldedChipOnePartnerNameTest {
 	 * rule; the NSAID group's prefixes are {@code M01AE} and {@code N02BA}, so the class arm matched on
 	 * {@code N02BA01} — aspirin — and warfarin is in no cross-reactivity group at all. The premise is
 	 * asserted below rather than reasoned about: the same nameless order carrying {@code B01AA03} ALONE
-	 * raises the rule sentence and no class sentence. Its label is the code list, so the partner is NOT
-	 * recorded as order-named — since issue #298 {@code OrderPartner.recordNameSource} admits an order
-	 * only where the label is that order's name — and the order-named branch is therefore not entered at
-	 * all, leaving the {@code !namesADrug} case to hand the token to both sentences. Before #298 the
-	 * partner did carry its order here and what kept this arrangement on the same path was that
-	 * {@code !namesADrug} was tested FIRST; the output is identical either way, which is why no
-	 * expectation below moved. The chip therefore states
+	 * raises the rule sentence and no class sentence. Its label is the code list, so the
+	 * {@code !namesADrug} case hands the rule's token to both sentences — and since issue #298 the
+	 * order-named branch below it could not be entered anyway, {@code OrderPartner.recordNameSource}
+	 * admitting an order only where the label is that order's name. Two independent reasons for one
+	 * output, which is why no expectation below moved. The chip therefore states
 	 * {@code Ibuprofen is in the same cross-reactivity group (NSAID) as active order warfarin}, which is
 	 * false of warfarin. {@code DrugReferenceInjector.renderFinding} copies the detail verbatim, so it
 	 * reaches the prompt as citable {@code safety_finding} evidence too.
@@ -700,30 +698,38 @@ public class FoldedChipOnePartnerNameTest {
 	}
 
 	/**
-	 * The shape issue #298's invariant actually closes, and the only case here that reaches it.
+	 * A code-valued label reaches NEITHER sentence of a folded chip — the one arrangement here where the
+	 * label is a bare ATC code while the order behind it does have names.
 	 *
 	 * <p>An order on the ladder's ORDER rung — the curated seed carries none of its three codes — whose
 	 * display is BLANK but whose names are not. Its label is therefore a bare ATC code (the blank display
-	 * resolves to the code), and unlike
-	 * {@code namedByCodesOnly} it has names for {@code namesNamingOrder} to match: the one combination in
-	 * which the order-named branch can say YES about a partner whose label is not a name. Under issue
-	 * #298 it cannot arise — {@code displayNamesADrug} answers false for a blank display, and
-	 * {@code OrderPartner.recordNameSource} admits an order only where that answer is true, so
-	 * {@code namingOrder} is null and the branch is not entered — and the rule's own token is handed to both sentences, exactly as
-	 * for the nameless order in {@link #theTicketsLiveCaseNamesTheOrderOnce}.
+	 * resolves to the code), and unlike {@code namedByCodesOnly} it has names for
+	 * {@code namesNamingOrder} to match, so it is the one shape in which the order-named branch could say
+	 * YES about a partner whose label is not a name. It does not get the chance: {@code namesADrug} is
+	 * false for a blank display, {@code foldedPartnerLabel} asks that first, and the rule's own token goes
+	 * to both sentences — exactly as for the nameless order in
+	 * {@link #theTicketsLiveCaseNamesTheOrderOnce}.
 	 *
-	 * <p><b>Why it is worth a case of its own.</b> The other arrangements that redden when
-	 * {@code recordNameSource} is mutated to admit the order unconditionally all fail the OTHER way: such
-	 * an order has no names, so {@code namesNamingOrder} answers false, nothing reconciles and the chip
-	 * names one prescription twice — issue #292's defect returning. None of them reaches the failure
-	 * issue #298 names, a bare ATC code handed to BOTH sentences, because that needs the branch to answer
-	 * yes. This arrangement is where it does: mutate {@code recordNameSource} and this case reads
-	 * {@code active order A01AD05} in both halves of the detail.
+	 * <p><b>What this does and does not pin, stated because an earlier form of this javadoc got it
+	 * wrong.</b> It is NOT a pin on issue #298's single-write-path invariant, and it was written believing
+	 * it was. Under the mutation that motivated it — {@code OrderPartner.recordNameSource} admitting the
+	 * order unconditionally, which is the pre-#298 state — this case still PASSES, because
+	 * {@code foldedPartnerLabel} reaches {@code !namesADrug} before it reaches the order branch and that
+	 * branch order is deliberately kept (see ADR Decision 40). Measured by applying exactly that
+	 * mutation: this class, {@code ClassChipPartnerLabelTest} and
+	 * {@code NamelessActiveOrderPartnerTest} are all green under it. The write path is pinned
+	 * structurally instead, by {@code OrderPartnerNameSourceWritePathTest}, a behaviour-neutral rule
+	 * having nothing a behavioural assertion can see.
+	 *
+	 * <p>What it DOES pin is real and was pinned by nothing before: on this rung the label is a code, and
+	 * a code must reach neither sentence. Both halves are asserted — the detail byte-exact, so a fold
+	 * that stopped firing cannot satisfy the name assertion by vacuity, and each of the order's three
+	 * codes absent by name.
 	 *
 	 * <p>Builder-unreachable, like {@link #aBlankDisplayNeverDisplacesTheDatasetName}, and for the same
 	 * reason — {@code PatientClinicalContextBuilder} takes a display from a name {@code addRaw} has
 	 * already trimmed and dropped if blank. It needs the public constructor's latitude, which is what
-	 * makes it a statement about the invariant rather than about production data.
+	 * makes it a statement about the code path rather than about production data.
 	 */
 	@Test
 	public void aBlankDisplayWithNamesNeverHandsItsCodeToBothSentences() {
@@ -744,13 +750,15 @@ public class FoldedChipOnePartnerNameTest {
 		assertFalse(detail.contains("A01AD05") || detail.contains("B01AC06")
 				|| detail.contains("N02BA01"),
 			"a bare ATC code is the label a blank display resolves to on this rung, and it must reach"
-					+ " NEITHER sentence — handing it to both is the defect issue #298 closes, was: "
+					+ " NEITHER sentence — a code in both is issue #155's defect doubled by issue #88's"
+					+ " fold, and it reaches the prompt through DrugReferenceInjector.renderFinding, was: "
 					+ detail);
 	}
 
 	/** An order on the ladder's ORDER rung whose display is blank and whose names are not — the one shape
-	 *  where {@code namesNamingOrder} can answer yes for a partner whose label is a bare code. Shared
-	 *  with {@link #noFoldedChipNamesOneActiveOrderTwoWays} so the sweep covers it too (issue #298). */
+	 *  where {@code namesNamingOrder} could answer yes for a partner whose label is a bare code, if the
+	 *  {@code !namesADrug} branch did not come first. Shared with
+	 *  {@link #noFoldedChipNamesOneActiveOrderTwoWays} so the sweep covers it too. */
 	private static PatientClinicalContext blankDisplayWithNames() {
 		Set<String> names = DrugReferenceTestSupport.set("aspirin 81mg");
 		return DrugReferenceTestSupport.ctx(60, null, names, ASPIRIN_ORDER_CODES, null, null,
@@ -783,17 +791,18 @@ public class FoldedChipOnePartnerNameTest {
 	 * than swept here.
 	 *
 	 * <p>The sixth is the blank-display order of
-	 * {@link #aBlankDisplayWithNamesNeverHandsItsCodeToBothSentences} (issue #298), whose label is a bare
-	 * ATC code and whose single name therefore comes from the rule's token.
+	 * {@link #aBlankDisplayWithNamesNeverHandsItsCodeToBothSentences}, whose label is a bare ATC code and
+	 * whose single name therefore comes from the rule's token.
 	 *
-	 * <p><b>Adding it required a second assertion to be worth anything</b>, and that is worth recording
-	 * because the first version of this paragraph claimed otherwise. The one-name property alone does NOT
-	 * see the failure that arrangement exists for: substituting the code for the name leaves exactly ONE
-	 * name in both sentences, so the count below still passes. Measured, by a mutation that breaks only
-	 * this arrangement — the byte-exact case reddened and this sweep did not. So the sweep also asserts
-	 * that the name it counted is not ATC-CODE-SHAPED, which is what makes a code-for-name substitution
-	 * visible here rather than in one case alone. {@link #ATC_CODE_SHAPED} says which shapes that covers
-	 * and which it deliberately does not.
+	 * <p><b>Adding it required a second assertion to be worth anything.</b> The one-name property alone
+	 * does not see the failure that arrangement is about: substituting the CODE for the name leaves
+	 * exactly ONE name in both sentences, so the count below still passes. So the sweep also asserts that
+	 * the name it counted is not ATC-CODE-SHAPED. Measured by making the {@code !namesADrug} branch hand
+	 * out {@code OrderPartner.label} wherever that label is not an {@code [ATC …]} list, which is a
+	 * code-for-name substitution on this arrangement and no other: two failures, the byte-exact case and
+	 * this sweep's shape assertion, and nothing in {@code ClassChipPartnerLabelTest}. The count assertion
+	 * stayed silent throughout, which is what the shape assertion is for. {@link #ATC_CODE_SHAPED} says
+	 * which shapes that covers and which it deliberately does not.
 	 *
 	 * <p>One RECONCILING arrangement is excluded too, and for the opposite reason:
 	 * {@link #aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug} names its

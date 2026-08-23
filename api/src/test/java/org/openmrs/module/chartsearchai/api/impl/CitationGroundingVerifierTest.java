@@ -1629,6 +1629,165 @@ public class CitationGroundingVerifierTest {
 				"a preamble qualifier must not be dropped from later items");
 	}
 
+	// ---- a COMPOUND claim unit: citations attached to different pieces of one statement (#302) ----
+
+	/** The colon-less medication list #302 measured, on the module's most common question. */
+	private static final String COLON_LESS_LIST =
+			"The patient is currently taking Salicylic acid [1] and Methotrexate [2].";
+
+	private List<RecordMapping> twoOrderMappings() {
+		return Arrays.asList(mapping(1, "Drug order: Salicylic acid"),
+				mapping(2, "Drug order: Methotrexate"));
+	}
+
+	private List<RecordReference> twoRefs() {
+		return new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2)));
+	}
+
+	@Test
+	public void compoundClaim_aCorrectCitationIsNoLongerPublishedUnsupported() {
+		// Issue #302. No colon, so splitEnumeration refuses the split and BOTH citations are handed
+		// the whole conjunction: each order record is asked to entail a statement that also names the
+		// OTHER drug, a correct judge says no to both, and the wire published grounded=false on two
+		// correct, active, unvoided citations. The verdict was right; the question was the wrong size.
+		//
+		// This case EXERCISES the rebuild path — with Tier-2 skipped the reference falls through to the
+		// lazy Tier-1 block, which rebuilds its Tier1Result in cosineVerdict — but do not read it as a
+		// guard on that rebuild. verify() decides from a snapshot taken at claim selection, so this
+		// stays green whether or not cosineVerdict carries the flag across; the rebuild carries it for
+		// a later reader's sake and NOTHING in this suite fails if that is dropped. The hazard the
+		// snapshot removes is real (reading the flag back off the rebuild instead would fail OPEN,
+		// certifying where the module used to flag) and it is removed structurally, not pinned.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(),
+				"[1] Salicylic acid: the module cannot isolate what this citation claims, so it must "
+						+ "say so rather than publish the conjunction's refusal as this citation's verdict");
+		assertNull(result.get(1).getGrounded(), "[2] Methotrexate: likewise");
+		assertEquals(0, judge.statementsPerCall.size(),
+				"a record asked to entail a conjunction it answers for only part of returns no whether "
+						+ "the citation is right or wrong, so the pair must not be put to the judge at all");
+	}
+
+	@Test
+	public void compoundClaim_anOffTopicCitationIsStillFlagged() {
+		// The demotion must not become a rubber stamp. Only a cosine PASS is demoted; record 2 is
+		// orthogonal to the answer, so the surviving Tier-1 verdict still flags it. That FALSE is the
+		// specified sentence-scope behaviour for a compound sentence — see
+		// clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence, whose whole point is
+		// that sentence scope flags such a citation and clause scope is the remedy for it.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("BP 150/95", AXIS_B);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(),
+				Arrays.asList(mapping(1, "Drug order: Salicylic acid"), mapping(2, "BP 150/95")),
+				FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(), "the on-topic citation is demoted, not verified");
+		assertEquals(Boolean.FALSE, result.get(1).getGrounded(),
+				"an off-topic citation of a compound claim must still be flagged");
+	}
+
+	@Test
+	public void compoundClaim_isDemoteOnlyOnTheTier1OnlyPathToo() {
+		// Mode-uniform, like the reference-group demote-only contract beside it: the rule is about what
+		// the claim unit can support, not about which tier is switched on. Cosine against a conjunction
+		// cannot separate the subject/polarity flips Tier-2 exists for, so a pass here is not assurance
+		// that THIS record backs the piece it is cited for.
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER1_ONLY, false);
+
+		assertNull(result.get(0).getGrounded(), "a cosine pass on a compound claim renders unverified");
+		assertNull(result.get(1).getGrounded(), "and so does the second citation's");
+	}
+
+	@Test
+	public void compoundClaim_doesNotConsumeTheEntailmentCapOfSingleClaimCitations() {
+		// Cap-boundary pin, mirroring drugReference_doesNotConsumeTheEntailmentCapOfChartCitations: the
+		// compound sentence comes FIRST and contributes TWO citations, followed by exactly cap-many
+		// single-claim ones. If the exclusion happened inside the budget branch, those two would eat two
+		// slots and the last TWO single-claim citations would fall past the cap onto their Tier-1 FALSE.
+		int cap = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
+		StringBuilder answer = new StringBuilder(COLON_LESS_LIST).append(" ");
+		List<RecordReference> refs = new ArrayList<RecordReference>(twoRefs());
+		List<RecordMapping> maps = new ArrayList<RecordMapping>(twoOrderMappings());
+		for (int i = 1; i <= cap; i++) {
+			answer.append("claim ").append(i).append(" [").append(i + 2).append("]. ");
+			refs.add(reference(i + 2));
+			maps.add(mapping(i + 2, "record " + i));
+		}
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer.toString(), refs, maps, FLOOR, TIER2_ON);
+
+		assertEquals(cap, llm.calls,
+				"the single-claim citations alone fill the cap; the excluded compound pair must not count");
+		assertEquals(Boolean.TRUE, result.get(refs.size() - 1).getGrounded(),
+				"the last single-claim citation must still get its Tier-2 verdict — two consumed slots "
+						+ "would leave it on its Tier-1 FALSE");
+	}
+
+	@Test
+	public void coCitationIsNotACompoundClaimAndKeepsItsFullTier2Grading() {
+		// Several citations of ONE claim is a shape this module MANUFACTURES: for a corroborated group
+		// LlmAnswerExtractor.normalizeSlashCitations rewrites "Infections [5/12/15]" into adjacent
+		// markers, "Infections [5], [12], [15]". Nothing but a list separator stands between the
+		// markers, so every record is cited for the same whole statement — that statement IS each
+		// citation's own claim, the judge's question is well-formed, and both directions of its answer
+		// must still be published. A predicate keyed on "more than one citation" would silence it.
+		String answer = "The patient has recurrent infections [1], [2].";
+		embeddings.register(answer, AXIS_A);
+		embeddings.register("record one", AXIS_A);
+		embeddings.register("record two", AXIS_A);
+		llm.verdict = Boolean.FALSE;
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(),
+				Arrays.asList(mapping(1, "record one"), mapping(2, "record two")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(2, llm.calls, "co-cited records are each asked their own well-formed question");
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(), "and the answer is published");
+		assertEquals(Boolean.FALSE, result.get(1).getGrounded());
+	}
+
+	@Test
+	public void theSubShapeWhoseSplitIsRefusedForWantOfOwnTextIsCoCitationAndStaysGraded() {
+		// #302's closing bullet names this shape and leaves its remedy unsettled: with the colon present
+		// the split is attempted and refused by splitEnumeration's no-own-text guard, because [2]
+		// contributes nothing of its own beyond its marker. It is left graded
+		// here deliberately — it is textually indistinguishable from the normalizer's co-citation shape
+		// above, and reading it as a conjunction with an unnamed second item would silence a verdict
+		// that is well-formed whenever it is not.
+		String answer = "Recorded medications: Salicylic acid [1], [2].";
+		embeddings.register(answer, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Salicylic acid 300mg", AXIS_A);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(),
+				Arrays.asList(mapping(1, "Drug order: Salicylic acid"),
+						mapping(2, "Drug order: Salicylic acid 300mg")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(2, llm.calls, "adjacent markers are co-citation, not a compound claim");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+	}
+
 	@Test
 	public void splitIntoCitedSentences_aNegationInsideAnItemStaysWithThatItemOnly() {
 		// The mirror case: a qualifier sitting in ONE item must not leak to its siblings and must not be

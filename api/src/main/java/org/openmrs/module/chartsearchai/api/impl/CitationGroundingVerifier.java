@@ -54,8 +54,8 @@ import org.springframework.stereotype.Service;
  * <p><strong>Tier-2 (optional).</strong> When
  * {@code chartsearchai.grounding.entailment.enabled} is set, the cited references are
  * confirmed by a yes/no LLM entailment verdict that is authoritative. This is what
- * catches the subject/polarity flips cosine cannot — for chart records; citations of
- * module-supplied reference material are excepted, see below. It runs on Tier-1 passes
+ * catches the subject/polarity flips cosine cannot — for chart records; two kinds of citation are
+ * excepted and both are below, module-supplied reference material and a COMPOUND claim unit. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
  * citation) is a Tier-1 pass, so confirming only failures would miss it. References are verified
  * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except for the citations of ONE
@@ -112,6 +112,27 @@ import org.springframework.stereotype.Service;
  * injected {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is NOT reference
  * material and is graded normally — see the carve-out site in {@link #verify} for why that is
  * right, and why "the module injected it" is the wrong test.
+ *
+ * <p><strong>A COMPOUND claim unit is demote-only too, on a different ground.</strong> A claim unit
+ * that attaches its citations to different pieces of its own text — more than one citation, with
+ * claim text standing between two of its markers ({@link Sentence#compoundClaim()}) — states a
+ * conjunction that no one cited record answers for all of. Asked to entail it, a correct judge
+ * replies "no" whether the citation is right or wrong, so the verdict says nothing about the
+ * citation; published, that is what marked correct, active, unvoided medication citations as
+ * unsupported on the module's most common question — 8 of the 30 chart citations in #302's own
+ * 12-patient sweep, and all 8 of them in this shape. Such citations therefore never enter Tier-2
+ * nor consume its cap, and a Tier-1 cosine pass renders {@code null}, because cosine against a
+ * conjunction cannot separate the subject/polarity flips Tier-2 exists for. A cosine FAIL is still
+ * published: that is the sentence-scope verdict this class already specifies for a compound
+ * sentence, and {@code chartsearchai.grounding.clauseScoped} is its existing remedy — what #302
+ * removes is Tier-2's negative alone. Note the two demote-only rules are independent and neither
+ * subsumes the other: this one is about the SHAPE of the claim, the reference-group one about the
+ * PROVENANCE of the record. Accepted cost, stated as the carve-out above states its own: these
+ * references now take the lazy Tier-1 path that the amortized Tier-2 batch spared them, an
+ * embedding pass per record and per claim unit on CPU deployments. Where no Tier-1 embedder is
+ * configured at all — a deployment this class otherwise supports, entailment carrying the whole pass
+ * — these citations therefore render {@code null} and are counted in the run's embedding-failure
+ * summary, rather than taking the Tier-2 verdict they used to.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"
@@ -202,9 +223,10 @@ public class CitationGroundingVerifier {
 	 * inline — e.g. it appeared only in the structured citations array — to the
 	 * best-matching sentence anywhere in the answer). References whose record
 	 * carries no text, or that cannot be embedded, are returned with a
-	 * {@code null} verdict ("could not verify"). Citations of module-supplied
-	 * reference material are demote-only — a cosine pass renders {@code null}, never
-	 * {@code true} — see the class javadoc.
+	 * {@code null} verdict ("could not verify"). Two kinds of citation are demote-only — a cosine
+	 * pass renders {@code null}, never {@code true} — those of module-supplied reference material,
+	 * and those of a COMPOUND claim unit, a statement that attaches its citations to different pieces
+	 * of itself. See the class javadoc for both.
 	 *
 	 * @param answer the full answer prose, with inline {@code [N]} markers
 	 * @param references the index-validated references to annotate
@@ -234,8 +256,9 @@ public class CitationGroundingVerifier {
 	 * tests can exercise the grounding logic without an OpenMRS context.
 	 *
 	 * <p>When {@code entailmentEnabled}, every reference with a resolvable claim sentence and
-	 * record text — except citations of module-supplied reference material, which never enter Tier-2
-	 * (see the class javadoc) — is confirmed by a Tier-2 LLM entailment verdict that is authoritative
+	 * record text — except two kinds that never enter Tier-2, citations of module-supplied reference
+	 * material and citations of a COMPOUND claim unit (both in the class javadoc) — is confirmed by a
+	 * Tier-2 LLM entailment verdict that is authoritative
 	 * (cosine errs in both directions, and the dangerous error — a high-overlap
 	 * but unsupported citation — is exactly the case Tier-1 cannot self-detect,
 	 * so the LLM must see Tier-1 passes too, not only failures). They are confirmed in a batched
@@ -331,8 +354,23 @@ public class CitationGroundingVerifier {
 		int entailmentBudget = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
 		int cappedCount = 0;
 		Tier1Result[] tier1Results = new Tier1Result[references.size()];
-		// Non-isolate candidates share ONE batch — their statements don't overlap, so the batched
-		// (not per-pair-independent) LLM cannot couple them.
+		// Decided ONCE per reference, at claim selection, and read from here afterwards — never off
+		// tier1Results, which cosineVerdict REBUILDS for every reference reaching the lazy Tier-1
+		// block — under entailment mode that is every compound-claim reference whose claim sentence
+		// was unambiguous, the common case (one citing sentence defers its cosine; several make
+		// selectClaim compute it eagerly instead). A flag lost in a rebuild fails OPEN: the Pass-2
+		// demotion stops firing and a cosine pass publishes true where the module used to publish
+		// false.
+		boolean[] compoundClaim = new boolean[references.size()];
+		// Non-isolate candidates share ONE batch. That is safe for the citations of DIFFERENT claim
+		// units, whose statements are different text. It is a known residue for CO-CITATION — several
+		// citations of one claim unit with nothing but a list separator between their markers
+		// ("Infections [1], [2]") — whose statements are not merely overlapping but IDENTICAL, and
+		// which is non-isolate and co-batched here. That predates issue #302 and is unchanged by it;
+		// #302 only records it, because that issue's rule deliberately leaves co-citation graded
+		// (Sentence.compoundClaim()) and so depends on this batch. Whether such a pair should be
+		// isolated is a separate question on its own evidence, and isolating it would cost a call per
+		// citation (see splitEnumeration's measured note on that trade).
 		List<Integer> batchPositions = new ArrayList<Integer>();
 		List<String> batchSources = new ArrayList<String>();
 		List<String> batchStatements = new ArrayList<String>();
@@ -351,6 +389,7 @@ public class CitationGroundingVerifier {
 					: verdictTier1(reference.getIndex(), textByIndex, sentences,
 							floor, recordVectors, sentenceVectors, embedder, stats);
 			tier1Results[i] = tier1;
+			compoundClaim[i] = tier1.compoundClaim;
 			// Tier-2 candidate: needs a concrete claim sentence to fact-check against the record.
 			// Candidacy deliberately does NOT require a Tier-1 verdict: for an unambiguous claim
 			// sentence the verdict is deferred (and may never be needed), and a broken Tier-1
@@ -359,8 +398,16 @@ public class CitationGroundingVerifier {
 			// is false assurance on recited reference prose (issue #106), and the skipped pair must
 			// not consume the per-answer entailment cap that chart citations rely on — which the
 			// safety findings were doing until issue #122, several per polypharmacy answer.
+			// A COMPOUND claim unit is excluded on the same footing and for a parallel reason (issue
+			// #302): its statement attaches different citations to different pieces of itself, so the
+			// record is asked to entail a conjunction it answers for only part of, and a correct judge
+			// replies "no" whether the citation is right or wrong. Published, that is what marked
+			// correct medication citations as unsupported. The exclusion sits OUTSIDE the
+			// budget branch below, like the reference-group one, so the skipped pairs do not spend the
+			// per-answer cap that single-claim citations rely on.
 			if (entailmentEnabled && tier1.bestSentence != null
 					&& tier1.recordText != null
+					&& !compoundClaim[i]
 					&& !demoteOnlyIndexes.contains(Integer.valueOf(reference.getIndex()))) {
 				if (entailmentBudget > 0) {
 					entailmentBudget--;
@@ -404,9 +451,12 @@ public class CitationGroundingVerifier {
 		}
 
 		// Lazy Tier-1: references whose cosine verdict was deferred at claim-selection time get it
-		// computed now, but ONLY where Tier-2 did not reach a verdict (cap overflow, engine failure,
-		// unparseable reply) — everywhere else the eager cosine would have been overridden and its
-		// embedding cost (the dominant grounding cost on CPU) wasted.
+		// computed now, but ONLY where Tier-2 did not reach a verdict — everywhere else the eager
+		// cosine would have been overridden and its embedding cost (the dominant grounding cost on
+		// CPU) wasted. Tier-2 reaches none where it failed or could not answer (cap overflow, engine
+		// failure, unparseable reply) and where it was never asked, which since issue #302 includes
+		// every citation of a compound claim unit. This is the block that gives those their verdict,
+		// and the demotion in Pass 2 is what keeps a pass from certifying them.
 		for (int i = 0; i < references.size(); i++) {
 			if (tier2Verdict[i] == null && tier1Results[i].deferred) {
 				tier1Results[i] = cosineVerdict(tier1Results[i], floor, references.get(i).getIndex(),
@@ -430,6 +480,21 @@ public class CitationGroundingVerifier {
 				// DrugSafetyValidator, not by this pass.
 				verdict = null;
 			}
+			if (Boolean.TRUE.equals(verdict) && compoundClaim[i]) {
+				// Demote-only for the OTHER reason (issue #302). With Tier-2 skipped above, the verdict
+				// standing here is Tier-1's cosine against the whole conjunction, and that cannot
+				// separate the subject/polarity flips Tier-2 exists for — so a pass is not assurance
+				// that THIS record backs the piece it is cited for, and it renders unverified.
+				//
+				// A cosine FAIL is deliberately still published. That is not a softer version of the
+				// same question: it is the sentence-scope verdict this module already specifies for a
+				// compound sentence, pinned by
+				// CitationGroundingVerifierTest.clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence,
+				// whose point is that sentence scope flags such a citation and clauseScoped is the
+				// remedy for it. What #302 removes is Tier-2's negative, which fired on every citation
+				// of a compound claim regardless of the evidence.
+				verdict = null;
+			}
 			annotated.add(references.get(i).withGrounded(verdict));
 		}
 		if (cappedCount > 0) {
@@ -450,7 +515,9 @@ public class CitationGroundingVerifier {
 
 	/**
 	 * Claim selection for entailment-enabled grounding: identifies the claim sentence Tier-2 will
-	 * fact-check for one cited index, running Tier-1 embeds ONLY when the choice is ambiguous.
+	 * fact-check for one cited index — or, where that sentence turns out to be a COMPOUND claim unit,
+	 * the one Tier-1 alone will score, since {@link #verify} then asks Tier-2 nothing (issue #302).
+	 * Runs Tier-1 embeds ONLY when the choice is ambiguous.
 	 * The common case — exactly one candidate sentence (a list-style answer where each line cites
 	 * its own record, a clause under clause-scope, or an enumeration item in either mode) — selects
 	 * deterministically with no
@@ -489,7 +556,8 @@ public class CitationGroundingVerifier {
 		if (candidates.size() == 1) {
 			int only = candidates.get(0).intValue();
 			Sentence claim = sentences.get(only);
-			return new Tier1Result(null, claim.text, recordText, claim.isolate, only, true);
+			return new Tier1Result(null, claim.text, recordText, claim.isolate, claim.compoundClaim(),
+					only, true);
 		}
 		try {
 			float[] recordVector = embedRecord(index, recordText, recordVectors, embedder);
@@ -505,7 +573,7 @@ public class CitationGroundingVerifier {
 			}
 			Sentence claim = sentences.get(bestIdx);
 			return new Tier1Result(Boolean.valueOf(best >= floor), claim.text, recordText,
-					claim.isolate, bestIdx, false);
+					claim.isolate, claim.compoundClaim(), bestIdx, false);
 		}
 		catch (RuntimeException e) {
 			stats.recordFailure(e);
@@ -528,12 +596,13 @@ public class CitationGroundingVerifier {
 			double sim = similarity(recordVector, selected.bestSentenceIdx, sentences,
 					sentenceVectors, embedder);
 			return new Tier1Result(Boolean.valueOf(sim >= floor), selected.bestSentence,
-					selected.recordText, selected.isolate, selected.bestSentenceIdx, false);
+					selected.recordText, selected.isolate, selected.compoundClaim,
+					selected.bestSentenceIdx, false);
 		}
 		catch (RuntimeException e) {
 			stats.recordFailure(e);
 			return new Tier1Result(null, selected.bestSentence, selected.recordText,
-					selected.isolate, selected.bestSentenceIdx, false);
+					selected.isolate, selected.compoundClaim, selected.bestSentenceIdx, false);
 		}
 	}
 
@@ -559,6 +628,7 @@ public class CitationGroundingVerifier {
 			double best = -Double.MAX_VALUE;
 			String bestSentence = null;
 			boolean bestIsolate = false;
+			boolean bestCompound = false;
 			boolean compared = false;
 			boolean anyInlineCite = false;
 			for (int s = 0; s < sentences.size(); s++) {
@@ -570,6 +640,7 @@ public class CitationGroundingVerifier {
 						best = sim;
 						bestSentence = sentences.get(s).text;
 						bestIsolate = sentences.get(s).isolate;
+						bestCompound = sentences.get(s).compoundClaim();
 					}
 				}
 			}
@@ -585,6 +656,7 @@ public class CitationGroundingVerifier {
 						best = sim;
 						bestSentence = sentences.get(s).text;
 						bestIsolate = sentences.get(s).isolate;
+						bestCompound = sentences.get(s).compoundClaim();
 					}
 				}
 			}
@@ -592,7 +664,8 @@ public class CitationGroundingVerifier {
 			if (!compared) {
 				return new Tier1Result(null, null, recordText, false); // no sentences (empty answer)
 			}
-			return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText, bestIsolate);
+			return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText, bestIsolate,
+					bestCompound, -1, false);
 		}
 		catch (RuntimeException e) {
 			// Never break the search path on a verification failure; count it for the
@@ -629,8 +702,9 @@ public class CitationGroundingVerifier {
 		return ChartSearchAiUtils.INLINE_CITATION.matcher(text).replaceAll("").trim();
 	}
 
-	/** Tier-1 outcome plus the claim sentence/clause, record text, and whether that clause must be
-	 *  Tier-2 verified in isolation — everything Tier-2 needs. */
+	/** Tier-1 outcome plus the claim sentence/clause, record text, whether that clause must be
+	 *  Tier-2 verified in isolation, and whether it is a compound claim unit — what {@link #verify}
+	 *  needs to decide whether Tier-2 runs at all and, if it does, how. */
 	private static class Tier1Result {
 
 		final Boolean verdict;
@@ -653,16 +727,26 @@ public class CitationGroundingVerifier {
 		 *  {@link #cosineVerdict} if Tier-2 yields no verdict for the reference. */
 		final boolean deferred;
 
+		/** True when the selected claim unit is a COMPOUND claim ({@link Sentence#compoundClaim()}).
+		 *  {@link #verify} does not read this field after claim selection: it snapshots the answer
+		 *  once per reference and decides from the snapshot, so that {@link #cosineVerdict} rebuilding
+		 *  a Tier1Result cannot drop it — a flag lost in that rebuild would fail OPEN, the demotion
+		 *  silently ceasing to fire and a cosine pass publishing {@code true} where the module used to
+		 *  flag. The rebuild carries it anyway, so the field is not stale for a later reader; that is
+		 *  belt-and-braces, not what the correctness rests on. */
+		final boolean compoundClaim;
+
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate) {
-			this(verdict, bestSentence, recordText, isolate, -1, false);
+			this(verdict, bestSentence, recordText, isolate, false, -1, false);
 		}
 
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate,
-				int bestSentenceIdx, boolean deferred) {
+				boolean compoundClaim, int bestSentenceIdx, boolean deferred) {
 			this.verdict = verdict;
 			this.bestSentence = bestSentence;
 			this.recordText = recordText;
 			this.isolate = isolate;
+			this.compoundClaim = compoundClaim;
 			this.bestSentenceIdx = bestSentenceIdx;
 			this.deferred = deferred;
 		}
@@ -854,8 +938,14 @@ public class CitationGroundingVerifier {
 	 * for). A list-introducing colon is the sentence declaring that boundary itself, so it is taken
 	 * as the only reliable signal rather than as a convenience. Consequence, stated rather than
 	 * hidden: a comma-only enumeration ("The patient has diabetes [1], hypertension [2]") is NOT
-	 * split and remains mis-scoped — #278 stays open for it. Narrow and correct beats broad and
+	 * split and remains mis-scoped. Narrow and correct beats broad and
 	 * subject-stripping, because this decides whether a TRUE citation is published as unsupported.
+	 *
+	 * <p><strong>What that consequence costs is no longer a wrong verdict (issue #302).</strong> An
+	 * unsplit sentence of this shape is a COMPOUND claim unit, so its citations are demote-only —
+	 * see {@link Sentence#compoundClaim()} and this class's javadoc. They stay mis-scoped, which is
+	 * what the boundary problem above makes unavoidable here, but the module no longer publishes the
+	 * conjunction's refusal as each citation's own verdict.
 	 *
 	 * <p>Returns {@code null} — meaning "not an enumeration" — for a single-citation sentence, for a
 	 * sentence with no colon before its first marker, for one where any item contributes no text of its
@@ -917,6 +1007,36 @@ public class CitationGroundingVerifier {
 			itemStart = marker.end();
 		}
 		return items;
+	}
+
+	/**
+	 * True when some pair of consecutive {@code [N]} markers in {@code text} has claim text between
+	 * them — anything left once {@link #LEADING_ITEM_SEPARATOR} has taken the punctuation and
+	 * coordinating conjunction that merely join a list. Reusing that constant is what keeps this
+	 * agreeing with {@link #splitEnumeration} about where one item ends and the next begins, rather
+	 * than growing a second opinion about what a separator is.
+	 *
+	 * <p>Reads the TEXT deliberately, and only ever as a question about shape — never to re-derive
+	 * which citations a claim unit is attributed to, which {@link Sentence} warns against because a
+	 * clause-scoped fragment's text carries markers it is not attributed to. {@link
+	 * Sentence#compoundClaim()} is the only caller and it guards this with the attributed count for
+	 * exactly that reason.
+	 */
+	private static boolean claimTextSeparatesCitations(String text) {
+		Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(text);
+		if (!marker.find()) {
+			return false;
+		}
+		int previousEnd = marker.end();
+		while (marker.find()) {
+			String between = LEADING_ITEM_SEPARATOR.matcher(text.substring(previousEnd, marker.start()))
+					.replaceFirst("").trim();
+			if (!between.isEmpty()) {
+				return true;
+			}
+			previousEnd = marker.end();
+		}
+		return false;
 	}
 
 	/**
@@ -999,6 +1119,28 @@ public class CitationGroundingVerifier {
 
 		boolean cites(int index) {
 			return citedIndexes.contains(Integer.valueOf(index));
+		}
+
+		/**
+		 * True when this claim unit attaches its citations to DIFFERENT pieces of its own text: it is
+		 * attributed to more than one citation AND claim text stands between two of its {@code [N]}
+		 * markers. Its statement is then a conjunction, and no one cited record answers for all of it
+		 * — so an entailment "no" is the expected reply whether the citation is right or wrong, and
+		 * publishing that as the citation's verdict marks a correct list unsupported (issue #302).
+		 *
+		 * <p><strong>Both halves are load-bearing.</strong> The citation count alone would catch
+		 * CO-CITATION, where nothing but a list separator stands between the markers
+		 * ({@code "Infections [5], [12], [15]"}) — several records cited for ONE claim, which is a
+		 * shape this module manufactures: {@code LlmAnswerExtractor.normalizeSlashCitations} rewrites
+		 * a corroborated {@code [5/12/15]} group into exactly that. There the statement IS each
+		 * citation's own claim, the judge's question is well-formed, and both directions of its answer
+		 * are worth publishing. The text test alone would catch a clause-scoped fragment, whose text
+		 * carries EARLIER markers while it is attributed to one citation; that is a real residual of
+		 * the cumulative prefix and it is deliberately not closed here — clause scope is off by
+		 * default, and {@link #splitIntoClauseScopedSentences} owns that trade.
+		 */
+		boolean compoundClaim() {
+			return citedIndexes.size() > 1 && claimTextSeparatesCitations(text);
 		}
 	}
 }

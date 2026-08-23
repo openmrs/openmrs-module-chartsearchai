@@ -135,7 +135,11 @@ public class ChartSearchAiUtils {
 	 * {@code RecordReference.getGrounded()}, and no longer published — because its meaning is
 	 * "off-topic citation" and reading it as anything else renders the module's own deterministic
 	 * finding as unsupported. Note that the Tier-2 exclusion and the {@code TRUE}-to-{@code null}
-	 * demotion are both driven by THIS predicate, not by that verdict.
+	 * demotion this predicate drives are driven by IT rather than by that verdict — but it is not
+	 * the only thing that drives them: {@code CitationGroundingVerifier} applies the same two
+	 * treatments, independently, to a COMPOUND claim unit (issue #302), which is a fact about the
+	 * shape of the claim rather than about the provenance of the record. A citation can therefore be
+	 * demote-only without this predicate being true of it.
 	 *
 	 * <p><strong>Why module-supplied material cannot be verified.</strong> An answer sentence citing
 	 * module-rendered reference prose is typically a recitation of it, and a recitation embeds

@@ -74,11 +74,14 @@ import org.springframework.stereotype.Service;
  * CPU-only servers — on verdicts that are then discarded. So when entailment is enabled, Tier-1
  * embeds run only where they still decide something: choosing the claim sentence when more than
  * one candidate cites the record (the statement must be the cosine-best match, identical to the
- * eager path), and supplying the fallback verdict for references whose Tier-2 check produced none
- * (cap overflow, engine failure) — computed lazily, after Tier-2. A list-style answer where each
- * line cites its own record runs no Tier-1 embeds at all. A consequence pinned in tests: a
- * broken or absent Tier-1 embedding model no longer blocks Tier-2 verdicts for unambiguous
- * claim sentences — previously it silently downgraded every citation to "unverified".
+ * eager path), and supplying the fallback verdict for references whose Tier-2 check produced none —
+ * because it failed or could not answer (cap overflow, engine failure), or because it was never
+ * asked, which is the case for both demote-only kinds — computed lazily, after Tier-2. A list-style
+ * answer where each line cites its own record runs no Tier-1 embeds at all. A consequence pinned in
+ * tests: a broken or absent Tier-1 embedding model no longer blocks Tier-2 verdicts for unambiguous
+ * claim sentences the judge is ASKED about — previously it silently downgraded every citation to
+ * "unverified". Since issue #302 it is not asked about a compound claim unit, which on such a
+ * deployment has no tier left and renders unverified; see the compound-claim paragraph below.
  *
  * <p><strong>Module-supplied reference citations are demote-only.</strong> A record whose
  * resource type groups as reference material
@@ -627,7 +630,8 @@ public class CitationGroundingVerifier {
 
 	/**
 	 * Lazily computes the deferred Tier-1 cosine verdict for a reference whose Tier-2 check
-	 * produced no verdict (cap overflow, engine failure, unparseable reply). Reuses the per-call
+	 * produced no verdict — because it failed or could not answer (cap overflow, engine failure,
+	 * unparseable reply), or because it was never asked (either demote-only kind). Reuses the per-call
 	 * record/sentence vector caches, so the work and the result are exactly what the eager path
 	 * would have produced for the same (record, claim sentence) pair. Never throws: an embedding
 	 * failure degrades to a {@code null} ("could not verify") verdict.

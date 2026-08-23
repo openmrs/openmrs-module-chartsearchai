@@ -20,8 +20,9 @@ baseline. Versus it:
 Since issue #302 a chart citation's null has a NEW CAUSE on the sentence-scope
 side (null was always publishable -- see the caveat below -- so what changed is
 why), and a gate that reads a verdict has to know about it or it fails open. A COMPOUND claim unit -- more than one citation
-with claim text between two of its markers -- is demote-only: it skips Tier-2
-and a Tier-1 pass renders null. So the sentence column now carries null for
+with claim text between two of its markers -- publishes no verdict at all: it
+skips Tier-2, its Tier-1 cosine is never computed, and the cell reads null
+whichever way either tier would have answered. So the sentence column now carries null for
 exactly the population clause-scoping targets. That includes this harness's own
 named win case, cite [89] on "any ear problems?", if the model answers it in the
 compound-sentence form the clauseScoped setting is documented against -- run it

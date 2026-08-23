@@ -75,8 +75,9 @@ import org.springframework.stereotype.Service;
  * embeds run only where they still decide something: choosing the claim sentence when more than
  * one candidate cites the record (the statement must be the cosine-best match, identical to the
  * eager path), and supplying the fallback verdict for references whose Tier-2 check produced none —
- * because it failed or could not answer (cap overflow, engine failure), or because it was never
- * asked, which is the case for both demote-only kinds — computed lazily, after Tier-2. A list-style
+ * because it failed or could not answer (cap overflow, engine failure), or because it was never asked
+ * AND a Tier-1 verdict could still be published, which since #302 means reference material but not a
+ * compound claim unit — computed lazily, after Tier-2. A list-style
  * answer where each line cites its own record runs no Tier-1 embeds at all. A consequence pinned in
  * tests: a broken or absent Tier-1 embedding model no longer blocks Tier-2 verdicts for unambiguous
  * claim sentences the judge is ASKED about — previously it silently downgraded every citation to
@@ -116,7 +117,7 @@ import org.springframework.stereotype.Service;
  * material and is graded normally — see the carve-out site in {@link #verify} for why that is
  * right, and why "the module injected it" is the wrong test.
  *
- * <p><strong>A COMPOUND claim unit is demote-only too, on a different ground.</strong> A claim unit
+ * <p><strong>A COMPOUND claim unit is UNVERIFIABLE, which is stronger than demote-only.</strong> A claim unit
  * that attaches its citations to different pieces of its own text — more than one citation, with
  * claim text standing between two of its markers ({@link Sentence#compoundClaim()}) — states a
  * conjunction that no one cited record answers for all of. Asked to entail it, a correct judge
@@ -156,7 +157,10 @@ import org.springframework.stereotype.Service;
  * #284 is about.
  *
  * <p><strong>Cost: this rule only removes work.</strong> Nothing is published for these citations, so
- * neither tier runs for them. Measured by A/B through the 6-arg {@link #verify} over a 12-citation
+ * the judge is never asked and the lazy Tier-1 fallback never runs. Claim SELECTION still embeds where
+ * several sentences cite one record and the cosine argmax has to choose between them — that predates
+ * this rule and is unchanged by it, which is why the A/B below adds no passes rather than removing
+ * them all. Measured by A/B through the 6-arg {@link #verify} over a 12-citation
  * answer with entailment on, counting the real {@link TextEmbedder} and {@link LlmProvider} calls: one
  * compound line citing all 12 drops the batch entirely (1 {@code entailsBatch} call to 0, 12 pairs to
  * 0) and adds no embedding passes; 8 sentences of which 4 are compound, covering 9 of the 12, keep the
@@ -207,8 +211,9 @@ public class CitationGroundingVerifier {
 	 * {@code null} when querystore's provider can't be resolved — Tier-1 cosine checks are then
 	 * skipped and Tier-2 entailment (the authoritative pass) still applies to every citation it is
 	 * asked about. Since issue #302 it is not asked about a citation of a compound claim unit, which
-	 * renders unverified on any deployment — neither tier answers for it, so an absent embedder makes
-	 * no difference there. Never throws.
+	 * renders unverified on any deployment, so an absent embedder cannot change its verdict. It can
+	 * still change the LOG: where several sentences cite the record, claim selection embeds to choose
+	 * between them, and that failure is counted in the run's embedding-failure summary. Never throws.
 	 *
 	 * <p>chartsearchai's own ONNX embedding provider was removed in the querystore migration (#51);
 	 * querystore is now the only grounding embedder. querystore is a {@code provided}-scope
@@ -259,10 +264,11 @@ public class CitationGroundingVerifier {
 	 * inline — e.g. it appeared only in the structured citations array — to the
 	 * best-matching sentence anywhere in the answer). References whose record
 	 * carries no text, or that cannot be embedded, are returned with a
-	 * {@code null} verdict ("could not verify"). Two kinds of citation are demote-only — a cosine
-	 * pass renders {@code null}, never {@code true} — those of module-supplied reference material,
-	 * and those of a COMPOUND claim unit, a statement that attaches its citations to different pieces
-	 * of itself. See the class javadoc for both.
+	 * {@code null} verdict ("could not verify"). Two kinds of citation are held back from a verdict,
+	 * by different amounts: module-supplied reference material is demote-only (a cosine pass renders
+	 * {@code null}, a cosine fail still flags), and a COMPOUND claim unit — a statement attaching its
+	 * citations to different pieces of itself — publishes nothing in either direction. See the class
+	 * javadoc for both.
 	 *
 	 * @param answer the full answer prose, with inline {@code [N]} markers
 	 * @param references the index-validated references to annotate
@@ -635,7 +641,8 @@ public class CitationGroundingVerifier {
 	/**
 	 * Lazily computes the deferred Tier-1 cosine verdict for a reference whose Tier-2 check
 	 * produced no verdict — because it failed or could not answer (cap overflow, engine failure,
-	 * unparseable reply), or because it was never asked (either demote-only kind). Reuses the per-call
+	 * unparseable reply), or because it was never asked AND a Tier-1 verdict could still be published.
+	 * A compound claim unit does not reach here at all: it publishes nothing, so its caller skips it. Reuses the per-call
 	 * record/sentence vector caches, so the work and the result are exactly what the eager path
 	 * would have produced for the same (record, claim sentence) pair. Never throws: an embedding
 	 * failure degrades to a {@code null} ("could not verify") verdict.
@@ -781,13 +788,13 @@ public class CitationGroundingVerifier {
 		final boolean deferred;
 
 		/** True when the selected claim unit is a COMPOUND claim ({@link Sentence#compoundClaim()}).
-		 *  {@link #verify} reads it once, at claim selection, folding it into its {@code demoteOnly}
-		 *  array along with the reference-group reason and the entailment mode, and decides from that
-		 *  array afterwards — so {@link #cosineVerdict} rebuilding a Tier1Result cannot drop it. A flag
-		 *  lost in that rebuild would fail OPEN: the demotion silently ceases to fire and a cosine pass
-		 *  publishes {@code true} where the module used to flag. The rebuild carries it anyway, so the
-		 *  field is not stale for a later reader; that is belt-and-braces, not what correctness rests
-		 *  on. */
+		 *  {@link #verify} reads it once, at claim selection, folding it with the entailment mode into
+		 *  its {@code unverifiable} array (and, with the reference-group reason, into {@code noTier2}),
+		 *  and decides from those afterwards — so {@link #cosineVerdict} rebuilding a Tier1Result
+		 *  cannot drop it. A flag lost in that rebuild would fail OPEN: the withholding silently
+		 *  ceases and whatever cosine verdict exists is published, in either direction. The rebuild
+		 *  carries it anyway, so the field is not stale for a later reader; that is belt-and-braces,
+		 *  not what correctness rests on. */
 		final boolean compoundClaim;
 
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate) {
@@ -996,8 +1003,8 @@ public class CitationGroundingVerifier {
 	 * subject-stripping, because this decides whether a TRUE citation is published as unsupported.
 	 *
 	 * <p><strong>What that consequence costs is no longer a wrong verdict (issue #302).</strong> An
-	 * unsplit sentence of this shape is a COMPOUND claim unit, so its citations are demote-only —
-	 * see {@link Sentence#compoundClaim()} and this class's javadoc. They stay mis-scoped, which is
+	 * unsplit sentence of this shape is a COMPOUND claim unit, so under entailment its citations
+	 * publish no verdict — see {@link Sentence#compoundClaim()} and this class's javadoc. They stay mis-scoped, which is
 	 * what the boundary problem above makes unavoidable here, but the module no longer publishes the
 	 * conjunction's refusal as each citation's own verdict.
 	 *

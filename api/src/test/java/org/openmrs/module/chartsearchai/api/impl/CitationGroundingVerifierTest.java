@@ -1768,10 +1768,9 @@ public class CitationGroundingVerifierTest {
 		// #302's defect is Tier-2's refusal of a conjunction, which does not exist when entailment is
 		// off: there every verdict is cosine against the claim text, a compound unit's is no different
 		// in kind, and sentence scope has always compared against the whole compound sentence
-		// (clauseScoped is this module's remedy for that, and #302 does not change it). Demoting here
-		// would suppress the PASS of a comparison whose FAIL the module still publishes — see
-		// compoundClaim_anOffTopicCitationIsStillFlagged — and cost a correct citation its verdict for
-		// no defect removed.
+		// (clauseScoped is this module's remedy for that, and #302 does not change it). Withholding here
+		// would cost a correct citation its verdict for no defect removed: with no judge to refuse the
+		// conjunction, there is no wrong verdict to suppress.
 		embeddings.register(COLON_LESS_LIST, AXIS_A);
 		embeddings.register("Drug order: Salicylic acid", AXIS_A);
 		embeddings.register("Drug order: Methotrexate", AXIS_A);
@@ -1868,8 +1867,10 @@ public class CitationGroundingVerifierTest {
 		// the inline citations, so the judge's refusal is as uninformative here — and it is demoted
 		// with them. Gating the rule on "does this claim unit cite ME" instead would send an array-only
 		// citation back to the judge against the whole conjunction, which is the shape #284 exists to
-		// complain about. Nothing is lost that Tier-1 was carrying: a record that does not resemble the
-		// sentence is still flagged, as compoundClaim_anOffTopicCitationIsStillFlagged shows.
+		// complain about. What IS given up is stated rather than denied: under entailment nothing is
+		// published for this citation, so a genuinely off-topic one is no longer flagged either — the
+		// cosine that would flag it is measured against the same conjunction and is diluted for a
+		// correct record too, which is why it is not better evidence.
 		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
 		verifier.setLlmProvider(judge);
 		embeddings.register(COLON_LESS_LIST, AXIS_A);

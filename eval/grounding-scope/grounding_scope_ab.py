@@ -26,9 +26,10 @@ exactly the population clause-scoping targets. That includes this harness's own
 named win case, cite [89] on "any ear problems?", if the model answers it in the
 compound-sentence form the clauseScoped setting is documented against -- run it
 and read the cell rather than assuming, since the answer is regenerated each
-time. Read only for True/False flips, a tally would go to zero wherever that
-happens and the gate would print a pass it had not measured. Hence the two
-null-side classes below, counted and printed separately rather than folded in:
+time. Read for True/False flips alone, a tally would go to zero wherever that
+happens and the gate would print a pass it had not measured. Hence the null-side
+classes below -- three counted and a fourth deliberately not -- printed separately
+rather than folded in:
   * null->True is a WIN of the demoted kind (sentence scope could not certify
     the citation, clause scope can);
   * True->null is a REGRESSION of the demoted kind;
@@ -125,9 +126,11 @@ def search(patient, question):
     # concluded (issue #201), so a clause-scope flip on one is NOT observable from here. Those
     # cells are tagged `withheld` rather than printed as None, which would read as "unverified"
     # and let this harness's gate be quoted over citations it is structurally blind to.
-    # The tallies below are unaffected either way: every one of them requires a True on one side,
-    # and a reference-group citation can never be True (demote-only, issue #106). The `withheld`
-    # string also keeps such a cell out of the #302 null-side classes, which test `is None`.
+    # The tallies below are unaffected because `withheld` is a STRING: the True/False classes cannot
+    # match it, and the #302 null-side classes test `is None`. Do not change the tag to None — the
+    # null->False class would then start counting withheld reference citations as #302 regressions.
+    # ("every class needs a True on one side" was the old reason and it is no longer true: null->False
+    # needs none.)
     d = req("/chartsearchai/search", {"patient": patient, "question": question}, "POST")
     verdicts = {}
     for r in (d.get("references") or []):

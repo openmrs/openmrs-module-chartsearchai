@@ -141,6 +141,13 @@ import org.springframework.stereotype.Service;
  * that one about the PROVENANCE of the record, and it demotes in both modes because recited prose is
  * unverifiable by either tier.
  *
+ * <p>A citation the model put only in the structured citations array is demoted with the rest when
+ * {@link #selectClaim}'s no-inline-cite fallback attributes it to a compound claim unit. That is
+ * deliberate and is pinned: the statement asserts more than THAT record is responsible for too, so
+ * the judge's refusal is no more informative for it, and asking instead whether the claim unit cites
+ * it would send an array-only citation to the judge against the whole conjunction — the shape issue
+ * #284 is about. Its off-topic signal survives on Tier-1 either way.
+ *
  * <p><strong>Accepted cost, measured, and it is not a swap on the shape that matters.</strong> A/B
  * through the 6-arg {@link #verify} over a 12-citation answer, entailment on, counting the real
  * {@link TextEmbedder} and {@link LlmProvider} calls: where the answer is ONE compound line citing all

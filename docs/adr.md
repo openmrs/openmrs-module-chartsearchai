@@ -1809,7 +1809,7 @@ Two refinements make the verdict match what the citation actually claims:
 
 The grounding pass is pure overhead on the user's critical path, and on CPU-only servers the Tier-2 LLM call adds seconds *after* the answer is already readable. Two mechanisms keep it from regressing perceived latency:
 
-- **Lazy Tier-1** — when Tier-2 entailment is on, the Tier-1 cosine is computed only for citations where the LLM check produced no verdict. Tier-2 is authoritative where it spoke, so the embedding work (and any embedding-model requirement) is skipped for those citations — grounding then works even with no Tier-1 embedding model configured.
+- **Lazy Tier-1** — when Tier-2 entailment is on, the Tier-1 cosine is computed only for citations where the LLM check produced no verdict. Tier-2 is authoritative where it spoke, so the embedding work (and any embedding-model requirement) is skipped for those citations — grounding then works with no Tier-1 embedding model configured, for any citation the judge is asked about. Since #302 it is not asked about a compound claim unit, which on an embedder-less deployment is therefore left unverified by both tiers.
 - **Async grounding (`chartsearchai.grounding.async`, default `false`, streaming only)** — the SSE `done` event is emitted as soon as the answer is complete (its references carrying no verdicts yet), and the verdicts arrive afterward in a trailing `grounded` event. The Tier-2 tail moves off the user's perceived completion time; clients keep consuming the stream after `done` and apply verdicts when they land. The blocking `/search` endpoint is unaffected and always returns final verdicts.
 
 ### Model-dependent cosine floor

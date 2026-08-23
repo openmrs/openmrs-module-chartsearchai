@@ -339,10 +339,14 @@ public class ChartSearchAiConstants {
 	 * sentence citing it. This is what catches high-overlap-but-false citations
 	 * ("patient has X [5]" where record 5 says a relative had X, or the record
 	 * negates X) that cosine similarity cannot separate. An answer's citations
-	 * are verified in one batched LLM call (capped per answer; clause-scoped
-	 * compound-sentence citations get single-pair calls), and the Tier-1 cosine
+	 * are verified in one batched LLM call (capped per answer; the citations of one
+	 * sentence whose claim statements overlap get single-pair calls — a clause-scoped
+	 * compound, or an enumerating sentence in either mode), and the Tier-1 cosine
 	 * verdict is computed lazily only where Tier-2 yields none, so the marginal
-	 * cost is one LLM round-trip per answer. Still a separate opt-in from the
+	 * cost is one LLM round-trip per answer. Two kinds of citation are never put to
+	 * the judge at all: module-supplied reference material (issue #106/#122) and a
+	 * COMPOUND claim unit, a statement attaching its citations to different pieces of
+	 * itself (issue #302). Still a separate opt-in from the
 	 * cheap Tier-1 pass. Default {@code false}. See {@code CitationGroundingVerifier}.
 	 */
 	public static final String GP_GROUNDING_ENTAILMENT_ENABLED = "chartsearchai.grounding.entailment.enabled";

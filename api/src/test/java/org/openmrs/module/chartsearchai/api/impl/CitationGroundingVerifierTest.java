@@ -1770,6 +1770,37 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
+	public void anArrayOnlyCitationAttributedToACompoundClaimIsDemotedWithIt() {
+		// A citation the model put only in the structured citations array has no marker of its own, so
+		// selectClaim attributes it to whichever sentence matches best. Where that is a compound claim
+		// unit, its statement asserts more than this record is responsible for exactly as it does for
+		// the inline citations, so the judge's refusal is as uninformative here — and it is demoted
+		// with them. Gating the rule on "does this claim unit cite ME" instead would send an array-only
+		// citation back to the judge against the whole conjunction, which is the shape #284 exists to
+		// complain about. Nothing is lost that Tier-1 was carrying: a record that does not resemble the
+		// sentence is still flagged, as compoundClaim_anOffTopicCitationIsStillFlagged shows.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+		embeddings.register("Condition: Asthma", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST,
+				new ArrayList<RecordReference>(
+						Arrays.asList(reference(1), reference(2), reference(3))),
+				Arrays.asList(mapping(1, "Drug order: Salicylic acid"),
+						mapping(2, "Drug order: Methotrexate"), mapping(3, "Condition: Asthma")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(0, judge.statementsPerCall.size(),
+				"the array-only citation reaches the judge only through the compound claim unit, so it "
+						+ "is excluded with the rest of them");
+		assertNull(result.get(2).getGrounded(),
+				"[3], cited only in the array: demoted, not published unsupported");
+	}
+
+	@Test
 	public void coCitationJoinedByAConjunctionIsAlsoStillGraded() {
 		// The comma register below is the one LlmAnswerExtractor.normalizeSlashCitations manufactures,
 		// so it is the one least likely to be edited away — and pinning only it leaves the

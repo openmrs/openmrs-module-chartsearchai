@@ -4441,8 +4441,11 @@ public class DrugSafetyValidator {
 		private String label;
 
 		/**
-		 * The ACTIVE ORDER this partner's {@link #label} was taken from, where one was consulted at all —
-		 * null on the entry rung and on issue #118's bare-code rung. See {@link #nameByOrder}.
+		 * The ACTIVE ORDER this partner's {@link #label} was taken from — null wherever the label is not an
+		 * order's name, which since issue #298 means the entry rung, issue #118's bare-code rung AND the
+		 * order rung where the order's own display is not a name. "Where an order was consulted" is what
+		 * this used to say and is not the rule: an order can be consulted and still supply no name. See
+		 * {@link #recordNameSource}, which is what makes that true, and {@link #nameByOrder}.
 		 *
 		 * <p>The order itself and not a boolean saying that one supplied the name, because
 		 * {@link DrugSafetyValidator#foldedPartnerLabel} asks a question OF that order — whether the rule
@@ -4613,6 +4616,11 @@ public class DrugSafetyValidator {
 		 * naming an active order {@code N02BA01} is what issue #155 exists to remove. Both write sites
 		 * therefore gate on {@link DrugSafetyValidator#displayNamesADrug}, once, rather than one of them
 		 * inferring it from the label being non-blank.
+		 *
+		 * <p><b>Setting this also decides {@link #namingOrder}</b>, and the two are written by
+		 * {@link #recordNameSource} alone (issue #298): a false answer here means no order is recorded as
+		 * having supplied the name. So this is not a flag that can be adjusted on its own — moving it
+		 * moves what {@code foldedPartnerLabel}'s first branch sees.
 		 */
 		private boolean namesADrug;
 

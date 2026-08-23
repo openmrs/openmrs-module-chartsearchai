@@ -1925,6 +1925,37 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
+	public void coCitationOfThreeRecordsIsStillGraded() {
+		// Both other co-citation cases use exactly TWO adjacent markers, which leaves
+		// claimTextSeparatesCitations' loop advance unguarded: delete `previousEnd = marker.end()` and
+		// the whole reactor stays green while every 3-or-more-marker co-citation reclassifies as a
+		// compound claim unit, because the slice for the second pair then runs from the FIRST marker's
+		// end and picks up the intervening markers as claim text.
+		//
+		// That is not a hypothetical shape. It is the one the class javadoc, README and ADR all name
+		// (`Infections [5], [12], [15]`), and the module manufactures it itself —
+		// LlmAnswerExtractor.normalizeSlashCitations joins a corroborated group of ANY length with
+		// ", ". Losing it would withhold Tier-2 for the module's own normalizer output silently.
+		String answer = "The patient has recurrent infections [1], [2], [3].";
+		embeddings.register(answer, AXIS_A);
+		embeddings.register("record one", AXIS_A);
+		embeddings.register("record two", AXIS_A);
+		embeddings.register("record three", AXIS_A);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer, threeRefs(),
+				Arrays.asList(mapping(1, "record one"), mapping(2, "record two"),
+						mapping(3, "record three")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(3, llm.calls, "three records co-cited for one claim are each asked about it");
+		assertEquals(1, llm.batches, "one claim unit, so they co-batch");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded(), "the third marker is the point");
+	}
+
+	@Test
 	public void coCitationJoinedByAConjunctionIsAlsoStillGraded() {
 		// The comma register below is the one LlmAnswerExtractor.normalizeSlashCitations manufactures,
 		// so it is the one least likely to be edited away — and pinning only it leaves the

@@ -44,10 +44,10 @@ public class RecordedAllergenChipNameTest {
 	 *  three ATC codes — so `ado-trastuzumab emtansine` is one of all three's own names. */
 	private static final String SHARED_CIEL_LIST = "chartsearchai-test/ddi-alias-names-another-substance.json";
 
-	/** Two families of shipped rows, each sharing one rxnorm_name that is no row's display name — so a
-	 *  recorded allergy spelled that way is claimed EQUALLY by several substances and nothing but
-	 *  dataset order separates them. They differ in whether {@link DrugReference#displayLabel()} appends
-	 *  that shared name as a synonym, which is what decides whether the chip may print the label. */
+	/** Three shipped shapes of a recorded allergy reaching several substances — two families sharing
+	 *  one rxnorm_name that is no row's display name, differing in whether
+	 *  {@link DrugReference#displayLabel()} appends it as a synonym, and one combination whose third
+	 *  substance is reached only through a CONSTITUENT. The fixture's own {@code note} describes each. */
 	private static final String TIED_ON_ONE_NAME = "chartsearchai-test/ddi-tied-alias-allergen.json";
 
 	private static final String KADCYLA = "ado-trastuzumab emtansine";
@@ -156,6 +156,60 @@ public class RecordedAllergenChipNameTest {
 				details.toString(),
 				"a label that carries the recorded name is what the chart says, tie or no tie, was: "
 						+ details);
+	}
+
+	@Test
+	public void aSubstanceReachedONLYThroughAConstituentIsStillNamed() throws IOException {
+		// The third clause, isolated. `Ubidecarenone` appears nowhere in the recorded string and the row
+		// publishes no diverging synonym, so neither of the two clauses above can name it — it is in play
+		// only because findImpliedSubstances' constituent leg resolved `coenzyme q10` to it. The chip may
+		// print that name for exactly the reason the leg admits the substance, so the support test asks
+		// the leg's own question through the leg's own resolver rather than approximating it.
+		//
+		// Without this case the clause is unpinned: disabling it entirely left all 1384 tests green,
+		// because every other combination in the suite names its constituent's row in the recorded
+		// string and so is carried by the clause above.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TIED_ON_ONE_NAME);
+		String combination = "coenzyme q10 / levocarnitine / vitamin e";
+		assertEquals("[Levocarnitine, Vitamin E, Ubidecarenone]",
+				DrugReferenceTestSupport.names(service.findImpliedSubstances(combination)).toString(),
+				"precondition: the combination must reach a substance it does not spell out");
+
+		List<String> details = DrugReferenceTestSupport.contraindicationDetails(
+				DrugReferenceTestSupport.validator(service).validate("",
+						"Is it safe to give her ubidecarenone?",
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set(combination), null)));
+
+		assertEquals("[The patient has a recorded allergy to Ubidecarenone.]", details.toString(),
+				"the constituent's own substance keeps its name, was: " + details);
+	}
+
+	@Test
+	public void aRowThatMerelyALIASESAConstituentIsNotWhatThatConstituentNames() throws IOException {
+		// The derivation clause asks the question its LEG asks — which substance does this constituent
+		// RESOLVE to — and not the looser "does this row claim the constituent among its own names". The
+		// two differ exactly here: `hydrocortisone` resolves to Hydrocortisone, while Hydrocortisone
+		// butyrate merely publishes it (the ester carries the moiety's name, which is legitimate data and
+		// the shape issues #198/#209 narrow at resolution time). Reading the row's claim instead would
+		// announce an ester the chart never mentions — the same falsehood this class exists to remove,
+		// re-entering through the clause meant to prevent it.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(SHARED_CIEL_LIST);
+		String combination = "hydrocortisone / neomycin";
+		assertEquals("[Hydrocortisone, Hydrocortisone butyrate]",
+				DrugReferenceTestSupport.names(service.findImpliedSubstances(combination)).toString(),
+				"precondition: the combination must reach the ester as well as the moiety");
+
+		List<String> details = DrugReferenceTestSupport.contraindicationDetails(
+				DrugReferenceTestSupport.validator(service).validate("",
+						"Is it safe to give her hydrocortisone butyrate?",
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set(combination), null)));
+
+		assertEquals("[The patient has a recorded allergy to Hydrocortisone., "
+				+ "The patient has a recorded allergy to hydrocortisone / neomycin.]", details.toString(),
+				"the moiety the constituent resolves to keeps its name; the ester, which the constituent "
+						+ "does not name, is quoted in the chart's words, was: " + details);
 	}
 
 	@Test

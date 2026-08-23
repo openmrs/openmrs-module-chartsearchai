@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "note": "Verbatim DDInter 2.0 slice for issue #268 — real shipped rows, unedited. TWO FAMILIES, each a recorded name claimed EQUALLY by several substances, and they differ in the one way that decides whether a chip may print a row's label. (1) The three gallium rows all carry the rxnorm_name `gallium`, and each display NAME already contains it, so DrugReference.displayLabel appends no synonym and `gallium` is nowhere in what the chip would print: the arm used to publish 'The patient has a recorded allergy to Gallium citrate ga-67.' — a radiodiagnostic the chart never mentions — and DrugReferenceService.lookupByToken picked that row by earliest dataset entry, which carries no clinical meaning. (2) The two penicillin G rows also share one rxnorm_name, but their display names diverge from it, so the label DOES append it and reads 'Benzylpenicillin (penicillin g)' — which quotes the chart, and must go on being printed. Kept as a slice rather than hand-authored so both shapes are the shipped data's and not a fixture's invention."
+  "note": "Verbatim DDInter 2.0 slice for issue #268 — real shipped rows, unedited. THREE shapes of a recorded allergy reaching several substances, which together decide whether a chip may print a row's label or must quote the chart. (1) The three gallium rows all carry the rxnorm_name `gallium`, and each display NAME already contains it, so DrugReference.displayLabel appends no synonym and `gallium` is nowhere in what the chip would print: the arm used to publish 'The patient has a recorded allergy to Gallium citrate ga-67.' — a radiodiagnostic the chart never mentions — and DrugReferenceService.lookupByToken picked that row by earliest dataset entry, which carries no clinical meaning. (2) The two penicillin G rows also share one rxnorm_name, but their display names diverge from it, so the label DOES append it and reads 'Benzylpenicillin (penicillin g)' — which quotes the chart, and must go on being printed. (3) `coenzyme q10 / levocarnitine / vitamin e` is a combination whose third substance, Ubidecarenone, is named nowhere in the recorded string: it is reached only because the CONSTITUENT `coenzyme q10` resolves to it, which is findImpliedSubstances' own third leg, and the chip may print that name for the same reason the leg admits the substance. Kept as a slice rather than hand-authored so all three shapes are the shipped data's and not a fixture's invention."
  },
  "mechanisms": {},
  "drugs": [
@@ -152,6 +152,192 @@
      "code": "81729",
      "uuid": "81729AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
      "name": "Penicillin G, procaine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1052",
+   "name": "Levocarnitine",
+   "rxcui": "42955",
+   "rxnorm_name": "levocarnitine",
+   "drugbank_id": "DB00583",
+   "atc": [
+    "A16AA01"
+   ],
+   "ciel": [
+    {
+     "code": "104384",
+     "uuid": "104384AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coenzyme Q10 / levocarnitine / vitamin E"
+    },
+    {
+     "code": "78782",
+     "uuid": "78782AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Levocarnitine"
+    },
+    {
+     "code": "78783",
+     "uuid": "78783AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Levocarnitine fumarate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1943",
+   "name": "Vitamin E",
+   "rxcui": "11256",
+   "rxnorm_name": "vitamin E",
+   "drugbank_id": "DB00163",
+   "atc": [
+    "A11HA03"
+   ],
+   "ciel": [
+    {
+     "code": "103286",
+     "uuid": "103286AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / pamabrom / vitamin E"
+    },
+    {
+     "code": "103654",
+     "uuid": "103654AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ascorbic acid / magnesium sulfate / vitamin E / zinc sulfate"
+    },
+    {
+     "code": "103672",
+     "uuid": "103672AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ascorbic acid / vitamin E"
+    },
+    {
+     "code": "103895",
+     "uuid": "103895AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Beta carotene / vitamin E"
+    },
+    {
+     "code": "103922",
+     "uuid": "103922AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Black currant oil / vitamin E"
+    },
+    {
+     "code": "104062",
+     "uuid": "104062AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium citrate / magnesium oxide / vitamin E"
+    },
+    {
+     "code": "104384",
+     "uuid": "104384AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coenzyme Q10 / levocarnitine / vitamin E"
+    },
+    {
+     "code": "104385",
+     "uuid": "104385AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coenzyme Q10 / thioctate / vitamin E"
+    },
+    {
+     "code": "104386",
+     "uuid": "104386AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coenzyme Q10 / vitamin E"
+    },
+    {
+     "code": "104535",
+     "uuid": "104535AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Docosahexaenoate / eicosapentaenoate / vitamin E"
+    },
+    {
+     "code": "104699",
+     "uuid": "104699AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gamma-linolenate / vitamin E"
+    },
+    {
+     "code": "104973",
+     "uuid": "104973AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lecithin / vitamin A / vitamin E"
+    },
+    {
+     "code": "104986",
+     "uuid": "104986AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Linoleate / omega-3 acid ethyl esters (usp) / vitamin E"
+    },
+    {
+     "code": "104999",
+     "uuid": "104999AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lutein / vitamin e / zeaxanthin"
+    },
+    {
+     "code": "105235",
+     "uuid": "105235AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Quinine / vitamin E"
+    },
+    {
+     "code": "105308",
+     "uuid": "105308AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Vitamin A / vitamin E"
+    },
+    {
+     "code": "70932",
+     "uuid": "70932AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Alpha-tocopherol acetate"
+    },
+    {
+     "code": "75089",
+     "uuid": "75089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dl-alpha tocopheryl acetate"
+    },
+    {
+     "code": "85192",
+     "uuid": "85192AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tocopherol,dl-alpha"
+    },
+    {
+     "code": "86347",
+     "uuid": "86347AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Vitamin E"
+    },
+    {
+     "code": "86348",
+     "uuid": "86348AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Vitamin E D-alpha"
+    },
+    {
+     "code": "86349",
+     "uuid": "86349AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Vitamin E DL-alpha"
+    },
+    {
+     "code": "86351",
+     "uuid": "86351AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Vitamin E succinate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2168",
+   "name": "Ubidecarenone",
+   "rxcui": "21406",
+   "rxnorm_name": "ubidecarenone",
+   "drugbank_id": "DB09270",
+   "atc": [
+    "C01EB09"
+   ],
+   "ciel": [
+    {
+     "code": "104384",
+     "uuid": "104384AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coenzyme Q10 / levocarnitine / vitamin E"
+    },
+    {
+     "code": "104385",
+     "uuid": "104385AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coenzyme Q10 / thioctate / vitamin E"
+    },
+    {
+     "code": "104386",
+     "uuid": "104386AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coenzyme Q10 / vitamin E"
+    },
+    {
+     "code": "73687",
+     "uuid": "73687AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Coenzyme Q10"
     }
    ]
   }

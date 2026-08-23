@@ -681,7 +681,7 @@ public class DrugReferenceService {
 	}
 
 	/**
-	 * Of the substances {@link #findImpliedSubstances} reads out of a recorded drug NAME, the ones that
+	 * Of the substances {@link #findImpliedSubstances} reads out of a recorded drug NAME, the ones the
 	 * name itself NAMES — the question a caller about to QUOTE the chart asks, and deliberately a
 	 * narrower one than which substances the name implies (issue #268).
 	 *
@@ -727,10 +727,6 @@ public class DrugReferenceService {
 	 * specific one, which is the safe direction for something that quotes a record; the defect it
 	 * replaces is a FALSE one.
 	 *
-	 * @param drugName the recorded name, as the chart holds it
-	 * @param implied  that name's substances, as {@link #findImpliedSubstances} resolved them — passed
-	 *                 in rather than re-resolved, so this cannot become a second resolution rule and
-	 *                 costs no further sweep of the dataset
 	 * <p><b>Every clause decides rows no other one does.</b> Measured 2026-08-24 through the real
 	 * {@link DdiDrugReferenceSource#parse} of the shipped 19 MB KB, this method and
 	 * {@link DrugReference#matchesOrderName}, over each of the 5169 published names as the recorded
@@ -745,6 +741,10 @@ public class DrugReferenceService {
 	 * A caller building a candidate set from it would silently drop the substances a recorded name
 	 * implies without naming — which is every comparison this module makes about a shared class.
 	 *
+	 * @param drugName the recorded name, as the chart holds it
+	 * @param implied  that name's substances, as {@link #findImpliedSubstances} resolved them — passed
+	 *                 in rather than re-resolved, so this cannot become a second resolution rule and
+	 *                 costs no further sweep of the dataset
 	 * @return the sublist of {@code implied} the name names, in the same order; the rows are the very
 	 *         objects handed in, so a caller may test membership by identity
 	 */

@@ -44,9 +44,10 @@ public class RecordedAllergenChipNameTest {
 	 *  three ATC codes — so `ado-trastuzumab emtansine` is one of all three's own names. */
 	private static final String SHARED_CIEL_LIST = "chartsearchai-test/ddi-alias-names-another-substance.json";
 
-	/** Three rows whose rxnorm_name is `gallium`, which is none of their display names — so a recorded
-	 *  `gallium` allergy is claimed EQUALLY by three substances and nothing but dataset order separates
-	 *  them. */
+	/** Two families of shipped rows, each sharing one rxnorm_name that is no row's display name — so a
+	 *  recorded allergy spelled that way is claimed EQUALLY by several substances and nothing but
+	 *  dataset order separates them. They differ in whether {@link DrugReference#displayLabel()} appends
+	 *  that shared name as a synonym, which is what decides whether the chip may print the label. */
 	private static final String TIED_ON_ONE_NAME = "chartsearchai-test/ddi-tied-alias-allergen.json";
 
 	private static final String KADCYLA = "ado-trastuzumab emtansine";
@@ -122,6 +123,39 @@ public class RecordedAllergenChipNameTest {
 				+ "The patient has a recorded allergy to gallium.]", details.toString(),
 				"every tied row is quoted in the chart's own words — including the one dataset order put "
 						+ "first, was: " + details);
+	}
+
+	@Test
+	public void aLabelThatSpellsOutTheRecordedNameKeepsIt() throws IOException {
+		// The other side of the tie, and the case that decides the question is asked of what the chip
+		// PRINTS rather than of the display name alone. `Benzylpenicillin` and `Procaine benzylpenicillin`
+		// share the rxnorm_name `penicillin G` exactly as the gallium rows share `gallium`, so both
+		// families reach the arm the same way — but these two display names diverge from it, so
+		// displayLabel appends it and the label reads `Benzylpenicillin (penicillin g)`. That label quotes
+		// the chart, so it must survive; gating on getName() alone would have replaced it with the raw
+		// token and lost the substance for no gain. Measured through the real parse of the shipped KB, 20
+		// rows are named by that appended synonym and by nothing else.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TIED_ON_ONE_NAME);
+		assertEquals("[Benzylpenicillin, Procaine benzylpenicillin]",
+				DrugReferenceTestSupport.names(service.findImpliedSubstances("penicillin g")).toString(),
+				"precondition: one recorded name, two substances");
+		assertEquals("Benzylpenicillin (penicillin g)",
+				service.findImpliedSubstances("penicillin g").get(0).displayLabel(),
+				"precondition: and the label — not the display name — is what spells the recorded name "
+						+ "out, which is the whole difference from the gallium family above");
+
+		List<String> details = DrugReferenceTestSupport.contraindicationDetails(
+				DrugReferenceTestSupport.validator(service).validate("",
+						"Is it safe to give her benzylpenicillin?",
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("penicillin g"), null)));
+
+		// One chip: only Benzylpenicillin is in play, the other row's names being absent from the
+		// question. Which is the point — the tie is in the RECORD's resolution, not in what was asked.
+		assertEquals("[The patient has a recorded allergy to Benzylpenicillin (penicillin g).]",
+				details.toString(),
+				"a label that carries the recorded name is what the chart says, tie or no tie, was: "
+						+ details);
 	}
 
 	@Test

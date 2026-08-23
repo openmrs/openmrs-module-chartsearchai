@@ -4002,10 +4002,11 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return the substances each of the patient's recorded allergies names, one entry per distinct
-	 *         resolution and in the order the context lists the tokens — the input to
-	 *         {@link #addAllergyContraindications}, resolved once per {@code validate} because it does
-	 *         not depend on the subject being checked.
+	 * @return one {@link RecordedAllergen} per distinct resolution, in the order the context lists the
+	 *         tokens — the input to {@link #addAllergyContraindications}, resolved once per
+	 *         {@code validate} because it does not depend on the subject being checked. Each carries
+	 *         the chart's own string and the substances it implies, plus which of those it NAMES
+	 *         (issue #268): the arm reasons over all of them and may quote only the named ones.
 	 *
 	 *         <p>De-duplicated on the whole resolved LIST rather than on one row of it — this is the
 	 *         {@code seenAllergens} guard that used to live inside the arm, widened because one row is
@@ -4084,12 +4085,20 @@ public class DrugSafetyValidator {
 
 		/**
 		 * @return what a chip quoting this record may call {@code row} — the row's own clinician-facing
-		 *         label where this recorded name names it, and otherwise the chart's own words. Membership
-		 *         is by identity, which is what {@link DrugReferenceService#findNamedSubstances} returns a
-		 *         sublist of the very rows it was handed for.
+		 *         label where this recorded name names it, and otherwise the chart's own words.
+		 *         By reference and not by {@code equals}, which is what
+		 *         {@link DrugReferenceService#findNamedSubstances} returning a sublist of the very rows
+		 *         it was handed makes available: {@link DrugReference} defines no {@code equals}, so a
+		 *         containment test would mean the same thing today and something else the day one is
+		 *         added — and this decides whether a sentence about a patient is true.
 		 */
 		private String quotedAs(DrugReference row) {
-			return named.contains(row) ? row.displayLabel() : token;
+			for (DrugReference candidate : named) {
+				if (candidate == row) {
+					return row.displayLabel();
+				}
+			}
+			return token;
 		}
 	}
 

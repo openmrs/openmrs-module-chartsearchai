@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "note": "Verbatim DDInter 2.0 slice for issue #268 — real shipped rows, unedited. All three rows carry the rxnorm_name `gallium`, and `gallium` is none of their display names, so a recorded allergy spelled that way is claimed EQUALLY by three different substances and DrugReferenceService.lookupByToken breaks the tie by earliest dataset entry. That is the shape issue #268 is about arriving without any borrowed CIEL name: the arm used to publish 'The patient has a recorded allergy to Gallium citrate ga-67.' — a radiodiagnostic the chart never records — beside the same sentence for the other two. Kept as a slice rather than hand-authored so the tie is the shipped data's and not a fixture's invention."
+  "note": "Verbatim DDInter 2.0 slice for issue #268 — real shipped rows, unedited. TWO FAMILIES, each a recorded name claimed EQUALLY by several substances, and they differ in the one way that decides whether a chip may print a row's label. (1) The three gallium rows all carry the rxnorm_name `gallium`, and each display NAME already contains it, so DrugReference.displayLabel appends no synonym and `gallium` is nowhere in what the chip would print: the arm used to publish 'The patient has a recorded allergy to Gallium citrate ga-67.' — a radiodiagnostic the chart never mentions — and DrugReferenceService.lookupByToken picked that row by earliest dataset entry, which carries no clinical meaning. (2) The two penicillin G rows also share one rxnorm_name, but their display names diverge from it, so the label DOES append it and reads 'Benzylpenicillin (penicillin g)' — which quotes the chart, and must go on being printed. Kept as a slice rather than hand-authored so both shapes are the shipped data's and not a fixture's invention."
  },
  "mechanisms": {},
  "drugs": [
@@ -76,6 +76,82 @@
      "code": "76770",
      "uuid": "76770AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
      "name": "Gallium nitrate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter189",
+   "name": "Benzylpenicillin",
+   "rxcui": "7980",
+   "rxnorm_name": "penicillin G",
+   "drugbank_id": "DB01053",
+   "atc": [
+    "J01CE01",
+    "S01AA14"
+   ],
+   "ciel": [
+    {
+     "code": "81725",
+     "uuid": "81725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G"
+    },
+    {
+     "code": "81726",
+     "uuid": "81726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G potassium"
+    },
+    {
+     "code": "81727",
+     "uuid": "81727AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G sodium"
+    },
+    {
+     "code": "81728",
+     "uuid": "81728AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G, benzathine"
+    },
+    {
+     "code": "81729",
+     "uuid": "81729AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G, procaine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2078",
+   "name": "Procaine benzylpenicillin",
+   "rxcui": "7980",
+   "rxnorm_name": "penicillin G",
+   "drugbank_id": "DB09320",
+   "atc": [
+    "J01CE01",
+    "S01AA14"
+   ],
+   "ciel": [
+    {
+     "code": "81725",
+     "uuid": "81725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G"
+    },
+    {
+     "code": "81726",
+     "uuid": "81726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G potassium"
+    },
+    {
+     "code": "81727",
+     "uuid": "81727AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G sodium"
+    },
+    {
+     "code": "81728",
+     "uuid": "81728AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G, benzathine"
+    },
+    {
+     "code": "81729",
+     "uuid": "81729AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Penicillin G, procaine"
     }
    ]
   }

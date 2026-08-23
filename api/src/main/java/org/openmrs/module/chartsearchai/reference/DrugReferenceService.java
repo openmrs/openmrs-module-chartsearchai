@@ -729,10 +729,24 @@ public class DrugReferenceService {
 	 * @param implied  that name's substances, as {@link #findImpliedSubstances} resolved them — passed
 	 *                 in rather than re-resolved, so this cannot become a second resolution rule and
 	 *                 costs no further sweep of the dataset
+	 * <p><b>Every clause decides rows no other one does.</b> Measured 2026-08-24 through the real
+	 * {@link DdiDrugReferenceSource#parse} of the shipped 19 MB KB, this method and
+	 * {@link DrugReference#matchesOrderName}, over each of the 5169 published names as the recorded
+	 * string: rows named by the appended generic alone 20 (the penicillin G family,
+	 * {@code atropine sulfate} → {@code Hyoscyamine (atropine)}), by the display name alone 55, by the
+	 * unique claim alone 1, by a derived name alone 206. Re-derive rather than trusting the figures —
+	 * they are a property of the dataset, not of this code — but do not drop a clause on the
+	 * assumption that another covers it.
+	 *
+	 * <p>Package-private, like {@link #findByActiveOrders} and for the same reason: this answers a
+	 * NARROWER question than {@link #findImpliedSubstances} and must never be mistaken for a resolution.
+	 * A caller building a candidate set from it would silently drop the substances a recorded name
+	 * implies without naming — which is every comparison this module makes about a shared class.
+	 *
 	 * @return the sublist of {@code implied} the name names, in the same order; the rows are the very
 	 *         objects handed in, so a caller may test membership by identity
 	 */
-	public List<DrugReference> findNamedSubstances(String drugName, List<DrugReference> implied) {
+	List<DrugReference> findNamedSubstances(String drugName, List<DrugReference> implied) {
 		List<DrugReference> named = new ArrayList<DrugReference>(implied.size());
 		for (DrugReference row : implied) {
 			if (row.labelNameOccursIn(drugName) || uniqueStrongestClaimant(drugName, row, implied)

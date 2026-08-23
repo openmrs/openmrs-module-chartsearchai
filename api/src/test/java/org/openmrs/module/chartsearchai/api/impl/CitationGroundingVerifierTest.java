@@ -1685,28 +1685,49 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
-	public void compoundClaim_anOffTopicCitationIsStillFlagged() {
-		// The demotion must not become a rubber stamp. Only a cosine PASS is demoted; record 2 is
-		// orthogonal to the answer, so the surviving Tier-1 verdict still flags it. That FALSE is the
-		// specified sentence-scope behaviour for a compound sentence — see
-		// clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence — which demonstrates
-		// that pre-existing behaviour but does NOT guard this branch, since it runs Tier-1-only where
-		// the demotion is gated off. This case is the compound arm's guard: mutate the demotion to
-		// swallow FALSE as well as TRUE and this one reddens, alongside the reference-group arm's own
-		// off-topic cases.
+	public void compoundClaim_publishesNothingWhicheverWayTheJudgeWouldHaveAnswered() {
+		// The cell that decided this rule's shape, and the one the suite could not see while every
+		// compound case used ConjunctionAwareJudge — an idealised stub that always refuses a
+		// conjunction, so "a correct judge says no" was assumed rather than exercised. A LENIENT judge
+		// is the real risk: #106 measured 4/4 role-swapped recitations judged entailed.
+		//
+		// Under main, cosine-FAIL + judge-YES published TRUE, the judge rescuing a score diluted by the
+		// items this record is not cited for. An earlier draft of #302 skipped Tier-2 and kept the
+		// cosine FAIL, which turned that cell into a published FALSE — Unsupported on a correct, active
+		// citation, the very harm #302 exists to remove. So a compound claim unit publishes nothing in
+		// either direction, and this case pins it from the side no other reaches: records orthogonal to
+		// the answer, so Tier-1 would FAIL, and a judge that would have said yes.
+		StubLlmProvider lenient = new StubLlmProvider(Boolean.TRUE);
+		verifier.setLlmProvider(lenient);
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_B);
+		embeddings.register("Drug order: Methotrexate", AXIS_B);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(0, lenient.calls, "the judge is not asked about a compound claim unit");
+		assertNull(result.get(0).getGrounded(),
+				"a cosine FAIL on a conjunction is dilution, not evidence — it must not publish false");
+		assertNull(result.get(1).getGrounded());
+	}
+
+	@Test
+	public void compoundClaim_spendsNoEmbeddingOnAVerdictItWillNotPublish() {
+		// The cost half of the same decision. Publishing nothing means the cosine is never needed, so
+		// the lazy Tier-1 block skips these references entirely — which is what keeps the rule from
+		// adding embedding passes on the module's most common answer shape.
 		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
 		verifier.setLlmProvider(judge);
 		embeddings.register(COLON_LESS_LIST, AXIS_A);
 		embeddings.register("Drug order: Salicylic acid", AXIS_A);
-		embeddings.register("BP 150/95", AXIS_B);
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
 
-		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(),
-				Arrays.asList(mapping(1, "Drug order: Salicylic acid"), mapping(2, "BP 150/95")),
-				FLOOR, TIER2_ON, false);
+		verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(), FLOOR, TIER2_ON, false);
 
-		assertNull(result.get(0).getGrounded(), "the on-topic citation is demoted, not verified");
-		assertEquals(Boolean.FALSE, result.get(1).getGrounded(),
-				"an off-topic citation of a compound claim must still be flagged");
+		assertEquals(0, embeddings.embedCalls,
+				"no tier is asked, so no embedding is spent on a verdict Pass 2 would discard");
+		assertEquals(0, judge.statementsPerCall.size());
 	}
 
 	@Test
@@ -1773,7 +1794,7 @@ public class CitationGroundingVerifierTest {
 				FLOOR, TIER2_ON, false);
 
 		assertEquals(0, judge.statementsPerCall.size(), "Tier-2 is not asked for a compound claim");
-		assertNull(result.get(0).getGrounded(), "and Tier-1 cannot answer with no embedder");
+		assertNull(result.get(0).getGrounded(), "and no tier is left to answer");
 		assertNull(result.get(1).getGrounded());
 	}
 

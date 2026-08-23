@@ -521,13 +521,13 @@ public class CitationGroundingVerifier {
 				// A cosine FAIL is deliberately still published in both cases — for reference prose it
 				// says the citation is not about the record at all (verified deterministically by the
 				// DrugSafetyValidator instead), and for a compound claim it is the sentence-scope
-				// verdict this module already specifies. What guards the FAIL surviving is
-				// compoundClaim_anOffTopicCitationIsStillFlagged, and nothing else: mutate this branch
-				// to swallow FALSE as well and
-				// clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence stays GREEN,
-				// because it runs Tier-1-only where demoteOnly is false throughout. That test
-				// demonstrates the pre-existing sentence-scope behaviour; it does not defend this
-				// branch. What #302 removes is Tier-2's negative, which fired on every citation of a
+				// verdict this module already specifies. Mutate this branch to swallow FALSE as well
+				// and read the failures: the compound arm's guard is
+				// compoundClaim_anOffTopicCitationIsStillFlagged and the reference-group arm has its
+				// own off-topic cases. What does NOT redden is
+				// clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence, which runs
+				// Tier-1-only where demoteOnly is false throughout — it demonstrates the pre-existing
+				// sentence-scope behaviour and does not defend this branch. What #302 removes is Tier-2's negative, which fired on every citation of a
 				// compound claim regardless of the evidence.
 				verdict = null;
 			}

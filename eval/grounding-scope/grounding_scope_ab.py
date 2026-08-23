@@ -42,10 +42,18 @@ null-side classes below, counted and printed separately rather than folded in:
     and clause scope withheld it, which is a loss of signal rather than a wrong
     verdict, and it is the direction #302 itself deliberately takes.
 
-What the wire cannot tell you: a chart null may also mean "not checked" -- no
-record text, an embedding failure, Tier-2 cap overflow with no Tier-1 verdict.
-This harness does not separate those from a #302 demotion, so read a null-side
-count as an upper bound on the demoted kind, not as a measurement of it.
+The #302 demotion is gated on entailment, and the module ships
+chartsearchai.grounding.entailment.enabled=false. With it off, none of the three
+null-side classes can fire for that reason at all and the demoted tallies are
+measuring something else, so the harness reads both grounding properties at
+startup, prints them beside the baseline line, and says so in the output rather
+than leaving a reader to assume which regime produced the numbers.
+
+What the wire cannot tell you even with entailment on: a chart null may also mean
+"not checked" -- no record text, an embedding failure, Tier-2 cap overflow with no
+Tier-1 verdict. This harness does not separate those from a #302 demotion, so read
+a null-side count as an upper bound on the demoted kind, not as a measurement of
+it.
 
 Only CHART-group citations are measurable here: a reference-group citation
 publishes no verdict at all (issue #201), so its cells read `withheld` and a
@@ -68,6 +76,8 @@ AUTH = base64.b64encode(
     ("%s:%s" % (os.environ.get("OMRS_USER", "admin"),
                os.environ.get("OMRS_PASS", "Admin123"))).encode()).decode()
 GP = "chartsearchai.grounding.clauseScoped"
+GROUNDING_GP = "chartsearchai.grounding.enabled"
+ENTAILMENT_GP = "chartsearchai.grounding.entailment.enabled"
 
 # (patient, question). 165497e8 = Sarah Taylor: malnutrition recorded as BOTH an
 # active condition AND a provisional primary diagnosis (the compound-sentence
@@ -128,7 +138,17 @@ def search(patient, question):
 
 def run():
     orig_uuid, orig = get_gp(GP)
-    print("harness BASE=%s  %s baseline value=%r\n" % (BASE, GP, orig))
+    grounding = (get_gp(GROUNDING_GP)[1] or "").strip().lower()
+    entailment = (get_gp(ENTAILMENT_GP)[1] or "").strip().lower()
+    print("harness BASE=%s  %s baseline value=%r" % (BASE, GP, orig))
+    print("regime: %s=%s  %s=%s" % (GROUNDING_GP, grounding or "unset",
+                                    ENTAILMENT_GP, entailment or "unset"))
+    if grounding != "true":
+        print("!! grounding is OFF — every verdict below is null and no class here can fire.")
+    elif entailment != "true":
+        print("!! entailment is OFF — the #302 demotion is gated on it, so the demoted tallies")
+        print("   below are NOT measuring that demotion. Turn it on to exercise these classes.")
+    print("")
     regressions, wins = 0, 0
     demoted_wins, demoted_regressions = 0, 0
     try:

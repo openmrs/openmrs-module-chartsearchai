@@ -1683,8 +1683,9 @@ public class CitationGroundingVerifierTest {
 		// specified sentence-scope behaviour for a compound sentence — see
 		// clauseScoped_groundsFirstCitationAgainstItsClauseNotTheCompoundSentence — which demonstrates
 		// that pre-existing behaviour but does NOT guard this branch, since it runs Tier-1-only where
-		// the demotion is gated off. This case is the guard: mutate the demotion to swallow FALSE as
-		// well as TRUE and it is this one that reddens.
+		// the demotion is gated off. This case is the compound arm's guard: mutate the demotion to
+		// swallow FALSE as well as TRUE and this one reddens, alongside the reference-group arm's own
+		// off-topic cases.
 		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
 		verifier.setLlmProvider(judge);
 		embeddings.register(COLON_LESS_LIST, AXIS_A);

@@ -129,21 +129,26 @@ public class ChartSearchAiUtils {
 	 * is a named view of {@link #referenceGroup}, not a second classification, so there is no list of
 	 * type names here to fall out of step with that one.
 	 *
-	 * <p><strong>This is the grading rule, not the wire.</strong> Since issue #201 the REST layer
+	 * <p><strong>This is the grading rule, not the wire — and since issue #284 it also decides one
+	 * CHART citation's published verdict.</strong> A chart citation whose claim rests on a record
+	 * this predicate calls reference material has its entailment NEGATIVE withheld, so what is
+	 * classified here is no longer the only citation affected by the classification. The rest of
+	 * this paragraph is about the classified citation's own verdict. Since issue #201 the REST layer
 	 * publishes no verdict at all for reference material — {@code grounded} serializes as
 	 * {@code null} for a {@code reference}-group citation whatever this pass concluded, at every
 	 * emission site (see {@code ChartSearchAiRestController.groundedForWire}). The surviving
 	 * {@code false} below is therefore module-internal: still computed, still returned on
 	 * {@code RecordReference.getGrounded()}, and no longer published — because its meaning is
 	 * "off-topic citation" and reading it as anything else renders the module's own deterministic
-	 * finding as unsupported. Note that the Tier-2 exclusion and the {@code TRUE}-to-{@code null}
-	 * demotion this predicate drives are driven by IT rather than by that verdict — but it is not
-	 * the only thing that holds a verdict back: {@code CitationGroundingVerifier} treats a COMPOUND
-	 * claim unit (issue #302) — a fact about the shape of the claim rather than the provenance of the
-	 * record — more strictly still. That one publishes nothing in either direction and skips Tier-1 as
-	 * well as Tier-2, under entailment only, where this predicate demotes in either mode and — except
-	 * where the two overlap, and the stronger rule wins — keeps its cosine FAIL. So the two are not the
-	 * same treatment, and a citation can be held back without this predicate being true of it.
+	 * finding as unsupported. Note that the Tier-2 exclusion, the {@code TRUE}-to-{@code null}
+	 * demotion and the composite-claim withholding above are driven by THIS predicate rather than by
+	 * that verdict — but it is not the only thing that holds a verdict back:
+	 * {@code CitationGroundingVerifier} treats a COMPOUND claim unit (issue #302) — a fact about the
+	 * shape of the claim rather than the provenance of the record — more strictly still. That one
+	 * publishes nothing in either direction and skips Tier-1 as well as Tier-2, under entailment only,
+	 * where this predicate demotes in either mode and — except where the two overlap, and the stronger
+	 * rule wins — keeps its cosine FAIL. So the two are not the same treatment, and a citation can be
+	 * held back without this predicate being true of it.
 	 *
 	 * <p><strong>Why module-supplied material cannot be verified.</strong> An answer sentence citing
 	 * module-rendered reference prose is typically a recitation of it, and a recitation embeds

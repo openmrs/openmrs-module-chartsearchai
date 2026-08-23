@@ -59,6 +59,15 @@ Tier-1 verdict. This harness does not separate those from a #302 withholding, so
 a null-side count as an upper bound on the demoted kind, not as a measurement of
 it.
 
+Issue #284 adds one more cause of a sentence-side null, on the same entailment
+gate: a chart citation whose claim also rests on a module-supplied safety
+finding has the judge's NEGATIVE withheld. So a null-side count is an upper
+bound over that too, and this harness cannot attribute a cell between the two.
+Its six cases are condition-shaped rather than drug-safety questions, so a
+finding is unlikely to be injected at all -- but that has not been re-measured,
+and "unlikely" is not "cannot". Do not quote a tally here over a change to the
+#284 rule.
+
 Only CHART-group citations are measurable here: a reference-group citation
 publishes no verdict at all (issue #201), so its cells read `withheld` and a
 scoping flip on one cannot be seen from the wire. The gate below is therefore a

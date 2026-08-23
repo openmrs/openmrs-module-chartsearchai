@@ -58,6 +58,10 @@ public class FoldedChipOnePartnerNameTest {
 
 	private static final String QUESTION = "Can I give ibuprofen?";
 
+	/** An ATC code as the ladder renders one when it has no name — {@code A01AD05}, {@code N02BA01}. */
+	private static final java.util.regex.Pattern ATC_CODE_SHAPED =
+			java.util.regex.Pattern.compile("[A-Z]\\d{2}[A-Z]{2}\\d{2}");
+
 	/** A fold whose two arms resolve one shared ATC code to two DIFFERENT substances — see the
 	 *  fixture's own description. */
 	private static final String SHARED_CODE_FIXTURE =
@@ -690,7 +694,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * {@code namingOrder} is null and the branch is not entered — and the rule's own token is handed to both sentences, exactly as
 	 * for the nameless order in {@link #theTicketsLiveCaseNamesTheOrderOnce}.
 	 *
-	 * <p><b>Why it is worth a case of its own.</b> The three arrangements that redden when
+	 * <p><b>Why it is worth a case of its own.</b> The other arrangements that redden when
 	 * {@code recordNameSource} is mutated to admit the order unconditionally all fail the OTHER way: such
 	 * an order has no names, so {@code namesNamingOrder} answers false, nothing reconciles and the chip
 	 * names one prescription twice — issue #292's defect returning. None of them reaches the failure
@@ -762,10 +766,15 @@ public class FoldedChipOnePartnerNameTest {
 	 *
 	 * <p>The sixth is the blank-display order of
 	 * {@link #aBlankDisplayWithNamesNeverHandsItsCodeToBothSentences} (issue #298), whose label is a bare
-	 * ATC code and whose single name therefore comes from the rule's token. It is swept as well as
-	 * asserted byte-exact there, because it is the one arrangement in this file where the ORDER-named
-	 * branch could answer yes for a label that is not a name — so if the invariant it rests on regresses,
-	 * this sweep must see it rather than leave one case to notice alone.
+	 * ATC code and whose single name therefore comes from the rule's token.
+	 *
+	 * <p><b>Adding it required a second assertion to be worth anything</b>, and that is worth recording
+	 * because the first version of this paragraph claimed otherwise. The one-name property alone does NOT
+	 * see the failure that arrangement exists for: substituting the code for the name leaves exactly ONE
+	 * name in both sentences, so the count below still passes. Measured, by a mutation that breaks only
+	 * this arrangement — the byte-exact case reddened and this sweep did not. So the sweep also asserts
+	 * that the name it counted is not ATC-CODE-SHAPED, which is what makes a code-for-name substitution
+	 * visible here rather than in one case alone.
 	 *
 	 * <p>One RECONCILING arrangement is excluded too, and for the opposite reason:
 	 * {@link #aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug} names its
@@ -803,8 +812,14 @@ public class FoldedChipOnePartnerNameTest {
 					continue;
 				}
 				foldedSeen++;
-				assertEquals(1, orderNamesIn(detail).size(),
+				Set<String> named = orderNamesIn(detail);
+				assertEquals(1, named.size(),
 					"a folded detail must name its one active order once, was: " + detail);
+				String only = named.iterator().next();
+				assertFalse(only.startsWith("[ATC") || ATC_CODE_SHAPED.matcher(only).matches(),
+					"and that one name must be a NAME: a bare ATC code standing in for it is issue #155's"
+							+ " defect, and in a folded detail it is in both sentences at once, was: "
+							+ detail);
 			}
 		}
 		assertEquals(6, foldedSeen,

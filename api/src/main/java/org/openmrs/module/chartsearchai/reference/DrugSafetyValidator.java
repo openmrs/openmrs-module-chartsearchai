@@ -4654,8 +4654,8 @@ public class DrugSafetyValidator {
 		 * therefore be set without the other, which is what lets {@code foldedPartnerLabel} ask the
 		 * order question first.
 		 *
-		 * <p>Two shapes were rejected to get here — a gate on the constructor's ARGUMENT, and re-asking
-		 * {@link DrugSafetyValidator#displayNamesADrug} here instead of taking the flag.
+		 * <p>Shapes were rejected to get here — among them a gate on the constructor's ARGUMENT, and
+		 * re-asking {@link DrugSafetyValidator#displayNamesADrug} here instead of taking the flag.
 		 * <b>ADR Decision 40 is where that reasoning lives</b>, and it is deliberately not restated here:
 		 * three copies of a rejected-alternative argument is how this repo has repeatedly come to
 		 * contradict itself. What a future author needs from this method is the rule — write both fields
@@ -4889,13 +4889,10 @@ public class DrugSafetyValidator {
 					: (order != null ? order : (Object) orderCode);
 			OrderPartner partner = byIdentity.get(identity);
 			if (partner == null) {
-				// namesADrug is a property of the LABEL just chosen, not of the order: an entry name
-				// always is one (the entry-rung constructor states that once), and an order's display is
-				// one only where displayNamesADrug says so — the same guard nameByOrder asks of itself.
-				// Everything else on this rung is a code standing in for a name. The order argument
-				// beside it is NOT separately gated here: recordNameSource derives it from this flag, so
-				// this site states the condition once and cannot hand out a name source for a label that
-				// is a bare code (issue #298).
+				// This site picks the RUNG and nothing else. Since issue #298 the label, whether it is a
+				// name, and the order that supplied it are all derived by the constructor the rung
+				// selects — see OrderPartner's two constructors and recordNameSource. This comment used
+				// to explain that derivation from out here, which is the split #298 removed.
 				partner = entry != null ? new OrderPartner(entry)
 						: new OrderPartner(order, orderCode);
 				byIdentity.put(identity, partner);

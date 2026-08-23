@@ -711,11 +711,13 @@ public class DrugReferenceService {
 	 *       ({@link DrugReference#labelNameOccursIn}) — what a separator-less combination asserts
 	 *       ({@code Amoxicillin} in {@code amoxicillin and clavulanic acid}, {@code Trastuzumab
 	 *       emtansine} in {@code ado-trastuzumab emtansine}) and what a shared alias does not;</li>
-	 *   <li>a combination CONSTITUENT or the parent MOIETY of the recorded name names it, at those two
-	 *       legs' OWN ranks — so every row {@link #findImpliedSubstances} admits through them is named
-	 *       by construction. The moiety rank stays {@link DrugReference#NAME_IS_THE_DISPLAY_NAME}: that
-	 *       leg's javadoc records why it is stricter than the constituent gate, and relaxing it here
-	 *       would license printing the name of exactly the rows it refuses.</li>
+	 *   <li>a combination CONSTITUENT or the parent MOIETY of the recorded name names its SUBSTANCE, at
+	 *       those two legs' OWN ranks and through the same {@link #resolvedAtLeast} they resolve with —
+	 *       so every substance {@link #findImpliedSubstances} admits through them is named by
+	 *       construction, whichever row ends up representing it. The moiety rank stays
+	 *       {@link DrugReference#NAME_IS_THE_DISPLAY_NAME}: that leg's javadoc records why it is
+	 *       stricter than the constituent gate, and relaxing it here would license printing the name of
+	 *       exactly the rows it refuses.</li>
 	 * </ul>
 	 *
 	 * <p><b>What it gives up.</b> A recorded name spelling out several ingredients, whose ingredient
@@ -732,9 +734,9 @@ public class DrugReferenceService {
 	 * <p><b>Every clause decides rows no other one does.</b> Measured 2026-08-24 through the real
 	 * {@link DdiDrugReferenceSource#parse} of the shipped 19 MB KB, this method and
 	 * {@link DrugReference#matchesOrderName}, over each of the 5169 published names as the recorded
-	 * string: rows named by the appended generic alone 20 (the penicillin G family,
+	 * string: rows named by the appended generic alone 40 (the penicillin G family,
 	 * {@code atropine sulfate} → {@code Hyoscyamine (atropine)}), by the display name alone 55, by the
-	 * unique claim alone 1, by a derived name alone 206. Re-derive rather than trusting the figures —
+	 * unique claim alone 1, by a derived substance alone 153. Re-derive rather than trusting the figures —
 	 * they are a property of the dataset, not of this code — but do not drop a clause on the
 	 * assumption that another covers it.
 	 *
@@ -747,10 +749,11 @@ public class DrugReferenceService {
 	 *         objects handed in, so a caller may test membership by identity
 	 */
 	List<DrugReference> findNamedSubstances(String drugName, List<DrugReference> implied) {
+		Set<Object> derived = derivedSubstances(drugName);
 		List<DrugReference> named = new ArrayList<DrugReference>(implied.size());
 		for (DrugReference row : implied) {
 			if (row.labelNameOccursIn(drugName) || uniqueStrongestClaimant(drugName, row, implied)
-					|| derivedNameNames(drugName, row)) {
+					|| derived.contains(row.substanceGroupKey())) {
 				named.add(row);
 			}
 		}
@@ -773,18 +776,36 @@ public class DrugReferenceService {
 		return true;
 	}
 
-	/** @return whether a combination constituent or the parent moiety of {@code drugName} names
-	 *          {@code row}, at the ranks {@link #findImpliedSubstances} admits each of them by — the
-	 *          mirror of its third and fourth legs, kept beside them so the two cannot drift. */
-	private static boolean derivedNameNames(String drugName, DrugReference row) {
+	/**
+	 * @return the SUBSTANCES a combination constituent or the parent moiety of {@code drugName} names,
+	 *         at the ranks {@link #findImpliedSubstances}' third and fourth legs admit each of them by
+	 *         — the mirror of those legs, through the same {@link #resolvedAtLeast} they use, so the
+	 *         two cannot answer differently.
+	 *
+	 *         <p>Keyed on the SUBSTANCE and not on the row, which is what makes it a mirror rather
+	 *         than an approximation: {@link #addSubstance} keeps the FIRST row seen for a substance, so
+	 *         a substance a derivation leg reached can be represented in the implied list by a row some
+	 *         earlier leg contributed — a row that need not claim the constituent itself. Asking the
+	 *         row would then refuse to name a substance the recorded string demonstrably asserts.
+	 *         Resolved once per recorded name rather than once per row, since it does not depend on
+	 *         which row is being asked about.
+	 */
+	private Set<Object> derivedSubstances(String drugName) {
+		Set<Object> out = new HashSet<Object>();
 		for (String constituent : DrugReference.combinationConstituents(drugName)) {
-			if (row.nameMatchStrength(constituent) >= DrugReference.NAME_IS_ANOTHER_NAME) {
-				return true;
-			}
+			addSubstanceKey(out, resolvedAtLeast(constituent, DrugReference.NAME_IS_ANOTHER_NAME));
 		}
-		String moiety = DrugReference.parentMoietyName(drugName);
-		return moiety != null
-				&& row.nameMatchStrength(moiety) == DrugReference.NAME_IS_THE_DISPLAY_NAME;
+		addSubstanceKey(out, resolvedAtLeast(DrugReference.parentMoietyName(drugName),
+				DrugReference.NAME_IS_THE_DISPLAY_NAME));
+		return out;
+	}
+
+	/** Adds {@code resolved}'s substance key when it resolved at all — {@link #derivedSubstances}'s
+	 *  one-line accumulator, so its two legs read as the two questions they are. */
+	private static void addSubstanceKey(Set<Object> keys, DrugReference resolved) {
+		if (resolved != null) {
+			keys.add(resolved.substanceGroupKey());
+		}
 	}
 
 	/** Adds the substance {@code candidate} resolves to, when an entry claims it at {@code minimumClaim}
@@ -792,13 +813,26 @@ public class DrugReferenceService {
 	 *  as the recorded name it was derived from and this cannot become a second resolution rule. */
 	private void addResolvedSubstance(Map<Object, DrugReference> bySubstance, String candidate,
 			int minimumClaim) {
-		if (candidate == null) {
-			return;
-		}
-		DrugReference resolved = lookupByToken(candidate);
-		if (resolved != null && resolved.nameMatchStrength(candidate) >= minimumClaim) {
+		DrugReference resolved = resolvedAtLeast(candidate, minimumClaim);
+		if (resolved != null) {
 			addSubstance(bySubstance, resolved);
 		}
+	}
+
+	/**
+	 * @return the entry {@code candidate} resolves to when it claims it at {@code minimumClaim} or
+	 *         better, else null — the derivation legs' gate itself, named once because
+	 *         {@link #findNamedSubstances} has to ask the SAME question of the SAME string to decide
+	 *         whether a derived substance may be printed. Two spellings of it would let the two answers
+	 *         drift, and in the direction that matters: the leg admits a substance and the mirror then
+	 *         refuses to name it, so a chip quotes the chart where it had a perfectly good name.
+	 */
+	private DrugReference resolvedAtLeast(String candidate, int minimumClaim) {
+		if (candidate == null) {
+			return null;
+		}
+		DrugReference resolved = lookupByToken(candidate);
+		return resolved != null && resolved.nameMatchStrength(candidate) >= minimumClaim ? resolved : null;
 	}
 
 	/** Keyed by {@link DrugReference#substanceGroupKey()}, FIRST row seen kept — so a later leg can add

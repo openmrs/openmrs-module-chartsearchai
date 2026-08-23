@@ -133,8 +133,8 @@ public class RecordedAllergenChipNameTest {
 		// families reach the arm the same way — but these two display names diverge from it, so
 		// displayLabel appends it and the label reads `Benzylpenicillin (penicillin g)`. That label quotes
 		// the chart, so it must survive; gating on getName() alone would have replaced it with the raw
-		// token and lost the substance for no gain. Measured through the real parse of the shipped KB, 20
-		// rows are named by that appended synonym and by nothing else.
+		// token and lost the substance for no gain. Mutate the clause away and this case is the one that
+		// reddens.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TIED_ON_ONE_NAME);
 		assertEquals("[Benzylpenicillin, Procaine benzylpenicillin]",
 				DrugReferenceTestSupport.names(service.findImpliedSubstances("penicillin g")).toString(),

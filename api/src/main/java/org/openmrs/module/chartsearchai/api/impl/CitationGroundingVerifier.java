@@ -665,7 +665,6 @@ public class CitationGroundingVerifier {
 			double best = -Double.MAX_VALUE;
 			String bestSentence = null;
 			boolean bestIsolate = false;
-			boolean bestCompound = false;
 			boolean compared = false;
 			boolean anyInlineCite = false;
 			for (int s = 0; s < sentences.size(); s++) {
@@ -677,7 +676,6 @@ public class CitationGroundingVerifier {
 						best = sim;
 						bestSentence = sentences.get(s).text;
 						bestIsolate = sentences.get(s).isolate;
-						bestCompound = sentences.get(s).compoundClaim();
 					}
 				}
 			}
@@ -693,7 +691,6 @@ public class CitationGroundingVerifier {
 						best = sim;
 						bestSentence = sentences.get(s).text;
 						bestIsolate = sentences.get(s).isolate;
-						bestCompound = sentences.get(s).compoundClaim();
 					}
 				}
 			}
@@ -701,8 +698,12 @@ public class CitationGroundingVerifier {
 			if (!compared) {
 				return new Tier1Result(null, null, recordText, false); // no sentences (empty answer)
 			}
+			// compoundClaim is reported false, not computed: this method runs only when entailment is
+			// OFF (it is the other arm of the ternary that calls selectClaim), and the demotion the
+			// flag feeds is gated on entailment being ON, so nothing can read a value computed here.
+			// If that gate is ever removed, this is one of the two places that has to be re-wired.
 			return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText, bestIsolate,
-					bestCompound, -1, false);
+					false, -1, false);
 		}
 		catch (RuntimeException e) {
 			// Never break the search path on a verification failure; count it for the
@@ -1031,12 +1032,12 @@ public class CitationGroundingVerifier {
 		int itemStart = colon + 1;
 		marker.reset();
 		while (marker.find()) {
-			String item = LEADING_ITEM_SEPARATOR.matcher(
-					sentence.text.substring(itemStart, marker.end())).replaceFirst("").trim();
 			// `item` keeps its marker because the fragment's text is built from it below; `named` is
-			// the item's bare text, and it comes from the shared definition so this guard and
-			// claimTextSeparatesCitations cannot drift about what an item contributes of its own.
-			String named = ownItemText(sentence.text, itemStart, marker.end());
+			// the same slice with the marker gone. Both come from itemSlice, so the guard below, the
+			// fragment handed to the judge, and claimTextSeparatesCitations cannot disagree about
+			// where this item starts.
+			String item = itemSlice(sentence.text, itemStart, marker.end());
+			String named = stripCitationMarkers(item);
 			if (named.isEmpty() || named.split("\\s+").length > MAX_ENUMERATION_ITEM_WORDS
 					|| CLAUSE_MARKER.matcher(named).find()) {
 				return null;
@@ -1049,11 +1050,34 @@ public class CitationGroundingVerifier {
 	}
 
 	/**
+	 * One enumerated item, from {@code fromIndex} to the end of the marker that closes it, with the
+	 * leading separator that joins it to its siblings stripped ({@link #LEADING_ITEM_SEPARATOR}) —
+	 * where one item ends and the next begins, defined once.
+	 *
+	 * <p>Three things read this boundary and all three must agree: the FRAGMENT TEXT
+	 * {@link #splitEnumeration} publishes as the claim Tier-2 is asked about, that method's guard on
+	 * whether the item names anything of its own, and {@link #claimTextSeparatesCitations}. The first
+	 * two are the pair worth naming — a separator rule that moved for the guard but not for the
+	 * fragment would let an item pass as "names something" while the statement handed to the judge
+	 * still carried the joining words, silently, in the method that decides whether a TRUE citation is
+	 * published as unsupported.
+	 */
+	private static String itemSlice(String text, int fromIndex, int toIndex) {
+		return LEADING_ITEM_SEPARATOR.matcher(text.substring(fromIndex, toIndex)).replaceFirst("").trim();
+	}
+
+	/**
+	 * The text an item contributes of its OWN: {@link #itemSlice} with its citation marker removed.
+	 * Empty means the item names nothing beyond that marker.
+	 */
+	private static String ownItemText(String text, int fromIndex, int toIndex) {
+		return stripCitationMarkers(itemSlice(text, fromIndex, toIndex));
+	}
+
+	/**
 	 * True when some pair of consecutive {@code [N]} markers in {@code text} has claim text between
-	 * them — anything left once {@link #LEADING_ITEM_SEPARATOR} has taken the punctuation and
-	 * coordinating conjunction that merely join a list. Reusing that constant is what keeps this
-	 * agreeing with {@link #splitEnumeration} about where one item ends and the next begins, rather
-	 * than growing a second opinion about what a separator is.
+	 * them — anything left once {@link #itemSlice} has taken the punctuation and coordinating
+	 * conjunction that merely join a list.
 	 *
 	 * <p>Reads the TEXT deliberately, and only ever as a question about shape — never to re-derive
 	 * which citations a claim unit is attributed to, which {@link Sentence} warns against because a
@@ -1061,23 +1085,6 @@ public class CitationGroundingVerifier {
 	 * Sentence#compoundClaim()} is the only caller and it guards this with the attributed count for
 	 * exactly that reason.
 	 */
-	/**
-	 * The text an item contributes of its OWN between {@code fromIndex} and {@code toIndex}: the
-	 * leading separator that joins it to its siblings is stripped ({@link #LEADING_ITEM_SEPARATOR})
-	 * and so is its citation marker, leaving the bare claim text. Empty means the item names nothing
-	 * beyond its marker.
-	 *
-	 * <p>Two callers ask one question of this and must agree on the answer: {@link #splitEnumeration},
-	 * deciding whether an item is a named item at all, and {@link #claimTextSeparatesCitations},
-	 * deciding whether two citations are attached to different pieces of one statement. A slice one
-	 * called empty and the other non-empty would either grade a citation against a conjunction (the
-	 * #302 defect) or demote one whose question was well-formed, and both are silent.
-	 */
-	private static String ownItemText(String text, int fromIndex, int toIndex) {
-		return stripCitationMarkers(LEADING_ITEM_SEPARATOR
-				.matcher(text.substring(fromIndex, toIndex)).replaceFirst("").trim());
-	}
-
 	private static boolean claimTextSeparatesCitations(String text) {
 		Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(text);
 		if (!marker.find()) {

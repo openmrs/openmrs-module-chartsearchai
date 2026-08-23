@@ -495,6 +495,99 @@ correct "No" here. `fixtures/probe-safety/wrong-partner` pins that as **exit 0**
 visible rather than assumed; it is the expectation a chip-versus-answer concordance check would have
 to change.
 
+> *(2026-08-22, #299.* One piece of that concordance check has landed, and it is the smallest:
+> `discordant_severity` asks whether the answer NAMES the severity the deterministic layer assigned,
+> comparing the rating in the answer against the ratings the chips for that drug carry. It is its own
+> column (`named a severity no chip carries`), it is in the flip condition, it appends a problem so
+> the arm exits 3, and it is **not** deducted from `verdict-led` — #299 is explicit that a Moderate
+> interaction reported as *"a Major problem"* is not a #283 violation: `moderate` withholds, so the
+> "No" was right and only the rating was wrong.
+>
+> It changes neither expectation above. `wrong-partner` names no rating at all, so there is nothing
+> to compare — the PARTNER half is still unchecked. `caution-over-major` names the chip's own
+> `Major`, so what is disproportionate there is the CALL made over the rating rather than the rating
+> stated, and asking whether a rating licenses a caution would put a second copy of
+> `DrugSafetyValidator.licensesWithholding` in Python, which is the drift `adverse_finding` refuses.
+> Naming the rating needs no such judgement, which is why this half could land and those cannot.
+>
+> **It is silent when the chips for that drug carry no rating at all.** The rating cannot then have
+> come from a chip of that drug, and every place left is about something else — a cited
+> `drug_reference` record or `safety_finding` about another partner, or another drug's own chip in
+> the same response. That is the shape a contraindication-only cell has, since a contraindication
+> rates nothing.
+> No live number stands behind that gate: over the same 20 cells it changes nothing either way.
+> `fixtures/probe-safety/severity-unrated-chip/` is what pins it; delete the gate and read the
+> failures rather than trusting a tally here, which went stale the first time another arm exercised
+> the same gate.
+>
+> **The census is a gate, not just a number.** The chip side has to parse the chip `detail` —
+> `serializeSafetyWarnings` puts type/drug/detail on the wire and no severity field — and every
+> fixture here is a frozen capture, so a reword in `DrugSafetyValidator.interactionWarning` or
+> `DdiDrugReferenceSource.noteFor` cannot redden any of them while every live arm reports a clean
+> zero for the wrong reason. Measured: reword BOTH of `severity-overstated/`'s chip clauses to
+> `(Moderate severity):` / `(Minor severity):` and leave its answer at *"a Major problem"*, and the
+> arm that exists to fail scored 0 and exited 0 — that arm is `severity-chip-reworded/`. So a cell carrying a RULE interaction chip that yields no readable
+> rating is now flagged. Per cell, because an arm-level form let one intact cell mask a reworded one
+> — `severity-chip-reworded/` is a partial reword and pins that. And "rule chip" is decided by
+> EXCLUDING the class-only join, which is `TYPE_INTERACTION` and unrated by design (so a type-keyed
+> flag fires on every healthy `sourceFormat=atc` arm — `severity-class-only/` pins that), by its own
+> rendered prefix `<drug> is in the same …` rather than by requiring `interacts with`. The
+> requiring form was fail-open on the one edit that matters: `interactionWarning` writes the anchor
+> and the ` — ` before the rating two lines apart, so one reword removes both and the flag went
+> silent on exactly the reword it guards. Excluding errs loud in both directions instead.
+>
+> What it still cannot do: on a `sourceFormat=json` capture, whose curated rules are unrated by
+> design, every ANSWER cell raising a curated rule chip trips the flag — so such a capture cannot be
+> relied on to exit 0 and is not a gate for #299, the honest report being that the comparison did
+> not run rather than that it passed.
+>
+> **What it does not catch**, pinned rather than assumed: it is a set difference over ALL of the
+> drug's chips, so on a cell with two rated chips an answer may name the wrong one and pass —
+> `severity-wrong-chip/` is #299's own capture calling its **Moderate** rifapentine interaction
+> *"a Minor problem"*, which is that cell's other chip, and it exits 0.
+>
+> Measured when it landed: **0 of the 7 ANSWER cells** (of 20 captured — the column's base is the
+> ANSWER cells, which is what it is computed over) flag it (capture 2026-08-22
+> against the 3.7.1 standalone on merged `main` @ `47b6aa0d`; that arm exits 3 in its own right,
+> because betty's drug-order query 400s on this demo DB (a null route) and her context reads
+> `ok:false` — her active orders are bupivacaine and lidocaine, neither a probe drug, and her one
+> simvastatin order expired 2026-08-04, so no label and neither figure moves), with the
+> census reading **5 of 7** ANSWER cells carrying a readable chip rating;
+> `fixtures/probe-safety/severity-overstated/` — a verbatim capture of #299's own cell, not a
+> constructed one — flags 1 and exits 3, where before it scored an ordinary verdict-led win at
+> exit 0.
+>
+> **That 0 of 7 is not evidence the module is clean, and the reproducing cell is now producible
+> rather than only frozen.** #299's cell is Steven White asked about rifabutin, and neither the
+> patient nor the drug is among the defaults — so the issue's own cell is not one of the twenty,
+> and on the capture behind that 0 of 7 no cell of the twenty showed the defect either.
+> `capture_probe_safety.sh` therefore takes `PROBE_PATIENTS` / `PROBE_DRUGS`, whitespace-separated
+> and both defaulting to the 4 × 5 arrays, so every figure above and in ADR Decision 37 is still
+> read under the matrix that produced it:
+>
+> ```
+> PROBE_PATIENTS=steven:cbc1658d-d77e-42e6-bfa8-35ed42882dfc PROBE_DRUGS=rifabutin \
+>   CAPTURE_PHRASING='Can I give {drug}?' ./capture_probe_safety.sh out-299-A
+> ```
+>
+> Without that, the only thing holding the cell is `fixtures/probe-safety/severity-overstated/`, a
+> frozen capture — it pins the SCORER and cannot move when the MODULE moves. An A/B gating either
+> remedy #299 names, run over the default cells, would then read `named a severity no chip carries:
+> A=0 B=0` — arm A already does — print no FLIP row and exit 0 on both arms, so the remedy ships
+> either ungated or judged ineffective on a harness whose cells do not carry the defect. Run it over
+> a capture of the command above as well, and read that column there.
+>
+> Two collisions worth knowing, both stated as accepted costs at `ANSWER_SEVERITY`. OpenMRS's
+> ALLERGY severity vocabulary overlaps DDInter's on `Moderate` and `Unknown` and the chart renders
+> `Severity: Moderate.`, so an answer quoting a chart allergy correctly is REPORTED. A lookbehind
+> refusing a rating after `Severity: ` was written for that and then removed: it also swallowed
+> `Interaction: … Severity: Major. Mechanism: …`, so `severity-overstated/` rewritten that way
+> exited 0 with no flip line — a false report traded for a silent false negative, the wrong
+> direction, and it did not even close its own register (`Severity:  Major`, `**Severity**: Major`
+> walked through). `ANSWER_SEVERITY_CASES` now pins which registers are read. The second collision:
+> the default `minInteractionSeverity=minor` filters exactly DDInter's Unknown rows, so no chip on a
+> default-configured capture can carry `Unknown`.*)
+
 **The same fault in the Java side of the harness.** `LlmAnswerQualityTest.buildPromptVariations()`
 anchored an arm on `"Answer ONLY the specific question asked."` while the prompt says *"Answer ONLY
 the specific query."*, so `String.replace` returned the original and that arm's trend instruction

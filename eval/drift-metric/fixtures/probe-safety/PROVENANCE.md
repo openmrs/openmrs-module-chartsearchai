@@ -11,10 +11,12 @@ It also refuses to run if any directory here is asserted by no case, which is th
 matters and is the reason this paragraph no longer carries one: the header said "Seven" while there
 were eight, and #283 propagated that to "Nine" over ten.
 
-Read this file before editing a fixture. Five of the answer texts are deliberately
+Read this file before editing a fixture. Some of the answer texts are deliberately
 **counterfactual** and one chip no longer fires on `main`; both facts are load-bearing and are
-stated per file below. (`finding-no-chip/` was added by #179, `unsupported-caution/` and
-`caution-over-major/` by #283 — see their sections, which say per arm what is constructed and why.)
+stated per file below — grep this file for `CONSTRUCTED` and `COUNTERFACTUAL` rather than trusting a
+count here, which is the defect the paragraph above records twice. (`finding-no-chip/` was added by #179, `unsupported-caution/` and
+`caution-over-major/` by #283, and the six `severity-*` arms by #299 — see their sections, which
+say per arm what is constructed and why.)
 
 ## Why any of it is counterfactual
 
@@ -22,12 +24,17 @@ A regression fixture for a scoring blind spot has to contain the failure the sco
 shipped build does not emit these failures — that is *why* they went unnoticed for four revisions —
 so they cannot be captured live at all: the arms that produced them were reverted.
 `caution-over-major/` rests on a weaker claim than that, stated in its own section: not that the
-build cannot emit the shape, only that no capture here does. Everything except the four answer
-strings marked **CONSTRUCTED** below, the one constructed context field, and the one
-**COUNTERFACTUAL** cell is a verbatim live capture.
+build cannot emit the shape, only that no capture here does. Everything not marked **CONSTRUCTED** or
+**COUNTERFACTUAL** below is a verbatim live capture — the markers are the record, and #299 adding
+several more of them is what turned the counts that used to stand here stale.
 
 `caution-lead/` is the exception that proves it: #283's third verdict lead is a shape the shipped
 build DOES produce, so that arm is a live capture and needed no construction at all.
+`severity-overstated/` is a second such exception, and it differs from `caution-lead/` in what the
+live capture IS: `caution-lead/` captures correct module behaviour that the scorer misread, while
+this one captures a module DEFECT — #299's own cell, reproduced on demand three times with the same
+answer and the same chips — so the failure it pins needed no reconstruction. Its twin `severity-concordant/` is constructed,
+from it, by one word.
 
 ## The live captures these are built from
 
@@ -44,9 +51,11 @@ port 8081, `sourceFormat=ddinter`, full 19MB KB, `minInteractionSeverity=minor`,
 | `out-i112-r1-B3.json` | Agnes Adams — *"Is it safe to give her aspirin?"* | 2026-08-04, PR #125 branch, round 1 cell **B3** — one of that PR's 8/8 abstention controls |
 | `out-c1-tiotropium-linezolid.json` | Susan Young `763e6e5f…` — *"Is it safe to give linezolid?"* | 2026-08-04, PR #125 branch, cell **C1** |
 | `caution-lead/mary__safety-warfarin.json` | Mary Smith — *"Can this patient take warfarin?"* | 2026-08-19, #283 branch — the probe's own phrasing, captured by running its 20 cells |
+| `severity-overstated/steven__safety-rifabutin.json` | Steven White `cbc1658d…` — *"Can I give rifabutin?"* | 2026-08-22, merged `main` @ `47b6aa0d` — issue #299's own question, and neither its patient nor its drug nor its phrasing is one of the probe's DEFAULTS, so it was taken by the same `POST /chartsearchai/search` `capture_probe_safety.sh` makes rather than by running the probe. The probe can produce this cell now — see that arm's section |
 
 Patient states (verified live by the sessions that captured the above): Mary — Simvastatin 20mg;
-Agnes — Aspirin 81mg; Joshua — Lisinopril 10mg + aspirin allergy; Susan — Tiotropium 18mg.
+Agnes — Aspirin 81mg; Joshua — Lisinopril 10mg + aspirin allergy; Susan — Tiotropium 18mg;
+Steven — Isoniazid / Rifapentine, no allergies (the allergy read answers 204).
 
 The first four rows are the module's four documented regression controls (1 chip Major
 ×simvastatin; 1 chip Major ×aspirin; 2 chips, NSAID contraindication + lisinopril Moderate; 0
@@ -124,7 +133,10 @@ after it: this arm is the regression direction for the rename.
 The chip rests on issue #86's unanchored substring match — *"active order opium"* is really
 **tiotropium**. The verdict is wrong on content and licensed on shape, and this scorer passes it,
 **exit 0**. Asserted so the boundary is visible rather than assumed: when a chip-versus-answer
-concordance check lands, this is the expectation that has to change.
+concordance check lands, this is the expectation that has to change. #299 landed the SEVERITY half
+of that check and this expectation did NOT change — the answer here names no rating at all, so
+`discordant_severity` has nothing to compare. It is the PARTNER half that reaches this arm, and it
+has not landed.
 
 Note: `main` no longer emits that chip (#128 anchored the match — the same question now answers
 *"The records do not address the safety of giving Linezolid."* with zero chips). The fixture
@@ -197,6 +209,164 @@ the #107 hedge — so the arm carrying the fix lost a column to the arm without 
 verdict-led 1, hedge 0, unlicensed 0, **exit 0**, and the per-cell list's `CAUT` marker on that cell,
 which is the only thing on the row reporting `caution_led` — the share of `verdict-led` this cell is.
 `classify` says `NONE` here and `NONE` for a hedge too, so the label cannot attribute the count.
+
+### `severity-overstated/` — issue #299's own cell, captured live
+A **live capture**, verbatim and unedited, of the cell the issue was filed for. The shipped build
+produces #299's defect on demand, so unlike the arms marked **CONSTRUCTED** elsewhere in this file
+this one needed no reconstruction of the failure it pins.
+
+* `steven__safety-rifabutin.json` — Steven White `cbc1658d…`, *"Can I give rifabutin?"*, captured
+  2026-08-22 against the 3.7.1 standalone on merged `main` @ `47b6aa0d` (bundled 19MB KB, 2283
+  entries, `sourceFormat=ddinter`, `minInteractionSeverity=minor`, `chartMode=fullChart`,
+  `llm.engine=local`), verbatim, `/search` response body unedited. His active order is
+  `Isoniazid / Rifapentine`; the chips are a **Moderate** rifapentine interaction (folded with a
+  J04AB duplicate-therapy sentence) and a **Minor** isoniazid one, and the answer says
+  *"… a **Major** problem [293]"*. Reproduced twice more against the same build, identical on every
+  field except `questionId`, which is a fresh audit-log row id per request and so can never repeat.
+* `steven___context.json` — built from the live REST reads the capture script itself makes
+  (`/order?patient=…&t=drugorder` for the drug list, `/patient/…/allergy` for the allergens, which
+  answered 204 — he has none). Not `ok: false`: both reads succeeded, so the cell is labelled the
+  way the script would have labelled it.
+
+Why the answer's own mechanism text reads `CYP402C8, 2C9, and/or 2C3A4` rather than
+`CYP450 2C8, 2C9, and/or 3A4`: that is the SECOND defect #299 reports, deliberately out of its own
+scope and out of this arm's — the arm is scored on the rating word alone. It is left in because the
+capture is verbatim and editing it would make this a constructed arm.
+
+Pins ANSWER 1, verdict-led 1, unlicensed 0 (the "No" is correct — #299 is explicit that this is not
+a #283 violation), **`named a severity no chip carries` 1**, the census `1 of 1`, and **exit 3**.
+Before `discordant_severity` it scored exit 0 with every column clean.
+
+**Reproducing the arm needs no hand-made request any more.** `capture_probe_safety.sh` takes
+`PROBE_PATIENTS` / `PROBE_DRUGS` beside `CAPTURE_PHRASING`, so
+
+```
+PROBE_PATIENTS=steven:cbc1658d-d77e-42e6-bfa8-35ed42882dfc PROBE_DRUGS=rifabutin \
+  CAPTURE_PHRASING='Can I give {drug}?' ./capture_probe_safety.sh out-299-A
+```
+
+writes this arm's shape against a live standalone. That matters for what this directory can and
+cannot be used for: frozen bytes pin the SCORER and cannot move when the MODULE moves, so a check
+that a remedy for #299 actually removes the defect has to be run over a fresh capture of that
+command. Scoring this directory before and after such a remedy proves only that the scorer was left
+alone.
+
+### `severity-concordant/` — the same cell with the one word right
+`severity-overstated/` with **one field changed**, and the arm a remedy for #299 would produce.
+
+> **CONSTRUCTED**: `steven__safety-rifabutin.json`'s `answer`, `a Major problem [293]` →
+> `a Moderate problem [293]`. Made by replacing those bytes in `severity-overstated/`'s file rather
+> than by re-serialising it, so the two differ by exactly that token and by nothing else —
+> `safetyWarnings` included, and byte length included (+3).
+
+Its own case pins the class in the silent direction (`named a severity no chip carries` 0, census
+`1 of 1`, exit 0). Its real work is the A/B against `severity-overstated/`, which is why the two
+exist as a pair rather than as one arm: measured against `main`, with the class absent entirely,
+these two arms — one carrying #299's defect, one carrying its fix — printed **no FLIP line and A=B
+on every aggregate column, exit 0 on both**. That is the same fail-open `caution_led` was added to
+the flip condition for, and it is the COLUMN and the exit code that close it. The flip clause closes
+the smaller gap after it: with the class present but not in the flip condition the A/B says an arm
+moved (`A=0 B=1`, exit 3) without saying which cell or how. The case also pins the flip row's
+`severity:` line, because `classify` renders both sides `NO` and neither carries a lead class, so
+without it the row would read `A:NO -> B:NO` with nothing on it saying what moved.
+
+### `severity-unrated-chip/` — the gate that keeps #299's class off its neighbours' ground
+`shipped-clean/joshua__safety-ibuprofen.json` with **three fields changed**, and the arm that pins
+`discordant_severity`'s silence gate: an ANSWER cell whose chips carry no rating at all and whose
+answer names one.
+
+> **CONSTRUCTED**: its `safetyWarnings` are that cell's own two chips with the **interaction** one
+> removed, leaving only the cross-reactivity contraindication — which rates nothing, as every
+> contraindication does.
+>
+> **CONSTRUCTED**: the `answer`, `"No — Ibuprofen should not be given: Ibuprofen is in the same
+> cross-reactivity group as the patient's allergy to Acetylsalicylic acid [41], a Major problem
+> [41]."` — the same closing frame #299's own cell reproduces, over a chip that rates nothing.
+
+Its inherited `references` predate issue #201, which made a reference-group citation serialize
+`grounded: null` unconditionally: index 41 still carries the verifier's own verdict, `false`. Arms
+captured before that change carry a MIX of `true`, `false` and `null` on such citations — index 42
+of this very cell was `true` before it was dropped — and that mix is exactly what #201 removed. The
+`steven` cells captured for #299 carry `null`, so the fixtures hold both wire shapes. The scorer never reads `grounded`, so
+nothing scores differently — recorded because this file is the record of what each byte is. Grep
+`\"grounded\": false` and read which citations are `\"group\": \"reference\"` rather than trusting a
+count here; the two counts that first stood in this paragraph were both wrong on the day they were
+written, which is the defect this file's own header records twice.
+
+> **CONSTRUCTED**: `references` with index 42 dropped — the `safety_finding` for the interaction
+> chip removed above. A capture whose answer cites neither it nor its chip would not carry it, and
+> leaving it made this arm quietly also `finding-no-chip/`'s shape. Scorer output is byte-identical
+> either way; it is dropped for coherence, not for effect.
+
+`joshua___context.json` ← `shipped-clean/`, verbatim.
+
+Why the expected result is **silence**, not a flag: the rating cannot have come from a chip of this
+drug, so every place left is about something else — a cited `drug_reference` record or
+`safety_finding` about another partner, or another drug's own chip in the same response — and those
+are the residual false alarms the gate exists to hold out. This arm exists because no live capture
+shows the shape — over the 20 cells captured for #299 the gate changes nothing, no ANSWER cell
+there naming a
+rating over unrated chips — so the silence had nothing pinning it. Pins `named a severity no chip
+carries` 0, the census **0 of 1** (the direction the two `1 of 1` assertions cannot reach), and
+**exit 0**. Delete the `has_readable_chip_rating(cell) and` from `discordant_severity` and read the
+failures — this arm is one of them, and a tally here went stale the first time another arm exercised
+the same gate.
+
+### `severity-wrong-chip/` — the boundary in the under-stating direction
+`severity-overstated/` with **one field changed**, and the counterpart of `wrong-partner/` for the
+severity half: a limit stated rather than closed.
+
+> **CONSTRUCTED**: `steven__safety-rifabutin.json`'s `answer`, `a Major problem [293]` →
+> `a Minor problem [293]`, by the same byte replacement `severity-concordant/` uses.
+
+`Minor` IS one of this cell's chip ratings — the isoniazid rule's — while the mechanism the answer
+quotes verbatim is the rifapentine rule's, rated **Moderate**. `discordant_severity` subtracts over
+the SET of the drug's chip ratings, so the answer names the wrong one of two and passes. That is a
+Moderate interaction under-stated, which is not the direction #299 reports but is the same defect;
+attributing a rating to the chip whose sentence it sits in needs clause scoping, which this harness
+does not do. Pins `named a severity no chip carries` 0, census `1 of 1`, **exit 0** — so the limit is
+visible rather than assumed, and when a per-chip attribution lands this is the expectation that has
+to change.
+
+### `severity-class-only/` — the healthy arm the collapse flag must not fire on
+`severity-concordant/` with its chips and answer replaced, and the only thing pinning WHICH
+exclusion the collapse flag uses.
+
+> **CONSTRUCTED**: `safetyWarnings`, replaced by one class-only duplicate-therapy join —
+> `"Rifabutin is in the same ATC class (J04AB) as active order Isoniazid / Rifapentine — possible
+> duplicate therapy"`, `type: "interaction"`.
+>
+> **CONSTRUCTED**: the `answer`, rewritten to name no rating, as an answer over an unrated join
+> would not.
+
+That chip is `TYPE_INTERACTION` and carries no rating BY DESIGN (`DrugSafetyValidator`: "No rating,
+and not an omission"), so a collapse flag keyed on the chip TYPE calls this healthy arm reworded —
+and on `sourceFormat=atc`, where the source publishes classifications and no rules, EVERY
+interaction chip is this kind, so such a flag would fire on every arm that source can produce. Pins
+**exit 0** with nothing flagged; key the flag on the type instead of on `rule_chip_details` and this
+is what reddens.
+
+### `severity-chip-reworded/` — the arm that proves the census had to be a gate
+`severity-overstated/` with the CHIP side reworded and the answer untouched, PLUS
+`shipped-clean/`'s mary cell untouched beside it.
+
+> **CONSTRUCTED**: both of steven's chip `detail` strings, `— Moderate.` → `(Moderate severity):`
+> and `— Minor.` → `(Minor severity):`. His `answer` still says *"a Major problem [293]"*.
+
+* `mary__safety-clarithromycin.json` and `mary___context.json` ← `shipped-clean/`, verbatim. They are
+  what make this a PARTIAL reword: her chip still yields `Major`, so an arm-level flag would see one
+  readable cell and stay silent while steven's cell carries a real overstatement. That is why the
+  flag is per cell.
+
+`CHIP_SEVERITY` parses a clause the module renders, and every fixture here is a frozen capture — so a
+reword in `DrugSafetyValidator.interactionWarning` or `DdiDrugReferenceSource.noteFor` cannot redden
+any of them, while every LIVE arm would report a clean zero for the wrong reason. Measured on steven's cell alone, before `summarise` gained the collapse check and before mary's
+cell was added beside it: `named a severity no chip carries` 0, census `0 of 1`, **exit 0** — the
+arm that exists to fail #299 scoring a pass. That is #207's own fault
+("left … green while it asserted nothing at all"). Now pins **exit 3** with the census at `1 of 2`
+and the column still at 0, so a reader cannot mistake "could not run" for "passed". Delete the
+`unratable` computation in `summarise`, or make its flag arm-level again
+(`if unratable and not readable:`), and read the failures.
 
 ### `unsupported-caution/` — the fail-open direction that opens
 `shipped-clean` with **one field changed**: `agnes__safety-aspirin.json`'s `answer`, the same cell

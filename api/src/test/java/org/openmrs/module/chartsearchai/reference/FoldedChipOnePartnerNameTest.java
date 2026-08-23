@@ -502,9 +502,13 @@ public class FoldedChipOnePartnerNameTest {
 	 * rule; the NSAID group's prefixes are {@code M01AE} and {@code N02BA}, so the class arm matched on
 	 * {@code N02BA01} — aspirin — and warfarin is in no cross-reactivity group at all. The premise is
 	 * asserted below rather than reasoned about: the same nameless order carrying {@code B01AA03} ALONE
-	 * raises the rule sentence and no class sentence. The partner IS named by its order here — its label
-	 * is the code list — but the {@code !namesADrug} branch is reached first, so the order-named refusal
-	 * below it never runs and the token is handed to both sentences. The chip therefore states
+	 * raises the rule sentence and no class sentence. Its label is the code list, so the partner is NOT
+	 * recorded as order-named — since issue #298 {@code OrderPartner.recordNameSource} admits an order
+	 * only where the label is that order's name — and the order-named branch is therefore not entered at
+	 * all, leaving the {@code !namesADrug} case to hand the token to both sentences. Before #298 the
+	 * partner did carry its order here and what kept this arrangement on the same path was that
+	 * {@code !namesADrug} was tested FIRST; the output is identical either way, which is why no
+	 * expectation below moved. The chip therefore states
 	 * {@code Ibuprofen is in the same cross-reactivity group (NSAID) as active order warfarin}, which is
 	 * false of warfarin. {@code DrugReferenceInjector.renderFinding} copies the detail verbatim, so it
 	 * reaches the prompt as citable {@code safety_finding} evidence too.
@@ -670,6 +674,56 @@ public class FoldedChipOnePartnerNameTest {
 		assertFalse(detail.contains("N02BA"),
 			"an ATC code must not reach either sentence: it is what a blank display resolves to, and"
 					+ " naming an active order by its code is the defect issue #155 removed, was: "
+					+ detail);
+	}
+
+	/**
+	 * The shape issue #298's invariant actually closes, and the only case here that reaches it.
+	 *
+	 * <p>An order on the ladder's ORDER rung — the curated seed carries none of its three codes — whose
+	 * display is BLANK but whose names are not. So its label is a bare ATC code, and unlike
+	 * {@code namedByCodesOnly} it has names for {@code namesNamingOrder} to match: the one combination in
+	 * which the order-named branch can say YES about a partner whose label is not a name. Under issue
+	 * #298 it cannot arise —{@code OrderPartner.recordNameSource} derives the name source from the flag,
+	 * the flag is false for a blank display ({@code displayNamesADrug}), so {@code namingOrder} is null
+	 * and the branch is not entered — and the rule's own token is handed to both sentences, exactly as
+	 * for the nameless order in {@link #theTicketsLiveCaseNamesTheOrderOnce}.
+	 *
+	 * <p><b>Why it is worth a case of its own.</b> The three arrangements that redden when
+	 * {@code recordNameSource} is mutated to admit the order unconditionally all fail the OTHER way: such
+	 * an order has no names, so {@code namesNamingOrder} answers false, nothing reconciles and the chip
+	 * names one prescription twice — issue #292's defect returning. None of them reaches the failure
+	 * issue #298 names, a bare ATC code handed to BOTH sentences, because that needs the branch to answer
+	 * yes. This arrangement is where it does: mutate {@code recordNameSource} and this case reads
+	 * {@code active order A01AD05} in both halves of the detail.
+	 *
+	 * <p>Builder-unreachable, like {@link #aBlankDisplayNeverDisplacesTheDatasetName}, and for the same
+	 * reason — {@code PatientClinicalContextBuilder} takes a display from a name {@code addRaw} has
+	 * already trimmed and dropped if blank. It needs the public constructor's latitude, which is what
+	 * makes it a statement about the invariant rather than about production data.
+	 */
+	@Test
+	public void aBlankDisplayWithNamesNeverHandsItsCodeToBothSentences() {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.curatedService());
+		Set<String> names = DrugReferenceTestSupport.set("aspirin 81mg");
+		PatientClinicalContext.ActiveDrugOrder blankButNamed =
+				new PatientClinicalContext.ActiveDrugOrder("order-blank-but-named", "   ", names,
+						ASPIRIN_ORDER_CODES);
+
+		List<SafetyWarning> warnings = validator.validate("", QUESTION,
+			DrugReferenceTestSupport.ctx(60, null, names, ASPIRIN_ORDER_CODES, null, null,
+				Arrays.asList(blankButNamed)));
+
+		assertEquals(1, warnings.size(), "one prescription, one folded chip, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertEquals(DrugReferenceTestSupport.set("aspirin"), orderNamesIn(detail),
+			"the rule's own token is the only name either arm holds, and it must be the only one the"
+					+ " detail carries, was: " + detail);
+		assertFalse(detail.contains("A01AD05") || detail.contains("B01AC06")
+				|| detail.contains("N02BA01"),
+			"a bare ATC code is the label a blank display resolves to on this rung, and it must reach"
+					+ " NEITHER sentence — handing it to both is the defect issue #298 closes, was: "
 					+ detail);
 	}
 

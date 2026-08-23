@@ -405,10 +405,7 @@ public interface ChartSearchService {
 		 * publishes {@code null} whatever this returns (issue #201, see
 		 * {@code ChartSearchAiRestController.groundedForWire}). Read this to
 		 * reason about grounding inside the module; read the wire to reason
-		 * about what a client renders — but note the #284 case above is withheld
-		 * UPSTREAM of this accessor, inside the verifier, so unlike the #201 case
-		 * there is no verdict left here to read. Its count is logged once per
-		 * answer instead.
+		 * about what a client renders.
 		 */
 		public Boolean getGrounded() {
 			return grounded;

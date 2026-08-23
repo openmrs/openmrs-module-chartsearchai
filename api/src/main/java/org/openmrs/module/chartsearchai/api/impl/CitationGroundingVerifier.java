@@ -193,7 +193,8 @@ import org.springframework.stereotype.Service;
  * signal it replaces did not discriminate — the judge refuses every conjunction, and cosine against a
  * conjunction is diluted for the correct record too, which is the sweep's finding that all 8 published
  * {@code false} sat on correct, active records. It is a real loss all the same, and it is stated here
- * because this is the paragraph a reader consults for what the rule costs. *
+ * because this is the paragraph a reader consults for what the rule costs.
+ *
  * <p><strong>The two rules above and below are disjoint by construction, and the difference between
  * them is which half of the claim the record is missing.</strong> A COMPOUND unit asserts several
  * things and cites a different record for each, so no record answers for the rest of its own unit;
@@ -229,9 +230,10 @@ import org.springframework.stereotype.Service;
  * carve-out is deliberately NOT extended to for
  * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} — the record issue #118 injected for
  * reconciliation, kept gradable by the carve-out comment in {@link #verify} — and it is why a
- * composite citation is not simply made demote-only. Whether the judge's "yes" is INFORMATIVE on a
- * composite statement is not measured; it is kept because nothing about the composition makes it
- * uninformative.</li>
+ * composite citation is not simply made demote-only. And NOT because a "yes" on a genuinely composite
+ * statement would be informative — by the paragraph above it cannot be, since a correct judge answers
+ * "no" there by construction. It is kept because the TRIGGER is a proxy that over-fires (see the cost
+ * paragraph below), and on the shapes it is wrong about a "yes" is a real verification.</li>
  * <li><strong>Only where a judge spoke.</strong> With no Tier-2 verdict there is nothing guaranteed
  * to withhold, so Tier-1-only mode is unchanged — including its off-topic {@code false}. Deliberate:
  * every measurement on #284 was taken with entailment enabled, and no claim is made here about what a
@@ -733,9 +735,13 @@ public class CitationGroundingVerifier {
 		}
 		// The withheld negative is the one verdict this pass computes and keeps nowhere: unlike the
 		// reference-group false, which #201 leaves on the RecordReference and withholds at the wire,
-		// this one is overwritten here. Without a line, a genuinely mis-attached chart citation in a
-		// safety answer produces no signal on a running server — which is how #122 and #178 each
-		// survived two releases.
+		// this one is overwritten here, so without a line it is unrecoverable after the fact.
+		//
+		// INFO, matching the cap line above it, and that bounds what it is for: core ships
+		// org.openmrs at WARN, so this reaches a maintainer who has raised the logger and nobody
+		// else. It is a diagnostic for someone already looking, not the arriving signal #149 argues
+		// a configuration error needs — the withholding is deliberate behaviour, not a misconfigured
+		// deployment, so nothing here is the operator's to fix.
 		if (withheldNegatives > 0) {
 			log.info("Citation grounding: withheld {} not-entailed verdict(s) whose claim also rested on "
 					+ "module-supplied reference material; those citations render unverified (issue #284)",
@@ -1085,10 +1091,13 @@ public class CitationGroundingVerifier {
 		 *  not what correctness rests on. */
 		final boolean compoundClaim;
 
-		/** Every citation the SELECTED statement rests on — the claim sentence's own
-		 *  {@link Sentence#sourceCitedIndexes}, or every citation in the answer where the pairing was
-		 *  GUESSED (see {@link #selectClaim}). Empty where no claim sentence was selected. Read by
-		 *  the composite-claim rule in Pass 2 of {@link #verify}. */
+		/** Every citation the SELECTED statement rests on: the claim sentence's own
+		 *  {@link Sentence#sourceCitedIndexes} — or every ANCHORED citation in the answer where the
+		 *  pairing was GUESSED (see {@link #selectClaim}) — and, on either branch, the answer's
+		 *  UNANCHORED citations, which belong to no statement and therefore to all. See
+		 *  {@link AnswerCitations#restsOn}, which is the only thing that builds this. Empty where no
+		 *  claim sentence was selected. Read by the composite-claim rule in Pass 2 of
+		 *  {@link #verify}. */
 		final Set<Integer> claimRestsOn;
 
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate) {

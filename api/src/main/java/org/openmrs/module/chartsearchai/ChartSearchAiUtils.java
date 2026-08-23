@@ -137,9 +137,10 @@ public class ChartSearchAiUtils {
 	 * finding as unsupported. Note that the Tier-2 exclusion and the {@code TRUE}-to-{@code null}
 	 * demotion this predicate drives are driven by IT rather than by that verdict — but it is not
 	 * the only thing that drives them: {@code CitationGroundingVerifier} applies the same two
-	 * treatments, independently, to a COMPOUND claim unit (issue #302), which is a fact about the
-	 * shape of the claim rather than about the provenance of the record. A citation can therefore be
-	 * demote-only without this predicate being true of it.
+	 * treatments, independently, to a COMPOUND claim unit (issue #302) — a fact about the shape of the
+	 * claim rather than the provenance of the record, and one that demotes under entailment only,
+	 * where this predicate demotes in either mode. A citation can therefore be demote-only without
+	 * this predicate being true of it.
 	 *
 	 * <p><strong>Why module-supplied material cannot be verified.</strong> An answer sentence citing
 	 * module-rendered reference prose is typically a recitation of it, and a recitation embeds

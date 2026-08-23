@@ -122,16 +122,21 @@ import org.springframework.stereotype.Service;
  * unsupported on the module's most common question — 8 of the 30 chart citations in #302's own
  * 12-patient sweep, all 8 in the colon-less multi-citation row. This rule reaches those of them whose
  * markers are separated by claim text; #302's closing sub-shape ({@code Salicylic acid [1], [2].}) is
- * co-citation by the definition below and stays graded, so the fix is not all 8. Such citations therefore never enter Tier-2
- * nor consume its cap, and a Tier-1 cosine pass renders {@code null}, because cosine against a
- * conjunction cannot separate the subject/polarity flips Tier-2 exists for. A cosine FAIL is still
- * published: that is the sentence-scope verdict this class already specifies for a compound
- * sentence, and {@code chartsearchai.grounding.clauseScoped} is its existing remedy — what #302
- * removes is Tier-2's negative alone. Note the two demote-only rules are independent and neither
- * subsumes the other: this one is about the SHAPE of the claim, the reference-group one about the
- * PROVENANCE of the record. It applies under entailment only: with Tier-2 off there is no refusal to
- * withhold, every verdict is cosine against the claim text, and demoting a compound unit's pass while
- * still publishing its fail would cost a correct citation its verdict for no defect removed.
+ * co-citation by the definition below and stays graded, so the fix is not all 8.
+ *
+ * <p>Such citations never enter Tier-2 nor consume its cap, and a Tier-1 cosine pass renders
+ * {@code null}, because cosine against a conjunction cannot separate the subject/polarity flips
+ * Tier-2 exists for. A cosine FAIL is still published: that is the sentence-scope verdict this class
+ * already specifies for a compound sentence, and {@code chartsearchai.grounding.clauseScoped} is its
+ * existing remedy — what #302 removes is Tier-2's negative alone.
+ *
+ * <p>The rule applies under ENTAILMENT ONLY. With Tier-2 off there is no refusal to withhold: every
+ * verdict is then cosine against the claim text, a compound unit's is no different in kind, and
+ * demoting its pass while still publishing its fail would cost a correct citation its verdict for no
+ * defect removed. That is where this rule and the reference-group one part company, and the two are
+ * otherwise independent with neither subsuming the other — this one is about the SHAPE of the claim,
+ * that one about the PROVENANCE of the record, and it demotes in both modes because recited prose is
+ * unverifiable by either tier.
  *
  * <p><strong>Accepted cost, measured, and it is not a swap on the shape that matters.</strong> A/B
  * through the 6-arg {@link #verify} over a 12-citation answer, entailment on, counting the real
@@ -478,8 +483,10 @@ public class CitationGroundingVerifier {
 		// cosine would have been overridden and its embedding cost (the dominant grounding cost on
 		// CPU) wasted. Tier-2 reaches none where it failed or could not answer (cap overflow, engine
 		// failure, unparseable reply) and where it was never asked, which since issue #302 includes
-		// every citation of a compound claim unit. This is the block that gives those their verdict,
-		// and the demotion in Pass 2 is what keeps a pass from certifying them.
+		// every citation of a compound claim unit. This is the block that gives such a citation its
+		// verdict whenever its claim sentence was unambiguous — with several candidates selectClaim
+		// already scored it eagerly — and the demotion in Pass 2 is what keeps a pass from certifying
+		// it either way.
 		for (int i = 0; i < references.size(); i++) {
 			if (tier2Verdict[i] == null && tier1Results[i].deferred) {
 				tier1Results[i] = cosineVerdict(tier1Results[i], floor, references.get(i).getIndex(),
@@ -745,12 +752,13 @@ public class CitationGroundingVerifier {
 		final boolean deferred;
 
 		/** True when the selected claim unit is a COMPOUND claim ({@link Sentence#compoundClaim()}).
-		 *  {@link #verify} does not read this field after claim selection: it snapshots the answer
-		 *  once per reference and decides from the snapshot, so that {@link #cosineVerdict} rebuilding
-		 *  a Tier1Result cannot drop it — a flag lost in that rebuild would fail OPEN, the demotion
-		 *  silently ceasing to fire and a cosine pass publishing {@code true} where the module used to
-		 *  flag. The rebuild carries it anyway, so the field is not stale for a later reader; that is
-		 *  belt-and-braces, not what the correctness rests on. */
+		 *  {@link #verify} reads it once, at claim selection, folding it into its {@code demoteOnly}
+		 *  array along with the reference-group reason and the entailment mode, and decides from that
+		 *  array afterwards — so {@link #cosineVerdict} rebuilding a Tier1Result cannot drop it. A flag
+		 *  lost in that rebuild would fail OPEN: the demotion silently ceases to fire and a cosine pass
+		 *  publishes {@code true} where the module used to flag. The rebuild carries it anyway, so the
+		 *  field is not stale for a later reader; that is belt-and-braces, not what correctness rests
+		 *  on. */
 		final boolean compoundClaim;
 
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate) {

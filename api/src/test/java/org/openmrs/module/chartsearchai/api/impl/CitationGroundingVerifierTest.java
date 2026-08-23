@@ -1770,6 +1770,36 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
+	public void compoundClaim_isDetectedOnTheAmbiguousClaimSelectionBranchToo() {
+		// tier1.compoundClaim is produced at TWO sites in selectClaim — the deterministic branch, when
+		// exactly one sentence cites the record, and the cosine argmax when several do. Every other
+		// case in this class gives each citation a single candidate, so the argmax branch was reachable
+		// and unpinned: setting compoundClaim false there left the whole api suite green while
+		// reinstating #302's symptom for any answer that cites one record from two sentences.
+		//
+		// Here [1] is cited by both sentences and the compound one is registered as its cosine-best, so
+		// selection goes through the argmax. If the flag were lost there, [1] would be put to the judge
+		// against the conjunction and published false — the defect, on a correct citation.
+		String answer = "The patient is currently taking Salicylic acid [1] and Methotrexate [2]. "
+				+ "Salicylic acid remains active [1].";
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register("The patient is currently taking Salicylic acid [1] and Methotrexate [2].",
+				AXIS_A);
+		embeddings.register("Salicylic acid remains active [1].", AXIS_B);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(0, judge.statementsPerCall.size(),
+				"[1]'s claim was selected by cosine and is still a compound unit, so it is not asked");
+		assertNull(result.get(0).getGrounded(), "[1], selected through the argmax branch");
+		assertNull(result.get(1).getGrounded(), "[2], selected deterministically");
+	}
+
+	@Test
 	public void anArrayOnlyCitationAttributedToACompoundClaimIsDemotedWithIt() {
 		// A citation the model put only in the structured citations array has no marker of its own, so
 		// selectClaim attributes it to whichever sentence matches best. Where that is a compound claim

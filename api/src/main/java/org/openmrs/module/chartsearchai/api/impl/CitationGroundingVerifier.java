@@ -1296,6 +1296,15 @@ public class CitationGroundingVerifier {
 		 * carries EARLIER markers while it is attributed to one citation; that is a real residual of
 		 * the cumulative prefix and it is deliberately not closed here — clause scope is off by
 		 * default, and {@link #splitIntoClauseScopedSentences} owns that trade.
+		 *
+		 * <p>One more residual, measured by a pathological-input sweep: {@link #LEADING_ITEM_SEPARATOR}
+		 * consumes {@code \s}, so a co-citation joined by an INVISIBLE non-{@code \s} character — a
+		 * comma and a no-break space, or a zero-width space — reads as claim text, and the pair is
+		 * classified compound. Under entailment it then publishes {@code null} where the same shape
+		 * with a plain space publishes {@code true}. That is a verdict withheld rather than a wrong
+		 * one, the direction this rule is deliberately safe in, so it is recorded rather than closed:
+		 * widening the separator to every Unicode space would move the boundary {@link #itemSlice}
+		 * shares with {@link #splitEnumeration}, and that needs its own evidence.
 		 */
 		boolean compoundClaim() {
 			return citedIndexes.size() > 1 && claimTextSeparatesCitations(text);

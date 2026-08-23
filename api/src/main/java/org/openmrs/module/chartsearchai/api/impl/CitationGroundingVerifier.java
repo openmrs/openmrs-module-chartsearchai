@@ -95,7 +95,10 @@ import org.springframework.stereotype.Service;
  * the one faithful recitation was judged not (issue #106). So these citations never enter
  * Tier-2 (nor consume its per-answer cap), and Tier-1 can only <em>demote</em>: a cosine
  * fail still flags an off-topic citation ({@code grounded=false}), but a pass renders
- * {@code null} (unverified), never {@code true}. Faithfulness of reference content is
+ * {@code null} (unverified), never {@code true}. (Where such a citation also sits inside a compound
+ * claim unit under entailment, the stronger rule below wins and even the fail is withheld — no
+ * consumer can see the difference, since #201 withholds every reference-group verdict at the wire.)
+ * Faithfulness of reference content is
  * checked deterministically instead: by the {@code DrugSafetyValidator} chips, and — for the one
  * part of a recitation that no semantic check can see, an ATC class code the model edited while
  * citing the record that carries it — by {@link ClassCodeFidelityCheck} (issue #142). Accepted
@@ -170,6 +173,14 @@ import org.springframework.stereotype.Service;
  * {@code null} exactly as it does everywhere else. The gate still keys on the CONFIGURED mode rather
  * than on whether the judge answered, because conditioning on "Tier-2 reached some verdict for this
  * answer" would switch the rule off for a single-compound-sentence answer — #302's own headline case.
+ *
+ * <p><strong>What it gives up.</strong> Compute is not the only thing this rule removes: a compound
+ * unit under entailment now has NO tier at all, so a genuinely off-topic or mis-pointed citation
+ * inside the module's most common answer shape gets no signal either. That is accepted because the
+ * signal it replaces did not discriminate — the judge refuses every conjunction, and cosine against a
+ * conjunction is diluted for the correct record too, which is the sweep's finding that all 8 published
+ * {@code false} sat on correct, active records. It is a real loss all the same, and it is stated here
+ * because this is the paragraph a reader consults for what the rule costs.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"
@@ -265,10 +276,11 @@ public class CitationGroundingVerifier {
 	 * best-matching sentence anywhere in the answer). References whose record
 	 * carries no text, or that cannot be embedded, are returned with a
 	 * {@code null} verdict ("could not verify"). Two kinds of citation are held back from a verdict,
-	 * by different amounts: module-supplied reference material is demote-only (a cosine pass renders
-	 * {@code null}, a cosine fail still flags), and a COMPOUND claim unit — a statement attaching its
-	 * citations to different pieces of itself — publishes nothing in either direction. See the class
-	 * javadoc for both.
+	 * by different amounts and under different conditions: module-supplied reference material is
+	 * demote-only in either mode (a cosine pass renders {@code null}, a cosine fail still flags), and
+	 * a COMPOUND claim unit — a statement attaching its citations to different pieces of itself —
+	 * publishes nothing in either direction, but only when entailment is enabled; with Tier-2 off it
+	 * is graded like any other citation. See the class javadoc for both.
 	 *
 	 * @param answer the full answer prose, with inline {@code [N]} markers
 	 * @param references the index-validated references to annotate
@@ -407,7 +419,9 @@ public class CitationGroundingVerifier {
 		//   * the RECORD is module-supplied reference material (issue #106/#122), in either mode:
 		//     DEMOTE-ONLY. Tier-1 still runs and its FAIL is kept — it says the citation is not about
 		//     the record at all — while a PASS renders null, because a recitation embeds like its
-		//     source whether or not it swapped roles.
+		//     source whether or not it swapped roles. Where a reference-group citation is ALSO inside a
+		//     compound claim unit, the stronger rule below wins and its fail is withheld too; nothing
+		//     downstream can tell, because #201 withholds every reference-group verdict at the wire.
 		//   * its CLAIM UNIT is compound and entailment is on (issue #302): UNVERIFIABLE, no verdict in
 		//     either direction. Both tiers are asking the wrong-sized question there — the judge is
 		//     asked to entail a conjunction the record answers for only part of, and cosine is measured
@@ -418,7 +432,9 @@ public class CitationGroundingVerifier {
 		//     is spent computing a verdict that would be discarded.
 		//     With entailment OFF this does not apply: cosine is then the only tier, every verdict in
 		//     the mode is that same comparison, and withholding a compound unit's alone would cost a
-		//     correct citation its verdict for no defect removed. clauseScoped remains this module's
+		//     correct citation its verdict for no defect removed. That restriction is guarded here AND
+		//     by verdictTier1 reporting the flag false; each alone suffices, so neither is individually
+		//     observable to the suite — see the note at that method. clauseScoped remains this module's
 		//     remedy for sentence-scope dilution, unchanged by #302.
 		boolean[] noTier2 = new boolean[references.size()];
 		boolean[] unverifiable = new boolean[references.size()];
@@ -721,9 +737,15 @@ public class CitationGroundingVerifier {
 				return new Tier1Result(null, null, recordText, false); // no sentences (empty answer)
 			}
 			// compoundClaim is reported false, not computed: this method runs only when entailment is
-			// OFF (it is the other arm of the ternary that calls selectClaim), and the demotion the
+			// OFF (it is the other arm of the ternary that calls selectClaim), and the withholding the
 			// flag feeds is gated on entailment being ON, so nothing can read a value computed here.
-			// If that gate is ever removed, this is one of the two places that has to be re-wired.
+			//
+			// The mode restriction is therefore guarded TWICE — here and by `entailmentEnabled &&` in
+			// verify's unverifiable[] fill — and each guard alone is sufficient, which means neither is
+			// individually observable: measured, breaking either one leaves all of
+			// CitationGroundingVerifierTest green and only breaking BOTH reddens
+			// compoundClaim_leavesTheTier1OnlyPathUntouched. Do not read that case as a guard on this
+			// line. If the gate is ever deliberately removed, both places have to move together.
 			return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText, bestIsolate,
 					false, -1, false);
 		}

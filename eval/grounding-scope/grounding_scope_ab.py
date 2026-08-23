@@ -42,7 +42,9 @@ rather than folded in:
     demoted_wins=1, demoted_regressions=0 and the gate prints a pass.
   * False->null is left UNCOUNTED on purpose: sentence scope published a flag
     and clause scope withheld it, which is a loss of signal rather than a wrong
-    verdict, and it is the direction #302 itself deliberately takes.
+    verdict. Note it can no longer arise from a COMPOUND unit -- that cell is
+    null on the sentence side now, not False -- so what remains here is the
+    other causes of a sentence-side False.
 
 The #302 demotion is gated on entailment, and the module ships
 chartsearchai.grounding.entailment.enabled=false. With it off, none of the three

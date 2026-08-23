@@ -1707,8 +1707,40 @@ public class CitationGroundingVerifierTest {
 				FLOOR, TIER2_ON, false);
 
 		assertEquals(0, lenient.calls, "the judge is not asked about a compound claim unit");
+		assertNull(result.get(0).getGrounded(), "so the yes that would have rescued it is never given");
+		assertNull(result.get(1).getGrounded());
+		// Note what this case does NOT pin: here the claim sentence is unambiguous, so the cosine is
+		// never computed either and the null comes from the lazy-Tier-1 skip rather than from Pass 2.
+		// The eagerly scored path is where Pass 2 does the work — see
+		// compoundClaim_anEagerlyScoredCosineFailIsWithheldToo.
+	}
+
+	@Test
+	public void compoundClaim_anEagerlyScoredCosineFailIsWithheldToo() {
+		// The other half of "publishes nothing", and the only case that reaches it. When one record is
+		// cited by several sentences, selectClaim scores the cosine EAGERLY to choose between them, so
+		// a verdict already exists by the time Pass 2 runs — the lazy-Tier-1 skip cannot produce the
+		// null there, and only Pass 2's unverifiable branch can. Weaken that branch back to demoting a
+		// TRUE alone and this case reddens while every other compound case stays green, because they
+		// all take the deferred path where no cosine is computed at all.
+		//
+		// Record 1's best candidate is the compound sentence (0.35) over the other (-0.94), and 0.35
+		// is under the 0.40 floor — a diluted score of exactly the kind a conjunction produces.
+		String answer = "The patient is currently taking Salicylic acid [1] and Methotrexate [2]. "
+				+ "Salicylic acid remains active [1].";
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register("The patient is currently taking Salicylic acid [1] and Methotrexate [2].",
+				AXIS_A);
+		embeddings.register("Salicylic acid remains active [1].", new float[] { 0f, -1f });
+		embeddings.register("Drug order: Salicylic acid", new float[] { 0.35f, 0.9368f });
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER2_ON, false);
+
 		assertNull(result.get(0).getGrounded(),
-				"a cosine FAIL on a conjunction is dilution, not evidence — it must not publish false");
+				"a sub-floor cosine against the conjunction is dilution, not evidence against [1]");
 		assertNull(result.get(1).getGrounded());
 	}
 

@@ -388,8 +388,11 @@ public interface ChartSearchService {
 		 * verification ran (see {@code chartsearchai.grounding.enabled});
 		 * {@code null} when verification was disabled, could not run for this
 		 * reference (e.g. the record carried no text to compare against), or ran
-		 * and could not certify it — a {@code reference}-group citation, or one
-		 * of a compound claim unit under entailment (issue #302). A
+		 * and could not certify it — a citation of a compound claim unit under
+		 * entailment (issue #302), or a {@code reference}-group citation whose
+		 * Tier-1 cosine PASSED. A reference-group cosine FAIL is kept and returns
+		 * {@code FALSE} here; only the wire withholds it unconditionally, which
+		 * is the distinction the next paragraph draws. A
 		 * {@code null} verdict must be rendered as "unverified", never as
 		 * "verified".
 		 *

@@ -3940,16 +3940,13 @@ public class DrugSafetyValidator {
 				// WHICH NAME the sentence may use is a second question, and not the same one (issue
 				// #268). The row above is a row of ref's substance, which is what makes the CHIP about
 				// the right drug; it is not necessarily a row the recorded name NAMES, because
-				// findImpliedSubstances reaches every substance a name could denote and its
-				// equal-claimant leg admits a row on a rank TIE. Where the record does not name the row,
-				// the sentence quotes the chart instead — see DrugReferenceService.findNamedSubstances
-				// for the three ways a name names a row and for what that fallback gives up. The chip's
-				// DRUG stays the row: the chip is still about that substance, and only the quotation
-				// moves.
+				// findImpliedSubstances reaches every substance a name could denote and admits some of
+				// them on a rank TIE or through a derivation. So the sentence has two forms and
+				// recordedAllergen decides between them — see DrugReferenceService.findNamedSubstances
+				// for the three ways a name names a row and for what the second form gives up.
 				chips.add(sameSubstance, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION,
-								sameSubstance.displayLabel(), "The patient has a recorded allergy to "
-										+ recorded.quotedAs(sameSubstance) + "."));
+								sameSubstance.displayLabel(), recorded.identitySentence(sameSubstance)));
 				continue;
 			}
 			if (refClasses.isEmpty() && refGroups.isEmpty()) {
@@ -4053,7 +4050,7 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * One of the patient's recorded allergies: the chart's own string, the substances it implies, and
+	 * One of the patient's recorded allergies: its charted allergen token, the substances it implies, and
 	 * the ones it NAMES (issue #268). Three facts about one record, held together because the identity
 	 * chip needs all three at once — it reports THAT record, so it may print a row's label only where
 	 * the record names it and must otherwise quote the chart.
@@ -4064,6 +4061,10 @@ public class DrugSafetyValidator {
 	 */
 	private static final class RecordedAllergen {
 
+		/** The allergen as {@link PatientClinicalContext} holds it — trimmed and lower-cased by
+		 *  {@link DrugReference#normalizeName} at construction, so this is the chart's word rather than
+		 *  the chart's STRING, and a sentence carrying it reads {@code … a recorded allergy to gallium.}
+		 *  for a chart that wrote {@code Gallium}. No un-normalized carrier exists to use instead. */
 		private final String token;
 
 		private final List<DrugReference> substances;
@@ -4084,21 +4085,38 @@ public class DrugSafetyValidator {
 		}
 
 		/**
-		 * @return what a chip quoting this record may call {@code row} — the row's own clinician-facing
-		 *         label where this recorded name names it, and otherwise the chart's own words.
-		 *         By reference and not by {@code equals}, which is what
-		 *         {@link DrugReferenceService#findNamedSubstances} returning a sublist of the very rows
-		 *         it was handed makes available: {@link DrugReference} defines no {@code equals}, so a
-		 *         containment test would mean the same thing today and something else the day one is
-		 *         added — and this decides whether a sentence about a patient is true.
+		 * The identity chip's whole sentence, in one of two forms, because the two state different
+		 * things and only one of them is available for a given row.
+		 *
+		 * <p>Where this recorded name NAMES the row, the chart records an allergy to that very drug and
+		 * the sentence says so — unchanged since issue #164, and what issues #187/#192 settled must keep
+		 * naming the row the chart records.
+		 *
+		 * <p>Where it does not, that claim would be false, so the sentence states the relationship the
+		 * module actually established: there is a recorded allergy to THIS name, and it contraindicates
+		 * THAT drug. It takes the curated rule arm's own shape ("X is contraindicated by an active
+		 * allergy: …") deliberately, because the wire contract requires it — {@code README} and
+		 * {@link SafetyWarning#getDetail()} say a detail is a standalone sentence naming its own drug,
+		 * which clients render alone and key per-finding identity on. A sentence that named only the
+		 * allergen would satisfy neither: the subject would appear nowhere on screen, and two chips
+		 * about different drugs raised by one allergy record would carry byte-identical details (issue
+		 * #238's collapse, from the other side).
+		 *
+		 * <p>Membership is tested by REFERENCE, which is what
+		 * {@link DrugReferenceService#findNamedSubstances} returning a sublist of the very rows it was
+		 * handed makes available: {@link DrugReference} defines no {@code equals}, so a containment test
+		 * would mean the same thing today and something else the day one is added — and this decides
+		 * whether a sentence about a patient is true. {@link #alreadyResolved} does lean on
+		 * {@code List.equals}, unchanged from the {@code contains} it replaced; that one is comparing
+		 * whole resolved lists for the de-duplication rule and is not deciding a claim.
 		 */
-		private String quotedAs(DrugReference row) {
+		private String identitySentence(DrugReference row) {
 			for (DrugReference candidate : named) {
 				if (candidate == row) {
-					return row.displayLabel();
+					return "The patient has a recorded allergy to " + row.displayLabel() + ".";
 				}
 			}
-			return token;
+			return row.displayLabel() + " is contraindicated by a recorded allergy to " + token + ".";
 		}
 	}
 

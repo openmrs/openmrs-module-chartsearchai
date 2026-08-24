@@ -33,13 +33,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * fold the identity chip away ({@code DdiDrugReferenceSource} emits no contraindications at all —
  * {@link SelfNamedAllergyRuleRankTest#aDdinterLoadCannotReachThisRankAtAll}).
  *
- * <p><b>The rule.</b> A row may be named only where the recorded name NAMES it: it is the unique
- * strongest claimant of the whole recorded name, or a name the printed label is built from occurs in
- * the recorded string, or a combination constituent of the recorded name resolves to its SUBSTANCE.
- * Otherwise the chip states the allergy in the chart's own name. Three cases below each name the
- * clause they discriminate, and say so in their own comment; the fourth clause, the unique claim,
- * needed no case here — mutating it away reddens five that were already in the suite, Opium under a
- * {@code papaveretum} allergy among them.
+ * <p><b>The rule.</b> A row may be named as the recorded allergy only where the recorded name NAMES
+ * it: it is the unique strongest NAME claimant among the substances in play, or a name the printed
+ * label is built from occurs in the recorded string, or a combination constituent of the recorded
+ * name resolves to its SUBSTANCE. Where it does, the chip keeps saying "The patient has a recorded
+ * allergy to X." Where it does not, that sentence would be false, so the chip states the
+ * relationship instead — "X is contraindicated by a recorded allergy to Y" — in the curated rule
+ * arm's own shape, which is also what keeps the wire contract that every {@code detail} names its
+ * own drug and tells one finding from another.
+ *
+ * <p>Four cases below each name the clause they discriminate and say so in their own comment; the
+ * unique-claim clause needed no case of its own — mutating it away reddens five that were already in
+ * the suite, Opium under a {@code papaveretum} allergy among them.
  */
 public class RecordedAllergenChipNameTest {
 
@@ -78,9 +83,10 @@ public class RecordedAllergenChipNameTest {
 		// that chip is untouched. The second is the defect — `Trastuzumab deruxtecan` occurs nowhere in
 		// `ado-trastuzumab emtansine`, so the chip may not announce it as what the chart records.
 		assertEquals("[The patient has a recorded allergy to Trastuzumab., "
-				+ "The patient has a recorded allergy to ado-trastuzumab emtansine.]", details.toString(),
-				"the row the recorded name does not name must be quoted in the chart's own words, was: "
-						+ details);
+				+ "Trastuzumab deruxtecan is contraindicated by a recorded allergy to ado-trastuzumab "
+				+ "emtansine.]", details.toString(),
+				"the row the recorded name does not name may not be announced as the recorded allergy — "
+						+ "it states the relationship instead, and still names itself, was: " + details);
 	}
 
 	@Test
@@ -121,11 +127,13 @@ public class RecordedAllergenChipNameTest {
 						DrugReferenceTestSupport.ctx(60, null, null, null,
 								DrugReferenceTestSupport.set("gallium"), null)));
 
-		assertEquals("[The patient has a recorded allergy to gallium., "
-				+ "The patient has a recorded allergy to gallium., "
-				+ "The patient has a recorded allergy to gallium.]", details.toString(),
-				"every tied row is quoted in the chart's own words — including the one dataset order put "
-						+ "first, was: " + details);
+		assertEquals("[Gallium citrate ga-67 is contraindicated by a recorded allergy to gallium., "
+				+ "Gallium chloride Ga-67 is contraindicated by a recorded allergy to gallium., "
+				+ "Gallium nitrate is contraindicated by a recorded allergy to gallium.]",
+				details.toString(),
+				"every tied row states the relationship instead of claiming the allergy — including the "
+						+ "one dataset order put first — and each still names its own drug, so the three "
+						+ "details stay distinct, was: " + details);
 	}
 
 	@Test
@@ -169,9 +177,9 @@ public class RecordedAllergenChipNameTest {
 		// print that name for exactly the reason the leg admits the substance, so the support test asks
 		// the leg's own question through the leg's own resolver rather than approximating it.
 		//
-		// Without this case the clause is unpinned: disabling it entirely left all 1384 tests green,
-		// because every other combination in the suite names its constituent's row in the recorded
-		// string and so is carried by the clause above.
+		// Without this case the clause was unpinned: disabling it entirely left the whole suite green,
+		// because every other combination in it names its constituent's row in the recorded string and
+		// so is carried by the clause above. Mutate the clause away and this case is what reddens.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TIED_ON_ONE_NAME);
 		String combination = "coenzyme q10 / levocarnitine / vitamin e";
 		assertEquals("[Levocarnitine, Vitamin E, Ubidecarenone]",
@@ -210,7 +218,8 @@ public class RecordedAllergenChipNameTest {
 								DrugReferenceTestSupport.set(combination), null)));
 
 		assertEquals("[The patient has a recorded allergy to Hydrocortisone., "
-				+ "The patient has a recorded allergy to hydrocortisone / neomycin.]", details.toString(),
+				+ "Hydrocortisone butyrate is contraindicated by a recorded allergy to hydrocortisone / "
+				+ "neomycin.]", details.toString(),
 				"the moiety the constituent resolves to keeps its name; the ester, which the constituent "
 						+ "does not name, is quoted in the chart's words, was: " + details);
 	}
@@ -232,25 +241,56 @@ public class RecordedAllergenChipNameTest {
 
 		assertEquals(2, findings.size(), "one citable record per chip, was: " + findings);
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
-				+ "Trastuzumab deruxtecan: The patient has a recorded allergy to ado-trastuzumab "
-				+ "emtansine." + DrugReferenceInjector.STRENGTH_WITHHOLD, findings.get(1).getText(),
-				"the record is ABOUT the subject and QUOTES the chart, was: " + findings);
+				+ "Trastuzumab deruxtecan: Trastuzumab deruxtecan is contraindicated by a recorded "
+				+ "allergy to ado-trastuzumab emtansine." + DrugReferenceInjector.STRENGTH_WITHHOLD,
+				findings.get(1).getText(),
+				"the record carries the chip's sentence verbatim, was: " + findings);
+	}
+
+	@Test
+	public void anAllergenRecordedWithAReactionStillCannotNameARivalSubstance() throws IOException {
+		// The commoner shape of the very defect this class exists for, and the one the first version of
+		// the rule missed. Four characters of reaction text after the drug name drop the resolution to
+		// the CONTAINMENT rank, where findImpliedSubstances' equal-claimant leg does not run — so the
+		// two rival gallium rows never enter the implied set and the survivor looks "unique" for a
+		// reason that is an artefact of the resolution rather than evidence about the record. Naming it
+		// then prints `Gallium citrate ga-67`, a radiodiagnostic the chart never mentions, off a chart
+		// that says `Gallium`: byte for byte the sentence the case above exists to remove.
+		//
+		// So the unique clause requires a NAME claim, not merely the strongest one available. Measured
+		// through the real parse of the shipped KB, that costs nothing on a recorded name the reference
+		// data publishes — 145 (name, row) pairs are claimed only at the containment rank and all 145
+		// are named by their own label anyway — because a name that matched by containment usually
+		// contains the row's name, and free text is where it does not.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TIED_ON_ONE_NAME);
+		String recordedWithReaction = "gallium \u2014 hives";
+		assertEquals("[Gallium citrate ga-67]", DrugReferenceTestSupport
+				.names(service.findImpliedSubstances(recordedWithReaction)).toString(),
+				"precondition: the reaction text drops the claim to containment, so the two rivals are "
+						+ "not in play and nothing else competes with the survivor");
+
+		List<String> details = DrugReferenceTestSupport.contraindicationDetails(
+				DrugReferenceTestSupport.validator(service).validate("",
+						"Is it safe to give her gallium nitrate?",
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set(recordedWithReaction), null)));
+
+		assertEquals("[Gallium citrate ga-67 is contraindicated by a recorded allergy to gallium "
+				+ "\u2014 hives.]", details.toString(),
+				"an uncontested row claimed only by containment still may not be announced as the "
+						+ "recorded allergy, was: " + details);
 	}
 
 	@Test
 	public void aFreeTextAllergenResolvingToOneSubstanceKeepsTheRowsName() throws IOException {
-		// What it takes to be quoted at all: a row is quoted only where some OTHER implied substance
-		// competes with it for the recorded name, since with no competitor the row is the unique
-		// strongest claimant whatever rank it claims at. A non-coded allergen — which
+		// The occurrence clause carrying a free-text allergen on its own. A non-coded allergen — which
 		// PatientClinicalContextBuilder files verbatim and PatientClinicalContext.containsToken's
-		// javadoc calls genuinely free text — resolves by CONTAINMENT, and the equal-claimant leg never
-		// runs at that rank, so free text of this shape puts no competitor in play and the chip goes on
-		// naming the row.
+		// javadoc calls genuinely free text — resolves only by CONTAINMENT, which is not a NAME claim,
+		// so the unique clause cannot name it (see the sibling case below, where nothing else can
+		// either). Here the row's own display name is right there in the recorded string, so the chip
+		// goes on saying the patient is allergic to Trastuzumab, which the chart does say.
 		//
-		// NOT a general claim that free text can never be printed: a free-text string carrying a
-		// combination separator can put a second substance in play through the constituent leg, and
-		// this case does not cover that. What it covers is the ordinary shape — a drug name with a
-		// reaction written after it.
+		// Mutating the display-name half of labelNameOccursIn away is what reddens this.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(SHARED_CIEL_LIST);
 		String freeText = "trastuzumab infusion \u2014 rash and fever";
 		assertEquals("[Trastuzumab]",

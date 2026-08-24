@@ -672,11 +672,9 @@ public class DrugReferenceService {
 				}
 			}
 		}
-		for (String constituent : DrugReference.combinationConstituents(drugName)) {
-			addResolvedSubstance(bySubstance, constituent, DrugReference.NAME_IS_ANOTHER_NAME);
+		for (DrugReference derived : derivedRows(drugName)) {
+			addSubstance(bySubstance, derived);
 		}
-		addResolvedSubstance(bySubstance, DrugReference.parentMoietyName(drugName),
-				DrugReference.NAME_IS_THE_DISPLAY_NAME);
 		return new ArrayList<DrugReference>(bySubstance.values());
 	}
 
@@ -749,11 +747,22 @@ public class DrugReferenceService {
 	 *         objects handed in, so a caller may test membership by identity
 	 */
 	List<DrugReference> findNamedSubstances(String drugName, List<DrugReference> implied) {
-		Set<Object> derived = derivedSubstances(drugName);
+		Set<Object> derived = null;
 		List<DrugReference> named = new ArrayList<DrugReference>(implied.size());
 		for (DrugReference row : implied) {
-			if (row.labelNameOccursIn(drugName) || uniqueStrongestClaimant(drugName, row, implied)
-					|| derived.contains(row.substanceGroupKey())) {
+			if (row.labelNameOccursIn(drugName) || uniqueStrongestClaimant(drugName, row, implied)) {
+				named.add(row);
+				continue;
+			}
+			// Resolved on demand, and never for a row the two cheap clauses already settled: a
+			// constituent that resolves to NOTHING has no early exit in lookupByToken and costs a full
+			// sweep of the dataset, which is exactly what a combination allergen string is full of.
+			// Measured 2026-08-24 over the shipped KB: eager, the 5169 published names cost 4019 sweeps;
+			// on demand, 527. A per-call local, never a field (issue #172).
+			if (derived == null) {
+				derived = derivedSubstanceKeys(drugName);
+			}
+			if (derived.contains(row.substanceGroupKey())) {
 				named.add(row);
 			}
 		}
@@ -765,7 +774,7 @@ public class DrugReferenceService {
 	private static boolean uniqueStrongestClaimant(String drugName, DrugReference row,
 			List<DrugReference> implied) {
 		int claim = row.nameMatchStrength(drugName);
-		if (claim == DrugReference.NAME_NO_MATCH) {
+		if (claim < DrugReference.NAME_IS_ANOTHER_NAME) {
 			return false;
 		}
 		for (DrugReference other : implied) {
@@ -777,54 +786,63 @@ public class DrugReferenceService {
 	}
 
 	/**
-	 * @return the SUBSTANCES a combination constituent or the parent moiety of {@code drugName} names,
-	 *         at the ranks {@link #findImpliedSubstances}' third and fourth legs admit each of them by
-	 *         — the mirror of those legs, through the same {@link #resolvedAtLeast} they use, so the
-	 *         two cannot answer differently.
+	 * @return the SUBSTANCE of each row {@link #derivedRows} resolves — {@link #findNamedSubstances}'s
+	 *         third clause, and a view over the very list {@link #findImpliedSubstances} folds into its
+	 *         implied set, so the two cannot disagree about which legs exist or what rank each admits
+	 *         at.
 	 *
 	 *         <p>Keyed on the SUBSTANCE and not on the row, which is what makes it a mirror rather
 	 *         than an approximation: {@link #addSubstance} keeps the FIRST row seen for a substance, so
 	 *         a substance a derivation leg reached can be represented in the implied list by a row some
 	 *         earlier leg contributed — a row that need not claim the constituent itself. Asking the
 	 *         row would then refuse to name a substance the recorded string demonstrably asserts.
-	 *         Resolved once per recorded name rather than once per row, since it does not depend on
-	 *         which row is being asked about.
 	 *
-	 *         <p><b>The moiety leg is currently redundant here, and is kept deliberately.</b> Measured
-	 *         2026-08-24: deleting it changes no naming decision over the shipped KB and reddens no
+	 *         <p><b>The moiety leg contributes nothing to THIS clause today.</b> Measured 2026-08-24:
+	 *         removing it from the mirror changes no naming decision over the shipped KB and reddens no
 	 *         test, because {@link DrugReference#parentMoietyName} returns a PREFIX of the recorded name
 	 *         and that leg admits a row only where the prefix IS its display name — so
 	 *         {@link DrugReference#labelNameOccursIn} has already said yes. That is a coincidence of
-	 *         three rules in two classes, not a property of this one: it stops holding the moment a
-	 *         moiety is derived as anything but a prefix. Do not delete it as dead code, and do not
-	 *         write a test for it — there is no input on which it decides anything.
+	 *         three rules in two classes, not a property of this one, and it stops holding the moment a
+	 *         moiety is derived as anything but a prefix. It is not this method's to drop in any case:
+	 *         {@link #derivedRows} owns the leg list and the resolution leg needs it.
 	 */
-	private Set<Object> derivedSubstances(String drugName) {
-		Set<Object> out = new HashSet<Object>();
+	private Set<Object> derivedSubstanceKeys(String drugName) {
+		Set<Object> keys = new HashSet<Object>();
+		for (DrugReference row : derivedRows(drugName)) {
+			keys.add(row.substanceGroupKey());
+		}
+		return keys;
+	}
+
+	/**
+	 * @return the rows the two DERIVATION legs of {@link #findImpliedSubstances} resolve out of
+	 *         {@code drugName} — each combination CONSTITUENT an entry is NAMED, then the parent MOIETY
+	 *         an entry is CALLED — in that order, so {@link #addSubstance}'s first-row-wins rule sees
+	 *         them exactly as it did when the legs were written inline.
+	 *
+	 *         <p>The single expression of WHICH legs there are and WHAT rank each admits at, because
+	 *         {@link #findNamedSubstances} has to mirror both to decide whether a derived substance may
+	 *         be printed. Sharing only the per-candidate gate was not enough: the leg list and its two
+	 *         rank constants were written twice, so a third leg added here would not be mirrored, and a
+	 *         rank tightened here but not there would let the mirror print a name the record does not
+	 *         name — issue #268 re-entering through the clause written to prevent it.
+	 */
+	private List<DrugReference> derivedRows(String drugName) {
+		List<DrugReference> rows = new ArrayList<DrugReference>();
 		for (String constituent : DrugReference.combinationConstituents(drugName)) {
-			addSubstanceKey(out, resolvedAtLeast(constituent, DrugReference.NAME_IS_ANOTHER_NAME));
+			addResolved(rows, constituent, DrugReference.NAME_IS_ANOTHER_NAME);
 		}
-		addSubstanceKey(out, resolvedAtLeast(DrugReference.parentMoietyName(drugName),
-				DrugReference.NAME_IS_THE_DISPLAY_NAME));
-		return out;
+		addResolved(rows, DrugReference.parentMoietyName(drugName),
+				DrugReference.NAME_IS_THE_DISPLAY_NAME);
+		return rows;
 	}
 
-	/** Adds {@code resolved}'s substance key when it resolved at all — {@link #derivedSubstances}'s
-	 *  one-line accumulator, so its two legs read as the two questions they are. */
-	private static void addSubstanceKey(Set<Object> keys, DrugReference resolved) {
-		if (resolved != null) {
-			keys.add(resolved.substanceGroupKey());
-		}
-	}
-
-	/** Adds the substance {@code candidate} resolves to, when an entry claims it at {@code minimumClaim}
-	 *  or better — through {@link #lookupByToken}, so a candidate string is resolved by the SAME ranking
-	 *  as the recorded name it was derived from and this cannot become a second resolution rule. */
-	private void addResolvedSubstance(Map<Object, DrugReference> bySubstance, String candidate,
-			int minimumClaim) {
+	/** Appends what {@code candidate} resolves to at {@code minimumClaim} or better, if anything —
+	 *  {@link #derivedRows}'s one-line accumulator, so its two legs read as the two questions they are. */
+	private void addResolved(List<DrugReference> rows, String candidate, int minimumClaim) {
 		DrugReference resolved = resolvedAtLeast(candidate, minimumClaim);
 		if (resolved != null) {
-			addSubstance(bySubstance, resolved);
+			rows.add(resolved);
 		}
 	}
 

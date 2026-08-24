@@ -1251,15 +1251,15 @@ public class DrugSafetyValidator {
 
 			private int relationship;
 
-			/** Whether the sentence currently occupying {@link #position} names the drug it is about —
-			 *  the equal-rank tiebreak (issue #268). Only the allergen arm's identity branch can answer
-			 *  false; every other sentence names its subject unconditionally. */
-			private boolean namesTheDrug;
+			/** Whether the sentence currently occupying {@link #position} names the substance this
+			 *  entry is keyed on — the equal-rank tiebreak (issue #268). Only the allergen arm's three
+			 *  sentences can answer false. */
+			private boolean namesTheFinding;
 
-			RaisedChip(int position, int relationship, boolean namesTheDrug) {
+			RaisedChip(int position, int relationship, boolean namesTheFinding) {
 				this.position = position;
 				this.relationship = relationship;
-				this.namesTheDrug = namesTheDrug;
+				this.namesTheFinding = namesTheFinding;
 			}
 		}
 
@@ -1302,13 +1302,18 @@ public class DrugSafetyValidator {
 		}
 
 		/**
-		 * As above, declaring whether this chip's sentence NAMES the drug it is about — which only the
-		 * allergen arm's identity branch can answer, and only it passes anything but {@code false}.
-		 * Every other arm's sentence names its subject unconditionally, so it has no preference to
-		 * express and takes the four-argument form.
+		 * As above, declaring whether this chip's sentence NAMES the substance this entry is KEYED on —
+		 * the drug for the allergen arm's identity chip, the allergen for its two class chips, which
+		 * since issue #268 both have a wording that quotes the chart instead. Only that arm can answer
+		 * anything but {@code false}: every other arm names both sides of its sentence unconditionally
+		 * and so has no preference to express, and takes the four-argument form.
+		 *
+		 * <p>Keyed on the FINDING side deliberately, because that is what the ledger groups by, so the
+		 * question "did this sentence name what these two chips have in common" is the same question in
+		 * both branches.
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip,
-				boolean namesTheDrug) {
+				boolean namesTheFinding) {
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
 			// merge different sets of rows. Its javadoc is where the two key spaces are justified. It is
@@ -1331,21 +1336,24 @@ public class DrugSafetyValidator {
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
 			if (already == null) {
-				raised.put(key, new RaisedChip(warnings.size(), relationship, namesTheDrug));
+				raised.put(key, new RaisedChip(warnings.size(), relationship, namesTheFinding));
 				warnings.add(chip);
 				return;
 			}
-			// Strictly stronger wins, and at EQUAL strength a chip that can name the drug beats one that
-			// cannot (issue #268). Without that second half the surviving sentence depends on the order
-			// PatientService.getAllergies returned the records: a chart recording `Gallium nitrate`
-			// verbatim was reported as merely contraindicated by `gallium` because an unrelated
-			// free-text row sorted first, so the module held evidence that the chart names the drug and
-			// printed a sentence saying it does not. It cannot demote a naming chip, only promote one.
+			// Strictly stronger wins, and at EQUAL strength a chip that NAMES what the entry is keyed on
+			// beats one that quotes the chart instead (issue #268). Without that second half the
+			// surviving sentence depends on the order PatientService.getAllergies returned the records:
+			// a chart recording `Gallium nitrate` verbatim was reported as merely contraindicated by
+			// `gallium` because an unrelated free-text row sorted first, so the module held evidence that
+			// the chart names the drug and printed a sentence saying it does not. The class chips have
+			// the same shape on their allergen half and declare it the same way. It cannot demote a
+			// naming chip, only promote one.
 			if (relationship > already.relationship
-					|| (relationship == already.relationship && namesTheDrug && !already.namesTheDrug)) {
+					|| (relationship == already.relationship && namesTheFinding
+							&& !already.namesTheFinding)) {
 				warnings.set(already.position, chip);
 				already.relationship = relationship;
-				already.namesTheDrug = namesTheDrug;
+				already.namesTheFinding = namesTheFinding;
 			}
 		}
 	}
@@ -4000,7 +4008,8 @@ public class DrugSafetyValidator {
 							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
 									subject.displayLabel() + " is in the same ATC class (" + shared
 											+ ") as the patient's allergy to " + recorded.allergenName(implied)
-											+ " — possible cross-reactivity"));
+											+ " — possible cross-reactivity"),
+							recorded.names(implied));
 					chipped = true;
 					break;
 				}
@@ -4015,7 +4024,8 @@ public class DrugSafetyValidator {
 							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
 									subject.displayLabel() + " is in the same cross-reactivity group ("
 											+ group.getName() + ") as the patient's allergy to "
-											+ recorded.allergenName(implied) + " — possible cross-reactivity"));
+											+ recorded.allergenName(implied) + " — possible cross-reactivity"),
+							recorded.names(implied));
 					break;
 				}
 			}
@@ -4135,6 +4145,11 @@ public class DrugSafetyValidator {
 		 *
 		 * <p>Safe to union rather than choose, because a NAMED row's sentence quotes no token at all —
 		 * it states the row's own label, which the other record supports just as well.
+		 *
+		 * <p>What it does NOT make order-independent: where NEITHER merged spelling names the row, the
+		 * surviving sentence quotes the first spelling's token, because the merge keeps one token and
+		 * nothing grounds a preference between two chart spellings. Both sentences are true and both
+		 * quote the chart; which spelling is quoted still follows row order.
 		 */
 		private void alsoNames(List<DrugReference> alsoNamed) {
 			for (DrugReference row : alsoNamed) {
@@ -4172,9 +4187,10 @@ public class DrugSafetyValidator {
 		 * {@link DrugReferenceService#findNamedSubstances} returning a sublist of the very rows it was
 		 * handed makes available: {@link DrugReference} defines no {@code equals}, so a containment test
 		 * would mean the same thing today and something else the day one is added — and this decides
-		 * whether a sentence about a patient is true. {@link #alreadyResolved} does lean on
-		 * {@code List.equals}, unchanged from the {@code contains} it replaced; that one is comparing
-		 * whole resolved lists for the de-duplication rule and is not deciding a claim.
+		 * whether a sentence about a patient is true.
+		 * {@link DrugSafetyValidator#resolvedAlike} does lean on {@code List.equals}, unchanged from
+		 * the {@code contains} it replaced; that one compares whole resolved lists for the
+		 * de-duplication rule and is not deciding a claim.
 		 */
 		private String identitySentence(DrugReference row) {
 			return names(row) ? "The patient has a recorded allergy to " + row.displayLabel() + "."

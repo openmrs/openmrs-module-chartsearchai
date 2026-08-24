@@ -354,6 +354,31 @@ public class RecordedAllergenChipNameTest {
 	}
 
 	@Test
+	public void theClassSentenceAlsoPrefersTheRecordThatNamesItsAllergen() throws IOException {
+		// The equal-rank tiebreak is about the substance the ledger entry is KEYED on, so it binds the
+		// class sentences too — their allergen half has two forms for the same reason the identity chip
+		// does. Two records reaching one substance, one naming it and one not, meet on the same key at
+		// SAME_CLASS; without this the more specific wording is kept or lost by row order.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(CLASS_ARM);
+		String kit = "amoxicillin / esomeprazole / levofloxacin combination kit";
+		String question = "Is it safe to give her lansoprazole?";
+		String named = "[Lansoprazole is in the same ATC class (A02BC) as the patient's allergy to "
+				+ "Omeprazole — possible cross-reactivity]";
+
+		for (java.util.List<String> order : java.util.Arrays.asList(
+				java.util.Arrays.asList(kit, "omeprazole"),
+				java.util.Arrays.asList("omeprazole", kit))) {
+			assertEquals(named, DrugReferenceTestSupport.contraindicationDetails(
+					DrugReferenceTestSupport.validator(service).validate("", question,
+							DrugReferenceTestSupport.ctx(60, null, null, null,
+									DrugReferenceTestSupport.set(order.get(0), order.get(1)), null)))
+					.toString(),
+					"the record that NAMES the allergen must speak whatever order it arrived in "
+							+ order + ", was: " + order);
+		}
+	}
+
+	@Test
 	public void thePromptCarriesTheCorrectedSentenceToo() throws IOException {
 		// The other half of a chip (issue #110): every chip is injected as a numbered, citable
 		// safety_finding, so a corrected chip and an uncorrected record would put the false sentence into

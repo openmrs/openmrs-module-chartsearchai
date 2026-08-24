@@ -712,9 +712,11 @@ public class DrugReferenceService {
 	 *       {@code gallium — hives} resolves that way, and naming its row prints the same
 	 *       radiodiagnostic off a chart that says {@code Gallium}. Requiring a NAME claim costs nothing
 	 *       on a name the reference data publishes — measured 2026-08-24, 145 (name, row) pairs over
-	 *       the shipped KB are claimed only at containment and every one of them is named by its own
-	 *       label anyway, because a name that matched by containment usually CONTAINS the row's name.
-	 *       Free text is where it does not;</li>
+	 *       the shipped KB are claimed only at containment, 143 of them named by their own label
+	 *       anyway (a name that matched by containment usually CONTAINS the row's name) and the other
+	 *       two by the derivation clause below ({@code menthol / selenium disulfide},
+	 *       {@code yohimbe preparation / zinc sulfate}). None is lost. Free text is where a containment
+	 *       match does not carry the row's name;</li>
 	 *   <li>a name its printed label is built from OCCURS in the recorded string
 	 *       ({@link DrugReference#labelNameOccursIn}) — what a separator-less combination asserts
 	 *       ({@code Amoxicillin} in {@code amoxicillin and clavulanic acid}, {@code Trastuzumab
@@ -728,12 +730,19 @@ public class DrugReferenceService {
 	 *       exactly the rows it refuses.</li>
 	 * </ul>
 	 *
-	 * <p><b>What it gives up.</b> A recorded name spelling out several ingredients, whose ingredient
-	 * this KB files under a SYNONYM, is not named by any of the three — {@code atovaquone /
-	 * chloroguanide} does not carry {@code Proguanil}, and no constituent of it resolves there — so the
-	 * caller states the relationship instead of the identity. Both sentences are true; the more
-	 * specific one is lost, which is the safe direction for something reporting a record, and the
-	 * defect it replaces is a FALSE sentence.
+	 * <p><b>What it gives up, measured like everything else here.</b> Over the shipped KB,
+	 * <b>169 of 6888</b> (recorded name, row) pairs take the relationship sentence rather than the
+	 * identity one. Most are corrections — a shared alias, or a row the recorded string reaches
+	 * through one ({@code acetic acid / hydrocortisone} → {@code Hydrocortisone butyrate},
+	 * {@code amoxicillin / clarithromycin / esomeprazole combination kit} → {@code Omeprazole}). The
+	 * cost is the rest: a recorded name spelling out several ingredients whose ingredient this KB files
+	 * under a SYNONYM is named by none of the three clauses — {@code atovaquone / chloroguanide} does
+	 * not carry {@code Proguanil} and no constituent of it resolves there, and
+	 * {@code ascorbic acid / folate} does not carry {@code Folic acid}. Both sentences are true; the
+	 * more specific one is lost, which is the safe direction for something reporting a record, and the
+	 * defect it replaces is a FALSE sentence. The two populations are not separated by a predicate —
+	 * telling them apart is a judgement about substances, which is why the sentence changes rather than
+	 * the resolution.
 	 *
 	 * <p><b>What it does not reach at all</b>, so that a reader does not take the paragraph above for
 	 * the whole surface: this decides WHICH SUBSTANCE a sentence may name, never which ROW represents
@@ -783,8 +792,9 @@ public class DrugReferenceService {
 			// Resolved on demand, and never for a row the two cheap clauses already settled: a
 			// constituent that resolves to NOTHING has no early exit in lookupByToken and costs a full
 			// sweep of the dataset, which is exactly what a combination allergen string is full of.
-			// Measured 2026-08-24 over the shipped KB: eager, the 5169 published names cost 4019 sweeps;
-			// on demand, 527. A per-call local, never a field (issue #172).
+			// Measured 2026-08-24 over the shipped KB: eager, the 5169 published names cost 4019
+			// lookupByToken CALLS of which 1381 are full sweeps; on demand, 527 calls and 293 sweeps.
+			// A per-call local, never a field (issue #172).
 			if (derived == null) {
 				derived = derivedSubstanceKeys(drugName);
 			}
@@ -795,8 +805,12 @@ public class DrugReferenceService {
 		return named;
 	}
 
-	/** @return whether {@code row} claims the whole of {@code drugName} strictly more strongly than
-	 *          every other substance in {@code implied} — {@link #findNamedSubstances}'s first clause. */
+	/** @return whether {@code row} claims the whole of {@code drugName} as a NAME
+	 *          ({@link DrugReference#NAME_IS_ANOTHER_NAME} or better) AND strictly more strongly than
+	 *          every other substance in {@code implied} — {@link #findNamedSubstances}'s first clause,
+	 *          both halves. The rank floor is not a detail of the implementation: without it an
+	 *          uncontested CONTAINMENT match passes, which is the shape that reads
+	 *          {@code gallium — hives} and names a radiodiagnostic. */
 	private static boolean uniqueStrongestClaimant(String drugName, DrugReference row,
 			List<DrugReference> implied) {
 		int claim = row.nameMatchStrength(drugName);

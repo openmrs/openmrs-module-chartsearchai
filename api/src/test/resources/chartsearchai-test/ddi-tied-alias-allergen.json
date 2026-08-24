@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "note": "Verbatim DDInter 2.0 slice for issue #268 — real shipped rows, unedited. THREE shapes of a recorded allergy reaching several substances, which together decide whether a chip may print a row's label or must quote the chart. (1) The three gallium rows all carry the rxnorm_name `gallium`, and each display NAME already contains it, so DrugReference.displayLabel appends no synonym and `gallium` is nowhere in what the chip would print: the arm used to publish 'The patient has a recorded allergy to Gallium citrate ga-67.' — a radiodiagnostic the chart never mentions — and DrugReferenceService.lookupByToken picked that row by earliest dataset entry, which carries no clinical meaning. (2) The two penicillin G rows also share one rxnorm_name, but their display names diverge from it, so the label DOES append it and reads 'Benzylpenicillin (penicillin g)' — which quotes the chart, and must go on being printed. (3) `coenzyme q10 / levocarnitine / vitamin e` is a combination whose third substance, Ubidecarenone, is named nowhere in the recorded string: it is reached only because the CONSTITUENT `coenzyme q10` resolves to it, which is findImpliedSubstances' own third leg, and the chip may print that name for the same reason the leg admits the substance. Kept as a slice rather than hand-authored so all three shapes are the shipped data's and not a fixture's invention. (4) Latanoprostene bunod (ophthalmic) is a fourth shape and about a different question: ONE substance recorded TWICE. Its rxnorm_name `latanoprostene bunod` names it, while a chart that writes `latanoprostene bunod 5mg` reaches the same row only by containment and does not name it — the display name's trailing qualifier keeps it out of the recorded string. The two records resolve to the same single substance, so they are de-duplicated as one clinical fact, and which of them PatientService.getAllergies returned first must not decide the wording."
+  "note": "Verbatim DDInter 2.0 slice for issue #268 — real shipped rows, unedited. THREE shapes of a recorded allergy reaching several substances, which together decide whether a chip may print a row's label or must quote the chart. (1) The three gallium rows all carry the rxnorm_name `gallium`, and each display NAME already contains it, so DrugReference.displayLabel appends no synonym and no name the label is built from occurs in the recorded string `gallium` — the test is on the row's name inside the chart's string, not the reverse: the arm used to publish 'The patient has a recorded allergy to Gallium citrate ga-67.' — a radiodiagnostic the chart never mentions — and DrugReferenceService.lookupByToken picked that row by earliest dataset entry, which carries no clinical meaning. (2) The two penicillin G rows also share one rxnorm_name, but their display names diverge from it, so the label DOES append it and reads 'Benzylpenicillin (penicillin g)' — which quotes the chart, and must go on being printed. (3) `coenzyme q10 / levocarnitine / vitamin e` is a combination whose third substance, Ubidecarenone, is named nowhere in the recorded string: it is reached only because the CONSTITUENT `coenzyme q10` resolves to it, which is findImpliedSubstances' own third leg, and the chip may print that name for the same reason the leg admits the substance. Kept as a slice rather than hand-authored so all three shapes are the shipped data's and not a fixture's invention. (4) Latanoprostene bunod (ophthalmic) is a fourth shape and about a different question: ONE substance recorded TWICE. Its rxnorm_name `latanoprostene bunod` names it, while a chart that writes `latanoprostene bunod 5mg` reaches the same row only by containment and does not name it — the display name's trailing qualifier keeps it out of the recorded string. The two records resolve to the same single substance, so they are de-duplicated as one clinical fact, and which of them PatientService.getAllergies returned first must not decide the wording. (5) Amphetamine is the fifth shape and isolates the half of DrugReference.labelNameOccursIn that reads the appended generic: its rxnorm_name `dextroamphetamine` CONTAINS its display name, so displayLabel prints no synonym — and a chart recording `dextroamphetamine sulfate`, a different substance, therefore carries a name the label never prints. Dextroamphetamine is the rival the chart's string DOES name, so the two are the shipped shape: one recorded string, two substances, and only one of them named. Dropping the appendsGenericName guard would let the string name Amphetamine as well."
  },
  "mechanisms": {},
  "drugs": [
@@ -351,6 +351,60 @@
     "S01EE06"
    ],
    "ciel": []
+  },
+  {
+   "id": "DDInter526",
+   "name": "Dextroamphetamine",
+   "rxcui": "3288",
+   "rxnorm_name": "dextroamphetamine",
+   "drugbank_id": "DB01576",
+   "atc": [
+    "N06BA02"
+   ],
+   "ciel": [
+    {
+     "code": "74663",
+     "uuid": "74663AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextroamphetamine"
+    },
+    {
+     "code": "74664",
+     "uuid": "74664AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextroamphetamine saccharate"
+    },
+    {
+     "code": "74665",
+     "uuid": "74665AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextroamphetamine sulfate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter84",
+   "name": "Amphetamine",
+   "rxcui": "3288",
+   "rxnorm_name": "dextroamphetamine",
+   "drugbank_id": "DB00182",
+   "atc": [
+    "N06BA02"
+   ],
+   "ciel": [
+    {
+     "code": "74663",
+     "uuid": "74663AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextroamphetamine"
+    },
+    {
+     "code": "74664",
+     "uuid": "74664AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextroamphetamine saccharate"
+    },
+    {
+     "code": "74665",
+     "uuid": "74665AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextroamphetamine sulfate"
+    }
+   ]
   }
  ],
  "interactions": []

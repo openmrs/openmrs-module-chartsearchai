@@ -142,17 +142,31 @@ public class DrugReference {
 	 * from — the display name, and the generic only where the label actually appends it.
 	 *
 	 * <p>The question a caller about to PRINT that label asks of the chart's own string (issue #268):
-	 * "The patient has a recorded allergy to X." quotes a record, so X may be this entry's label only
-	 * where the record says it. Narrower than {@link #matchesDrugName}, deliberately: that scans every
-	 * alias, and an alias is precisely how a row comes to be reached by a name belonging to a different
-	 * substance — the shape this is asked to separate.
+	 * "The patient has a recorded allergy to X." reports a record, so X may be this entry's label only
+	 * where the record says it. It reads two names where {@link #matchesDrugName} scans every alias,
+	 * and an alias is precisely how a row comes to be reached by a name belonging to a different
+	 * substance — the shape this is asked to separate. Narrower than that scan for any entry whose
+	 * aliases carry its own name and generic, which the {@code ddinter} and {@code atc} parsers
+	 * guarantee and a hand-authored {@code json} entry need not: there this can answer true where
+	 * {@code matchesDrugName} answers false. Not reachable through the caller — {@code
+	 * findNamedSubstances} only ever sees rows {@code findImpliedSubstances} already gated on that
+	 * scan — so it is a bound on the accessor rather than on the arm.
 	 *
 	 * <p>Gated on what the label PRINTS rather than on {@link #getName()} alone because the two must
 	 * be one string. A row whose generic diverges renders as {@code Acetylsalicylic acid (aspirin)},
 	 * and an allergy recorded as {@code aspirin} does name that label even though it does not carry
 	 * {@code Acetylsalicylic acid}. Where the label does NOT append the generic the generic is not part
-	 * of what is printed, so it cannot license printing it — which is what keeps the three shipped rows
-	 * whose {@code rxnorm_name} is {@code gallium} from each claiming to be the recorded allergen.
+	 * of what is printed, so it cannot license printing it: a chart recording
+	 * {@code dextroamphetamine sulfate} carries {@code Amphetamine}'s {@code rxnorm_name} and not its
+	 * name, and {@code displayLabel()} prints no synonym there because the name is a substring of the
+	 * generic — so the recorded string does not name that row, which is a different substance.
+	 * Measured 2026-08-24, 15 (name, row) pairs over the shipped KB turn on that half alone.
+	 *
+	 * <p>An earlier version of this paragraph offered the three shipped {@code gallium} rows as the
+	 * example, and they do not exercise this half at all: {@code DdiDrugReferenceSource} sets
+	 * {@code genericName} only where the display name does NOT contain the {@code rxnorm_name}, and
+	 * every gallium display name contains it, so those rows carry no generic for the gate to test.
+	 * They are refused by the display-name half.
 	 *
 	 * <p>By {@link #matchesOrderName}'s rule, since both operands are that shape: a clinician-entered
 	 * name on one side and a reference name on the other. So {@code trastuzumab} names

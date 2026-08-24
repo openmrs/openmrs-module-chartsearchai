@@ -47,8 +47,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * and so assert the allergy as flatly — only the allergen half of those moves, since they already
  * name their own subject.
  *
- * <p>Six cases below each name the clause or sentence they discriminate and say so in their own
- * comment.
+ * <p>Each case below names, in its own comment, the clause or sentence it discriminates — mutate
+ * that one thing and the case named on it is what reddens.
  * Removing the unique clause altogether also reddens five cases that were already in the suite, Opium
  * under a {@code papaveretum} allergy among them.
  */
@@ -323,6 +323,36 @@ public class RecordedAllergenChipNameTest {
 	}
 
 	@Test
+	public void aGenericTheLabelNeverPrintsCannotNameItsRow() throws IOException {
+		// The half of labelNameOccursIn that reads the APPENDED generic, isolated — and it was the half
+		// nothing pinned: removing the guard entirely left the whole suite green while changing 15
+		// naming decisions over the shipped KB.
+		//
+		// Amphetamine's rxnorm_name is `dextroamphetamine`, which CONTAINS its display name, so
+		// displayLabel prints no synonym and the generic is not part of what a chip would show. A chart
+		// recording `dextroamphetamine sulfate` therefore carries a name this row never prints — while
+		// naming Dextroamphetamine, a different substance, outright. Reading the generic regardless
+		// would let one string claim both.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TIED_ON_ONE_NAME);
+		DrugReference amphetamine = DrugReferenceTestSupport
+				.row(DrugReferenceTestSupport.ddiFixtureEntries(TIED_ON_ONE_NAME), "Amphetamine");
+		assertEquals("Amphetamine", amphetamine.displayLabel(),
+				"precondition: the label must print no synonym, or this case tests the other half");
+
+		List<String> details = DrugReferenceTestSupport.contraindicationDetails(
+				DrugReferenceTestSupport.validator(service).validate("",
+						"Is it safe to give her amphetamine or dextroamphetamine?",
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("dextroamphetamine sulfate"), null)));
+
+		assertEquals("[The patient has a recorded allergy to Dextroamphetamine., "
+				+ "Amphetamine is contraindicated by a recorded allergy to "
+				+ "\"dextroamphetamine sulfate\".]", details.toString(),
+				"the substance the chart's string names keeps its name; the one whose generic the label "
+						+ "never prints does not, was: " + details);
+	}
+
+	@Test
 	public void thePromptCarriesTheCorrectedSentenceToo() throws IOException {
 		// The other half of a chip (issue #110): every chip is injected as a numbered, citable
 		// safety_finding, so a corrected chip and an uncorrected record would put the false sentence into
@@ -357,9 +387,9 @@ public class RecordedAllergenChipNameTest {
 		//
 		// So the unique clause requires a NAME claim, not merely the strongest one available. Measured
 		// through the real parse of the shipped KB, that costs nothing on a recorded name the reference
-		// data publishes — 145 (name, row) pairs are claimed only at the containment rank and all 145
-		// are named by their own label anyway — because a name that matched by containment usually
-		// contains the row's name, and free text is where it does not.
+		// data publishes: 145 (name, row) pairs are claimed only at the containment rank, 143 named by
+		// their own label anyway and the other two by the derivation clause. None is lost. Free text is
+		// where a containment match does not carry the row's name.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TIED_ON_ONE_NAME);
 		String recordedWithReaction = "gallium \u2014 hives";
 		assertEquals("[Gallium citrate ga-67]", DrugReferenceTestSupport
@@ -384,8 +414,9 @@ public class RecordedAllergenChipNameTest {
 		// The occurrence clause carrying a free-text allergen on its own. A non-coded allergen — which
 		// PatientClinicalContextBuilder files verbatim and PatientClinicalContext.containsToken's
 		// javadoc calls genuinely free text — resolves only by CONTAINMENT, which is not a NAME claim,
-		// so the unique clause cannot name it (see the sibling case below, where nothing else can
-		// either). Here the row's own display name is right there in the recorded string, so the chip
+		// so the unique clause cannot name it (which is what
+		// anAllergenRecordedWithAReactionStillCannotNameARivalSubstance turns on, where nothing else
+		// names it either). Here the row's own display name is right there in the recorded string, so the chip
 		// goes on saying the patient is allergic to Trastuzumab, which the chart does say.
 		//
 		// Mutating the display-name half of labelNameOccursIn away is what reddens this.

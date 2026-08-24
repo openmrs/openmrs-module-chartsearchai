@@ -418,8 +418,8 @@ public class DrugSafetyValidator {
 		// of that a functional case can see — a memo outliving the entries it was resolved from — and
 		// before it nothing pinned even that. Reassigning a FIELD here once per pass stays green on it;
 		// see that test's javadoc, which names what it does not cover.
-		List<List<DrugReference>> recordedAllergens = warnContra
-				? recordedAllergens(context) : Collections.<List<DrugReference>> emptyList();
+		List<RecordedAllergen> recordedAllergens = warnContra
+				? recordedAllergens(context) : Collections.<RecordedAllergen> emptyList();
 
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
@@ -1086,8 +1086,10 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>Which chip survives.</b> The most specific relationship, since that is this arm's analogue
 	 * of "the highest severity wins" — a contraindication chip carries no severity, and what it can
-	 * under-report is the STRENGTH of the claim: identity ("the patient has a recorded allergy to X")
-	 * over a shared ATC class over a shared curated group. Where a self-named curated rule joins that
+	 * under-report is the STRENGTH of the claim: identity (the patient is allergic to this very drug)
+	 * over a shared ATC class over a shared curated group. Identity is the RELATIONSHIP and not a fixed
+	 * wording — since issue #268 that rank states it in one of two sentences, depending on whether the
+	 * recorded name names the row. Where a self-named curated rule joins that
 	 * space it is ranked by what it ADDS, not by which arm produced it — issue #88's finding that "arm X
 	 * yields to arm Y" is the wrong dedup whenever the yielding arm can be the one carrying the content.
 	 * A rule with a note of its own says the identity fact in the deployment's own words and outranks it;
@@ -1167,7 +1169,15 @@ public class DrugSafetyValidator {
 		 *  relationship below, stated in the deployment's own clinical wording. Above {@link #IDENTITY}
 		 *  because it says the identity fact and the note besides, which nothing else in this ledger can
 		 *  reproduce — a deployment authoring {@code drug-reference.json} is recording exactly that
-		 *  wording, and a fold that kept the module's stock sentence would silently discard it. */
+		 *  wording, and a fold that kept the module's stock sentence would silently discard it.
+		 *
+		 *  <p>Its rank guard asks whether the matched record names the entry with
+		 *  {@link DrugReference#matchesDrugName}, which scans every alias, while issue #268 asks the
+		 *  narrower {@link DrugReference#labelNameOccursIn} of the sentence below. So a record matching
+		 *  through a borrowed alias can hold this rank while {@link #IDENTITY} would have declined to
+		 *  state identity. The two cannot contradict each other — only one rank ever renders, and this
+		 *  one's sentence is itself relationship-shaped ("X is contraindicated by an active allergy:
+		 *  …"), asserting the contraindication rather than an allergy to X. */
 		static final int SELF_NAMED_RULE = 4;
 
 		/** A recorded allergy to this very substance — needs no ATC code and outranks both class
@@ -1241,9 +1251,15 @@ public class DrugSafetyValidator {
 
 			private int relationship;
 
-			RaisedChip(int position, int relationship) {
+			/** Whether the sentence currently occupying {@link #position} names the substance this
+			 *  entry is keyed on — the equal-rank tiebreak (issue #268). Only the allergen arm's three
+			 *  sentences can answer false. */
+			private boolean namesTheFinding;
+
+			RaisedChip(int position, int relationship, boolean namesTheFinding) {
 				this.position = position;
 				this.relationship = relationship;
+				this.namesTheFinding = namesTheFinding;
 			}
 		}
 
@@ -1282,6 +1298,22 @@ public class DrugSafetyValidator {
 		 *        either way it keys the same, since both are rows of the subject's substance.
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip) {
+			add(subject, finding, relationship, chip, false);
+		}
+
+		/**
+		 * As above, declaring whether this chip's sentence NAMES the substance this entry is KEYED on —
+		 * the drug for the allergen arm's identity chip, the allergen for its two class chips, which
+		 * since issue #268 both have a wording that quotes the chart instead. Only that arm can answer
+		 * anything but {@code false}: every other arm names both sides of its sentence unconditionally
+		 * and so has no preference to express, and takes the four-argument form.
+		 *
+		 * <p>Keyed on the FINDING side deliberately, because that is what the ledger groups by, so the
+		 * question "did this sentence name what these two chips have in common" is the same question in
+		 * both branches.
+		 */
+		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip,
+				boolean namesTheFinding) {
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
 			// merge different sets of rows. Its javadoc is where the two key spaces are justified. It is
@@ -1304,13 +1336,24 @@ public class DrugSafetyValidator {
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
 			if (already == null) {
-				raised.put(key, new RaisedChip(warnings.size(), relationship));
+				raised.put(key, new RaisedChip(warnings.size(), relationship, namesTheFinding));
 				warnings.add(chip);
 				return;
 			}
-			if (relationship > already.relationship) {
+			// Strictly stronger wins, and at EQUAL strength a chip that NAMES what the entry is keyed on
+			// beats one that quotes the chart instead (issue #268). Without that second half the
+			// surviving sentence depends on the order PatientService.getAllergies returned the records:
+			// a chart recording `Gallium nitrate` verbatim was reported as merely contraindicated by
+			// `gallium` because an unrelated free-text row sorted first, so the module held evidence that
+			// the chart names the drug and printed a sentence saying it does not. The class chips have
+			// the same shape on their allergen half and declare it the same way. It cannot demote a
+			// naming chip, only promote one.
+			if (relationship > already.relationship
+					|| (relationship == already.relationship && namesTheFinding
+							&& !already.namesTheFinding)) {
 				warnings.set(already.position, chip);
 				already.relationship = relationship;
+				already.namesTheFinding = namesTheFinding;
 			}
 		}
 	}
@@ -3885,7 +3928,7 @@ public class DrugSafetyValidator {
 	 * {@code PresentationMoietyAllergenTest} for the bound pinned as a test.
 	 */
 	private void addAllergyContraindications(ContraindicationChips chips, DrugReference ref,
-			List<List<DrugReference>> recordedAllergens) {
+			List<RecordedAllergen> recordedAllergens) {
 		if (recordedAllergens.isEmpty()) {
 			return;
 		}
@@ -3912,7 +3955,8 @@ public class DrugSafetyValidator {
 		// name a drug that publishes no such code. Re-measure it on a refresh — the instruction lives with
 		// the measurement, and this is one more thing that now depends on it.
 		DrugReference subject = chips.subjectOf(ref);
-		for (List<DrugReference> allergen : recordedAllergens) {
+		for (RecordedAllergen recorded : recordedAllergens) {
+			List<DrugReference> allergen = recorded.substances();
 			// Identity FIRST, over every substance the recorded name implies, and only then the class
 			// comparisons over the same set: precedence belongs to the recorded allergy as a whole, so a
 			// weaker relationship with one implied substance must not pre-empt a stronger one with
@@ -3935,10 +3979,18 @@ public class DrugSafetyValidator {
 				// chip does not read the resolver at all, so a later change to SubstanceSubjects cannot
 				// reach a chip that must not move — which is #187, and #187 is not a thing to leave resting
 				// on two expressions happening to be equal.
+				//
+				// WHICH NAME the sentence may use is a second question, and not the same one (issue
+				// #268). The row above is a row of ref's substance, which is what makes the CHIP about
+				// the right drug; it is not necessarily a row the recorded name NAMES, because
+				// findImpliedSubstances reaches every substance a name could denote and admits some of
+				// them on a rank TIE or through a derivation. So the sentence has two forms and
+				// recordedAllergen decides between them — see DrugReferenceService.findNamedSubstances
+				// for the three ways a name names a row and for what the second form gives up.
 				chips.add(sameSubstance, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION,
-								sameSubstance.displayLabel(), "The patient has a recorded allergy to "
-										+ sameSubstance.displayLabel() + "."));
+								sameSubstance.displayLabel(), recorded.identitySentence(sameSubstance)),
+						recorded.names(sameSubstance));
 				continue;
 			}
 			if (refClasses.isEmpty() && refGroups.isEmpty()) {
@@ -3955,8 +4007,9 @@ public class DrugSafetyValidator {
 					chips.add(subject, implied.substanceGroupKey(), ContraindicationChips.SAME_CLASS,
 							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
 									subject.displayLabel() + " is in the same ATC class (" + shared
-											+ ") as the patient's allergy to " + implied.displayLabel()
-											+ " — possible cross-reactivity"));
+											+ ") as the patient's allergy to " + recorded.allergenName(implied)
+											+ " — possible cross-reactivity"),
+							recorded.names(implied));
 					chipped = true;
 					break;
 				}
@@ -3971,7 +4024,8 @@ public class DrugSafetyValidator {
 							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
 									subject.displayLabel() + " is in the same cross-reactivity group ("
 											+ group.getName() + ") as the patient's allergy to "
-											+ implied.displayLabel() + " — possible cross-reactivity"));
+											+ recorded.allergenName(implied) + " — possible cross-reactivity"),
+							recorded.names(implied));
 					break;
 				}
 			}
@@ -3991,10 +4045,12 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return the substances each of the patient's recorded allergies names, one entry per distinct
-	 *         resolution and in the order the context lists the tokens — the input to
-	 *         {@link #addAllergyContraindications}, resolved once per {@code validate} because it does
-	 *         not depend on the subject being checked.
+	 * @return one {@link RecordedAllergen} per distinct resolution, in the order the context lists the
+	 *         tokens — the input to {@link #addAllergyContraindications}, resolved once per
+	 *         {@code validate} because it does not depend on the subject being checked. Each carries
+	 *         its charted allergen token and the substances it implies, plus which of those it NAMES
+	 *         (issue #268): the arm reasons over all of them, and only a named one may be reported as
+	 *         the allergy itself.
 	 *
 	 *         <p>De-duplicated on the whole resolved LIST rather than on one row of it — this is the
 	 *         {@code seenAllergens} guard that used to live inside the arm, widened because one row is
@@ -4011,18 +4067,175 @@ public class DrugSafetyValidator {
 	 *         A free-text allergen can, and the ledger then collapses the identity chip but not
 	 *         necessarily the class one.
 	 */
-	private List<List<DrugReference>> recordedAllergens(PatientClinicalContext context) {
+	private List<RecordedAllergen> recordedAllergens(PatientClinicalContext context) {
 		if (context == null) {
 			return Collections.emptyList();
 		}
-		List<List<DrugReference>> out = new ArrayList<List<DrugReference>>();
+		List<RecordedAllergen> out = new ArrayList<RecordedAllergen>();
 		for (String allergyToken : context.getAllergyTokens()) {
 			List<DrugReference> implied = drugReferenceService.findImpliedSubstances(allergyToken);
-			if (!implied.isEmpty() && !out.contains(implied)) {
-				out.add(implied);
+			if (implied.isEmpty()) {
+				continue;
+			}
+			List<DrugReference> named = drugReferenceService.findNamedSubstances(allergyToken, implied);
+			RecordedAllergen seen = resolvedAlike(out, implied);
+			if (seen == null) {
+				out.add(new RecordedAllergen(allergyToken, implied, named));
+			}
+			else {
+				seen.alsoNames(named);
 			}
 		}
 		return out;
+	}
+
+	/** @return the entry of {@code out} that already resolved to exactly {@code implied}, else null —
+	 *          the de-duplication above, unchanged in what it compares: the whole resolved LIST, never
+	 *          the recorded token beside it, because two spellings of one allergy are one record and
+	 *          the rule that says so is stated on {@link #recordedAllergens}. It returns the entry
+	 *          rather than a boolean because the later spelling still carries evidence — see
+	 *          {@link RecordedAllergen#alsoNames}. */
+	private static RecordedAllergen resolvedAlike(List<RecordedAllergen> out,
+			List<DrugReference> implied) {
+		for (RecordedAllergen seen : out) {
+			if (seen.substances().equals(implied)) {
+				return seen;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * One of the patient's recorded allergies: its charted allergen token, the substances it implies, and
+	 * the ones it NAMES (issue #268). Three facts about one record, held together because the identity
+	 * chip needs all three at once — it reports THAT record, so it may print a row's label only where
+	 * the record names it and must otherwise quote the chart.
+	 *
+	 * <p>Private to this class and built once per {@code validate} pass, by the caller that already
+	 * resolves the allergy list — so nothing here outlives the pass (issue #172: this bean is a Spring
+	 * singleton and this memo is keyed on nothing at all).
+	 */
+	private static final class RecordedAllergen {
+
+		/** The allergen as {@link PatientClinicalContext} holds it — trimmed and lower-cased by
+		 *  {@link DrugReference#normalizeName} at construction, so this is the chart's word rather than
+		 *  the chart's STRING, and a sentence carrying it reads {@code … a recorded allergy to gallium.}
+		 *  for a chart that wrote {@code Gallium}. No un-normalized carrier exists to use instead. */
+		private final String token;
+
+		private final List<DrugReference> substances;
+
+		private final List<DrugReference> named;
+
+		private RecordedAllergen(String token, List<DrugReference> substances,
+				List<DrugReference> named) {
+			this.token = token;
+			this.substances = substances;
+			this.named = new ArrayList<DrugReference>(named);
+		}
+
+		/**
+		 * Folds in what ANOTHER spelling of this same allergy names. Two records resolving to the same
+		 * substances are one clinical fact and are de-duplicated, but they are not equally good
+		 * EVIDENCE: a chart carrying both {@code latanoprostene bunod} and
+		 * {@code latanoprostene bunod 5mg} names the drug through the first and not the second, and
+		 * which one {@code PatientService.getAllergies} returns first is not something a clinician
+		 * should be able to see in the wording. So naming survives the merge, and the sentence no
+		 * longer depends on that order.
+		 *
+		 * <p>Safe to union rather than choose, because a NAMED row's sentence quotes no token at all —
+		 * it states the row's own label, which the other record supports just as well.
+		 *
+		 * <p>What it does NOT make order-independent: where NEITHER merged spelling names the row, the
+		 * surviving sentence quotes the first spelling's token, because the merge keeps one token and
+		 * nothing grounds a preference between two chart spellings. Both sentences are true and both
+		 * quote the chart; which spelling is quoted still follows row order.
+		 */
+		private void alsoNames(List<DrugReference> alsoNamed) {
+			for (DrugReference row : alsoNamed) {
+				if (!names(row)) {
+					named.add(row);
+				}
+			}
+		}
+
+		/** The substances this recorded name implies — what the class comparisons reason over, and the
+		 *  de-duplication key. Unchanged by issue #268: no substance is withheld from any arm. */
+		private List<DrugReference> substances() {
+			return substances;
+		}
+
+		/**
+		 * The identity chip's whole sentence, in one of two forms, because the two state different
+		 * things and only one of them is available for a given row.
+		 *
+		 * <p>Where this recorded name NAMES the row, the chart records an allergy to that very drug and
+		 * the sentence says so — unchanged since issue #164, and what issues #187/#192 settled must keep
+		 * naming the row the chart records.
+		 *
+		 * <p>Where it does not, that claim would be false, so the sentence states the relationship the
+		 * module actually established: there is a recorded allergy to THIS name, and it contraindicates
+		 * THAT drug. It takes the curated rule arm's own shape ("X is contraindicated by an active
+		 * allergy: …") deliberately, because the wire contract requires it — {@code README} and
+		 * {@link SafetyWarning#getDetail()} say a detail is a standalone sentence naming its own drug,
+		 * which clients render alone and key per-finding identity on. A sentence that named only the
+		 * allergen would satisfy neither: the subject would appear nowhere on screen, and two chips
+		 * about different drugs raised by one allergy record would carry byte-identical details (issue
+		 * #238's collapse, from the other side).
+		 *
+		 * <p>Membership is tested by REFERENCE, which is what
+		 * {@link DrugReferenceService#findNamedSubstances} returning a sublist of the very rows it was
+		 * handed makes available: {@link DrugReference} defines no {@code equals}, so a containment test
+		 * would mean the same thing today and something else the day one is added — and this decides
+		 * whether a sentence about a patient is true.
+		 * {@link DrugSafetyValidator#resolvedAlike} does lean on {@code List.equals}, unchanged from
+		 * the {@code contains} it replaced; that one compares whole resolved lists for the
+		 * de-duplication rule and is not deciding a claim.
+		 */
+		private String identitySentence(DrugReference row) {
+			return names(row) ? "The patient has a recorded allergy to " + row.displayLabel() + "."
+					: row.displayLabel() + " is contraindicated by a recorded allergy to " + quotedToken()
+							+ ".";
+		}
+
+		/**
+		 * @return what the two CLASS sentences may call {@code row}, the substance they report a
+		 *         relationship WITH — its own label where this recorded name names it, and otherwise the
+		 *         charted token. Those sentences say "as the patient's allergy to Y", which asserts the
+		 *         allergy as flatly as the identity chip does, so the same rule binds them: measured over
+		 *         the shipped KB, an allergen charted as {@code amoxicillin / esomeprazole / levofloxacin
+		 *         combination kit} put "the patient's allergy to Omeprazole" beside the identity chip
+		 *         that had just declined to say it, in one payload. Unlike the identity chip the sentence
+		 *         needs no second form — it already names its own subject and states the relationship,
+		 *         so only the allergen half moves.
+		 */
+		private String allergenName(DrugReference row) {
+			return names(row) ? row.displayLabel() : quotedToken();
+		}
+
+		/**
+		 * @return the charted token in quotation marks — because it is a quotation, and because a
+		 *         non-coded allergen is clinician free text that can carry the module's own punctuation.
+		 *         The class sentences end in {@code " — possible cross-reactivity"}, so an allergen
+		 *         charted as {@code esomeprazole magnesium — hives} produced a sentence with two
+		 *         em-dashed clauses and no way to tell which was the chart's; that text is injected as a
+		 *         citable {@code safety_finding}, so a model reads it too.
+		 */
+		private String quotedToken() {
+			return "\"" + token + "\"";
+		}
+
+		/** @return whether this recorded name NAMES {@code row} — by reference, for the reason
+		 *          {@link #identitySentence} gives, and asked in one place because all three of the
+		 *          arm's sentences turn on it. */
+		private boolean names(DrugReference row) {
+			for (DrugReference candidate : named) {
+				if (candidate == row) {
+					return true;
+				}
+			}
+			return false;
+		}
 	}
 
 	/**
@@ -4129,7 +4342,7 @@ public class DrugSafetyValidator {
 	 */
 	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries,
-			List<List<DrugReference>> recordedAllergens, SubjectMatter askedAbout) {
+			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout) {
 		if (!hasContraindicationRecords(context)) {
 			return;
 		}
@@ -4138,7 +4351,7 @@ public class DrugSafetyValidator {
 		// varies inside the loop. A per-call local and never a field, for issue #172's reason — this
 		// bean is a Spring singleton, so a field here is one unsynchronized structure shared by every
 		// concurrent request, and this one is keyed on nothing at all.
-		List<List<DrugReference>> allergensAskedAbout = null;
+		List<RecordedAllergen> allergensAskedAbout = null;
 		for (DrugReference ref : orderEntries) {
 			if (inPlay.contains(ref)) {
 				continue;
@@ -4209,11 +4422,11 @@ public class DrugSafetyValidator {
 	 *         #145/#193/#195), so admitting the allergy on any of its entries keeps the identity and
 	 *         cross-reactivity arms reasoning over the same finding they always did.
 	 */
-	private static List<List<DrugReference>> recordedAllergensAskedAbout(
-			List<List<DrugReference>> recordedAllergens, SubjectMatter askedAbout) {
-		List<List<DrugReference>> out = new ArrayList<List<DrugReference>>();
-		for (List<DrugReference> allergen : recordedAllergens) {
-			if (askedAbout.namesRecordedAllergen(allergen)) {
+	private static List<RecordedAllergen> recordedAllergensAskedAbout(
+			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout) {
+		List<RecordedAllergen> out = new ArrayList<RecordedAllergen>();
+		for (RecordedAllergen allergen : recordedAllergens) {
+			if (askedAbout.namesRecordedAllergen(allergen.substances())) {
 				out.add(allergen);
 			}
 		}

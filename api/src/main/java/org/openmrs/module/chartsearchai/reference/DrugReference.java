@@ -118,15 +118,72 @@ public class DrugReference {
 	 * cannot share a string; say which RECORD is meant.
 	 */
 	public String displayLabel() {
+		return appendsGenericName() ? name + " (" + genericName + ")" : name;
+	}
+
+	/**
+	 * @return whether {@link #displayLabel()} appends {@link #getGenericName()} as a synonym — the
+	 *         divergence test itself, extracted so that {@link #labelNameOccursIn} can ask which names
+	 *         the printed label is actually BUILT from without restating the rule. Two spellings of it
+	 *         would let a caller admit a generic the label never prints, which is the whole point of
+	 *         asking.
+	 */
+	private boolean appendsGenericName() {
 		if (genericName == null || genericName.isEmpty() || name == null) {
-			return name;
+			return false;
 		}
 		String n = name.toLowerCase(Locale.ROOT);
 		String g = genericName.toLowerCase(Locale.ROOT);
-		if (n.contains(g) || g.contains(n)) {
-			return name;
+		return !n.contains(g) && !g.contains(n);
+	}
+
+	/**
+	 * Whether a clinician-entered drug NAME carries one of the names {@link #displayLabel()} is built
+	 * from — the display name, and the generic only where the label actually appends it.
+	 *
+	 * <p>The question a caller about to PRINT that label asks of the chart's own string (issue #268):
+	 * "The patient has a recorded allergy to X." reports a record, so X may be this entry's label only
+	 * where the record says it. It reads two names where {@link #matchesDrugName} scans every alias,
+	 * and an alias is precisely how a row comes to be reached by a name belonging to a different
+	 * substance — the shape this is asked to separate. Narrower than that scan for any entry whose
+	 * aliases carry its own name and generic, which the {@code ddinter} and {@code atc} parsers
+	 * guarantee and a hand-authored {@code json} entry need not: there this can answer true where
+	 * {@code matchesDrugName} answers false. Not reachable through the caller — {@code
+	 * findNamedSubstances} only ever sees rows {@code findImpliedSubstances} already gated on that
+	 * scan — so it is a bound on the accessor rather than on the arm.
+	 *
+	 * <p>Gated on what the label PRINTS rather than on {@link #getName()} alone because the two must
+	 * be one string. A row whose generic diverges renders as {@code Acetylsalicylic acid (aspirin)},
+	 * and an allergy recorded as {@code aspirin} does name that label even though it does not carry
+	 * {@code Acetylsalicylic acid}. Where the label does NOT append the generic the generic is not part
+	 * of what is printed, so it cannot license printing it: a chart recording
+	 * {@code dextroamphetamine sulfate} carries {@code Amphetamine}'s {@code rxnorm_name} and not its
+	 * name, and {@code displayLabel()} prints no synonym there because the name is a substring of the
+	 * generic — so the recorded string does not name that row, which is a different substance.
+	 *
+	 * <p>Measured 2026-08-24 over the shipped KB, the two halves of this accessor pull in opposite
+	 * directions and both earn their place: the appended generic ADMITS 512 (name, row) pairs the
+	 * display name alone would refuse, and the {@code appendsGenericName()} guard REFUSES 7 that
+	 * nothing else names — {@code esomeprazole magnesium} and three combination kits reaching
+	 * {@code Omeprazole} (issue #185's shape), {@code dexfenfluramine hydrochloride} reaching
+	 * {@code Fenfluramine}, and the two {@code dextroamphetamine} salts reaching {@code Amphetamine}.
+	 *
+	 * <p>An earlier version of this paragraph offered the three shipped {@code gallium} rows as the
+	 * example, and they do not exercise this half at all: {@code DdiDrugReferenceSource} sets
+	 * {@code genericName} only where the display name does NOT contain the {@code rxnorm_name}, and
+	 * every gallium display name contains it, so those rows carry no generic for the gate to test.
+	 * They are refused by the display-name half.
+	 *
+	 * <p>By {@link #matchesOrderName}'s rule, since both operands are that shape: a clinician-entered
+	 * name on one side and a reference name on the other. So {@code trastuzumab} names
+	 * {@code ado-trastuzumab emtansine} — the hyphen is a boundary — and {@code ketoconazole} does not
+	 * name {@code Levoketoconazole}, where the token sits inside a longer word (issue #86).
+	 */
+	boolean labelNameOccursIn(String recordedName) {
+		if (matchesOrderName(recordedName, name)) {
+			return true;
 		}
-		return name + " (" + genericName + ")";
+		return appendsGenericName() && matchesOrderName(recordedName, genericName);
 	}
 
 	public void setName(String name) {

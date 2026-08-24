@@ -672,26 +672,234 @@ public class DrugReferenceService {
 				}
 			}
 		}
-		for (String constituent : DrugReference.combinationConstituents(drugName)) {
-			addResolvedSubstance(bySubstance, constituent, DrugReference.NAME_IS_ANOTHER_NAME);
+		for (DrugReference derived : derivedRows(drugName)) {
+			addSubstance(bySubstance, derived);
 		}
-		addResolvedSubstance(bySubstance, DrugReference.parentMoietyName(drugName),
-				DrugReference.NAME_IS_THE_DISPLAY_NAME);
 		return new ArrayList<DrugReference>(bySubstance.values());
 	}
 
-	/** Adds the substance {@code candidate} resolves to, when an entry claims it at {@code minimumClaim}
-	 *  or better — through {@link #lookupByToken}, so a candidate string is resolved by the SAME ranking
-	 *  as the recorded name it was derived from and this cannot become a second resolution rule. */
-	private void addResolvedSubstance(Map<Object, DrugReference> bySubstance, String candidate,
-			int minimumClaim) {
+	/**
+	 * Of the substances {@link #findImpliedSubstances} reads out of a recorded drug NAME, the ones the
+	 * name itself NAMES — the question a caller about to QUOTE the chart asks, and deliberately a
+	 * narrower one than which substances the name implies (issue #268).
+	 *
+	 * <p><b>Why the two differ, and must.</b> That resolution is additive on purpose (issues
+	 * #193/#195): a recorded name reaches every substance it could denote, so the class and
+	 * cross-reactivity comparisons see all of them. Narrowing it would trade a false positive for a
+	 * false NEGATIVE in a safety net. But its equal-claimant leg admits a row on a rank TIE, and a tie
+	 * is satisfied by two quite different things — a combination the KB spells without a separator
+	 * ({@code amoxicillin and clavulanic acid}, that leg's own reason for existing) and two substances
+	 * sharing one name that is neither's display name. The second is a row the recorded name does not
+	 * name, and a chip saying "The patient has a recorded allergy to X." about it states something the
+	 * chart does not.
+	 *
+	 * <p><b>Three ways a name names a row</b>, and no leg is exempt AS a leg:
+	 * <ul>
+	 *   <li>it is the <b>unique strongest NAME claimant</b> — the recorded name IS one of its names
+	 *       ({@link DrugReference#NAME_IS_ANOTHER_NAME} or better) and every other implied substance
+	 *       claims the whole recorded name strictly less strongly. That keeps an allergy recorded as
+	 *       one of a row's own aliases naming its row ({@code papaveretum} → {@code Opium}).
+	 *       <p>Deliberately NOT "the first element": {@link #lookupByToken} breaks a tie by earliest
+	 *       dataset entry, which carries no clinical meaning, so on a tie the first row has no
+	 *       privilege — three shipped rows publish {@code gallium} as their {@code rxnorm_name} and
+	 *       exempting the earliest would announce a radiodiagnostic the chart never mentions while
+	 *       correcting its two co-tied rivals in the same payload.
+	 *       <p>And deliberately NOT "the strongest claim available, however weak", which is what this
+	 *       said first and what a reachable input refutes. At the CONTAINMENT rank the equal-claimant
+	 *       leg of {@link #findImpliedSubstances} does not run, so rival rows never enter the implied
+	 *       set at all and the survivor is uncontested for a reason that is an artefact of the
+	 *       resolution rather than evidence about the record: an allergy charted as
+	 *       {@code gallium — hives} resolves that way, and naming its row prints the same
+	 *       radiodiagnostic off a chart that says {@code Gallium}. Requiring a NAME claim costs nothing
+	 *       on a name the reference data publishes — measured 2026-08-24, 145 (name, row) pairs over
+	 *       the shipped KB are claimed only at containment, 143 of them named by their own label
+	 *       anyway (a name that matched by containment usually CONTAINS the row's name) and the other
+	 *       two by the derivation clause below ({@code menthol / selenium disulfide},
+	 *       {@code yohimbe preparation / zinc sulfate}). None is lost. Free text is where a containment
+	 *       match does not carry the row's name;</li>
+	 *   <li>a name its printed label is built from OCCURS in the recorded string
+	 *       ({@link DrugReference#labelNameOccursIn}) — what a separator-less combination asserts
+	 *       ({@code Amoxicillin} in {@code amoxicillin and clavulanic acid}, {@code Trastuzumab
+	 *       emtansine} in {@code ado-trastuzumab emtansine}) and what a shared alias does not;</li>
+	 *   <li>a combination CONSTITUENT or the parent MOIETY of the recorded name names its SUBSTANCE, at
+	 *       those two legs' OWN ranks and through the same {@link #resolvedAtLeast} they resolve with —
+	 *       so every substance {@link #findImpliedSubstances} admits through them is named by
+	 *       construction, whichever row ends up representing it. The moiety rank stays
+	 *       {@link DrugReference#NAME_IS_THE_DISPLAY_NAME}: that leg's javadoc records why it is
+	 *       stricter than the constituent gate, and relaxing it here would license printing the name of
+	 *       exactly the rows it refuses.</li>
+	 * </ul>
+	 *
+	 * <p><b>What it gives up, measured like everything else here.</b> Over the shipped KB,
+	 * <b>169 of 6888</b> (recorded name, row) pairs take the relationship sentence rather than the
+	 * identity one. Most are corrections — a shared alias, or a row the recorded string reaches
+	 * through one ({@code acetic acid / hydrocortisone} → {@code Hydrocortisone butyrate},
+	 * {@code amoxicillin / clarithromycin / esomeprazole combination kit} → {@code Omeprazole}). The
+	 * cost is the rest: a recorded name spelling out several ingredients whose ingredient this KB files
+	 * under a SYNONYM is named by none of the three clauses — {@code atovaquone / chloroguanide} does
+	 * not carry {@code Proguanil} and no constituent of it resolves there, and
+	 * {@code ascorbic acid / folate} does not carry {@code Folic acid}. Both sentences are true; the
+	 * more specific one is lost, which is the safe direction for something reporting a record, and the
+	 * defect it replaces is a FALSE sentence. The two populations are not separated by a predicate —
+	 * telling them apart is a judgement about substances, which is why the sentence changes rather than
+	 * the resolution.
+	 *
+	 * <p><b>What it does not reach at all</b>, so that a reader does not take the paragraph above for
+	 * the whole surface: this decides WHICH SUBSTANCE a sentence may name, never which ROW represents
+	 * that substance. {@link #addSubstance} keeps the first row seen, so a recorded
+	 * {@code estradiol / levonorgestrel} still names the estradiol substance by its
+	 * {@code Fluoroestradiol f-18} row — a PET tracer the KB files under
+	 * {@code [estradiol, db00783]}, the same substance key. That is issue #187/#206's question, it
+	 * behaves exactly as it did before issue #268, and nothing here improves or worsens it.
+	 *
+	 * <p>One more consequence, stated because CLAUDE.md's own rule is that one substance must not be
+	 * named two ways in one response: a single recorded allergy CAN now produce two chips whose
+	 * sentences name their subject differently, one identifying it and one stating the relationship.
+	 * Each names its own drug, so no reader is misled about which drug a chip is about; what is given
+	 * up is the uniformity.
+	 *
+	 * <p><b>Every clause decides rows no other one does.</b> Measured 2026-08-24 through the real
+	 * {@link DdiDrugReferenceSource#parse} of the shipped 19 MB KB, this method and
+	 * {@link DrugReference#matchesOrderName}, over <b>all 5169 published names</b> as the recorded
+	 * string — rows named by that clause and by no other: appended generic 40 (the penicillin G family,
+	 * {@code atropine sulfate} → {@code Hyoscyamine (atropine)}), display name 55, unique claim 322,
+	 * derived substance 153. State the base: three of those four are the same over any base, and the
+	 * unique column is not — restricted to names implying MORE than one substance it reads 1, because
+	 * its other 321 are ordinary single-substance names ({@code thyroxine} → {@code Levothyroxine}).
+	 * A reader taking the smaller figure for the whole would conclude the clause is all but redundant
+	 * and delete it. Re-derive rather than trusting the figures — they are a property of the dataset,
+	 * not of this code — but do not drop a clause on the assumption that another covers it.
+	 *
+	 * <p>Package-private, like {@link #findByActiveOrders} and for the same reason: this answers a
+	 * NARROWER question than {@link #findImpliedSubstances} and must never be mistaken for a resolution.
+	 * A caller building a candidate set from it would silently drop the substances a recorded name
+	 * implies without naming — which is every comparison this module makes about a shared class.
+	 *
+	 * @param drugName the recorded name, as the chart holds it
+	 * @param implied  that name's substances, as {@link #findImpliedSubstances} resolved them — passed
+	 *                 in rather than re-resolved, so this cannot become a second resolution rule
+	 * @return the sublist of {@code implied} the name names, in the same order; the rows are the very
+	 *         objects handed in, so a caller may test membership by identity
+	 */
+	List<DrugReference> findNamedSubstances(String drugName, List<DrugReference> implied) {
+		Set<Object> derived = null;
+		List<DrugReference> named = new ArrayList<DrugReference>(implied.size());
+		for (DrugReference row : implied) {
+			if (row.labelNameOccursIn(drugName) || uniqueStrongestClaimant(drugName, row, implied)) {
+				named.add(row);
+				continue;
+			}
+			// Resolved on demand, and never for a row the two cheap clauses already settled: a
+			// constituent that resolves to NOTHING has no early exit in lookupByToken and costs a full
+			// sweep of the dataset, which is exactly what a combination allergen string is full of.
+			// Most rows never get here, so most recorded names never pay for it at all. No tally: the
+			// numbers move whenever the dataset or the clauses do, and the mechanism is the reason.
+			// A per-call local, never a field (issue #172).
+			if (derived == null) {
+				derived = derivedSubstanceKeys(drugName);
+			}
+			if (derived.contains(row.substanceGroupKey())) {
+				named.add(row);
+			}
+		}
+		return named;
+	}
+
+	/** @return whether {@code row} claims the whole of {@code drugName} as a NAME
+	 *          ({@link DrugReference#NAME_IS_ANOTHER_NAME} or better) AND strictly more strongly than
+	 *          every other substance in {@code implied} — {@link #findNamedSubstances}'s first clause,
+	 *          both halves. The rank floor is not a detail of the implementation: without it an
+	 *          uncontested CONTAINMENT match passes, which is the shape that reads
+	 *          {@code gallium — hives} and names a radiodiagnostic. */
+	private static boolean uniqueStrongestClaimant(String drugName, DrugReference row,
+			List<DrugReference> implied) {
+		int claim = row.nameMatchStrength(drugName);
+		if (claim < DrugReference.NAME_IS_ANOTHER_NAME) {
+			return false;
+		}
+		for (DrugReference other : implied) {
+			if (other != row && other.nameMatchStrength(drugName) >= claim) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * @return the SUBSTANCE of each row {@link #derivedRows} resolves — {@link #findNamedSubstances}'s
+	 *         third clause, and a view over the very list {@link #findImpliedSubstances} folds into its
+	 *         implied set, so the two cannot disagree about which legs exist or what rank each admits
+	 *         at.
+	 *
+	 *         <p>Keyed on the SUBSTANCE and not on the row, which is what makes it a mirror rather
+	 *         than an approximation: {@link #addSubstance} keeps the FIRST row seen for a substance, so
+	 *         a substance a derivation leg reached can be represented in the implied list by a row some
+	 *         earlier leg contributed — a row that need not claim the constituent itself. Asking the
+	 *         row would then refuse to name a substance the recorded string demonstrably asserts.
+	 *
+	 *         <p><b>The moiety leg contributes nothing to THIS clause today.</b> Measured 2026-08-24:
+	 *         removing it from the mirror changes no naming decision over the shipped KB and reddens no
+	 *         test, because {@link DrugReference#parentMoietyName} returns a PREFIX of the recorded name
+	 *         and that leg admits a row only where the prefix IS its display name — so
+	 *         {@link DrugReference#labelNameOccursIn} has already said yes. That is a coincidence of
+	 *         three rules in two classes, not a property of this one, and it stops holding the moment a
+	 *         moiety is derived as anything but a prefix. It is not this method's to drop in any case:
+	 *         {@link #derivedRows} owns the leg list and the resolution leg needs it.
+	 */
+	private Set<Object> derivedSubstanceKeys(String drugName) {
+		Set<Object> keys = new HashSet<Object>();
+		for (DrugReference row : derivedRows(drugName)) {
+			keys.add(row.substanceGroupKey());
+		}
+		return keys;
+	}
+
+	/**
+	 * @return the rows the two DERIVATION legs of {@link #findImpliedSubstances} resolve out of
+	 *         {@code drugName} — each combination CONSTITUENT an entry is NAMED, then the parent MOIETY
+	 *         an entry is CALLED — in that order, so {@link #addSubstance}'s first-row-wins rule sees
+	 *         them exactly as it did when the legs were written inline.
+	 *
+	 *         <p>The single expression of WHICH legs there are and WHAT rank each admits at, because
+	 *         {@link #findNamedSubstances} has to mirror both to decide whether a derived substance may
+	 *         be printed. Sharing only the per-candidate gate was not enough: the leg list and its two
+	 *         rank constants were written twice, so a third leg added here would not be mirrored, and a
+	 *         rank tightened here but not there would let the mirror print a name the record does not
+	 *         name — issue #268 re-entering through the clause written to prevent it.
+	 */
+	private List<DrugReference> derivedRows(String drugName) {
+		List<DrugReference> rows = new ArrayList<DrugReference>();
+		for (String constituent : DrugReference.combinationConstituents(drugName)) {
+			addResolved(rows, constituent, DrugReference.NAME_IS_ANOTHER_NAME);
+		}
+		addResolved(rows, DrugReference.parentMoietyName(drugName),
+				DrugReference.NAME_IS_THE_DISPLAY_NAME);
+		return rows;
+	}
+
+	/** Appends what {@code candidate} resolves to at {@code minimumClaim} or better, if anything —
+	 *  {@link #derivedRows}'s one-line accumulator, so its two legs read as the two questions they are. */
+	private void addResolved(List<DrugReference> rows, String candidate, int minimumClaim) {
+		DrugReference resolved = resolvedAtLeast(candidate, minimumClaim);
+		if (resolved != null) {
+			rows.add(resolved);
+		}
+	}
+
+	/**
+	 * @return the entry {@code candidate} resolves to when it claims it at {@code minimumClaim} or
+	 *         better, else null — the derivation legs' gate itself, named once because
+	 *         {@link #findNamedSubstances} has to ask the SAME question of the SAME string to decide
+	 *         whether a derived substance may be printed. Two spellings of it would let the two answers
+	 *         drift, and in the direction that matters: the leg admits a substance and the mirror then
+	 *         refuses to name it, so a chip quotes the chart where it had a perfectly good name.
+	 */
+	private DrugReference resolvedAtLeast(String candidate, int minimumClaim) {
 		if (candidate == null) {
-			return;
+			return null;
 		}
 		DrugReference resolved = lookupByToken(candidate);
-		if (resolved != null && resolved.nameMatchStrength(candidate) >= minimumClaim) {
-			addSubstance(bySubstance, resolved);
-		}
+		return resolved != null && resolved.nameMatchStrength(candidate) >= minimumClaim ? resolved : null;
 	}
 
 	/** Keyed by {@link DrugReference#substanceGroupKey()}, FIRST row seen kept — so a later leg can add

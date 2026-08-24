@@ -814,14 +814,20 @@ public class DrugReferenceInjector {
 	 *         that said no such thing.
 	 *
 	 *         <p><b>KNOWN RESIDUE, stated rather than discovered.</b> Answering null here is silence, not
-	 *         agreement. The comparison is against the fold over the SUBJECT group, while the row the
-	 *         record renders is the fold over the narrower INJECTED set, and once those differ the two
-	 *         surfaces can still diverge with nothing saying so: a question resolving only a qualified
-	 *         row renders that row's record, while the chip layer — whose group is the same union — names
-	 *         the substance by the unqualified row. That is issue #237's shape surviving in the one case
-	 *         this method deliberately stays quiet about, and
+	 *         agreement, and one divergence survives it: a question resolving only a qualified row renders
+	 *         that row's record, while the chip layer — whose group is the wider union — names the
+	 *         substance by the row the fold elects. The chart chose neither, so this stays quiet and the
+	 *         two surfaces still differ with nothing saying so. That is issue #237's shape surviving in
+	 *         the one case this method deliberately does not speak to, and
 	 *         {@code ReferenceRecordRowAttributionTest.aSubjectTheFoldMovedRatherThanTheChartIsAttributed
 	 *         ToNobody} pins the silence rather than blessing the divergence.
+	 *
+	 *         <p>Its MECHANISM changed with issue #250 even though the residue did not, so do not read the
+	 *         older account of it: this used to compare the fold over the SUBJECT group against the row
+	 *         rendered from the narrower INJECTED set, and the divergence was partly an artefact of the
+	 *         comparison straddling two row sets. It no longer straddles them — the rendered row is passed
+	 *         in — so what is left is the honest core of it: where no recorded name claims either row, no
+	 *         sentence can truthfully say the chart preferred one, whatever the fold decided.
 	 *
 	 *         <p>Closing it needs a SECOND sentence rather than a wider guard: the existing one would be
 	 *         false there, because no recorded name chose the row, so the choice is between a differently

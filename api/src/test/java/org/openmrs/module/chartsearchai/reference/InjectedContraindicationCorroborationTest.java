@@ -73,8 +73,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * a model would read. {@link #theThreeSectionLeadsAreTheWordsAModelReads} reads no record — it is the
  * one case here that pins the READING's three section leads, whose words every other assertion takes
  * from production and therefore cannot see. {@code RULE_LIST_LEAD} is deliberately NOT among them: it
- * is a local literal, and rewording it in production reddens nine of the cases below through
- * {@link #record}'s own precondition.
+ * is a local literal, and rewording it in production reddens every case below that reads a record,
+ * through {@link #record}'s own precondition — mutate it and read the failures rather than trusting a
+ * tally, which the case added for the imply-vs-name leg had already made stale once.
  */
 public class InjectedContraindicationCorroborationTest {
 

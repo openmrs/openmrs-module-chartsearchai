@@ -160,7 +160,13 @@ public class DrugReference {
 	 * {@code dextroamphetamine sulfate} carries {@code Amphetamine}'s {@code rxnorm_name} and not its
 	 * name, and {@code displayLabel()} prints no synonym there because the name is a substring of the
 	 * generic — so the recorded string does not name that row, which is a different substance.
-	 * Measured 2026-08-24, 15 (name, row) pairs over the shipped KB turn on that half alone.
+	 *
+	 * <p>Measured 2026-08-24 over the shipped KB, the two halves of this accessor pull in opposite
+	 * directions and both earn their place: the appended generic ADMITS 512 (name, row) pairs the
+	 * display name alone would refuse, and the {@code appendsGenericName()} guard REFUSES 7 that
+	 * nothing else names — {@code esomeprazole magnesium} and three combination kits reaching
+	 * {@code Omeprazole} (issue #185's shape), {@code dexfenfluramine hydrochloride} reaching
+	 * {@code Fenfluramine}, and the two {@code dextroamphetamine} salts reaching {@code Amphetamine}.
 	 *
 	 * <p>An earlier version of this paragraph offered the three shipped {@code gallium} rows as the
 	 * example, and they do not exercise this half at all: {@code DdiDrugReferenceSource} sets

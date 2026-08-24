@@ -4099,6 +4099,17 @@ public class DrugSafetyValidator {
 	 *         while the rank keeps its full {@code SELF_NAMED_RULE}. A consumer wanting "is this rule
 	 *         corroborated at all" takes the UNION, which can hedge nothing either half admits.
 	 *
+	 *         <p><b>The caller's {@link DrugReference} must come from the same service.</b>
+	 *         {@link DrugReference#substanceGroupKey()} is the substance name where the data publishes
+	 *         one and the ROW ITSELF where it does not, and {@link DrugReference} declares no
+	 *         {@code equals}, so for a curated entry publishing no substance name membership here is
+	 *         object identity. That is the same condition {@link #firstOfSameSubstance} has always run
+	 *         under — one {@code validate} pass, one service — stated here because this answer crosses
+	 *         a bean boundary: {@code DrugReferenceInjector} passes its OWN
+	 *         {@link DrugReferenceService}, which is also where the entries it renders come from, so the
+	 *         two sides are the same objects. Two services would parse the dataset twice and this set
+	 *         would silently contain nothing the caller can find.
+	 *
 	 *         <p>Static and service-taking rather than an instance method: its consumer is
 	 *         {@code DrugReferenceInjector}, whose {@code drugSafetyValidator} may be absent while its
 	 *         {@code drugReferenceService} is not, and an answer that went missing there would silently

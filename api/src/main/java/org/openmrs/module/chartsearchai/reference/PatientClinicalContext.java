@@ -368,8 +368,11 @@ public class PatientClinicalContext {
 	 * every one is on the CLASS token {@code penicillin} ({@code benzylpenicillin},
 	 * {@code phenoxymethylpenicillin}, {@code procaine benzylpenicillin} …); the three tokens that name
 	 * their own entry lose nothing. So the token shapes really do want different rules, and what moved
-	 * instead is the one decision the nesting risk had made dangerous — see
-	 * {@link #allergensMatching} and {@code DrugSafetyValidator.contraindicationRank}.
+	 * instead are the two decisions the nesting risk had made dangerous — which chip sentence a
+	 * self-named rule may speak in ({@code DrugSafetyValidator.contraindicationRank}, issue #223) and
+	 * whether an injected record may state its clause as the chart's own reading
+	 * ({@code DrugReferenceInjector.corroborated}, issue #269). Both read
+	 * {@link #allergensMatching} for the witnesses this method does not report.
 	 *
 	 * <p>What that corpus bounds, stated rather than implied: published reference NAMES, the shape a
 	 * coded allergen carries. It is not the localized dictionary {@link PatientClinicalContextBuilder}

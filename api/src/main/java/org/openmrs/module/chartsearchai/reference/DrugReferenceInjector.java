@@ -1497,6 +1497,14 @@ public class DrugReferenceInjector {
 			return states;
 		}
 
+		/** The chart the two answers above are about. Read from here rather than taken as a second
+		 *  parameter beside this object: {@link #corroborated} asks one question of the context and one
+		 *  of the resolved set, and a caller able to hand it a context other than the one the set was
+		 *  resolved from is the same two-facts-that-can-disagree shape this class exists to remove. */
+		PatientClinicalContext context() {
+			return context;
+		}
+
 		/** The substances this patient's recorded allergies name, resolved on first ask. */
 		Set<Object> allergicSubstances() {
 			if (allergicSubstances == null) {
@@ -1551,11 +1559,11 @@ public class DrugReferenceInjector {
 	 *         {@link PatientClinicalContext#hasAllergyToken}.
 	 */
 	private static boolean corroborated(DrugReference ref, DrugReference.Contraindication c,
-			PatientClinicalContext context, ContraindicationReading reading) {
+			ContraindicationReading reading) {
 		if (!DrugSafetyValidator.selfNamedAllergyRule(ref, c)) {
 			return true;
 		}
-		return DrugSafetyValidator.aMatchedRecordNamesTheEntry(ref, c, context)
+		return DrugSafetyValidator.aMatchedRecordNamesTheEntry(ref, c, reading.context())
 				|| reading.allergicSubstances().contains(ref.substanceGroupKey());
 	}
 
@@ -1644,8 +1652,7 @@ public class DrugReferenceInjector {
 		// No guard beyond appendSection's own: every collection is empty when the entry publishes no
 		// contraindication rule, and the reading's sections are subsets of the clause list (see
 		// contraindicationSections), so none of them can be non-empty when the list is.
-		ContraindicationSections contraindications =
-				contraindicationSections(ref, context, reading);
+		ContraindicationSections contraindications = contraindicationSections(ref, reading);
 		// The patient-specific reading BEFORE the list it qualifies (issue #208 item 2), so a model
 		// reading forward has the qualifier before the content — the same reason the interactions section
 		// below promotes this patient's own partners to its front rather than appending them. Omitted
@@ -1653,7 +1660,7 @@ public class DrugReferenceInjector {
 		// that cannot see the chart must not report an absence — see
 		// statesTheChartsContraindicationReading for the three things that decides.
 		if (reading.states()) {
-			// BOTH halves named, each by its own clauses, and neither left to be inferred from the other.
+			// EVERY section named, each by its own clauses, and none left to be inferred from another.
 			// Two weaker forms were tried live on the 3.7.1 standalone 2026-08-13 and BOTH were measured
 			// failing on the model this module ships against:
 			//   * positive half only ("…this patient's chart records: documented ibuprofen allergy.") —
@@ -1666,9 +1673,11 @@ public class DrugReferenceInjector {
 			//     patient with no penicillin allergy was answered "the patient has a documented
 			//     amoxicillin allergy", quoting a clause of the list beside that very sentence.
 			// Both failures are the same shape: a sentence that names some clauses and expects the reader
-			// to infer the rest. So each clause is named on the side it is actually on. The two halves are
-			// disjoint and cover every clause the module can evaluate; a clause it cannot (an unrecognised
-			// rule type, a rule with no token) is listed and claimed neither way.
+			// to infer the rest. So each clause is named on the side it is actually on — which is also why
+			// issue #269 gave the uncorroborated clauses a section rather than dropping them out of the
+			// reading. The three sections are disjoint and cover every clause the module can evaluate AND
+			// get an answer about; a clause it cannot evaluate at all (an unrecognised rule type, a rule
+			// with no token) is listed and claimed by none of them.
 			appendSection(sb, " Recorded for this patient: ", contraindications.recorded);
 			appendSection(sb, " Not recorded for this patient: ", contraindications.notRecorded);
 			// Third and last of the reading's sections, after the two that make a claim: it makes none —
@@ -2099,7 +2108,8 @@ public class DrugReferenceInjector {
 	 *         enumerated; it is unreachable on any bundled dataset.
 	 */
 	private static ContraindicationSections contraindicationSections(DrugReference ref,
-			PatientClinicalContext context, ContraindicationReading reading) {
+			ContraindicationReading reading) {
+		PatientClinicalContext context = reading.context();
 		Map<Object, String> byRule = new LinkedHashMap<Object, String>();
 		Set<Object> recordedRules = new HashSet<Object>();
 		Set<Object> uncorroboratedRules = new HashSet<Object>();
@@ -2139,7 +2149,7 @@ public class DrugReferenceInjector {
 				// corroborated rule of the key is enough for the key. Asked only where the record may state
 				// the reading at all: otherwise no section is rendered, and asking would resolve the
 				// patient's allergy list for a sentence nothing prints (see ContraindicationReading).
-				if (reading.states() && !corroborated(ref, c, context, reading)) {
+				if (reading.states() && !corroborated(ref, c, reading)) {
 					uncorroboratedRules.add(key);
 				} else {
 					recordedRules.add(key);

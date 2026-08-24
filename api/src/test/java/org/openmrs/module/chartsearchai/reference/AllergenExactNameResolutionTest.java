@@ -34,10 +34,19 @@ import org.junit.jupiter.api.Test;
  *
  * <p><b>Not the boundary problem #128/#148 fixed.</b> {@code botulinum toxin type a} is a whole-word
  * match — indeed the whole string — inside the {@code Daxibotulinumtoxina} row's alias list, because
- * that row's {@code rxnorm_name} IS that name. Anchoring cannot separate them and neither can
- * {@link DrugReference#canonicalRow}: both rows name no route, so the fold keeps the earliest, which is
- * the wrong one. What separates them is that one row's own DISPLAY NAME is the recorded name and the
- * other's is not.
+ * that row's {@code rxnorm_name} IS that name. Anchoring cannot separate them. What separates them is
+ * that one row's own DISPLAY NAME is the recorded name and the other's is not.
+ *
+ * <p>This used to add "and neither can {@link DrugReference#canonicalRow}: both rows name no route, so
+ * the fold keeps the earliest, which is the wrong one". Issue #250 made that false of this family — the
+ * fold's second rung prefers the row whose display name IS the name the data files the family under,
+ * which here is {@code Botulinum toxin type A} — so the fold now reaches the same row by a route of its
+ * own. What is unchanged is that the RESOLUTION rank is what the chip reads: mutate
+ * {@link DrugReference#nameMatchStrength} to drop its display-name rank and
+ * {@code anAllergyIsNamedByTheRowThatIsItRatherThanByAnEarlierRowThatClaimsItsName} reddens with the
+ * chip reading {@code Daxibotulinumtoxina (botulinum toxin type a)}, so this file still pins what it was
+ * written to pin. The case whose premise #250 genuinely removed is on the ORDER side —
+ * {@code OrderedSubjectRowTest}, where the trap moved to the COVID pair in this same fixture.
  *
  * <p>Every case runs over verbatim shipped-KB slices through the real {@link DdiDrugReferenceSource}
  * parser, and the cases that assert an OUTCOME go through the real
@@ -109,9 +118,13 @@ public class AllergenExactNameResolutionTest {
 		assertEquals(daxi.substanceGroupKey(), botox.substanceGroupKey(),
 				"precondition: since issue #187 the two are one substance, so the identity VERDICT was "
 						+ "already right and only the name the chip prints was wrong");
-		assertSame(daxi, DrugReference.canonicalRow(Arrays.asList(daxi, botox)),
-				"precondition: and the canonical row is the trap row — both name no route, so that fold "
-						+ "keeps the earliest and cannot be the remedy here");
+		// This asserted the opposite until issue #250, as a fact about the fold's pre-#250 rungs: both rows
+		// name no route, so the fold kept the earliest and could not be the remedy. The second rung
+		// changed which row it keeps, not which row the chip reads — see the class javadoc for the
+		// mutation that shows the outcome case below still discriminates.
+		assertSame(botox, DrugReference.canonicalRow(Arrays.asList(daxi, botox)),
+				"precondition: since issue #250 the fold reaches the recorded row here by its own route, "
+						+ "so it is no longer what disqualifies the fold that the chip must not read");
 	}
 
 	@Test

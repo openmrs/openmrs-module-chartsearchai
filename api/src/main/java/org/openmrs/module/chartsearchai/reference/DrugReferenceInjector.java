@@ -609,8 +609,14 @@ public class DrugReferenceInjector {
 	 *   <li>{@link #collect} folds over a SUPERSET, so a substance the question leg represented by a
 	 *       route-qualified row can now be represented by the route-unspecified one — a different
 	 *       {@code resourceId} on the wire and a different row's rules rendered. The direction is
-	 *       monotone and is the one issue #163 asks for ({@link DrugReference#canonicalRow} only ever
-	 *       moves toward {@link DrugReference#namesNoRoute()}).
+	 *       monotone and is the one issue #163 asks for ({@link DrugReference#canonicalRow} never moves
+	 *       AWAY from {@link DrugReference#namesNoRoute()}).
+	 *       <p>Since issue #250 that fold has a second rung, so "monotone" no longer means it moves only
+	 *       toward {@code namesNoRoute()}: it may also move LATERALLY, between two rows that agree on it,
+	 *       toward the row the data files the substance under. All three moves the rung makes over the
+	 *       shipped KB are of that kind. The consequence stated above is unchanged and now covers the
+	 *       lateral case too — a different {@code resourceId} and a different row's rules rendered,
+	 *       without any change in route-qualification.</p>
 	 *       <p>This used to add "and it makes this record agree with the chip layer's subject rather
 	 *       than diverge from it". That was true when written and is <b>not</b> true now, which is
 	 *       issues #237/#259: since issue #194 anchored a chip's subject on the CHART and issue #206
@@ -743,8 +749,9 @@ public class DrugReferenceInjector {
 			// than an assertion because a future third leg would otherwise silently get a null group.
 			List<DrugReference> group = subjectRows.get(substance.getKey());
 			List<DrugReference> rows = group == null ? injected : group;
-			subjects.put(DrugReference.canonicalRow(injected),
-					new SubstanceRendering(rows, chartAnchoredSubject(rows, context)));
+			DrugReference rendered = DrugReference.canonicalRow(injected);
+			subjects.put(rendered,
+					new SubstanceRendering(rows, chartAnchoredSubject(rendered, rows, context)));
 		}
 		return subjects;
 	}
@@ -783,14 +790,21 @@ public class DrugReferenceInjector {
 	 *         particular", which is the common case and the one {@link #rowAttribution} must stay silent
 	 *         on.
 	 *
-	 *         <p><b>Why the question is asked twice.</b>
-	 *         {@link DrugSafetyValidator#interactionSubject} composes two rankings: the chart's claim
-	 *         first, then {@link DrugReference#canonicalRow} among the rows tied on it. Both steps
-	 *         answer, always — so its answer alone cannot say WHICH step decided, and a caller that
-	 *         wants only the chart-driven half has to ask the fold on its own and compare. Where they
-	 *         agree, no recorded name out-claimed any other row and the answer is the dataset's, not the
-	 *         patient's. This is a READ of the two accessors and not a third ranking: neither predicate
-	 *         is re-expressed here, and the composition still lives in exactly one place.
+	 *         <p><b>Why the chart is asked directly (issue #250).</b>
+	 *         {@link DrugSafetyValidator#interactionSubject} composes two rankings — the chart's claim
+	 *         first, then {@link DrugReference#canonicalRow} among the rows tied on it — and both steps
+	 *         answer, always, so its answer alone cannot say WHICH step decided. This used to infer that
+	 *         by comparing its row against the fold's: where they agreed, no recorded name had
+	 *         out-claimed any other row. That was a PROXY, and it held only while the fold could not
+	 *         reach the row the chart names. Issue #250's second rung made the fold reach exactly that
+	 *         row for three shipped substances, and the proxy then read agreement as "the chart chose
+	 *         nothing" — suppressing this clause on the arrangement that needs it most, where the record
+	 *         renders one row and every chip beside it names another. So the question is now put to the
+	 *         chart itself ({@link DrugSafetyValidator#recordNamesMoreStrongly}, asked of the row this
+	 *         record RENDERS): does the patient's own record claim the subject more strongly than the row
+	 *         published here? That is what this clause's sentence asserts, and unlike the proxy it cannot
+	 *         drift as the fold's rungs change. Still a READ of the existing accessors and not a third
+	 *         ranking — the composition that decides a subject stays in one place.
 	 *
 	 *         <p>It matters because {@code rowAttribution}'s sentence says "the row this patient's record
 	 *         names". Widening the group to every row the pass resolved (see the caller) makes the fold
@@ -800,14 +814,20 @@ public class DrugReferenceInjector {
 	 *         that said no such thing.
 	 *
 	 *         <p><b>KNOWN RESIDUE, stated rather than discovered.</b> Answering null here is silence, not
-	 *         agreement. The comparison is against the fold over the SUBJECT group, while the row the
-	 *         record renders is the fold over the narrower INJECTED set, and once those differ the two
-	 *         surfaces can still diverge with nothing saying so: a question resolving only a qualified
-	 *         row renders that row's record, while the chip layer — whose group is the same union — names
-	 *         the substance by the unqualified row. That is issue #237's shape surviving in the one case
-	 *         this method deliberately stays quiet about, and
+	 *         agreement, and one divergence survives it: a question resolving only a qualified row renders
+	 *         that row's record, while the chip layer — whose group is the wider union — names the
+	 *         substance by the row the fold elects. The chart chose neither, so this stays quiet and the
+	 *         two surfaces still differ with nothing saying so. That is issue #237's shape surviving in
+	 *         the one case this method deliberately does not speak to, and
 	 *         {@code ReferenceRecordRowAttributionTest.aSubjectTheFoldMovedRatherThanTheChartIsAttributed
 	 *         ToNobody} pins the silence rather than blessing the divergence.
+	 *
+	 *         <p>Its MECHANISM changed with issue #250 even though the residue did not, so do not read the
+	 *         older account of it: this used to compare the fold over the SUBJECT group against the row
+	 *         rendered from the narrower INJECTED set, and the divergence was partly an artefact of the
+	 *         comparison straddling two row sets. It no longer straddles them — the rendered row is passed
+	 *         in — so what is left is the honest core of it: where no recorded name claims either row, no
+	 *         sentence can truthfully say the chart preferred one, whatever the fold decided.
 	 *
 	 *         <p>Closing it needs a SECOND sentence rather than a wider guard: the existing one would be
 	 *         false there, because no recorded name chose the row, so the choice is between a differently
@@ -816,10 +836,10 @@ public class DrugReferenceInjector {
 	 *         guess — see {@code DrugSafetyValidator.ceilingAttribution}, whose wording was settled by
 	 *         issue #244 against measured alternatives.
 	 */
-	private static DrugReference chartAnchoredSubject(List<DrugReference> rows,
+	private static DrugReference chartAnchoredSubject(DrugReference rendered, List<DrugReference> rows,
 			PatientClinicalContext context) {
 		DrugReference subject = DrugSafetyValidator.interactionSubject(rows, context);
-		return subject == DrugReference.canonicalRow(rows) ? null : subject;
+		return DrugSafetyValidator.recordNamesMoreStrongly(subject, rendered, context) ? subject : null;
 	}
 
 	/**

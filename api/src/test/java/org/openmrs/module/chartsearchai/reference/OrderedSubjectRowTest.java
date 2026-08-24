@@ -21,11 +21,18 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * Issue #194 — the interaction chip's subject was {@link DrugReference#canonicalRow}'s pick, which is
- * the row naming no route and, where every row of a family names no route, simply the dataset's first.
- * So a patient ordered one presentation was told about another: live-measured on the 3.7.1 standalone,
- * a {@code Botulinum toxin type A} order was subjected on
- * {@code Daxibotulinumtoxina (botulinum toxin type a)}.
+ * Issue #194 — the interaction chip's subject was {@link DrugReference#canonicalRow}'s pick, and where
+ * the rows of a family TIE on that fold's rungs it can only keep the dataset's first. So a patient
+ * ordered one presentation was told about another: live-measured on the 3.7.1 standalone, a
+ * {@code Botulinum toxin type A} order was subjected on
+ * {@code Daxibotulinumtoxina (botulinum toxin type a)}, because at the time the fold had one rung and
+ * both rows answered it.
+ *
+ * <p>That family no longer ties. Issue #250 gave the fold a second rung — the row the data files the
+ * family under — which is {@code Botulinum toxin type A}, so the fold now reaches this file's answer
+ * unaided and the botulinum cases below can no longer fail if the chart-anchoring step is removed. The
+ * trap moved to the COVID pair in the same fixture, whose rows tie on both rungs; see
+ * {@link #theOrderNamedRowIsNamedWhereTheFoldCannotReachIt}.
  *
  * <p>Not the same defect as issue #176/#192, which was {@code lookupByToken}'s resolution of a
  * recorded ALLERGEN name, and not #188's collapse of the injector's notes. This one arrives through
@@ -41,7 +48,10 @@ import org.junit.jupiter.api.Test;
  * order name in {@code ScreeningSubjectLabelTest} and in
  * {@code InteractionRouteVariantTest.aSubstanceWithNoRouteUnspecifiedRowStillRaisesOneChip} carries a
  * strength or a form suffix, so no row's own name IS the recorded name and those cases exercise the
- * {@code canonicalRow} fallback unchanged.
+ * {@code canonicalRow} fallback. Still unchanged by issue #250's second rung, and checked rather than
+ * assumed: that rung needs a row whose display name IS its own {@code substanceName}, and the families
+ * those two cases turn on have none reachable — the oxymetazoline rows are all route-qualified, and the
+ * chloroprocaine pair is decided by the FIRST rung before the second is consulted.
  *
  * <p>Every scenario runs the REAL production path: a verbatim DDInter KB slice parsed by the real
  * {@link DdiDrugReferenceSource}, the real {@code validate} entry point, real question strings, GP
@@ -69,10 +79,10 @@ public class OrderedSubjectRowTest {
 
 	@Test
 	public void theFixtureReallyPutsTheTrapRowFirstAndTiesTheCanonicalFold() throws Exception {
-		// The premise, through the production predicates: both rows name no route, so canonicalRow
-		// cannot separate them and keeps the earliest — while the order's own name IS the second row's
-		// display name and only an alias of the first. Without this the case could pass on a slice
-		// where canonicalRow happened to pick the right row anyway.
+		// The premise, through the production predicates: both rows name no route, so canonicalRow's first
+		// rung cannot separate them — while the order's own name IS the second row's display name and
+		// only an alias of the first. Which row the fold then keeps changed with issue #250; the
+		// assertion below says what it keeps now and why that costs the two cases after it their teeth.
 		List<DrugReference> entries = DrugReferenceTestSupport
 				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY);
 		DrugReference daxi = DrugReferenceTestSupport.row(entries, "Daxibotulinumtoxina");
@@ -82,8 +92,17 @@ public class OrderedSubjectRowTest {
 				"precondition: the two rows must be ONE substance");
 		assertTrue(daxi.namesNoRoute() && botoxA.namesNoRoute(),
 				"precondition: neither row may name a route, or canonicalRow decides it on merit");
-		assertSame(daxi, DrugReference.canonicalRow(Arrays.asList(daxi, botoxA)),
-				"precondition: canonicalRow therefore keeps the trap row");
+		// Issue #250 gave the fold a second rung — among rows of ONE substance agreeing on namesNoRoute,
+		// the row whose display name IS the name the data files the family under — and Botulinum toxin
+		// type A is that row. So for THIS family the fold now reaches the same row the chart does, and
+		// the assertion that stood here (that it keeps the trap row) was a fact about the pre-#250 rungs.
+		// What that costs is the two cases below: each still asserts something true, but neither can now
+		// fail if the chart-anchoring step is removed, because the fold alone would answer the same. The
+		// family that still supplies the trap is the COVID pair in this same fixture — neither of its rows
+		// names its own substance, so the second rung cannot reach it either — and it is asserted in
+		// theOrderNamedRowIsNamedWhereTheFoldCannotReachIt below.
+		assertSame(botoxA, DrugReference.canonicalRow(Arrays.asList(daxi, botoxA)),
+				"precondition: since issue #250 the fold reaches the charted row here on its own");
 		assertEquals(DrugReference.NAME_IS_THE_DISPLAY_NAME, botoxA.nameMatchStrength(BOTULINUM_A_ORDER),
 				"precondition: and the charted order name IS the other row's display name");
 		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, daxi.nameMatchStrength(BOTULINUM_A_ORDER),
@@ -119,7 +138,10 @@ public class OrderedSubjectRowTest {
 	public void theDrugInPlayArmNamesThatRowToo() throws Exception {
 		// The same choice on the arm the question drives, so one build cannot call the substance two
 		// things. Here the question resolves BOTH rows (they share the alias the question uses), so the
-		// subject is a free choice between them and the chart is the only thing that can settle it.
+		// subject is a free choice between them. Since issue #250 the fold would settle it the same way
+		// unaided — see the precondition case — so what this asserts is the agreement rather than the
+		// chart's power to override; the case that still proves the override is
+		// theOrderNamedRowIsNamedWhereTheFoldCannotReachIt.
 		DrugReferenceService service = service();
 		PatientClinicalContext context = bothSerotypes();
 
@@ -214,5 +236,67 @@ public class OrderedSubjectRowTest {
 		// publishes no band and therefore still needs it.
 		assertTrue(overdose.getDetail().contains("2000 mg/day maximum"),
 				"was: " + overdose.getDetail());
+	}
+
+	/** The order name the CIEL-aliased second row of the COVID substance carries as its own display
+	 *  name, verbatim from the shipped KB — the trap the fold cannot reach after issue #250. */
+	private static final String COVID_ORDER = "Pfizer-BioNTech Covid-19 Vaccine";
+
+	@Test
+	public void theFixtureStillCarriesATrapTheFoldCannotReach() throws Exception {
+		// The premise for the case below, and the reason it exists at all. Issue #250's second rung asks
+		// which row of a family the DATA names the family after; this pair answers "neither", because both
+		// rows are filed under an rxnorm_name that is neither row's display name. So the fold is back to
+		// keeping the earliest, the charted row is the later one, and the chart-anchoring step is once
+		// again the only thing that can produce the right subject.
+		List<DrugReference> entries = DrugReferenceTestSupport
+				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY);
+		DrugReference tozinameran = DrugReferenceTestSupport.row(entries, "Tozinameran");
+		DrugReference charted = DrugReferenceTestSupport.row(entries, COVID_ORDER);
+
+		assertEquals(tozinameran.substanceGroupKey(), charted.substanceGroupKey(),
+				"precondition: the two rows must be ONE substance");
+		assertTrue(tozinameran.namesNoRoute() && charted.namesNoRoute(),
+				"precondition: neither row may name a route, or the first rung decides it");
+		assertFalse(tozinameran.namesItsSubstance() || charted.namesItsSubstance(),
+				"precondition: and neither may name its own substance, or issue #250's rung decides it");
+		assertSame(tozinameran, DrugReference.canonicalRow(Arrays.asList(tozinameran, charted)),
+				"precondition: so the fold still keeps the row the chart does NOT name");
+		assertEquals(DrugReference.NAME_IS_THE_DISPLAY_NAME, charted.nameMatchStrength(COVID_ORDER),
+				"precondition: while the charted order name IS the later row's display name");
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, tozinameran.nameMatchStrength(COVID_ORDER),
+				"precondition: which the trap row claims only as one of its CIEL names");
+	}
+
+	/** The typhoid concept's own CIEL name, verbatim — the second order's name, and what makes the pair
+	 *  reachable at all: the COVID rows' rule token IS this string, while neither row's rule carries an
+	 *  ATC code, so a context naming that order any other way leaves the arm with no partner to match. */
+	private static final String TYPHOID_ORDER = "Salmonella typhi Ty21a live antigen";
+
+	@Test
+	public void theOrderNamedRowIsNamedWhereTheFoldCannotReachIt() throws Exception {
+		// Issue #194's property, re-pinned on the family issue #250's rung cannot reach: remove the
+		// chart-anchoring step from interactionSubject and this reddens, which is no longer true of the
+		// botulinum cases above.
+		List<DrugReference> entries = DrugReferenceTestSupport
+				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY);
+		DrugReference charted = DrugReferenceTestSupport.row(entries, COVID_ORDER);
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY);
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set(COVID_ORDER, TYPHOID_ORDER), null, null, null);
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", SCREENING_QUESTION, context);
+
+		assertEquals(1, warnings.size(), "one pair, one chip, was: " + warnings);
+		assertEquals(charted.displayLabel(), warnings.get(0).getDrug(),
+				"the chip must name the row the patient's own order names, was: " + warnings);
+		assertTrue(warnings.get(0).getDetail()
+				.startsWith(charted.displayLabel() + " interacts with active order "),
+				"and its detail must lead with that same name, was: " + warnings.get(0).getDetail());
+		assertFalse(warnings.get(0).getDetail().contains("Tozinameran"),
+				"and must not assert a product the chart does not record, was: "
+						+ warnings.get(0).getDetail());
 	}
 }

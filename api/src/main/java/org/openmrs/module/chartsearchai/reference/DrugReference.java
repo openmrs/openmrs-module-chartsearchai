@@ -374,6 +374,48 @@ public class DrugReference {
 	}
 
 	/**
+	 * @return whether this entry's display name IS the name the data files it under — {@code Estradiol}
+	 *         against a {@code substanceName} of {@code estradiol}, compared through
+	 *         {@link #normalizeName} like every other identity between two reference strings. The row a
+	 *         family is NAMED after, as distinct from the row that names no route
+	 *         ({@link #namesNoRoute()}): a family can hold several of the second and this asks which one
+	 *         the data itself calls the substance.
+	 *
+	 *         <p>The FULL display name and not {@link #displayStem}, which is the difference that makes
+	 *         it answer for a substance whose own name carries a parenthetical: the shipped
+	 *         {@code Tick-borne encephalitis vaccine (whole virus, inactivated)} row is filed under that
+	 *         very string, and its paediatric sibling under the same one, so both stems are
+	 *         {@code tick-borne encephalitis vaccine} and a stem comparison separates neither.
+	 *
+	 *         <p><b>The closest neighbour is {@link #nameMatchStrength}'s top rank, and the two are
+	 *         measured identical on the shipped data.</b> The expression here is the one
+	 *         {@code nameMatchStrength} uses for {@link #NAME_IS_THE_DISPLAY_NAME}, with this row's own
+	 *         {@code substanceName} as the operand, and over the shipped KB
+	 *         {@code nameMatchStrength(getSubstanceName()) == NAME_IS_THE_DISPLAY_NAME} agrees with this
+	 *         predicate on all 2283 rows and elects the same row for all 129 multi-row families. It is
+	 *         still not reused, and the second reason is the one that would bite: that method is for a
+	 *         CLINICIAN-ENTERED name, and CLAUDE.md keeps identity, ranking and widening apart; and it is
+	 *         gated on {@link #matchesDrugName}, which its own javadoc says excludes "a hand-authored
+	 *         {@code json} entry whose {@code aliases} omit its own {@code name}" — so on such a dataset
+	 *         it answers false where this answers true, i.e. fails CLOSED. Recorded because the
+	 *         measurement is what makes the two look interchangeable to whoever reads them next.
+	 *
+	 *         <p>Read by {@link #canonicalRow} alone in production, and by the cases that state its
+	 *         premises. It is not a claim that the row is
+	 *         the substance — {@code DrugReferenceValidity.derivesFromItsOwnSubstance} asks a different
+	 *         and narrower question about the same two fields (does this row's stem carry the substance's
+	 *         name without naming it as a word, i.e. is it a DERIVATIVE) and reusing that here fixes 1 of
+	 *         the 3 families this rung is for, measured through the shipped KB. Null-safe on both sides:
+	 *         a source publishing no {@code substanceName} — the {@code atc} adapter, a curated file that
+	 *         sets none — answers false for every row, so the fold behaves exactly as it did before this
+	 *         predicate existed.
+	 */
+	boolean namesItsSubstance() {
+		String substance = normalizeName(substanceName);
+		return substance != null && substance.equals(normalizeName(name));
+	}
+
+	/**
 	 * Which of two rows of ONE substance should represent it — the row a collapsed chip is named after
 	 * ({@code DrugSafetyValidator.interactionSubject}, issue #162, and since issue #206 every chip arm
 	 * through {@code DrugSafetyValidator.SubstanceSubjects}), the row a collapsed reference
@@ -405,18 +447,106 @@ public class DrugReference {
 	 * ({@code DrugReferenceInjector.rowAttribution}). The class-partner site genuinely still has no
 	 * recorded name.
 	 *
-	 * @return {@code candidate} when it {@link #namesNoRoute()} and {@code incumbent} does not, else
-	 *         {@code incumbent} — so the route-unspecified row wins wherever the family has one, and
-	 *         otherwise the first row seen keeps the role. For the 10 shipped families that name no
-	 *         unqualified row the survivor therefore still carries a qualifier: the KB publishes no
-	 *         unqualified name for those substances, and manufacturing one by stripping a display name
-	 *         is the pattern-match-a-label mistake issue #148 had to undo.
+	 * <p><b>Two rungs since issue #250, in this order.</b> First {@link #namesNoRoute()}: the
+	 * route-unspecified row wins wherever the family has one. Then, among rows agreeing on THAT and
+	 * belonging to one substance, {@link #namesItsSubstance()}: the row the data files the family under
+	 * wins. Otherwise the first row seen keeps the role. The second rung exists because the first one
+	 * ties on any family holding two rows that both name no route, and dataset order then answered — so
+	 * the shipped KB elected {@code Fluoroestradiol f-18}, a diagnostic PET tracer at index 1282, to
+	 * speak for the estradiol substance against {@code Estradiol} at 1927, and every rated partner of
+	 * that substance took the tracer as its chip subject. It did not stay in the chip either: live on a
+	 * 3.7.1 standalone, a question naming estradiol was answered <em>"No — Fluoroestradiol f-18 should
+	 * not be given"</em>, the substance the clinician asked about named nowhere in the response.
+	 *
+	 * <p><b>Why the second rung is BELOW the first and not above it.</b> Above it, the rung renames a
+	 * fourth shipped family — the influenza A/Vietnam antigen, whose elected row carries a display name
+	 * with a dropped leading "I" — and issue #250 lists that as one of its four. It is also the ONLY
+	 * shipped family for which that placement elects a route-qualified row while the family HAS an
+	 * unqualified one, which falsifies this method's own first rung and, with it,
+	 * {@link DrugReferenceInjector#matchingEntries}' stated reason for widening its candidate set
+	 * ("{@code canonicalRow} never moves AWAY from {@code namesNoRoute()}"). And the row a record
+	 * renders is where its rules come from ({@code DrugReferenceInjector.onePerPartner} walks the
+	 * elected row's own {@code getInteractions()}), so that placement costs that family 12 rendered
+	 * interaction partners against 1 gained — traded for a typo the issue itself files as a ninth
+	 * instance of issue #196's upstream data problem, which is the handoff the estradiol MERGE already
+	 * takes. That refusal is about the rung ORDER and is NOT an argument that this is the only route to
+	 * that family: the parenthetical {@code namesNoRoute()} reads as a qualifier there is part of the row's
+	 * own {@code substanceName}, so correcting THIS rung's reading of it delivers that family and, measured
+	 * over the shipped KB, no other family's election. ADR Decision 43's rejected-alternative section
+	 * carries that measurement and why it is out of scope here — a second consumer of this predicate,
+	 * {@code DrugSafetyValidator.outranks}, decides whose mechanism prose a chip renders and was not
+	 * measured for it.
+	 *
+	 * <p>Below the first rung the fold never moves AWAY from {@code namesNoRoute()}, and that is
+	 * structural rather than a property of the shipped data: the first rung RETURNS whenever the two rows
+	 * disagree on it, so the second is only ever reached between rows that agree, and it therefore cannot
+	 * replace an unqualified row with a qualified one. It can still move LATERALLY between two rows that
+	 * agree — which is what all three of its shipped moves are — so "monotone" here means the weaker
+	 * thing; {@link DrugReferenceInjector#matchingEntries}' bullet says so at its own site.
+	 * {@code SubstanceNameRowTest.routeQualificationStillOutranksNamingTheSubstance} is what fails if the
+	 * rungs are ever reordered. Reorder them and read the failures rather than trusting a list here; when
+	 * that case was written it was the only one that reddened, which is why it exists.
+	 *
+	 * <p><b>What it moves, measured 2026-08-24 through the real parse and this method on BOTH sides</b> —
+	 * the baseline is this same method as it stands before the rung, driven from a second worktree, rather
+	 * than a re-expression of it; re-measure before relying on the figures. Of the 129 multi-row families,
+	 * <b>3 change subject</b> and 126 do not: {@code Fluoroestradiol f-18}/{@code Estradiol},
+	 * {@code Daxibotulinumtoxina}/{@code Botulinum toxin type A}, and the paediatric tick-borne
+	 * encephalitis vaccine/the row the data files that family under. <b>All three moves are LATERAL in
+	 * route terms</b> — the first two elect a row that names no route where the incumbent did too, and the
+	 * third elects one that does not where the incumbent did not either, since neither tick-borne row is
+	 * unqualified. The count of families electing a route-qualified row is 10 before and 10 after. At the one
+	 * {@code canonicalRow} site whose row set is NOT one substance
+	 * ({@code DrugSafetyValidator.entryForAtcCode}, over every row publishing one ATC code, 30 of the
+	 * KB's 2148 codes spanning more than one substance) exactly 1 fold moves, and within one substance.
+	 * The rules the RENDERED record then carries move with the row: the vaccine family gains 19 partners
+	 * and loses none, botulinum is identical at 110, and estradiol goes from the tracer's 4 partners to
+	 * 578. Those are counts of the elected ROW's rated partners in the dataset and NOT of anything a
+	 * clinician sees — the chip arm is scoped to the patient's own active orders, so the response for the
+	 * ticket's own patient carries five interaction chips before and after, live-verified. Read 578 as
+	 * breadth available to a record, never as chips gained. The estradiol row loses
+	 * {@code bazedoxifene} and {@code toremifene}, which only the tracer row rates, and
+	 * rendering {@code ospemifene} and {@code tamoxifen} at the substance row's own rating rather than
+	 * the tracer's. The CHIP arm is unaffected there, because it pools every row of the substance
+	 * ({@code DrugSafetyValidator.bestRulePerPartner}): that pool is 580 partners before and after.
+	 *
+	 * <p><b>The residue of the same-substance gate, stated rather than left to be found.</b> Where the
+	 * row set spans substances the second rung is skipped per PAIR, so the answer can depend on the order
+	 * the rows arrive in — a row of one substance interposed between two rows of another is compared
+	 * against neither of them on that rung. This fold was already order-sensitive there, and the gate
+	 * does not make it more so: re-folding each of the 2148 ATC codes' rows reversed, and under 40 random
+	 * permutations each, changes the elected row for <b>49</b> codes with this rung and <b>50</b> without
+	 * it — the one it removes being {@code G03CA03}, which the rung now decides outright. Nothing here is
+	 * a claim that the ordering is sound; what would make it sound is grouping by substance before
+	 * folding, and that is a change to {@code DrugSafetyValidator.entryForAtcCode} rather than to this
+	 * method.
+	 *
+	 * @return {@code candidate} where it outranks {@code incumbent} on {@link #namesNoRoute()}, or — for
+	 *         two rows of one substance agreeing on that — on {@link #namesItsSubstance()}; else
+	 *         {@code incumbent}. For the 10 shipped families that name no unqualified row the survivor
+	 *         still carries a qualifier: the KB publishes no unqualified name for those substances, and
+	 *         manufacturing one by stripping a display name is the pattern-match-a-label mistake issue
+	 *         #148 had to undo.
 	 */
 	static DrugReference canonicalRow(DrugReference incumbent, DrugReference candidate) {
 		if (incumbent == null) {
 			return candidate;
 		}
-		return candidate.namesNoRoute() && !incumbent.namesNoRoute() ? candidate : incumbent;
+		if (candidate.namesNoRoute() != incumbent.namesNoRoute()) {
+			return candidate.namesNoRoute() ? candidate : incumbent;
+		}
+		// Rung two, and only where the two rows are one substance: "is this row the one the family is
+		// named after" is a question about a family, and this method is also folded over row sets that
+		// are NOT one — DrugSafetyValidator.entryForAtcCode folds every row publishing one ATC code, and
+		// 30 of the shipped KB's 2148 codes span more than one substance. Ungated the rung renames three
+		// of those across substances, including A02BC05 Omeprazole -> Esomeprazole: the shipped
+		// Omeprazole row carries rxnorm_name esomeprazole, so it does not name its own substance while
+		// Esomeprazole does, and the pair is the one DrugReference.substanceKey exists to keep apart.
+		if (incumbent.substanceGroupKey().equals(candidate.substanceGroupKey())
+		        && candidate.namesItsSubstance() && !incumbent.namesItsSubstance()) {
+			return candidate;
+		}
+		return incumbent;
 	}
 
 	/**

@@ -1936,8 +1936,9 @@ public class DrugSafetyValidator {
 	 * @return the row of one substance that its chips name: the row the patient's own record claims most
 	 *         strongly ({@link DrugReference#nameMatchStrength}), and among rows tied on that —
 	 *         including the common case where no recorded name matches any of them at all —
-	 *         {@link DrugReference#canonicalRow}'s choice, i.e. the row carrying no route qualifier
-	 *         wherever the loaded data has one.
+	 *         {@link DrugReference#canonicalRow}'s choice — the row carrying no route qualifier wherever
+	 *         the loaded data has one, and among rows tied on THAT the row the data files the substance
+	 *         under (issue #250).
 	 *
 	 *         <p><b>Issue #162, the second half</b>, and the half that is a correctness fix rather than a
 	 *         de-duplication. The chips named the subject by whichever ROW produced them, so a question
@@ -1946,12 +1947,20 @@ public class DrugSafetyValidator {
 	 *         chart does not record.
 	 *
 	 *         <p><b>Issue #194.</b> {@link DrugReference#canonicalRow} answers "which row names this
-	 *         substance", and where NO row of a family names a route it can only keep the earliest — so
-	 *         a patient ordered one presentation was told about another. Live-measured on the 3.7.1
+	 *         substance", and where the rows of a family TIE on its rungs it can only keep the earliest —
+	 *         so a patient ordered one presentation was told about another. Live-measured on the 3.7.1
 	 *         standalone: a {@code Botulinum toxin type A} order (the demo dictionary's concept 4259,
 	 *         whose name the order carries verbatim) was subjected on
 	 *         {@code Daxibotulinumtoxina (botulinum toxin type a)}, because both rows of that substance
 	 *         name no route and the {@code Daxibotulinumtoxina} row is the dataset's first.
+	 *
+	 *         <p>That example no longer ties: issue #250 gave the fold a second rung — the row the data
+	 *         files the family under, which here is {@code Botulinum toxin type A} — so the fold now
+	 *         reaches this case's answer unaided, and the family it was demonstrated on can no longer
+	 *         demonstrate it. The chart-anchoring step below is unchanged and still decides every family
+	 *         whose rows tie on BOTH rungs; where it is pinned moved with the
+	 *         example, to the COVID pair in {@code OrderedSubjectRowTest
+	 *         .theOrderNamedRowIsNamedWhereTheFoldCannotReachIt}, whose two rows tie on both.
 	 *
 	 *         <p>So the chart decides first, and only then the fold. That order is the constraint issue
 	 *         #187 settled and #192 re-measured — naming the row the CHART records is what makes a
@@ -1965,8 +1974,11 @@ public class DrugSafetyValidator {
 	 *         which commonly carries a strength ({@code Aspirin 81mg}), and its CONCEPT's own name, which
 	 *         commonly does not ({@code Botulinum toxin type A}) — and an order with no drug row
 	 *         contributes only the second. So a row whose display name IS that concept name reaches
-	 *         {@link DrugReference#NAME_IS_THE_DISPLAY_NAME} and wins, which is what moves the botulinum
-	 *         case; where no recorded name is any row's name or alias every row scores
+	 *         {@link DrugReference#NAME_IS_THE_DISPLAY_NAME} and wins, which is what moves the COVID pair
+	 *         in {@code OrderedSubjectRowTest.theOrderNamedRowIsNamedWhereTheFoldCannotReachIt}. This
+	 *         sentence used to name the botulinum case here, and that is the one family issue #250's
+	 *         second rung leaves unable to demonstrate it — see the paragraph above. Where no recorded
+	 *         name is any row's name or alias every row scores
 	 *         {@link DrugReference#NAME_TOKEN_INSIDE_A_NAME} and the fold decides exactly as before. That
 	 *         second shape is what the route-variant and no-unqualified-row cases in
 	 *         {@code InteractionRouteVariantTest} and {@code ScreeningSubjectLabelTest} supply — their
@@ -2063,10 +2075,7 @@ public class DrugSafetyValidator {
 		List<DrugReference> strongest = new ArrayList<DrugReference>();
 		int best = DrugReference.NAME_NO_MATCH;
 		for (DrugReference row : rows) {
-			int claim = DrugReference.NAME_NO_MATCH;
-			for (String recorded : recordedNames) {
-				claim = Math.max(claim, row.nameMatchStrength(recorded));
-			}
+			int claim = recordedClaim(row, recordedNames);
 			if (claim > best) {
 				best = claim;
 				strongest.clear();
@@ -2082,6 +2091,116 @@ public class DrugSafetyValidator {
 	 *          evidence {@link #interactionSubject} anchors a substance's representative row on. */
 	private static Collection<String> recordedDrugNames(PatientClinicalContext context) {
 		return context == null ? Collections.<String> emptySet() : context.getActiveDrugNames();
+	}
+
+	/** @return the strongest claim any of {@code recordedNames} makes on {@code row}
+	 *          ({@link DrugReference#nameMatchStrength}), or {@link DrugReference#NAME_NO_MATCH} when none
+	 *          of them names it — the per-row step {@link #strongestClaimants} takes a maximum over,
+	 *          extracted so {@link #recordNamesMoreStrongly} asks it the same way rather than re-deriving
+	 *          "how strongly does the chart claim this row" a second time. */
+	private static int recordedClaim(DrugReference row, Collection<String> recordedNames) {
+		int claim = DrugReference.NAME_NO_MATCH;
+		for (String recorded : recordedNames) {
+			claim = Math.max(claim, row.nameMatchStrength(recorded));
+		}
+		return claim;
+	}
+
+	/**
+	 * @return whether the patient's own record claims {@code row} MORE STRONGLY than it claims
+	 *         {@code than} — the question {@code DrugReferenceInjector.rowAttribution}'s sentence
+	 *         asserts, since that sentence says the row it names is "the row this patient's record
+	 *         names" and the row it contrasts is the one the record was published for.
+	 *
+	 *         <p><b>Why this and not "the fold and the chart disagree" (issue #250).</b>
+	 *         {@code chartAnchoredSubject} used to answer by comparing
+	 *         {@link #interactionSubject}'s row against {@link DrugReference#canonicalRow}'s — a proxy,
+	 *         which held only while the fold could not reach the row the chart names. Issue #250's second
+	 *         rung made it reach that row for three shipped substances, and the proxy then read their
+	 *         agreement as "the chart chose nothing": measured over the shipped KB through the real
+	 *         {@code injectRecords}, a question naming {@code daxibotulinumtoxina} for a patient ordered
+	 *         {@code Botulinum toxin type A} rendered a record titled {@code Daxibotulinumtoxina} beside a
+	 *         chip naming {@code Botulinum toxin type A}, and the clause reconciling them — which that
+	 *         same arrangement printed before the rung — was suppressed. Asking the chart directly is what
+	 *         the sentence needed all along, and it cannot drift as the fold changes.
+	 *
+	 *         <p>It is a READ of {@link DrugReference#nameMatchStrength} through
+	 *         {@link #recordedClaim}, the same per-row step {@link #strongestClaimants} uses, and not a
+	 *         second ranking: the composition that decides a SUBJECT still lives only in
+	 *         {@link #interactionSubject}. What this decides is whether a record may say the chart
+	 *         preferred one of its siblings.
+	 */
+	static boolean recordNamesMoreStrongly(DrugReference row, DrugReference than,
+			PatientClinicalContext context) {
+		// A fast path, NOT the guard against a sentence contrasting a row with itself: the comparison
+		// below already answers false for row == than, since a claim cannot exceed itself. What actually
+		// keeps "published for X, not for X" out of the prose is
+		// DrugReferenceInjector.rowAttribution's worthNamingApart call, and that is where a reader
+		// should look — this clause cannot be pinned by any test, because no mutation of it changes an
+		// answer.
+		if (row == null || than == null || row == than) {
+			return false;
+		}
+		Collection<String> recorded = recordedDrugNames(context);
+		int claim = recordedClaim(row, recorded);
+		// A FLOOR, because the sentence says the record NAMES the row. NAME_TOKEN_INSIDE_A_NAME is bare
+		// containment — one of the entry's names merely occurs inside the recorded string — and a record
+		// asserting "the row this patient's record names" on that is the overclaim issue #269 removed from
+		// the section beside this one, where `opium` matched an allergen recorded as `Tiotropium`. The
+		// strictly-greater comparison alone admits it, at rank 0 against a rendered row at NAME_NO_MATCH:
+		// measured over the shipped KB through this method, 6 such arrangements exist today — an order
+		// recorded `Procaine benzylpenicillin` against a `Benzylpenicillin` subject, `Insulin human
+		// (isophane)` against `Insulin human`. Nothing false is PRINTED for them, because the injector's
+		// relevance gate is silent there too; but the sentence each would license IS false, and for a
+		// reason worth stating exactly, since it is easy to misread. The pair being compared is one
+		// substance — that is what makes a record of one row contrast with the other at all. What the
+		// chart records is a THIRD: `Insulin human (isophane)` is filed under `insulin isophane`, while the
+		// row whose name it merely contains is filed under `insulin, regular, human`. So the clause would
+		// say the chart names a row of a substance the chart does not record. The floor is also what stops a
+		// dataset refresh turning one of these into printed text, and the
+		// hazard is exactly the one `nameMatchStrength`'s own javadoc records for that rank (`Lactate`
+		// inside `Ciprofloxacin lactate`, two different substances). Those 6 are silent both before this
+		// method existed and after the floor, so it costs nothing that was ever printed.
+		//
+		// NAME_IS_ANOTHER_NAME and not NAME_IS_THE_DISPLAY_NAME, because an alias IS a name: where the
+		// chart records a row's rxnorm or CIEL name, that row is named and the sentence is true. Raising
+		// the floor to the display name silences the #237 clause for exactly that chart, which is the
+		// common shape rather than a corner — interactionSubject's own javadoc says why: an order
+		// contributes its CONCEPT's name, and the rows of one substance share their rxnorm and CIEL
+		// aliases.
+		//
+		// The SHIPPED data cannot observe that, and this used to say so and stop there. Measured through
+		// the real DdiDrugReferenceSource().load(), substanceGroupKey and nameMatchStrength — taking every
+		// alias any row of a family publishes as the candidate recorded order, 1021 candidates over the
+		// 129 multi-row families, a wider population than the display names this comment first counted —
+		// ZERO have a strongest claim of exactly rank 1 while another row of the family claims lower,
+		// because a shared alias lands on every row at once and yields no strict inequality either way.
+		// So the level needs a family whose rows publish DIFFERENT alias sets, which is curated data:
+		// drug-reference-substance-dosing-ceilings.json publishes `clobex` on the route-qualified
+		// Clobetasol row alone. Pinned there by
+		// SubstanceNameRowTest.aRowTheChartNamesByAnAliasIsARowTheChartNames at this gate and by
+		// theRecordSaysWhichRowItIsWhereTheChartNamesThatRowByAnAlias on the printed record — raise the
+		// floor and read those failures rather than trusting this attribution. The fast path above is now
+		// the only part of this predicate no case pins, for the reason it states itself.
+		//
+		// STRICTLY greater, which is the OTHER half of this return and was unpinned when the floor was
+		// written: relaxed to `claim >= recordedClaim(than, recorded)` the predicate answers true in BOTH
+		// directions for one pair, so it stops meaning "more strongly" and the clause asserts a preference
+		// the chart never expressed. The arrangement is the paragraph above read from the other side —
+		// because the rows of one substance share their rxnorm and CIEL aliases, a recorded order name that
+		// is no row's own display name claims the whole family at rank 1, above the floor and tied. The
+		// shipped botulinum family reaches it through the CIEL name `Botulinum type A
+		// toxin-haemagglutinin complex`, which both its rows publish: relaxed, an injected record for a
+		// question naming only `Daxibotulinumtoxina` reads "Published by this dataset for
+		// Daxibotulinumtoxina, not for Botulinum toxin type A — the row this patient's record names" over a
+		// chart that names neither in preference. Pinned by
+		// SubstanceNameRowTest.aRowTheChartClaimsNoMoreStronglyThanItsSiblingIsNotARowTheChartPreferred at
+		// this gate and by aRecordAttributesItsRowToNobodyWhereTheChartClaimsBothRowsAlike on the printed
+		// record — two cases rather than one, because folded together the first fails and JUnit never
+		// reaches the second. Mutate the comparison and read the failures rather than trusting that
+		// attribution.
+		return claim >= DrugReference.NAME_IS_ANOTHER_NAME
+		        && claim > recordedClaim(than, recorded);
 	}
 
 	/**

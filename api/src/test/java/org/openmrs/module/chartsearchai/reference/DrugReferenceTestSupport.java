@@ -617,6 +617,23 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * The entries the module actually SHIPS — the bundled 19 MB knowledge base, through the real
+	 * {@link DdiDrugReferenceSource#load()}. Deliberately NOT {@link #ddinterEntries()}, which returns
+	 * the pinned excerpt: a case asserting a property of the shipped dataset must read the shipped
+	 * dataset, and the two answer differently by three orders of magnitude in row count.
+	 *
+	 * <p>Here rather than inlined for the reason {@link #row} records — the idiom was written out at
+	 * several call sites in one class and at more in others, and a dataset accessor that lives in one
+	 * place cannot come to mean two things. (A count stood here and went stale within two commits, which
+	 * is why it is now a word.) Use it for an invariant over every substance the KB files as more
+	 * than one row; use a verbatim slice for anything that asserts specific chip or record TEXT, so the
+	 * case does not depend on a KB refresh leaving one family alone.
+	 */
+	static List<DrugReference> shippedEntries() {
+		return new DdiDrugReferenceSource().load();
+	}
+
+	/**
 	 * As {@link #ddinterService}, carrying the real curated cross-reactivity groups — the excerpt
 	 * counterpart of {@link #ddiFixtureService}, and here for the same reason that one is: the two steps
 	 * have to stay together, because {@link #serviceWith} pins the groups EMPTY through its

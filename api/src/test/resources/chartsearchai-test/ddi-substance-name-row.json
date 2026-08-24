@@ -1,0 +1,387 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #250 \u2014 the row canonicalRow elects to represent a substance. Fluoroestradiol f-18 (a PET imaging tracer) carries no drugbank_id, so DdiDrugReferenceSource files it under the estradiol family's resolved substance id and it becomes one substance with Estradiol and Estradiol (topical). It is listed FIRST here, exactly as in the shipped file (index 1282 against 1927), because that is what the defect turns on: both it and Estradiol answer namesNoRoute(), so before this issue the fold could not separate them and kept the earliest. The rated rule is on Estradiol and Estradiol (topical), NOT on the tracer \u2014 also verbatim \u2014 which is why the live symptom was a chip carrying an oestrogen's mechanism text under the tracer's name. Dexamethasone is the partner the live 3.7.1 reproduction used. Taken unedited from the shipped 19 MB KB; the merge itself is left as loaded, which is issue #249's upstream handoff. THIS IS THE THIRD COPY OF THIS FAMILY IN THIS DIRECTORY, and deliberately: the three estradiol rows are value-identical and in the same order in ddi-derivative-merged-into-one-substance.json, which carries rated estradiol rules of its own, and every scenario in SubstanceNameRowTest was measured to be expressible over that file. It is not reused because that fixture exists to exercise DrugReferenceValidity's derivative-merged finding across 14 rows and 6 families \u2014 a different concern, whose rows a change there may legitimately move \u2014 and because the partner here is the Dexamethasone the live reproduction actually used, so the chip text this asserts is the one that was reported. ddi-derivative-rule-edges.json holds a fourth copy with a deliberately diacritic-mutated tracer name."
+ },
+ "mechanisms": {
+  "1743": {
+   "text": "Estrogens may enhance the systemic effects of both endogenous and exogenous corticosteroids. The proposed mechanism is an increase in serum cortisol-binding globulin (transcortin) induced by estrogens, resulting in a decreased rate of corticosteroid metabolic clearance. The interaction has been reported with estrogens or estrogen-containing oral contraceptives (OCs) and hydrocortisone, prednisone, and prednisolone.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter2152",
+   "name": "Fluoroestradiol f-18",
+   "rxcui": "4083",
+   "rxnorm_name": "estradiol",
+   "drugbank_id": null,
+   "atc": [
+    "G03CA03"
+   ],
+   "ciel": [
+    {
+     "code": "104597",
+     "uuid": "104597AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / ethinyl estradiol / levonorgestrel"
+    },
+    {
+     "code": "104598",
+     "uuid": "104598AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / hydroxyprogesterone"
+    },
+    {
+     "code": "104599",
+     "uuid": "104599AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / levonorgestrel"
+    },
+    {
+     "code": "104600",
+     "uuid": "104600AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / medroxyprogesterone"
+    },
+    {
+     "code": "104601",
+     "uuid": "104601AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / norethindrone"
+    },
+    {
+     "code": "104602",
+     "uuid": "104602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / norgestimate"
+    },
+    {
+     "code": "104603",
+     "uuid": "104603AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / testosterone"
+    },
+    {
+     "code": "165449",
+     "uuid": "165449AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol valerate / norethisterone enantate"
+    },
+    {
+     "code": "165467",
+     "uuid": "165467AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Algestone acetophenide / estradiol enantate"
+    },
+    {
+     "code": "167605",
+     "uuid": "7911cbdf-66f0-42a1-a75d-e398d675f25c",
+     "name": "Estradiol / norethindrone / relugolix"
+    },
+    {
+     "code": "75900",
+     "uuid": "75900AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol"
+    },
+    {
+     "code": "75901",
+     "uuid": "75901AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol 17 beta-cypionate"
+    },
+    {
+     "code": "75902",
+     "uuid": "75902AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol 3-benzoate"
+    },
+    {
+     "code": "75904",
+     "uuid": "75904AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol hemihydrate"
+    },
+    {
+     "code": "75905",
+     "uuid": "75905AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol valerate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter513",
+   "name": "Dexamethasone",
+   "rxcui": "3264",
+   "rxnorm_name": "dexamethasone",
+   "drugbank_id": "DB01234",
+   "atc": [
+    "A01AC02",
+    "C05AA09",
+    "D07AB19",
+    "D07XB05",
+    "D10AA03",
+    "H02AB02",
+    "R01AD03",
+    "S01BA01",
+    "S01CB01",
+    "S02BA06",
+    "S03BA01"
+   ],
+   "ciel": [
+    {
+     "code": "104317",
+     "uuid": "104317AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ciprofloxacin / dexamethasone"
+    },
+    {
+     "code": "104422",
+     "uuid": "104422AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / hypromellose"
+    },
+    {
+     "code": "104423",
+     "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / lidocaine"
+    },
+    {
+     "code": "104424",
+     "uuid": "104424AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin"
+    },
+    {
+     "code": "104425",
+     "uuid": "104425AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / neomycin / polymyxin B"
+    },
+    {
+     "code": "104426",
+     "uuid": "104426AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tobramycin"
+    },
+    {
+     "code": "104427",
+     "uuid": "104427AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / tramazoline"
+    },
+    {
+     "code": "168548",
+     "uuid": "f5c7c86c-2b95-42d4-95f2-6d9e8949f39e",
+     "name": "Dexamethasone / gentamicin"
+    },
+    {
+     "code": "170697",
+     "uuid": "d2a620d9-138d-4125-a84a-7ddbf3b2ee45",
+     "name": "Dexamethasone / framycetin"
+    },
+    {
+     "code": "74609",
+     "uuid": "74609AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone"
+    },
+    {
+     "code": "74610",
+     "uuid": "74610AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone acetate"
+    },
+    {
+     "code": "74612",
+     "uuid": "74612AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone isonicotinate"
+    },
+    {
+     "code": "74613",
+     "uuid": "74613AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone phosphate"
+    },
+    {
+     "code": "74614",
+     "uuid": "74614AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone sodium phosphate"
+    },
+    {
+     "code": "74615",
+     "uuid": "74615AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone trimethyl acetate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter679",
+   "name": "Estradiol",
+   "rxcui": "4083",
+   "rxnorm_name": "estradiol",
+   "drugbank_id": "DB00783",
+   "atc": [
+    "G03CA03"
+   ],
+   "ciel": [
+    {
+     "code": "104597",
+     "uuid": "104597AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / ethinyl estradiol / levonorgestrel"
+    },
+    {
+     "code": "104598",
+     "uuid": "104598AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / hydroxyprogesterone"
+    },
+    {
+     "code": "104599",
+     "uuid": "104599AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / levonorgestrel"
+    },
+    {
+     "code": "104600",
+     "uuid": "104600AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / medroxyprogesterone"
+    },
+    {
+     "code": "104601",
+     "uuid": "104601AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / norethindrone"
+    },
+    {
+     "code": "104602",
+     "uuid": "104602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / norgestimate"
+    },
+    {
+     "code": "104603",
+     "uuid": "104603AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / testosterone"
+    },
+    {
+     "code": "165449",
+     "uuid": "165449AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol valerate / norethisterone enantate"
+    },
+    {
+     "code": "165467",
+     "uuid": "165467AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Algestone acetophenide / estradiol enantate"
+    },
+    {
+     "code": "167605",
+     "uuid": "7911cbdf-66f0-42a1-a75d-e398d675f25c",
+     "name": "Estradiol / norethindrone / relugolix"
+    },
+    {
+     "code": "75900",
+     "uuid": "75900AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol"
+    },
+    {
+     "code": "75901",
+     "uuid": "75901AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol 17 beta-cypionate"
+    },
+    {
+     "code": "75902",
+     "uuid": "75902AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol 3-benzoate"
+    },
+    {
+     "code": "75904",
+     "uuid": "75904AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol hemihydrate"
+    },
+    {
+     "code": "75905",
+     "uuid": "75905AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol valerate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter680",
+   "name": "Estradiol (topical)",
+   "rxcui": "4083",
+   "rxnorm_name": "estradiol",
+   "drugbank_id": "DB00783",
+   "atc": [
+    "G03CA03"
+   ],
+   "ciel": [
+    {
+     "code": "104597",
+     "uuid": "104597AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / ethinyl estradiol / levonorgestrel"
+    },
+    {
+     "code": "104598",
+     "uuid": "104598AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / hydroxyprogesterone"
+    },
+    {
+     "code": "104599",
+     "uuid": "104599AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / levonorgestrel"
+    },
+    {
+     "code": "104600",
+     "uuid": "104600AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / medroxyprogesterone"
+    },
+    {
+     "code": "104601",
+     "uuid": "104601AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / norethindrone"
+    },
+    {
+     "code": "104602",
+     "uuid": "104602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / norgestimate"
+    },
+    {
+     "code": "104603",
+     "uuid": "104603AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol / testosterone"
+    },
+    {
+     "code": "165449",
+     "uuid": "165449AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol valerate / norethisterone enantate"
+    },
+    {
+     "code": "165467",
+     "uuid": "165467AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Algestone acetophenide / estradiol enantate"
+    },
+    {
+     "code": "167605",
+     "uuid": "7911cbdf-66f0-42a1-a75d-e398d675f25c",
+     "name": "Estradiol / norethindrone / relugolix"
+    },
+    {
+     "code": "75900",
+     "uuid": "75900AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol"
+    },
+    {
+     "code": "75901",
+     "uuid": "75901AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol 17 beta-cypionate"
+    },
+    {
+     "code": "75902",
+     "uuid": "75902AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol 3-benzoate"
+    },
+    {
+     "code": "75904",
+     "uuid": "75904AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol hemihydrate"
+    },
+    {
+     "code": "75905",
+     "uuid": "75905AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Estradiol valerate"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter513",
+   "DDInter679",
+   "Moderate",
+   "1743"
+  ],
+  [
+   "DDInter513",
+   "DDInter680",
+   "Moderate",
+   "1743"
+  ]
+ ]
+}

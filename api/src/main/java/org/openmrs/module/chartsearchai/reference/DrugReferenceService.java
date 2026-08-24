@@ -768,8 +768,7 @@ public class DrugReferenceService {
 	 *
 	 * @param drugName the recorded name, as the chart holds it
 	 * @param implied  that name's substances, as {@link #findImpliedSubstances} resolved them — passed
-	 *                 in rather than re-resolved, so this cannot become a second resolution rule and
-	 *                 costs no further sweep of the dataset
+	 *                 in rather than re-resolved, so this cannot become a second resolution rule
 	 * @return the sublist of {@code implied} the name names, in the same order; the rows are the very
 	 *         objects handed in, so a caller may test membership by identity
 	 */

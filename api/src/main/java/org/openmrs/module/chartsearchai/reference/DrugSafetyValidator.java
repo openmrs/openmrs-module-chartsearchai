@@ -2152,6 +2152,14 @@ public class DrugSafetyValidator {
 		// hazard is exactly the one `nameMatchStrength`'s own javadoc records for that rank (`Lactate`
 		// inside `Ciprofloxacin lactate`, two different substances). Those 6 are silent both before this
 		// method existed and after the floor, so it costs nothing that was ever printed.
+		//
+		// NAME_IS_ANOTHER_NAME and not NAME_IS_THE_DISPLAY_NAME, because an alias IS a name: where the
+		// chart records a row's rxnorm or CIEL name, that row is named and the sentence is true. That
+		// LEVEL is the one part of this predicate no case pins — measured, raising the floor to the
+		// display name reddens nothing, because the rows of one substance normally share their aliases,
+		// so a rank-1 claim lands on every row of a family at once and yields no strict inequality either
+		// way. Distinguishing the two needs a family whose rows publish DIFFERENT alias sets
+		// (drug-reference-charted-substance-row.json is one), and no shipped family does.
 		return claim >= DrugReference.NAME_IS_ANOTHER_NAME
 		        && claim > recordedClaim(than, recorded);
 	}

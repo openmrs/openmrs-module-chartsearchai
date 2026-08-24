@@ -327,6 +327,61 @@ public class SubstanceNameRowTest {
 		    "and must name the row the chart does claim, was: " + record);
 	}
 
+	/** The order name whose recorded string CONTAINS another substance's row name without being it —
+	 *  the shipped KB's own witness for the weakest rank of {@link DrugReference#nameMatchStrength}. */
+	private static final String CONTAINING_ORDER = "Insulin human (isophane)";
+	
+	@Test
+	public void aRowTheChartMerelyCONTAINSIsNotARowTheChartNames() throws Exception {
+		// The floor on the claim the #237 attribution clause may rest on. That sentence says "the row this
+		// patient's record names", and NAME_TOKEN_INSIDE_A_NAME is bare containment — one of the entry's
+		// names merely occurring inside the recorded string — so resting it on that rank is the overclaim
+		// issue #269 removed from the section beside it, where `opium` matched an allergen recorded as
+		// `Tiotropium`. Strictly-greater alone admits it: rank 0 beats a sibling's NAME_NO_MATCH.
+		//
+		// The shipped KB supplies the arrangement, and the two rows are DIFFERENT substances, which is what
+		// makes the suppressed sentence a false one rather than a merely weak one: an order recorded
+		// `Insulin human (isophane)` is filed under `insulin isophane`, while the row whose name it
+		// contains is filed under `insulin, regular, human`.
+		//
+		// Asserted at the gate rather than on rendered prose, deliberately and with the reason stated: the
+		// end-to-end path is silent here for a SECOND reason (the injector's relevance gate), so a prose
+		// assertion would pass whether or not the floor exists and would pin nothing. The inputs are not
+		// hand-crafted — they are real rows from the real shipped dataset and a real recorded order name,
+		// the same shape as the premise assertions elsewhere in this package.
+		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
+		DrugReference named = null;
+		DrugReference sibling = null;
+		for (DrugReference row : all) {
+			if ("Insulin human".equals(row.getName())) {
+				named = row;
+			}
+			if ("Insulin human (regular)".equals(row.getName())) {
+				sibling = row;
+			}
+		}
+		assertNotNull(named, "precondition: the shipped dataset must carry the Insulin human row");
+		assertNotNull(sibling, "precondition: and its route-qualified sibling");
+		
+		assertEquals(named.substanceGroupKey(), sibling.substanceGroupKey(),
+		    "precondition: the two must be ONE substance, or no record of either contrasts with the other");
+		assertEquals(DrugReference.NAME_TOKEN_INSIDE_A_NAME, named.nameMatchStrength(CONTAINING_ORDER),
+		    "precondition: the recorded name must CONTAIN this row's name without being it");
+		assertEquals(DrugReference.NAME_NO_MATCH, sibling.nameMatchStrength(CONTAINING_ORDER),
+		    "precondition: while claiming the sibling not at all — so strictly-greater alone would fire");
+		
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+		    DrugReferenceTestSupport.set(CONTAINING_ORDER), null, null, null);
+		assertFalse(DrugSafetyValidator.recordNamesMoreStrongly(named, sibling, context),
+		    "a record may not say the chart NAMES a row the chart merely contains");
+		
+		// The control, on the same pair: a chart that really does name it clears the floor.
+		PatientClinicalContext naming = DrugReferenceTestSupport.ctx(60, null,
+		    DrugReferenceTestSupport.set("Insulin human"), null, null, null);
+		assertTrue(DrugSafetyValidator.recordNamesMoreStrongly(named, sibling, naming),
+		    "while a chart that names it outright still licenses the sentence");
+	}
+
 	@Test
 	public void theRecordHasNothingToAttributeWhereTheChartNamesTheRowItRenders() throws Exception {
 		// A consequence of the rename, on the surface that says WHICH row a record is: since the fold now

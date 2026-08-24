@@ -609,8 +609,14 @@ public class DrugReferenceInjector {
 	 *   <li>{@link #collect} folds over a SUPERSET, so a substance the question leg represented by a
 	 *       route-qualified row can now be represented by the route-unspecified one — a different
 	 *       {@code resourceId} on the wire and a different row's rules rendered. The direction is
-	 *       monotone and is the one issue #163 asks for ({@link DrugReference#canonicalRow} only ever
-	 *       moves toward {@link DrugReference#namesNoRoute()}).
+	 *       monotone and is the one issue #163 asks for ({@link DrugReference#canonicalRow} never moves
+	 *       AWAY from {@link DrugReference#namesNoRoute()}).
+	 *       <p>Since issue #250 that fold has a second rung, so "monotone" no longer means it moves only
+	 *       toward {@code namesNoRoute()}: it may also move LATERALLY, between two rows that agree on it,
+	 *       toward the row the data files the substance under. All three moves the rung makes over the
+	 *       shipped KB are of that kind. The consequence stated above is unchanged and now covers the
+	 *       lateral case too — a different {@code resourceId} and a different row's rules rendered,
+	 *       without any change in route-qualification.</p>
 	 *       <p>This used to add "and it makes this record agree with the chip layer's subject rather
 	 *       than diverge from it". That was true when written and is <b>not</b> true now, which is
 	 *       issues #237/#259: since issue #194 anchored a chip's subject on the CHART and issue #206

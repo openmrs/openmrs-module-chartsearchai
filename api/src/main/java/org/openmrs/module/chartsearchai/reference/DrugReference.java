@@ -387,7 +387,21 @@ public class DrugReference {
 	 *         very string, and its paediatric sibling under the same one, so both stems are
 	 *         {@code tick-borne encephalitis vaccine} and a stem comparison separates neither.
 	 *
-	 *         <p>Consumed by {@link #canonicalRow} and nowhere else. It is not a claim that the row is
+	 *         <p><b>The closest neighbour is {@link #nameMatchStrength}'s top rank, and the two are
+	 *         measured identical on the shipped data.</b> The expression here is the one
+	 *         {@code nameMatchStrength} uses for {@link #NAME_IS_THE_DISPLAY_NAME}, with this row's own
+	 *         {@code substanceName} as the operand, and over the shipped KB
+	 *         {@code nameMatchStrength(getSubstanceName()) == NAME_IS_THE_DISPLAY_NAME} agrees with this
+	 *         predicate on all 2283 rows and elects the same row for all 129 multi-row families. It is
+	 *         still not reused, and the second reason is the one that would bite: that method is for a
+	 *         CLINICIAN-ENTERED name, and CLAUDE.md keeps identity, ranking and widening apart; and it is
+	 *         gated on {@link #matchesDrugName}, which its own javadoc says excludes "a hand-authored
+	 *         {@code json} entry whose {@code aliases} omit its own {@code name}" — so on such a dataset
+	 *         it answers false where this answers true, i.e. fails CLOSED. Recorded because the
+	 *         measurement is what makes the two look interchangeable to whoever reads them next.
+	 *
+	 *         <p>Read by {@link #canonicalRow} alone in production, and by the cases that state its
+	 *         premises. It is not a claim that the row is
 	 *         the substance — {@code DrugReferenceValidity.derivesFromItsOwnSubstance} asks a different
 	 *         and narrower question about the same two fields (does this row's stem carry the substance's
 	 *         name without naming it as a word, i.e. is it a DERIVATIVE) and reusing that here fixes 1 of
@@ -440,8 +454,9 @@ public class DrugReference {
 	 * ties on any family holding two rows that both name no route, and dataset order then answered — so
 	 * the shipped KB elected {@code Fluoroestradiol f-18}, a diagnostic PET tracer at index 1282, to
 	 * speak for the estradiol substance against {@code Estradiol} at 1927, and every rated partner of
-	 * that substance took the tracer as its chip subject. Live on a 3.7.1 standalone that reached the
-	 * ANSWER: <em>"No — Fluoroestradiol f-18 should not be given"</em>, to a question naming estradiol.
+	 * that substance took the tracer as its chip subject. It did not stay in the chip either: live on a
+	 * 3.7.1 standalone, a question naming estradiol was answered <em>"No — Fluoroestradiol f-18 should
+	 * not be given"</em>, the substance the clinician asked about named nowhere in the response.
 	 *
 	 * <p><b>Why the second rung is BELOW the first and not above it.</b> Above it, the rung renames a
 	 * fourth shipped family — the influenza A/Vietnam antigen, whose elected row carries a display name
@@ -449,20 +464,30 @@ public class DrugReference {
 	 * shipped family for which that placement elects a route-qualified row while the family HAS an
 	 * unqualified one, which falsifies this method's own first rung and, with it,
 	 * {@link DrugReferenceInjector#matchingEntries}' stated reason for widening its candidate set
-	 * ("{@code canonicalRow} only ever moves toward {@code namesNoRoute()}"). And the row a record
+	 * ("{@code canonicalRow} never moves AWAY from {@code namesNoRoute()}"). And the row a record
 	 * renders is where its rules come from ({@code DrugReferenceInjector.onePerPartner} walks the
 	 * elected row's own {@code getInteractions()}), so that placement costs that family 12 rendered
 	 * interaction partners against 1 gained — traded for a typo the issue itself files as a ninth
 	 * instance of issue #196's upstream data problem, which is the handoff the estradiol MERGE already
-	 * takes. Below the first rung, the fold still only ever moves toward {@code namesNoRoute()}: measured
-	 * through {@link DdiDrugReferenceSource#parse} of the shipped KB and this method, 0 of the 129
-	 * multi-row families elect a qualified row over an existing unqualified one.
+	 * takes. Below the first rung the fold never moves AWAY from {@code namesNoRoute()}, and that is
+	 * structural rather than a property of the shipped data: the first rung RETURNS whenever the two rows
+	 * disagree on it, so the second is only ever reached between rows that agree, and it therefore cannot
+	 * replace an unqualified row with a qualified one. It can still move LATERALLY between two rows that
+	 * agree — which is what all three of its shipped moves are — so "monotone" here means the weaker
+	 * thing; {@link DrugReferenceInjector#matchingEntries}' bullet says so at its own site.
+	 * {@code SubstanceNameRowTest.routeQualificationStillOutranksNamingTheSubstance} is what fails if the
+	 * rungs are ever reordered. Reorder them and read the failures rather than trusting a list here; when
+	 * that case was written it was the only one that reddened, which is why it exists.
 	 *
-	 * <p><b>What it moves, measured 2026-08-24 through the real parse and this method</b> (the pre-#250
-	 * fold expressed in a throwaway harness, since production no longer carries it; re-measure before
-	 * relying on the figures): of the 129 multi-row families, <b>3 change subject</b> and 126 do not —
-	 * {@code Fluoroestradiol f-18}/{@code Estradiol}, {@code Daxibotulinumtoxina}/{@code Botulinum toxin
-	 * type A}, and the paediatric tick-borne encephalitis vaccine/the unqualified one. At the one
+	 * <p><b>What it moves, measured 2026-08-24 through the real parse and this method on BOTH sides</b> —
+	 * the baseline is this same method as it stands before the rung, driven from a second worktree, rather
+	 * than a re-expression of it; re-measure before relying on the figures. Of the 129 multi-row families,
+	 * <b>3 change subject</b> and 126 do not: {@code Fluoroestradiol f-18}/{@code Estradiol},
+	 * {@code Daxibotulinumtoxina}/{@code Botulinum toxin type A}, and the paediatric tick-borne
+	 * encephalitis vaccine/the row the data files that family under. <b>All three moves are LATERAL in
+	 * route terms</b> — the first two elect a row that names no route where the incumbent did too, and the
+	 * third elects one that does not where the incumbent did not either, since neither tick-borne row is
+	 * unqualified. The count of families electing a route-qualified row is 10 before and 10 after. At the one
 	 * {@code canonicalRow} site whose row set is NOT one substance
 	 * ({@code DrugSafetyValidator.entryForAtcCode}, over every row publishing one ATC code, 30 of the
 	 * KB's 2148 codes spanning more than one substance) exactly 1 fold moves, and within one substance.
@@ -473,7 +498,19 @@ public class DrugReference {
 	 * the tracer's. The CHIP arm is unaffected there, because it pools every row of the substance
 	 * ({@code DrugSafetyValidator.bestRulePerPartner}): that pool is 580 partners before and after.
 	 *
-	 * @return {@code candidate} where it outranks {@code incumbent} on those rungs, else
+	 * <p><b>The residue of the same-substance gate, stated rather than left to be found.</b> Where the
+	 * row set spans substances the second rung is skipped per PAIR, so the answer can depend on the order
+	 * the rows arrive in — a row of one substance interposed between two rows of another is compared
+	 * against neither of them on that rung. This fold was already order-sensitive there, and the gate
+	 * does not make it more so: re-folding each of the 2148 ATC codes' rows reversed, and under 40 random
+	 * permutations each, changes the elected row for <b>49</b> codes with this rung and <b>50</b> without
+	 * it — the one it removes being {@code G03CA03}, which the rung now decides outright. Nothing here is
+	 * a claim that the ordering is sound; what would make it sound is grouping by substance before
+	 * folding, and that is a change to {@code DrugSafetyValidator.entryForAtcCode} rather than to this
+	 * method.
+	 *
+	 * @return {@code candidate} where it outranks {@code incumbent} on {@link #namesNoRoute()}, or — for
+	 *         two rows of one substance agreeing on that — on {@link #namesItsSubstance()}; else
 	 *         {@code incumbent}. For the 10 shipped families that name no unqualified row the survivor
 	 *         still carries a qualifier: the KB publishes no unqualified name for those substances, and
 	 *         manufacturing one by stripping a display name is the pattern-match-a-label mistake issue

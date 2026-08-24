@@ -1429,7 +1429,9 @@ public class DrugSafetyValidator {
 	 *         ({@link PatientClinicalContext#allergensMatching}) and each is put to the entry by the
 	 *         accessor for a clinician-entered drug NAME, {@link DrugReference#matchesDrugName}. Without
 	 *         that an allergen recorded as {@code Tiotropium} let an {@code Opium} rule replace the
-	 *         sentence a genuine, separately recorded opium allergy had raised.
+	 *         sentence a genuine, separately recorded opium allergy had raised. That walk is
+	 *         {@link #aMatchedRecordNamesTheEntry}, which the injected record's reading reads too
+	 *         (issue #269) — everything said about it in the paragraphs here is said of that method.
 	 *         </ul>
 	 *
 	 *         <p><b>Per witness, and against the ENTRY rather than the token</b> — both halves measured,
@@ -1499,6 +1501,10 @@ public class DrugSafetyValidator {
 	 */
 	static boolean aMatchedRecordNamesTheEntry(DrugReference ref, DrugReference.Contraindication c,
 			PatientClinicalContext context) {
+		// No caller reaches this today: addContraindications returns on a null context before the rank is
+		// asked, and DrugReferenceInjector.corroborated is gated on a reading that requires one. Kept
+		// because allergensMatching would throw instead, and because false is the only safe answer here —
+		// it hedges or demotes, and can never make a record ASSERT something about a chart nobody read.
 		if (context == null) {
 			return false;
 		}
@@ -4113,7 +4119,11 @@ public class DrugSafetyValidator {
 	/**
 	 * @return one {@link RecordedAllergen} per distinct resolution, in the order the context lists the
 	 *         tokens — the input to {@link #addAllergyContraindications}, resolved once per
-	 *         {@code validate} because it does not depend on the subject being checked. Each carries
+	 *         {@code validate} because it does not depend on the subject being checked, and once per
+	 *         injection by {@link #allergicSubstances} for the injected record's own reading (issue
+	 *         #269). Two invocations of ONE walk rather than two walks: the answer is a function of the
+	 *         service and the context alone, so the two cannot disagree, and neither holds it past the
+	 *         pass or the injection that asked for it. Each carries
 	 *         its charted allergen token and the substances it implies, plus which of those it NAMES
 	 *         (issue #268): the arm reasons over all of them, and only a named one may be reported as
 	 *         the allergy itself.
@@ -4178,8 +4188,9 @@ public class DrugSafetyValidator {
 	 * chip needs all three at once — it reports THAT record, so it may print a row's label only where
 	 * the record names it and must otherwise quote the chart.
 	 *
-	 * <p>Private to this class and built once per {@code validate} pass, by the caller that already
-	 * resolves the allergy list — so nothing here outlives the pass (issue #172: this bean is a Spring
+	 * <p>Private to this class and built by whoever resolves the allergy list — once per
+	 * {@code validate} pass, and once per injection for {@link #allergicSubstances} (issue #269) — so
+	 * nothing here outlives the pass or the injection that built it (issue #172: this bean is a Spring
 	 * singleton and this memo is keyed on nothing at all).
 	 */
 	private static final class RecordedAllergen {

@@ -192,7 +192,10 @@ public class DrugReferenceInjector {
 	 * <p><b>A THIRD channel carries this patient's own contraindication findings into the prompt, and
 	 * it is neither of those.</b> {@link #contraindicationSections} marks a rendered clause "Recorded
 	 * for this patient" on an injected {@code drug_reference} record, off
-	 * {@code DrugSafetyValidator.recordedContraindicationKind} and nothing else. That method's javadoc
+	 * {@code DrugSafetyValidator.recordedContraindicationKind} and — since issue #269, for a self-named
+	 * allergy rule — {@link #corroborated}, which NARROWS that match rather than adding a second route to
+	 * the marking: a clause the match reaches and corroboration does not takes a third section instead,
+	 * claiming nothing about the patient. That method's javadoc
 	 * used to call the marking exact — "which is exactly when the ledger raises a chip for that key" —
 	 * and the order leg no longer satisfies it: {@link #matchingEntries} admits an active order that
 	 * merely SHARES a class with a question-named drug, such an entry is not in the drugs-in-play set,
@@ -1569,10 +1572,11 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>{@code context} does two things here. It orders the capped {@code Interactions:} section — see
 	 * {@link #orderedInteractionNotes} — and it splits the contraindication list into what this patient's
-	 * chart records and what it does not (issue #208 item 2, {@link #contraindicationSections}). It may be
-	 * null, which is "nothing known about the patient": the interactions section then keeps dataset order
-	 * and the contraindication list is rendered with no reading at all, because a record that cannot see
-	 * the chart must not report an absence. {@code orderEntries} is passed straight through to the
+	 * chart records, what it does not, and (issue #269) what it matched but nothing corroborates (issue
+	 * #208 item 2, {@link #contraindicationSections}). It may be null, which is "nothing known about the
+	 * patient": the interactions section then keeps dataset order and the contraindication list is
+	 * rendered with no reading at all, because a record that cannot see the chart must not report an
+	 * absence. {@code orderEntries} is passed straight through to the
 	 * interactions method, which groups a partner the patient is on by the entry it resolves to (issue
 	 * #190 item 2).
 	 *
@@ -2076,7 +2080,10 @@ public class DrugReferenceInjector {
 	 *         active gastrointestinal bleeding", with no chip beside it. The predicate is
 	 *         {@link DrugSafetyValidator#recordedContraindicationKind}, the chip arm's own, for the same
 	 *         reason the KEY here is the chip ledger's own; and a clause is marked when ANY rule folded
-	 *         into it matched, which is when the ledger raises a chip for that key. Selecting
+	 *         into it matched, which is when the ledger raises a chip for that key. Since issue #269 the
+	 *         positive marking additionally needs {@link #corroborated} of that rule, and a matched rule
+	 *         it refuses takes a third section rather than either half — so the walk resolves each key as
+	 *         a MAX over its rules, one corroborated rule carrying the key. Selecting
 	 *         from the clauses in this walk rather than recomputing them afterwards is what keeps the
 	 *         marked strings a subset of the rendered ones by construction.
 	 *

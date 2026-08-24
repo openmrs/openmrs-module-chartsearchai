@@ -271,6 +271,45 @@ public class InjectedContraindicationCorroborationTest {
 	}
 
 	@Test
+	public void aClauseTheDenialHalfWouldAlsoClaimIsLeftToTheUncorroboratedSection()
+			throws IOException {
+		// The cross-key precedence. Codeine files an allergy rule and a CONDITION rule under the same
+		// note, which is a natural way to author "recorded either way" — two collapsed keys, one clause
+		// STRING. The allergy rule matches `Dihydrocodeine` by containment and nothing corroborates it;
+		// the condition rule matches nothing at all. So one key wants the uncorroborated section and the
+		// other the denial, and printing both would have the record say the module both could and could
+		// not answer for those words. The denial yields, because of the two it is the only one that can
+		// be false of the string.
+		String record = record(BORROWED_ALIAS, "Codeine", "Is it safe to give her codeine?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Dihydrocodeine"), null));
+
+		assertEquals("opioid reaction", sectionAfter(record, UNCORROBORATED_LEAD),
+				"the section that claims nothing keeps the string, was: " + record);
+		assertNull(sectionAfter(record, NOT_RECORDED_LEAD),
+				"and the denial of the same words is withheld, was: " + record);
+		assertNull(sectionAfter(record, RECORDED_LEAD),
+				"nothing is asserted either, was: " + record);
+	}
+
+	@Test
+	public void aClauseAnotherRuleOfTheSameEntryDoesRecordIsStatedAsRecorded() throws IOException {
+		// The other leg of the cross-key precedence, over the same two Codeine rules. Here the CONDITION
+		// is on record, so its key is recorded while the allergy rule's key is uncorroborated — one clause
+		// string wanted by both. The recorded section keeps it: it is the one that can be true of the
+		// words, which is the rule this file's third section was slotted into rather than a new one.
+		String record = record(BORROWED_ALIAS, "Codeine", "Is it safe to give her codeine?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Dihydrocodeine"),
+						DrugReferenceTestSupport.set("Respiratory depression")));
+
+		assertEquals("opioid reaction", sectionAfter(record, RECORDED_LEAD),
+				"the section that can be true of the words keeps them, was: " + record);
+		assertNull(sectionAfter(record, UNCORROBORATED_LEAD),
+				"and the weaker one yields, was: " + record);
+	}
+
+	@Test
 	public void aClassTokenRuleIsUntouchedThoughTheAllergenArmResolvesNothing() throws IOException {
 		// THE SCOPE GUARD, over the SHIPPED curated seed. `nsaid` is not one of Ibuprofen's own names, so
 		// the rule is not selfNamedAllergyRule and neither corroborating question is asked of it — which

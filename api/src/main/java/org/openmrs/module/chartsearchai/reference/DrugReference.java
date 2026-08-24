@@ -501,7 +501,11 @@ public class DrugReference {
 	 * KB's 2148 codes spanning more than one substance) exactly 1 fold moves, and within one substance.
 	 * The rules the RENDERED record then carries move with the row: the vaccine family gains 19 partners
 	 * and loses none, botulinum is identical at 110, and estradiol goes from the tracer's 4 partners to
-	 * 578 — losing {@code bazedoxifene} and {@code toremifene}, which only the tracer row rates, and
+	 * 578. Those are counts of the elected ROW's rated partners in the dataset and NOT of anything a
+	 * clinician sees — the chip arm is scoped to the patient's own active orders, so the response for the
+	 * ticket's own patient carries five interaction chips before and after, live-verified. Read 578 as
+	 * breadth available to a record, never as chips gained. The estradiol row loses
+	 * {@code bazedoxifene} and {@code toremifene}, which only the tracer row rates, and
 	 * rendering {@code ospemifene} and {@code tamoxifen} at the substance row's own rating rather than
 	 * the tracer's. The CHIP arm is unaffected there, because it pools every row of the substance
 	 * ({@code DrugSafetyValidator.bestRulePerPartner}): that pool is 580 partners before and after.

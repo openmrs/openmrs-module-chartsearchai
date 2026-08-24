@@ -2693,7 +2693,7 @@ Through the real `DdiDrugReferenceSource.parse` of the shipped 19 MB knowledge b
 
 All three moves are **lateral** in route terms: the first two elect a row naming no route where the incumbent did too, and the third elects one that does not where the incumbent did not either — *neither* tick-borne row is unqualified, so that rename is not a move "toward the unqualified row" and rung two does not only ever hand off to a `namesNoRoute()` row.
 
-Rendered-record partners move with the row: the vaccine family gains 19 and loses none, botulinum is identical at 110, and estradiol goes from the tracer's 4 to 578 — losing `bazedoxifene` and `toremifene`, which only the tracer row rates, and rendering `ospemifene` and `tamoxifen` at the substance row's own rating rather than the tracer's. The chip arm is unaffected there because it pools every row of the substance (`bestRulePerPartner`): that pool is 580 partners before and after.
+Rendered-record partners move with the row — counts of the elected ROW's rated partners in the dataset, not of anything a clinician sees, since the chip arm is scoped to the patient's own active orders (live-verified: five interaction chips for the ticket's patient before and after). The vaccine family gains 19 and loses none, botulinum is identical at 110, and estradiol goes from the tracer's 4 to 578 — losing `bazedoxifene` and `toremifene`, which only the tracer row rates, and rendering `ospemifene` and `tamoxifen` at the substance row's own rating rather than the tracer's. The chip arm is unaffected there because it pools every row of the substance (`bestRulePerPartner`): that pool is 580 partners before and after.
 
 ### Trade-offs
 

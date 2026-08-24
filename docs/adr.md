@@ -2632,7 +2632,7 @@ The union is **monotone**, which is the whole argument for it: it can hedge noth
 
 ### Context
 
-`canonicalRow` decides which row of a substance every surface names it by — the chip's subject, the injected record's title and the class arm's partner label. It had two rungs: prefer the row that answers `namesNoRoute()`, else keep the earliest row seen.
+`canonicalRow` decides which row of a substance every surface names it by — the chip's subject, the injected record's title and the class arm's partner label. It had ONE rung — prefer the row that answers `namesNoRoute()` — and a fallback to the earliest row seen. (That counting matters, because the issue asks for "a third rung": the fallback is not one, so what this adds is the SECOND, which is also why it must not go above the first.)
 
 `namesNoRoute()` is true of any display name carrying no trailing parenthesised qualifier, so it ties on any family holding two such rows, and dataset order then answered. On the shipped knowledge base the row that wins that race for the estradiol substance is `Fluoroestradiol f-18` — a diagnostic PET tracer, at index 1282 against `Estradiol` at 1927, merged into that family because DDInter gives it no `drugbank_id` (the merge itself is [#249](https://github.com/openmrs/openmrs-module-chartsearchai/pull/249)'s load-time finding and Decision 36's upstream handoff, deliberately unrepaired).
 

@@ -30,8 +30,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 
 /**
  * Issue #250 — which row of a substance {@link DrugReference#canonicalRow} elects to represent it.
- * Before this issue the fold had two rungs: prefer the row that {@link DrugReference#namesNoRoute()},
- * and otherwise keep the earliest row seen. Nothing preferred the row whose display name IS the name
+ * Before this issue the fold had ONE rung — prefer the row that
+ * {@link DrugReference#namesNoRoute()} — and a fallback to the earliest row seen. Nothing preferred the row whose display name IS the name
  * the data files the family under, so where two rows of one substance both name no route the tie fell
  * to dataset order — and on the shipped KB the row that wins that race is
  * {@code Fluoroestradiol f-18}, a diagnostic PET tracer at index 1282, against {@code Estradiol} at

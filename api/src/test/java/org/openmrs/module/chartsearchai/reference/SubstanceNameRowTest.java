@@ -118,14 +118,110 @@ public class SubstanceNameRowTest {
 		        .startsWith("Estradiol interacts with active order dexamethasone — Moderate."),
 		    "and its detail must lead with that same name, was: " + warnings.get(0).getDetail());
 		// On the STEM and case-insensitively, because the KB spells the tracer three ways and a guard
-		// written on the display name alone is blind to the other two: this substance's own rated rules
-		// carry mechanism prose reading "the radioactive diagnostic agent fluoroestradiol F 18 …", which
-		// `contains("Fluoroestradiol f-18")` does not see. That prose can still reach a chip about
-		// Estradiol — bestRulePerPartner pools every row of the substance — so this guard is what makes
-		// that residue observable in-suite rather than accidentally green. See ADR 43's trade-offs.
+		// written on the display name alone is blind to the other two: the tracer's own mechanism prose
+		// reads "the radioactive diagnostic agent fluoroestradiol F 18 …", which
+		// `contains("Fluoroestradiol f-18")` does not see.
+		//
+		// What it catches HERE is narrower than an earlier version of this comment claimed, and the
+		// difference is worth stating rather than deleting. It refuses the tracer's name reaching this
+		// detail by ANY route — the subject label, the partner label, an appended class sentence — and
+		// over this slice the two assertions above already refuse the only route that exists, failing
+		// first if the fold elects the tracer. What it cannot observe is bestRulePerPartner's POOLING of
+		// every row of the substance, because this slice rates no rule on the tracer row at all, so there
+		// is no tracer prose here to pool. That residue is real and is observed by
+		// theChipNamesTheElectedRowWhereThePooledWinningRuleIsTheTracers below, over the one slice that
+		// does file a rated rule on that row. See ADR 43's trade-offs.
 		assertFalse(warnings.get(0).getDetail().toLowerCase(Locale.ROOT).contains(TRACER_STEM),
 		    "and must not attribute an oestrogen's mechanism to a diagnostic tracer, nor carry the "
 		            + "tracer's own prose, was: " + warnings.get(0).getDetail());
+	}
+
+	/** The verbatim slice that files a rated rule on the TRACER row — the estradiol slice above files
+	 *  none, so it cannot pose a pooled tracer rule at all. Its own concern is
+	 *  {@code DrugReferenceValidity}'s derivative-merged finding across six families
+	 *  ({@code DrugReferenceValidityContextTest}), which is why the case below reads the ratings it
+	 *  depends on off the real parse rather than assuming them: a change to those rows reddens it loudly,
+	 *  naming what it found, instead of quietly asserting nothing. */
+	private static final String MERGED_FAMILIES =
+	        "chartsearchai-test/ddi-derivative-merged-into-one-substance.json";
+	
+	/** The active order that slice's tracer rule points at, verbatim from it — an oestrogen
+	 *  agonist/antagonist, which is what the tracer's own mechanism prose is about. */
+	private static final String TRACER_RULE_PARTNER = "Ospemifene";
+	
+	@Test
+	public void theChipNamesTheElectedRowWhereThePooledWinningRuleIsTheTracers() throws Exception {
+		// The residue ADR 43 records as a trade-off of this change, made observable in-suite. Two
+		// assertions here and only the first is a property this module promises: the chip names the
+		// ELECTED row (issue #250) even in the arrangement where the rule it renders came from a sibling
+		// row — bestRulePerPartner pools every row of a substance, and severity leads its ranking, so the
+		// tracer's Major rule outranks the substance row's Moderate one for the same partner. The second
+		// pins the residue as it stands, so that a change to the pooling, to outranks' route or
+		// note-length steps, or to this slice's ratings cannot widen or close it in silence. Closing it
+		// would be an improvement, and the place to record that is ADR 43's trade-off together with this
+		// assertion — not a deletion of it.
+		//
+		// Nothing in the suite could see this before: the arrangement needs a rated rule ON the tracer,
+		// which the estradiol slice deliberately does not carry.
+		List<DrugReference> entries = DrugReferenceTestSupport.ddiFixtureEntries(MERGED_FAMILIES);
+		DrugReference tracer = DrugReferenceTestSupport.row(entries, TRACER);
+		DrugReference estradiol = DrugReferenceTestSupport.row(entries, "Estradiol");
+		DrugReference.Interaction tracerRule = ruleFor(tracer, TRACER_RULE_PARTNER);
+		DrugReference.Interaction substanceRule = ruleFor(estradiol, TRACER_RULE_PARTNER);
+		
+		assertEquals(tracer.substanceGroupKey(), estradiol.substanceGroupKey(),
+		    "precondition: the two rows must be ONE substance in this slice too, or nothing pools");
+		assertNotNull(tracerRule, "precondition: the tracer row must carry a rated rule for "
+		        + TRACER_RULE_PARTNER + ", was: " + tracer.getInteractions());
+		assertNotNull(substanceRule, "precondition: and the substance row must carry its own for that "
+		        + "same partner, or there is no pool to choose from, was: " + estradiol.getInteractions());
+		assertTrue(tracer.namesNoRoute() && estradiol.namesNoRoute(),
+		    "precondition: neither row may name a route, or outranks' route step decides the pool");
+		assertTrue(DrugSafetyValidator.outranksOnRule(tracerRule, substanceRule),
+		    "precondition: and the tracer's rule must WIN that pool through the real ranking, or the chip "
+		            + "renders the substance row's own prose and this case asserts nothing");
+		assertTrue(tracerRule.getNote().toLowerCase(Locale.ROOT).contains(TRACER_STEM),
+		    "precondition: the winning rule's note must name the tracer, or the residue assertion below "
+		            + "cannot tell whose prose the chip carried, was: " + tracerRule.getNote());
+		assertFalse(substanceRule.getNote().toLowerCase(Locale.ROOT).contains(TRACER_STEM),
+		    "precondition: while the substance row's own note must not, was: " + substanceRule.getNote());
+		
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(MERGED_FAMILIES);
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+		    DrugReferenceTestSupport.set(TRACER_RULE_PARTNER), null, null, null);
+		
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+		        .validate("", ESTRADIOL_QUESTION, context);
+		
+		assertEquals(1, warnings.size(), "one substance, one partner, one chip, was: " + warnings);
+		assertEquals("Estradiol", warnings.get(0).getDrug(),
+		    "the chip must name the elected row even where the rule it renders is a sibling's, was: "
+		            + warnings);
+		assertTrue(warnings.get(0).getDetail().startsWith("Estradiol interacts with active order "
+		        + tracerRule.getToken() + " — Major."),
+		    "and its detail must lead with that same name at the winning rule's rating, was: "
+		            + warnings.get(0).getDetail());
+		// The residue, not a promise: the mechanism prose under that name is the tracer's own. Read the
+		// detail in the failure message before changing this line.
+		assertTrue(warnings.get(0).getDetail().toLowerCase(Locale.ROOT).contains(TRACER_STEM),
+		    "the pooled winning rule's prose is the tracer's, which is ADR 43's recorded residue — if this "
+		            + "no longer holds the residue has moved or closed, and that belongs in ADR 43 beside "
+		            + "this assertion, was: " + warnings.get(0).getDetail());
+	}
+	
+	/** @return the rule {@code row} carries for the active order named {@code partner}, matched by the
+	 *          production predicate the chip arm itself gates on
+	 *          ({@link PatientClinicalContext#hasActiveDrug}), so a premise assertion cannot admit a rule
+	 *          {@code validate} would skip; null where the row files none. */
+	private static DrugReference.Interaction ruleFor(DrugReference row, String partner) {
+		PatientClinicalContext onlyThatOrder = DrugReferenceTestSupport.ctx(60, null,
+		    DrugReferenceTestSupport.set(partner), null, null, null);
+		for (DrugReference.Interaction rule : row.getInteractions()) {
+			if (onlyThatOrder.hasActiveDrug(rule.getToken(), rule.getAtc())) {
+				return rule;
+			}
+		}
+		return null;
 	}
 	
 	@Test
@@ -398,14 +494,119 @@ public class SubstanceNameRowTest {
 		    "while a chart that names it outright still licenses the sentence");
 	}
 
+	/** The curated fixture whose two Clobetasol rows publish DIFFERENT alias sets, which is what the
+	 *  floor's LEVEL needs. No family of the shipped KB poses that arrangement — rows of one substance
+	 *  normally share their rxnorm and CIEL aliases, so a claim that is an alias-but-not-a-display-name
+	 *  lands on every row at once and no row out-claims another; the measurement is on
+	 *  {@code recordNamesMoreStrongly} itself, made through the real load rather than restated here.
+	 *  This fixture's own concern is issue #259's two-ceiling record, so the two cases below read the
+	 *  claims they depend on off the real parse: a change to those rows reddens them loudly, naming what
+	 *  it found, rather than quietly asserting nothing. */
+	private static final String DIFFERING_ALIASES =
+	        "chartsearchai-test/drug-reference-substance-dosing-ceilings.json";
+	
+	/** The brand alias only that fixture's route-qualified Clobetasol row publishes — a recorded order
+	 *  name that IS one row's other name and matches its sibling not at all, which is the shape that tells
+	 *  {@link DrugReference#NAME_IS_ANOTHER_NAME} apart from
+	 *  {@link DrugReference#NAME_IS_THE_DISPLAY_NAME} as the floor. That fixture's {@code zantac} pair has
+	 *  the same shape and is deliberately not used here: its two rows share ONE display name, so the
+	 *  printed clause is refused by {@code worthNamingApart} whatever the floor says, and only rows with
+	 *  distinct display names can show the floor deciding the prose. */
+	private static final String ALIAS_ONLY_ORDER = "Clobex";
+	
+	@Test
+	public void aRowTheChartNamesByAnAliasIsARowTheChartNames() throws Exception {
+		// The floor's LEVEL, which nothing pinned: raised from NAME_IS_ANOTHER_NAME to
+		// NAME_IS_THE_DISPLAY_NAME the whole api suite stayed green, while the #237 clause silently stops
+		// being printed wherever the chart records a row's rxnorm or CIEL name rather than its display
+		// name — which per interactionSubject's own javadoc is the common shape, since an order
+		// contributes its CONCEPT's name and rows of one substance share their aliases. An alias IS a
+		// name, so that chart does name the row and the sentence is true.
+		//
+		// Asked at the gate here and on the printed record in the case below, split for the reason the
+		// strictness pair below is split: folded together the gate assertion fails first and JUnit never
+		// reaches the prose, so a change that keeps the gate honest while breaking the plumbing to the
+		// sentence would be masked.
+		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(DIFFERING_ALIASES);
+		DrugReference named = DrugReferenceTestSupport.row(entries, "Clobetasol (topical)");
+		DrugReference sibling = DrugReferenceTestSupport.row(entries, "Clobetasol");
+		
+		assertEquals(named.substanceGroupKey(), sibling.substanceGroupKey(),
+		    "precondition: the two must be ONE substance, or no record of either contrasts with the other");
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, named.nameMatchStrength(ALIAS_ONLY_ORDER),
+		    "precondition: the recorded name must be one of this row's OTHER names — above the floor by "
+		            + "exactly one rank, which is what makes the level observable at all");
+		assertEquals(DrugReference.NAME_NO_MATCH, sibling.nameMatchStrength(ALIAS_ONLY_ORDER),
+		    "precondition: while claiming the sibling not at all, so the comparison is strict either way");
+		
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+		    DrugReferenceTestSupport.set(ALIAS_ONLY_ORDER), null, null, null);
+		assertTrue(DrugSafetyValidator.recordNamesMoreStrongly(named, sibling, context),
+		    "a chart recording one of a row's other names NAMES that row, so the sentence is licensed");
+		assertFalse(DrugSafetyValidator.recordNamesMoreStrongly(sibling, named, context),
+		    "while the sibling that name does not reach is not the row the record may claim");
+	}
+	
+	@Test
+	public void theRecordSaysWhichRowItIsWhereTheChartNamesThatRowByAnAlias() throws Exception {
+		// What the level costs when it is wrong, on the surface that prints — the same arrangement driven
+		// through the real injectRecords. The question resolves both rows, so the record is rendered from
+		// the fold's row while the chart names its sibling by an alias: raise the floor and this record
+		// falls silent about which row it is, with the chips beside it still naming the other one, which is
+		// exactly the divergence issue #237's clause exists to reconcile.
+		DrugReferenceService service = DrugReferenceTestSupport
+		        .serviceWith(DrugReferenceTestSupport.fixtureEntries(DIFFERING_ALIASES));
+		String question = "Is it safe to give her clobetasol?";
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, 60.0,
+		    DrugReferenceTestSupport.set(ALIAS_ONLY_ORDER), null, null, null);
+		
+		assertEquals(Arrays.asList("Clobetasol", "Clobetasol (topical)"),
+		    DrugReferenceTestSupport.names(service.findImpliedByQuery(question)),
+		    "precondition: the question must resolve BOTH rows, or the fold and the chart name one row "
+		            + "and there is nothing to reconcile");
+		assertSame(DrugReferenceTestSupport.row(service.getAll(), "Clobetasol (topical)"),
+		    DrugSafetyValidator.interactionSubject(service.findImpliedByQuery(question), context),
+		    "precondition: and the chart's alias must move the subject onto the row the record does NOT "
+		            + "render, which is the claim the floor's level admits");
+		
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+		        .injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Clobetasol");
+		
+		assertNotNull(record, "precondition: the record must be rendered from the fold's row, was: "
+		        + DrugReferenceTestSupport.referenceTexts(chart));
+		assertTrue(record.contains(DrugReferenceTestSupport.ROW_ATTRIBUTION_LEAD
+		        + " Clobetasol, not for Clobetasol (topical) — the row this patient's record names"),
+		    "a record whose sibling the chart names by an alias must say so, was: " + record);
+	}
+
 	@Test
 	public void theRecordHasNothingToAttributeWhereTheChartNamesTheRowItRenders() throws Exception {
 		// A consequence of the rename, on the surface that says WHICH row a record is: since the fold now
-		// elects the row a chart naming the bare substance also names, the two agree and
-		// DrugReferenceInjector.rowAttribution has nothing to say — where before the fold answered the
-		// tracer, they disagreed, and the record carried an attribution clause for a divergence that was
-		// itself the defect. The sibling case is the control: a chart naming the route-qualified row still
-		// moves the subject off the rendered row, so the clause is not simply gone.
+		// elects the row a chart naming the bare substance also names, the record renders the very row
+		// every chip names and DrugReferenceInjector.rowAttribution has nothing to contrast — where before
+		// the fold answered the tracer, the two disagreed and the record carried an attribution clause for
+		// a divergence that was itself the defect. The sibling case is the control: a chart naming the
+		// route-qualified row still moves the subject off the rendered row, so the clause is not simply
+		// gone.
+		//
+		// The silence is READ OFF THE RECORD and not inferred from the fold agreeing with the chart, which
+		// is the inference this clause stopped resting on: since issue #250 it is decided by
+		// recordNamesMoreStrongly(subject, rendered), so "the fold agrees with the chart" no longer
+		// implies it, and re-deriving the retired proxy in a test comment is the step that produced the
+		// regression this change had to fix. What holds here is narrower and is exactly what the
+		// assertions state: subject and rendered are the SAME row, so there is nothing to contrast.
+		//
+		// Two independent refusals keep that out of the prose and either is enough, so the printed
+		// assertion reddens only when BOTH are broken. Measured: bypassing the gate (chartAnchoredSubject
+		// returning its subject unconditionally) leaves this green, because worthNamingApart will not
+		// print "for X, not for X"; mutating worthNamingApart alone leaves it green, because the gate
+		// refuses a row against itself anyway — its `row == than` fast path, and behind that the strict
+		// comparison, which is why that fast path's own comment says no mutation of IT changes an answer;
+		// do both and the record reads "Published by this dataset for Estradiol, not for Estradiol" and
+		// this reddens. So what this case cannot see is the gate's floor, its LEVEL or its strictness:
+		// those are aRowTheChartMerelyCONTAINSIsNotARowTheChartNames,
+		// aRowTheChartNamesByAnAliasIsARowTheChartNames and the two strictness cases below.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(ESTRADIOL_FIXTURE);
 		List<DrugReference> group = service.findImpliedByQuery(ESTRADIOL_QUESTION);
 		
@@ -414,8 +615,19 @@ public class SubstanceNameRowTest {
 		    null);
 		assertSame(DrugReference.canonicalRow(group),
 		    DrugSafetyValidator.interactionSubject(group, onTheSubstance),
-		    "a chart naming the bare substance must now agree with the fold, so the record's attribution "
-		            + "clause has nothing to report");
+		    "a chart naming the bare substance must now agree with the fold, so the row the record renders "
+		            + "IS the row the chips name");
+		
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+		        .injectRecords(DrugReferenceTestSupport.oneRecordChart(), onTheSubstance,
+		            ESTRADIOL_QUESTION);
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Estradiol");
+		
+		assertNotNull(record, "precondition: a record must be rendered for the substance, was: "
+		        + DrugReferenceTestSupport.referenceTexts(chart));
+		assertFalse(record.contains(DrugReferenceTestSupport.ROW_ATTRIBUTION_LEAD),
+		    "and it must attribute its row to nobody, since it renders the row the chips name, was: "
+		            + record);
 		
 		PatientClinicalContext onTheTopicalRow = DrugReferenceTestSupport.ctx(60, null,
 		    DrugReferenceTestSupport.set("Estradiol (topical)", "Dexamethasone Injection vial 8mg"), null,

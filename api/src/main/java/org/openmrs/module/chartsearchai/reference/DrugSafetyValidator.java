@@ -1974,8 +1974,11 @@ public class DrugSafetyValidator {
 	 *         which commonly carries a strength ({@code Aspirin 81mg}), and its CONCEPT's own name, which
 	 *         commonly does not ({@code Botulinum toxin type A}) — and an order with no drug row
 	 *         contributes only the second. So a row whose display name IS that concept name reaches
-	 *         {@link DrugReference#NAME_IS_THE_DISPLAY_NAME} and wins, which is what moves the botulinum
-	 *         case; where no recorded name is any row's name or alias every row scores
+	 *         {@link DrugReference#NAME_IS_THE_DISPLAY_NAME} and wins, which is what moves the COVID pair
+	 *         in {@code OrderedSubjectRowTest.theOrderNamedRowIsNamedWhereTheFoldCannotReachIt}. This
+	 *         sentence used to name the botulinum case here, and that is the one family issue #250's
+	 *         second rung leaves unable to demonstrate it — see the paragraph above. Where no recorded
+	 *         name is any row's name or alias every row scores
 	 *         {@link DrugReference#NAME_TOKEN_INSIDE_A_NAME} and the fold decides exactly as before. That
 	 *         second shape is what the route-variant and no-unqualified-row cases in
 	 *         {@code InteractionRouteVariantTest} and {@code ScreeningSubjectLabelTest} supply — their
@@ -2160,16 +2163,25 @@ public class DrugSafetyValidator {
 		// method existed and after the floor, so it costs nothing that was ever printed.
 		//
 		// NAME_IS_ANOTHER_NAME and not NAME_IS_THE_DISPLAY_NAME, because an alias IS a name: where the
-		// chart records a row's rxnorm or CIEL name, that row is named and the sentence is true. That
-		// LEVEL is a part of this predicate no case pins — one of two, the other being the fast path above,
-		// which says so itself — and it is unobservable rather than merely untested: measured over the
-		// shipped KB through nameMatchStrength, taking every display name in it as the candidate recorded
-		// order, ZERO of the 129 multi-row families have an arrangement whose strongest claim is exactly
-		// rank 1 while another row of the family claims lower — because the rows
-		// of one substance normally share their aliases, so a rank-1 claim lands on every row at once and
-		// yields no strict inequality either way. Raising the floor to the display name therefore reddens
-		// nothing, and cannot. Distinguishing the two needs a family whose rows publish DIFFERENT alias
-		// sets (drug-reference-charted-substance-row.json is one, and is curated).
+		// chart records a row's rxnorm or CIEL name, that row is named and the sentence is true. Raising
+		// the floor to the display name silences the #237 clause for exactly that chart, which is the
+		// common shape rather than a corner — interactionSubject's own javadoc says why: an order
+		// contributes its CONCEPT's name, and the rows of one substance share their rxnorm and CIEL
+		// aliases.
+		//
+		// The SHIPPED data cannot observe that, and this used to say so and stop there. Measured through
+		// the real DdiDrugReferenceSource().load(), substanceGroupKey and nameMatchStrength — taking every
+		// alias any row of a family publishes as the candidate recorded order, 1021 candidates over the
+		// 129 multi-row families, a wider population than the display names this comment first counted —
+		// ZERO have a strongest claim of exactly rank 1 while another row of the family claims lower,
+		// because a shared alias lands on every row at once and yields no strict inequality either way.
+		// So the level needs a family whose rows publish DIFFERENT alias sets, which is curated data:
+		// drug-reference-substance-dosing-ceilings.json publishes `clobex` on the route-qualified
+		// Clobetasol row alone. Pinned there by
+		// SubstanceNameRowTest.aRowTheChartNamesByAnAliasIsARowTheChartNames at this gate and by
+		// theRecordSaysWhichRowItIsWhereTheChartNamesThatRowByAnAlias on the printed record — raise the
+		// floor and read those failures rather than trusting this attribution. The fast path above is now
+		// the only part of this predicate no case pins, for the reason it states itself.
 		//
 		// STRICTLY greater, which is the OTHER half of this return and was unpinned when the floor was
 		// written: relaxed to `claim >= recordedClaim(than, recorded)` the predicate answers true in BOTH

@@ -1,0 +1,24 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #269 — not shipped data",
+  "description": "Shapes about what CORROBORATES a self-named allergy rule's bare-containment match, for the injected record's patient-specific reading. (1) 'Ketoconazole' is an entry's own DISPLAY name, so findImpliedSubstances('Ketoconazole') stops there and the equal-claimant leg admits only entries whose claim on the whole recorded name is as strong (NAME_IS_THE_DISPLAY_NAME). (2) Levoketoconazole merely ALIASES 'ketoconazole' and files a self-named allergy rule on that token, so an allergy recorded as 'Ketoconazole' does NOT put its substance in the allergen arm's set — while the record IS a clinician-entered name that names the entry, which is the shape that separates the two corroborating questions and the one a set-only reading hedges wrongly. (3) It also files a second self-named rule on its own name 'levo', which no other entry's name contains and which an allergy recorded as 'Levocetirizine' reaches only mid-word with a six-letter tail — so two rules of ONE collapsed key can disagree about corroboration, which is what the max per key is for. No entry carries ATC codes, so no class comparison can chip and every count is the allergy arms' own."
+  ,
+  "entries": [
+    {
+      "id": "ketoconazole",
+      "name": "Ketoconazole",
+      "aliases": ["ketoconazole"],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "levoketoconazole",
+      "name": "Levoketoconazole",
+      "aliases": ["levoketoconazole", "ketoconazole", "levo"],
+      "contraindications": [
+        { "type": "allergy", "token": "ketoconazole", "note": "documented ketoconazole allergy" },
+        { "type": "allergy", "token": "levo", "note": "documented levo allergy" }
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

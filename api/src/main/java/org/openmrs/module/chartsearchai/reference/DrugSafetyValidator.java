@@ -419,7 +419,8 @@ public class DrugSafetyValidator {
 		// before it nothing pinned even that. Reassigning a FIELD here once per pass stays green on it;
 		// see that test's javadoc, which names what it does not cover.
 		List<RecordedAllergen> recordedAllergens = warnContra
-				? recordedAllergens(context) : Collections.<RecordedAllergen> emptyList();
+				? recordedAllergens(drugReferenceService, context)
+				: Collections.<RecordedAllergen> emptyList();
 
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
@@ -1473,16 +1474,40 @@ public class DrugSafetyValidator {
 		if (ChartSearchAiUtils.isBlank(c.getNote())) {
 			return ContraindicationChips.SELF_NAMED_RULE_WITHOUT_A_NOTE;
 		}
-		// Reaching here means the rule MATCHED, so its ALLERGY leg matched: recordedContraindicationKind's
-		// legs are exclusive by TYPE, and selfNamedAllergyRule is true only of an allergy rule. So the
-		// witness list below is non-empty, and what is being asked of it is which of those records the
-		// chart reads as this drug.
+		return aMatchedRecordNamesTheEntry(ref, c, context) ? ContraindicationChips.SELF_NAMED_RULE
+				: ContraindicationChips.SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE;
+	}
+
+	/**
+	 * @return whether an allergy record that MATCHED {@code c} NAMES {@code ref} — the question the
+	 *         chip rank above turns on, and one of the two the injected record's patient-specific
+	 *         reading takes the union of (issue #269, {@code DrugReferenceInjector}). Asked of a rule
+	 *         that has already matched; on any other the witness list is empty and the answer is a
+	 *         vacuous false.
+	 *
+	 *         <p>Per WITNESS and against the ENTRY, both halves measured — see
+	 *         {@link #contraindicationRank}, which states why and is not restated here. What the
+	 *         extraction adds is a NAME for it: the rank folds this answer onto a value it shares with
+	 *         the blank-note disqualification, so nothing behavioural could tell the two apart, while
+	 *         the record asks this one alone (a blank note changes what a clause SAYS, not what its
+	 *         match rests on).
+	 *
+	 *         <p>Reaching a non-empty witness list means the rule's ALLERGY leg matched:
+	 *         {@link #recordedContraindicationKind}'s legs are exclusive by TYPE and
+	 *         {@link #selfNamedAllergyRule} is true only of an allergy rule, so what is being asked is
+	 *         which of those records the chart reads as this drug.
+	 */
+	static boolean aMatchedRecordNamesTheEntry(DrugReference ref, DrugReference.Contraindication c,
+			PatientClinicalContext context) {
+		if (context == null) {
+			return false;
+		}
 		for (String allergen : context.allergensMatching(c.getToken())) {
 			if (ref.matchesDrugName(allergen)) {
-				return ContraindicationChips.SELF_NAMED_RULE;
+				return true;
 			}
 		}
-		return ContraindicationChips.SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE;
+		return false;
 	}
 
 	/**
@@ -4045,6 +4070,47 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * @return the substances the patient's recorded allergies name — {@link #addAllergyContraindications}'s
+	 *         own identity question, asked over the WHOLE allergy list rather than of one record, in the
+	 *         form a caller holding a {@link DrugReference} can test. Empty for a null context, which is
+	 *         "nothing known" and not "nothing recorded"; a consumer making a negative claim has to ask
+	 *         {@link PatientClinicalContext#contraindicationRecordsRead} as well.
+	 *
+	 *         <p>The keys are {@link DrugReference#substanceGroupKey()} — the very values
+	 *         {@link #firstOfSameSubstance} compares, from the very walk
+	 *         {@link #recordedAllergens} builds for that arm, so "would that arm raise its IDENTITY chip
+	 *         for this substance from some record" cannot come to have two answers. A set rather than
+	 *         that method because the caller has no row to scan and does not want one: it holds the
+	 *         entry and asks about it.
+	 *
+	 *         <p>The WHOLE list is what separates this from {@link #aMatchedRecordNamesTheEntry}, and
+	 *         the pair is not interchangeable in either direction (issue #269). This one is satisfied by
+	 *         a record the RULE never fired on, which for a rank choosing between rival sentences is the
+	 *         defect {@link #contraindicationRank} refuses and for a record stating what the chart holds
+	 *         is the right answer. That one is satisfied by a name this resolution NARROWS away, since
+	 *         {@link DrugReferenceService#findImpliedSubstances} admits equal claimants only at the
+	 *         strongest claimant's rank — so an entry merely aliasing a recorded name is absent here
+	 *         while the rank keeps its full {@code SELF_NAMED_RULE}. A consumer wanting "is this rule
+	 *         corroborated at all" takes the UNION, which can hedge nothing either half admits.
+	 *
+	 *         <p>Static and service-taking rather than an instance method: its consumer is
+	 *         {@code DrugReferenceInjector}, whose {@code drugSafetyValidator} may be absent while its
+	 *         {@code drugReferenceService} is not, and an answer that went missing there would silently
+	 *         report every self-named rule as uncorroborated. Resolved per call and held by the caller
+	 *         for the life of one injection, never on this bean (issue #172).
+	 */
+	static Set<Object> allergicSubstances(DrugReferenceService drugReferenceService,
+			PatientClinicalContext context) {
+		Set<Object> substances = new LinkedHashSet<Object>();
+		for (RecordedAllergen recorded : recordedAllergens(drugReferenceService, context)) {
+			for (DrugReference implied : recorded.substances()) {
+				substances.add(implied.substanceGroupKey());
+			}
+		}
+		return substances;
+	}
+
+	/**
 	 * @return one {@link RecordedAllergen} per distinct resolution, in the order the context lists the
 	 *         tokens — the input to {@link #addAllergyContraindications}, resolved once per
 	 *         {@code validate} because it does not depend on the subject being checked. Each carries
@@ -4067,7 +4133,8 @@ public class DrugSafetyValidator {
 	 *         A free-text allergen can, and the ledger then collapses the identity chip but not
 	 *         necessarily the class one.
 	 */
-	private List<RecordedAllergen> recordedAllergens(PatientClinicalContext context) {
+	private static List<RecordedAllergen> recordedAllergens(DrugReferenceService drugReferenceService,
+			PatientClinicalContext context) {
 		if (context == null) {
 			return Collections.emptyList();
 		}

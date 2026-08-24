@@ -118,12 +118,12 @@ public class SelfNamedAllergyRuleRankTest {
 		// this one demotes FROM, which proves that sibling and not this variant.
 		//
 		// SCOPE, because injectedFindings sees only the safety_finding records: the drug_reference record
-		// injected beside them still reads "Recorded for this patient: documented opium allergy", and
-		// still does so for a patient whose ONLY allergy is the accidental one. That half keys on
-		// recordedContraindicationKind — the bare-containment MATCH — which this change deliberately does
-		// not touch, so it is unchanged rather than newly wrong, and it is the reason the match itself is
-		// the subject of a separate decision (see this class's javadoc). Asserting it here would assert
-		// the deferral, not the fix.
+		// injected beside them is a separate surface, and its own patient-specific reading is now scoped
+		// by whether anything CORROBORATES the match (issue #269 — it used to read "Recorded for this
+		// patient: documented opium allergy" even for a patient whose ONLY allergy was the accidental
+		// one). InjectedContraindicationCorroborationTest owns that half; asserting it here would assert
+		// another decision's fix. The MATCH itself is still untightened, which is what this class's
+		// javadoc records.
 		DrugReferenceService service = fixtureService();
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
 		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));

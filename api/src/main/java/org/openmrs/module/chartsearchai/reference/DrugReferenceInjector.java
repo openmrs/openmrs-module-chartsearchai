@@ -109,6 +109,41 @@ public class DrugReferenceInjector {
 	 */
 	static final int MAX_INTERACTION_RENDER_CHARS = 1500;
 
+	/** The lead of the reading's first section: a clause this patient's chart records. */
+	static final String RECORDED_READING_LEAD = " Recorded for this patient: ";
+
+	/** The lead of the reading's second section: a clause this patient's chart does NOT record. */
+	static final String NOT_RECORDED_READING_LEAD = " Not recorded for this patient: ";
+
+	/** The lead of the reading's third section (issue #269): a clause the patient's chart matched, but
+	 *  which nothing corroborates — see {@link #contraindicationSections} and {@link #corroborated}.
+	 *
+	 *  <p>It asserts no contraindication and denies none, and is worded as a CONTRAST for issue #244's
+	 *  reason: the record says what the match rests on and leaves the sentence a fact about the EVIDENCE.
+	 *  It does speak ABOUT the chart — "Matched in this patient's chart" — which is what puts it on the
+	 *  {@code drugSafety} switches' side of {@link #render}'s divide, with the two sections beside it
+	 *  ({@code InjectedContraindicationCorroborationToggleContextTest}).
+	 *
+	 *  <p><b>What it must not be is a CATEGORICAL about the chart.</b> An
+	 *  earlier wording said "not by a recorded allergy to this drug", and that is a categorical the
+	 *  chart can contradict: both of {@link #corroborated}'s legs can miss a recorded allergy that
+	 *  really does name the drug, because the first sees only the witnesses of THIS rule's token and
+	 *  the second is narrowed by {@link DrugReferenceService#findImpliedSubstances}. Measured on a
+	 *  curated arrangement — an entry aliasing {@code ketoconazole} and ruling on another of its own
+	 *  names, beside an allergy recorded as {@code Ketoconazole} that {@code matchesDrugName} accepts —
+	 *  the record denied an allergy the chart holds. It claims no MECHANISM either, for the same
+	 *  reason: neither leg fails only by a mid-word accident.
+	 *
+	 *  <p>Three constants rather than three literals so that every assertion about a section can read
+	 *  the words a model reads. That is NOT what makes a reword visible — a suite that reads all three
+	 *  from here compares a constant to itself, which was measured: rewording this one left the whole
+	 *  api suite green. What makes a reword visible is one case asserting the LITERALS,
+	 *  {@code InjectedContraindicationCorroborationTest.theThreeSectionLeadsAreTheWordsAModelReads} —
+	 *  the arrangement {@code ChartSearchAiAuditSearchModeTest} uses for the four search-mode spellings
+	 *  and for the same reason. */
+	static final String UNCORROBORATED_READING_LEAD =
+			" Matched in this patient's chart but not corroborated as a record of this drug: ";
+
 	/** querystore's resource type for a drug-order document (its {@code DrugOrderRecordSerializer}
 	 *  contract), which the chart carries through unchanged. The type the active-order
 	 *  reconciliation looks for, and the type it asks the chart's completeness declaration about. */
@@ -179,7 +214,10 @@ public class DrugReferenceInjector {
 	 * <p><b>A THIRD channel carries this patient's own contraindication findings into the prompt, and
 	 * it is neither of those.</b> {@link #contraindicationSections} marks a rendered clause "Recorded
 	 * for this patient" on an injected {@code drug_reference} record, off
-	 * {@code DrugSafetyValidator.recordedContraindicationKind} and nothing else. That method's javadoc
+	 * {@code DrugSafetyValidator.recordedContraindicationKind} and — since issue #269, for a self-named
+	 * allergy rule — {@link #corroborated}, which NARROWS that match rather than adding a second route to
+	 * the marking: a clause the match reaches and corroboration does not takes a third section instead,
+	 * claiming nothing about the patient. That method's javadoc
 	 * used to call the marking exact — "which is exactly when the ledger raises a chip for that key" —
 	 * and the order leg no longer satisfies it: {@link #matchingEntries} admits an active order that
 	 * merely SHARES a class with a question-named drug, such an entry is not in the drugs-in-play set,
@@ -268,7 +306,6 @@ public class DrugReferenceInjector {
 			return chart;
 		}
 
-		Integer age = context != null ? context.getAgeYears() : null;
 		StringBuilder text = new StringBuilder(chart.getText());
 		List<RecordMapping> mappings = new ArrayList<RecordMapping>(chart.getMappings());
 		int index = mappings.size() + 1;
@@ -288,11 +325,11 @@ public class DrugReferenceInjector {
 		// other GP read in this class is hoisted to a once-per-injection site for the same reason
 		// LlmInferenceService gives for trusting the chart over a re-read — a flag that flips mid-loop
 		// would leave record [7] carrying a patient-specific reading and record [8] not.
-		boolean patientReading = statesTheChartsContraindicationReading(context);
+		ContraindicationReading reading = new ContraindicationReading(context);
 		for (Map.Entry<DrugReference, SubstanceRendering> match : matched.entrySet()) {
 			DrugReference ref = match.getKey();
 			RenderedReference rendered =
-					render(ref, age, context, orderEntries, patientReading, match.getValue());
+					render(ref, orderEntries, reading, match.getValue());
 			// The rendering's own bookkeeping rides on the mapping, not in the line — see
 			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
 			// grounding verifier still compares against exactly what the model read.
@@ -1437,23 +1474,163 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * What one injection may say about this patient's own contraindication records: whether it may say
+	 * anything at all ({@link #statesTheChartsContraindicationReading}) and, where it may, which
+	 * substances their recorded allergies imply ({@link DrugSafetyValidator#allergicSubstanceKeys}).
+	 *
+	 * <p><b>NOTHING is supplied but the chart.</b> Whether the reading may be stated, the allergic
+	 * substance keys and the service they are resolved from are all DERIVED here, so there is no pair a
+	 * call site can hand over disagreeing — which is issue #298's discipline, whose own words are that
+	 * "no constructor takes the label and the flag as separate arguments". Two earlier versions of this
+	 * class fell short of it. Taking the SERVICE left a set resolvable from another dataset, read off the
+	 * signature. Taking the FLAG left the worse half, and that one a reviewer CONSTRUCTED — measured,
+	 * {@code new ContraindicationReading(true, null)} rendered
+	 * "Not recorded for this patient: documented opium allergy", a denial about a chart nobody read,
+	 * which is issue #208 item 2 with the sign flipped. Deriving needs no structural guard to hold it,
+	 * which passing would.
+	 *
+	 * <p><b>An INNER class, not a static one, so the service is derivable at all.</b>
+	 * {@link DrugSafetyValidator#allergicSubstanceKeys} compares
+	 * {@link DrugReference#substanceGroupKey()}, which is the ROW ITSELF for an entry publishing no
+	 * substance name — so a set resolved from a different {@link DrugReferenceService} than the rendered
+	 * entries came from would contain nothing the caller can find, and every self-named allergy rule
+	 * would read as uncorroborated. Taking the service in a constructor left exactly the pair this class
+	 * exists to remove, one field along; reading the injector's own field removes it the way deriving
+	 * the set does.
+	 *
+	 * <p><b>Decided once per injection</b>, for the reason the boolean already was: it reads global
+	 * properties and resolves the patient's allergy list, and two records of one chart must not disagree
+	 * about either. Held on this per-call object and never on the bean — {@link DrugReferenceInjector}
+	 * is a Spring singleton and this memo is keyed on nothing at all (issue #172).
+	 *
+	 * <p><b>Resolved lazily</b>, because {@link DrugSafetyValidator#allergicSubstanceKeys} sweeps the
+	 * dataset once per recorded allergen and the question is asked only of a matched self-named allergy
+	 * rule. Neither bundled parser publishes a contraindication rule at all, so on every {@code ddinter}
+	 * and {@code atc} load nothing here resolves anything.
+	 */
+	private final class ContraindicationReading {
+
+		private final boolean states;
+
+		private final PatientClinicalContext context;
+
+		private Set<Object> allergicSubstanceKeys;
+
+		ContraindicationReading(PatientClinicalContext context) {
+			this.states = statesTheChartsContraindicationReading(context);
+			this.context = context;
+		}
+
+		/** Whether a record of this injection may describe this patient's own records at all. */
+		boolean states() {
+			return states;
+		}
+
+		/** The chart the two answers above are about. Read from here rather than taken as a second
+		 *  parameter beside this object: {@link #corroborated} asks one question of the context and one
+		 *  of the resolved set, and a caller able to hand it a context other than the one the set was
+		 *  resolved from is the same two-facts-that-can-disagree shape this class exists to remove. */
+		PatientClinicalContext context() {
+			return context;
+		}
+
+		/** The substances this patient's recorded allergies imply, keyed as the safety arms key them,
+		 *  resolved on first ask off the injector's own service. */
+		Set<Object> allergicSubstanceKeys() {
+			if (allergicSubstanceKeys == null) {
+				allergicSubstanceKeys =
+						DrugSafetyValidator.allergicSubstanceKeys(drugReferenceService, context);
+			}
+			return allergicSubstanceKeys;
+		}
+	}
+
+	/**
+	 * @return whether anything CORROBORATES {@code c}'s match against this patient's chart, so that the
+	 *         record may state the clause as the chart's own reading (issue #269). Asked only of a rule
+	 *         that has already matched.
+	 *
+	 *         <p><b>The UNION of two questions, and neither half will do.</b> A rule whose token is one
+	 *         of its own entry's drug NAMES reaches the allergy list through
+	 *         {@link PatientClinicalContext#hasAllergyToken}'s bare containment — deliberately bare,
+	 *         because a curated token may name a CLASS or a fragment of free text — so {@code opium}
+	 *         matches an allergen recorded as {@code Tiotropium} and the record used to say the chart
+	 *         records a documented opium allergy. Either of two things redeems that match:
+	 *         {@link DrugSafetyValidator#aMatchedRecordNamesTheEntry}, the chip rank's own predicate,
+	 *         and {@link DrugSafetyValidator#allergicSubstanceKeys}, the allergen arm's identity
+	 *         question over the whole allergy list.
+	 *
+	 *         <p>Each alone is wrong, in opposite directions, which is why this takes both:
+	 *         <ul>
+	 *           <li>the rank's predicate alone UNDERSTATES. It is per WITNESS of the rule that fired, and
+	 *               {@code papaveretum} does not contain {@code opium} — so a patient allergic to
+	 *               papaveretum and, separately, to tiotropium has a genuine opium allergy the allergen
+	 *               arm chips, and the record would have hedged it.</li>
+	 *           <li>the allergen arm's set alone OVERSTATES.
+	 *               {@link DrugReferenceService#findImpliedSubstances} admits equal claimants only at the
+	 *               strongest claimant's rank, so an allergy recorded as {@code Ketoconazole} reaches the
+	 *               entry CALLED that and not one merely aliasing it — and a self-named rule on the
+	 *               aliasing entry keeps the full {@code SELF_NAMED_RULE} chip rank while the record
+	 *               would have hedged it. It is also why the third section's lead states what the module
+	 *               established rather than a categorical about the chart — see
+	 *               {@link #UNCORROBORATED_READING_LEAD}. That is the cost
+	 *               {@code DrugSafetyValidator.contraindicationRank} records against swapping its own
+	 *               predicate for this one, reached from the other side.</li>
+	 *         </ul>
+	 *         The union is MONOTONE, which is the whole argument for it: it can hedge nothing either
+	 *         half admits, so it can neither understate a recorded allergy nor disagree with a chip
+	 *         standing at full rank. Asked in cost order — the rank's predicate reads only the context
+	 *         and the entry, so the dataset sweep happens only where it fails.
+	 *
+	 *         <p><b>Scoped to a self-named allergy rule</b>, exactly as the chip's demotion is, and that
+	 *         is load-bearing rather than incidental: a rule whose token is NOT one of its entry's names
+	 *         is asking about a class or about free text, which is what the bare match exists for, and
+	 *         neither corroborating question can speak to it. The shipped seed's {@code nsaid} rule is
+	 *         such a rule and the allergen arm resolves nothing at all from an allergy recorded as
+	 *         {@code NSAIDs}, so an unscoped reading would hedge a correct clause. Tightening the MATCH
+	 *         instead was measured and declined — see
+	 *         {@link PatientClinicalContext#hasAllergyToken}.
+	 */
+	private static boolean corroborated(DrugReference ref, DrugReference.Contraindication c,
+			ContraindicationReading reading) {
+		if (!DrugSafetyValidator.selfNamedAllergyRule(ref, c)) {
+			return true;
+		}
+		return DrugSafetyValidator.aMatchedRecordNamesTheEntry(ref, c, reading.context())
+				|| reading.allergicSubstanceKeys().contains(ref.substanceGroupKey());
+	}
+
+	/**
 	 * Renders one reference entry into the citable line the LLM sees, plus the metadata that
 	 * describes the rendering and must stay out of it — see {@link RenderedReference}. Numeric
 	 * dosing is included only when an age band matches {@code age}; prose warnings,
 	 * contraindications and interactions are always rendered.
 	 *
-	 * <p>{@code patientReading} is {@link #statesTheChartsContraindicationReading}, decided once for the
-	 * whole injection by the caller rather than re-derived here: it reads global properties, and two
-	 * records of one chart must not disagree about whether this patient's chart may be described.
+	 * <p>{@code reading} is the {@link ContraindicationReading} the caller decided once for the
+	 * whole injection rather than anything re-derived here: it reads global properties and resolves the
+	 * patient's allergy list, and two records of one chart must not disagree about whether — or about
+	 * what — this patient's chart records.
 	 *
-	 * <p>{@code context} does two things here. It orders the capped {@code Interactions:} section — see
+	 * <p>The chart comes off {@code reading}, and so does the AGE derived from it — neither is a
+	 * parameter, because a second source for either lets one record's dose bands and its patient reading
+	 * describe different patients. It orders the capped {@code Interactions:} section — see
 	 * {@link #orderedInteractionNotes} — and it splits the contraindication list into what this patient's
-	 * chart records and what it does not (issue #208 item 2, {@link #contraindicationSections}). It may be
-	 * null, which is "nothing known about the patient": the interactions section then keeps dataset order
-	 * and the contraindication list is rendered with no reading at all, because a record that cannot see
-	 * the chart must not report an absence. {@code orderEntries} is passed straight through to the
-	 * interactions method, which groups a partner the patient is on by the entry it resolves to (issue
-	 * #190 item 2).
+	 * chart records, what it does not, and (issue #269) what it matched but nothing corroborates (issue
+	 * #208 item 2, {@link #contraindicationSections}). It may be null, which is "nothing known about the
+	 * patient": the interactions section then keeps dataset order and the contraindication list is
+	 * rendered with no reading at all, because a record that cannot see the chart must not report an
+	 * absence.
+	 *
+	 * <p>{@code orderEntries} stays a parameter and is NOT a counter-example to that: the context is
+	 * BUILT from it ({@code withReferenceNames} at the call site), so there is nothing to re-derive here
+	 * and re-resolving it per record is the second resolution CLAUDE.md's {@code findForActiveOrders}
+	 * bullet refuses. It is passed straight through to the interactions method, which groups a partner
+	 * the patient is on by the entry it resolves to (issue #190 item 2).
+	 *
+	 * <p>Private because {@code injectRecords} is the only caller. That is the whole reason: a
+	 * package-private signature would let a caller outside this class pass a null reading — measured,
+	 * {@code render(null, null, null, null)} compiles the moment the modifier is dropped, since four
+	 * nulls name no private type — and it would NPE on {@code reading.context()}.
 	 *
 	 * <p>{@code substance} is what this row's own fields cannot say: the rows of its substance the pass
 	 * resolved, and which of them THIS RESPONSE names the substance by — the caller's
@@ -1463,8 +1640,10 @@ public class DrugReferenceInjector {
 	 * chart says nothing — every entry of every bundled dataset — this method's output is byte-identical
 	 * to what it produced before issues #237/#259.
 	 */
-	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context,
-			List<DrugReference> orderEntries, boolean patientReading, SubstanceRendering substance) {
+	private static RenderedReference render(DrugReference ref, List<DrugReference> orderEntries,
+			ContraindicationReading reading, SubstanceRendering substance) {
+		PatientClinicalContext context = reading.context();
+		Integer age = context != null ? context.getAgeYears() : null;
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
 		StringBuilder paren = new StringBuilder();
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {
@@ -1515,18 +1694,18 @@ public class DrugReferenceInjector {
 		}
 		appendSection(sb, " Warnings: ", warningLines);
 
-		// No guard beyond appendSection's own: all three collections are empty when the entry publishes no
-		// contraindication rule, and the halves are subsets of the clause list (see
+		// No guard beyond appendSection's own: every collection is empty when the entry publishes no
+		// contraindication rule, and the reading's sections are subsets of the clause list (see
 		// contraindicationSections), so none of them can be non-empty when the list is.
-		ContraindicationSections contraindications = contraindicationSections(ref, context);
+		ContraindicationSections contraindications = contraindicationSections(ref, reading);
 		// The patient-specific reading BEFORE the list it qualifies (issue #208 item 2), so a model
 		// reading forward has the qualifier before the content — the same reason the interactions section
 		// below promotes this patient's own partners to its front rather than appending them. Omitted
 		// entirely when the context is null, which is "nothing known" and not "nothing recorded": a record
 		// that cannot see the chart must not report an absence — see
 		// statesTheChartsContraindicationReading for the three things that decides.
-		if (patientReading) {
-			// BOTH halves named, each by its own clauses, and neither left to be inferred from the other.
+		if (reading.states()) {
+			// EVERY section named, each by its own clauses, and none left to be inferred from another.
 			// Two weaker forms were tried live on the 3.7.1 standalone 2026-08-13 and BOTH were measured
 			// failing on the model this module ships against:
 			//   * positive half only ("…this patient's chart records: documented ibuprofen allergy.") —
@@ -1539,11 +1718,17 @@ public class DrugReferenceInjector {
 			//     patient with no penicillin allergy was answered "the patient has a documented
 			//     amoxicillin allergy", quoting a clause of the list beside that very sentence.
 			// Both failures are the same shape: a sentence that names some clauses and expects the reader
-			// to infer the rest. So each clause is named on the side it is actually on. The two halves are
-			// disjoint and cover every clause the module can evaluate; a clause it cannot (an unrecognised
-			// rule type, a rule with no token) is listed and claimed neither way.
-			appendSection(sb, " Recorded for this patient: ", contraindications.recorded);
-			appendSection(sb, " Not recorded for this patient: ", contraindications.notRecorded);
+			// to infer the rest. So each clause is named on the side it is actually on — which is also why
+			// issue #269 gave the uncorroborated clauses a section rather than dropping them out of the
+			// reading. The three sections are disjoint and cover every clause the module can evaluate AND
+			// get an answer about; a clause it cannot evaluate at all (an unrecognised rule type, a rule
+			// with no token) is listed and claimed by none of them.
+			appendSection(sb, RECORDED_READING_LEAD, contraindications.recorded);
+			appendSection(sb, NOT_RECORDED_READING_LEAD, contraindications.notRecorded);
+			// Third and last of the reading's sections, after the two that make a claim: it makes none —
+			// see UNCORROBORATED_READING_LEAD and corroborated(). Last rather than first because a model
+			// reading forward meets what the chart says before what it only appeared to say.
+			appendSection(sb, UNCORROBORATED_READING_LEAD, contraindications.uncorroborated);
 		}
 		appendSection(sb, " Contraindicated with: ", contraindications.clauses);
 
@@ -1872,14 +2057,20 @@ public class DrugReferenceInjector {
 	}
 
 	/** The contraindication half of a rendered record: every rule the entry publishes, and that list
-	 *  split by what the patient's own chart records. One value rather than three calls because all
-	 *  three are computed in ONE walk of the rules — the two halves are selections FROM the clauses,
-	 *  keyed on the same collapsed rule, so recomputing either beside them is how a record comes to
-	 *  mark a clause it does not carry (or carry one it cannot mark). Both halves are subsets of
-	 *  {@code clauses} in clause order and are disjoint; together they are every clause the module could
-	 *  put to the chart, which is every clause but one shape — a rule
-	 *  {@link DrugSafetyValidator#evaluatesAgainstTheChart} rejects is in the LIST and in neither half,
-	 *  because the record may not say a patient does not have something nobody checked. */
+	 *  split by what the patient's own chart records. One value rather than four calls because all four
+	 *  are computed in ONE walk of the rules — the reading's sections are selections FROM the clauses,
+	 *  keyed on the same collapsed rule, so recomputing any of them beside the others is how a record
+	 *  comes to mark a clause it does not carry (or carry one it cannot mark).
+	 *
+	 *  <p>All three reading sections are empty where the injection may state no reading at all
+	 *  ({@link #statesTheChartsContraindicationReading}), so no consumer can read a partition that was
+	 *  never computed. Otherwise they are subsets of {@code clauses} in clause order and pairwise
+	 *  disjoint, and together they are every clause but ONE shape: a rule
+	 *  {@link DrugSafetyValidator#evaluatesAgainstTheChart} rejects is in the LIST and in no section,
+	 *  because the record may not say a patient does not have something nobody checked. Issue #269 did
+	 *  not change WHAT is excluded — the clause it moved was in the recorded section, which was the
+	 *  defect — and gave it a section of its own: {@code uncorroborated}, a clause the chart matched
+	 *  that {@link #corroborated} could not support, which is neither a claim nor a denial. */
 	private static final class ContraindicationSections {
 
 		private final Collection<String> clauses;
@@ -1888,11 +2079,14 @@ public class DrugReferenceInjector {
 
 		private final Collection<String> notRecorded;
 
+		private final Collection<String> uncorroborated;
+
 		ContraindicationSections(Collection<String> clauses, Collection<String> recorded,
-				Collection<String> notRecorded) {
+				Collection<String> notRecorded, Collection<String> uncorroborated) {
 			this.clauses = clauses;
 			this.recorded = recorded;
 			this.notRecorded = notRecorded;
+			this.uncorroborated = uncorroborated;
 		}
 	}
 
@@ -1941,7 +2135,10 @@ public class DrugReferenceInjector {
 	 *         active gastrointestinal bleeding", with no chip beside it. The predicate is
 	 *         {@link DrugSafetyValidator#recordedContraindicationKind}, the chip arm's own, for the same
 	 *         reason the KEY here is the chip ledger's own; and a clause is marked when ANY rule folded
-	 *         into it matched, which is when the ledger raises a chip for that key. Selecting
+	 *         into it matched, which is when the ledger raises a chip for that key. Since issue #269 the
+	 *         positive marking additionally needs {@link #corroborated} of that rule, and a matched rule
+	 *         it refuses takes a third section rather than either half — so the walk resolves each key as
+	 *         a MAX over its rules, one corroborated rule carrying the key. Selecting
 	 *         from the clauses in this walk rather than recomputing them afterwards is what keeps the
 	 *         marked strings a subset of the rendered ones by construction.
 	 *
@@ -1957,9 +2154,11 @@ public class DrugReferenceInjector {
 	 *         enumerated; it is unreachable on any bundled dataset.
 	 */
 	private static ContraindicationSections contraindicationSections(DrugReference ref,
-			PatientClinicalContext context) {
+			ContraindicationReading reading) {
+		PatientClinicalContext context = reading.context();
 		Map<Object, String> byRule = new LinkedHashMap<Object, String>();
 		Set<Object> recordedRules = new HashSet<Object>();
+		Set<Object> uncorroboratedRules = new HashSet<Object>();
 		Set<Object> unevaluableRules = new HashSet<Object>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			List<String> notes = new ArrayList<String>();
@@ -1988,7 +2187,19 @@ public class DrugReferenceInjector {
 				// ANY rule of the collapsed key, because that is precisely when the ledger raises a chip
 				// for it: two spellings of one rule are one clause and one chip, and the patient matching
 				// either is the drug being contraindicated once.
-				recordedRules.add(key);
+				//
+				// Which SECTION that key lands in is decided per rule and resolved as a MAX below, and the
+				// max is not a formality: contraindicationFinding keys a self-named allergy rule on the
+				// SUBSTANCE (issue #146), so two such rules of one entry under different tokens are one
+				// clause, while corroborated() reads each rule's own token — so they can disagree, and one
+				// corroborated rule of the key is enough for the key. Asked only where the record may state
+				// the reading at all: otherwise no section is rendered, and asking would resolve the
+				// patient's allergy list for a sentence nothing prints (see ContraindicationReading).
+				if (reading.states() && !corroborated(ref, c, reading)) {
+					uncorroboratedRules.add(key);
+				} else {
+					recordedRules.add(key);
+				}
 			} else if (!DrugSafetyValidator.evaluatesAgainstTheChart(c)) {
 				// A rule this module cannot put to the chart at all — an unrecognised type, or no token to
 				// look for. Not the same as "the chart says no", and the record may not say it is.
@@ -1997,25 +2208,42 @@ public class DrugReferenceInjector {
 		}
 		// Walked in CLAUSE order, not in the order the matches were found: a rule authored twice can be
 		// matched by its second spelling while its clause sits at the first's position, and a reading
-		// that listed those out of order would be a half a reader cannot line up against the list. One
-		// loop for both halves, so they follow the clauses rather than agreeing with them.
+		// that listed those out of order would be a section a reader cannot line up against the list. One
+		// loop for all three, so they follow the clauses rather than agreeing with them.
 		//
-		// SETS of clause TEXT, and the negative half yields: two rules of different keys may render the
+		// SETS of clause TEXT, and the weaker claim yields: two rules of different keys may render the
 		// same string — an allergy rule and a condition rule may carry one note, which is a natural way to
 		// author "recorded either way" — and "Recorded for this patient: X. Not recorded for this patient:
-		// X." is a record contradicting itself. Whichever half is true of the string is the one that keeps
-		// it, and the recorded half is the one that can be true.
+		// X." is a record contradicting itself. Whichever section is true of the string is the one that
+		// keeps it, and the recorded one is the one that can be true.
+		//
+		// Extended to three, in that order: of the two that remain, only the DENIAL can be false of the
+		// string, so it is the one that yields. The uncorroborated section asserts nothing about the
+		// patient, so it cannot contradict a section that does — but printing it beside a denial of the
+		// same words would still say the module both could and could not answer for them.
 		Set<String> recorded = new LinkedHashSet<String>();
 		Set<String> notRecorded = new LinkedHashSet<String>();
-		for (Map.Entry<Object, String> clause : byRule.entrySet()) {
-			if (recordedRules.contains(clause.getKey())) {
-				recorded.add(clause.getValue());
-			} else if (!unevaluableRules.contains(clause.getKey())) {
-				notRecorded.add(clause.getValue());
+		Set<String> uncorroborated = new LinkedHashSet<String>();
+		// All three left EMPTY where the record may state no reading, rather than filled with a partition
+		// nothing prints. The walk above still runs — the clause LIST is rendered either way — but with no
+		// reading there is nothing true to put in these, and the corroboration question was not asked, so
+		// a caller reading them would get "recorded" for a clause nothing corroborates. render() happens
+		// to gate them itself; that is not a property to leave a future consumer resting on.
+		if (reading.states()) {
+			for (Map.Entry<Object, String> clause : byRule.entrySet()) {
+				if (recordedRules.contains(clause.getKey())) {
+					recorded.add(clause.getValue());
+				} else if (uncorroboratedRules.contains(clause.getKey())) {
+					uncorroborated.add(clause.getValue());
+				} else if (!unevaluableRules.contains(clause.getKey())) {
+					notRecorded.add(clause.getValue());
+				}
 			}
+			uncorroborated.removeAll(recorded);
+			notRecorded.removeAll(recorded);
+			notRecorded.removeAll(uncorroborated);
 		}
-		notRecorded.removeAll(recorded);
-		return new ContraindicationSections(byRule.values(), recorded, notRecorded);
+		return new ContraindicationSections(byRule.values(), recorded, notRecorded, uncorroborated);
 	}
 
 	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the

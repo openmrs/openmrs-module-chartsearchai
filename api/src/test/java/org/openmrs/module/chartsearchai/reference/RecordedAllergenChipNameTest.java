@@ -325,8 +325,9 @@ public class RecordedAllergenChipNameTest {
 	@Test
 	public void aGenericTheLabelNeverPrintsCannotNameItsRow() throws IOException {
 		// The half of labelNameOccursIn that reads the APPENDED generic, isolated — and it was the half
-		// nothing pinned: removing the guard entirely left the whole suite green while changing 15
-		// naming decisions over the shipped KB.
+		// nothing pinned: before this case, removing the appendsGenericName guard left the whole suite
+		// green while changing naming decisions over the shipped KB (measured on this branch, it
+		// refuses 7 rows nothing else names).
 		//
 		// Amphetamine's rxnorm_name is `dextroamphetamine`, which CONTAINS its display name, so
 		// displayLabel prints no synonym and the generic is not part of what a chip would show. A chart

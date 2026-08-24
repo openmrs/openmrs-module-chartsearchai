@@ -2129,11 +2129,31 @@ public class DrugSafetyValidator {
 	 */
 	static boolean recordNamesMoreStrongly(DrugReference row, DrugReference than,
 			PatientClinicalContext context) {
+		// A fast path, NOT the guard against a sentence contrasting a row with itself: the comparison
+		// below already answers false for row == than, since a claim cannot exceed itself. What actually
+		// keeps "published for X, not for X" out of the prose is
+		// DrugReferenceInjector.rowAttribution's worthNamingApart call, and that is where a reader
+		// should look — this clause cannot be pinned by any test, because no mutation of it changes an
+		// answer.
 		if (row == null || than == null || row == than) {
 			return false;
 		}
 		Collection<String> recorded = recordedDrugNames(context);
-		return recordedClaim(row, recorded) > recordedClaim(than, recorded);
+		int claim = recordedClaim(row, recorded);
+		// A FLOOR, because the sentence says the record NAMES the row. NAME_TOKEN_INSIDE_A_NAME is bare
+		// containment — one of the entry's names merely occurs inside the recorded string — and a record
+		// asserting "the row this patient's record names" on that is the overclaim issue #269 removed from
+		// the section beside this one, where `opium` matched an allergen recorded as `Tiotropium`. The
+		// strictly-greater comparison alone admits it, at rank 0 against a rendered row at NAME_NO_MATCH:
+		// measured over the shipped KB through this method, 6 such arrangements exist today and all 6 are
+		// benign same-family shapes (an order recorded `Procaine benzylpenicillin` against a
+		// `Benzylpenicillin` subject, `Insulin human (isophane)` against `Insulin human`), so nothing
+		// false ships either way — but the floor is what stops a dataset refresh from making one, and the
+		// hazard is exactly the one `nameMatchStrength`'s own javadoc records for that rank (`Lactate`
+		// inside `Ciprofloxacin lactate`, two different substances). Those 6 are silent both before this
+		// method existed and after the floor, so it costs nothing that was ever printed.
+		return claim >= DrugReference.NAME_IS_ANOTHER_NAME
+		        && claim > recordedClaim(than, recorded);
 	}
 
 	/**

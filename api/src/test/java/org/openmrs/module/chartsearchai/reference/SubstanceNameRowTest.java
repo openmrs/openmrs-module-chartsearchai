@@ -424,4 +424,88 @@ public class SubstanceNameRowTest {
 		    DrugSafetyValidator.interactionSubject(group, onTheTopicalRow).getName(),
 		    "while a chart naming a route-qualified sibling still moves the subject off it");
 	}
+
+	/** The CIEL name BOTH botulinum rows of the slice publish — a recorded order name that is neither
+	 *  row's display name, so it claims the two EQUALLY. The shipped KB writes it on both rows of that
+	 *  family too; the slice carries it verbatim, which is what makes the two cases below reachable
+	 *  without the 19 MB file. */
+	private static final String EQUALLY_CLAIMING_ORDER = "Botulinum type A toxin-haemagglutinin complex";
+
+	/** The question those two cases ask, verbatim — the one that resolves ONLY the row the fold does not
+	 *  elect, which is what leaves the attribution clause something it could say. */
+	private static final String DAXI_QUESTION = "Is it safe to give her daxibotulinumtoxina?";
+
+	@Test
+	public void aRowTheChartClaimsNoMoreStronglyThanItsSiblingIsNotARowTheChartPreferred() throws Exception {
+		// The STRICTNESS of the comparison the floor case above bounds from below, and the OTHER half of
+		// the same return expression: nothing pinned it, so relaxing `claim >` to `claim >=` left the whole
+		// api suite green. The #237 sentence says the row it names is "the row this patient's record names"
+		// — in preference to the row the record was published FOR — so it needs the chart to claim one row
+		// MORE strongly than the other. Relaxed, the predicate answers true in BOTH directions for one pair,
+		// which states no preference at all, and the clause then asserts a choice the chart did not make.
+		//
+		// Reachable rather than hypothetical: rows of one substance normally SHARE their rxnorm and CIEL
+		// aliases, so a recorded order name that is no row's own display name lands on every row of the
+		// family at once. Both preconditions below are read off the real parse of a verbatim slice.
+		//
+		// Asserted BOTH ways round, because one direction alone cannot see the mutation for what it is: a
+		// single false is equally satisfied by the floor, by the row == than fast path and by a genuine
+		// strict inequality, so it distinguishes "neither row is preferred" from "this row is not the
+		// preferred one" only when its mirror is asserted beside it.
+		List<DrugReference> entries = DrugReferenceTestSupport
+		        .ddiFixtureEntries(DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY);
+		DrugReference daxi = DrugReferenceTestSupport.row(entries, "Daxibotulinumtoxina");
+		DrugReference botoxA = DrugReferenceTestSupport.row(entries, "Botulinum toxin type A");
+
+		assertEquals(daxi.substanceGroupKey(), botoxA.substanceGroupKey(),
+		    "precondition: the two must be ONE substance, or no record of either contrasts with the other");
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, daxi.nameMatchStrength(EQUALLY_CLAIMING_ORDER),
+		    "precondition: the recorded name must claim this row as one of its other names");
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME, botoxA.nameMatchStrength(EQUALLY_CLAIMING_ORDER),
+		    "precondition: and claim the sibling at the SAME rank — above the floor, so strictness is the "
+		            + "only thing left that can decide this arrangement");
+
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+		    DrugReferenceTestSupport.set(EQUALLY_CLAIMING_ORDER), null, null, null);
+		assertFalse(DrugSafetyValidator.recordNamesMoreStrongly(botoxA, daxi, context),
+		    "a record may not say the chart PREFERRED a row it claims no more strongly than its sibling");
+		assertFalse(DrugSafetyValidator.recordNamesMoreStrongly(daxi, botoxA, context),
+		    "and the same must hold read the other way round, or the predicate has stopped meaning "
+		            + "\"more strongly\"");
+	}
+
+	@Test
+	public void aRecordAttributesItsRowToNobodyWhereTheChartClaimsBothRowsAlike() throws Exception {
+		// What the case above costs when it is wrong, on the surface that prints — the same mutation driven
+		// through the real injectRecords rather than asked of the gate. Separate case and not a tail on
+		// that one, deliberately: folded together, the gate assertion fails first and JUnit never reaches
+		// this, so a later change that keeps the gate honest while breaking the plumbing between it and the
+		// prose would be masked. Each was measured to redden on `claim >=` on its own.
+		DrugReferenceService service = DrugReferenceTestSupport
+		        .ddiFixtureService(DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY);
+		List<DrugReference> entries = DrugReferenceTestSupport
+		        .ddiFixtureEntries(DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY);
+		DrugReference daxi = DrugReferenceTestSupport.row(entries, "Daxibotulinumtoxina");
+		DrugReference botoxA = DrugReferenceTestSupport.row(entries, "Botulinum toxin type A");
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+		    DrugReferenceTestSupport.set(EQUALLY_CLAIMING_ORDER), null, null, null);
+
+		assertEquals(Arrays.asList("Daxibotulinumtoxina"),
+		    DrugReferenceTestSupport.names(service.findImpliedByQuery(DAXI_QUESTION)),
+		    "precondition: the question must resolve ONLY the row the fold does not elect, or the record "
+		            + "and the fold name the same row and the clause is silent for a second reason");
+		assertSame(botoxA, DrugSafetyValidator.interactionSubject(Arrays.asList(daxi, botoxA), context),
+		    "precondition: and the fold must name the substance by the OTHER row, or this record has "
+		            + "nothing it could wrongly attribute and the assertion below is vacuous");
+
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+		        .injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, DAXI_QUESTION);
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Daxibotulinumtoxina");
+
+		assertNotNull(record, "precondition: the record must be rendered from the row the question named, "
+		        + "was: " + DrugReferenceTestSupport.referenceTexts(chart));
+		assertFalse(record.contains(DrugReferenceTestSupport.ROW_ATTRIBUTION_LEAD),
+		    "and it must attribute its row to nobody, since the chart claims both rows alike, was: "
+		            + record);
+	}
 }

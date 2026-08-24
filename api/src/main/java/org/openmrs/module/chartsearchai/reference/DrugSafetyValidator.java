@@ -2161,14 +2161,32 @@ public class DrugSafetyValidator {
 		//
 		// NAME_IS_ANOTHER_NAME and not NAME_IS_THE_DISPLAY_NAME, because an alias IS a name: where the
 		// chart records a row's rxnorm or CIEL name, that row is named and the sentence is true. That
-		// LEVEL is the one part of this predicate no case pins, and it is unobservable rather than merely
-		// untested: measured over the shipped KB through nameMatchStrength, taking every display name in it
-		// as the candidate recorded order, ZERO of the 129 multi-row families have an arrangement whose
-		// strongest claim is exactly rank 1 while another row of the family claims lower — because the rows
+		// LEVEL is a part of this predicate no case pins — one of two, the other being the fast path above,
+		// which says so itself — and it is unobservable rather than merely untested: measured over the
+		// shipped KB through nameMatchStrength, taking every display name in it as the candidate recorded
+		// order, ZERO of the 129 multi-row families have an arrangement whose strongest claim is exactly
+		// rank 1 while another row of the family claims lower — because the rows
 		// of one substance normally share their aliases, so a rank-1 claim lands on every row at once and
 		// yields no strict inequality either way. Raising the floor to the display name therefore reddens
 		// nothing, and cannot. Distinguishing the two needs a family whose rows publish DIFFERENT alias
 		// sets (drug-reference-charted-substance-row.json is one, and is curated).
+		//
+		// STRICTLY greater, which is the OTHER half of this return and was unpinned when the floor was
+		// written: relaxed to `claim >= recordedClaim(than, recorded)` the predicate answers true in BOTH
+		// directions for one pair, so it stops meaning "more strongly" and the clause asserts a preference
+		// the chart never expressed. The arrangement is the paragraph above read from the other side —
+		// because the rows of one substance share their rxnorm and CIEL aliases, a recorded order name that
+		// is no row's own display name claims the whole family at rank 1, above the floor and tied. The
+		// shipped botulinum family reaches it through the CIEL name `Botulinum type A
+		// toxin-haemagglutinin complex`, which both its rows publish: relaxed, an injected record for a
+		// question naming only `Daxibotulinumtoxina` reads "Published by this dataset for
+		// Daxibotulinumtoxina, not for Botulinum toxin type A — the row this patient's record names" over a
+		// chart that names neither in preference. Pinned by
+		// SubstanceNameRowTest.aRowTheChartClaimsNoMoreStronglyThanItsSiblingIsNotARowTheChartPreferred at
+		// this gate and by aRecordAttributesItsRowToNobodyWhereTheChartClaimsBothRowsAlike on the printed
+		// record — two cases rather than one, because folded together the first fails and JUnit never
+		// reaches the second. Mutate the comparison and read the failures rather than trusting that
+		// attribution.
 		return claim >= DrugReference.NAME_IS_ANOTHER_NAME
 		        && claim > recordedClaim(than, recorded);
 	}

@@ -469,7 +469,15 @@ public class DrugReference {
 	 * elected row's own {@code getInteractions()}), so that placement costs that family 12 rendered
 	 * interaction partners against 1 gained — traded for a typo the issue itself files as a ninth
 	 * instance of issue #196's upstream data problem, which is the handoff the estradiol MERGE already
-	 * takes. Below the first rung the fold never moves AWAY from {@code namesNoRoute()}, and that is
+	 * takes. That refusal is about the rung ORDER and is NOT an argument that this is the only route to
+	 * that family: the parenthetical {@code namesNoRoute()} reads as a qualifier there is part of the row's
+	 * own {@code substanceName}, so correcting THIS rung's reading of it delivers that family and, measured
+	 * over the shipped KB, no other family's election. ADR Decision 43's rejected-alternative section
+	 * carries that measurement and why it is out of scope here — a second consumer of this predicate,
+	 * {@code DrugSafetyValidator.outranks}, decides whose mechanism prose a chip renders and was not
+	 * measured for it.
+	 *
+	 * <p>Below the first rung the fold never moves AWAY from {@code namesNoRoute()}, and that is
 	 * structural rather than a property of the shipped data: the first rung RETURNS whenever the two rows
 	 * disagree on it, so the second is only ever reached between rows that agree, and it therefore cannot
 	 * replace an unqualified row with a qualified one. It can still move LATERALLY between two rows that

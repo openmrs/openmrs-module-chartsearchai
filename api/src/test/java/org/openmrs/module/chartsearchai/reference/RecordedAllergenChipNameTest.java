@@ -42,9 +42,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * arm's own shape, which is also what keeps the wire contract that every {@code detail} names its
  * own drug and tells one finding from another.
  *
- * <p>Four cases below each name the clause they discriminate and say so in their own comment; the
- * unique-claim clause needed no case of its own — mutating it away reddens five that were already in
- * the suite, Opium under a {@code papaveretum} allergy among them.
+ * <p>Five cases below each name the clause they discriminate and say so in their own comment.
+ * Removing the unique clause altogether also reddens five cases that were already in the suite, Opium
+ * under a {@code papaveretum} allergy among them.
  */
 public class RecordedAllergenChipNameTest {
 

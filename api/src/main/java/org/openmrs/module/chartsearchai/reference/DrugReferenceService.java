@@ -695,16 +695,26 @@ public class DrugReferenceService {
 	 *
 	 * <p><b>Three ways a name names a row</b>, and no leg is exempt AS a leg:
 	 * <ul>
-	 *   <li>it is the <b>unique strongest claimant</b> — every other implied substance claims the whole
-	 *       recorded name strictly less strongly. Asked of the implied SET rather than of the dataset,
-	 *       because that is where the harm is: a substance nothing else in play competes with is what
-	 *       the name is about, however weakly it claims it, which is what keeps an allergy recorded as
-	 *       free text or as one of a row's own aliases ({@code papaveretum} → {@code Opium}) naming its
-	 *       row. Deliberately NOT "the first element": {@link #lookupByToken} breaks a tie by earliest
+	 *   <li>it is the <b>unique strongest NAME claimant</b> — the recorded name IS one of its names
+	 *       ({@link DrugReference#NAME_IS_ANOTHER_NAME} or better) and every other implied substance
+	 *       claims the whole recorded name strictly less strongly. That keeps an allergy recorded as
+	 *       one of a row's own aliases naming its row ({@code papaveretum} → {@code Opium}).
+	 *       <p>Deliberately NOT "the first element": {@link #lookupByToken} breaks a tie by earliest
 	 *       dataset entry, which carries no clinical meaning, so on a tie the first row has no
 	 *       privilege — three shipped rows publish {@code gallium} as their {@code rxnorm_name} and
 	 *       exempting the earliest would announce a radiodiagnostic the chart never mentions while
-	 *       correcting its two co-tied rivals in the same payload;</li>
+	 *       correcting its two co-tied rivals in the same payload.
+	 *       <p>And deliberately NOT "the strongest claim available, however weak", which is what this
+	 *       said first and what a reachable input refutes. At the CONTAINMENT rank the equal-claimant
+	 *       leg of {@link #findImpliedSubstances} does not run, so rival rows never enter the implied
+	 *       set at all and the survivor is uncontested for a reason that is an artefact of the
+	 *       resolution rather than evidence about the record: an allergy charted as
+	 *       {@code gallium — hives} resolves that way, and naming its row prints the same
+	 *       radiodiagnostic off a chart that says {@code Gallium}. Requiring a NAME claim costs nothing
+	 *       on a name the reference data publishes — measured 2026-08-24, 145 (name, row) pairs over
+	 *       the shipped KB are claimed only at containment and every one of them is named by its own
+	 *       label anyway, because a name that matched by containment usually CONTAINS the row's name.
+	 *       Free text is where it does not;</li>
 	 *   <li>a name its printed label is built from OCCURS in the recorded string
 	 *       ({@link DrugReference#labelNameOccursIn}) — what a separator-less combination asserts
 	 *       ({@code Amoxicillin} in {@code amoxicillin and clavulanic acid}, {@code Trastuzumab
@@ -721,18 +731,35 @@ public class DrugReferenceService {
 	 * <p><b>What it gives up.</b> A recorded name spelling out several ingredients, whose ingredient
 	 * this KB files under a SYNONYM, is not named by any of the three — {@code atovaquone /
 	 * chloroguanide} does not carry {@code Proguanil}, and no constituent of it resolves there — so the
-	 * caller falls back to the chart's own words. That is a TRUE sentence replacing a true and more
-	 * specific one, which is the safe direction for something that quotes a record; the defect it
-	 * replaces is a FALSE one.
+	 * caller states the relationship instead of the identity. Both sentences are true; the more
+	 * specific one is lost, which is the safe direction for something reporting a record, and the
+	 * defect it replaces is a FALSE sentence.
+	 *
+	 * <p><b>What it does not reach at all</b>, so that a reader does not take the paragraph above for
+	 * the whole surface: this decides WHICH SUBSTANCE a sentence may name, never which ROW represents
+	 * that substance. {@link #addSubstance} keeps the first row seen, so a recorded
+	 * {@code estradiol / levonorgestrel} still names the estradiol substance by its
+	 * {@code Fluoroestradiol f-18} row — a PET tracer the KB files under
+	 * {@code [estradiol, db00783]}, the same substance key. That is issue #187/#206's question, it
+	 * behaves exactly as it did before issue #268, and nothing here improves or worsens it.
+	 *
+	 * <p>One more consequence, stated because CLAUDE.md's own rule is that one substance must not be
+	 * named two ways in one response: a single recorded allergy CAN now produce two chips whose
+	 * sentences name their subject differently, one identifying it and one stating the relationship.
+	 * Each names its own drug, so no reader is misled about which drug a chip is about; what is given
+	 * up is the uniformity.
 	 *
 	 * <p><b>Every clause decides rows no other one does.</b> Measured 2026-08-24 through the real
 	 * {@link DdiDrugReferenceSource#parse} of the shipped 19 MB KB, this method and
-	 * {@link DrugReference#matchesOrderName}, over each of the 5169 published names as the recorded
-	 * string: rows named by the appended generic alone 40 (the penicillin G family,
-	 * {@code atropine sulfate} → {@code Hyoscyamine (atropine)}), by the display name alone 55, by the
-	 * unique claim alone 1, by a derived substance alone 153. Re-derive rather than trusting the figures —
-	 * they are a property of the dataset, not of this code — but do not drop a clause on the
-	 * assumption that another covers it.
+	 * {@link DrugReference#matchesOrderName}, over <b>all 5169 published names</b> as the recorded
+	 * string — rows named by that clause and by no other: appended generic 40 (the penicillin G family,
+	 * {@code atropine sulfate} → {@code Hyoscyamine (atropine)}), display name 55, unique claim 322,
+	 * derived substance 153. State the base: three of those four are the same over any base, and the
+	 * unique column is not — restricted to names implying MORE than one substance it reads 1, because
+	 * its other 321 are ordinary single-substance names ({@code thyroxine} → {@code Levothyroxine}).
+	 * A reader taking the smaller figure for the whole would conclude the clause is all but redundant
+	 * and delete it. Re-derive rather than trusting the figures — they are a property of the dataset,
+	 * not of this code — but do not drop a clause on the assumption that another covers it.
 	 *
 	 * <p>Package-private, like {@link #findByActiveOrders} and for the same reason: this answers a
 	 * NARROWER question than {@link #findImpliedSubstances} and must never be mistaken for a resolution.

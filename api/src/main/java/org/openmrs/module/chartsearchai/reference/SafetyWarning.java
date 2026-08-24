@@ -71,6 +71,8 @@ public class SafetyWarning {
 
 	private final boolean unratedRelationship;
 
+	private final boolean uncorroboratedChartMatch;
+
 	/** A warning raised from something the reference data assigns no severity to — see
 	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
@@ -93,11 +95,41 @@ public class SafetyWarning {
 	 */
 	SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship) {
+		this(type, drug, detail, severity, unratedRelationship, false);
+	}
+
+	/**
+	 * A contraindication chip's warning, and the only shape that can carry
+	 * {@link #restsOnAnUncorroboratedChartMatch()} (issue #308). A FACTORY rather than a sixth
+	 * constructor argument, for the reason issue #298 states of a label and its source: the two flags
+	 * describe relationships that cannot both hold — an interaction never matches a rule against the
+	 * chart's allergy list, and a contraindication carries no rating for a fold to outrun — so a
+	 * constructor taking both would offer a caller a pair that has no meaning. Naming the type here
+	 * also keeps {@link #TYPE_CONTRAINDICATION} out of the call site, which is where a chip arm would
+	 * otherwise repeat it.
+	 *
+	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. The one
+	 * caller is {@code DrugSafetyValidator.addContraindications} — the curated-rule arm, the only arm
+	 * whose warning is derived from a rule matched against the chart at all. The allergen arm's own
+	 * three sentences are built from a {@code RecordedAllergen} and keep the public three-argument
+	 * form, so they answer false by construction rather than by remembering to.
+	 *
+	 * @param uncorroboratedChartMatch see {@link #restsOnAnUncorroboratedChartMatch()}
+	 */
+	static SafetyWarning contraindication(String drug, String detail,
+			boolean uncorroboratedChartMatch) {
+		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false,
+				uncorroboratedChartMatch);
+	}
+
+	private SafetyWarning(String type, String drug, String detail, String severity,
+			boolean unratedRelationship, boolean uncorroboratedChartMatch) {
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
 		this.severity = severity;
 		this.unratedRelationship = unratedRelationship;
+		this.uncorroboratedChartMatch = uncorroboratedChartMatch;
 	}
 
 	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */
@@ -218,6 +250,32 @@ public class SafetyWarning {
 	 */
 	boolean carriesUnratedRelationship() {
 		return unratedRelationship;
+	}
+
+	/**
+	 * Whether the curated rule this warning was raised from reached this patient's chart only through
+	 * {@code PatientClinicalContext.hasAllergyToken}'s bare containment, with nothing corroborating
+	 * that match as a record of this drug — the fourth question of CLAUDE.md's injected-record rule,
+	 * answered by {@code DrugSafetyValidator.corroboratedByTheChart} and asked once so the two
+	 * injected channels cannot answer it differently (issue #308).
+	 *
+	 * <p>It changes what the injected {@code safety_finding} SAYS and never how strongly it speaks.
+	 * {@code DrugReferenceInjector.renderFinding} appends
+	 * {@code DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH} for it; the strength clause is still
+	 * {@code STRENGTH_WITHHOLD}, {@code getSeverity()} is still null and
+	 * {@code DrugSafetyValidator.licensesWithholding} still answers true — one definition of how
+	 * strongly a finding licenses a clinical call, and this is not a second one. ADR Decisions 37 and
+	 * 42 are why: the corroboration union can miss an allergy the chart really holds, and a
+	 * contraindication finding that states no withholding clause was measured turning
+	 * <em>"No — ibuprofen should not be taken"</em> into <em>"Ibuprofen can be given, with one
+	 * caution"</em>, 3 of 3.
+	 *
+	 * <p>Scoped exactly as the chip's own demotion is — a SELF-NAMED allergy rule — so a class-token
+	 * rule, a condition rule and every allergen-arm sentence answer false. Not serialized; the wire
+	 * shape is unchanged, and the chip's detail is the same string it was.
+	 */
+	boolean restsOnAnUncorroboratedChartMatch() {
+		return uncorroboratedChartMatch;
 	}
 
 	@Override

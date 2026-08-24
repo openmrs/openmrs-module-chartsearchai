@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -422,11 +423,19 @@ public class DrugSafetyValidator {
 				? recordedAllergens(drugReferenceService, context)
 				: Collections.<RecordedAllergen> emptyList();
 
+		// Derived from the walk resolved just above rather than re-walked (allergicSubstanceKeys' own
+		// list overload), and held for this pass exactly as that list is — a per-call local and never a
+		// field, issue #172. It is leg 2 of the corroboration union both injected channels now ask
+		// (issue #308); the supplier form is what lets the injector keep its lazy memo while this side,
+		// which has already paid for the walk, hands over a set it has.
+		final Set<Object> allergicSubstances = allergicSubstanceKeys(recordedAllergens);
+		Supplier<Set<Object>> allergicSubstanceSupplier = () -> allergicSubstances;
+
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
-				addContraindications(contraindications, ref, context, null);
+				addContraindications(contraindications, ref, context, null, allergicSubstanceSupplier);
 				addAllergyContraindications(contraindications, ref, recordedAllergens);
 			}
 			// The rows this pass resolved for ref's substance, and the null/empty check the two-map form
@@ -472,7 +481,8 @@ public class DrugSafetyValidator {
 				citedTextsLower = citedRecordTextsLower(answer, mappings);
 			}
 			addActiveOrderContraindications(contraindications, inPlay, context, orderEntries,
-					recordedAllergens, new SubjectMatter(question, answer, citedTextsLower));
+					recordedAllergens, new SubjectMatter(question, answer, citedTextsLower),
+					allergicSubstanceSupplier);
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
@@ -1225,6 +1235,15 @@ public class DrugSafetyValidator {
 		 *  not do is SPEAK for a chip the allergen arm corroborated, because the fold's whole premise is
 		 *  that a self-named rule reports that arm's fact, and a match no recorded name supports does not.
 		 *
+		 *  <p>Still raised, and since issue #308 no longer silently: the injected {@code safety_finding}
+		 *  such a rule produces states how it was matched
+		 *  ({@code DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH}), on the same corroboration
+		 *  question the injected {@code drug_reference} record's third section asks. Its CALL is
+		 *  unchanged — the chip's rank, its detail and its severity are what they were, and the sentence
+		 *  above about being raised on independent evidence is why. What #308 measured is that a
+		 *  qualification reaching only one of two citable records changes no answer, because the model
+		 *  answers from the unqualified one.
+		 *
 		 *  <p>0 rather than 3.5: what it has to be is BELOW {@link #IDENTITY}, and the two class ranks can
 		 *  never share this key ({@link #addAllergyContraindications} reaches them only after
 		 *  {@link #firstOfSameSubstance} returned null). It shares {@link #SELF_NAMED_RULE_WITHOUT_A_NOTE}'s
@@ -1360,7 +1379,8 @@ public class DrugSafetyValidator {
 	}
 
 	private void addContraindications(ContraindicationChips chips, DrugReference ref,
-			PatientClinicalContext context, SubjectMatter askedAbout) {
+			PatientClinicalContext context, SubjectMatter askedAbout,
+			Supplier<Set<Object>> allergicSubstances) {
 		if (context == null) {
 			return;
 		}
@@ -1398,10 +1418,27 @@ public class DrugSafetyValidator {
 			// every request, for a loop that then does nothing. SubstanceSubjects memoises per substance, so
 			// asking it once per MATCHED rule costs no more than asking it once.
 			DrugReference subject = chips.subjectOf(ref);
+			// Whether the injected finding may state this rule's sentence bare — issue #308, and the
+			// SAME question the injected drug_reference record's third section asks
+			// (DrugReferenceInjector.corroborated, which delegates to the method below). It rides on the
+			// warning rather than being re-derived at the renderer because the renderer holds a
+			// SafetyWarning and not the rule it came from; it is set here, on the one arm that builds a
+			// warning from a rule matched against the chart at all.
+			//
+			// Asked per RULE, and only the warning that WINS the collapsed key is ever rendered: two
+			// self-named rules of one entry are ONE chip (issue #146 keys both on the substance), so a
+			// corroborated rule that outranks an uncorroborated one carries its own answer with it. That
+			// is what the ledger's strictly-stronger-wins comparison already does with the sentence, and
+			// this flag travels with the sentence rather than beside it for exactly that reason.
+			//
+			// It changes what the record SAYS and never how strongly it speaks: the chip's detail, its
+			// rank and its severity are untouched, so licensesWithholding still answers alike for it.
+			boolean uncorroborated = !corroboratedByTheChart(ref, c, context, allergicSubstances);
 			chips.add(subject, contraindicationFinding(ref, c), contraindicationRank(ref, c, context),
-					new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
+					SafetyWarning.contraindication(subject.displayLabel(),
 							subject.displayLabel() + " is contraindicated by an " + recorded + ": "
-									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
+									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()),
+							uncorroborated));
 		}
 	}
 
@@ -4242,13 +4279,63 @@ public class DrugSafetyValidator {
 	 */
 	static Set<Object> allergicSubstanceKeys(DrugReferenceService drugReferenceService,
 			PatientClinicalContext context) {
+		return allergicSubstanceKeys(recordedAllergens(drugReferenceService, context));
+	}
+
+	/**
+	 * @return the same answer over a walk the caller has ALREADY resolved — {@code validate}'s own
+	 *         per-pass {@code recordedAllergens} local (issue #308). One spelling of the derivation
+	 *         rather than two, which is the whole reason this overload exists: the set and the arm
+	 *         that raises the identity chip must not come to disagree about which substances this
+	 *         patient is recorded allergic to, and a second loop is how they would.
+	 *
+	 *         <p>Not a memo and not a cache — it derives from the list it is handed and holds nothing,
+	 *         so issue #172's rule is satisfied by the caller's own scoping rather than by anything
+	 *         here.
+	 */
+	private static Set<Object> allergicSubstanceKeys(List<RecordedAllergen> recordedAllergens) {
 		Set<Object> substances = new LinkedHashSet<Object>();
-		for (RecordedAllergen recorded : recordedAllergens(drugReferenceService, context)) {
+		for (RecordedAllergen recorded : recordedAllergens) {
 			for (DrugReference implied : recorded.substances()) {
 				substances.add(implied.substanceGroupKey());
 			}
 		}
 		return substances;
+	}
+
+	/**
+	 * @return whether anything CORROBORATES {@code c}'s match against this patient's chart, so that a
+	 *         record derived from it may state the clause as the chart's own reading — CLAUDE.md's
+	 *         fourth injected-record question, and since issue #308 the question BOTH injected
+	 *         channels ask. Asked only of a rule that has already matched.
+	 *
+	 *         <p>The union of two questions, and neither half will do: the everything about WHY is on
+	 *         {@code DrugReferenceInjector.corroborated}, which is where the reasoning has lived since
+	 *         issue #269 and which now delegates here. What moved is only the body, and it moved for
+	 *         one reason — the injected {@code drug_reference} section and the injected
+	 *         {@code safety_finding} beside it report ONE fact about ONE chart, and issue #308
+	 *         measured what happens when only one of them is qualified: the model answers from the
+	 *         bare one. Two copies of this predicate is how they would come apart again, silently,
+	 *         since nothing errors when a hedge and an assertion sit side by side.
+	 *
+	 *         <p>{@code allergicSubstances} is a supplier and not a set deliberately: leg 2 is a
+	 *         dataset sweep and leg 1 reads only the context and the entry, so the cost order the
+	 *         injector documents is preserved here rather than at one caller. The injector hands its
+	 *         own lazily memoised reading; {@code validate} hands a set it has already derived from
+	 *         the walk it does once per pass.
+	 *
+	 *         <p>Scoped to a SELF-NAMED allergy rule, which is load-bearing rather than incidental —
+	 *         a rule whose token is not one of its entry's names is asking about a class or about a
+	 *         fragment of free text, which is what the bare match exists for, and neither corroborating
+	 *         question can speak to it. Mutate the scope out and read the failures.
+	 */
+	static boolean corroboratedByTheChart(DrugReference ref, DrugReference.Contraindication c,
+			PatientClinicalContext context, Supplier<Set<Object>> allergicSubstances) {
+		if (!selfNamedAllergyRule(ref, c)) {
+			return true;
+		}
+		return aMatchedRecordNamesTheEntry(ref, c, context)
+				|| allergicSubstances.get().contains(ref.substanceGroupKey());
 	}
 
 	/**
@@ -4555,7 +4642,8 @@ public class DrugSafetyValidator {
 	 */
 	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries,
-			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout) {
+			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout,
+			Supplier<Set<Object>> allergicSubstances) {
 		if (!hasContraindicationRecords(context)) {
 			return;
 		}
@@ -4575,14 +4663,20 @@ public class DrugSafetyValidator {
 			// Where it does not hold, only the findings the response is itself about may speak — which
 			// is what stops a cancer question carrying chips about her local anaesthetics.
 			if (askedAbout.names(ref)) {
-				addContraindications(chips, ref, context, null);
+				addContraindications(chips, ref, context, null, allergicSubstances);
 				addAllergyContraindications(chips, ref, recordedAllergens);
 				continue;
 			}
 			if (allergensAskedAbout == null) {
 				allergensAskedAbout = recordedAllergensAskedAbout(recordedAllergens, askedAbout);
 			}
-			addContraindications(chips, ref, context, askedAbout);
+			// The WHOLE-list set, never allergensAskedAbout beside it. Leg 2 of the union is the allergen
+			// arm's own identity question "asked over the WHOLE allergy list" (ADR Decision 42), so
+			// narrowing it to what the response is about would report a finding as uncorroborated on the
+			// strength of the question's wording — hedging a clause a recorded allergy really does
+			// support. The narrowing below is about which allergy records may SPEAK in this response;
+			// this is about what the chart holds, and the two are different questions.
+			addContraindications(chips, ref, context, askedAbout, allergicSubstances);
 			addAllergyContraindications(chips, ref, allergensAskedAbout);
 		}
 	}

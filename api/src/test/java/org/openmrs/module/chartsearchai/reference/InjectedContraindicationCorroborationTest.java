@@ -412,6 +412,45 @@ public class InjectedContraindicationCorroborationTest {
 	}
 
 	@Test
+	public void oneRecordCarryingAllThreeSectionsStatesThemInOrderAndPartitionsTheList()
+			throws IOException {
+		// The only arrangement here whose record renders all three sections at once, and the only thing
+		// pinning their ORDER: every other case isolates one section and assertNulls the rest, so moving
+		// the uncorroborated append ahead of the two that make a claim left the whole suite green.
+		//
+		// Tramadol files one rule per section, each with its own note: `trama` is self-named and an
+		// allergen recorded as `Tramazoline` reaches it only mid-word — with a six-letter tail no
+		// inflection rule allows, and resolving to no entry of this fixture — so neither corroborating
+		// question can reach it; `nsaid` is a CLASS token, not one of the entry's names, so it is
+		// corroborated by construction and an allergen recorded as `NSAIDs` matches it; and the condition
+		// rule matches nothing on a patient with no conditions recorded.
+		String record = record(fixtureService(BORROWED_ALIAS), "Tramadol",
+				"Is it safe to give her tramadol?", DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Tramazoline", "NSAIDs"), null));
+
+		assertEquals("NSAID hypersensitivity", sectionAfter(record, RECORDED_LEAD),
+				"the corroborated clause, was: " + record);
+		assertEquals("history of seizures", sectionAfter(record, NOT_RECORDED_LEAD),
+				"the unmatched clause, was: " + record);
+		assertEquals("documented tramadol allergy", sectionAfter(record, UNCORROBORATED_LEAD),
+				"and the clause nothing corroborates, was: " + record);
+
+		// The sections that make a CLAIM come first, and the one that makes none is last, so a model
+		// reading forward meets what the chart says before what it only appeared to say.
+		assertTrue(record.indexOf(RECORDED_LEAD) < record.indexOf(NOT_RECORDED_LEAD)
+				&& record.indexOf(NOT_RECORDED_LEAD) < record.indexOf(UNCORROBORATED_LEAD)
+				&& record.indexOf(UNCORROBORATED_LEAD) < record.indexOf(RULE_LIST_LEAD),
+				"the reading states its three sections in order, before the list they qualify, was: "
+						+ record);
+
+		// And together they are the drug's whole list, in dataset order — a partition, not a selection:
+		// every clause is on exactly one side, which is what the two pre-existing halves already promise
+		// and what a third section could silently break.
+		assertEquals("documented tramadol allergy; NSAID hypersensitivity; history of seizures",
+				sectionAfter(record, RULE_LIST_LEAD), "the list is unchanged, was: " + record);
+	}
+
+	@Test
 	public void aClassTokenRuleIsUntouchedThoughTheAllergenArmResolvesNothing() {
 		// THE SCOPE GUARD, over the SHIPPED curated seed. `nsaid` is not one of Ibuprofen's own names, so
 		// the rule is not selfNamedAllergyRule and neither corroborating question is asked of it — which

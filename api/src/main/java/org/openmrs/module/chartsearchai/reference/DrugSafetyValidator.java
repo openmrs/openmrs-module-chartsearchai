@@ -1936,8 +1936,9 @@ public class DrugSafetyValidator {
 	 * @return the row of one substance that its chips name: the row the patient's own record claims most
 	 *         strongly ({@link DrugReference#nameMatchStrength}), and among rows tied on that —
 	 *         including the common case where no recorded name matches any of them at all —
-	 *         {@link DrugReference#canonicalRow}'s choice, i.e. the row carrying no route qualifier
-	 *         wherever the loaded data has one.
+	 *         {@link DrugReference#canonicalRow}'s choice — the row carrying no route qualifier wherever
+	 *         the loaded data has one, and among rows tied on THAT the row the data files the substance
+	 *         under (issue #250).
 	 *
 	 *         <p><b>Issue #162, the second half</b>, and the half that is a correctness fix rather than a
 	 *         de-duplication. The chips named the subject by whichever ROW produced them, so a question
@@ -1946,12 +1947,20 @@ public class DrugSafetyValidator {
 	 *         chart does not record.
 	 *
 	 *         <p><b>Issue #194.</b> {@link DrugReference#canonicalRow} answers "which row names this
-	 *         substance", and where NO row of a family names a route it can only keep the earliest — so
-	 *         a patient ordered one presentation was told about another. Live-measured on the 3.7.1
+	 *         substance", and where the rows of a family TIE on its rungs it can only keep the earliest —
+	 *         so a patient ordered one presentation was told about another. Live-measured on the 3.7.1
 	 *         standalone: a {@code Botulinum toxin type A} order (the demo dictionary's concept 4259,
 	 *         whose name the order carries verbatim) was subjected on
 	 *         {@code Daxibotulinumtoxina (botulinum toxin type a)}, because both rows of that substance
 	 *         name no route and the {@code Daxibotulinumtoxina} row is the dataset's first.
+	 *
+	 *         <p>That example no longer ties: issue #250 gave the fold a second rung — the row the data
+	 *         files the family under, which here is {@code Botulinum toxin type A} — so the fold now
+	 *         reaches this case's answer unaided, and the family it was demonstrated on can no longer
+	 *         demonstrate it. The chart-anchoring step below is unchanged and still decides every family
+	 *         whose rows tie on BOTH rungs, which is most of them; where it is pinned moved with the
+	 *         example, to the COVID pair in {@code OrderedSubjectRowTest
+	 *         .theOrderNamedRowIsNamedWhereTheFoldCannotReachIt}, whose two rows tie on both.
 	 *
 	 *         <p>So the chart decides first, and only then the fold. That order is the constraint issue
 	 *         #187 settled and #192 re-measured — naming the row the CHART records is what makes a

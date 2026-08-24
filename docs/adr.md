@@ -2624,3 +2624,52 @@ The union is **monotone**, which is the whole argument for it: it can hedge noth
 - **−** **The residue #269 states remains open in the other direction.** Where a drug is named only by the ANSWER, `matchingEntries` injects no `drug_reference` record at all, so an uncorroborated note reaches the clinician through no channel — not the chip, not the record. Correct in itself, and it means the two surfaces still differ depending on how the drug entered the response.
 - **−** **A `condition` rule matched by bare containment is untouched.** `selfNamedAllergyRule` is allergy-typed and so is the chip's demotion, and there is no allergen-arm analogue to corroborate a condition against. Widening it is a decision with no measurement behind it.
 
+
+## Decision 43: A substance is named by the row the data files it under
+
+**Status: Accepted** (August 2026) — implemented, issue [#250](https://github.com/openmrs/openmrs-module-chartsearchai/issues/250). Adds a second rung to `DrugReference.canonicalRow`, the fold [Decision 30](#decision-30-one-chip-per-substance--the-contraindication-ledger-and-its-collapse-key) and issues #162/#163/#174/#194/#206 all read. No new call site and no wire-format change; the chip arms are untouched, though the subject they name moves for three substances.
+
+### Context
+
+`canonicalRow` decides which row of a substance every surface names it by — the chip's subject, the injected record's title and the class arm's partner label. It had two rungs: prefer the row that answers `namesNoRoute()`, else keep the earliest row seen.
+
+`namesNoRoute()` is true of any display name carrying no trailing parenthesised qualifier, so it ties on any family holding two such rows, and dataset order then answered. On the shipped knowledge base the row that wins that race for the estradiol substance is `Fluoroestradiol f-18` — a diagnostic PET tracer, at index 1282 against `Estradiol` at 1927, merged into that family because DDInter gives it no `drugbank_id` (the merge itself is [#249](https://github.com/openmrs/openmrs-module-chartsearchai/pull/249)'s load-time finding and Decision 36's upstream handoff, deliberately unrepaired).
+
+The consequence is not confined to the chip. `DrugReferenceInjector.renderFinding` carries a chip's detail into the prompt verbatim, so the tracer became the answer's subject. Live on a 3.7.1 standalone with the stock dataset, *"Is it safe to give her estradiol?"* was answered:
+
+> No — **Fluoroestradiol f-18** should not be given: it interacts with active order methylprednisolone, a Moderate problem. …
+
+over five interaction chips every one of which was subjected on the tracer, each carrying an oestrogen's mechanism prose, and with the word `estradiol` appearing nowhere in the response except inside `Fluoroestradiol`. The clinician cannot tell from the output that the module answered about a different drug, because the substitution happens before the answer is written.
+
+### Decision
+
+**Among rows of ONE substance that tie on `namesNoRoute()`, the row whose display name IS the name the data files the family under wins** — `DrugReference.namesItsSubstance()`, comparing the full display name to `getSubstanceName()` through `normalizeName`.
+
+**Below the first rung, not above it — and this is the decision, not the predicate.** Above it, the rung also renames the influenza A/Vietnam antigen family, whose elected row carries a display name with a dropped leading "I", and #250 lists that as one of its four. It is refused because it is the only shipped family for which that placement elects a route-qualified row while the family HAS an unqualified one, which falsifies the first rung and, with it, `DrugReferenceInjector.matchingEntries`' stated reason for widening its candidate set — *"`canonicalRow` only ever moves toward `namesNoRoute()`"*. And the elected row's own rules are what a record renders (`onePerPartner` walks its `getInteractions()`), so that placement costs that family **12 rendered interaction partners against 1 gained**. The typo is a #196 upstream data defect, which is the handoff the estradiol merge itself already takes; repairing it by re-ranking rows would be this module correcting a display name on its own authority, and it is a different defect from the ones Decision 36 enumerates — those sit in `rxnorm_name`, this one in the row's own `name`, where no validity rule sees it.
+
+Below the first rung the direction is preserved **structurally** rather than by measurement: the first rung returns whenever the two rows disagree on it, so the second is only ever reached between rows that agree, and it therefore cannot replace an unqualified row with a qualified one.
+
+**Gated on the two rows being one substance**, because this fold is also applied to sets that are not one: `DrugSafetyValidator.entryForAtcCode` folds every loaded row publishing one ATC code, and 30 of the KB's 2148 codes span more than one substance. Ungated, the rung renames three of those **across** substances — `A02BC05 Omeprazole` → `Esomeprazole`, `N02BF01 Gabapentin enacarbil` → `Gabapentin`, `D08AG03 Iodide I-131` → `Iodine` — every pair one `DrugReference.substanceKey`'s own javadoc names as deliberately distinct, and the first the pair `substanceKey`'s `drugbank_id` component exists to keep apart. The shipped `Omeprazole` row carries `rxnorm_name: esomeprazole`, so it does not name its own substance while `Esomeprazole` does; unscoped, the rung would rename a class chip's partner to a substance the patient is not on.
+
+### Measured
+
+Through the real `DdiDrugReferenceSource.parse` of the shipped 19 MB knowledge base and the real `canonicalRow` (the pre-change fold expressed in a throwaway harness, since production no longer carries it; the new rung was measured through production after implementation):
+
+| | |
+|---|---|
+| multi-row families | 129 of 2283 entries |
+| families changing subject | **3** — `Fluoroestradiol f-18`→`Estradiol`, `Daxibotulinumtoxina`→`Botulinum toxin type A`, paediatric tick-borne encephalitis vaccine→the unqualified row |
+| families unchanged | 126 |
+| families electing a qualified row over an existing unqualified one | 0 |
+| ATC-code folds moving | 1 of 2148 (`G03CA03`, within one substance) |
+
+Rendered-record partners move with the row: the vaccine family gains 19 and loses none, botulinum is identical at 110, and estradiol goes from the tracer's 4 to 578 — losing `bazedoxifene` and `toremifene`, which only the tracer row rates, and rendering `ospemifene` and `tamoxifen` at the substance row's own rating rather than the tracer's. The chip arm is unaffected there because it pools every row of the substance (`bestRulePerPartner`): that pool is 580 partners before and after.
+
+### Trade-offs
+
+- **+** A question naming a substance is answered about that substance. The estradiol case is the sharpest available: a real, clinically important oestrogen/anticoagulant interaction was attached to a PET tracer nobody is giving, so both failure directions were bad — act on a warning about a drug not in play, or dismiss it and miss the interaction.
+- **+** One decision, one place. The chip subject, the injected record's title and the class arm's partner label all read this fold, so none of them can disagree about what a substance is called.
+- **−** **The estradiol record loses two rated partners it used to render.** `bazedoxifene` and `toremifene` are rated only on the tracer row, so the record no longer carries them and two more are rendered at `Estradiol`'s own rating (`tamoxifen` Major→Unknown, `ospemifene` Major→Moderate). The chip arm still raises all of them, so nothing is lost to the clinician — but the record and the chip can now state different severities for one partner, which is the chip-versus-prose divergence this fold exists to prevent, reappearing one level down. It is the price of the record speaking with the substance's own row, and closing it means rendering the substance's pooled rules rather than one row's, which is a change to `DrugReferenceInjector.onePerPartner` on its own evidence.
+- **−** **The influenza A/Vietnam antigen family keeps its typo name**, for the reasons above. #250 asked for four renames and this delivers three; the fourth is a data fix.
+- **−** **The gate leaves the mixed-substance fold order-sensitive**, because the second rung is skipped per pair: a row of one substance interposed between two rows of another is compared against neither on that rung. It was already order-sensitive there and this does not make it more so — re-folding each of the 2148 codes' rows reversed, and under 40 random permutations each, changes the elected row for 49 codes with the rung and 50 without it, the one removed being `G03CA03`. What would make it sound is grouping by substance before folding, in `entryForAtcCode` rather than in the fold.
+- **−** **Two existing precondition assertions asserted the pre-change fold** over the botulinum family and are corrected. That family also stops supplying the trap two `OrderedSubjectRowTest` scenarios needed — after the fix the fold reaches the charted row unaided, so neither case can fail if `interactionSubject`'s chart-anchoring step is removed. The trap moved to the `Tozinameran`/`Pfizer-BioNTech Covid-19 Vaccine` pair already in the same fixture, whose rows tie on both rungs; verified by mutation rather than assumed. `AllergenExactNameResolutionTest` was checked the same way and keeps its teeth — it reddens on a `nameMatchStrength` mutation, which is the rank it was written to pin.

@@ -4076,9 +4076,14 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return the substances the patient's recorded allergies name — {@link #addAllergyContraindications}'s
-	 *         own identity question, asked over the WHOLE allergy list rather than of one record, in the
-	 *         form a caller holding a {@link DrugReference} can test. Empty for a null context, which is
+	 * @return the substances the patient's recorded allergies IMPLY, keyed as this arm keys them — NOT
+	 *         the narrower set they NAME. Swapping in {@link DrugReferenceService#findNamedSubstances}
+	 *         to "fix" the vocabulary (issue #268 makes implies-vs-names load-bearing) would narrow this
+	 *         answer away from the very chip it exists to agree with, since that chip is raised off
+	 *         {@link RecordedAllergen#substances()}. It is
+	 *         {@link #addAllergyContraindications}'s own identity question, asked over the WHOLE allergy
+	 *         list rather than of one record, in the form a caller holding a {@link DrugReference} can
+	 *         test. Empty for a null context, which is
 	 *         "nothing known" and not "nothing recorded"; a consumer making a negative claim has to ask
 	 *         {@link PatientClinicalContext#contraindicationRecordsRead} as well.
 	 *

@@ -74,7 +74,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * one case here that pins the READING's three section leads, whose words every other assertion takes
  * from production and therefore cannot see. {@code RULE_LIST_LEAD} is deliberately NOT among them: it
  * is a local literal, and rewording it in production reddens nine of the cases below through
- * {@link #record}'s own precondition. Reading it off production too would make those nine vacuous.
+ * {@link #record}'s own precondition.
  */
 public class InjectedContraindicationCorroborationTest {
 
@@ -317,6 +317,51 @@ public class InjectedContraindicationCorroborationTest {
 				"one clause, and a corroborated rule of the key carries it, was: " + record);
 		assertNull(sectionAfter(record, UNCORROBORATED_LEAD),
 				"so the key is not hedged by its other rule, was: " + record);
+	}
+
+	@Test
+	public void anAllergenThatImpliesTheSubstanceWithoutNamingItStillCorroborates() throws IOException {
+		// The IMPLIED reading, and the only arrangement that separates it from the NAMED one at this gate.
+		// Both Amphotericin B rows alias `amphotericin b` and neither is CALLED it, so an allergy recorded
+		// under that bare name ties them: findImpliedSubstances reaches both, findNamedSubstances admits
+		// neither. The deoxycholate row rules on another of its own names, `deoxy`, which that allergen
+		// does not contain — so the naming record is not one of the rule's witnesses and leg 1 cannot see
+		// it, while `Deoxyribose` is a witness that does not name the entry.
+		//
+		// The chip beside it is the allergen arm's IDENTITY chip, raised off the same implied list, and
+		// that is what this case is really about: the record must not hedge a clause whose chip stands at
+		// full rank, which is the union's monotonicity. Narrow the gate to findNamedSubstances and this
+		// reddens — nothing else in the suite does.
+		DrugReferenceService service = fixtureService(BORROWED_ALIAS);
+		assertEquals("[Amphotericin B (liposomal), Amphotericin B deoxycholate]",
+				DrugReferenceTestSupport.names(service.findImpliedSubstances("amphotericin b")).toString(),
+				"precondition: the recorded name must imply BOTH rows, by a tie");
+		assertEquals("[]", DrugReferenceTestSupport.names(service.findNamedSubstances("amphotericin b",
+				service.findImpliedSubstances("amphotericin b"))).toString(),
+				"precondition: and must NAME neither, or the two readings do not differ here");
+
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null,
+				DrugReferenceTestSupport.set("amphotericin b", "Deoxyribose"), null);
+		// The allergen arm raises its IDENTITY chip for this substance — in issue #268's SECOND sentence
+		// form, because the recorded name implies the row without naming it, which is the same fact that
+		// makes findNamedSubstances empty above. So the two questions compose rather than compete: that
+		// one narrows what a sentence may SAY, and this gate has to take the wider implied set to agree
+		// with the chip being raised at all.
+		assertTrue(DrugReferenceTestSupport
+				.contraindicationDetails(DrugReferenceTestSupport.validator(service)
+						.validate("", "Is it safe to give her amphotericin B deoxycholate?", context))
+				.contains("Amphotericin B deoxycholate is contraindicated by a recorded allergy to "
+						+ "\"amphotericin b\"."),
+				"precondition: the allergen arm must raise its identity-rank chip for this very substance, "
+						+ "or there is no chip for the record to agree with");
+
+		String record = record(service, "Amphotericin B deoxycholate",
+				"Is it safe to give her amphotericin B deoxycholate?", context);
+
+		assertEquals("documented amphotericin reaction", sectionAfter(record, RECORDED_LEAD),
+				"an allergen that IMPLIES the substance corroborates the rule, was: " + record);
+		assertNull(sectionAfter(record, UNCORROBORATED_LEAD),
+				"so nothing is hedged beside a chip at full rank, was: " + record);
 	}
 
 	@Test

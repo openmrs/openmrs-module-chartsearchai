@@ -26,8 +26,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p>{@code InjectedContraindicationReadingToggleContextTest} exists because a citable record must not
  * claim anything about the patient with the chips switched off, and it asserts both existing leads by
- * substring for a reason it records: one lead is a substring of the other, so gating half the split
- * would pass. The lead this file is about shares no substring with either, so that file cannot see it,
+ * substring. The lead this file is about shares no substring with either, so that file cannot see it,
  * and its own arrangement is a CORROBORATED allergy which never renders this section at all — there is
  * no case there to extend.
  *

@@ -792,8 +792,8 @@ public class DrugReferenceService {
 			// Resolved on demand, and never for a row the two cheap clauses already settled: a
 			// constituent that resolves to NOTHING has no early exit in lookupByToken and costs a full
 			// sweep of the dataset, which is exactly what a combination allergen string is full of.
-			// Measured 2026-08-24 over the shipped KB: eager, the 5169 published names cost 4019
-			// lookupByToken CALLS of which 1381 are full sweeps; on demand, 527 calls and 293 sweeps.
+			// Most rows never get here, so most recorded names never pay for it at all. No tally: the
+			// numbers move whenever the dataset or the clauses do, and the mechanism is the reason.
 			// A per-call local, never a field (issue #172).
 			if (derived == null) {
 				derived = derivedSubstanceKeys(drugName);

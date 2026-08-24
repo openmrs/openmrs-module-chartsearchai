@@ -4116,7 +4116,7 @@ public class DrugSafetyValidator {
 	 *         report every self-named rule as uncorroborated. Resolved per call and held by the caller
 	 *         for the life of one injection, never on this bean (issue #172).
 	 */
-	static Set<Object> allergicSubstances(DrugReferenceService drugReferenceService,
+	static Set<Object> allergicSubstanceKeys(DrugReferenceService drugReferenceService,
 			PatientClinicalContext context) {
 		Set<Object> substances = new LinkedHashSet<Object>();
 		for (RecordedAllergen recorded : recordedAllergens(drugReferenceService, context)) {
@@ -4131,7 +4131,7 @@ public class DrugSafetyValidator {
 	 * @return one {@link RecordedAllergen} per distinct resolution, in the order the context lists the
 	 *         tokens — the input to {@link #addAllergyContraindications}, resolved once per
 	 *         {@code validate} because it does not depend on the subject being checked, and once per
-	 *         injection by {@link #allergicSubstances} for the injected record's own reading (issue
+	 *         injection by {@link #allergicSubstanceKeys} for the injected record's own reading (issue
 	 *         #269). Two invocations of ONE walk rather than two walks: the answer is a function of the
 	 *         service and the context alone, so the two cannot disagree, and neither holds it past the
 	 *         pass or the injection that asked for it. Each carries
@@ -4200,7 +4200,7 @@ public class DrugSafetyValidator {
 	 * the record names it and must otherwise quote the chart.
 	 *
 	 * <p>Private to this class and built by whoever resolves the allergy list — once per
-	 * {@code validate} pass, and once per injection for {@link #allergicSubstances} (issue #269) — so
+	 * {@code validate} pass, and once per injection for {@link #allergicSubstanceKeys} (issue #269) — so
 	 * nothing here outlives the pass or the injection that built it (issue #172: this bean is a Spring
 	 * singleton and this memo is keyed on nothing at all).
 	 */

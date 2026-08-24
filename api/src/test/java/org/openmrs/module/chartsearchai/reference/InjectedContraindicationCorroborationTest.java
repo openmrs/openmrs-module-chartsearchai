@@ -44,7 +44,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * in the recorded half when EITHER an allergy record the rule matched NAMES the entry
  * ({@link DrugSafetyValidator#aMatchedRecordNamesTheEntry}, the chip rank's own predicate) OR the
  * allergen arm reads some recorded allergy as an allergy to the entry's substance
- * ({@link DrugSafetyValidator#allergicSubstances}, that arm's own identity question asked over the
+ * ({@link DrugSafetyValidator#allergicSubstanceKeys}, that arm's own identity question asked over the
  * whole allergy list). Each half alone is wrong, in opposite directions, and both are exercised below:
  * <ul>
  * <li>the rank's predicate ALONE understates — {@code allergensMatching("opium")} is
@@ -81,12 +81,15 @@ public class InjectedContraindicationCorroborationTest {
 	private static final String BORROWED_ALIAS =
 			"chartsearchai-test/drug-reference-borrowed-alias-corroboration.json";
 
-	private static final String RECORDED_LEAD = " Recorded for this patient: ";
+	/** All three read off production, so no case here can pass against a lead no record carries — which
+	 *  matters most for the {@code assertNull} guards below, since a stale literal makes those vacuous
+	 *  rather than red. What pins the WORDS is
+	 *  {@link #theThreeSectionLeadsAreTheWordsAModelReads}, and only that: every other assertion in this
+	 *  file compares a constant to itself. */
+	private static final String RECORDED_LEAD = DrugReferenceInjector.RECORDED_READING_LEAD;
 
-	private static final String NOT_RECORDED_LEAD = " Not recorded for this patient: ";
+	private static final String NOT_RECORDED_LEAD = DrugReferenceInjector.NOT_RECORDED_READING_LEAD;
 
-	/** Read off production rather than restated, so a reword cannot leave these cases passing against a
-	 *  lead no record carries. */
 	private static final String UNCORROBORATED_LEAD = DrugReferenceInjector.UNCORROBORATED_READING_LEAD;
 
 	private static final String RULE_LIST_LEAD = " Contraindicated with: ";
@@ -119,6 +122,37 @@ public class InjectedContraindicationCorroborationTest {
 		assertNotNull(sectionAfter(record, RULE_LIST_LEAD),
 				"precondition: the record must list the drug's own rules, was: " + record);
 		return record;
+	}
+
+	@Test
+	public void theThreeSectionLeadsAreTheWordsAModelReads() {
+		// The one case in this file that asserts the LITERALS, and the only thing here a reword can
+		// redden: every other assertion reads the constant and so compares it to itself. Measured — with
+		// the third lead read from production everywhere and pinned nowhere, rewording it left the whole
+		// api suite green. Same arrangement, and the same reason, as
+		// ChartSearchAiAuditSearchModeTest's four search-mode spellings.
+		//
+		// The third lead states what the MODULE established, deliberately not a categorical about the
+		// chart: both of corroborated()'s legs can miss a recorded allergy that really does name the drug
+		// (its first sees only this rule's own witnesses, its second is narrowed by
+		// findImpliedSubstances), so a lead reading "not by a recorded allergy to this drug" is one the
+		// chart can contradict. Reword it only with that in mind.
+		assertEquals(" Recorded for this patient: ", RECORDED_LEAD);
+		assertEquals(" Not recorded for this patient: ", NOT_RECORDED_LEAD);
+		assertEquals(" Matched in this patient's chart but not corroborated as a record of this drug: ",
+				UNCORROBORATED_LEAD);
+
+		// And no lead may be a substring of another, because sectionAfter finds a section by indexOf: the
+		// pairs to keep apart went from one to three with this change, and the pre-existing pair is one
+		// capital letter from colliding.
+		String[] leads = { RECORDED_LEAD, NOT_RECORDED_LEAD, UNCORROBORATED_LEAD };
+		for (int i = 0; i < leads.length; i++) {
+			for (int j = 0; j < leads.length; j++) {
+				assertTrue(i == j || !leads[i].contains(leads[j]),
+						"lead " + j + " must not sit inside lead " + i + ", or sectionAfter reads the "
+								+ "wrong section: " + leads[i] + " / " + leads[j]);
+			}
+		}
 	}
 
 	@Test

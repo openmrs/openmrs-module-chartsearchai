@@ -71,8 +71,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p>Every case that reads a RECORD drives the real {@code injectRecords} wired to the real
  * {@code DrugSafetyValidator} over a dataset parsed by the real production parser, and reads the record
  * a model would read. {@link #theThreeSectionLeadsAreTheWordsAModelReads} reads no record — it is the
- * one case here that pins the section leads' own words, which every other assertion reads from
- * production and therefore cannot see.
+ * one case here that pins the READING's three section leads, whose words every other assertion takes
+ * from production and therefore cannot see. {@code RULE_LIST_LEAD} is deliberately NOT among them: it
+ * is a local literal, and rewording it in production reddens nine of the cases below through
+ * {@link #record}'s own precondition. Reading it off production too would make those nine vacuous.
  */
 public class InjectedContraindicationCorroborationTest {
 
@@ -109,7 +111,11 @@ public class InjectedContraindicationCorroborationTest {
 		return record.substring(start + lead.length(), end);
 	}
 
-	/** A service over {@code fixture}, parsed by the real production parser. */
+	/** A service over {@code fixture}, parsed by the real production parser — and with cross-reactivity
+	 *  groups pinned EMPTY, which is {@code serviceWith}'s own seam rather than a choice made here.
+	 *  Said because the DDInter counterpart in {@code DrugReferenceTestSupport} attaches the bundled
+	 *  groups instead, and a case here that needed one would otherwise find it silently absent. Every
+	 *  case below is about the two allergy arms, which read no group. */
 	private static DrugReferenceService fixtureService(String fixture) throws IOException {
 		return DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(fixture));
 	}
@@ -325,9 +331,11 @@ public class InjectedContraindicationCorroborationTest {
 		// be false of the string.
 		//
 		// The LIST that follows reads "opioid reaction; opioid reaction" — two rules of two keys carrying
-		// one note, which byRule renders twice because its em-dash join is per key. Pre-existing (issue
-		// #190 item 1 collapses per rule, and these are two rules), and this fixture is simply the first
-		// thing to author the shape; the sections are what this case is about.
+		// one note, which byRule renders twice: its keys are per rule and nothing de-dups across them
+		// (the em-dash join and its contains() check are both WITHIN a key). Pre-existing — issue #190
+		// item 1 collapses per rule and these are two rules, and the same fixture renders the same
+		// doubling on origin/main — and this fixture is simply the first thing to author the shape; the
+		// sections are what this case is about.
 		String record = record(fixtureService(BORROWED_ALIAS), "Codeine",
 				"Is it safe to give her codeine?", DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Dihydrocodeine"), null));
@@ -358,7 +366,7 @@ public class InjectedContraindicationCorroborationTest {
 	}
 
 	@Test
-	public void aClassTokenRuleIsUntouchedThoughTheAllergenArmResolvesNothing() throws IOException {
+	public void aClassTokenRuleIsUntouchedThoughTheAllergenArmResolvesNothing() {
 		// THE SCOPE GUARD, over the SHIPPED curated seed. `nsaid` is not one of Ibuprofen's own names, so
 		// the rule is not selfNamedAllergyRule and neither corroborating question is asked of it — which
 		// it must not be: the token names a CLASS, the bare containment match is what it is for, and

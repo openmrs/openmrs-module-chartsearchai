@@ -1482,8 +1482,8 @@ public class DrugReferenceInjector {
 	 * substance keys and the service they are resolved from are all DERIVED here, so there is no pair a
 	 * call site can hand over disagreeing — which is issue #298's discipline, whose own words are that
 	 * "no constructor takes the label and the flag as separate arguments". Two earlier versions of this
-	 * class fell short of it and each was found by a reviewer constructing the pair: taking the SERVICE
-	 * left a set resolved from another dataset, and taking the FLAG left the worse half — measured,
+	 * class fell short of it. Taking the SERVICE left a set resolvable from another dataset, read off the
+	 * signature. Taking the FLAG left the worse half, and that one a reviewer CONSTRUCTED — measured,
 	 * {@code new ContraindicationReading(true, null)} rendered
 	 * "Not recorded for this patient: documented opium allergy", a denial about a chart nobody read,
 	 * which is issue #208 item 2 with the sign flipped. Deriving needs no structural guard to hold it,
@@ -1611,22 +1611,26 @@ public class DrugReferenceInjector {
 	 * patient's allergy list, and two records of one chart must not disagree about whether — or about
 	 * what — this patient's chart records.
 	 *
-	 * <p>The chart is read off {@code reading}, and so is the AGE derived from it — neither is a
-	 * parameter of its own, because a second source for either lets one record's dose bands and its
-	 * patient reading describe different patients. Private for the same reason there is one source: the
-	 * only argument that could reach it from outside is a {@code ContraindicationReading}, which nothing
-	 * outside can construct. It orders the capped
-	 * {@code Interactions:} section — see {@link #orderedInteractionNotes} — and it splits the
-	 * contraindication list into what this patient's chart records, what it does not, and (issue #269)
-	 * what it matched but nothing corroborates (issue #208 item 2, {@link #contraindicationSections}).
-	 * ONE source, because two would let a caller order the interactions from one chart while the reading
-	 * describes another — the pair {@link ContraindicationReading} exists to make unconstructible, which
-	 * taking a second argument here re-created one level up. It may be null, which is "nothing known
-	 * about the patient": the interactions section then keeps dataset order and the contraindication list
-	 * is rendered with no reading at all, because a record that cannot see the chart must not report an
-	 * absence. {@code orderEntries} is passed straight through to the
-	 * interactions method, which groups a partner the patient is on by the entry it resolves to (issue
-	 * #190 item 2).
+	 * <p>The chart comes off {@code reading}, and so does the AGE derived from it — neither is a
+	 * parameter, because a second source for either lets one record's dose bands and its patient reading
+	 * describe different patients. It orders the capped {@code Interactions:} section — see
+	 * {@link #orderedInteractionNotes} — and it splits the contraindication list into what this patient's
+	 * chart records, what it does not, and (issue #269) what it matched but nothing corroborates (issue
+	 * #208 item 2, {@link #contraindicationSections}). It may be null, which is "nothing known about the
+	 * patient": the interactions section then keeps dataset order and the contraindication list is
+	 * rendered with no reading at all, because a record that cannot see the chart must not report an
+	 * absence.
+	 *
+	 * <p>{@code orderEntries} stays a parameter and is NOT a counter-example to that: the context is
+	 * BUILT from it ({@code withReferenceNames} at the call site), so there is nothing to re-derive here
+	 * and re-resolving it per record is the second resolution CLAUDE.md's {@code findForActiveOrders}
+	 * bullet refuses. It is passed straight through to the interactions method, which groups a partner
+	 * the patient is on by the entry it resolves to (issue #190 item 2).
+	 *
+	 * <p>Private because {@code injectRecords} is the only caller. That is the whole reason: a
+	 * package-private signature would let a caller outside this class pass a null reading — measured,
+	 * {@code render(null, null, null, null)} compiles the moment the modifier is dropped, since four
+	 * nulls name no private type — and it would NPE on {@code reading.context()}.
 	 *
 	 * <p>{@code substance} is what this row's own fields cannot say: the rows of its substance the pass
 	 * resolved, and which of them THIS RESPONSE names the substance by — the caller's

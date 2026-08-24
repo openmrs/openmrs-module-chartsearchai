@@ -11,16 +11,22 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 
 /**
  * Issue #250 — which row of a substance {@link DrugReference#canonicalRow} elects to represent it.
@@ -59,6 +65,17 @@ public class SubstanceNameRowTest {
 	
 	private static final String TRACER = "Fluoroestradiol f-18";
 	
+	/** {@link #TRACER}'s stem, lower-cased — what a guard has to match on, since the shipped KB also
+	 *  writes the tracer {@code fluoroestradiol F 18} inside its own mechanism prose. */
+	private static final String TRACER_STEM = "fluoroestradiol";
+	
+	/** The ATC code the shipped silver-nitrate family publishes — the code whose class-chip entry the
+	 *  stem weakening would hand to an ophthalmic presentation. */
+	private static final String SILVER_CODE = "D08AL01";
+	
+	/** The presentation row a stem comparison would elect to speak for the silver-nitrate substance. */
+	private static final String OPHTHALMIC_SILVER = "Silver nitrate (ophthalmic)";
+	
 	@Test
 	public void theFixtureReallyTiesTheFoldOnTheTracer() throws Exception {
 		// The premise, through the production predicates: the tracer and Estradiol are ONE substance to
@@ -96,9 +113,15 @@ public class SubstanceNameRowTest {
 		assertTrue(warnings.get(0).getDetail()
 		        .startsWith("Estradiol interacts with active order dexamethasone — Moderate."),
 		    "and its detail must lead with that same name, was: " + warnings.get(0).getDetail());
-		assertFalse(warnings.get(0).getDetail().contains(TRACER),
-		    "and must not attribute an oestrogen's mechanism to a diagnostic tracer, was: "
-		            + warnings.get(0).getDetail());
+		// On the STEM and case-insensitively, because the KB spells the tracer three ways and a guard
+		// written on the display name alone is blind to the other two: this substance's own rated rules
+		// carry mechanism prose reading "the radioactive diagnostic agent fluoroestradiol F 18 …", which
+		// `contains("Fluoroestradiol f-18")` does not see. That prose can still reach a chip about
+		// Estradiol — bestRulePerPartner pools every row of the substance — so this guard is what makes
+		// that residue observable in-suite rather than accidentally green. See ADR 43's trade-offs.
+		assertFalse(warnings.get(0).getDetail().toLowerCase(Locale.ROOT).contains(TRACER_STEM),
+		    "and must not attribute an oestrogen's mechanism to a diagnostic tracer, nor carry the "
+		            + "tracer's own prose, was: " + warnings.get(0).getDetail());
 	}
 	
 	@Test
@@ -131,20 +154,27 @@ public class SubstanceNameRowTest {
 				continue;
 			}
 			multiRow++;
-			DrugReference unqualified = null;
-			DrugReference selfNamingButQualified = null;
+			boolean anyUnqualified = false;
+			boolean unqualifiedSelfNamer = false;
+			boolean qualifiedSelfNamer = false;
 			for (DrugReference row : rows) {
-				if (row.namesNoRoute() && unqualified == null) {
-					unqualified = row;
-				}
-				if (!row.namesNoRoute() && row.namesItsSubstance() && selfNamingButQualified == null) {
-					selfNamingButQualified = row;
+				if (row.namesNoRoute()) {
+					anyUnqualified = true;
+					if (row.namesItsSubstance()) {
+						unqualifiedSelfNamer = true;
+					}
+				} else if (row.namesItsSubstance()) {
+					qualifiedSelfNamer = true;
 				}
 			}
-			if (unqualified == null) {
+			if (!anyUnqualified) {
 				continue;
 			}
-			if (selfNamingButQualified != null) {
+			// The DISCRIMINATING shape, and it is narrower than "holds a qualified self-namer": with the
+			// rungs reordered, a family that ALSO holds an unqualified self-namer still elects that row,
+			// which names no route, so the invariant survives there and such a family proves nothing. Only
+			// a family whose sole self-naming row carries a qualifier can witness the reorder.
+			if (qualifiedSelfNamer && !unqualifiedSelfNamer) {
 				discriminating++;
 			}
 			assertTrue(DrugReference.canonicalRow(rows).namesNoRoute(),
@@ -155,15 +185,84 @@ public class SubstanceNameRowTest {
 		assertTrue(multiRow > 1, "precondition: the shipped dataset must file some substance as several "
 		        + "rows, or this asserts nothing — was " + multiRow);
 		assertTrue(discriminating > 0,
-		    "precondition: and at least one such family must hold a row that names its substance while "
-		            + "carrying a qualifier, or the two rung orders cannot be told apart here");
+		    "precondition: and at least one such family's ONLY self-naming row must carry a qualifier, or "
+		            + "no family here can witness the reorder and the case is vacuous");
+	}
+
+	@Test
+	public void theSubstanceNameIsMatchedAgainstTheWholeDisplayNameAndNotItsStem() throws Exception {
+		// The other half of the predicate's definition, and until this case nothing pinned it: mutate
+		// namesItsSubstance() to compare DrugReference.displayStem(name) instead of the whole name and the
+		// entire api suite stays green, while two shipped families change their elected row. Both changes
+		// are wrong in the way this module keeps having to undo.
+		//
+		// The tick-borne family is the one the predicate's javadoc exists for. Its substance name carries
+		// a parenthetical of its own, so BOTH rows reduce to the same stem and a stem comparison separates
+		// neither — the fold falls back to dataset order and re-elects the paediatric row, silently giving
+		// back one of the three renames this issue delivers.
+		List<DrugReference> all = new DdiDrugReferenceSource().load();
+		List<DrugReference> tickBorne = new ArrayList<DrugReference>();
+		for (DrugReference row : all) {
+			if (row.getName().startsWith("Tick-borne encephalitis vaccine")) {
+				tickBorne.add(row);
+			}
+		}
+		
+		assertEquals(2, tickBorne.size(), "precondition: the family must be the two shipped rows, was: "
+		        + DrugReferenceTestSupport.names(tickBorne));
+		assertEquals(DrugReference.displayStem(tickBorne.get(0).getName()),
+		    DrugReference.displayStem(tickBorne.get(1).getName()),
+		    "precondition: and both rows must reduce to ONE stem, or a stem comparison would separate "
+		            + "them and this case would not discriminate");
+		assertEquals("Tick-borne encephalitis vaccine (whole virus, inactivated)",
+		    DrugReference.canonicalRow(tickBorne).getName(),
+		    "the row the data files the family under must be elected, not the paediatric one");
+		
+	}
+
+	@Test
+	public void noRouteQualifiedPresentationIsElectedToSpeakForItsSubstance() throws Exception {
+		// The second cost of comparing stems instead of whole names, and it is on the other side of the
+		// same-substance gate — the ATC-code fold, which is the one canonicalRow site whose row set is not
+		// one substance. No row of the shipped silver-nitrate family names its substance by its whole name,
+		// so today the fold decides nothing there and the earliest row keeps the role. Compare stems and
+		// `Silver nitrate (ophthalmic)` self-names, taking both the family and the code with it — an
+		// ophthalmic presentation elected to speak for a substance, which is exactly the shape issue #174
+		// site 1 removed when a systemic cyclosporine order was named "Cyclosporine (ophthalmic)" in a chip
+		// about tacrolimus.
+		//
+		// Its own case rather than more assertions beside the tick-borne one: that case fails on this same
+		// mutation and would stop before reaching these, so folded together only one of the two halves
+		// would ever be observed reddening.
+		List<DrugReference> all = new DdiDrugReferenceSource().load();
+		List<DrugReference> silverNitrate = new ArrayList<DrugReference>();
+		DrugReference byCode = null;
+		for (DrugReference row : all) {
+			if ("silver nitrate".equals(DrugReference.normalizeName(row.getSubstanceName()))) {
+				silverNitrate.add(row);
+			}
+			if (row.normalizedAtcCodes().contains(SILVER_CODE)) {
+				byCode = DrugReference.canonicalRow(byCode, row);
+			}
+		}
+		
+		assertTrue(silverNitrate.size() > 1, "precondition: the silver nitrate family must be several rows,"
+		        + " was: " + DrugReferenceTestSupport.names(silverNitrate));
+		assertNotNull(byCode, "precondition: the shipped dataset must cover " + SILVER_CODE);
+		
+		assertNotEquals(OPHTHALMIC_SILVER, DrugReference.canonicalRow(silverNitrate).getName(),
+		    "no route-qualified presentation may be elected to speak for the substance, was: "
+		            + DrugReferenceTestSupport.names(silverNitrate));
+		assertNotEquals(OPHTHALMIC_SILVER, byCode.getName(),
+		    "nor may it become the entry a class chip names for " + SILVER_CODE);
 	}
 
 	@Test
 	public void theInjectedRecordNamesThatRowToo() throws Exception {
-		// The same row, on the surface the model actually cites. The record renders canonicalRow's pick
-		// directly (DrugReferenceInjector.matchingEntries), so a fix that moved only the chip would leave
-		// the prompt carrying the tracer's title beside a chip naming Estradiol.
+		// The same row, on the surface the model actually cites — asserted on the RENDERED record text
+		// through the real injectRecords, not on canonicalRow as a proxy for it. A fix that moved only the
+		// chip would leave the prompt carrying the tracer's title beside a chip naming Estradiol, and only
+		// reading the record can see that.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(ESTRADIOL_FIXTURE);
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
 		    DrugReferenceTestSupport.set("Dexamethasone Injection vial 8mg"), null, null, null);
@@ -171,10 +270,16 @@ public class SubstanceNameRowTest {
 		List<DrugReference> group = service.findImpliedByQuery(ESTRADIOL_QUESTION);
 		assertEquals(3, group.size(), "precondition: the whole family must be in play, was: " + group);
 		
-		assertEquals("Estradiol", DrugReference.canonicalRow(group).getName(),
-		    "the row the record renders must be the one the data names the substance after");
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+		        .injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, ESTRADIOL_QUESTION);
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Estradiol");
+		
+		assertNotNull(record, "a drug-reference record naming Estradiol must be injected, was: "
+		        + DrugReferenceTestSupport.referenceTexts(chart));
+		assertNull(DrugReferenceTestSupport.referenceTextNaming(chart, TRACER),
+		    "and none naming the tracer, was: " + DrugReferenceTestSupport.referenceTexts(chart));
 		assertEquals("Estradiol", DrugSafetyValidator.interactionSubject(group, context).getName(),
-		    "and the row the chips name it by must be the same one, was: " + group);
+		    "and the row the chips name the substance by must be that same row, was: " + group);
 	}
 	
 	@Test

@@ -1086,8 +1086,10 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>Which chip survives.</b> The most specific relationship, since that is this arm's analogue
 	 * of "the highest severity wins" — a contraindication chip carries no severity, and what it can
-	 * under-report is the STRENGTH of the claim: identity ("the patient has a recorded allergy to X")
-	 * over a shared ATC class over a shared curated group. Where a self-named curated rule joins that
+	 * under-report is the STRENGTH of the claim: identity (the patient is allergic to this very drug)
+	 * over a shared ATC class over a shared curated group. Identity is the RELATIONSHIP and not a fixed
+	 * wording — since issue #268 that rank states it in one of two sentences, depending on whether the
+	 * recorded name names the row. Where a self-named curated rule joins that
 	 * space it is ranked by what it ADDS, not by which arm produced it — issue #88's finding that "arm X
 	 * yields to arm Y" is the wrong dedup whenever the yielding arm can be the one carrying the content.
 	 * A rule with a note of its own says the identity fact in the deployment's own words and outranks it;
@@ -1167,7 +1169,15 @@ public class DrugSafetyValidator {
 		 *  relationship below, stated in the deployment's own clinical wording. Above {@link #IDENTITY}
 		 *  because it says the identity fact and the note besides, which nothing else in this ledger can
 		 *  reproduce — a deployment authoring {@code drug-reference.json} is recording exactly that
-		 *  wording, and a fold that kept the module's stock sentence would silently discard it. */
+		 *  wording, and a fold that kept the module's stock sentence would silently discard it.
+		 *
+		 *  <p>Its rank guard asks whether the matched record names the entry with
+		 *  {@link DrugReference#matchesDrugName}, which scans every alias, while issue #268 asks the
+		 *  narrower {@link DrugReference#labelNameOccursIn} of the sentence below. So a record matching
+		 *  through a borrowed alias can hold this rank while {@link #IDENTITY} would have declined to
+		 *  state identity. The two cannot contradict each other — only one rank ever renders, and this
+		 *  one's sentence is itself relationship-shaped ("X is contraindicated by an active allergy:
+		 *  …"), asserting the contraindication rather than an allergy to X. */
 		static final int SELF_NAMED_RULE = 4;
 
 		/** A recorded allergy to this very substance — needs no ATC code and outranks both class
@@ -3963,7 +3973,7 @@ public class DrugSafetyValidator {
 					chips.add(subject, implied.substanceGroupKey(), ContraindicationChips.SAME_CLASS,
 							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
 									subject.displayLabel() + " is in the same ATC class (" + shared
-											+ ") as the patient's allergy to " + implied.displayLabel()
+											+ ") as the patient's allergy to " + recorded.allergenName(implied)
 											+ " — possible cross-reactivity"));
 					chipped = true;
 					break;
@@ -3979,7 +3989,7 @@ public class DrugSafetyValidator {
 							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
 									subject.displayLabel() + " is in the same cross-reactivity group ("
 											+ group.getName() + ") as the patient's allergy to "
-											+ implied.displayLabel() + " — possible cross-reactivity"));
+											+ recorded.allergenName(implied) + " — possible cross-reactivity"));
 					break;
 				}
 			}
@@ -4112,12 +4122,35 @@ public class DrugSafetyValidator {
 		 * whole resolved lists for the de-duplication rule and is not deciding a claim.
 		 */
 		private String identitySentence(DrugReference row) {
+			return names(row) ? "The patient has a recorded allergy to " + row.displayLabel() + "."
+					: row.displayLabel() + " is contraindicated by a recorded allergy to " + token + ".";
+		}
+
+		/**
+		 * @return what the two CLASS sentences may call {@code row}, the substance they report a
+		 *         relationship WITH — its own label where this recorded name names it, and otherwise the
+		 *         charted token. Those sentences say "as the patient's allergy to Y", which asserts the
+		 *         allergy as flatly as the identity chip does, so the same rule binds them: measured over
+		 *         the shipped KB, an allergen charted as {@code amoxicillin / esomeprazole / levofloxacin
+		 *         combination kit} put "the patient's allergy to Omeprazole" beside the identity chip
+		 *         that had just declined to say it, in one payload. Unlike the identity chip the sentence
+		 *         needs no second form — it already names its own subject and states the relationship,
+		 *         so only the allergen half moves.
+		 */
+		private String allergenName(DrugReference row) {
+			return names(row) ? row.displayLabel() : token;
+		}
+
+		/** @return whether this recorded name NAMES {@code row} — by reference, for the reason
+		 *          {@link #identitySentence} gives, and asked in one place because all three of the
+		 *          arm's sentences turn on it. */
+		private boolean names(DrugReference row) {
 			for (DrugReference candidate : named) {
 				if (candidate == row) {
-					return "The patient has a recorded allergy to " + row.displayLabel() + ".";
+					return true;
 				}
 			}
-			return row.displayLabel() + " is contraindicated by a recorded allergy to " + token + ".";
+			return false;
 		}
 	}
 

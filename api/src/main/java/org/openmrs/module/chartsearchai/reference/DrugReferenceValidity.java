@@ -827,13 +827,14 @@ public final class DrugReferenceValidity {
 	 * direction by ranking the claim, but {@link DrugReference#isNamed} — rule-token identity — does not
 	 * rank, so the collision stays reachable however the prose legs are ordered.
 	 *
-	 * <p><b>That quoted sentence is no longer what the arm says</b> (issue #268): the allergen chip
-	 * quotes a record, so it now prints a row's label only where the recorded name NAMES it
-	 * ({@link DrugReferenceService#findNamedSubstances}) and otherwise states the allergy in the
-	 * chart's own words. What is unchanged is everything this check exists for — the borrowed name is
-	 * still a resolution key, so the wrong substance still enters the class and cross-reactivity
-	 * comparisons, and the fix is still in the dataset. Do not read the chip's correction as making
-	 * this rule redundant.
+	 * <p><b>That quoted sentence is no longer what the arm says</b> (issue #268). Every sentence
+	 * {@code DrugSafetyValidator.addAllergyContraindications} emits — the identity chip and both class
+	 * chips — now calls a substance by its own label only where the recorded name NAMES it
+	 * ({@link DrugReferenceService#findNamedSubstances}), and otherwise by the charted allergen token.
+	 * What is unchanged is everything this check exists for — the borrowed name is still a resolution
+	 * key, so the wrong substance still enters the class and cross-reactivity comparisons and is still
+	 * reported as related to the patient's allergy; only the NAME it is reported under moves, and the
+	 * fix is still in the dataset. Do not read the chip's correction as making this rule redundant.
 	 *
 	 * <p><b>Two conditions, each excluding a shape that is CORRECT</b>, which is what keeps this from
 	 * being a channel operators filter:

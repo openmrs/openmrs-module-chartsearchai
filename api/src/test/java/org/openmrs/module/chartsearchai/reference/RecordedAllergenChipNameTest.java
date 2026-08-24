@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
- * WHICH NAME the identity chip may call a recorded allergy (issue #268).
+ * WHICH NAME the allergen arm may call a recorded allergy (issue #268).
  *
  * <p><b>The defect.</b> The chip quotes a RECORD — "The patient has a recorded allergy to X." — and
  * used to put in X whichever row of the subject's substance the recorded name resolved to. But
@@ -42,7 +42,12 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * arm's own shape, which is also what keeps the wire contract that every {@code detail} names its
  * own drug and tells one finding from another.
  *
- * <p>Five cases below each name the clause they discriminate and say so in their own comment.
+ * <p>The same rule binds the arm's two CLASS sentences, which say "as the patient's allergy to Y"
+ * and so assert the allergy as flatly — only the allergen half of those moves, since they already
+ * name their own subject.
+ *
+ * <p>Six cases below each name the clause or sentence they discriminate and say so in their own
+ * comment.
  * Removing the unique clause altogether also reddens five cases that were already in the suite, Opium
  * under a {@code papaveretum} allergy among them.
  */
@@ -57,6 +62,11 @@ public class RecordedAllergenChipNameTest {
 	 *  {@link DrugReference#displayLabel()} appends it as a synonym, and one combination whose third
 	 *  substance is reached only through a CONSTITUENT. The fixture's own {@code note} describes each. */
 	private static final String TIED_ON_ONE_NAME = "chartsearchai-test/ddi-tied-alias-allergen.json";
+
+	/** Four shipped rows publishing one combination name, of which the name NAMES three — plus the
+	 *  class partner that makes the fourth reachable through the CLASS arm rather than the identity
+	 *  one. The fixture's own {@code note} describes it. */
+	private static final String CLASS_ARM = "chartsearchai-test/ddi-class-arm-unnamed-allergen.json";
 
 	private static final String KADCYLA = "ado-trastuzumab emtansine";
 
@@ -223,6 +233,38 @@ public class RecordedAllergenChipNameTest {
 				+ "neomycin.]", details.toString(),
 				"the moiety the constituent resolves to keeps its name; the ester, which the constituent "
 						+ "does not name, is quoted in the chart's words, was: " + details);
+	}
+
+	@Test
+	public void theClassSentenceCannotAssertAnAllergyEither() throws IOException {
+		// The same rule on the arm's OTHER two sentences. "X is in the same ATC class (C) as the
+		// patient's allergy to Y" asserts the allergy as flatly as the identity chip does, so a Y the
+		// recorded name does not name is the same falsehood — and it was reachable in the SAME payload
+		// as the chip that had just declined to state it. Only the allergen half moves: that sentence
+		// already names its own subject and already states a relationship, so it needs no second form.
+		//
+		// The arm walks the implied substances in order and stops at the first that shares the class,
+		// which here is the one the record does not name. Preferring a named implied substance where
+		// both share the class would give a more specific sentence, but it would change WHICH chip is
+		// raised rather than only its wording, so it is left alone.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(CLASS_ARM);
+		String kit = "amoxicillin / esomeprazole / levofloxacin combination kit";
+		assertEquals("[Levofloxacin, Omeprazole, Esomeprazole, Amoxicillin]",
+				DrugReferenceTestSupport.names(service.findImpliedSubstances(kit)).toString(),
+				"precondition: the kit must reach both proton-pump rows, in an order that puts the one "
+						+ "it does not name first");
+
+		List<String> details = DrugReferenceTestSupport.contraindicationDetails(
+				DrugReferenceTestSupport.validator(service).validate("",
+						"Is it safe to give her lansoprazole?",
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set(kit), null)));
+
+		assertEquals("[Lansoprazole is in the same ATC class (A02BC) as the patient's allergy to "
+				+ "amoxicillin / esomeprazole / levofloxacin combination kit — possible "
+				+ "cross-reactivity]", details.toString(),
+				"the class sentence names the allergen the CHART records, not the row the kit merely "
+						+ "reached, was: " + details);
 	}
 
 	@Test

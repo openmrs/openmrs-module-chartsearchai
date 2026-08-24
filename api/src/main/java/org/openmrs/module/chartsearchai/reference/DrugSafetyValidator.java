@@ -2161,11 +2161,14 @@ public class DrugSafetyValidator {
 		//
 		// NAME_IS_ANOTHER_NAME and not NAME_IS_THE_DISPLAY_NAME, because an alias IS a name: where the
 		// chart records a row's rxnorm or CIEL name, that row is named and the sentence is true. That
-		// LEVEL is the one part of this predicate no case pins — measured, raising the floor to the
-		// display name reddens nothing, because the rows of one substance normally share their aliases,
-		// so a rank-1 claim lands on every row of a family at once and yields no strict inequality either
-		// way. Distinguishing the two needs a family whose rows publish DIFFERENT alias sets
-		// (drug-reference-charted-substance-row.json is one), and no shipped family does.
+		// LEVEL is the one part of this predicate no case pins, and it is unobservable rather than merely
+		// untested: measured over the shipped KB through nameMatchStrength, taking every display name in it
+		// as the candidate recorded order, ZERO of the 129 multi-row families have an arrangement whose
+		// strongest claim is exactly rank 1 while another row of the family claims lower — because the rows
+		// of one substance normally share their aliases, so a rank-1 claim lands on every row at once and
+		// yields no strict inequality either way. Raising the floor to the display name therefore reddens
+		// nothing, and cannot. Distinguishing the two needs a family whose rows publish DIFFERENT alias
+		// sets (drug-reference-charted-substance-row.json is one, and is curated).
 		return claim >= DrugReference.NAME_IS_ANOTHER_NAME
 		        && claim > recordedClaim(than, recorded);
 	}

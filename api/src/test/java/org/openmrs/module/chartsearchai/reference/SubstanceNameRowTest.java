@@ -254,8 +254,11 @@ public class SubstanceNameRowTest {
 		        + " was: " + DrugReferenceTestSupport.names(silverNitrate));
 		assertNotNull(byCode, "precondition: the shipped dataset must cover " + SILVER_CODE);
 		// The row the weakening would elect must EXIST, or both assertions below compare against a string
-		// no row carries and the case is vacuously green. Measured: with the stem mutation applied and this
-		// constant pointed at a name nothing bears, the case passed while its two siblings failed.
+		// no row carries and the case is vacuously green. That was measured on this case BEFORE this line
+		// existed: with the stem mutation applied and the constant pointed at a name nothing bears, it
+		// passed while its two siblings failed. With this line it fails here instead, loudly and naming
+		// the rows it did find, which is the whole point — re-run that pair of mutations if you want to
+		// see it rather than trusting the sentence.
 		assertTrue(DrugReferenceTestSupport.names(silverNitrate).contains(OPHTHALMIC_SILVER),
 		    "precondition: the family must still carry " + OPHTHALMIC_SILVER + ", or nothing here can "
 		            + "witness the stem weakening — was: " + DrugReferenceTestSupport.names(silverNitrate));

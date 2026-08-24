@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "note": "Verbatim DDInter 2.0 slice for issue #268 — real shipped rows, unedited. THREE shapes of a recorded allergy reaching several substances, which together decide whether a chip may print a row's label or must quote the chart. (1) The three gallium rows all carry the rxnorm_name `gallium`, and each display NAME already contains it, so DrugReference.displayLabel appends no synonym and `gallium` is nowhere in what the chip would print: the arm used to publish 'The patient has a recorded allergy to Gallium citrate ga-67.' — a radiodiagnostic the chart never mentions — and DrugReferenceService.lookupByToken picked that row by earliest dataset entry, which carries no clinical meaning. (2) The two penicillin G rows also share one rxnorm_name, but their display names diverge from it, so the label DOES append it and reads 'Benzylpenicillin (penicillin g)' — which quotes the chart, and must go on being printed. (3) `coenzyme q10 / levocarnitine / vitamin e` is a combination whose third substance, Ubidecarenone, is named nowhere in the recorded string: it is reached only because the CONSTITUENT `coenzyme q10` resolves to it, which is findImpliedSubstances' own third leg, and the chip may print that name for the same reason the leg admits the substance. Kept as a slice rather than hand-authored so all three shapes are the shipped data's and not a fixture's invention."
+  "note": "Verbatim DDInter 2.0 slice for issue #268 — real shipped rows, unedited. THREE shapes of a recorded allergy reaching several substances, which together decide whether a chip may print a row's label or must quote the chart. (1) The three gallium rows all carry the rxnorm_name `gallium`, and each display NAME already contains it, so DrugReference.displayLabel appends no synonym and `gallium` is nowhere in what the chip would print: the arm used to publish 'The patient has a recorded allergy to Gallium citrate ga-67.' — a radiodiagnostic the chart never mentions — and DrugReferenceService.lookupByToken picked that row by earliest dataset entry, which carries no clinical meaning. (2) The two penicillin G rows also share one rxnorm_name, but their display names diverge from it, so the label DOES append it and reads 'Benzylpenicillin (penicillin g)' — which quotes the chart, and must go on being printed. (3) `coenzyme q10 / levocarnitine / vitamin e` is a combination whose third substance, Ubidecarenone, is named nowhere in the recorded string: it is reached only because the CONSTITUENT `coenzyme q10` resolves to it, which is findImpliedSubstances' own third leg, and the chip may print that name for the same reason the leg admits the substance. Kept as a slice rather than hand-authored so all three shapes are the shipped data's and not a fixture's invention. (4) Latanoprostene bunod (ophthalmic) is a fourth shape and about a different question: ONE substance recorded TWICE. Its rxnorm_name `latanoprostene bunod` names it, while a chart that writes `latanoprostene bunod 5mg` reaches the same row only by containment and does not name it — the display name's trailing qualifier keeps it out of the recorded string. The two records resolve to the same single substance, so they are de-duplicated as one clinical fact, and which of them PatientService.getAllergies returned first must not decide the wording."
  },
  "mechanisms": {},
  "drugs": [
@@ -340,6 +340,17 @@
      "name": "Coenzyme Q10"
     }
    ]
+  },
+  {
+   "id": "DDInter1030",
+   "name": "Latanoprostene bunod (ophthalmic)",
+   "rxcui": "1988390",
+   "rxnorm_name": "latanoprostene bunod",
+   "drugbank_id": null,
+   "atc": [
+    "S01EE06"
+   ],
+   "ciel": []
   }
  ],
  "interactions": []

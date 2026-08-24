@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.List;
@@ -94,8 +95,8 @@ public class RecordedAllergenChipNameTest {
 		// that chip is untouched. The second is the defect — `Trastuzumab deruxtecan` occurs nowhere in
 		// `ado-trastuzumab emtansine`, so the chip may not announce it as what the chart records.
 		assertEquals("[The patient has a recorded allergy to Trastuzumab., "
-				+ "Trastuzumab deruxtecan is contraindicated by a recorded allergy to ado-trastuzumab "
-				+ "emtansine.]", details.toString(),
+				+ "Trastuzumab deruxtecan is contraindicated by a recorded allergy to "
+				+ "\"ado-trastuzumab emtansine\".]", details.toString(),
 				"the row the recorded name does not name may not be announced as the recorded allergy — "
 						+ "it states the relationship instead, and still names itself, was: " + details);
 	}
@@ -138,9 +139,9 @@ public class RecordedAllergenChipNameTest {
 						DrugReferenceTestSupport.ctx(60, null, null, null,
 								DrugReferenceTestSupport.set("gallium"), null)));
 
-		assertEquals("[Gallium citrate ga-67 is contraindicated by a recorded allergy to gallium., "
-				+ "Gallium chloride Ga-67 is contraindicated by a recorded allergy to gallium., "
-				+ "Gallium nitrate is contraindicated by a recorded allergy to gallium.]",
+		assertEquals("[Gallium citrate ga-67 is contraindicated by a recorded allergy to \"gallium\"., "
+				+ "Gallium chloride Ga-67 is contraindicated by a recorded allergy to \"gallium\"., "
+				+ "Gallium nitrate is contraindicated by a recorded allergy to \"gallium\".]",
 				details.toString(),
 				"every tied row states the relationship instead of claiming the allergy — including the "
 						+ "one dataset order put first — and each still names its own drug, so the three "
@@ -229,8 +230,8 @@ public class RecordedAllergenChipNameTest {
 								DrugReferenceTestSupport.set(combination), null)));
 
 		assertEquals("[The patient has a recorded allergy to Hydrocortisone., "
-				+ "Hydrocortisone butyrate is contraindicated by a recorded allergy to hydrocortisone / "
-				+ "neomycin.]", details.toString(),
+				+ "Hydrocortisone butyrate is contraindicated by a recorded allergy to "
+				+ "\"hydrocortisone / neomycin\".]", details.toString(),
 				"the moiety the constituent resolves to keeps its name; the ester, which the constituent "
 						+ "does not name, is quoted in the chart's words, was: " + details);
 	}
@@ -261,10 +262,64 @@ public class RecordedAllergenChipNameTest {
 								DrugReferenceTestSupport.set(kit), null)));
 
 		assertEquals("[Lansoprazole is in the same ATC class (A02BC) as the patient's allergy to "
-				+ "amoxicillin / esomeprazole / levofloxacin combination kit — possible "
+				+ "\"amoxicillin / esomeprazole / levofloxacin combination kit\" — possible "
 				+ "cross-reactivity]", details.toString(),
 				"the class sentence names the allergen the CHART records, not the row the kit merely "
 						+ "reached, was: " + details);
+	}
+
+	@Test
+	public void twoSpellingsOfOneAllergyDoNotLetRowOrderDecideTheWording() throws IOException {
+		// The de-duplication must not throw away EVIDENCE. Two records naming one substance are one
+		// clinical fact and collapse to one chip — but they are not equally good evidence: the bare
+		// rxnorm_name names the row, while the dose-suffixed spelling reaches it only by containment and
+		// cannot, the display name's trailing qualifier keeping it out of the recorded string. Keeping
+		// whichever arrived first made the sentence depend on the order PatientService.getAllergies
+		// returned the rows, which is nothing a clinician should be able to see. Naming survives the
+		// merge instead, so both orders read alike — and it is the STRONGER sentence that survives.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TIED_ON_ONE_NAME);
+		assertEquals("[Latanoprostene bunod (ophthalmic)]", DrugReferenceTestSupport
+				.names(service.findImpliedSubstances("latanoprostene bunod 5mg")).toString(),
+				"precondition: the dose-suffixed spelling must resolve to the same single substance as "
+						+ "the bare one, or the two are not de-duplicated at all");
+
+		String question = "Is it safe to give her latanoprostene bunod?";
+		String named = "[The patient has a recorded allergy to Latanoprostene bunod (ophthalmic).]";
+		assertEquals(named, DrugReferenceTestSupport.contraindicationDetails(
+				DrugReferenceTestSupport.validator(service).validate("", question,
+						DrugReferenceTestSupport.ctx(60, null, null, null, DrugReferenceTestSupport
+								.set("latanoprostene bunod", "latanoprostene bunod 5mg"), null))).toString(),
+				"the naming record first");
+		assertEquals(named, DrugReferenceTestSupport.contraindicationDetails(
+				DrugReferenceTestSupport.validator(service).validate("", question,
+						DrugReferenceTestSupport.ctx(60, null, null, null, DrugReferenceTestSupport
+								.set("latanoprostene bunod 5mg", "latanoprostene bunod"), null))).toString(),
+				"and the same the other way round, which is the whole point");
+	}
+
+	@Test
+	public void aNamingRecordOutranksANonNamingOneOnTheSameSubstance() throws IOException {
+		// The same rule one layer down, where the two records are genuinely DIFFERENT findings rather
+		// than two spellings: `gallium` reaches three substances and names none of them, `gallium
+		// nitrate` reaches one and names it. Both raise an identity chip for that one substance, so they
+		// meet on the ledger's key at equal rank — and the ledger kept whichever came first, so a chart
+		// recording `Gallium nitrate` verbatim was reported as merely contraindicated by `gallium`. The
+		// tiebreak can only promote a naming chip, never demote one.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TIED_ON_ONE_NAME);
+		String question = "Is it safe to give her gallium nitrate?";
+		String surviving = "The patient has a recorded allergy to Gallium nitrate.";
+
+		for (java.util.List<String> order : java.util.Arrays.asList(
+				java.util.Arrays.asList("gallium", "gallium nitrate"),
+				java.util.Arrays.asList("gallium nitrate", "gallium"))) {
+			List<String> details = DrugReferenceTestSupport.contraindicationDetails(
+					DrugReferenceTestSupport.validator(service).validate("", question,
+							DrugReferenceTestSupport.ctx(60, null, null, null,
+									DrugReferenceTestSupport.set(order.get(0), order.get(1)), null)));
+			assertTrue(details.contains(surviving),
+					"the record that NAMES the drug must speak whatever order it arrived in " + order
+							+ ", was: " + details);
+		}
 	}
 
 	@Test
@@ -285,7 +340,7 @@ public class RecordedAllergenChipNameTest {
 		assertEquals(2, findings.size(), "one citable record per chip, was: " + findings);
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Trastuzumab deruxtecan: Trastuzumab deruxtecan is contraindicated by a recorded "
-				+ "allergy to ado-trastuzumab emtansine." + DrugReferenceInjector.STRENGTH_WITHHOLD,
+				+ "allergy to \"ado-trastuzumab emtansine\"." + DrugReferenceInjector.STRENGTH_WITHHOLD,
 				findings.get(1).getText(),
 				"the record carries the chip's sentence verbatim, was: " + findings);
 	}
@@ -318,8 +373,8 @@ public class RecordedAllergenChipNameTest {
 						DrugReferenceTestSupport.ctx(60, null, null, null,
 								DrugReferenceTestSupport.set(recordedWithReaction), null)));
 
-		assertEquals("[Gallium citrate ga-67 is contraindicated by a recorded allergy to gallium "
-				+ "\u2014 hives.]", details.toString(),
+		assertEquals("[Gallium citrate ga-67 is contraindicated by a recorded allergy to "
+				+ "\"gallium — hives\".]", details.toString(),
 				"an uncontested row claimed only by containment still may not be announced as the "
 						+ "recorded allergy, was: " + details);
 	}

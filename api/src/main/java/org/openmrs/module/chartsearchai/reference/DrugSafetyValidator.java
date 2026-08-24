@@ -1251,9 +1251,15 @@ public class DrugSafetyValidator {
 
 			private int relationship;
 
-			RaisedChip(int position, int relationship) {
+			/** Whether the sentence currently occupying {@link #position} names the drug it is about —
+			 *  the equal-rank tiebreak (issue #268). Only the allergen arm's identity branch can answer
+			 *  false; every other sentence names its subject unconditionally. */
+			private boolean namesTheDrug;
+
+			RaisedChip(int position, int relationship, boolean namesTheDrug) {
 				this.position = position;
 				this.relationship = relationship;
+				this.namesTheDrug = namesTheDrug;
 			}
 		}
 
@@ -1292,6 +1298,17 @@ public class DrugSafetyValidator {
 		 *        either way it keys the same, since both are rows of the subject's substance.
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip) {
+			add(subject, finding, relationship, chip, false);
+		}
+
+		/**
+		 * As above, declaring whether this chip's sentence NAMES the drug it is about — which only the
+		 * allergen arm's identity branch can answer, and only it passes anything but {@code false}.
+		 * Every other arm's sentence names its subject unconditionally, so it has no preference to
+		 * express and takes the four-argument form.
+		 */
+		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip,
+				boolean namesTheDrug) {
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
 			// merge different sets of rows. Its javadoc is where the two key spaces are justified. It is
@@ -1314,13 +1331,21 @@ public class DrugSafetyValidator {
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
 			if (already == null) {
-				raised.put(key, new RaisedChip(warnings.size(), relationship));
+				raised.put(key, new RaisedChip(warnings.size(), relationship, namesTheDrug));
 				warnings.add(chip);
 				return;
 			}
-			if (relationship > already.relationship) {
+			// Strictly stronger wins, and at EQUAL strength a chip that can name the drug beats one that
+			// cannot (issue #268). Without that second half the surviving sentence depends on the order
+			// PatientService.getAllergies returned the records: a chart recording `Gallium nitrate`
+			// verbatim was reported as merely contraindicated by `gallium` because an unrelated
+			// free-text row sorted first, so the module held evidence that the chart names the drug and
+			// printed a sentence saying it does not. It cannot demote a naming chip, only promote one.
+			if (relationship > already.relationship
+					|| (relationship == already.relationship && namesTheDrug && !already.namesTheDrug)) {
 				warnings.set(already.position, chip);
 				already.relationship = relationship;
+				already.namesTheDrug = namesTheDrug;
 			}
 		}
 	}
@@ -3956,7 +3981,8 @@ public class DrugSafetyValidator {
 				// for the three ways a name names a row and for what the second form gives up.
 				chips.add(sameSubstance, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION,
-								sameSubstance.displayLabel(), recorded.identitySentence(sameSubstance)));
+								sameSubstance.displayLabel(), recorded.identitySentence(sameSubstance)),
+						recorded.names(sameSubstance));
 				continue;
 			}
 			if (refClasses.isEmpty() && refGroups.isEmpty()) {
@@ -4038,26 +4064,35 @@ public class DrugSafetyValidator {
 		List<RecordedAllergen> out = new ArrayList<RecordedAllergen>();
 		for (String allergyToken : context.getAllergyTokens()) {
 			List<DrugReference> implied = drugReferenceService.findImpliedSubstances(allergyToken);
-			if (implied.isEmpty() || alreadyResolved(out, implied)) {
+			if (implied.isEmpty()) {
 				continue;
 			}
-			out.add(new RecordedAllergen(allergyToken, implied,
-					drugReferenceService.findNamedSubstances(allergyToken, implied)));
+			List<DrugReference> named = drugReferenceService.findNamedSubstances(allergyToken, implied);
+			RecordedAllergen seen = resolvedAlike(out, implied);
+			if (seen == null) {
+				out.add(new RecordedAllergen(allergyToken, implied, named));
+			}
+			else {
+				seen.alsoNames(named);
+			}
 		}
 		return out;
 	}
 
-	/** @return whether one of {@code out} already resolved to exactly {@code implied} — the
-	 *          de-duplication above, unchanged in what it compares: the whole resolved LIST, never the
-	 *          recorded token beside it, because two spellings of one allergy are one record and the
-	 *          rule that says so is stated on {@link #recordedAllergens}. */
-	private static boolean alreadyResolved(List<RecordedAllergen> out, List<DrugReference> implied) {
+	/** @return the entry of {@code out} that already resolved to exactly {@code implied}, else null —
+	 *          the de-duplication above, unchanged in what it compares: the whole resolved LIST, never
+	 *          the recorded token beside it, because two spellings of one allergy are one record and
+	 *          the rule that says so is stated on {@link #recordedAllergens}. It returns the entry
+	 *          rather than a boolean because the later spelling still carries evidence — see
+	 *          {@link RecordedAllergen#alsoNames}. */
+	private static RecordedAllergen resolvedAlike(List<RecordedAllergen> out,
+			List<DrugReference> implied) {
 		for (RecordedAllergen seen : out) {
 			if (seen.substances().equals(implied)) {
-				return true;
+				return seen;
 			}
 		}
-		return false;
+		return null;
 	}
 
 	/**
@@ -4086,7 +4121,27 @@ public class DrugSafetyValidator {
 				List<DrugReference> named) {
 			this.token = token;
 			this.substances = substances;
-			this.named = named;
+			this.named = new ArrayList<DrugReference>(named);
+		}
+
+		/**
+		 * Folds in what ANOTHER spelling of this same allergy names. Two records resolving to the same
+		 * substances are one clinical fact and are de-duplicated, but they are not equally good
+		 * EVIDENCE: a chart carrying both {@code latanoprostene bunod} and
+		 * {@code latanoprostene bunod 5mg} names the drug through the first and not the second, and
+		 * which one {@code PatientService.getAllergies} returns first is not something a clinician
+		 * should be able to see in the wording. So naming survives the merge, and the sentence no
+		 * longer depends on that order.
+		 *
+		 * <p>Safe to union rather than choose, because a NAMED row's sentence quotes no token at all —
+		 * it states the row's own label, which the other record supports just as well.
+		 */
+		private void alsoNames(List<DrugReference> alsoNamed) {
+			for (DrugReference row : alsoNamed) {
+				if (!names(row)) {
+					named.add(row);
+				}
+			}
 		}
 
 		/** The substances this recorded name implies — what the class comparisons reason over, and the
@@ -4123,7 +4178,8 @@ public class DrugSafetyValidator {
 		 */
 		private String identitySentence(DrugReference row) {
 			return names(row) ? "The patient has a recorded allergy to " + row.displayLabel() + "."
-					: row.displayLabel() + " is contraindicated by a recorded allergy to " + token + ".";
+					: row.displayLabel() + " is contraindicated by a recorded allergy to " + quotedToken()
+							+ ".";
 		}
 
 		/**
@@ -4138,7 +4194,19 @@ public class DrugSafetyValidator {
 		 *         so only the allergen half moves.
 		 */
 		private String allergenName(DrugReference row) {
-			return names(row) ? row.displayLabel() : token;
+			return names(row) ? row.displayLabel() : quotedToken();
+		}
+
+		/**
+		 * @return the charted token in quotation marks — because it is a quotation, and because a
+		 *         non-coded allergen is clinician free text that can carry the module's own punctuation.
+		 *         The class sentences end in {@code " — possible cross-reactivity"}, so an allergen
+		 *         charted as {@code esomeprazole magnesium — hives} produced a sentence with two
+		 *         em-dashed clauses and no way to tell which was the chart's; that text is injected as a
+		 *         citable {@code safety_finding}, so a model reads it too.
+		 */
+		private String quotedToken() {
+			return "\"" + token + "\"";
 		}
 
 		/** @return whether this recorded name NAMES {@code row} — by reference, for the reason

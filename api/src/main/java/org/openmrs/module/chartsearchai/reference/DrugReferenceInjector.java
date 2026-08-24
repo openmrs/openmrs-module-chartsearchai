@@ -2017,7 +2017,9 @@ public class DrugReferenceInjector {
 	 *  keyed on the same collapsed rule, so recomputing any of them beside the others is how a record
 	 *  comes to mark a clause it does not carry (or carry one it cannot mark).
 	 *
-	 *  <p>All three reading sections are subsets of {@code clauses} in clause order and are pairwise
+	 *  <p>All three reading sections are empty where the injection may state no reading at all
+	 *  ({@link #statesTheChartsContraindicationReading}), so no consumer can read a partition that was
+	 *  never computed. Otherwise they are subsets of {@code clauses} in clause order and pairwise
 	 *  disjoint. Together they are every clause the module could put to the chart AND get a corroborated
 	 *  answer about, which is every clause but two shapes, both of them in the LIST and in no section:
 	 *  a rule {@link DrugSafetyValidator#evaluatesAgainstTheChart} rejects, because the record may not
@@ -2162,8 +2164,8 @@ public class DrugReferenceInjector {
 		}
 		// Walked in CLAUSE order, not in the order the matches were found: a rule authored twice can be
 		// matched by its second spelling while its clause sits at the first's position, and a reading
-		// that listed those out of order would be a half a reader cannot line up against the list. One
-		// loop for both halves, so they follow the clauses rather than agreeing with them.
+		// that listed those out of order would be a section a reader cannot line up against the list. One
+		// loop for all three, so they follow the clauses rather than agreeing with them.
 		//
 		// SETS of clause TEXT, and the weaker claim yields: two rules of different keys may render the
 		// same string — an allergy rule and a condition rule may carry one note, which is a natural way to
@@ -2178,18 +2180,25 @@ public class DrugReferenceInjector {
 		Set<String> recorded = new LinkedHashSet<String>();
 		Set<String> notRecorded = new LinkedHashSet<String>();
 		Set<String> uncorroborated = new LinkedHashSet<String>();
-		for (Map.Entry<Object, String> clause : byRule.entrySet()) {
-			if (recordedRules.contains(clause.getKey())) {
-				recorded.add(clause.getValue());
-			} else if (uncorroboratedRules.contains(clause.getKey())) {
-				uncorroborated.add(clause.getValue());
-			} else if (!unevaluableRules.contains(clause.getKey())) {
-				notRecorded.add(clause.getValue());
+		// All three left EMPTY where the record may state no reading, rather than filled with a partition
+		// nothing prints. The walk above still runs — the clause LIST is rendered either way — but with no
+		// reading there is nothing true to put in these, and the corroboration question was not asked, so
+		// a caller reading them would get "recorded" for a clause nothing corroborates. render() happens
+		// to gate them itself; that is not a property to leave a future consumer resting on.
+		if (reading.states()) {
+			for (Map.Entry<Object, String> clause : byRule.entrySet()) {
+				if (recordedRules.contains(clause.getKey())) {
+					recorded.add(clause.getValue());
+				} else if (uncorroboratedRules.contains(clause.getKey())) {
+					uncorroborated.add(clause.getValue());
+				} else if (!unevaluableRules.contains(clause.getKey())) {
+					notRecorded.add(clause.getValue());
+				}
 			}
+			uncorroborated.removeAll(recorded);
+			notRecorded.removeAll(recorded);
+			notRecorded.removeAll(uncorroborated);
 		}
-		uncorroborated.removeAll(recorded);
-		notRecorded.removeAll(recorded);
-		notRecorded.removeAll(uncorroborated);
 		return new ContraindicationSections(byRule.values(), recorded, notRecorded, uncorroborated);
 	}
 

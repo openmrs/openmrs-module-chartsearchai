@@ -301,12 +301,12 @@ public class DrugReferenceInjector {
 		// other GP read in this class is hoisted to a once-per-injection site for the same reason
 		// LlmInferenceService gives for trusting the chart over a re-read — a flag that flips mid-loop
 		// would leave record [7] carrying a patient-specific reading and record [8] not.
-		ContraindicationReading patientReading = new ContraindicationReading(
+		ContraindicationReading reading = new ContraindicationReading(
 				statesTheChartsContraindicationReading(context), drugReferenceService, context);
 		for (Map.Entry<DrugReference, SubstanceRendering> match : matched.entrySet()) {
 			DrugReference ref = match.getKey();
 			RenderedReference rendered =
-					render(ref, age, context, orderEntries, patientReading, match.getValue());
+					render(ref, age, context, orderEntries, reading, match.getValue());
 			// The rendering's own bookkeeping rides on the mapping, not in the line — see
 			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
 			// grounding verifier still compares against exactly what the model read.
@@ -1562,7 +1562,7 @@ public class DrugReferenceInjector {
 	 * dosing is included only when an age band matches {@code age}; prose warnings,
 	 * contraindications and interactions are always rendered.
 	 *
-	 * <p>{@code patientReading} is the {@link ContraindicationReading} the caller decided once for the
+	 * <p>{@code reading} is the {@link ContraindicationReading} the caller decided once for the
 	 * whole injection rather than anything re-derived here: it reads global properties and resolves the
 	 * patient's allergy list, and two records of one chart must not disagree about whether — or about
 	 * what — this patient's chart records.
@@ -1585,7 +1585,7 @@ public class DrugReferenceInjector {
 	 * to what it produced before issues #237/#259.
 	 */
 	static RenderedReference render(DrugReference ref, Integer age, PatientClinicalContext context,
-			List<DrugReference> orderEntries, ContraindicationReading patientReading,
+			List<DrugReference> orderEntries, ContraindicationReading reading,
 			SubstanceRendering substance) {
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
 		StringBuilder paren = new StringBuilder();
@@ -1641,14 +1641,14 @@ public class DrugReferenceInjector {
 		// contraindication rule, and the reading's sections are subsets of the clause list (see
 		// contraindicationSections), so none of them can be non-empty when the list is.
 		ContraindicationSections contraindications =
-				contraindicationSections(ref, context, patientReading);
+				contraindicationSections(ref, context, reading);
 		// The patient-specific reading BEFORE the list it qualifies (issue #208 item 2), so a model
 		// reading forward has the qualifier before the content — the same reason the interactions section
 		// below promotes this patient's own partners to its front rather than appending them. Omitted
 		// entirely when the context is null, which is "nothing known" and not "nothing recorded": a record
 		// that cannot see the chart must not report an absence — see
 		// statesTheChartsContraindicationReading for the three things that decides.
-		if (patientReading.states()) {
+		if (reading.states()) {
 			// BOTH halves named, each by its own clauses, and neither left to be inferred from the other.
 			// Two weaker forms were tried live on the 3.7.1 standalone 2026-08-13 and BOTH were measured
 			// failing on the model this module ships against:

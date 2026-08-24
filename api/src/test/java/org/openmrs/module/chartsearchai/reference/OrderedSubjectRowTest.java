@@ -21,11 +21,18 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * Issue #194 — the interaction chip's subject was {@link DrugReference#canonicalRow}'s pick, which is
- * the row naming no route and, where every row of a family names no route, simply the dataset's first.
- * So a patient ordered one presentation was told about another: live-measured on the 3.7.1 standalone,
- * a {@code Botulinum toxin type A} order was subjected on
- * {@code Daxibotulinumtoxina (botulinum toxin type a)}.
+ * Issue #194 — the interaction chip's subject was {@link DrugReference#canonicalRow}'s pick, and where
+ * the rows of a family TIE on that fold's rungs it can only keep the dataset's first. So a patient
+ * ordered one presentation was told about another: live-measured on the 3.7.1 standalone, a
+ * {@code Botulinum toxin type A} order was subjected on
+ * {@code Daxibotulinumtoxina (botulinum toxin type a)}, because at the time the fold had one rung and
+ * both rows answered it.
+ *
+ * <p>That family no longer ties. Issue #250 gave the fold a second rung — the row the data files the
+ * family under — which is {@code Botulinum toxin type A}, so the fold now reaches this file's answer
+ * unaided and the botulinum cases below can no longer fail if the chart-anchoring step is removed. The
+ * trap moved to the COVID pair in the same fixture, whose rows tie on both rungs; see
+ * {@link #theOrderNamedRowIsNamedWhereTheFoldCannotReachIt}.
  *
  * <p>Not the same defect as issue #176/#192, which was {@code lookupByToken}'s resolution of a
  * recorded ALLERGEN name, and not #188's collapse of the injector's notes. This one arrives through
@@ -41,7 +48,10 @@ import org.junit.jupiter.api.Test;
  * order name in {@code ScreeningSubjectLabelTest} and in
  * {@code InteractionRouteVariantTest.aSubstanceWithNoRouteUnspecifiedRowStillRaisesOneChip} carries a
  * strength or a form suffix, so no row's own name IS the recorded name and those cases exercise the
- * {@code canonicalRow} fallback unchanged.
+ * {@code canonicalRow} fallback. Still unchanged by issue #250's second rung, and checked rather than
+ * assumed: that rung needs a row whose display name IS its own {@code substanceName}, and the families
+ * those two cases turn on have none reachable — the oxymetazoline rows are all route-qualified, and the
+ * chloroprocaine pair is decided by the FIRST rung before the second is consulted.
  *
  * <p>Every scenario runs the REAL production path: a verbatim DDInter KB slice parsed by the real
  * {@link DdiDrugReferenceSource}, the real {@code validate} entry point, real question strings, GP

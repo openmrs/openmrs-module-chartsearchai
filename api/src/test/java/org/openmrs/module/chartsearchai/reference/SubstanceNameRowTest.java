@@ -50,9 +50,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * leaves as loaded, because splitting the rows would invent the fact the data is missing. Given the
  * merge, this is the other half: which of the merged rows speaks for the substance.
  *
- * <p>Both fixtures are verbatim shipped-KB slices read by the real {@link DdiDrugReferenceSource}, and
- * every scenario runs the real {@code validate} entry point with real question strings and GP reads on
- * their no-context defaults.
+ * <p>Two dataset sources, both read by the real {@link DdiDrugReferenceSource}: one verbatim shipped-KB
+ * slice for the cases that drive {@code validate} and {@code injectRecords} end to end, and the shipped
+ * knowledge base ITSELF for the three cases that assert an invariant over every substance it files as
+ * more than one row. Every scenario runs a real production entry point with real question strings and GP
+ * reads on their no-context defaults.
  */
 public class SubstanceNameRowTest {
 	
@@ -135,7 +137,7 @@ public class SubstanceNameRowTest {
 		// placements is the influenza A/Vietnam antigen, whose elected row carries a display name with a
 		// dropped leading "I" — so this case is also what keeps that typo UNFIXED here, deliberately, as
 		// issue #196's upstream handoff rather than something to repair by re-ranking rows.
-		List<DrugReference> all = new DdiDrugReferenceSource().load();
+		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
 		Map<Object, List<DrugReference>> families = new LinkedHashMap<Object, List<DrugReference>>();
 		for (DrugReference row : all) {
 			Object substance = row.substanceGroupKey();
@@ -200,7 +202,7 @@ public class SubstanceNameRowTest {
 		// a parenthetical of its own, so BOTH rows reduce to the same stem and a stem comparison separates
 		// neither — the fold falls back to dataset order and re-elects the paediatric row, silently giving
 		// back one of the three renames this issue delivers.
-		List<DrugReference> all = new DdiDrugReferenceSource().load();
+		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
 		List<DrugReference> tickBorne = new ArrayList<DrugReference>();
 		for (DrugReference row : all) {
 			if (row.getName().startsWith("Tick-borne encephalitis vaccine")) {
@@ -234,7 +236,7 @@ public class SubstanceNameRowTest {
 		// Its own case rather than more assertions beside the tick-borne one: that case fails on this same
 		// mutation and would stop before reaching these, so folded together only one of the two halves
 		// would ever be observed reddening.
-		List<DrugReference> all = new DdiDrugReferenceSource().load();
+		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
 		List<DrugReference> silverNitrate = new ArrayList<DrugReference>();
 		DrugReference byCode = null;
 		for (DrugReference row : all) {
@@ -249,6 +251,12 @@ public class SubstanceNameRowTest {
 		assertTrue(silverNitrate.size() > 1, "precondition: the silver nitrate family must be several rows,"
 		        + " was: " + DrugReferenceTestSupport.names(silverNitrate));
 		assertNotNull(byCode, "precondition: the shipped dataset must cover " + SILVER_CODE);
+		// The row the weakening would elect must EXIST, or both assertions below compare against a string
+		// no row carries and the case is vacuously green. Measured: with the stem mutation applied and this
+		// constant pointed at a name nothing bears, the case passed while its two siblings failed.
+		assertTrue(DrugReferenceTestSupport.names(silverNitrate).contains(OPHTHALMIC_SILVER),
+		    "precondition: the family must still carry " + OPHTHALMIC_SILVER + ", or nothing here can "
+		            + "witness the stem weakening — was: " + DrugReferenceTestSupport.names(silverNitrate));
 		
 		assertNotEquals(OPHTHALMIC_SILVER, DrugReference.canonicalRow(silverNitrate).getName(),
 		    "no route-qualified presentation may be elected to speak for the substance, was: "
@@ -282,6 +290,43 @@ public class SubstanceNameRowTest {
 		    "and the row the chips name the substance by must be that same row, was: " + group);
 	}
 	
+	@Test
+	public void theRecordStillSaysWhichRowItIsWhereTheFoldNowAgreesWithTheChart() throws Exception {
+		// The regression this rung would have caused on a surface two removes away, found by driving the
+		// real injectRecords rather than by reading the fold. DrugReferenceInjector.rowAttribution prints
+		// "Published by this dataset for X, not for Y — the row this patient's record names" so the model
+		// can tell a record's row from the row every chip beside it names. Its gate used to infer "the
+		// chart chose the subject" by comparing interactionSubject's row against canonicalRow's — a proxy
+		// that held only while the fold could NOT reach the row the chart names. This rung makes it reach
+		// exactly that row, so the proxy read the agreement as "the chart chose nothing" and the clause
+		// vanished from the one arrangement that needs it: the question resolves only the non-elected row,
+		// so the record renders Daxibotulinumtoxina while every chip names Botulinum toxin type A.
+		//
+		// Measured before the fix, on the shipped KB: the clause was printed with the rung disabled and
+		// absent with it enabled — a strict regression, with the whole suite green on both sides.
+		DrugReferenceService service = DrugReferenceTestSupport
+		        .serviceWith(DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+		    DrugReferenceTestSupport.set("Botulinum toxin type A", "Kanamycin"), null, null, null);
+		String question = "Is it safe to give her daxibotulinumtoxina?";
+		
+		List<DrugReference> asked = service.findImpliedByQuery(question);
+		assertEquals(Arrays.asList("Daxibotulinumtoxina"), DrugReferenceTestSupport.names(asked),
+		    "precondition: the question must resolve ONLY the row the fold no longer elects, or the "
+		            + "record and the chip would name the same row and there would be nothing to say");
+		
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+		        .injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Daxibotulinumtoxina");
+		
+		assertNotNull(record, "precondition: the record must be rendered from the row the question named, "
+		        + "was: " + DrugReferenceTestSupport.referenceTexts(chart));
+		assertTrue(record.contains(DrugReferenceTestSupport.ROW_ATTRIBUTION_LEAD),
+		    "a record whose row the chart claims less strongly than a sibling must say so, was: " + record);
+		assertTrue(record.contains("not for Botulinum toxin type A"),
+		    "and must name the row the chart does claim, was: " + record);
+	}
+
 	@Test
 	public void theRecordHasNothingToAttributeWhereTheChartNamesTheRowItRenders() throws Exception {
 		// A consequence of the rename, on the surface that says WHICH row a record is: since the fold now

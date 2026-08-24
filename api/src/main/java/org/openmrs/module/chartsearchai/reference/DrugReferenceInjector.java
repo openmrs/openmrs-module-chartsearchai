@@ -749,8 +749,9 @@ public class DrugReferenceInjector {
 			// than an assertion because a future third leg would otherwise silently get a null group.
 			List<DrugReference> group = subjectRows.get(substance.getKey());
 			List<DrugReference> rows = group == null ? injected : group;
-			subjects.put(DrugReference.canonicalRow(injected),
-					new SubstanceRendering(rows, chartAnchoredSubject(rows, context)));
+			DrugReference rendered = DrugReference.canonicalRow(injected);
+			subjects.put(rendered,
+					new SubstanceRendering(rows, chartAnchoredSubject(rendered, rows, context)));
 		}
 		return subjects;
 	}
@@ -789,14 +790,21 @@ public class DrugReferenceInjector {
 	 *         particular", which is the common case and the one {@link #rowAttribution} must stay silent
 	 *         on.
 	 *
-	 *         <p><b>Why the question is asked twice.</b>
-	 *         {@link DrugSafetyValidator#interactionSubject} composes two rankings: the chart's claim
-	 *         first, then {@link DrugReference#canonicalRow} among the rows tied on it. Both steps
-	 *         answer, always — so its answer alone cannot say WHICH step decided, and a caller that
-	 *         wants only the chart-driven half has to ask the fold on its own and compare. Where they
-	 *         agree, no recorded name out-claimed any other row and the answer is the dataset's, not the
-	 *         patient's. This is a READ of the two accessors and not a third ranking: neither predicate
-	 *         is re-expressed here, and the composition still lives in exactly one place.
+	 *         <p><b>Why the chart is asked directly (issue #250).</b>
+	 *         {@link DrugSafetyValidator#interactionSubject} composes two rankings — the chart's claim
+	 *         first, then {@link DrugReference#canonicalRow} among the rows tied on it — and both steps
+	 *         answer, always, so its answer alone cannot say WHICH step decided. This used to infer that
+	 *         by comparing its row against the fold's: where they agreed, no recorded name had
+	 *         out-claimed any other row. That was a PROXY, and it held only while the fold could not
+	 *         reach the row the chart names. Issue #250's second rung made the fold reach exactly that
+	 *         row for three shipped substances, and the proxy then read agreement as "the chart chose
+	 *         nothing" — suppressing this clause on the arrangement that needs it most, where the record
+	 *         renders one row and every chip beside it names another. So the question is now put to the
+	 *         chart itself ({@link DrugSafetyValidator#recordNamesMoreStrongly}, asked of the row this
+	 *         record RENDERS): does the patient's own record claim the subject more strongly than the row
+	 *         published here? That is what this clause's sentence asserts, and unlike the proxy it cannot
+	 *         drift as the fold's rungs change. Still a READ of the existing accessors and not a third
+	 *         ranking — the composition that decides a subject stays in one place.
 	 *
 	 *         <p>It matters because {@code rowAttribution}'s sentence says "the row this patient's record
 	 *         names". Widening the group to every row the pass resolved (see the caller) makes the fold
@@ -822,10 +830,10 @@ public class DrugReferenceInjector {
 	 *         guess — see {@code DrugSafetyValidator.ceilingAttribution}, whose wording was settled by
 	 *         issue #244 against measured alternatives.
 	 */
-	private static DrugReference chartAnchoredSubject(List<DrugReference> rows,
+	private static DrugReference chartAnchoredSubject(DrugReference rendered, List<DrugReference> rows,
 			PatientClinicalContext context) {
 		DrugReference subject = DrugSafetyValidator.interactionSubject(rows, context);
-		return subject == DrugReference.canonicalRow(rows) ? null : subject;
+		return DrugSafetyValidator.recordNamesMoreStrongly(subject, rendered, context) ? subject : null;
 	}
 
 	/**

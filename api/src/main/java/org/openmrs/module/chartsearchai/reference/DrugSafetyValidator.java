@@ -2072,10 +2072,7 @@ public class DrugSafetyValidator {
 		List<DrugReference> strongest = new ArrayList<DrugReference>();
 		int best = DrugReference.NAME_NO_MATCH;
 		for (DrugReference row : rows) {
-			int claim = DrugReference.NAME_NO_MATCH;
-			for (String recorded : recordedNames) {
-				claim = Math.max(claim, row.nameMatchStrength(recorded));
-			}
+			int claim = recordedClaim(row, recordedNames);
 			if (claim > best) {
 				best = claim;
 				strongest.clear();
@@ -2091,6 +2088,52 @@ public class DrugSafetyValidator {
 	 *          evidence {@link #interactionSubject} anchors a substance's representative row on. */
 	private static Collection<String> recordedDrugNames(PatientClinicalContext context) {
 		return context == null ? Collections.<String> emptySet() : context.getActiveDrugNames();
+	}
+
+	/** @return the strongest claim any of {@code recordedNames} makes on {@code row}
+	 *          ({@link DrugReference#nameMatchStrength}), or {@link DrugReference#NAME_NO_MATCH} when none
+	 *          of them names it — the per-row step {@link #strongestClaimants} takes a maximum over,
+	 *          extracted so {@link #recordNamesMoreStrongly} asks it the same way rather than re-deriving
+	 *          "how strongly does the chart claim this row" a second time. */
+	private static int recordedClaim(DrugReference row, Collection<String> recordedNames) {
+		int claim = DrugReference.NAME_NO_MATCH;
+		for (String recorded : recordedNames) {
+			claim = Math.max(claim, row.nameMatchStrength(recorded));
+		}
+		return claim;
+	}
+
+	/**
+	 * @return whether the patient's own record claims {@code row} MORE STRONGLY than it claims
+	 *         {@code than} — the question {@code DrugReferenceInjector.rowAttribution}'s sentence
+	 *         asserts, since that sentence says the row it names is "the row this patient's record
+	 *         names" and the row it contrasts is the one the record was published for.
+	 *
+	 *         <p><b>Why this and not "the fold and the chart disagree" (issue #250).</b>
+	 *         {@code chartAnchoredSubject} used to answer by comparing
+	 *         {@link #interactionSubject}'s row against {@link DrugReference#canonicalRow}'s — a proxy,
+	 *         which held only while the fold could not reach the row the chart names. Issue #250's second
+	 *         rung made it reach that row for three shipped substances, and the proxy then read their
+	 *         agreement as "the chart chose nothing": measured over the shipped KB through the real
+	 *         {@code injectRecords}, a question naming {@code daxibotulinumtoxina} for a patient ordered
+	 *         {@code Botulinum toxin type A} rendered a record titled {@code Daxibotulinumtoxina} beside a
+	 *         chip naming {@code Botulinum toxin type A}, and the clause reconciling them — which that
+	 *         same arrangement printed before the rung — was suppressed. Asking the chart directly is what
+	 *         the sentence needed all along, and it cannot drift as the fold changes.
+	 *
+	 *         <p>It is a READ of {@link DrugReference#nameMatchStrength} through
+	 *         {@link #recordedClaim}, the same per-row step {@link #strongestClaimants} uses, and not a
+	 *         second ranking: the composition that decides a SUBJECT still lives only in
+	 *         {@link #interactionSubject}. What this decides is whether a record may say the chart
+	 *         preferred one of its siblings.
+	 */
+	static boolean recordNamesMoreStrongly(DrugReference row, DrugReference than,
+			PatientClinicalContext context) {
+		if (row == null || than == null || row == than) {
+			return false;
+		}
+		Collection<String> recorded = recordedDrugNames(context);
+		return recordedClaim(row, recorded) > recordedClaim(than, recorded);
 	}
 
 	/**

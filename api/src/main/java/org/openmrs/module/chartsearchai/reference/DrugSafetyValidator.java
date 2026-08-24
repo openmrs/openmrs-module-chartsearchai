@@ -4002,8 +4002,9 @@ public class DrugSafetyValidator {
 	 * @return one {@link RecordedAllergen} per distinct resolution, in the order the context lists the
 	 *         tokens — the input to {@link #addAllergyContraindications}, resolved once per
 	 *         {@code validate} because it does not depend on the subject being checked. Each carries
-	 *         the chart's own string and the substances it implies, plus which of those it NAMES
-	 *         (issue #268): the arm reasons over all of them and may quote only the named ones.
+	 *         its charted allergen token and the substances it implies, plus which of those it NAMES
+	 *         (issue #268): the arm reasons over all of them, and only a named one may be reported as
+	 *         the allergy itself.
 	 *
 	 *         <p>De-duplicated on the whole resolved LIST rather than on one row of it — this is the
 	 *         {@code seenAllergens} guard that used to live inside the arm, widened because one row is

@@ -63,9 +63,10 @@ public class RecordedAllergenChipNameTest {
 	@Test
 	public void aRowTheRecordedNameDoesNotNameIsNotAnnouncedAsTheRecordedAllergy() throws IOException {
 		// THE case, and the one the fixture's own metadata records as having produced a false LIVE label.
-		// The patient is allergic to Kadcyla; the question is about Enhertu, a different drug. Both rows
-		// publish the other's name, so the allergen arm reaches both substances — which is right, because
-		// the class comparisons must see both — but only ONE of them is something the chart says.
+		// The patient is allergic to Kadcyla; the question is about Enhertu, a different drug. All three
+		// trastuzumab rows share one CIEL list, so the allergen arm reaches all three substances — which
+		// is right, because the class comparisons must see them — but of the two this question puts in
+		// play, only Trastuzumab is something the chart's own string says.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(SHARED_CIEL_LIST);
 		assertEquals("[Trastuzumab, Trastuzumab deruxtecan, Trastuzumab emtansine]",
 				DrugReferenceTestSupport.names(service.findImpliedSubstances(KADCYLA)).toString(),

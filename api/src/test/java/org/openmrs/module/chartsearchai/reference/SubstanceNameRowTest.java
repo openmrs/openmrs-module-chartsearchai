@@ -50,11 +50,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * leaves as loaded, because splitting the rows would invent the fact the data is missing. Given the
  * merge, this is the other half: which of the merged rows speaks for the substance.
  *
- * <p>Two dataset sources, both read by the real {@link DdiDrugReferenceSource}: one verbatim shipped-KB
- * slice for the cases that drive {@code validate} and {@code injectRecords} end to end, and the shipped
- * knowledge base ITSELF for the three cases that assert an invariant over every substance it files as
- * more than one row. Every scenario runs a real production entry point with real question strings and GP
- * reads on their no-context defaults.
+ * <p>Two dataset sources, both read by the real {@link DdiDrugReferenceSource}, and which a case takes
+ * follows from what it asserts rather than from a list here — an earlier version of this sentence
+ * enumerated them and went stale twice in eight commits. A case asserting a property of the SHIPPED
+ * dataset reads the shipped knowledge base ({@code DrugReferenceTestSupport.shippedEntries}); a case
+ * asserting particular chip or record TEXT reads a verbatim slice, so a refresh that leaves one family
+ * alone cannot rewrite what it expects. Every scenario runs a real production entry point with real
+ * question strings and GP reads on their no-context defaults.
  */
 public class SubstanceNameRowTest {
 	
@@ -304,10 +306,14 @@ public class SubstanceNameRowTest {
 		//
 		// Measured before the fix, on the shipped KB: the clause was printed with the rung disabled and
 		// absent with it enabled — a strict regression, with the whole suite green on both sides.
+		// On the verbatim slice and not the shipped KB, per shippedEntries()' own rule: this asserts record
+		// TEXT, so a refresh touching that family must not be able to rewrite what it expects. The slice
+		// carries the same two rows in the same order, and Botulinum Toxin Type B is its rated partner.
 		DrugReferenceService service = DrugReferenceTestSupport
-		        .serviceWith(DrugReferenceTestSupport.shippedEntries());
+		        .ddiFixtureService(DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY);
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
-		    DrugReferenceTestSupport.set("Botulinum toxin type A", "Kanamycin"), null, null, null);
+		    DrugReferenceTestSupport.set("Botulinum toxin type A", "Botulinum Toxin Type B"), null, null,
+		    null);
 		String question = "Is it safe to give her daxibotulinumtoxina?";
 		
 		List<DrugReference> asked = service.findImpliedByQuery(question);
@@ -339,10 +345,12 @@ public class SubstanceNameRowTest {
 		// issue #269 removed from the section beside it, where `opium` matched an allergen recorded as
 		// `Tiotropium`. Strictly-greater alone admits it: rank 0 beats a sibling's NAME_NO_MATCH.
 		//
-		// The shipped KB supplies the arrangement, and the two rows are DIFFERENT substances, which is what
-		// makes the suppressed sentence a false one rather than a merely weak one: an order recorded
-		// `Insulin human (isophane)` is filed under `insulin isophane`, while the row whose name it
-		// contains is filed under `insulin, regular, human`.
+		// The shipped KB supplies the arrangement, and what makes the suppressed sentence FALSE rather than
+		// merely weak is not the pair — those two rows are one substance, which is the precondition below
+		// and the only reason a record of one contrasts with the other. It is the recorded ORDER: `Insulin
+		// human (isophane)` is filed under `insulin isophane`, a THIRD substance, while the row whose name
+		// that string merely contains is filed under `insulin, regular, human`. So without the floor the
+		// clause says this patient's chart names a row of a substance the chart does not record.
 		//
 		// Asserted at the gate rather than on rendered prose, deliberately and with the reason stated: the
 		// end-to-end path is silent here for a SECOND reason (the injector's relevance gate), so a prose

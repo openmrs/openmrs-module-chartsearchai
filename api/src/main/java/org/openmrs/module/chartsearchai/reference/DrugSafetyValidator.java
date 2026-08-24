@@ -1958,7 +1958,7 @@ public class DrugSafetyValidator {
 	 *         files the family under, which here is {@code Botulinum toxin type A} — so the fold now
 	 *         reaches this case's answer unaided, and the family it was demonstrated on can no longer
 	 *         demonstrate it. The chart-anchoring step below is unchanged and still decides every family
-	 *         whose rows tie on BOTH rungs, which is most of them; where it is pinned moved with the
+	 *         whose rows tie on BOTH rungs; where it is pinned moved with the
 	 *         example, to the COVID pair in {@code OrderedSubjectRowTest
 	 *         .theOrderNamedRowIsNamedWhereTheFoldCannotReachIt}, whose two rows tie on both.
 	 *
@@ -2145,10 +2145,16 @@ public class DrugSafetyValidator {
 		// asserting "the row this patient's record names" on that is the overclaim issue #269 removed from
 		// the section beside this one, where `opium` matched an allergen recorded as `Tiotropium`. The
 		// strictly-greater comparison alone admits it, at rank 0 against a rendered row at NAME_NO_MATCH:
-		// measured over the shipped KB through this method, 6 such arrangements exist today and all 6 are
-		// benign same-family shapes (an order recorded `Procaine benzylpenicillin` against a
-		// `Benzylpenicillin` subject, `Insulin human (isophane)` against `Insulin human`), so nothing
-		// false ships either way — but the floor is what stops a dataset refresh from making one, and the
+		// measured over the shipped KB through this method, 6 such arrangements exist today — an order
+		// recorded `Procaine benzylpenicillin` against a `Benzylpenicillin` subject, `Insulin human
+		// (isophane)` against `Insulin human`. Nothing false is PRINTED for them, because the injector's
+		// relevance gate is silent there too; but the sentence each would license IS false, and for a
+		// reason worth stating exactly, since it is easy to misread. The pair being compared is one
+		// substance — that is what makes a record of one row contrast with the other at all. What the
+		// chart records is a THIRD: `Insulin human (isophane)` is filed under `insulin isophane`, while the
+		// row whose name it merely contains is filed under `insulin, regular, human`. So the clause would
+		// say the chart names a row of a substance the chart does not record. The floor is also what stops a
+		// dataset refresh turning one of these into printed text, and the
 		// hazard is exactly the one `nameMatchStrength`'s own javadoc records for that rank (`Lactate`
 		// inside `Ciprofloxacin lactate`, two different substances). Those 6 are silent both before this
 		// method existed and after the floor, so it costs nothing that was ever printed.

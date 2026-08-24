@@ -48,6 +48,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 40: A partner's name source has one write path](#decision-40-a-partners-name-source-has-one-write-path)
 - [Decision 41: A composite claim's negative says nothing about the citation](#decision-41-a-composite-claims-negative-says-nothing-about-the-citation)
 - [Decision 42: A recorded clause needs corroboration, not just a match](#decision-42-a-recorded-clause-needs-corroboration-not-just-a-match)
+- [Decision 43: A substance is named by the row the data files it under](#decision-43-a-substance-is-named-by-the-row-the-data-files-it-under)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 

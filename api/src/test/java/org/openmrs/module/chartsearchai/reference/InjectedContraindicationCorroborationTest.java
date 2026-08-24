@@ -68,8 +68,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * dropped: {@code DrugReferenceInjector.render} records two live-measured failures of naming some
  * clauses and leaving the rest to inference.
  *
- * <p>Every case drives the real {@code injectRecords} wired to the real {@code DrugSafetyValidator} over
- * a dataset parsed by the real production parser, and reads the record a model would read.
+ * <p>Every case that reads a RECORD drives the real {@code injectRecords} wired to the real
+ * {@code DrugSafetyValidator} over a dataset parsed by the real production parser, and reads the record
+ * a model would read. {@link #theThreeSectionLeadsAreTheWordsAModelReads} reads no record — it is the
+ * one case here that pins the section leads' own words, which every other assertion reads from
+ * production and therefore cannot see.
  */
 public class InjectedContraindicationCorroborationTest {
 
@@ -106,12 +109,22 @@ public class InjectedContraindicationCorroborationTest {
 		return record.substring(start + lead.length(), end);
 	}
 
+	/** A service over {@code fixture}, parsed by the real production parser. */
+	private static DrugReferenceService fixtureService(String fixture) throws IOException {
+		return DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(fixture));
+	}
+
 	/** The rendered {@code drug_reference} record for the entry named {@code drug}, through the real
-	 *  injector and the real validator over {@code fixture}. */
-	private static String record(String fixture, String drug, String question,
-			PatientClinicalContext context) throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.fixtureEntries(fixture));
+	 *  injector and the real validator over {@code service}.
+	 *
+	 *  <p>The service is the CALLER's, not one built here: a case that asserts a precondition through
+	 *  {@code findImpliedSubstances} must assert it of the very instance the record is rendered from,
+	 *  or any instance-scoped behaviour — a memo, a lazily loaded group file, an entry-count guard —
+	 *  lets the precondition pass while describing another object. That is how
+	 *  {@code SelfNamedAllergyRuleRankTest} does it, and it is also what lets the shipped curated seed
+	 *  reach this helper instead of re-inlining it. */
+	private static String record(DrugReferenceService service, String drug, String question,
+			PatientClinicalContext context) {
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
 		String record = DrugReferenceTestSupport.referenceTextNaming(chart, drug);
@@ -162,7 +175,7 @@ public class InjectedContraindicationCorroborationTest {
 		// contains the rule's token `opium` and which neither corroborating question can reach —
 		// allergensMatching("opium") yields [tiotropium], which does not NAME Opium, and
 		// findImpliedSubstances("Tiotropium") is [Tiotropium], which is not Opium's substance.
-		String record = record(MID_WORD_TOKEN, "Opium", "Is it safe to give her opium?",
+		String record = record(fixtureService(MID_WORD_TOKEN), "Opium", "Is it safe to give her opium?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Tiotropium"), null));
 
@@ -186,8 +199,7 @@ public class InjectedContraindicationCorroborationTest {
 		// (SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE's javadoc) — so the same injection carries it as a
 		// citable finding. This change is the record's and only the record's; the finding channel is a
 		// separate decision on separate evidence.
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.fixtureEntries(MID_WORD_TOKEN));
+		DrugReferenceService service = fixtureService(MID_WORD_TOKEN);
 		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(
 				DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
 						DrugReferenceTestSupport.oneRecordChart(),
@@ -206,7 +218,7 @@ public class InjectedContraindicationCorroborationTest {
 	public void aRuleTheAllergenRecordNamesIsStillTheChartsOwnReading() throws IOException {
 		// The control that separates this from deleting the reading: the same entry, the same rule, and
 		// an allergy recorded under the very name the token is.
-		String record = record(MID_WORD_TOKEN, "Opium", "Is it safe to give her opium?",
+		String record = record(fixtureService(MID_WORD_TOKEN), "Opium", "Is it safe to give her opium?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Opium"), null));
 
@@ -224,13 +236,12 @@ public class InjectedContraindicationCorroborationTest {
 		// does not CONTAIN the token `opium`, so it is not among the rule's witnesses at all and the
 		// rank's per-witness question answers no. Hedging here would understate a real allergy in citable
 		// evidence, which is the opposite of the defect this class exists for.
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.fixtureEntries(MID_WORD_TOKEN));
+		DrugReferenceService service = fixtureService(MID_WORD_TOKEN);
 		assertEquals("[Opium]",
 				DrugReferenceTestSupport.names(service.findImpliedSubstances("Papaveretum")).toString(),
 				"precondition: the allergen arm must genuinely resolve that record to Opium");
 
-		String record = record(MID_WORD_TOKEN, "Opium", "Is it safe to give her opium?",
+		String record = record(service, "Opium", "Is it safe to give her opium?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Papaveretum", "Tiotropium"), null));
 
@@ -246,8 +257,8 @@ public class InjectedContraindicationCorroborationTest {
 		// the token: Levothyroxine publishes `thyroxine` among its own names and rules on THAT name, so an
 		// allergy recorded as `Levothyroxine` reaches the token only mid-word while the ENTRY is exactly
 		// what the chart named.
-		String record = record(MID_WORD_TOKEN, "Levothyroxine", "Is it safe to give her levothyroxine?",
-				DrugReferenceTestSupport.ctx(60, null, null, null,
+		String record = record(fixtureService(MID_WORD_TOKEN), "Levothyroxine",
+				"Is it safe to give her levothyroxine?", DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Levothyroxine"), null));
 
 		assertEquals("documented thyroxine allergy — anaphylaxis", sectionAfter(record, RECORDED_LEAD),
@@ -263,16 +274,15 @@ public class InjectedContraindicationCorroborationTest {
 		// aliasing `ketoconazole`, does not. So the arm's set does not hold its substance, while the
 		// recorded name IS one of its names: the chip rank keeps the full SELF_NAMED_RULE here, and a
 		// set-only reading would hedge the record beside an undemoted chip.
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.fixtureEntries(BORROWED_ALIAS));
+		DrugReferenceService service = fixtureService(BORROWED_ALIAS);
 		assertEquals("[Ketoconazole]",
 				DrugReferenceTestSupport.names(service.findImpliedSubstances("Ketoconazole")).toString(),
 				"precondition: the allergen arm must NOT reach the aliasing entry, or there is nothing "
 						+ "for the naming question to add");
 
-		String record = record(BORROWED_ALIAS, "Levoketoconazole",
-				"Is it safe to give her levoketoconazole?", DrugReferenceTestSupport.ctx(60, null, null,
-						null, DrugReferenceTestSupport.set("Ketoconazole"), null));
+		String record = record(service, "Levoketoconazole", "Is it safe to give her levoketoconazole?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Ketoconazole"), null));
 
 		assertEquals("documented ketoconazole allergy — documented levo allergy",
 				sectionAfter(record, RECORDED_LEAD),
@@ -288,14 +298,13 @@ public class InjectedContraindicationCorroborationTest {
 		// `Levocetirizine` reaches the token `levo` only mid-word, with a six-letter tail no inflection
 		// rule allows, and resolves to no entry of this fixture at all; `Ketoconazole` names the entry.
 		// One clause, and the corroborated rule decides it.
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.fixtureEntries(BORROWED_ALIAS));
+		DrugReferenceService service = fixtureService(BORROWED_ALIAS);
 		assertTrue(service.findImpliedSubstances("Levocetirizine").isEmpty(),
 				"precondition: the uncorroborated witness must reach no substance of this fixture");
 
-		String record = record(BORROWED_ALIAS, "Levoketoconazole",
-				"Is it safe to give her levoketoconazole?", DrugReferenceTestSupport.ctx(60, null, null,
-						null, DrugReferenceTestSupport.set("Ketoconazole", "Levocetirizine"), null));
+		String record = record(service, "Levoketoconazole", "Is it safe to give her levoketoconazole?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Ketoconazole", "Levocetirizine"), null));
 
 		assertEquals("documented ketoconazole allergy — documented levo allergy",
 				sectionAfter(record, RECORDED_LEAD),
@@ -314,8 +323,13 @@ public class InjectedContraindicationCorroborationTest {
 		// other the denial, and printing both would have the record say the module both could and could
 		// not answer for those words. The denial yields, because of the two it is the only one that can
 		// be false of the string.
-		String record = record(BORROWED_ALIAS, "Codeine", "Is it safe to give her codeine?",
-				DrugReferenceTestSupport.ctx(60, null, null, null,
+		//
+		// The LIST that follows reads "opioid reaction; opioid reaction" — two rules of two keys carrying
+		// one note, which byRule renders twice because its em-dash join is per key. Pre-existing (issue
+		// #190 item 1 collapses per rule, and these are two rules), and this fixture is simply the first
+		// thing to author the shape; the sections are what this case is about.
+		String record = record(fixtureService(BORROWED_ALIAS), "Codeine",
+				"Is it safe to give her codeine?", DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Dihydrocodeine"), null));
 
 		assertEquals("opioid reaction", sectionAfter(record, UNCORROBORATED_LEAD),
@@ -332,8 +346,8 @@ public class InjectedContraindicationCorroborationTest {
 		// is on record, so its key is recorded while the allergy rule's key is uncorroborated — one clause
 		// string wanted by both. The recorded section keeps it: it is the one that can be true of the
 		// words, which is the rule this file's third section was slotted into rather than a new one.
-		String record = record(BORROWED_ALIAS, "Codeine", "Is it safe to give her codeine?",
-				DrugReferenceTestSupport.ctx(60, null, null, null,
+		String record = record(fixtureService(BORROWED_ALIAS), "Codeine",
+				"Is it safe to give her codeine?", DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Dihydrocodeine"),
 						DrugReferenceTestSupport.set("Respiratory depression")));
 
@@ -356,14 +370,9 @@ public class InjectedContraindicationCorroborationTest {
 				"precondition: the allergen arm must resolve no substance from a class name, or this "
 						+ "case cannot separate the scope from the corroboration");
 
-		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
-				DrugReferenceTestSupport.oneRecordChart(),
+		String record = record(service, "Ibuprofen", "Is ibuprofen safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
-						DrugReferenceTestSupport.set("NSAIDs"), null),
-				"Is ibuprofen safe for her?");
-		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Ibuprofen");
-		assertNotNull(record, "no ibuprofen reference record was injected: "
-				+ DrugReferenceTestSupport.referenceTexts(chart));
+						DrugReferenceTestSupport.set("NSAIDs"), null));
 
 		assertEquals("NSAID hypersensitivity", sectionAfter(record, RECORDED_LEAD),
 				"a class-token rule is stated as the chart's own reading, unchanged, was: " + record);

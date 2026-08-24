@@ -118,10 +118,13 @@ public class DrugReferenceInjector {
 	/** The lead of the reading's third section (issue #269): a clause the patient's chart matched, but
 	 *  which nothing corroborates — see {@link #contraindicationSections} and {@link #corroborated}.
 	 *
-	 *  <p>Neither an assertion nor a denial, and worded as a CONTRAST for issue #244's reason: the
-	 *  record says what the match rests on and leaves the sentence a fact about the EVIDENCE.
+	 *  <p>It asserts no contraindication and denies none, and is worded as a CONTRAST for issue #244's
+	 *  reason: the record says what the match rests on and leaves the sentence a fact about the EVIDENCE.
+	 *  It does speak ABOUT the chart — "Matched in this patient's chart" — which is what puts it on the
+	 *  {@code drugSafety} switches' side of {@link #render}'s divide, with the two sections beside it
+	 *  ({@code InjectedContraindicationCorroborationToggleContextTest}).
 	 *
-	 *  <p><b>It states what the MODULE established and deliberately nothing about the chart.</b> An
+	 *  <p><b>What it must not be is a CATEGORICAL about the chart.</b> An
 	 *  earlier wording said "not by a recorded allergy to this drug", and that is a categorical the
 	 *  chart can contradict: both of {@link #corroborated}'s legs can miss a recorded allergy that
 	 *  really does name the drug, because the first sees only the witnesses of THIS rule's token and
@@ -303,7 +306,6 @@ public class DrugReferenceInjector {
 			return chart;
 		}
 
-		Integer age = context != null ? context.getAgeYears() : null;
 		StringBuilder text = new StringBuilder(chart.getText());
 		List<RecordMapping> mappings = new ArrayList<RecordMapping>(chart.getMappings());
 		int index = mappings.size() + 1;
@@ -323,12 +325,11 @@ public class DrugReferenceInjector {
 		// other GP read in this class is hoisted to a once-per-injection site for the same reason
 		// LlmInferenceService gives for trusting the chart over a re-read — a flag that flips mid-loop
 		// would leave record [7] carrying a patient-specific reading and record [8] not.
-		ContraindicationReading reading =
-				new ContraindicationReading(statesTheChartsContraindicationReading(context), context);
+		ContraindicationReading reading = new ContraindicationReading(context);
 		for (Map.Entry<DrugReference, SubstanceRendering> match : matched.entrySet()) {
 			DrugReference ref = match.getKey();
 			RenderedReference rendered =
-					render(ref, age, orderEntries, reading, match.getValue());
+					render(ref, orderEntries, reading, match.getValue());
 			// The rendering's own bookkeeping rides on the mapping, not in the line — see
 			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
 			// grounding verifier still compares against exactly what the model read.
@@ -1477,14 +1478,18 @@ public class DrugReferenceInjector {
 	 * anything at all ({@link #statesTheChartsContraindicationReading}) and, where it may, which
 	 * substances their recorded allergies imply ({@link DrugSafetyValidator#allergicSubstanceKeys}).
 	 *
-	 * <p><b>One value rather than two arguments</b>, and the set is DERIVED here rather than supplied by
-	 * a caller — so "may state the reading" paired with an empty set is not something any call site can
-	 * construct. That is the shape issue #298 removed for a partner's name source: two facts that must
-	 * agree, handed separately, agree only by the caller's care, and here a wrongly-empty set would
-	 * report every self-named allergy rule as uncorroborated. Deriving it needs no structural guard to
-	 * hold it, which passing it would.
+	 * <p><b>NOTHING is supplied but the chart.</b> Whether the reading may be stated, the allergic
+	 * substance keys and the service they are resolved from are all DERIVED here, so there is no pair a
+	 * call site can hand over disagreeing — which is issue #298's discipline, whose own words are that
+	 * "no constructor takes the label and the flag as separate arguments". Two earlier versions of this
+	 * class fell short of it and each was found by a reviewer constructing the pair: taking the SERVICE
+	 * left a set resolved from another dataset, and taking the FLAG left the worse half — measured,
+	 * {@code new ContraindicationReading(true, null)} rendered
+	 * "Not recorded for this patient: documented opium allergy", a denial about a chart nobody read,
+	 * which is issue #208 item 2 with the sign flipped. Deriving needs no structural guard to hold it,
+	 * which passing would.
 	 *
-	 * <p><b>An INNER class, not a static one, so the SERVICE is not an argument either.</b>
+	 * <p><b>An INNER class, not a static one, so the service is derivable at all.</b>
 	 * {@link DrugSafetyValidator#allergicSubstanceKeys} compares
 	 * {@link DrugReference#substanceGroupKey()}, which is the ROW ITSELF for an entry publishing no
 	 * substance name — so a set resolved from a different {@link DrugReferenceService} than the rendered
@@ -1511,8 +1516,8 @@ public class DrugReferenceInjector {
 
 		private Set<Object> allergicSubstanceKeys;
 
-		ContraindicationReading(boolean states, PatientClinicalContext context) {
-			this.states = states;
+		ContraindicationReading(PatientClinicalContext context) {
+			this.states = statesTheChartsContraindicationReading(context);
 			this.context = context;
 		}
 
@@ -1606,7 +1611,11 @@ public class DrugReferenceInjector {
 	 * patient's allergy list, and two records of one chart must not disagree about whether — or about
 	 * what — this patient's chart records.
 	 *
-	 * <p>The chart is read off {@code reading} and is NOT a parameter of its own. It orders the capped
+	 * <p>The chart is read off {@code reading}, and so is the AGE derived from it — neither is a
+	 * parameter of its own, because a second source for either lets one record's dose bands and its
+	 * patient reading describe different patients. Private for the same reason there is one source: the
+	 * only argument that could reach it from outside is a {@code ContraindicationReading}, which nothing
+	 * outside can construct. It orders the capped
 	 * {@code Interactions:} section — see {@link #orderedInteractionNotes} — and it splits the
 	 * contraindication list into what this patient's chart records, what it does not, and (issue #269)
 	 * what it matched but nothing corroborates (issue #208 item 2, {@link #contraindicationSections}).
@@ -1627,9 +1636,10 @@ public class DrugReferenceInjector {
 	 * chart says nothing — every entry of every bundled dataset — this method's output is byte-identical
 	 * to what it produced before issues #237/#259.
 	 */
-	static RenderedReference render(DrugReference ref, Integer age, List<DrugReference> orderEntries,
+	private static RenderedReference render(DrugReference ref, List<DrugReference> orderEntries,
 			ContraindicationReading reading, SubstanceRendering substance) {
 		PatientClinicalContext context = reading.context();
+		Integer age = context != null ? context.getAgeYears() : null;
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
 		StringBuilder paren = new StringBuilder();
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {
@@ -2053,10 +2063,10 @@ public class DrugReferenceInjector {
 	 *  never computed. Otherwise they are subsets of {@code clauses} in clause order and pairwise
 	 *  disjoint, and together they are every clause but ONE shape: a rule
 	 *  {@link DrugSafetyValidator#evaluatesAgainstTheChart} rejects is in the LIST and in no section,
-	 *  because the record may not say a patient does not have something nobody checked. Issue #269
-	 *  reduced that from two by giving the other shape a section of its own — {@code uncorroborated}, a
-	 *  clause the chart matched that {@link #corroborated} could not support, which is neither a claim
-	 *  nor a denial. */
+	 *  because the record may not say a patient does not have something nobody checked. Issue #269 did
+	 *  not change WHAT is excluded — the clause it moved was in the recorded section, which was the
+	 *  defect — and gave it a section of its own: {@code uncorroborated}, a clause the chart matched
+	 *  that {@link #corroborated} could not support, which is neither a claim nor a denial. */
 	private static final class ContraindicationSections {
 
 		private final Collection<String> clauses;

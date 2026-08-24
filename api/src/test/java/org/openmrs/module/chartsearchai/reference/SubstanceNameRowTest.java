@@ -263,11 +263,16 @@ public class SubstanceNameRowTest {
 		    "precondition: the family must still carry " + OPHTHALMIC_SILVER + ", or nothing here can "
 		            + "witness the stem weakening — was: " + DrugReferenceTestSupport.names(silverNitrate));
 		
+		// Not "no qualified row may be elected" — every row of this family is qualified and one of them IS
+		// elected, which is the 10-family case canonicalRow's own @return documents. What must not happen
+		// is the OPHTHALMIC presentation taking the role: the fold decides nothing here today, and this is
+		// what stops it starting to decide for that row.
 		assertNotEquals(OPHTHALMIC_SILVER, DrugReference.canonicalRow(silverNitrate).getName(),
-		    "no route-qualified presentation may be elected to speak for the substance, was: "
+		    "the ophthalmic presentation must not be elected to speak for the substance, was elected from "
 		            + DrugReferenceTestSupport.names(silverNitrate));
 		assertNotEquals(OPHTHALMIC_SILVER, byCode.getName(),
-		    "nor may it become the entry a class chip names for " + SILVER_CODE);
+		    "nor may it become the entry a class chip names for " + SILVER_CODE + ", was: "
+		            + byCode.getName());
 	}
 
 	@Test

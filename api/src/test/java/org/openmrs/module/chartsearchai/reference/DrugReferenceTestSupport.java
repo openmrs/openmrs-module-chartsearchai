@@ -623,8 +623,9 @@ public final class DrugReferenceTestSupport {
 	 * dataset, and the two answer differently by three orders of magnitude in row count.
 	 *
 	 * <p>Here rather than inlined for the reason {@link #row} records — the idiom was written out at
-	 * three call sites in one class and at more in others, and a dataset accessor that lives in one place
-	 * cannot come to mean two things. Use it for an invariant over every substance the KB files as more
+	 * several call sites in one class and at more in others, and a dataset accessor that lives in one
+	 * place cannot come to mean two things. (A count stood here and went stale within two commits, which
+	 * is why it is now a word.) Use it for an invariant over every substance the KB files as more
 	 * than one row; use a verbatim slice for anything that asserts specific chip or record TEXT, so the
 	 * case does not depend on a KB refresh leaving one family alone.
 	 */

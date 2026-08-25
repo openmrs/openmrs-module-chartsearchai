@@ -467,6 +467,56 @@ public class UncorroboratedFindingProvenanceTest {
 	}
 
 	@Test
+	public void aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded() throws IOException {
+		// The exact complement of the case above, and what pins the pre-pass's own opening guard: it
+		// seeds corroboratedClauses only from rules that MATCHED this chart
+		// (`recordedContraindicationKind(c, context) == null` -> continue). That guard is load-bearing
+		// twice over. corroboratedByTheChart answers TRUE unconditionally for anything that is not a
+		// self-named allergy rule, and contraindicationClauses renders a clause for every rule of the
+		// entry whether it matched or not — so an UNMATCHED rule reaching the fold seeds its key TRUE,
+		// puts that key's clause into statedAsRecorded and clears the finding's provenance, while the
+		// injected record beside it goes on hedging that very string. That is issue #308's own
+		// contradiction, one rule along.
+		//
+		// Same Codeine entry and same allergen as the case above, with the recorded CONDITION taken
+		// away: the allergy rule on `codeine` still matches an allergen recorded as `Dihydrocodeine`
+		// mid-word and corroborates nothing, while the condition rule on `respiratory depression` — the
+		// rule that carries the same note, `opioid reaction`, and is corroborated by construction for
+		// not being self-named — is now matched by nothing in the chart and may not speak for it.
+		//
+		// Delete that `continue` from the PRE-PASS (leaving `Object key = contraindicationFinding(ref,
+		// c);` as the loop's first statement) and read the failure: the two preconditions below still
+		// hold — the record goes on hedging `opioid reaction` and states nothing as recorded — while the
+		// finding beside it goes bare.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(BORROWED_ALIAS));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Dihydrocodeine"), null),
+						"Is it safe to give her codeine?");
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Codeine");
+		List<String> findings = new ArrayList<String>();
+		for (RecordMapping f : DrugReferenceTestSupport.injectedFindings(chart)) {
+			findings.add(f.getText());
+		}
+
+		// Precondition: the record hedges those words, and states nothing as this chart's own reading —
+		// the unmatched condition rule contributes to neither section. Without this the assertion below
+		// could pass while the two channels had merely gone silent together.
+		assertTrue(record.contains(
+				DrugReferenceInjector.UNCORROBORATED_READING_LEAD + "opioid reaction"),
+				"precondition: the record hedges the clause, was: " + record);
+		assertFalse(record.contains(DrugReferenceInjector.RECORDED_READING_LEAD),
+				"precondition: and states nothing as recorded, was: " + record);
+
+		assertEquals(1, findings.size(),
+				"one matched rule is one citable record, was: " + findings);
+		assertTrue(findings.get(0).contains(CLAUSE),
+				"the finding must not assert bare what the record beside it hedges, was: " + findings);
+	}
+
+	@Test
 	public void theWordsTheFindingPrintsAreNotHedgedWhereAnotherKeyStatesThemAsRecorded()
 			throws IOException {
 		// The cross-key precedence has to be asked of the string the FINDING prints, and that is not

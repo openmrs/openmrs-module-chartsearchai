@@ -1444,6 +1444,18 @@ public class DrugSafetyValidator {
 		// was asked, and contraindicationSections asks it unscoped. Scoped, a corroborated rule the
 		// question does not name is skipped before it can carry its key — the record then states the
 		// clause while the finding beside it says nothing corroborates the match.
+		//
+		// The guard opening the loop — MATCHED rules only — is load-bearing too, and it is what
+		// everything read off this map assumes. corroboratedByTheChart answers TRUE unconditionally for
+		// a rule that is not a self-named allergy rule, and contraindicationClauses renders a clause for
+		// every rule of the entry whether it matched or not, so an UNMATCHED rule reaching this fold
+		// seeds its key TRUE, puts that key's clause into statedAsRecorded and clears a finding whose
+		// record beside it goes on hedging the same string — issue #308's own contradiction, one rule
+		// along, and nothing errors or changes a count when it happens. This loop and the walk below
+		// open on the same recordedContraindicationKind call, so a later dedup pass that shares it is
+		// the seam to watch. Delete the `continue` here, leaving `Object key = contraindicationFinding(
+		// ref, c);` as the loop's first statement, and read the failure:
+		// UncorroboratedFindingProvenanceTest.aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded.
 		Map<Object, String> clauses = contraindicationClauses(ref);
 		Map<Object, Boolean> corroboratedClauses = new HashMap<Object, Boolean>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
@@ -1531,8 +1543,10 @@ public class DrugSafetyValidator {
 			// statedAsRecorded is built FROM that map, and a matched rule always carries a matchable —
 			// hence non-blank — token (PatientClinicalContext.matchableToken), so its key always has a
 			// rendered clause and a corroborated key always contributed that clause to the set: the
-			// key-clause conjunct already answers for it. One was written here in round 1 of this
-			// branch's review and removed in round 3, having measured that replacing it with
+			// key-clause conjunct already answers for it. That premise is a statement about this map
+			// holding MATCHED rules only, which is the guard above and is pinned by
+			// aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded. One was written here in round 1
+			// of this branch's review and removed in round 3, having measured that replacing it with
 			// corroboratedByTheChart(ref, c, context, allergicSubstances) — the mutation four texts then
 			// prescribed as this fold's own guard — moved no case's colour.
 			//

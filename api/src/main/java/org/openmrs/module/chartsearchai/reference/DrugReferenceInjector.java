@@ -508,12 +508,17 @@ public class DrugReferenceInjector {
 	 * reason {@link #FINDING_PREFIX} is: a prompt carrying its own copy of this cue would go on
 	 * teaching the model a marker no chart record carries, and every test would stay green.
 	 *
-	 * <p>Deliberately NOT the same string as {@link #QUERYSTORE_STOPPED_MARKER}, and the matcher is
-	 * deliberately not derived from this by {@code toLowerCase()}: this one carries a trailing space
-	 * and that one does not, so deriving would narrow the predicate — a record rendering
-	 * {@code ". Stopped:2026-08-24"} would stop reading as ended and would substantiate a live order
-	 * again (#118). They are independent literals whose agreement is asserted rather than assumed,
-	 * by {@code EndedOrderMarkerContractTest.theMarkersShownToTheModelAreTheOnesTheMatcherKeysOn}.
+	 * <p><b>Deliberately NOT derived from {@link #QUERYSTORE_STOPPED_MARKER} by
+	 * {@code toLowerCase()}, though the tidy-up is tempting.</b> This one carries a trailing space
+	 * and that one does not, so deriving would widen the match constant and narrow what
+	 * {@link #describesEndedOrder} accepts. Say only what is checkable about that: querystore is
+	 * the sole producer of these records and always emits the space, so no shape it renders today
+	 * would stop being recognised — the cost is not a live defect but that the predicate would
+	 * quietly stop tolerating a spacing it currently tolerates, for a producer that has changed
+	 * its wording before. What makes the tidy-up worth refusing is that NOTHING WOULD CATCH IT:
+	 * {@code EndedOrderMarkerContractTest.theMarkersShownToTheModelAreTheOnesTheMatcherKeysOn}
+	 * asserts the two agree, and once one is derived from the other that assertion is
+	 * {@code x.contains(x)} and cannot fail. Independence is what keeps it a real assertion.
 	 */
 	public static final String ORDER_STOPPED_MARKER = ". Stopped: ";
 
@@ -570,6 +575,13 @@ public class DrugReferenceInjector {
 	 * <p>Because it keys on rendered prose, the markers are pinned against the REAL querystore
 	 * serializer's output in {@code QuerystoreOrderTextMarkerTest} — a wording change there fails
 	 * loudly instead of silently reopening issue #118.
+	 *
+	 * <p><b>Two consumers, not one, since issue #315.</b> The same two markers are shown to the model
+	 * by {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} (as {@link #ORDER_STOPPED_MARKER} and
+	 * {@link #ORDER_DISCONTINUED_MARKER}) so that an answer naming a drug from an ended order has to
+	 * say the order ended. Reword either marker and both the reconciliation above and that answer
+	 * rule move together; {@code EndedOrderMarkerContractTest} pins the second against the same real
+	 * serializer output.
 	 *
 	 * <p><strong>Known limitation, and the strongest argument for the structural fix above.</strong>
 	 * Running that serializer (rather than reading it) showed querystore does NOT render an

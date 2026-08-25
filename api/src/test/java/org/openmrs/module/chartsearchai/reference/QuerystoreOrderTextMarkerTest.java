@@ -30,12 +30,21 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p>Why this test exists. Keying a safety decision on another module's display text is fragile in
  * the worst way — a wording change there would silently reopen issue #118 (a stopped order's record
- * substantiating the live order that replaced it) with every other test still green, because nothing
- * else in this module reads that text. So the markers are asserted against the output of querystore's
+ * substantiating the live order that replaced it) with every other test still green. So the markers
+ * are asserted against the output of querystore's
  * REAL {@link DrugOrderRecordSerializer}, driven through its public
  * {@code AbstractRecordSerializer.serialize} entry point on a real {@link DrugOrder} from the
  * standard test dataset. No hand-typed imitation of the format appears here: if querystore renames
  * or restructures these markers, this test fails and names what broke.
+ *
+ * <p><b>This is no longer the only reader of that text.</b> Since issue #315,
+ * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} shows the model the same two markers — as
+ * {@link DrugReferenceInjector#ORDER_STOPPED_MARKER} and
+ * {@link DrugReferenceInjector#ORDER_DISCONTINUED_MARKER}, the display-cased constants — so that an
+ * answer naming a drug from an ended order has to say the order ended. A querystore rewording
+ * therefore breaks two things, not one, and {@code EndedOrderMarkerContractTest} is the companion
+ * pin for the second: it asserts those constants against this same real serializer's RAW output,
+ * casing included, which this class cannot do because it matches on a lowercased copy.
  *
  * <p>Both directions are pinned. An ended order's text must be RECOGNISED as ended, and an ordinary
  * live order's text must NOT be — the second matters just as much, because over-matching would treat

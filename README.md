@@ -327,6 +327,31 @@ chartsearchai does not run its own relevance gate. The LLM is given the patient'
 
 Questions with numeric recency constraints are automatically detected and honored. For example, "last 3 blood pressure readings" or "most recent 5 lab results" will cap the results per concept group to the specified number, keeping only the most recent measurements.
 
+### Ended drug orders
+
+A `drug_order` record for a prescription that has **ended** carries querystore's end marker — a
+`. Stopped: <date>` field, or `. Action: DISCONTINUE` — and the system prompt classifies it as such,
+the same way it classifies `Drug reference` and `Safety finding` records. Whenever the answer names a
+drug from one of those records it must say in the same sentence that the order was stopped, with the
+date where the record carries one; and such a record settles that the patient is not on that drug, so
+the answer may neither present it as current nor report its status as unrecorded
+([#315](https://github.com/openmrs/openmrs-module-chartsearchai/issues/315)). Before this, whether the
+stop date survived into the answer was decided by the question's phrasing: on one stopped Nevirapine
+order, three of four question shapes named the drug and dropped its end, and *"is he currently taking
+any medications?"* answered *"Yes — the patient was ordered Nevirapine…"* about a drug stopped the day
+before.
+
+The rule is scoped to the drug that record names and says nothing about any other, so a chart holding
+a stopped order beside a live one still answers a medications question from the live one. The markers
+are the same two [active-order reconciliation](#drug-reference-injection--safety-validation) keys on
+for #118, shared as constants rather than restated, so the prompt cannot come to describe a cue the
+chart does not carry.
+
+Not covered: an order that lapsed by its **auto-expire date**. querystore carries `auto_expire_date`
+in the document metadata but renders no marker for it into the record text, so nothing downstream of
+the text can see it — the same limitation `DrugReferenceInjector.describesEndedOrder` records for the
+reconciliation, and it would be closed by the same structural fix.
+
 ### Input validation
 
 Questions are checked against common prompt injection patterns (e.g., "ignore previous instructions", "you are now", "system prompt:") and rejected with HTTP 400 if matched. This is a defense-in-depth measure — the primary protection is the structured-output constraint (`response_format: json_schema`, sent by both engines and shared via `ChartAnswerResponseFormat`; the local llama-server enforces it via a derived GBNF grammar internally, and remote OpenAI-compat providers enforce it server-side) that forces LLM output into a fixed `{answer, citations}` shape regardless of prompt content. Normal clinical questions containing words like "ignore" or "instructions" in non-adversarial contexts (e.g., "What instructions were given at discharge?") are not affected.

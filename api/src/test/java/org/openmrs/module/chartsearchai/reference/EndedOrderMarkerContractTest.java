@@ -120,11 +120,12 @@ public class EndedOrderMarkerContractTest extends BaseModuleContextSensitiveTest
 	@Test
 	public void theMarkersShownToTheModelAreTheOnesTheMatcherKeysOn() {
 		// The display constants and the match constants are INDEPENDENT literals, deliberately not
-		// derived one from the other. Deriving the matcher from the display constant by
-		// toLowerCase() would NARROW the predicate: ". Stopped: ".toLowerCase() carries a trailing
-		// space that the match constant ". stopped:" does not, so a record rendering
-		// ". Stopped:2026-08-24" would stop reading as ended and would substantiate a live order
-		// again (#118). Independence is also what makes this a real pin rather than x.contains(x).
+		// derived one from the other — and this case is the reason that matters, because it is the
+		// case that stops working if they ever are. ". Stopped: ".toLowerCase() carries a trailing
+		// space the match constant ". stopped:" does not, so deriving one from the other would make
+		// this assertion x.contains(x): trivially true for every possible value, including a value
+		// querystore never renders. It would keep passing while pinning nothing. Kept independent,
+		// it is a real assertion that the cue shown to the model is one the matcher accepts.
 		assertTrue(DrugReferenceInjector.describesEndedOrder(
 				DrugReferenceInjector.ORDER_STOPPED_MARKER.toLowerCase(Locale.ROOT)),
 				"the stop marker shown to the model must be one the matcher recognises");

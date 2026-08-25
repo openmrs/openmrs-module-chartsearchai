@@ -1283,22 +1283,33 @@ public class DrugSafetyValidator {
 			/** Whether EVERY chip raised on this key so far rests on a chart match nothing corroborates
 			 *  — the key's answer, resolved as this AND rather than taken from the rank winner (issue
 			 *  #308). See {@link SafetyWarning#withUncorroboratedChartMatch}, which states why the rank
-			 *  cannot carry it. Only a curated-rule chip can ever make this true, and only two things can
-			 *  meet on one key: two self-named rules of one entry — the shape the MAX exists for — and a
-			 *  self-named rule beside the IDENTITY chip, whose key is the allergen substance twice over
-			 *  and therefore coincides exactly when some recorded allergy resolves to THIS substance,
-			 *  which is leg 2 of the union and so already answers false. The two class ranks cannot meet
-			 *  it at all: {@link #addAllergyContraindications} reaches them only after
-			 *  {@link #firstOfSameSubstance} returned null, so their finding is never the subject's own
-			 *  substance and never this key. */
+			 *  cannot carry it — and it is the answer for the sentence CURRENTLY occupying
+			 *  {@link #position}, which is why {@link #origin} sits beside it.
+			 *
+			 *  <p><b>Scoped to one entry, because that is the unit the injected record resolves.</b>
+			 *  {@code DrugReferenceInjector.contraindicationSections} renders one record per ENTRY and
+			 *  takes its MAX over that entry's own rules; this ledger's key is the SUBSTANCE, which spans
+			 *  every row of it. ANDing across that wider unit was measured wrong in the opposite
+			 *  direction to the defect it fixed: two rule-bearing ROWS of one substance — the shape
+			 *  {@code DrugReferenceValidity.RULES_WITHOUT_A_SUBSTANCE_IDENTITY} actively tells operators
+			 *  to author — let a corroborated rule on row B clear the flag while row B's neighbour row A
+			 *  still hedges its own clause in its own record. So the AND runs only between chips from the
+			 *  SAME origin, and a chip from another origin that wins the rank brings its own answer with
+			 *  its sentence. */
 			private boolean uncorroborated;
 
+			/** The entry whose rule supplied the sentence at {@link #position}, or null where the
+			 *  sentence is not a rule's — every allergen-arm chip. Compared by IDENTITY, which is what
+			 *  the rest of this pass already does with rows of one {@code DrugReferenceService}. */
+			private DrugReference origin;
+
 			RaisedChip(int position, int relationship, boolean namesTheFinding,
-					boolean uncorroborated) {
+					boolean uncorroborated, DrugReference origin) {
 				this.position = position;
 				this.relationship = relationship;
 				this.namesTheFinding = namesTheFinding;
 				this.uncorroborated = uncorroborated;
+				this.origin = origin;
 			}
 		}
 
@@ -1335,9 +1346,13 @@ public class DrugSafetyValidator {
 		 *        chip, which names that instead (issue #164). Either way it is the row the chip's own
 		 *        sentence uses, so what the chip says and what the ledger counts cannot come apart; and
 		 *        either way it keys the same, since both are rows of the subject's substance.
+		 * @param origin (on the longer form) the entry whose RULE supplied this sentence, or null where
+		 *        no rule did — every allergen-arm chip. Deliberately not {@code subject}: that is the row
+		 *        the chip is NAMED after and is substance-wide, while this is the row the injected record
+		 *        for that same sentence is rendered from. See {@code RaisedChip.uncorroborated}.
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip) {
-			add(subject, finding, relationship, chip, false);
+			add(subject, finding, relationship, chip, false, null);
 		}
 
 		/**
@@ -1352,7 +1367,7 @@ public class DrugSafetyValidator {
 		 * both branches.
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip,
-				boolean namesTheFinding) {
+				boolean namesTheFinding, DrugReference origin) {
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
 			// merge different sets of rows. Its javadoc is where the two key spaces are justified. It is
@@ -1376,7 +1391,7 @@ public class DrugSafetyValidator {
 			RaisedChip already = raised.get(key);
 			if (already == null) {
 				raised.put(key, new RaisedChip(warnings.size(), relationship, namesTheFinding,
-						chip.restsOnAnUncorroboratedChartMatch()));
+						chip.restsOnAnUncorroboratedChartMatch(), origin));
 				warnings.add(chip);
 				return;
 			}
@@ -1392,8 +1407,10 @@ public class DrugSafetyValidator {
 			// corroborated blank-note rule ties with an uncorroborated noted one and loses the
 			// incumbent-keeps tiebreak — and the prompt then carried "Recorded for this patient" beside
 			// "could not corroborate it as a record of this drug", about one chart, in one injection.
-			already.uncorroborated =
-					already.uncorroborated && chip.restsOnAnUncorroboratedChartMatch();
+			if (already.origin == origin) {
+				already.uncorroborated =
+						already.uncorroborated && chip.restsOnAnUncorroboratedChartMatch();
+			}
 			// Strictly stronger wins, and at EQUAL strength a chip that NAMES what the entry is keyed on
 			// beats one that quotes the chart instead (issue #268). Without that second half the
 			// surviving sentence depends on the order PatientService.getAllergies returned the records:
@@ -1408,6 +1425,13 @@ public class DrugSafetyValidator {
 				warnings.set(already.position, chip);
 				already.relationship = relationship;
 				already.namesTheFinding = namesTheFinding;
+				if (already.origin != origin) {
+					// A sentence from another entry replaces this one, so the answer travels with it
+					// rather than being inherited: the clause qualifies the sentence that is printed, and
+					// the record that renders the same sentence resolved its own MAX over THAT entry.
+					already.origin = origin;
+					already.uncorroborated = chip.restsOnAnUncorroboratedChartMatch();
+				}
 			}
 			// Stamped onto whichever sentence survived, after the rank has chosen it: the two questions
 			// are independent, so the winner of one may carry the wrong answer to the other.
@@ -1475,11 +1499,16 @@ public class DrugSafetyValidator {
 			// It changes what the record SAYS and never how strongly it speaks: the chip's detail, its
 			// rank and its severity are untouched, so licensesWithholding still answers alike for it.
 			boolean uncorroborated = !corroboratedByTheChart(ref, c, context, allergicSubstances);
+			// `ref` is handed over as the chip's ORIGIN — the entry this rule is authored on, which is not
+			// necessarily the row the chip is NAMED after (that is `subject`, issue #206). The ledger
+			// needs it because the injected record resolves its own corroboration MAX per ENTRY while
+			// this ledger's key is the substance: see RaisedChip.uncorroborated.
 			chips.add(subject, contraindicationFinding(ref, c), contraindicationRank(ref, c, context),
 					SafetyWarning.contraindication(subject.displayLabel(),
 							subject.displayLabel() + " is contraindicated by an " + recorded + ": "
 									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()),
-							uncorroborated));
+							uncorroborated),
+					false, ref);
 		}
 	}
 
@@ -4222,7 +4251,7 @@ public class DrugSafetyValidator {
 				chips.add(sameSubstance, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION,
 								sameSubstance.displayLabel(), recorded.identitySentence(sameSubstance)),
-						recorded.names(sameSubstance));
+						recorded.names(sameSubstance), null);
 				continue;
 			}
 			if (refClasses.isEmpty() && refGroups.isEmpty()) {
@@ -4241,7 +4270,7 @@ public class DrugSafetyValidator {
 									subject.displayLabel() + " is in the same ATC class (" + shared
 											+ ") as the patient's allergy to " + recorded.allergenName(implied)
 											+ " — possible cross-reactivity"),
-							recorded.names(implied));
+							recorded.names(implied), null);
 					chipped = true;
 					break;
 				}
@@ -4257,7 +4286,7 @@ public class DrugSafetyValidator {
 									subject.displayLabel() + " is in the same cross-reactivity group ("
 											+ group.getName() + ") as the patient's allergy to "
 											+ recorded.allergenName(implied) + " — possible cross-reactivity"),
-							recorded.names(implied));
+							recorded.names(implied), null);
 					break;
 				}
 			}

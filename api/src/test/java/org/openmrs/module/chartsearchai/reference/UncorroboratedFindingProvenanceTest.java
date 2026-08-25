@@ -62,6 +62,11 @@ public class UncorroboratedFindingProvenanceTest {
 
 	/** Read off production, so no case below can pass against a clause no record carries. What pins
 	 *  the WORDS is {@link #theClauseIsTheWordsAModelReads}, and only that. */
+	/** Issue #308's own: two rule-bearing ROWS of one substance, which the chip ledger folds and the
+	 *  injected record does not. */
+	private static final String RULE_ROWS_ONE_SUBSTANCE =
+			"chartsearchai-test/drug-reference-rule-rows-one-substance.json";
+
 	/** Issue #308's own: one entry, two self-named rules that collapse onto one key and DISAGREE about
 	 *  corroboration while tying on rank. */
 	private static final String COLLAPSED_KEY =
@@ -369,6 +374,43 @@ public class UncorroboratedFindingProvenanceTest {
 		assertEquals(1, findings.size(), "one collapsed key is one citable finding, was: " + findings);
 		assertFalse(findings.get(0).contains(CLAUSE),
 				"and the finding beside it must not deny what that record states, was: " + findings);
+	}
+
+	@Test
+	public void aCorroboratedRuleOnANEIGHBOURRowDoesNotClearTheClauseThatRowsOwnRecordStates()
+			throws IOException {
+		// The bound on the MAX above, and the direction it was first got wrong in. This ledger's key is
+		// the SUBSTANCE, so it spans every ROW of it — while DrugReferenceInjector renders one record per
+		// ENTRY and resolves its own corroboration MAX over that entry's rules alone. Folding the two
+		// across rows therefore re-created the contradiction from the other side: a corroborated rule on
+		// the gel row cleared the flag while the tablets row's own record went on hedging the tablets
+		// rule's clause, in the same injection.
+		//
+		// So the AND is scoped to the chip's ORIGIN, and a sentence from another entry brings its own
+		// answer with it. Mutate RaisedChip's origin comparison to always fold and read the failure.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(RULE_ROWS_ONE_SUBSTANCE));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Ketoconazole", "Levocetirizine"), null),
+						"Is it safe to give her levoketoconazole?");
+		String tablets = DrugReferenceTestSupport.referenceTextNaming(chart, "Levoketoconazole (tablets)");
+		List<String> findings = new ArrayList<String>();
+		for (RecordMapping f : DrugReferenceTestSupport.injectedFindings(chart)) {
+			findings.add(f.getText());
+		}
+
+		// Precondition: the tablets record really does hedge its own clause, which is what the finding
+		// must agree with. Without this the assertion below could pass against a record that states it.
+		assertTrue(tablets.contains(DrugReferenceInjector.UNCORROBORATED_READING_LEAD),
+				"precondition: the tablets record must hedge its own rule, was: " + tablets);
+		assertEquals(1, findings.size(), "one substance is one chip and one finding, was: " + findings);
+		assertTrue(findings.get(0).contains("documented levo allergy"),
+				"precondition: the incumbent tablets sentence must be the one that survived the tie, "
+						+ "was: " + findings);
+		assertTrue(findings.get(0).contains(CLAUSE),
+				"and the finding must say what that row's own record says, was: " + findings);
 	}
 
 	@Test

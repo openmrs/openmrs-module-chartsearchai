@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #308 — not shipped data",
+  "description": "Two rule-bearing ROWS of ONE substance, which is the unit the chip ledger and the injected record disagree about. Both Levoketoconazole rows declare substanceName 'levoketoconazole', so DrugReference.substanceGroupKey folds them and ContraindicationChips keys both rules alike — while DrugReferenceInjector renders one record PER ROW and takes its corroboration MAX over that row's own rules. The tablets row rules on 'levo', which an allergy recorded as 'Levocetirizine' reaches only mid-word and nothing corroborates; the gel row rules on 'ketoconazole' with a blank note, which an allergy recorded as 'Ketoconazole' names outright. They tie at rank 0 (SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE against SELF_NAMED_RULE_WITHOUT_A_NOTE) so the incumbent tablets sentence stands, and the tablets record hedges its own clause — so a corroboration answer folded across the two ROWS would clear a flag that record still states. The standalone Ketoconazole entry exists so that allergen resolves to a substance that is NOT this one, keeping the gel rule's corroboration a leg-1 answer. Jackson binds these entries straight onto DrugReference, so substanceName is honoured on the json source exactly as it is on ddinter."
+  ,
+  "entries": [
+    {
+      "id": "levoketoconazole-tablets",
+      "name": "Levoketoconazole (tablets)",
+      "substanceName": "levoketoconazole",
+      "aliases": ["levoketoconazole (tablets)", "levoketoconazole", "levo"],
+      "contraindications": [
+        { "type": "allergy", "token": "levo", "note": "documented levo allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "levoketoconazole-gel",
+      "name": "Levoketoconazole (gel)",
+      "substanceName": "levoketoconazole",
+      "aliases": ["levoketoconazole (gel)", "levoketoconazole", "ketoconazole"],
+      "contraindications": [
+        { "type": "allergy", "token": "ketoconazole", "note": "" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ketoconazole",
+      "name": "Ketoconazole",
+      "aliases": ["ketoconazole"],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

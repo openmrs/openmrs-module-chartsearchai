@@ -4392,10 +4392,12 @@ public class DrugSafetyValidator {
 	 *         {@code DrugReferenceTestSupport.injectorWithSafety} wires one service into both — and that
 	 *         is what makes the condition hold, rather than anything either class checks.
 	 *
-	 *         <p><b>This answers about one RULE. A collapsed KEY is a MAX over its rules</b>, and that
-	 *         resolution is {@code ContraindicationChips.add}'s, not this method's — see
-	 *         {@link SafetyWarning#withUncorroboratedChartMatch}. Asking this per rule and reading the
-	 *         answer off the rank winner is not the same thing, and the difference is reachable.
+	 *         <p><b>This answers about one RULE. A collapsed KEY is a fold over its rules</b>, and that
+	 *         resolution belongs to {@link #addContraindications}, not to this method: two self-named
+	 *         rules of one entry are ONE chip and one rendered clause (issue #146), so one corroborated
+	 *         rule carries the key. Asking this per rule and reading the answer off whichever rule won
+	 *         the ledger's RANK is not the same thing, and the difference is reachable — see issue
+	 *         #308 and ADR Decision 44, which record three ways of getting the unit wrong.
 	 *
 	 *         <p>Scoped to a SELF-NAMED allergy rule, which is load-bearing rather than incidental —
 	 *         a rule whose token is not one of its entry's names is asking about a class or about a

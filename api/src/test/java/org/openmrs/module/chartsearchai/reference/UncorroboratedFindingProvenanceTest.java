@@ -349,10 +349,11 @@ public class UncorroboratedFindingProvenanceTest {
 		// leaves the uncorroborated rule's sentence standing.
 		//
 		// The record resolves this as a MAX ("one corroborated rule of the key is enough for the key",
-		// DrugReferenceInjector.contraindicationSections) and marks the clause RECORDED. Before the
-		// ledger did the same, the finding beside it said the module could not corroborate the match:
-		// two citable records of one chart, in one injection, contradicting each other. Mutate
-		// ContraindicationChips.add's AND to take the rank winner's own answer and read the failure.
+		// DrugReferenceInjector.contraindicationSections) and marks the clause RECORDED. Before
+		// addContraindications folded it the same way, the finding beside it said the module could not
+		// corroborate the match: two citable records of one chart, in one injection, contradicting each
+		// other. Mutate the walk to ask this RULE's own answer — replace the corroboratedClauses lookup
+		// with corroboratedByTheChart(ref, c, context, allergicSubstances) — and read the failure.
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(COLLAPSED_KEY));
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
@@ -394,8 +395,10 @@ public class UncorroboratedFindingProvenanceTest {
 		// the gel row cleared the flag while the tablets row's own record went on hedging the tablets
 		// rule's clause, in the same injection.
 		//
-		// So the AND is scoped to the chip's ORIGIN, and a sentence from another entry brings its own
-		// answer with it. Mutate RaisedChip's origin comparison to always fold and read the failure.
+		// So the fold is scoped to ONE ENTRY, and a sentence from another entry brings its own answer
+		// with it. Mutate the pre-walk to fold across the rows of a substance — iterate the service's
+		// rows sharing this one's substanceGroupKey instead of ref.getContraindications() — and read the
+		// failure; this is the only case that reddens on it.
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(RULE_ROWS_ONE_SUBSTANCE));
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)

@@ -2289,13 +2289,13 @@ public class DrugReferenceInjector {
 				// corroborated rule of the key is enough for the key.
 				//
 				// SINCE ISSUE #308 THIS FOLD HAS A SECOND SPELLING, and a change here belongs in both
-				// places: DrugSafetyValidator.ContraindicationChips.add resolves the same question for the
+				// places: DrugSafetyValidator.addContraindications folds the same question for the
 				// injected safety_finding, because that record states the answer too and the two must not
-				// disagree about one chart. They are deliberately NOT unified — this walk resolves keys
-				// the ledger never saw, since a record renders the whole rule list with or without a chip
-				// — and they resolve over DIFFERENT units: this one per ENTRY, because a record is
-				// rendered per entry, and the ledger per entry-within-a-substance-key, because its key is
-				// the substance. That difference is why the ledger has to carry the origin at all.
+				// disagree about one chart. Deliberately NOT unified — this walk resolves keys no chip was
+				// raised for, since a record renders the whole rule list with or without one — and
+				// deliberately over the SAME unit, which is the point rather than an accident: this
+				// entry's matched rules, keyed by contraindicationFinding, unscoped by subject matter.
+				// ADR Decision 44 records the three units that were tried first and what each printed.
 				// Asked only where the record may state
 				// the reading at all: otherwise no section is rendered, and asking would resolve the
 				// patient's allergy list for a sentence nothing prints (see ContraindicationReading).

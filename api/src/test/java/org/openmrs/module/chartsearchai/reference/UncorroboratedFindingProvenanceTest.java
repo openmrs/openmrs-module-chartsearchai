@@ -372,6 +372,14 @@ public class UncorroboratedFindingProvenanceTest {
 		assertTrue(record.contains(DrugReferenceInjector.RECORDED_READING_LEAD),
 				"precondition: the record must state the key as recorded, was: " + record);
 		assertEquals(1, findings.size(), "one collapsed key is one citable finding, was: " + findings);
+		// The INCUMBENT is the uncorroborated rule, and asserting it is what keeps the fold's direction
+		// pinned. Without this the case passes on either fixture ordering, so weakening the fold from
+		// "any corroborated rule of the key carries it" to "the first rule seen carries it" goes green
+		// the moment the two rules are authored the other way round — and that is the very direction ADR
+		// Decision 44's recorded defect ran in. Its sibling case below asserts the same precondition.
+		assertTrue(findings.get(0).contains("documented levo allergy"),
+				"precondition: the uncorroborated rule is the incumbent whose sentence survived the "
+						+ "rank tie, so the clause below is cleared by its SIBLING, was: " + findings);
 		assertFalse(findings.get(0).contains(CLAUSE),
 				"and the finding beside it must not deny what that record states, was: " + findings);
 	}

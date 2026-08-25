@@ -2250,33 +2250,29 @@ public class DrugReferenceInjector {
 	private static ContraindicationSections contraindicationSections(DrugReference ref,
 			ContraindicationReading reading) {
 		PatientClinicalContext context = reading.context();
-		Map<Object, String> byRule = new LinkedHashMap<Object, String>();
+		// The very key the chip ledger uses and the very clause the chip ledger's own corroboration fold
+		// reads, from the very methods it uses, so "ALLERGY"/"Ibuprofen" and "allergy"/"ibuprofen" are
+		// one rule here exactly as they are one chip there — including issue #146's exception, where an
+		// allergy rule NAMING this entry is keyed on the substance because that is the fact it reports.
+		// Shared rather than restated: a copy is how the two came apart when that exception was added,
+		// two such rules under two aliases of one drug becoming one chip and two clauses, which is #190
+		// item 1 re-opened one rule shape along. The chip's own key additionally carries the SUBJECT and
+		// the patient's match, neither of which a record about the drug has any business consulting;
+		// what has to agree is the collapse UNIT — and, since issue #308, the clause TEXT the three
+		// sections below are resolved over, which DrugSafetyValidator.addContraindications reads to ask
+		// this walk's own cross-key precedence question of the same strings.
+		Map<Object, String> byRule = DrugSafetyValidator.contraindicationClauses(ref);
 		Set<Object> recordedRules = new HashSet<Object>();
 		Set<Object> uncorroboratedRules = new HashSet<Object>();
 		Set<Object> unevaluableRules = new HashSet<Object>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
-			List<String> notes = new ArrayList<String>();
-			addIfPresent(notes, ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()));
-			if (notes.isEmpty()) {
+			// A rule stating neither a note nor a token contributes no clause, so it is in no section:
+			// the same emptiness contraindicationClauses skips, asked from the same method so the walk
+			// and the clause list cannot come to disagree about which rules exist.
+			if (DrugSafetyValidator.contraindicationClause(c) == null) {
 				continue;
 			}
-			// The very key the chip ledger uses, from the very method it uses, so "ALLERGY"/"Ibuprofen"
-			// and "allergy"/"ibuprofen" are one rule here exactly as they are one chip there — including
-			// issue #146's exception, where an allergy rule NAMING this entry is keyed on the substance
-			// because that is the fact it reports. Shared rather than restated: a copy is how the two came
-			// apart when that exception was added, two such rules under two aliases of one drug becoming
-			// one chip and two clauses, which is #190 item 1 re-opened one rule shape along. The chip's
-			// own key additionally carries the SUBJECT and the patient's match, neither of which a record
-			// about the drug has any business consulting; what has to agree is the collapse UNIT.
 			Object key = DrugSafetyValidator.contraindicationFinding(ref, c);
-			String clause = byRule.get(key);
-			if (clause == null) {
-				byRule.put(key, notes.get(0));
-			} else if (!clause.contains(notes.get(0))) {
-				// contains(), so a row re-authored with the identical note adds nothing — the drop issue
-				// #174 site 2 could make, made only where it is provably lossless.
-				byRule.put(key, clause + " — " + notes.get(0));
-			}
 			if (DrugSafetyValidator.recordedContraindicationKind(c, context) != null) {
 				// ANY rule of the collapsed key, because that is precisely when the ledger raises a chip
 				// for it: two spellings of one rule are one clause and one chip, and the patient matching
@@ -2295,7 +2291,11 @@ public class DrugReferenceInjector {
 				// raised for, since a record renders the whole rule list with or without one — and
 				// deliberately over the SAME unit, which is the point rather than an accident: this
 				// entry's matched rules, keyed by contraindicationFinding, unscoped by subject matter.
-				// ADR Decision 44 records the three units that were tried first and what each printed.
+				// BOTH STAGES of it, and the second is the one below rather than this one: the sections
+				// are resolved over clause TEXT as well as over keys (uncorroborated.removeAll(recorded)),
+				// so a fold stopping here leaves that walk stating a string as this chart's reading while
+				// the finding beside it hedges the identical string. ADR Decision 44 records the units
+				// that were tried first and what each printed.
 				// Asked only where the record may state
 				// the reading at all: otherwise no section is rendered, and asking would resolve the
 				// patient's allergy list for a sentence nothing prints (see ContraindicationReading).

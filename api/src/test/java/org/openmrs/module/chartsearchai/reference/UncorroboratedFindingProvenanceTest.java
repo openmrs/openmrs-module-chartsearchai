@@ -76,6 +76,12 @@ public class UncorroboratedFindingProvenanceTest {
 	private static final String COLLAPSED_KEY =
 			"chartsearchai-test/drug-reference-collapsed-key-corroboration.json";
 
+	/** The same two rows with the CANONICAL row's rule corroborated and the sibling's uncorroborated
+	 *  sentence holding the ledger — the other direction of the residue, pinned by
+	 *  {@link #theRenderedRowsRecordAssertsWhileTheSurvivingSiblingSentenceHedges}. */
+	private static final String RULE_ROWS_RENDERED_ROW_CORROBORATED =
+			"chartsearchai-test/drug-reference-rule-rows-rendered-row-corroborated.json";
+
 	/** Read off production, so no case below can pass against a clause no record carries. What pins
 	 *  the WORDS is {@link #theClauseIsTheWordsAModelReads}, and only that. */
 	private static final String CLAUSE = DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH;
@@ -397,6 +403,56 @@ public class UncorroboratedFindingProvenanceTest {
 	}
 
 	@Test
+	public void aClauseAnotherKeyOfThisEntryStatesAsRecordedIsNotHedged() throws IOException {
+		// The record's partition has a SECOND stage, and the fold above stops at the first. After keying
+		// by contraindicationFinding, DrugReferenceInjector.contraindicationSections resolves its three
+		// sections over clause TEXT — `uncorroborated.removeAll(recorded)` — because two rules of
+		// DIFFERENT keys may render the SAME string, which that walk's own comment calls a natural way
+		// to author "recorded either way". So a string one key states as this chart's reading is stated,
+		// full stop, and the key that merely wanted to hedge it loses the words.
+		//
+		// Stopping at the key left the finding hedging the identical string the record beside it
+		// asserted: issue #308's own defect, in one injection, newly created by the change that fixes it
+		// everywhere else. Codeine files an allergy rule on `codeine` and a CONDITION rule on
+		// `respiratory depression` carrying ONE note, `opioid reaction`; an allergy recorded as
+		// `Dihydrocodeine` reaches the first only mid-word and corroborates nothing, while a recorded
+		// condition `Respiratory depression` matches the second, which is not self-named and so is
+		// corroborated by construction. The record's own side of this is
+		// InjectedContraindicationCorroborationTest.aClauseAnotherRuleOfTheSameEntryDoesRecordIsStatedAsRecorded,
+		// which owns this exact arrangement and asserts only that side of it.
+		//
+		// Mutate addContraindications' `statedAsRecorded` leg away — drop the second conjunct of
+		// `uncorroborated` — and read the failure.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(BORROWED_ALIAS));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Dihydrocodeine"),
+								DrugReferenceTestSupport.set("Respiratory depression")),
+						"Is it safe to give her codeine?");
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Codeine");
+		List<String> findings = new ArrayList<String>();
+		for (RecordMapping f : DrugReferenceTestSupport.injectedFindings(chart)) {
+			findings.add(f.getText());
+		}
+
+		// Precondition: the record really does state those words as this chart's own reading. Asserted
+		// rather than assumed — if the cross-key precedence ever moved, the assertion below would pass
+		// while testing nothing.
+		assertTrue(record.contains(DrugReferenceInjector.RECORDED_READING_LEAD + "opioid reaction"),
+				"precondition: the record states the clause as recorded, was: " + record);
+		assertFalse(record.contains(DrugReferenceInjector.UNCORROBORATED_READING_LEAD),
+				"precondition: and hedges nothing, was: " + record);
+		assertEquals(2, findings.size(),
+				"two rules on two keys are two citable records, was: " + findings);
+		for (String finding : findings) {
+			assertFalse(finding.contains(CLAUSE),
+					"no finding may hedge words the record beside it asserts, was: " + findings);
+		}
+	}
+
+	@Test
 	public void aCorroboratedRuleOnANEIGHBOURRowDoesNotClearTheClauseThatRowsOwnRecordStates()
 			throws IOException {
 		// The bound on the MAX above, and the direction it was first got wrong in. This ledger's key is
@@ -494,6 +550,61 @@ public class UncorroboratedFindingProvenanceTest {
 		assertFalse(findings.get(0).contains(CLAUSE),
 				"the surviving sentence brings its own corroborated answer, so the finding states no "
 						+ "provenance while the record beside it hedges, was: " + findings);
+		assertTrue(findings.get(0).contains(WITHHOLD),
+				"and its call is unchanged either way, was: " + findings);
+	}
+
+	@Test
+	public void theRenderedRowsRecordAssertsWhileTheSurvivingSiblingSentenceHedges()
+			throws IOException {
+		// The SECOND direction of ADR Decision 44's cross-row residue, and the one this change makes
+		// worse rather than merely fails to close. Above, the sibling row's CORROBORATED sentence
+		// outranks the rendered row's while the record goes on hedging — record hedges, finding bare,
+		// which is what main printed too. Here it runs the other way: the row the record is rendered for
+		// (canonicalRow's, the bare one, elected by namesNoRoute) carries the corroborated rule and
+		// states its clause as this chart's reading, while the route-qualified sibling's UNCORROBORATED
+		// sentence holds the ledger on a rank tie and now brings the hedge with it.
+		//
+		// Measured, by emptying FINDING_UNCORROBORATED_MATCH so renderFinding appends nothing (what main
+		// does): on this arrangement the finding goes bare and the pair AGREES. So this is a divergence
+		// the clause creates, and "not a regression, main carried no clause on any arrangement" is not a
+		// reason that holds here — adding a clause where main had agreement is how a disagreement gets
+		// made. What is true of both directions is that closing them needs a record that states the
+		// whole substance's rules or a ledger whose surviving sentence is the rendered row's, both
+		// changes to what a clinician-facing surface SAYS; and that the cross-row fold is ruled out
+		// separately, by aCorroboratedRuleOnANEIGHBOURRowDoesNotClearTheClauseThatRowsOwnRecordStates.
+		//
+		// The tablets rule is authored FIRST so it is the ledger's incumbent, which is what makes the
+		// uncorroborated sentence the one that survives the 0-0 tie
+		// (SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE against SELF_NAMED_RULE_WITHOUT_A_NOTE).
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.fixtureEntries(RULE_ROWS_RENDERED_ROW_CORROBORATED));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Ketoconazole", "Levocetirizine"), null),
+						"Is it safe to give her levoketoconazole?");
+		List<String> references = DrugReferenceTestSupport.referenceTexts(chart);
+		List<String> findings = new ArrayList<String>();
+		for (RecordMapping f : DrugReferenceTestSupport.injectedFindings(chart)) {
+			findings.add(f.getText());
+		}
+
+		assertEquals(1, references.size(),
+				"one substance is one injected record, whatever its row count, was: " + references);
+		assertTrue(references.get(0).contains(DrugReferenceInjector.RECORDED_READING_LEAD),
+				"precondition: the rendered row's own rule is the corroborated one, so its record "
+						+ "ASSERTS, was: " + references);
+		assertEquals(1, findings.size(), "one substance is one chip and one finding, was: " + findings);
+		assertTrue(findings.get(0).contains("documented levo allergy"),
+				"precondition: the sibling row's incumbent sentence is the one that survived the tie, "
+						+ "was: " + findings);
+		// The residue itself, in the direction the governing text did not declare. Flip this to
+		// assertFalse only together with ADR Decision 44's trade-off: making this side agree means
+		// moving the row one of the two channels speaks for, not widening the fold.
+		assertTrue(findings.get(0).contains(CLAUSE),
+				"the surviving sentence brings its own uncorroborated answer, so the finding hedges "
+						+ "while the record beside it asserts, was: " + findings);
 		assertTrue(findings.get(0).contains(WITHHOLD),
 				"and its call is unchanged either way, was: " + findings);
 	}

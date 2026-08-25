@@ -1424,9 +1424,11 @@ public class DrugSafetyValidator {
 
 		// The corroboration answer for each collapsed CLAUSE of this entry, resolved before the walk
 		// below and over the same unit the injected drug_reference record resolves it over: this
-		// ENTRY's rules, folded by contraindicationFinding, one corroborated rule carrying the key
-		// (issue #308, DrugReferenceInjector.contraindicationSections — a change to either belongs in
-		// both). Two things about the scoping are load-bearing and each was measured wrong first.
+		// ENTRY's rules, folded by contraindicationFinding, one corroborated rule carrying the key,
+		// and then — the record's own second stage — a key whose clause TEXT another key of this entry
+		// states as recorded (issue #308, DrugReferenceInjector.contraindicationSections — a change to
+		// either belongs in both). Two things about the scoping are load-bearing and each was measured
+		// wrong first.
 		//
 		// It is per ENTRY and not per chip KEY. The ledger's key is the SUBSTANCE, so it spans every
 		// ROW of it, while the injector injects ONE record for the substance and renders it for
@@ -1441,6 +1443,7 @@ public class DrugSafetyValidator {
 		// was asked, and contraindicationSections asks it unscoped. Scoped, a corroborated rule the
 		// question does not name is skipped before it can carry its key — the record then states the
 		// clause while the finding beside it says nothing corroborates the match.
+		Map<Object, String> clauses = contraindicationClauses(ref);
 		Map<Object, Boolean> corroboratedClauses = new HashMap<Object, Boolean>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			if (recordedContraindicationKind(c, context) == null) {
@@ -1450,6 +1453,26 @@ public class DrugSafetyValidator {
 			if (!Boolean.TRUE.equals(corroboratedClauses.get(key))) {
 				corroboratedClauses.put(key,
 						corroboratedByTheChart(ref, c, context, allergicSubstances));
+			}
+		}
+		// The record's SECOND stage, and the finding needs it for the reason the record does: the three
+		// sections are resolved over clause TEXT and not over keys (`uncorroborated.removeAll(recorded)`),
+		// because two rules of DIFFERENT keys may render the SAME string — an allergy rule and a
+		// condition rule carrying one note, which contraindicationSections' own comment calls a natural
+		// way to author "recorded either way". Stopping at the key left the record stating a string as
+		// this chart's own reading while the finding beside it hedged the identical string: issue #308's
+		// defect, in one injection, created by the change that fixes it everywhere else. Reproduced over
+		// drug-reference-borrowed-alias-corroboration.json's Codeine entry and pinned by
+		// UncorroboratedFindingProvenanceTest.aClauseAnotherKeyOfThisEntryStatesAsRecordedIsNotHedged —
+		// drop this conjunct and read the failure.
+		//
+		// Read off contraindicationClauses, so the strings compared are the strings that walk renders.
+		// This rule's own note is a different unit: two rules of ONE key render one JOINED clause there,
+		// so a rule's own note is not what the record states for it.
+		Set<String> statedAsRecorded = new HashSet<String>();
+		for (Map.Entry<Object, Boolean> clause : corroboratedClauses.entrySet()) {
+			if (Boolean.TRUE.equals(clause.getValue()) && clauses.get(clause.getKey()) != null) {
+				statedAsRecorded.add(clauses.get(clause.getKey()));
 			}
 		}
 
@@ -1484,9 +1507,10 @@ public class DrugSafetyValidator {
 			//
 			// It changes what the record SAYS and never how strongly it speaks: the chip's detail, its
 			// rank and its severity are untouched, so licensesWithholding still answers alike for it.
-			boolean uncorroborated = !Boolean.TRUE.equals(
-					corroboratedClauses.get(contraindicationFinding(ref, c)));
-			chips.add(subject, contraindicationFinding(ref, c), contraindicationRank(ref, c, context),
+			Object key = contraindicationFinding(ref, c);
+			boolean uncorroborated = !Boolean.TRUE.equals(corroboratedClauses.get(key))
+					&& !statedAsRecorded.contains(clauses.get(key));
+			chips.add(subject, key, contraindicationRank(ref, c, context),
 					SafetyWarning.contraindication(subject.displayLabel(),
 							subject.displayLabel() + " is contraindicated by an " + recorded + ": "
 									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()),
@@ -1755,6 +1779,54 @@ public class DrugSafetyValidator {
 		return selfNamedAllergyRule(ref, c) ? ref.substanceGroupKey()
 				: Arrays.<Object> asList("rule", DrugReference.normalizeName(c.getType()),
 						DrugReference.normalizeName(c.getToken()));
+	}
+
+	/**
+	 * @return the clause {@code c} contributes to a record about its entry — its note, else its own
+	 *         token rendered back ({@link ChartSearchAiUtils#firstNonBlank}), trimmed — or {@code null}
+	 *         where the rule states neither. A rule stating neither reaches no channel at all: it
+	 *         cannot match ({@link PatientClinicalContext#matchableToken} refuses a blank token) and
+	 *         {@link #contraindicationClauses} gives it no clause to be listed under.
+	 */
+	static String contraindicationClause(DrugReference.Contraindication c) {
+		String clause = ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken());
+		return ChartSearchAiUtils.isBlank(clause) ? null : clause.trim();
+	}
+
+	/**
+	 * @return the clause each collapsed contraindication key of {@code ref} renders, in the order the
+	 *         rules are authored — {@link #contraindicationFinding}'s partition carrying the TEXT the
+	 *         injected {@code drug_reference} record prints for each key. Two rules of ONE key
+	 *         contribute one clause, joined where they say different things and dropped where a row is
+	 *         re-authored with the identical note ({@code contains}, so the drop is provably lossless —
+	 *         the one issue #174 site 2 could make, made only where it is).
+	 *
+	 *         <p>ONE definition, called by {@code DrugReferenceInjector.contraindicationSections} to
+	 *         build the clause list it renders and by {@link #addContraindications} to ask that walk's
+	 *         own cross-key precedence question of the same strings — for the same reason
+	 *         {@link #contraindicationFinding} is one definition. That walk resolves its three sections
+	 *         over these strings and not over the keys ({@code uncorroborated.removeAll(recorded)}),
+	 *         because two rules of DIFFERENT keys may render the SAME string — an allergy rule and a
+	 *         condition rule may carry one note, which is a natural way to author "recorded either
+	 *         way" — and a record cannot both state a string as this chart's reading and hedge it. A
+	 *         finding beside it cannot either, which is why these have to be the same strings.
+	 */
+	static Map<Object, String> contraindicationClauses(DrugReference ref) {
+		Map<Object, String> byKey = new LinkedHashMap<Object, String>();
+		for (DrugReference.Contraindication c : ref.getContraindications()) {
+			String note = contraindicationClause(c);
+			if (note == null) {
+				continue;
+			}
+			Object key = contraindicationFinding(ref, c);
+			String clause = byKey.get(key);
+			if (clause == null) {
+				byKey.put(key, note);
+			} else if (!clause.contains(note)) {
+				byKey.put(key, clause + " — " + note);
+			}
+		}
+		return byKey;
 	}
 
 	/**
@@ -4395,11 +4467,17 @@ public class DrugSafetyValidator {
 	 *         is the one both channels ask, the condition belongs here rather than only on
 	 *         {@link #allergicSubstanceKeys}. Leg 2 compares {@link DrugReference#substanceGroupKey()},
 	 *         which is the substance NAME where the data publishes one and the ROW ITSELF where it does
-	 *         not — and it does not on the only population that can reach this at all, since no bundled
-	 *         parser publishes a contraindication rule and the curated sources set no substance name. So
-	 *         membership there is object identity, and a validator holding a second service would answer
-	 *         differently from the injector rendering the record: the two channels back to disagreeing
-	 *         about one chart, which is what this method exists to prevent. Not constructible today —
+	 *         not. Where it is the ROW, membership is object identity, and a validator holding a second
+	 *         service would answer differently from the injector rendering the record: the two channels
+	 *         back to disagreeing about one chart, which is what this method exists to prevent. That is
+	 *         the shape the BUNDLED curated seed has — it publishes no {@code substanceName} at all —
+	 *         and it is the only bundled population that can reach this method, since neither the
+	 *         {@code ddinter} nor the {@code atc} parser publishes a contraindication rule (ADR
+	 *         Decision 44 re-measures all three). An operator's own {@code json} entry MAY set one,
+	 *         which Jackson binds straight onto {@link DrugReference} and which
+	 *         {@code DrugReferenceValidity.RULES_WITHOUT_A_SUBSTANCE_IDENTITY} steers a deployment
+	 *         toward; the key is then a string and two services would agree, so what this condition is
+	 *         really about is the identity case rather than every dataset. Not constructible today —
 	 *         both beans are Spring singletons in one context and
 	 *         {@code DrugReferenceTestSupport.injectorWithSafety} wires one service into both — and that
 	 *         is what makes the condition hold, rather than anything either class checks.

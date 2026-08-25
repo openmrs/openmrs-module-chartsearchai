@@ -269,6 +269,13 @@ public class SafetyWarning {
 	 * refutes, and it reddens
 	 * {@code UncorroboratedFindingProvenanceTest.oneCorroboratedRuleOfACollapsedKeyClearsTheClauseForTheWholeKey}.
 	 *
+	 * <p>It can also answer false because ANOTHER key of this entry states the identical clause TEXT as
+	 * recorded, which is the record's own second stage ({@code uncorroborated.removeAll(recorded)}) and
+	 * not a second rule about this key: an allergy rule and a condition rule may carry one note, and a
+	 * record cannot both state a string as this chart's reading and hedge it — nor may a finding beside
+	 * it. Pinned by
+	 * {@code UncorroboratedFindingProvenanceTest.aClauseAnotherKeyOfThisEntryStatesAsRecordedIsNotHedged}.
+	 *
 	 * <p>It changes what the injected {@code safety_finding} SAYS and never how strongly it speaks.
 	 * {@code DrugReferenceInjector.renderFinding} appends
 	 * {@code DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH} for it; the strength clause is still

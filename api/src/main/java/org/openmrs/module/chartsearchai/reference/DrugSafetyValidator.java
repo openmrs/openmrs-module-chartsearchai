@@ -1412,7 +1412,9 @@ public class DrugSafetyValidator {
 		// chip would name that substance one way and the class chip another, which is #206 re-created
 		// inside this arm. What is left for a deployment authoring a genuinely route-specific rule is to
 		// file that presentation as its own substance, which is what a row publishing no substanceName
-		// already does.
+		// already does. (That paragraph is about `subject`, which the walk below resolves; the pre-pass
+		// between here and there is a separate concern and says so in its own comment.)
+
 		// The corroboration answer for each collapsed CLAUSE of this entry, resolved before the walk
 		// below and over the same unit the injected drug_reference record resolves it over: this
 		// ENTRY's rules, folded by contraindicationFinding, one corroborated rule carrying the key

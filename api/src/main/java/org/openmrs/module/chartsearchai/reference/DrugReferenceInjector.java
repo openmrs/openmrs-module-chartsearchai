@@ -1001,6 +1001,50 @@ public class DrugReferenceInjector {
 			" This finding is a caution to note, not a reason to withhold it.";
 
 	/**
+	 * How a contraindication finding's rule reached this patient's chart, stated in the finding
+	 * itself where nothing corroborates that match as a record of the drug (issue #308) — the
+	 * {@code safety_finding} counterpart of {@link #UNCORROBORATED_READING_LEAD}, which issue #269
+	 * gave the {@code drug_reference} record injected beside it.
+	 *
+	 * <p><b>Why the two are not one string.</b> They report one fact about one chart and they must
+	 * keep saying the same thing, but that lead is a colon-terminated section HEAD whose object is
+	 * supplied by the clause after it, so a well-formed sentence cannot be a substring of it — and
+	 * deriving one from the other would put the single case that pins that literal
+	 * ({@code InjectedContraindicationCorroborationTest.theThreeSectionLeadsAreTheWordsAModelReads})
+	 * silently in charge of a second channel it was never written for. What binds them is this
+	 * pairing of javadocs; each is pinned in its own file, and
+	 * {@code UncorroboratedFindingProvenanceTest.theClauseIsTheWordsAModelReads} is this one's.
+	 *
+	 * <p><b>Three properties of the wording, each load-bearing.</b> It NAMES its subject, so it is not
+	 * a dangling participle whose implied subject is the previous sentence's object. It OPENS by
+	 * asserting that a record was matched, which is the negation of the antecedent of the opposite
+	 * branch in {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} — "when no record addresses the drug or
+	 * intervention asked about, the whole answer is one sentence stating that the records do not
+	 * address it" — that a clause reading only "not a record of this drug", inside a record type the
+	 * same prompt says IS about this patient, would sit close to; a flip to that branch would be
+	 * fail-open. And it says what the MODULE established rather than a categorical about the chart,
+	 * ADR Decision 42's own measured constraint, because both corroborating legs can miss an allergy
+	 * the chart really holds.
+	 *
+	 * <p><b>Additive, and that is the decision rather than a detail.</b> The finding still states
+	 * {@link #STRENGTH_WITHHOLD}, and a third strength class between withholding and a caution — the
+	 * obvious fix — was refuted before any code was written. <b>ADR Decision 44 is canonical for what
+	 * it costs</b>; the measurements it rests on are not restated here, because three copies of a
+	 * rejected-alternative argument is how this repo has come to contradict itself before.
+	 *
+	 * <p>Package-private, like the three section leads and unlike {@link #STRENGTH_WITHHOLD}. That
+	 * difference is the whole of what this clause is NOT: the strength clauses are public because
+	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} — another package — carries them verbatim in its
+	 * graded-safety rule and its format demonstrations, and this one has no such consumer. It adds no
+	 * branch to that prompt, because it introduces no new call for the prompt to teach; it is evidence
+	 * the model reads inside a finding the prompt already instructs it to carry whole. Anything that
+	 * makes it public is teaching the prompt a third class, which ADR Decision 44 refused.
+	 */
+	static final String FINDING_UNCORROBORATED_MATCH =
+			" This module matched that record in this patient's chart by its wording alone and could "
+					+ "not corroborate it as a record of this drug.";
+
+	/**
 	 * One deterministic finding as a chart line. The detail text is reused verbatim — it is the same
 	 * string the clinician already sees on the chip, so the prose and the chip cannot describe the
 	 * same finding differently — and the finding then states what it licenses, so the answer's opening
@@ -1012,12 +1056,36 @@ public class DrugReferenceInjector {
 	 * sentence gains a full stop, so the clause after it reads as its own sentence rather than running
 	 * on. That is {@link DrugSafetyValidator#endSentence}, shared with the chip's own fold rather than
 	 * copied, and it is the only way the record's copy of the detail differs from the chip's.
+	 *
+	 * <p>Since issue #308 a contraindication finding whose match against the chart nothing
+	 * CORROBORATES also states how it was matched, between the detail and the strength clause — see
+	 * {@link #FINDING_UNCORROBORATED_MATCH}, and {@code SafetyWarning.restsOnAnUncorroboratedChartMatch}
+	 * for where that answer is decided. Not "reached the chart by bare containment": that is one LEG of
+	 * the union and it is the chip rank's condition, not this one, so a rule at the demoted rank whose
+	 * substance some other recorded allergy reaches carries no clause. It is a second clause and not a
+	 * second CALL — the strength clause is unchanged, so everything the paragraph above says about the
+	 * answer's opening call still holds.
+	 *
+	 * <p>The full-stop guard asks about BOTH clauses, and its provenance half cannot fire today: only a
+	 * contraindication can carry provenance and {@link #strengthClause} answers one unconditionally for
+	 * that type, so a provenance clause never arrives without a strength beside it. Said rather than
+	 * left to be rediscovered — mutating the guard to {@code strength.isEmpty()} alone leaves the whole
+	 * api suite green. It is kept because the two clauses are independent by construction, and a type
+	 * carrying one without the other is the shape {@link #strengthClause} already warns a future caller
+	 * it must write for.
 	 */
 	static String renderFinding(SafetyWarning finding) {
 		String strength = strengthClause(finding);
-		String detail = strength.isEmpty() ? finding.getDetail()
+		// Between the detail and the strength clause, so the clause stays SENTENCE-FINAL — which is
+		// where the prompt's own two format demonstrations put it, and what its graded-safety rule
+		// reads to decide how the answer opens. Provenance is about the evidence and belongs beside
+		// the sentence it qualifies; the call the finding states is the last word either way.
+		String provenance = finding.restsOnAnUncorroboratedChartMatch()
+				? FINDING_UNCORROBORATED_MATCH
+				: "";
+		String detail = strength.isEmpty() && provenance.isEmpty() ? finding.getDetail()
 				: DrugSafetyValidator.endSentence(finding.getDetail());
-		return FINDING_PREFIX + finding.getDrug() + ": " + detail + strength;
+		return FINDING_PREFIX + finding.getDrug() + ": " + detail + provenance + strength;
 	}
 
 	/**
@@ -1570,6 +1638,15 @@ public class DrugReferenceInjector {
 	 *         record may state the clause as the chart's own reading (issue #269). Asked only of a rule
 	 *         that has already matched.
 	 *
+	 *         <p><b>The body now lives on {@link DrugSafetyValidator#corroboratedByTheChart}</b>, which
+	 *         this delegates to, and the reasoning below is what that method points back at. It moved
+	 *         for one reason: since issue #308 the injected {@code safety_finding} asks this same
+	 *         question, and it is decided in the arm that BUILDS that finding — so a second copy here
+	 *         would let the two records of one chart come apart again, which is precisely what #308
+	 *         measured the cost of. The lazy memo is preserved across the move by handing the reading's
+	 *         own accessor rather than its value, so leg 2's dataset sweep still happens only where
+	 *         leg 1 fails.
+	 *
 	 *         <p><b>The UNION of two questions, and neither half will do.</b> A rule whose token is one
 	 *         of its own entry's drug NAMES reaches the allergy list through
 	 *         {@link PatientClinicalContext#hasAllergyToken}'s bare containment — deliberately bare,
@@ -1613,11 +1690,8 @@ public class DrugReferenceInjector {
 	 */
 	private static boolean corroborated(DrugReference ref, DrugReference.Contraindication c,
 			ContraindicationReading reading) {
-		if (!DrugSafetyValidator.selfNamedAllergyRule(ref, c)) {
-			return true;
-		}
-		return DrugSafetyValidator.aMatchedRecordNamesTheEntry(ref, c, reading.context())
-				|| reading.allergicSubstanceKeys().contains(ref.substanceGroupKey());
+		return DrugSafetyValidator.corroboratedByTheChart(ref, c, reading.context(),
+				reading::allergicSubstanceKeys);
 	}
 
 	/**
@@ -2176,33 +2250,29 @@ public class DrugReferenceInjector {
 	private static ContraindicationSections contraindicationSections(DrugReference ref,
 			ContraindicationReading reading) {
 		PatientClinicalContext context = reading.context();
-		Map<Object, String> byRule = new LinkedHashMap<Object, String>();
+		// The very key the chip ledger uses and the very clause the chip ledger's own corroboration fold
+		// reads, from the very methods it uses, so "ALLERGY"/"Ibuprofen" and "allergy"/"ibuprofen" are
+		// one rule here exactly as they are one chip there — including issue #146's exception, where an
+		// allergy rule NAMING this entry is keyed on the substance because that is the fact it reports.
+		// Shared rather than restated: a copy is how the two came apart when that exception was added,
+		// two such rules under two aliases of one drug becoming one chip and two clauses, which is #190
+		// item 1 re-opened one rule shape along. The chip's own key additionally carries the SUBJECT and
+		// the patient's match, neither of which a record about the drug has any business consulting;
+		// what has to agree is the collapse UNIT — and, since issue #308, the clause TEXT the three
+		// sections below are resolved over, which DrugSafetyValidator.addContraindications reads to ask
+		// this walk's own cross-key precedence question of the same strings.
+		Map<Object, String> byRule = DrugSafetyValidator.contraindicationClauses(ref);
 		Set<Object> recordedRules = new HashSet<Object>();
 		Set<Object> uncorroboratedRules = new HashSet<Object>();
 		Set<Object> unevaluableRules = new HashSet<Object>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
-			List<String> notes = new ArrayList<String>();
-			addIfPresent(notes, ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()));
-			if (notes.isEmpty()) {
+			// A rule stating neither a note nor a token contributes no clause, so it is in no section:
+			// the same emptiness contraindicationClauses skips, asked from the same method so the walk
+			// and the clause list cannot come to disagree about which rules exist.
+			if (DrugSafetyValidator.contraindicationClause(c) == null) {
 				continue;
 			}
-			// The very key the chip ledger uses, from the very method it uses, so "ALLERGY"/"Ibuprofen"
-			// and "allergy"/"ibuprofen" are one rule here exactly as they are one chip there — including
-			// issue #146's exception, where an allergy rule NAMING this entry is keyed on the substance
-			// because that is the fact it reports. Shared rather than restated: a copy is how the two came
-			// apart when that exception was added, two such rules under two aliases of one drug becoming
-			// one chip and two clauses, which is #190 item 1 re-opened one rule shape along. The chip's
-			// own key additionally carries the SUBJECT and the patient's match, neither of which a record
-			// about the drug has any business consulting; what has to agree is the collapse UNIT.
 			Object key = DrugSafetyValidator.contraindicationFinding(ref, c);
-			String clause = byRule.get(key);
-			if (clause == null) {
-				byRule.put(key, notes.get(0));
-			} else if (!clause.contains(notes.get(0))) {
-				// contains(), so a row re-authored with the identical note adds nothing — the drop issue
-				// #174 site 2 could make, made only where it is provably lossless.
-				byRule.put(key, clause + " — " + notes.get(0));
-			}
 			if (DrugSafetyValidator.recordedContraindicationKind(c, context) != null) {
 				// ANY rule of the collapsed key, because that is precisely when the ledger raises a chip
 				// for it: two spellings of one rule are one clause and one chip, and the patient matching
@@ -2212,7 +2282,21 @@ public class DrugReferenceInjector {
 				// max is not a formality: contraindicationFinding keys a self-named allergy rule on the
 				// SUBSTANCE (issue #146), so two such rules of one entry under different tokens are one
 				// clause, while corroborated() reads each rule's own token — so they can disagree, and one
-				// corroborated rule of the key is enough for the key. Asked only where the record may state
+				// corroborated rule of the key is enough for the key.
+				//
+				// SINCE ISSUE #308 THIS FOLD HAS A SECOND SPELLING, and a change here belongs in both
+				// places: DrugSafetyValidator.addContraindications folds the same question for the
+				// injected safety_finding, because that record states the answer too and the two must not
+				// disagree about one chart. Deliberately NOT unified — this walk resolves keys no chip was
+				// raised for, since a record renders the whole rule list with or without one — and
+				// deliberately over the SAME unit, which is the point rather than an accident: this
+				// entry's matched rules, keyed by contraindicationFinding, unscoped by subject matter.
+				// BOTH STAGES of it, and the second is the one below rather than this one: the sections
+				// are resolved over clause TEXT as well as over keys (uncorroborated.removeAll(recorded)),
+				// so a fold stopping here leaves that walk stating a string as this chart's reading while
+				// the finding beside it hedges the identical string. ADR Decision 44 records the units
+				// that were tried first and what each printed.
+				// Asked only where the record may state
 				// the reading at all: otherwise no section is rendered, and asking would resolve the
 				// patient's allergy list for a sentence nothing prints (see ContraindicationReading).
 				if (reading.states() && !corroborated(ref, c, reading)) {

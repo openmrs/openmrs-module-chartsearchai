@@ -62,11 +62,15 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p><b>Marked, not denied and not dropped.</b> The clause goes to a third named section rather than to
  * the negative half, because the same injection still carries the demoted chip as a
- * {@code safety_finding} asserting the contraindication with {@code STRENGTH_WITHHOLD} — deliberately,
+ * {@code safety_finding} stating the contraindication with {@code STRENGTH_WITHHOLD} — deliberately,
  * per {@code SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE}'s own javadoc — and a flat "Not recorded for
  * this patient" beside it would be two citable records of one chart contradicting each other. Nor is it
  * dropped: {@code DrugReferenceInjector.render} records two live-measured failures of naming some
  * clauses and leaving the rest to inference.
+ *
+ * <p>Since issue #308 that finding carries {@code FINDING_UNCORROBORATED_MATCH} as well, so both
+ * injected channels now say how the rule was matched — but its CALL is unchanged, which is why the
+ * paragraph above still holds and why a denial here would still contradict it.
  *
  * <p>Every case that reads a RECORD drives the real {@code injectRecords} wired to the real
  * {@code DrugSafetyValidator} over a dataset parsed by the real production parser, and reads the record
@@ -204,21 +208,39 @@ public class InjectedContraindicationCorroborationTest {
 		// The bound, and why the section above is a qualification rather than a denial. The demoted chip
 		// is still RAISED — the arms fire on different evidence and this one was never gated on the other
 		// (SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE's javadoc) — so the same injection carries it as a
-		// citable finding. This change is the record's and only the record's; the finding channel is a
-		// separate decision on separate evidence.
+		// citable finding.
+		//
+		// Issue #269 left the finding channel alone and said so, calling it "a separate decision on
+		// separate evidence". Issue #308 IS that decision, taken on evidence #269 did not have: measured
+		// live afterwards, the model answers from the finding and never surfaces the section above,
+		// because the finding was the unqualified one of two records reporting one fact. So the finding
+		// now carries FINDING_UNCORROBORATED_MATCH — and still carries STRENGTH_WITHHOLD, which is the
+		// half this case exists to hold: the qualification is ADDITIVE and the call did not move. The
+		// rule's own sentence, the first half of the assertion below, is byte-identical across both
+		// changes. UncorroboratedFindingProvenanceTest owns the finding channel; what this case keeps is
+		// that the two channels answer ONE chart together.
 		DrugReferenceService service = fixtureService(MID_WORD_TOKEN);
-		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(
-				DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
-						DrugReferenceTestSupport.oneRecordChart(),
-						DrugReferenceTestSupport.ctx(60, null, null, null,
-								DrugReferenceTestSupport.set("Tiotropium"), null),
-						"Is it safe to give her opium?"));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Tiotropium"), null),
+				"Is it safe to give her opium?");
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
 
+		// The PAIRING is what this case owns, so it reads BOTH records of the one injection — the
+		// finding's own text is pinned in UncorroboratedFindingProvenanceTest and asserting only that
+		// here would make this a copy of it, green even if the section beside it were deleted outright.
+		assertEquals("documented opium allergy",
+				sectionAfter(DrugReferenceTestSupport.referenceTextNaming(chart, "Opium"),
+						UNCORROBORATED_LEAD),
+				"the drug_reference record must still hedge the clause the finding qualifies");
 		assertEquals(1, findings.size(), "one fact is one citable record, was: " + findings);
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Opium: Opium is contraindicated by an active allergy: documented opium allergy."
+				+ DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH
 				+ DrugReferenceInjector.STRENGTH_WITHHOLD, findings.get(0).getText(),
-				"unchanged by this fix, was: " + findings);
+				"the finding must qualify the same match this record's third section qualifies, and "
+						+ "must still state the same call, was: " + findings);
 	}
 
 	@Test

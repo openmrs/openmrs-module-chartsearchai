@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #308 — not shipped data",
+  "description": "The arrangement in which the string a FINDING prints and the string its collapsed KEY renders are not the same string. Levoketoconazole files TWO self-named allergy rules — 'levo', carrying the note 'opioid reaction' authored with whitespace around it, which an allergy recorded as 'Levocetirizine' reaches only mid-word and nothing corroborates, and 'ketoconazole', carrying 'other reaction', which no recorded allergen here reaches at all. contraindicationFinding keys both on the SUBSTANCE (issue #146), so contraindicationClauses renders them as ONE joined clause 'opioid reaction — other reaction', while the ledger's sentence prints only the matched rule's own note, 'opioid reaction'. A CONDITION rule on 'respiratory depression' carries that same note; it is not self-named, so it is corroborated by construction, and an allergy rule and a condition rule sharing one note is the 'recorded either way' shape DrugReferenceInjector.contraindicationSections' own comment names. The record therefore states 'opioid reaction' as this chart's reading — and the finding beside it prints exactly those words. No entry carries ATC codes, so no class comparison can chip. The whitespace on the 'levo' note is load-bearing rather than untidy: the record renders every clause trimmed (contraindicationClauses, through contraindicationClause) while the ledger's sentence prints the note as authored, so the two channels only compare like with like because addContraindications asks contraindicationClause(c) and not the expression that sentence is built from. Replace that call with ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()) and theWordsTheFindingPrintsAreNotHedgedWhereAnotherKeyStatesThemAsRecorded reddens; measured with the whitespace taken off, the same replacement moved no case's colour in the api suite."
+  ,
+  "entries": [
+    {
+      "id": "levoketoconazole",
+      "name": "Levoketoconazole",
+      "aliases": ["levoketoconazole", "ketoconazole", "levo"],
+      "contraindications": [
+        { "type": "allergy", "token": "levo", "note": "  opioid reaction  " },
+        { "type": "allergy", "token": "ketoconazole", "note": "other reaction" },
+        { "type": "condition", "token": "respiratory depression", "note": "opioid reaction" }
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

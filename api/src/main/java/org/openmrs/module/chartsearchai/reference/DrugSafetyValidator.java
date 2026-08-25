@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -422,11 +423,19 @@ public class DrugSafetyValidator {
 				? recordedAllergens(drugReferenceService, context)
 				: Collections.<RecordedAllergen> emptyList();
 
+		// Derived from the walk resolved just above rather than re-walked (allergicSubstanceKeys' own
+		// list overload), and held for this pass exactly as that list is — a per-call local and never a
+		// field, issue #172. It is leg 2 of the corroboration union both injected channels now ask
+		// (issue #308); the supplier form is what lets the injector keep its lazy memo while this side,
+		// which has already paid for the walk, hands over a set it has.
+		final Set<Object> allergicSubstances = allergicSubstanceKeys(recordedAllergens);
+		Supplier<Set<Object>> allergicSubstanceSupplier = () -> allergicSubstances;
+
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
-				addContraindications(contraindications, ref, context, null);
+				addContraindications(contraindications, ref, context, null, allergicSubstanceSupplier);
 				addAllergyContraindications(contraindications, ref, recordedAllergens);
 			}
 			// The rows this pass resolved for ref's substance, and the null/empty check the two-map form
@@ -472,7 +481,8 @@ public class DrugSafetyValidator {
 				citedTextsLower = citedRecordTextsLower(answer, mappings);
 			}
 			addActiveOrderContraindications(contraindications, inPlay, context, orderEntries,
-					recordedAllergens, new SubjectMatter(question, answer, citedTextsLower));
+					recordedAllergens, new SubjectMatter(question, answer, citedTextsLower),
+					allergicSubstanceSupplier);
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
@@ -1225,6 +1235,19 @@ public class DrugSafetyValidator {
 		 *  not do is SPEAK for a chip the allergen arm corroborated, because the fold's whole premise is
 		 *  that a self-named rule reports that arm's fact, and a match no recorded name supports does not.
 		 *
+		 *  <p>Still raised, and since issue #308 the injected {@code safety_finding} such a rule produces
+		 *  may state how it was matched ({@code DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH}).
+		 *  <b>May, not does</b>, and the difference is this rank's own condition: this rank asks
+		 *  {@link #aMatchedRecordNamesTheEntry} alone, while the clause asks the UNION that predicate is
+		 *  one leg of ({@link #corroboratedByTheChart}) — so a rule at this rank whose substance some
+		 *  OTHER recorded allergy reaches carries no clause, and the record's third section agrees with
+		 *  it. Do not re-derive one from the other: reading the clause off this rank is reading leg 1
+		 *  alone, which is the false hedge leg 2 exists to prevent. Its CALL is
+		 *  unchanged — the chip's rank, its detail and its severity are what they were, and the sentence
+		 *  above about being raised on independent evidence is why. What #308 measured is that a
+		 *  qualification reaching only one of two citable records changes no answer, because the model
+		 *  answers from the unqualified one.
+		 *
 		 *  <p>0 rather than 3.5: what it has to be is BELOW {@link #IDENTITY}, and the two class ranks can
 		 *  never share this key ({@link #addAllergyContraindications} reaches them only after
 		 *  {@link #firstOfSameSubstance} returned null). It shares {@link #SELF_NAMED_RULE_WITHOUT_A_NOTE}'s
@@ -1356,11 +1379,26 @@ public class DrugSafetyValidator {
 				already.relationship = relationship;
 				already.namesTheFinding = namesTheFinding;
 			}
+			// Nothing to reconcile about issue #308's corroboration flag here, and that is a property of
+			// WHERE it is resolved rather than an omission: addContraindications folds it over the whole
+			// ENTRY's rules for a clause before building any warning, so every chip arrives carrying its
+			// own entry's answer and the sentence that survives brings that answer with it. Resolving it
+			// in this ledger instead was tried and is wrong twice over — the key is the SUBSTANCE, so it
+			// folds across rows only ONE of which has a record rendered for it, and the rules the
+			// subject-matter gate skips never arrive to be folded at all.
+			//
+			// What this does NOT reconcile is the two channels being about DIFFERENT rows: the sentence
+			// that survives here is the strongest RANK across the substance's rows, while the record is
+			// rendered for canonicalRow's row and states that row's rules alone. ADR Decision 44 declares
+			// that residue and
+			// UncorroboratedFindingProvenanceTest.aSiblingRowsSentenceOutranksTheRenderedRowsAndBringsItsOwnAnswer
+			// pins it.
 		}
 	}
 
 	private void addContraindications(ContraindicationChips chips, DrugReference ref,
-			PatientClinicalContext context, SubjectMatter askedAbout) {
+			PatientClinicalContext context, SubjectMatter askedAbout,
+			Supplier<Set<Object>> allergicSubstances) {
 		if (context == null) {
 			return;
 		}
@@ -1381,7 +1419,79 @@ public class DrugSafetyValidator {
 		// chip would name that substance one way and the class chip another, which is #206 re-created
 		// inside this arm. What is left for a deployment authoring a genuinely route-specific rule is to
 		// file that presentation as its own substance, which is what a row publishing no substanceName
-		// already does.
+		// already does. (That paragraph is about `subject`, which the walk below resolves; the pre-pass
+		// between here and there is a separate concern and says so in its own comment.)
+
+		// The corroboration answer for each collapsed CLAUSE of this entry, resolved before the walk
+		// below and over the same unit the injected drug_reference record resolves it over: this
+		// ENTRY's rules, folded by contraindicationFinding, one corroborated rule carrying the key,
+		// and then — the record's own second stage — a clause TEXT another key of this entry states as
+		// recorded, asked below both of the key's own rendered clause and of the sentence the finding
+		// prints for the rule (issue #308, DrugReferenceInjector.contraindicationSections — a change to
+		// either belongs in both). Two things about the scoping are load-bearing and each was measured
+		// wrong first.
+		//
+		// It is per ENTRY and not per chip KEY. The ledger's key is the SUBSTANCE, so it spans every
+		// ROW of it, while the injector injects ONE record for the substance and renders it for
+		// canonicalRow's row — and on two rule-bearing rows of one substance a corroborated rule on the
+		// sibling cleared the flag while the rendered row's own record went on hedging its own clause.
+		// The residue that scoping leaves — the surviving SENTENCE can still be a row's the record does
+		// not state — is declared in ADR Decision 44 and pinned by
+		// UncorroboratedFindingProvenanceTest.aSiblingRowsSentenceOutranksTheRenderedRowsAndBringsItsOwnAnswer.
+		//
+		// And it ignores `askedAbout`. That gate decides which CHIPS this response may raise (issue
+		// #143); whether the chart corroborates a match is a fact about the chart and not about what
+		// was asked, and contraindicationSections asks it unscoped. Scoped, a corroborated rule the
+		// question does not name is skipped before it can carry its key — the record then states the
+		// clause while the finding beside it says nothing corroborates the match.
+		//
+		// The guard opening the loop — MATCHED rules only — is load-bearing too, and it is what
+		// everything read off this map assumes. corroboratedByTheChart answers TRUE unconditionally for
+		// a rule that is not a self-named allergy rule, and contraindicationClauses renders a clause for
+		// every rule of the entry whether it matched or not, so an UNMATCHED rule reaching this fold
+		// seeds its key TRUE, puts that key's clause into statedAsRecorded and clears a finding whose
+		// record beside it goes on hedging the same string — issue #308's own contradiction, one rule
+		// along, and nothing errors or changes a count when it happens. This loop and the walk below
+		// open on the same recordedContraindicationKind call, so a later dedup pass that shares it is
+		// the seam to watch. Delete the `continue` here, leaving `Object key = contraindicationFinding(
+		// ref, c);` as the loop's first statement, and read the failure:
+		// UncorroboratedFindingProvenanceTest.aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded.
+		Map<Object, String> clauses = contraindicationClauses(ref);
+		Map<Object, Boolean> corroboratedClauses = new HashMap<Object, Boolean>();
+		for (DrugReference.Contraindication c : ref.getContraindications()) {
+			if (recordedContraindicationKind(c, context) == null) {
+				continue;
+			}
+			Object key = contraindicationFinding(ref, c);
+			if (!Boolean.TRUE.equals(corroboratedClauses.get(key))) {
+				corroboratedClauses.put(key,
+						corroboratedByTheChart(ref, c, context, allergicSubstances));
+			}
+		}
+		// The record's SECOND stage, and the finding needs it for the reason the record does: the three
+		// sections are resolved over clause TEXT and not over keys (`uncorroborated.removeAll(recorded)`),
+		// because two rules of DIFFERENT keys may render the SAME string — an allergy rule and a
+		// condition rule carrying one note, which contraindicationSections' own comment calls a natural
+		// way to author "recorded either way". Stopping at the key left the record stating a string as
+		// this chart's own reading while the finding beside it hedged the identical string: issue #308's
+		// defect, in one injection, created by the change that fixes it everywhere else. Reproduced over
+		// drug-reference-borrowed-alias-corroboration.json's Codeine entry and pinned by
+		// UncorroboratedFindingProvenanceTest.aClauseAnotherKeyOfThisEntryStatesAsRecordedIsNotHedged;
+		// replace both of the statedAsRecorded legs read below with the key fold alone
+		// (`!Boolean.TRUE.equals(corroboratedClauses.get(key))`, the state this stage was added to) and
+		// read the failures.
+		//
+		// The set holds the clause each corroborated KEY renders, off contraindicationClauses, so these
+		// are the strings that walk prints. What is asked OF it is two strings rather than one, and the
+		// read below says why: a key's rendered clause is a JOIN wherever the key collapses two rules
+		// that say different things, while the sentence a finding prints is one rule's note alone.
+		Set<String> statedAsRecorded = new HashSet<String>();
+		for (Map.Entry<Object, Boolean> clause : corroboratedClauses.entrySet()) {
+			if (Boolean.TRUE.equals(clause.getValue()) && clauses.get(clause.getKey()) != null) {
+				statedAsRecorded.add(clauses.get(clause.getKey()));
+			}
+		}
+
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			String recorded = recordedContraindicationKind(c, context);
 			if (recorded == null) {
@@ -1398,10 +1508,65 @@ public class DrugSafetyValidator {
 			// every request, for a loop that then does nothing. SubstanceSubjects memoises per substance, so
 			// asking it once per MATCHED rule costs no more than asking it once.
 			DrugReference subject = chips.subjectOf(ref);
-			chips.add(subject, contraindicationFinding(ref, c), contraindicationRank(ref, c, context),
-					new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
+			// Whether the injected finding may state this rule's sentence bare — issue #308, and the SAME
+			// question the injected drug_reference record's third section asks
+			// (DrugReferenceInjector.corroborated, which delegates to the same method). It rides on the
+			// WARNING because the renderer holds a SafetyWarning and not the rule it came from.
+			//
+			// The CLAUSE's answer, not this rule's: two self-named rules of one entry are one chip and
+			// one rendered clause (issue #146 keys both on the substance), so they are folded above and
+			// the fold is what is read here. Reading this rule's own answer instead was the first cut and
+			// is measured wrong — contraindicationRank answers SELF_NAMED_RULE_WITHOUT_A_NOTE for a blank
+			// note WITHOUT asking corroboration, so a corroborated blank-note rule ties with an
+			// uncorroborated noted one and loses the incumbent-keeps tiebreak, and the prompt then carried
+			// "Recorded for this patient" beside "could not corroborate it as a record of this drug".
+			// Mutate the whole expression below to !corroboratedByTheChart(ref, c, context,
+			// allergicSubstances) and read the failures.
+			//
+			// Asked of BOTH strings the two channels can print about this rule, because they are not
+			// always one string. clauses.get(key) is what the RECORD renders for the collapsed key — a
+			// JOIN of the distinct notes wherever the key collapses two rules that say different things
+			// (contraindicationClauses) — while the sentence built below prints the winning rule's own
+			// note alone. contraindicationClause(c) is that note, trimmed, which is the form the record
+			// renders and so the form these strings have to be compared in. So once such a key carries
+			// a second rule saying something different, a guard asked only of the joined
+			// clause cannot see that another key of this entry states the finding's own words as
+			// recorded, and the finding hedges words the record beside it asserts. That is issue #308's
+			// defect one rule along, and one this walk CREATES rather than fails to close, since main
+			// appends no clause to any finding. Mutate either conjunct away and read the failures: the
+			// key-clause one reddens oneCorroboratedRuleOfACollapsedKeyClearsTheClauseForTheWholeKey,
+			// aRuleTheSubjectMatterGateSKIPSStillCarriesItsClausesCorroboration and
+			// theSentenceIsTheRankWinnersAndTheClauseIsTheKeysFold; the rule-clause one reddens
+			// theWordsTheFindingPrintsAreNotHedgedWhereAnotherKeyStatesThemAsRecorded.
+			//
+			// RENORMALISING the second conjunct is a separate mutation from removing it, and it reddens
+			// that same case: replace contraindicationClause(c) with the expression the sentence below is
+			// built from — the untrimmed ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()) — and
+			// a matched rule whose curated note carries surrounding whitespace hedges the very words the
+			// record beside it states as this chart's reading. That case's fixture authors such a note for
+			// exactly this; measured with the whitespace taken off, the replacement moved no case's colour.
+			//
+			// No conjunct reads corroboratedClauses directly at this site, and the absence is deliberate.
+			// statedAsRecorded is built FROM that map, and a matched rule always carries a matchable —
+			// hence non-blank — token (PatientClinicalContext.matchableToken), so its key always has a
+			// rendered clause and a corroborated key always contributed that clause to the set: the
+			// key-clause conjunct already answers for it. That premise is a statement about this map
+			// holding MATCHED rules only, which is the guard above and is pinned by
+			// aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded. One was written here in round 1
+			// of this branch's review and removed in round 3, having measured that replacing it with
+			// corroboratedByTheChart(ref, c, context, allergicSubstances) — the mutation four texts then
+			// prescribed as this fold's own guard — moved no case's colour.
+			//
+			// It changes what the record SAYS and never how strongly it speaks: the chip's detail, its
+			// rank and its severity are untouched, so licensesWithholding still answers alike for it.
+			Object key = contraindicationFinding(ref, c);
+			boolean uncorroborated = !statedAsRecorded.contains(clauses.get(key))
+					&& !statedAsRecorded.contains(contraindicationClause(c));
+			chips.add(subject, key, contraindicationRank(ref, c, context),
+					SafetyWarning.contraindication(subject.displayLabel(),
 							subject.displayLabel() + " is contraindicated by an " + recorded + ": "
-									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())));
+									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()),
+							uncorroborated));
 		}
 	}
 
@@ -1501,10 +1666,14 @@ public class DrugSafetyValidator {
 	 */
 	static boolean aMatchedRecordNamesTheEntry(DrugReference ref, DrugReference.Contraindication c,
 			PatientClinicalContext context) {
-		// No caller reaches this today: addContraindications returns on a null context before the rank is
-		// asked, and DrugReferenceInjector.corroborated is gated on a reading that requires one. Kept
-		// because allergensMatching would throw instead, and because false is the only safe answer here —
-		// it hedges or demotes, and can never make a record ASSERT something about a chart nobody read.
+		// No caller reaches this today, and the reason is a property of the paths rather than a list of
+		// them: every one of them is downstream of a context the caller has already established. The
+		// rank and the flag are both asked from inside addContraindications, which returns on a null
+		// context before either; the injected record's reading is gated on a reading that requires one.
+		// Stated as the mechanism because the list has already grown once — issue #308 added the flag —
+		// and an enumeration goes stale silently while a mechanism does not. Kept because
+		// allergensMatching would throw instead, and because false is the only safe answer here: it
+		// hedges or demotes, and can never make a record ASSERT something about a chart nobody read.
 		if (context == null) {
 			return false;
 		}
@@ -1662,6 +1831,69 @@ public class DrugSafetyValidator {
 		return selfNamedAllergyRule(ref, c) ? ref.substanceGroupKey()
 				: Arrays.<Object> asList("rule", DrugReference.normalizeName(c.getType()),
 						DrugReference.normalizeName(c.getToken()));
+	}
+
+	/**
+	 * @return the clause {@code c} contributes to a record about its entry — its note, else its own
+	 *         token rendered back ({@link ChartSearchAiUtils#firstNonBlank}), trimmed — or {@code null}
+	 *         where the rule states neither. A rule stating neither reaches no channel at all: it
+	 *         cannot match ({@link PatientClinicalContext#matchableToken} refuses a blank token) and
+	 *         {@link #contraindicationClauses} gives it no clause to be listed under.
+	 *
+	 *         <p>Since issue #308 {@link #addContraindications} asks this of a MATCHED rule as well, to
+	 *         compare the sentence its finding prints against the strings the record states as this
+	 *         chart's reading. That is the same expression the sentence is built from, trimmed — which
+	 *         is the form the record renders — so the two channels compare like with like. The TRIM is
+	 *         what that turns on wherever a curated note carries surrounding whitespace, and
+	 *         {@code UncorroboratedFindingProvenanceTest.theWordsTheFindingPrintsAreNotHedgedWhereAnotherKeyStatesThemAsRecorded}
+	 *         is what holds it: that case's fixture authors the matched rule's note padded, so replacing
+	 *         this call at that site with the untrimmed
+	 *         {@code ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())} reddens it. Measured
+	 *         with the padding taken off, the same replacement moved no case's colour in the api suite —
+	 *         so it is the fixture's whitespace and not the case's shape that pins the normalisation. It
+	 *         is not
+	 *         the same string as the clause the rule's collapsed KEY renders wherever that key folds two
+	 *         rules saying different things; both are asked there, and the walk says why.
+	 */
+	static String contraindicationClause(DrugReference.Contraindication c) {
+		String clause = ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken());
+		return ChartSearchAiUtils.isBlank(clause) ? null : clause.trim();
+	}
+
+	/**
+	 * @return the clause each collapsed contraindication key of {@code ref} renders, in the order the
+	 *         rules are authored — {@link #contraindicationFinding}'s partition carrying the TEXT the
+	 *         injected {@code drug_reference} record prints for each key. Two rules of ONE key
+	 *         contribute one clause, joined where they say different things and dropped where a row is
+	 *         re-authored with the identical note ({@code contains}, so the drop is provably lossless —
+	 *         the one issue #174 site 2 could make, made only where it is).
+	 *
+	 *         <p>ONE definition, called by {@code DrugReferenceInjector.contraindicationSections} to
+	 *         build the clause list it renders and by {@link #addContraindications} to ask that walk's
+	 *         own cross-key precedence question of the same strings — for the same reason
+	 *         {@link #contraindicationFinding} is one definition. That walk resolves its three sections
+	 *         over these strings and not over the keys ({@code uncorroborated.removeAll(recorded)}),
+	 *         because two rules of DIFFERENT keys may render the SAME string — an allergy rule and a
+	 *         condition rule may carry one note, which is a natural way to author "recorded either
+	 *         way" — and a record cannot both state a string as this chart's reading and hedge it. A
+	 *         finding beside it cannot either, which is why these have to be the same strings.
+	 */
+	static Map<Object, String> contraindicationClauses(DrugReference ref) {
+		Map<Object, String> byKey = new LinkedHashMap<Object, String>();
+		for (DrugReference.Contraindication c : ref.getContraindications()) {
+			String note = contraindicationClause(c);
+			if (note == null) {
+				continue;
+			}
+			Object key = contraindicationFinding(ref, c);
+			String clause = byKey.get(key);
+			if (clause == null) {
+				byKey.put(key, note);
+			} else if (!clause.contains(note)) {
+				byKey.put(key, clause + " — " + note);
+			}
+		}
+		return byKey;
 	}
 
 	/**
@@ -4239,11 +4471,37 @@ public class DrugSafetyValidator {
 	 *         {@code drugReferenceService} is not, and an answer that went missing there would silently
 	 *         report every self-named rule as uncorroborated. Resolved per call and held by the caller
 	 *         for the life of one injection, never on this bean (issue #172).
+	 *
+	 *         <p>Since issue #308 this bean derives the same set for itself, from the
+	 *         {@code recordedAllergens} walk {@code validate} already does once per pass — see the list
+	 *         overload below, which is the one spelling of the derivation. That makes the same-service
+	 *         condition above bind a SECOND pair: the flag is set here and the record's section is
+	 *         decided in the injector, so an injector wired to a validator holding a different
+	 *         {@code DrugReferenceService} would give the two channels different answers about one
+	 *         chart — the divergence #308 exists to close, reappearing through the wiring. Both are
+	 *         Spring singletons in production and {@code DrugReferenceTestSupport.injectorWithSafety}
+	 *         wires one service into both, which is what makes the condition hold rather than anything
+	 *         either class checks.
 	 */
 	static Set<Object> allergicSubstanceKeys(DrugReferenceService drugReferenceService,
 			PatientClinicalContext context) {
+		return allergicSubstanceKeys(recordedAllergens(drugReferenceService, context));
+	}
+
+	/**
+	 * @return the same answer over a walk the caller has ALREADY resolved — {@code validate}'s own
+	 *         per-pass {@code recordedAllergens} local (issue #308). One spelling of the derivation
+	 *         rather than two, which is the whole reason this overload exists: the set and the arm
+	 *         that raises the identity chip must not come to disagree about which substances this
+	 *         patient is recorded allergic to, and a second loop is how they would.
+	 *
+	 *         <p>Not a memo and not a cache — it derives from the list it is handed and holds nothing,
+	 *         so issue #172's rule is satisfied by the caller's own scoping rather than by anything
+	 *         here.
+	 */
+	private static Set<Object> allergicSubstanceKeys(List<RecordedAllergen> recordedAllergens) {
 		Set<Object> substances = new LinkedHashSet<Object>();
-		for (RecordedAllergen recorded : recordedAllergens(drugReferenceService, context)) {
+		for (RecordedAllergen recorded : recordedAllergens) {
 			for (DrugReference implied : recorded.substances()) {
 				substances.add(implied.substanceGroupKey());
 			}
@@ -4252,11 +4510,73 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * @return whether anything CORROBORATES {@code c}'s match against this patient's chart, so that a
+	 *         record derived from it may state the clause as the chart's own reading — CLAUDE.md's
+	 *         fourth injected-record question, and since issue #308 the question BOTH injected
+	 *         channels ask. Asked only of a rule that has already matched.
+	 *
+	 *         <p>The union of two questions, and neither half will do: everything about WHY is on
+	 *         {@code DrugReferenceInjector.corroborated}, which is where the reasoning has lived since
+	 *         issue #269 and which now delegates here. What moved is only the body, and it moved for
+	 *         one reason — the injected {@code drug_reference} section and the injected
+	 *         {@code safety_finding} beside it report ONE fact about ONE chart, and issue #308
+	 *         measured what happens when only one of them is qualified: the model answers from the
+	 *         bare one. Two copies of this predicate is how they would come apart again, silently,
+	 *         since nothing errors when a hedge and an assertion sit side by side.
+	 *
+	 *         <p>{@code allergicSubstances} is a supplier and not a set deliberately: leg 2 is a
+	 *         dataset sweep and leg 1 reads only the context and the entry, so the cost order the
+	 *         injector documents is preserved here rather than at one caller. The injector hands its
+	 *         own lazily memoised reading; {@code validate} hands a set it has already derived from
+	 *         the walk it does once per pass.
+	 *
+	 *         <p><b>Both sides must hold the same {@link DrugReferenceService}</b>, and since this method
+	 *         is the one both channels ask, the condition belongs here rather than only on
+	 *         {@link #allergicSubstanceKeys}. Leg 2 compares {@link DrugReference#substanceGroupKey()},
+	 *         which is the substance NAME where the data publishes one and the ROW ITSELF where it does
+	 *         not. Where it is the ROW, membership is object identity, and a validator holding a second
+	 *         service would answer differently from the injector rendering the record: the two channels
+	 *         back to disagreeing about one chart, which is what this method exists to prevent. That is
+	 *         the shape the BUNDLED curated seed has — it publishes no {@code substanceName} at all —
+	 *         and it is the only bundled population that can reach this method, since neither the
+	 *         {@code ddinter} nor the {@code atc} parser publishes a contraindication rule (ADR
+	 *         Decision 44 re-measures all three). An operator's own {@code json} entry MAY set one,
+	 *         which Jackson binds straight onto {@link DrugReference} and which
+	 *         {@code DrugReferenceValidity.RULES_WITHOUT_A_SUBSTANCE_IDENTITY} steers a deployment
+	 *         toward; the key is then a string and two services would agree, so what this condition is
+	 *         really about is the identity case rather than every dataset. Not constructible today —
+	 *         both beans are Spring singletons in one context and
+	 *         {@code DrugReferenceTestSupport.injectorWithSafety} wires one service into both — and that
+	 *         is what makes the condition hold, rather than anything either class checks.
+	 *
+	 *         <p><b>This answers about one RULE. A collapsed KEY is a fold over its rules</b>, and that
+	 *         resolution belongs to {@link #addContraindications}, not to this method: two self-named
+	 *         rules of one entry are ONE chip and one rendered clause (issue #146), so one corroborated
+	 *         rule carries the key. Asking this per rule and reading the answer off whichever rule won
+	 *         the ledger's RANK is not the same thing, and the difference is reachable — see issue
+	 *         #308 and ADR Decision 44, which record three ways of getting the unit wrong.
+	 *
+	 *         <p>Scoped to a SELF-NAMED allergy rule, which is load-bearing rather than incidental —
+	 *         a rule whose token is not one of its entry's names is asking about a class or about a
+	 *         fragment of free text, which is what the bare match exists for, and neither corroborating
+	 *         question can speak to it. Mutate the scope out and read the failures.
+	 */
+	static boolean corroboratedByTheChart(DrugReference ref, DrugReference.Contraindication c,
+			PatientClinicalContext context, Supplier<Set<Object>> allergicSubstances) {
+		if (!selfNamedAllergyRule(ref, c)) {
+			return true;
+		}
+		return aMatchedRecordNamesTheEntry(ref, c, context)
+				|| allergicSubstances.get().contains(ref.substanceGroupKey());
+	}
+
+	/**
 	 * @return one {@link RecordedAllergen} per distinct resolution, in the order the context lists the
 	 *         tokens — the input to {@link #addAllergyContraindications}, resolved once per
 	 *         {@code validate} because it does not depend on the subject being checked, and once per
 	 *         injection by {@link #allergicSubstanceKeys} for the injected record's own reading (issue
-	 *         #269). Two invocations of ONE walk rather than two walks: the answer is a function of the
+	 *         #269) — and, since issue #308, read a second time within the pass, to derive the key set
+	 *         the injected finding's own clause turns on. Two invocations of ONE walk rather than two walks: the answer is a function of the
 	 *         service and the context alone, so the two cannot disagree, and neither holds it past the
 	 *         pass or the injection that asked for it. Each carries
 	 *         its charted allergen token and the substances it implies, plus which of those it NAMES
@@ -4555,7 +4875,8 @@ public class DrugSafetyValidator {
 	 */
 	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries,
-			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout) {
+			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout,
+			Supplier<Set<Object>> allergicSubstances) {
 		if (!hasContraindicationRecords(context)) {
 			return;
 		}
@@ -4575,14 +4896,20 @@ public class DrugSafetyValidator {
 			// Where it does not hold, only the findings the response is itself about may speak — which
 			// is what stops a cancer question carrying chips about her local anaesthetics.
 			if (askedAbout.names(ref)) {
-				addContraindications(chips, ref, context, null);
+				addContraindications(chips, ref, context, null, allergicSubstances);
 				addAllergyContraindications(chips, ref, recordedAllergens);
 				continue;
 			}
 			if (allergensAskedAbout == null) {
 				allergensAskedAbout = recordedAllergensAskedAbout(recordedAllergens, askedAbout);
 			}
-			addContraindications(chips, ref, context, askedAbout);
+			// The WHOLE-list set, never allergensAskedAbout beside it. Leg 2 of the union is the allergen
+			// arm's own identity question "asked over the WHOLE allergy list" (ADR Decision 42), so
+			// narrowing it to what the response is about would report a finding as uncorroborated on the
+			// strength of the question's wording — hedging a clause a recorded allergy really does
+			// support. The narrowing below is about which allergy records may SPEAK in this response;
+			// this is about what the chart holds, and the two are different questions.
+			addContraindications(chips, ref, context, askedAbout, allergicSubstances);
 			addAllergyContraindications(chips, ref, allergensAskedAbout);
 		}
 	}

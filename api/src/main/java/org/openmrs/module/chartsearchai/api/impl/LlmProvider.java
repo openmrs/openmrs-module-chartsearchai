@@ -73,8 +73,9 @@ public class LlmProvider {
 			+ "means the records DO address that drug: answer the question from that finding and cite "
 			+ "it, and never put a sentence saying the records do not address the drug in front of "
 			+ "one, which contradicts it in the same breath. "
-			// ISSUE #315. The prompt classified every OTHER record class it puts in front of the
-			// model and said what it meant, and classified a drug order not at all — so an ENDED
+			// ISSUE #315. The prompt told the model what a "Drug reference" record means and what a
+			// "Safety finding" record means — the two classes this module injects — and said
+			// nothing at all about a drug order, the class it does NOT inject. So an ENDED
 			// prescription reached the model as a flat field list in which the end date was one
 			// field among four, and whether it survived into the answer was left to phrasing.
 			//

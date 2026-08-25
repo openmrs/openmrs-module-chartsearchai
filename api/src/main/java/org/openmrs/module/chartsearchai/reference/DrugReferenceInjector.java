@@ -555,7 +555,9 @@ public class DrugReferenceInjector {
 	 * branch. Without that, the one record #118 injects to stop a chip and the prose contradicting
 	 * each other would fall outside the class the rule reasons about — reopening #118 by instruction
 	 * rather than by missing evidence. Held as one constant because the renderer and the prompt are
-	 * the two places that spell it, and nothing else would notice them drifting apart.
+	 * the two places that spell it: sharing makes it impossible for those two to disagree. The
+	 * RENDER site's spacing is pinned separately, from outside, by the reconciliation tests that
+	 * assert the rendered {@code "Active drug order: <display>."} text.
 	 */
 	public static final String ACTIVE_ORDER_PREFIX = "Active drug order:";
 

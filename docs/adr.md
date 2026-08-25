@@ -2798,7 +2798,7 @@ Two things follow, and the second is a residue rather than a win.
 
 ### Context
 
-`DEFAULT_SYSTEM_PROMPT` classifies every other record class it puts in front of the model and says what it means — `"Records beginning with \"Drug reference\" are clinical reference data, not this patient's data"` ([#110](https://github.com/openmrs/openmrs-module-chartsearchai/issues/110)/[#112](https://github.com/openmrs/openmrs-module-chartsearchai/issues/112)), `"Records beginning with \"Safety finding\" ARE about this patient"` — and classified a drug order not at all. An ENDED prescription therefore reached the model as a flat field list in which the end date is one field among four: `Drug order: Nevirapine. Action: NEW. Urgency: ROUTINE. Stopped: 2026-08-24`.
+`DEFAULT_SYSTEM_PROMPT` tells the model what each record class the MODULE INJECTS means — `"Records beginning with \"Drug reference\" are clinical reference data, not this patient's data"` ([#110](https://github.com/openmrs/openmrs-module-chartsearchai/issues/110)/[#112](https://github.com/openmrs/openmrs-module-chartsearchai/issues/112)), `"Records beginning with \"Safety finding\" ARE about this patient"` — and classified a drug order not at all. An ENDED prescription therefore reached the model as a flat field list in which the end date is one field among four: `Drug order: Nevirapine. Action: NEW. Urgency: ROUTINE. Stopped: 2026-08-24`.
 
 Measured on the 3.7.1 standalone against `main` @ `3775c997`, one concept-only Nevirapine order stopped the day before and no active order, `chartMode=queryScoped`, n=3 byte-identical per shape:
 

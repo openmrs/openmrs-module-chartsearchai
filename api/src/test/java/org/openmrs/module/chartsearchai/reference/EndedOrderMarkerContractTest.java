@@ -30,8 +30,10 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * <p>Split from {@code EndedOrderAnswerRuleTest}, which holds the PROMPT half, because
  * {@link DrugReferenceInjector#describesEndedOrder} and {@code DEFAULT_SYSTEM_PROMPT} are
  * package-private in different packages. Neither is widened for a test: the two halves are joined by
- * the PUBLIC constants {@link DrugReferenceInjector#ORDER_STOPPED_MARKER} and
- * {@link DrugReferenceInjector#ORDER_DISCONTINUED_MARKER}, which both classes assert against — the
+ * the PUBLIC constants on {@link DrugReferenceInjector} — the two end markers
+ * ({@link DrugReferenceInjector#ORDER_STOPPED_MARKER},
+ * {@link DrugReferenceInjector#ORDER_DISCONTINUED_MARKER}) and the record prefix
+ * {@link DrugReferenceInjector#QUERYSTORE_DRUG_ORDER_PREFIX} — which both classes assert against — the
  * same way {@code LlmProviderTest} already couples the prompt's format demonstration to
  * {@code DrugReferenceInjector.FINDING_PREFIX}.
  *
@@ -119,11 +121,12 @@ public class EndedOrderMarkerContractTest extends BaseModuleContextSensitiveTest
 
 	@Test
 	public void theRecordPrefixTheClauseIdentifiesTheClassBySurvivesToo() {
-		// The clause names THREE cues, and this is the third: it identifies the record class by the
-		// text beginning "Drug order:" before it looks for either end marker. The two markers are
-		// shared constants pinned above; this one is a literal in the prompt, so without this case a
-		// querystore rename of the record prefix leaves every test green while the prompt teaches a
-		// class no record belongs to — the exact failure the constant-sharing exists to prevent.
+		// The clause identifies the record class by this prefix before it looks for either end
+		// marker. Like the two markers it is a shared constant, and this case is the QUERYSTORE half
+		// of its pin: rename the constant and the prompt-side assertion moves with it and stays
+		// green, while this one reddens against the serializer's actual output. Without it, a
+		// querystore rename would leave every test green while the prompt taught a record class no
+		// chart record belongs to.
 		//
 		// The conjunct is also a GUARD, not redundant labelling, which is the reason not to "simplify"
 		// it away: querystore's AbstractServiceOrderRecordSerializer emits the SAME ". Stopped: " and

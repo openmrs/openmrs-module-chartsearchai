@@ -71,7 +71,7 @@ public class EndedOrderAnswerRuleTest {
 		assertTrue(prompt.contains(DrugReferenceInjector.QUERYSTORE_DRUG_ORDER_PREFIX),
 				"the prompt must name querystore's drug-order prefix, or no chart record is "
 						+ "recognised as belonging to the class this rule is about");
-		assertTrue(prompt.contains(DrugReferenceInjector.ACTIVE_ORDER_PREFIX.trim()),
+		assertTrue(prompt.contains(DrugReferenceInjector.ACTIVE_ORDER_PREFIX),
 				"and the module's own active-order prefix, or the record #118 injects to stop a "
 						+ "chip and the prose contradicting each other has no standing in the rule");
 	}

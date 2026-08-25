@@ -276,6 +276,14 @@ public class SafetyWarning {
 	 * it. Pinned by
 	 * {@code UncorroboratedFindingProvenanceTest.aClauseAnotherKeyOfThisEntryStatesAsRecordedIsNotHedged}.
 	 *
+	 * <p><b>And that stage is asked of TWO strings</b>, because the clause a key renders and the
+	 * sentence this warning carries are not always one string: {@code contraindicationClauses} JOINS the
+	 * distinct notes of the rules a key collapses, while the sentence prints the winning rule's own note
+	 * alone. Asked only of the joined clause, the guard cannot see that another key states this
+	 * sentence's own words as recorded, and the finding hedges words the record beside it asserts.
+	 * Pinned by
+	 * {@code UncorroboratedFindingProvenanceTest.theWordsTheFindingPrintsAreNotHedgedWhereAnotherKeyStatesThemAsRecorded}.
+	 *
 	 * <p>It changes what the injected {@code safety_finding} SAYS and never how strongly it speaks.
 	 * {@code DrugReferenceInjector.renderFinding} appends
 	 * {@code DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH} for it; the strength clause is still

@@ -76,6 +76,12 @@ public class UncorroboratedFindingProvenanceTest {
 	private static final String COLLAPSED_KEY =
 			"chartsearchai-test/drug-reference-collapsed-key-corroboration.json";
 
+	/** Issue #308: a collapsed key whose two rules carry DIFFERENT notes, so the clause the key renders
+	 *  is a JOIN and is not the string the surviving sentence prints — beside a condition rule of
+	 *  another key carrying the matched rule's own note. */
+	private static final String COLLAPSED_KEY_JOINED_CLAUSE =
+			"chartsearchai-test/drug-reference-collapsed-key-joined-clause.json";
+
 	/** The same two rows with the CANONICAL row's rule corroborated and the sibling's uncorroborated
 	 *  sentence holding the ledger — the other direction of the residue, pinned by
 	 *  {@link #theRenderedRowsRecordAssertsWhileTheSurvivingSiblingSentenceHedges}. */
@@ -369,8 +375,11 @@ public class UncorroboratedFindingProvenanceTest {
 		// DrugReferenceInjector.contraindicationSections) and marks the clause RECORDED. Before
 		// addContraindications folded it the same way, the finding beside it said the module could not
 		// corroborate the match: two citable records of one chart, in one injection, contradicting each
-		// other. Mutate the walk to ask this RULE's own answer — replace the corroboratedClauses lookup
-		// with corroboratedByTheChart(ref, c, context, allergicSubstances) — and read the failure.
+		// other. Mutate the walk to ask this RULE's own answer — replace the whole `uncorroborated`
+		// expression with !corroboratedByTheChart(ref, c, context, allergicSubstances) — and read the
+		// failure. Two narrower mutations reach this case as well: dropping the `clauses.get(key)`
+		// conjunct of that expression, and breaking the fold above it to first-rule-wins
+		// (`!corroboratedClauses.containsKey(key)`), which is the OR the fold is for.
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(COLLAPSED_KEY));
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
@@ -421,8 +430,13 @@ public class UncorroboratedFindingProvenanceTest {
 		// InjectedContraindicationCorroborationTest.aClauseAnotherRuleOfTheSameEntryDoesRecordIsStatedAsRecorded,
 		// which owns this exact arrangement and asserts only that side of it.
 		//
-		// Mutate addContraindications' `statedAsRecorded` leg away — drop the second conjunct of
-		// `uncorroborated` — and read the failure.
+		// Mutate addContraindications' `statedAsRecorded` legs away — replace the whole `uncorroborated`
+		// expression with the key fold alone, !Boolean.TRUE.equals(corroboratedClauses.get(key)) — and
+		// read the failure. BOTH legs have to go: this entry's allergy key collapses one rule, so the
+		// clause it renders and the sentence the finding prints are the same string and either leg alone
+		// carries the case. The arrangement where they differ is
+		// theWordsTheFindingPrintsAreNotHedgedWhereAnotherKeyStatesThemAsRecorded, and that is where the
+		// rule-clause leg is pinned on its own.
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(BORROWED_ALIAS));
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
@@ -447,6 +461,61 @@ public class UncorroboratedFindingProvenanceTest {
 		assertEquals(2, findings.size(),
 				"two rules on two keys are two citable records, was: " + findings);
 		for (String finding : findings) {
+			assertFalse(finding.contains(CLAUSE),
+					"no finding may hedge words the record beside it asserts, was: " + findings);
+		}
+	}
+
+	@Test
+	public void theWordsTheFindingPrintsAreNotHedgedWhereAnotherKeyStatesThemAsRecorded()
+			throws IOException {
+		// The cross-key precedence has to be asked of the string the FINDING prints, and that is not
+		// always the string its KEY renders. contraindicationClauses JOINS the distinct notes of the
+		// rules a key collapses ("A — B"), while the ledger's sentence prints the winning rule's own
+		// note alone (ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())). So as soon as a
+		// collapsed key carries a second rule with a different note, a guard asked only of the joined
+		// clause cannot see that another key of the same entry states the finding's own words as this
+		// chart's reading.
+		//
+		// Here Levoketoconazole's two self-named allergy rules collapse onto the substance key (issue
+		// #146) and render "opioid reaction — other reaction", while only the `levo` rule matches — an
+		// allergy recorded as `Levocetirizine` reaches it mid-word and corroborates nothing — so the
+		// finding prints "opioid reaction". A CONDITION rule of another key carries that same note and
+		// is matched by a recorded `Respiratory depression`; not being self-named it is corroborated by
+		// construction, so the record states "opioid reaction" as this chart's own reading.
+		//
+		// Mutate the `contraindicationClause(c)` conjunct of `uncorroborated` away and read the failure.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(COLLAPSED_KEY_JOINED_CLAUSE));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Levocetirizine"),
+								DrugReferenceTestSupport.set("Respiratory depression")),
+						"Is it safe to give her levoketoconazole?");
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Levoketoconazole");
+		List<String> findings = new ArrayList<String>();
+		for (RecordMapping f : DrugReferenceTestSupport.injectedFindings(chart)) {
+			findings.add(f.getText());
+		}
+
+		// Precondition: the record really does state those words as this chart's own reading, which is
+		// what the finding must not contradict.
+		assertTrue(record.contains(DrugReferenceInjector.RECORDED_READING_LEAD + "opioid reaction"),
+				"precondition: the condition rule's key states the clause as recorded, was: " + record);
+		// Precondition: and the collapsed allergy key renders a JOIN, so the string it renders is NOT
+		// the string the finding prints. Without this the arrangement degenerates into
+		// aClauseAnotherKeyOfThisEntryStatesAsRecordedIsNotHedged, where the two strings coincide and
+		// either conjunct alone would carry the case.
+		assertTrue(record.contains(
+				DrugReferenceInjector.UNCORROBORATED_READING_LEAD + "opioid reaction — other reaction"),
+				"precondition: the collapsed key renders the two notes joined, was: " + record);
+
+		assertEquals(2, findings.size(),
+				"two rules on two keys are two citable records, was: " + findings);
+		for (String finding : findings) {
+			assertTrue(finding.contains("opioid reaction"),
+					"precondition: both sentences print the words the record asserts, was: " + findings);
 			assertFalse(finding.contains(CLAUSE),
 					"no finding may hedge words the record beside it asserts, was: " + findings);
 		}

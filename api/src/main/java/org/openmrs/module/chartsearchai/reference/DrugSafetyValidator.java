@@ -1425,8 +1425,9 @@ public class DrugSafetyValidator {
 		// The corroboration answer for each collapsed CLAUSE of this entry, resolved before the walk
 		// below and over the same unit the injected drug_reference record resolves it over: this
 		// ENTRY's rules, folded by contraindicationFinding, one corroborated rule carrying the key,
-		// and then — the record's own second stage — a key whose clause TEXT another key of this entry
-		// states as recorded (issue #308, DrugReferenceInjector.contraindicationSections — a change to
+		// and then — the record's own second stage — a clause TEXT another key of this entry states as
+		// recorded, asked below both of the key's own rendered clause and of the sentence the finding
+		// prints for the rule (issue #308, DrugReferenceInjector.contraindicationSections — a change to
 		// either belongs in both). Two things about the scoping are load-bearing and each was measured
 		// wrong first.
 		//
@@ -1463,12 +1464,15 @@ public class DrugSafetyValidator {
 		// this chart's own reading while the finding beside it hedged the identical string: issue #308's
 		// defect, in one injection, created by the change that fixes it everywhere else. Reproduced over
 		// drug-reference-borrowed-alias-corroboration.json's Codeine entry and pinned by
-		// UncorroboratedFindingProvenanceTest.aClauseAnotherKeyOfThisEntryStatesAsRecordedIsNotHedged —
-		// drop this conjunct and read the failure.
+		// UncorroboratedFindingProvenanceTest.aClauseAnotherKeyOfThisEntryStatesAsRecordedIsNotHedged;
+		// replace both of the statedAsRecorded legs read below with the key fold alone
+		// (`!Boolean.TRUE.equals(corroboratedClauses.get(key))`, the state this stage was added to) and
+		// read the failures.
 		//
-		// Read off contraindicationClauses, so the strings compared are the strings that walk renders.
-		// This rule's own note is a different unit: two rules of ONE key render one JOINED clause there,
-		// so a rule's own note is not what the record states for it.
+		// The set holds the clause each corroborated KEY renders, off contraindicationClauses, so these
+		// are the strings that walk prints. What is asked OF it is two strings rather than one, and the
+		// read below says why: a key's rendered clause is a JOIN wherever the key collapses two rules
+		// that say different things, while the sentence a finding prints is one rule's note alone.
 		Set<String> statedAsRecorded = new HashSet<String>();
 		for (Map.Entry<Object, Boolean> clause : corroboratedClauses.entrySet()) {
 			if (Boolean.TRUE.equals(clause.getValue()) && clauses.get(clause.getKey()) != null) {
@@ -1504,12 +1508,39 @@ public class DrugSafetyValidator {
 			// note WITHOUT asking corroboration, so a corroborated blank-note rule ties with an
 			// uncorroborated noted one and loses the incumbent-keeps tiebreak, and the prompt then carried
 			// "Recorded for this patient" beside "could not corroborate it as a record of this drug".
+			// Mutate the whole expression below to !corroboratedByTheChart(ref, c, context,
+			// allergicSubstances) and read the failures.
+			//
+			// Asked of BOTH strings the two channels can print about this rule, because they are not
+			// always one string. clauses.get(key) is what the RECORD renders for the collapsed key — a
+			// JOIN of the distinct notes wherever the key collapses two rules that say different things
+			// (contraindicationClauses) — while the sentence built below prints the winning rule's own
+			// note alone. contraindicationClause(c) is that note, trimmed, which is the form the record
+			// renders and so the form these strings have to be compared in. So once such a key carries
+			// a second rule saying something different, a guard asked only of the joined
+			// clause cannot see that another key of this entry states the finding's own words as
+			// recorded, and the finding hedges words the record beside it asserts. That is issue #308's
+			// defect one rule along, and one this walk CREATES rather than fails to close, since main
+			// appends no clause to any finding. Mutate either conjunct away and read the failures: the
+			// key-clause one reddens oneCorroboratedRuleOfACollapsedKeyClearsTheClauseForTheWholeKey,
+			// aRuleTheSubjectMatterGateSKIPSStillCarriesItsClausesCorroboration and
+			// theSentenceIsTheRankWinnersAndTheClauseIsTheKeysFold; the rule-clause one reddens
+			// theWordsTheFindingPrintsAreNotHedgedWhereAnotherKeyStatesThemAsRecorded.
+			//
+			// No conjunct reads corroboratedClauses directly at this site, and the absence is deliberate.
+			// statedAsRecorded is built FROM that map, and a matched rule always carries a matchable —
+			// hence non-blank — token (PatientClinicalContext.matchableToken), so its key always has a
+			// rendered clause and a corroborated key always contributed that clause to the set: the
+			// key-clause conjunct already answers for it. One was written here in round 1 of this
+			// branch's review and removed in round 3, having measured that replacing it with
+			// corroboratedByTheChart(ref, c, context, allergicSubstances) — the mutation four texts then
+			// prescribed as this fold's own guard — moved no case's colour.
 			//
 			// It changes what the record SAYS and never how strongly it speaks: the chip's detail, its
 			// rank and its severity are untouched, so licensesWithholding still answers alike for it.
 			Object key = contraindicationFinding(ref, c);
-			boolean uncorroborated = !Boolean.TRUE.equals(corroboratedClauses.get(key))
-					&& !statedAsRecorded.contains(clauses.get(key));
+			boolean uncorroborated = !statedAsRecorded.contains(clauses.get(key))
+					&& !statedAsRecorded.contains(contraindicationClause(c));
 			chips.add(subject, key, contraindicationRank(ref, c, context),
 					SafetyWarning.contraindication(subject.displayLabel(),
 							subject.displayLabel() + " is contraindicated by an " + recorded + ": "
@@ -1787,6 +1818,13 @@ public class DrugSafetyValidator {
 	 *         where the rule states neither. A rule stating neither reaches no channel at all: it
 	 *         cannot match ({@link PatientClinicalContext#matchableToken} refuses a blank token) and
 	 *         {@link #contraindicationClauses} gives it no clause to be listed under.
+	 *
+	 *         <p>Since issue #308 {@link #addContraindications} asks this of a MATCHED rule as well, to
+	 *         compare the sentence its finding prints against the strings the record states as this
+	 *         chart's reading. That is the same expression the sentence is built from, trimmed — which
+	 *         is the form the record renders — so the two channels compare like with like. It is not
+	 *         the same string as the clause the rule's collapsed KEY renders wherever that key folds two
+	 *         rules saying different things; both are asked there, and the walk says why.
 	 */
 	static String contraindicationClause(DrugReference.Contraindication c) {
 		String clause = ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken());

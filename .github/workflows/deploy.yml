@@ -21,6 +21,8 @@ jobs:
       name: chartsearchai
       url: https://chartsearchai.openmrs.org/openmrs/spa
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Deploy via scoped SSH
         env:
           DEPLOY_COMMAND: ${{ inputs.reset && 'deploy emr-3-ai --destroy-volumes --no-health-check' || 'deploy emr-3-ai --no-health-check' }}
@@ -34,3 +36,34 @@ jobs:
             -o StrictHostKeyChecking=yes \
             deploy@${{ secrets.SERVER_HOST }} \
             "$DEPLOY_COMMAND"
+
+      # The wrapper's exit code says the compose project was acted on, not that
+      # a clinician can see the feature. #275 asked for a post-deploy gate for
+      # that reason; this is the narrowest one that would have caught a real
+      # outage. On 2026-08-25 the deploy was green, the backend module was
+      # loaded and healthy (drugreferencestatus reported 2283 entries), and the
+      # AI icon was absent from every patient chart because a stale
+      # pre-compressed importmap in the frontend image (importmap.json.br, the
+      # variant a browser is served) shadowed the assembled one. Nothing in
+      # this workflow could have said so.
+      #
+      # It reads only files nginx serves statically, so it does not wait on
+      # OpenMRS's own startup — which is why --no-health-check above stays as it
+      # is rather than being traded for a gate that can time out on a legitimate
+      # first boot.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # xvfb-run because the browser must be HEADED: measured 2026-08-25, a
+      # headless Chromium never clears Cloudflare's managed challenge (the page
+      # stays on the interstitial and an in-page fetch throws), while a headed
+      # one read the importmap at t+10s. The script's header records the rest.
+      - name: Assert the deployed SPA loads the Chart Search AI ESM
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+          npm install --no-save playwright@1.59.1
+          npx playwright install --with-deps chromium
+          xvfb-run -a node .github/scripts/assert-spa-serves-chartsearchai.mjs \
+            "https://chartsearchai.openmrs.org"

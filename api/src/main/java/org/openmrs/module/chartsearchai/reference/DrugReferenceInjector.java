@@ -2286,7 +2286,17 @@ public class DrugReferenceInjector {
 				// max is not a formality: contraindicationFinding keys a self-named allergy rule on the
 				// SUBSTANCE (issue #146), so two such rules of one entry under different tokens are one
 				// clause, while corroborated() reads each rule's own token — so they can disagree, and one
-				// corroborated rule of the key is enough for the key. Asked only where the record may state
+				// corroborated rule of the key is enough for the key.
+				//
+				// SINCE ISSUE #308 THIS FOLD HAS A SECOND SPELLING, and a change here belongs in both
+				// places: DrugSafetyValidator.ContraindicationChips.add resolves the same question for the
+				// injected safety_finding, because that record states the answer too and the two must not
+				// disagree about one chart. They are deliberately NOT unified — this walk resolves keys
+				// the ledger never saw, since a record renders the whole rule list with or without a chip
+				// — and they resolve over DIFFERENT units: this one per ENTRY, because a record is
+				// rendered per entry, and the ledger per entry-within-a-substance-key, because its key is
+				// the substance. That difference is why the ledger has to carry the origin at all.
+				// Asked only where the record may state
 				// the reading at all: otherwise no section is rendered, and asking would resolve the
 				// patient's allergy list for a sentence nothing prints (see ContraindicationReading).
 				if (reading.states() && !corroborated(ref, c, reading)) {

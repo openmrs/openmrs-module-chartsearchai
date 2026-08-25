@@ -220,13 +220,20 @@ public class InjectedContraindicationCorroborationTest {
 		// changes. UncorroboratedFindingProvenanceTest owns the finding channel; what this case keeps is
 		// that the two channels answer ONE chart together.
 		DrugReferenceService service = fixtureService(MID_WORD_TOKEN);
-		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(
-				DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
-						DrugReferenceTestSupport.oneRecordChart(),
-						DrugReferenceTestSupport.ctx(60, null, null, null,
-								DrugReferenceTestSupport.set("Tiotropium"), null),
-						"Is it safe to give her opium?"));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Tiotropium"), null),
+				"Is it safe to give her opium?");
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
 
+		// The PAIRING is what this case owns, so it reads BOTH records of the one injection — the
+		// finding's own text is pinned in UncorroboratedFindingProvenanceTest and asserting only that
+		// here would make this a copy of it, green even if the section beside it were deleted outright.
+		assertEquals("documented opium allergy",
+				sectionAfter(DrugReferenceTestSupport.referenceTextNaming(chart, "Opium"),
+						UNCORROBORATED_LEAD),
+				"the drug_reference record must still hedge the clause the finding qualifies");
 		assertEquals(1, findings.size(), "one fact is one citable record, was: " + findings);
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Opium: Opium is contraindicated by an active allergy: documented opium allergy."

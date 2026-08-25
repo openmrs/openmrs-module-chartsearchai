@@ -4375,6 +4375,24 @@ public class DrugSafetyValidator {
 	 *         own lazily memoised reading; {@code validate} hands a set it has already derived from
 	 *         the walk it does once per pass.
 	 *
+	 *         <p><b>Both sides must hold the same {@link DrugReferenceService}</b>, and since this method
+	 *         is the one both channels ask, the condition belongs here rather than only on
+	 *         {@link #allergicSubstanceKeys}. Leg 2 compares {@link DrugReference#substanceGroupKey()},
+	 *         which is the substance NAME where the data publishes one and the ROW ITSELF where it does
+	 *         not — and it does not on the only population that can reach this at all, since no bundled
+	 *         parser publishes a contraindication rule and the curated sources set no substance name. So
+	 *         membership there is object identity, and a validator holding a second service would answer
+	 *         differently from the injector rendering the record: the two channels back to disagreeing
+	 *         about one chart, which is what this method exists to prevent. Not constructible today —
+	 *         both beans are Spring singletons in one context and
+	 *         {@code DrugReferenceTestSupport.injectorWithSafety} wires one service into both — and that
+	 *         is what makes the condition hold, rather than anything either class checks.
+	 *
+	 *         <p><b>This answers about one RULE. A collapsed KEY is a MAX over its rules</b>, and that
+	 *         resolution is {@code ContraindicationChips.add}'s, not this method's — see
+	 *         {@link SafetyWarning#withUncorroboratedChartMatch}. Asking this per rule and reading the
+	 *         answer off the rank winner is not the same thing, and the difference is reachable.
+	 *
 	 *         <p>Scoped to a SELF-NAMED allergy rule, which is load-bearing rather than incidental —
 	 *         a rule whose token is not one of its entry's names is asking about a class or about a
 	 *         fragment of free text, which is what the bare match exists for, and neither corroborating

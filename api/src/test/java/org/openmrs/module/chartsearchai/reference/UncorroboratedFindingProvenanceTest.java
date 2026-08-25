@@ -65,6 +65,12 @@ public class UncorroboratedFindingProvenanceTest {
 	private static final String RULE_ROWS_ONE_SUBSTANCE =
 			"chartsearchai-test/drug-reference-rule-rows-one-substance.json";
 
+	/** The same shape with the two rules NOT tied on rank, so the sibling row's sentence replaces the
+	 *  rendered row's — ADR Decision 44's declared residue, pinned by
+	 *  {@link #aSiblingRowsSentenceOutranksTheRenderedRowsAndBringsItsOwnAnswer}. */
+	private static final String RULE_ROWS_RANK_CROSSING =
+			"chartsearchai-test/drug-reference-rule-rows-rank-crossing.json";
+
 	/** Issue #308's own: one entry, two self-named rules that collapse onto one key and DISAGREE about
 	 *  corroboration while tying on rank. */
 	private static final String COLLAPSED_KEY =
@@ -394,16 +400,21 @@ public class UncorroboratedFindingProvenanceTest {
 	public void aCorroboratedRuleOnANEIGHBOURRowDoesNotClearTheClauseThatRowsOwnRecordStates()
 			throws IOException {
 		// The bound on the MAX above, and the direction it was first got wrong in. This ledger's key is
-		// the SUBSTANCE, so it spans every ROW of it — while DrugReferenceInjector renders one record per
-		// ENTRY and resolves its own corroboration MAX over that entry's rules alone. Folding the two
-		// across rows therefore re-created the contradiction from the other side: a corroborated rule on
-		// the gel row cleared the flag while the tablets row's own record went on hedging the tablets
-		// rule's clause, in the same injection.
+		// the SUBSTANCE, so it spans every ROW of it — while DrugReferenceInjector injects one record
+		// per SUBSTANCE, renders it for canonicalRow's row, and resolves its own corroboration MAX over
+		// THAT ROW's rules alone. So the sibling row's rules are stated by no record at all, and folding
+		// the corroboration answer across the rows re-created the contradiction from the other side: a
+		// corroborated rule on the gel row cleared the flag while the tablets record — the only record
+		// injected for this substance — went on hedging the tablets rule's clause, in the same injection.
 		//
 		// So the fold is scoped to ONE ENTRY, and a sentence from another entry brings its own answer
 		// with it. Mutate the pre-walk to fold across the rows of a substance — iterate the service's
 		// rows sharing this one's substanceGroupKey instead of ref.getContraindications() — and read the
-		// failure; this is the only case that reddens on it.
+		// failure.
+		//
+		// What that scoping does NOT buy is agreement on every arrangement of this shape, and the case
+		// below it says so: here the two rules TIE on rank, so the sentence that survives is the
+		// rendered row's own and the two channels are speaking about one row.
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(RULE_ROWS_ONE_SUBSTANCE));
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
@@ -427,6 +438,64 @@ public class UncorroboratedFindingProvenanceTest {
 						+ "was: " + findings);
 		assertTrue(findings.get(0).contains(CLAUSE),
 				"and the finding must say what that row's own record says, was: " + findings);
+	}
+
+	@Test
+	public void aSiblingRowsSentenceOutranksTheRenderedRowsAndBringsItsOwnAnswer() throws IOException {
+		// ADR Decision 44's declared residue, pinned so it is a known shape rather than a claim nobody
+		// re-checks. What issue #308 gives the two injected channels is ONE fold over ONE unit — this
+		// entry's matched rules — so where the surviving sentence's row is the row the record renders,
+		// the two answer alike. It is not always the same row.
+		//
+		// ContraindicationChips keys on the SUBSTANCE and keeps the strictly stronger RANK, across rows;
+		// the injector injects one record per SUBSTANCE and renders it for canonicalRow's row, whose
+		// sections state that row's rules alone. So a sibling row's sentence can replace the rendered
+		// row's in the ledger and bring its own (corroborated) answer with it, while the record goes on
+		// hedging the rule it does state. Here the gel row's `ketoconazole` rule is named outright by a
+		// recorded `Ketoconazole` allergy — rank SELF_NAMED_RULE, corroborated — and outranks the tablets
+		// row's `levo` rule, which an allergy recorded as `Levocetirizine` reaches only mid-word and
+		// nothing corroborates.
+		//
+		// This is NOT what #308 changed: on origin/main renderFinding appends no provenance to any
+		// finding, so the record hedged and the finding was bare on this arrangement too. Closing it
+		// needs a record that states the whole substance's rules, or a ledger whose surviving sentence is
+		// the rendered row's — both changes to what the clinician-facing chip and record SAY, which #308
+		// is deliberately monotone about. Read the trade-off in ADR Decision 44 before moving either.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(RULE_ROWS_RANK_CROSSING));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Ketoconazole", "Levocetirizine"), null),
+						"Is it safe to give her levoketoconazole?");
+		List<String> references = DrugReferenceTestSupport.referenceTexts(chart);
+		List<String> findings = new ArrayList<String>();
+		for (RecordMapping f : DrugReferenceTestSupport.injectedFindings(chart)) {
+			findings.add(f.getText());
+		}
+
+		// One record for the substance, not one per rule-bearing row — the premise the residue rests on,
+		// asserted rather than assumed, because it is the premise ADR Decision 44 first stated wrongly.
+		assertEquals(1, references.size(),
+				"one substance is one injected record, whatever its row count, was: " + references);
+		assertTrue(references.get(0).contains("Levoketoconazole (tablets)"),
+				"precondition: the record is rendered for the tablets row, was: " + references);
+		assertTrue(references.get(0).contains(DrugReferenceInjector.UNCORROBORATED_READING_LEAD)
+				&& references.get(0).contains("documented levo allergy"),
+				"precondition: that record hedges the rule it states, was: " + references);
+
+		assertEquals(1, findings.size(), "one substance is one chip and one finding, was: " + findings);
+		assertTrue(findings.get(0).contains("documented ketoconazole allergy"),
+				"precondition: the GEL row's sentence is the one that outranked and survived, was: "
+						+ findings);
+		// The residue itself. Flip this to assertTrue only together with the ADR trade-off: a finding
+		// hedging a sibling row's corroborated clause is the false hedge leg 2 of the union exists to
+		// prevent, so the fix is not to make this side speak but to make the two sides be about one row.
+		assertFalse(findings.get(0).contains(CLAUSE),
+				"the surviving sentence brings its own corroborated answer, so the finding states no "
+						+ "provenance while the record beside it hedges, was: " + findings);
+		assertTrue(findings.get(0).contains(WITHHOLD),
+				"and its call is unchanged either way, was: " + findings);
 	}
 
 	@Test

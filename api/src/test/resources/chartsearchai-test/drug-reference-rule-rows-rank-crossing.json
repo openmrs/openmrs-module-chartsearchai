@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #308 — not shipped data",
+  "description": "The residue ADR Decision 44 declares: two rule-bearing ROWS of one substance whose sentences do NOT tie on rank. Both Levoketoconazole rows declare substanceName 'levoketoconazole', so contraindicationFinding keys both self-named allergy rules on the substance and ContraindicationChips holds ONE chip for them, while DrugReferenceInjector injects one record for the substance and renders it for canonicalRow's row — the tablets row, whose sections state that row's own rules alone. The tablets rule on 'levo' is reached by an allergy recorded as 'Levocetirizine' only mid-word and nothing corroborates it, so it is demoted to SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE (0); the gel rule on 'ketoconazole' carries a note and is named outright by an allergy recorded as 'Ketoconazole', so it holds SELF_NAMED_RULE (4) and is corroborated. The gel sentence therefore REPLACES the tablets one in the ledger and brings its own corroboration answer with it, while the tablets record goes on hedging the tablets rule. Distinct notes so which row's sentence survived is readable from the text. The standalone Ketoconazole entry exists so that allergen resolves to a substance that is NOT this one, keeping the gel rule's corroboration a leg-1 answer. Its sibling fixture drug-reference-rule-rows-one-substance.json is the same shape with the two rules TIED at rank 0, where the two channels do agree.",
+  "entries": [
+    {
+      "id": "levoketoconazole-tablets",
+      "name": "Levoketoconazole (tablets)",
+      "substanceName": "levoketoconazole",
+      "aliases": ["levoketoconazole (tablets)", "levoketoconazole", "levo"],
+      "contraindications": [
+        { "type": "allergy", "token": "levo", "note": "documented levo allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "levoketoconazole-gel",
+      "name": "Levoketoconazole (gel)",
+      "substanceName": "levoketoconazole",
+      "aliases": ["levoketoconazole (gel)", "levoketoconazole", "ketoconazole"],
+      "contraindications": [
+        { "type": "allergy", "token": "ketoconazole", "note": "documented ketoconazole allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ketoconazole",
+      "name": "Ketoconazole",
+      "aliases": ["ketoconazole"],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

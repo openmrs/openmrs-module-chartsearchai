@@ -1382,10 +1382,17 @@ public class DrugSafetyValidator {
 			// Nothing to reconcile about issue #308's corroboration flag here, and that is a property of
 			// WHERE it is resolved rather than an omission: addContraindications folds it over the whole
 			// ENTRY's rules for a clause before building any warning, so every chip arrives carrying its
-			// clause's answer and the sentence that survives brings the right one with it. Resolving it
+			// own entry's answer and the sentence that survives brings that answer with it. Resolving it
 			// in this ledger instead was tried and is wrong twice over — the key is the SUBSTANCE, so it
-			// folds across rows the record renders separately, and the rules the subject-matter gate
-			// skips never arrive to be folded at all.
+			// folds across rows only ONE of which has a record rendered for it, and the rules the
+			// subject-matter gate skips never arrive to be folded at all.
+			//
+			// What this does NOT reconcile is the two channels being about DIFFERENT rows: the sentence
+			// that survives here is the strongest RANK across the substance's rows, while the record is
+			// rendered for canonicalRow's row and states that row's rules alone. ADR Decision 44 declares
+			// that residue and
+			// UncorroboratedFindingProvenanceTest.aSiblingRowsSentenceOutranksTheRenderedRowsAndBringsItsOwnAnswer
+			// pins it.
 		}
 	}
 
@@ -1422,9 +1429,12 @@ public class DrugSafetyValidator {
 		// both). Two things about the scoping are load-bearing and each was measured wrong first.
 		//
 		// It is per ENTRY and not per chip KEY. The ledger's key is the SUBSTANCE, so it spans every
-		// ROW of it, while a record is rendered per row — and on two rule-bearing rows of one substance
-		// a corroborated rule on one cleared the flag while the other row's own record went on hedging
-		// its own clause.
+		// ROW of it, while the injector injects ONE record for the substance and renders it for
+		// canonicalRow's row — and on two rule-bearing rows of one substance a corroborated rule on the
+		// sibling cleared the flag while the rendered row's own record went on hedging its own clause.
+		// The residue that scoping leaves — the surviving SENTENCE can still be a row's the record does
+		// not state — is declared in ADR Decision 44 and pinned by
+		// UncorroboratedFindingProvenanceTest.aSiblingRowsSentenceOutranksTheRenderedRowsAndBringsItsOwnAnswer.
 		//
 		// And it ignores `askedAbout`. That gate decides which CHIPS this response may raise (issue
 		// #143); whether the chart corroborates a match is a fact about the chart and not about what

@@ -73,6 +73,61 @@ public class LlmProvider {
 			+ "means the records DO address that drug: answer the question from that finding and cite "
 			+ "it, and never put a sentence saying the records do not address the drug in front of "
 			+ "one, which contradicts it in the same breath. "
+			// ISSUE #315. The prompt classified every OTHER record class it puts in front of the
+			// model and said what it meant, and classified a drug order not at all — so an ENDED
+			// prescription reached the model as a flat field list in which the end date was one
+			// field among four, and whether it survived into the answer was left to phrasing.
+			// Measured on the 3.7.1 standalone, one stopped Nevirapine order and no active order,
+			// n=3 byte-identical: three of four question shapes named the drug and dropped its end,
+			// and "is he currently taking any medications?" answered "Yes — the patient was ordered
+			// Nevirapine on 2026-07-26 [1]" about a drug stopped the day before. Only the shape
+			// whose question supplied the word "stopped" carried the date.
+			//
+			// Two EXISTING rules produce that "Yes" between them, which is why this is a
+			// contradiction and not a mere omission, and why the clause contradicts their
+			// ANTECEDENT rather than competing with their conclusion: the "latest, current, or most
+			// recent value" rule above points at the stopped record (it IS the first matching one),
+			// and the yes/no rule's YES criterion is a PRESENCE criterion whose enumerated record
+			// classes do not include a drug order at all. Hence "SETTLES whether the patient is on
+			// that drug" rather than a clause that merely asks for the date.
+			//
+			// The markers are the production constants, not copies, for the reason FINDING_PREFIX
+			// is shared: a prompt carrying its own spelling of a cue would go on teaching a marker
+			// no chart record carries, and every test would stay green. They are the same two
+			// DrugReferenceInjector.describesEndedOrder keys on for the #118 reconciliation, so the
+			// answer rule and that reconciliation cannot come to disagree about which records ended.
+			// EndedOrderMarkerContractTest pins both against querystore's REAL serializer output.
+			//
+			// Three drafting constraints, each measured rather than preferred:
+			//   - The stop DATE is conditional. querystore appends ". Stopped: " only for a
+			//     non-null dateStopped and ". Action: " unconditionally, so a DISCONTINUE record
+			//     reads as ended and carries no date; a rule demanding one would be unsatisfiable
+			//     there and the model would have to invent it.
+			//   - Scoped to THAT drug, with the no-marker counterpart stated. A stopped record
+			//     settles nothing about whether the patient is on ANY medication, and under the
+			//     shipped queryScoped mode the model reads a slice — unscoped, this trades an
+			//     over-hedge for a fabricated categorical negative (#94/#214's slice-for-patient
+			//     confusion). Measured on a patient with a stopped order BESIDE an active one, the
+			//     two "currently taking" shapes were already correct and must stay so.
+			//   - The forbidden sentence is DESCRIBED, never quoted, and is paired with the lead
+			//     that replaces it. Arm B of the 2026-07-30 A/B forbade a sentence by quoting it
+			//     and the model then emitted that exact string 6/6 on a cell the baseline never
+			//     did; #214's hunk is the precedent for pairing a prohibition with a positive
+			//     instruction. No otherwise-branch: that was arm D, the costliest of the four.
+			+ "A patient record naming a drug order — its text carries \"Drug order:\" — that also "
+			+ "carries \"" + DrugReferenceInjector.ORDER_STOPPED_MARKER + "\" (the date the order "
+			+ "ended) or \"" + DrugReferenceInjector.ORDER_DISCONTINUED_MARKER + "\" records a "
+			+ "prescription for THAT drug that has ENDED. Whenever your answer names a drug from "
+			+ "such a record, say in the same sentence that the order was stopped, and give the "
+			+ "stop date when the record carries one. Such a record SETTLES whether the patient is "
+			+ "on that drug: never present that drug as one the patient is taking now, even where "
+			+ "it is the most recent or the only drug order in the chart, and never treat that "
+			+ "drug's current status as unrecorded — asked whether they are currently taking it, "
+			+ "answer \"No\" and name the date it stopped; asked what they are taking, do not "
+			+ "list that drug among them. It settles nothing about any OTHER drug: a drug-order "
+			+ "record carrying neither marker "
+			+ "is current, and a question about what the patient is taking now is answered from "
+			+ "those. "
 			+ "Include ALL relevant records in your answer — never omit any for brevity. "
 			+ "Cite EVERY record you reference by its number in brackets (e.g. [1], [3]). "
 			+ "Respond with ONLY a JSON object with a \"reasoning\" string, then an \"answer\" string "

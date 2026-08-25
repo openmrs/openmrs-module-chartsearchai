@@ -501,9 +501,47 @@ public class DrugReferenceInjector {
 		return unrepresented;
 	}
 
-	/** Lowercased marker querystore renders a drug order's END date under — it emits
-	 *  {@code ". Stopped: <date>"} for both {@code getDateStopped()} and {@code getAutoExpireDate()}
-	 *  (its {@code DrugOrderRecordSerializer} contract). */
+	/**
+	 * Display-cased marker querystore renders a drug order's END date under, exactly as it reaches
+	 * the chart — {@code "Drug order: X. … . Stopped: 2026-08-24"}. Public, and shared with
+	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT}'s ended-order record rule (issue #315), for the
+	 * reason {@link #FINDING_PREFIX} is: a prompt carrying its own copy of this cue would go on
+	 * teaching the model a marker no chart record carries, and every test would stay green.
+	 *
+	 * <p>Deliberately NOT the same string as {@link #QUERYSTORE_STOPPED_MARKER}, and the matcher is
+	 * deliberately not derived from this by {@code toLowerCase()}: this one carries a trailing space
+	 * and that one does not, so deriving would narrow the predicate — a record rendering
+	 * {@code ". Stopped:2026-08-24"} would stop reading as ended and would substantiate a live order
+	 * again (#118). They are independent literals whose agreement is asserted rather than assumed,
+	 * by {@code EndedOrderMarkerContractTest.theMarkersShownToTheModelAreTheOnesTheMatcherKeysOn}.
+	 */
+	public static final String ORDER_STOPPED_MARKER = ". Stopped: ";
+
+	/**
+	 * Display-cased marker for a DISCONTINUE order, shared with the prompt for the reason
+	 * {@link #ORDER_STOPPED_MARKER} is. Unlike that one this round-trips exactly to
+	 * {@link #QUERYSTORE_DISCONTINUE_MARKER} under {@code toLowerCase()}; it is still held apart,
+	 * so that the two markers are read the same way and neither acquires a rule of its own.
+	 *
+	 * <p>A record carrying THIS marker need carry no date at all: querystore appends
+	 * {@link #ORDER_STOPPED_MARKER} only for a non-null {@code getDateStopped()} and
+	 * {@code ". Action: "} unconditionally. That is why the prompt rule asks for the stop date
+	 * <em>when the record carries one</em> rather than demanding it — pinned by
+	 * {@code EndedOrderMarkerContractTest.aDiscontinuedOrderCarriesNoStopDate_soTheRuleMayNotDemandOne}.
+	 */
+	public static final String ORDER_DISCONTINUED_MARKER = ". Action: DISCONTINUE";
+
+	/**
+	 * Lowercased marker querystore renders a drug order's END date under — the match form of
+	 * {@link #ORDER_STOPPED_MARKER}, held apart from it for the reason stated there.
+	 *
+	 * <p>It is emitted for {@code getDateStopped()} only. An earlier version of this comment said
+	 * "for both {@code getDateStopped()} and {@code getAutoExpireDate()}", which is measured false:
+	 * {@code QuerystoreOrderTextMarkerTest.anAutoExpireDateAloneIsNotVisibleInTheRenderedText}
+	 * found by RUNNING the serializer that an auto-expired order renders no end marker at all, and
+	 * the serializer computes both dates but appends only the stopped one. The auto-expiry gap is
+	 * real and is recorded on {@link #describesEndedOrder}; it is not covered by this marker.
+	 */
 	private static final String QUERYSTORE_STOPPED_MARKER = ". stopped:";
 
 	/** Lowercased marker for a DISCONTINUE order — the record of a drug ENDING. Keyed on the

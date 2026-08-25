@@ -1283,9 +1283,14 @@ public class DrugSafetyValidator {
 			/** Whether EVERY chip raised on this key so far rests on a chart match nothing corroborates
 			 *  — the key's answer, resolved as this AND rather than taken from the rank winner (issue
 			 *  #308). See {@link SafetyWarning#withUncorroboratedChartMatch}, which states why the rank
-			 *  cannot carry it. Only a curated-rule chip can ever make this true; every allergen-arm
-			 *  sentence answers false, so one of those on the key clears it — correct, because that arm
-			 *  fires exactly when the chart records an allergy to this substance. */
+			 *  cannot carry it. Only a curated-rule chip can ever make this true, and only two things can
+			 *  meet on one key: two self-named rules of one entry — the shape the MAX exists for — and a
+			 *  self-named rule beside the IDENTITY chip, whose key is the allergen substance twice over
+			 *  and therefore coincides exactly when some recorded allergy resolves to THIS substance,
+			 *  which is leg 2 of the union and so already answers false. The two class ranks cannot meet
+			 *  it at all: {@link #addAllergyContraindications} reaches them only after
+			 *  {@link #firstOfSameSubstance} returned null, so their finding is never the subject's own
+			 *  substance and never this key. */
 			private boolean uncorroborated;
 
 			RaisedChip(int position, int relationship, boolean namesTheFinding,

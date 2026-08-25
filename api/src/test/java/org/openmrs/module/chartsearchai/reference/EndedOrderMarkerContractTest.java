@@ -118,6 +118,25 @@ public class EndedOrderMarkerContractTest extends BaseModuleContextSensitiveTest
 	}
 
 	@Test
+	public void theRecordPrefixTheClauseIdentifiesTheClassBySurvivesToo() {
+		// The clause names THREE cues, and this is the third: it identifies the record class by the
+		// text beginning "Drug order:" before it looks for either end marker. The two markers are
+		// shared constants pinned above; this one is a literal in the prompt, so without this case a
+		// querystore rename of the record prefix leaves every test green while the prompt teaches a
+		// class no record belongs to — the exact failure the constant-sharing exists to prevent.
+		//
+		// The conjunct is also a GUARD, not redundant labelling, which is the reason not to "simplify"
+		// it away: querystore's AbstractServiceOrderRecordSerializer emits the SAME ". Stopped: " and
+		// ". Action: " markers, and it backs "Referral order:" and "Test order:". Without the prefix
+		// cue the clause would have the model report an ended lab test as an ended prescription.
+		String rendered = renderedText(triomuneOrder());
+
+		assertTrue(rendered.startsWith("Drug order:"),
+				"the prompt identifies a drug-order record by this prefix; querystore must still "
+						+ "render it. Rendered: " + rendered);
+	}
+
+	@Test
 	public void theMarkersShownToTheModelAreTheOnesTheMatcherKeysOn() {
 		// The display constants and the match constants are INDEPENDENT literals, deliberately not
 		// derived one from the other — and this case is the reason that matters, because it is the

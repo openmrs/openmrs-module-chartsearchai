@@ -510,9 +510,10 @@ public class DrugReferenceInjector {
 	 *
 	 * <p><b>Deliberately NOT derived from {@link #QUERYSTORE_STOPPED_MARKER} by
 	 * {@code toLowerCase()}, though the tidy-up is tempting.</b> This one carries a trailing space
-	 * and that one does not, so deriving would widen the match constant and narrow what
-	 * {@link #describesEndedOrder} accepts. Say only what is checkable about that: querystore is
-	 * the sole producer of these records and always emits the space, so no shape it renders today
+	 * and that one does not, so deriving would LENGTHEN the match constant, which narrows what
+	 * {@link #describesEndedOrder} accepts. Say only what is checkable about that: every
+	 * marker-bearing drug-order record reaching the chart is rendered by querystore's
+	 * {@code DrugOrderRecordSerializer}, which always emits the space, so no shape it renders today
 	 * would stop being recognised — the cost is not a live defect but that the predicate would
 	 * quietly stop tolerating a spacing it currently tolerates, for a producer that has changed
 	 * its wording before. What makes the tidy-up worth refusing is that NOTHING WOULD CATCH IT:
@@ -599,8 +600,10 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * One unrepresented active order as a chart line. Shaped like querystore's own drug-order text
-	 * ({@code "Drug order: <drug>. Dose: …"}) so the model reads it as the chart record it stands in
+	 * One unrepresented active order as a chart line. Shaped after querystore's own drug-order text
+	 * — {@code "Active drug order: <display>."}, the label deliberately distinct so the record says
+	 * it is the module's stand-in rather than an indexed one — so the model reads it as the chart
+	 * record it stands in
 	 * for, and stated as plain fact: a hedge inside the record ("no matching record was retrieved")
 	 * is the shape that made the model put an abstention clause in front of its own evidence in
 	 * #110. The provenance is carried by the record's resource type and the WARN above, where an

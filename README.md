@@ -333,19 +333,26 @@ A `drug_order` record for a prescription that has **ended** carries querystore's
 `. Stopped: <date>` field, or `. Action: DISCONTINUE` — and the system prompt classifies it as such,
 the same way it classifies `Drug reference` and `Safety finding` records. Whenever the answer names a
 drug from one of those records it must say in the same sentence that the order was stopped, with the
-date where the record carries one; and such a record settles that the patient is not on that drug, so
-the answer may neither present it as current nor report its status as unrecorded
-([#315](https://github.com/openmrs/openmrs-module-chartsearchai/issues/315)). Before this, whether the
+date where the record carries one. Where a drug's records have *all* ended, that settles the patient
+is not on it, so the answer may neither present it as current nor report its status as unrecorded
+([#315](https://github.com/openmrs/openmrs-module-chartsearchai/issues/315)); where an ended record
+sits beside a live one for the same drug — how a dose change is written, as a REVISE — the live
+record governs and the ended one is reported as earlier therapy. Before this, whether the
 stop date survived into the answer was decided by the question's phrasing: on one stopped Nevirapine
 order, three of four question shapes named the drug and dropped its end, and *"is he currently taking
 any medications?"* answered *"Yes — the patient was ordered Nevirapine…"* about a drug stopped the day
 before.
 
 The rule is scoped to the drug that record names and says nothing about any other, so a chart holding
-a stopped order beside a live one still answers a medications question from the live one. The markers
+a stopped order beside a live one for a *different* drug still answers a medications question from the
+live one. A record's class is identified by its `Drug order:` / `Active drug order:` prefix as well as
+by the end marker, and that prefix is load-bearing rather than labelling: querystore emits the same
+two markers behind `Referral order:` and `Test order:`, so without it an ended lab test would read as
+an ended prescription. The markers
 are the same two [active-order reconciliation](#drug-reference-injection--safety-validation) keys on
-for #118, shared as constants rather than restated, so the prompt cannot come to describe a cue the
-chart does not carry.
+for #118, shared as constants rather than restated, so the prompt and the matcher cannot come to
+disagree; that the cues are ones querystore actually renders is pinned separately, by
+`EndedOrderMarkerContractTest` against the real serializer's output.
 
 Not covered: an order that lapsed by its **auto-expire date**. querystore carries `auto_expire_date`
 in the document metadata but renders no marker for it into the record text, so nothing downstream of

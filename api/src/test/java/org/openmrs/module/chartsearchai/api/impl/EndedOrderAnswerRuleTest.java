@@ -33,14 +33,9 @@ import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
  * hand-typed {@code ". Stopped: "} would be a second definition of the marker, which is the drift
  * the shared constant exists to prevent.
  *
- * <p><b>What was measured, and why the rule is shaped the way it is.</b> On the 3.7.1 standalone
- * against {@code main} @ {@code 3775c997}, one concept-only Nevirapine drug order stopped the day
- * before and no active order, {@code chartMode=queryScoped}, n=3 byte-identical per shape: three of
- * four question shapes named the drug and dropped its end, and {@code "is he currently taking any
- * medications?"} answered {@code "Yes — the patient was ordered Nevirapine on 2026-07-26 [1]."}
- * Only the shape whose question supplied the word "stopped" carried the date. On a second patient
- * carrying a stopped order BESIDE an active one, the two "currently taking" shapes were already
- * correct and must stay so — which is why the rule is scoped to the drug the record names.
+ * <p><b>ADR Decision 45 is canonical for what was measured and for the drafts it refuted</b>, and it
+ * is not restated here — three copies of one measurement narrative is how this repo's notes have come
+ * to contradict themselves before. Each case below carries only what justifies its own assertion.
  */
 public class EndedOrderAnswerRuleTest {
 
@@ -82,9 +77,9 @@ public class EndedOrderAnswerRuleTest {
 		// record — it is the first matching one — so a clause that merely asks for the date to be
 		// mentioned leaves that rule pointing at the same place. The rule therefore contradicts the
 		// antecedent ("this record SETTLES the status") rather than competing with its conclusion.
-		assertTrue(prompt.contains("SETTLES whether the patient is on that drug"),
+		assertTrue(prompt.contains("that settles that the patient is not on it"),
 				"the record must be stated to SETTLE the status, not merely to carry a date");
-		assertTrue(prompt.contains("never treat that drug's current status as unrecorded"),
+		assertTrue(prompt.contains("never treat its current status as unrecorded"),
 				"the second half of #315: the answer denied the status its own cited record states");
 
 		// Shape-INDEPENDENT, and measured rather than preferred. The first draft of this clause
@@ -94,7 +89,7 @@ public class EndedOrderAnswerRuleTest {
 		// taking Nevirapine [1]" (past tense) to "He is currently taking Nevirapine [1]" — a flat
 		// falsehood about a drug stopped the day before — n=3 byte-identical on both sides. A
 		// question's grammatical shape must not decide whether a stopped drug reads as current.
-		assertTrue(prompt.contains("never present that drug as one the patient is taking now"),
+		assertTrue(prompt.contains("never present it as one they are taking now"),
 				"the prohibition must not be scoped to a yes/no framing: a wh-question ('what "
 						+ "medications is he taking?') names the drug without ever asking whether, "
 						+ "and that is the shape a yes/no-scoped clause measurably made worse");
@@ -104,11 +99,19 @@ public class EndedOrderAnswerRuleTest {
 		// medications is he taking?" still answered "He is taking Nevirapine [1]" — present tense,
 		// no end — n=3 byte-identical, because "the relevant record is the FIRST matching one in
 		// the list; report that value" is satisfied by the stopped order when it is the only one.
-		assertTrue(prompt.contains("even where it is the most recent or the only drug order in the chart"),
+		assertTrue(prompt.contains("even where its record is the most recent or the only drug order"),
 				"the rule must name the case the current-value rule above resolves the other way, "
 						+ "or a chart whose ONLY drug order is a stopped one reports it as current");
-		assertTrue(prompt.contains("asked what they are taking, do not list that drug among them"),
-				"the wh-question shape needs its own lead for the same reason the yes/no shape does");
+		// The wh branch needs the positive counterpart for the same reason the yes/no branch does,
+		// and it was measured missing: with the prohibition alone, "what medications is he taking?"
+		// answered "No medications are currently recorded for the patient." — dropping the stopped
+		// order and citing nothing, n=3 byte-identical. A prohibition that names no replacement
+		// reads as silence, which is #214's lesson arriving one branch along.
+		assertTrue(prompt.contains("do not list it among the drugs they are taking"),
+				"the wh-question shape needs its own prohibition, since it never asks 'whether'");
+		assertTrue(prompt.contains("so the record is reported rather than dropped"),
+				"and that prohibition needs its positive counterpart, or the answer omits the very "
+						+ "record the clause exists to surface");
 
 		// Paired with a positive lead, per #214's precedent in this same prompt. A prohibition that
 		// removes every plausible lead and supplies none leaves the model to invent one — and the
@@ -132,9 +135,24 @@ public class EndedOrderAnswerRuleTest {
 		assertTrue(prompt.contains("settles nothing about any OTHER drug"),
 				"the rule must be scoped to the drug the record names, or it licenses 'the patient "
 						+ "is on no medication' from one stopped record");
-		assertTrue(prompt.contains("carrying neither marker is current"),
+		assertTrue(prompt.contains("carrying neither marker is CURRENT"),
 				"and it must say what an order with NO end marker means, or the scoping has no "
 						+ "positive counterpart to answer a medications question from");
+
+		// The SAME-drug case, which the "any OTHER drug" scoping above does not reach and which the
+		// first version of this clause left to inference. A dose change in OpenMRS is a REVISE: a new
+		// order is created and the previous order's dateStopped is set, so a chart routinely carries
+		// an ended record and a live record for ONE drug. Measured on that arrangement (a stopped
+		// Nevirapine 200mg beside a live REVISE 400mg, n=2 byte-identical) the model answered "Yes"
+		// on all three cells WITHOUT this sentence — so what it fixes is not an observed wrong answer
+		// but a clause that did not say what it meant, on the commonest chart shape there is.
+		assertTrue(prompt.contains("the CURRENT record governs"),
+				"where one drug has both an ended and a live order the live one must be stated to "
+						+ "win, or the clause's categorical 'never present that drug as one the "
+						+ "patient is taking now' is left to be resolved by inference");
+		assertTrue(prompt.contains("Where every record naming a drug has ended"),
+				"and the ended branch must be conditioned on ALL of the drug's records having "
+						+ "ended, or it still reads as categorical about the drug");
 	}
 
 	@Test
@@ -154,7 +172,7 @@ public class EndedOrderAnswerRuleTest {
 
 		assertFalse(safetyRule.contains(DrugReferenceInjector.ORDER_STOPPED_MARKER),
 				"the ended-order rule must not live in the safety/suitability paragraph: " + safetyRule);
-		assertFalse(safetyRule.toLowerCase().contains("otherwise"),
+		assertFalse(safetyRule.toLowerCase(java.util.Locale.ROOT).contains("otherwise"),
 				"and adding it must not have introduced an otherwise-branch there: " + safetyRule);
 	}
 }

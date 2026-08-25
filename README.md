@@ -356,8 +356,11 @@ disagree; that the cues are ones querystore actually renders is pinned separatel
 
 Not covered: an order that lapsed by its **auto-expire date**. querystore carries `auto_expire_date`
 in the document metadata but renders no marker for it into the record text, so nothing downstream of
-the text can see it — the same limitation `DrugReferenceInjector.describesEndedOrder` records for the
-reconciliation, and it would be closed by the same structural fix.
+the text can see it. Such an order therefore falls under "carrying neither marker is current" and the
+answer will report it as current — the rule asserts something false about it, where previously the
+prompt said nothing and the model inferred. It is the same limitation
+`DrugReferenceInjector.describesEndedOrder` records for the reconciliation, and it is closed by the
+same structural fix.
 
 ### Input validation
 

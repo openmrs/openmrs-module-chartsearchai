@@ -264,11 +264,10 @@ public class SafetyWarning {
 	 * {@code DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH} for it; the strength clause is still
 	 * {@code STRENGTH_WITHHOLD}, {@code getSeverity()} is still null and
 	 * {@code DrugSafetyValidator.licensesWithholding} still answers true — one definition of how
-	 * strongly a finding licenses a clinical call, and this is not a second one. ADR Decisions 37 and
-	 * 42 are why: the corroboration union can miss an allergy the chart really holds, and a
-	 * contraindication finding that states no withholding clause was measured turning
-	 * <em>"No — ibuprofen should not be taken"</em> into <em>"Ibuprofen can be given, with one
-	 * caution"</em>, 3 of 3.
+	 * strongly a finding licenses a clinical call, and this is not a second one. Do not key a strength
+	 * on this flag; <b>ADR Decision 44 is canonical for what that costs</b> and the measurements are
+	 * not restated here, because three copies of a rejected-alternative argument is how this repo has
+	 * come to contradict itself before.
 	 *
 	 * <p>Scoped exactly as the chip's own demotion is — a SELF-NAMED allergy rule — so a class-token
 	 * rule, a condition rule and every allergen-arm sentence answer false. Not serialized; the wire
@@ -276,6 +275,29 @@ public class SafetyWarning {
 	 */
 	boolean restsOnAnUncorroboratedChartMatch() {
 		return uncorroboratedChartMatch;
+	}
+
+	/**
+	 * A copy of this warning answering {@code uncorroboratedChartMatch} instead, with everything else —
+	 * type, drug, detail, severity, folded relationship — untouched (issue #308).
+	 *
+	 * <p>It exists because that answer belongs to a COLLAPSED KEY and not to the rule this warning was
+	 * built from. {@code ContraindicationChips} groups two self-named allergy rules of one entry onto
+	 * one chip (issue #146) while each rule is put to the chart on its own token, so the two can
+	 * disagree — and the injected {@code drug_reference} record resolves that disagreement as a MAX,
+	 * one corroborated rule of the key being enough for the key. The ledger has to reach the same
+	 * answer or the two injected channels contradict each other about one chart, which is the failure
+	 * #308 exists to close. The rank alone cannot carry it: a corroborated rule with a BLANK note ranks
+	 * {@code SELF_NAMED_RULE_WITHOUT_A_NOTE}, ties with an uncorroborated noted rule at the same value,
+	 * and loses the ledger's incumbent-keeps tiebreak.
+	 *
+	 * <p>A copy rather than a setter because this class is immutable and the ledger stores warnings by
+	 * position: replacing the element is the whole of the mutation, so nothing that already read one
+	 * can observe it change underneath.
+	 */
+	SafetyWarning withUncorroboratedChartMatch(boolean uncorroboratedChartMatch) {
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship,
+				uncorroboratedChartMatch);
 	}
 
 	@Override

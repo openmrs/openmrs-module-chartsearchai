@@ -1235,10 +1235,14 @@ public class DrugSafetyValidator {
 		 *  not do is SPEAK for a chip the allergen arm corroborated, because the fold's whole premise is
 		 *  that a self-named rule reports that arm's fact, and a match no recorded name supports does not.
 		 *
-		 *  <p>Still raised, and since issue #308 no longer silently: the injected {@code safety_finding}
-		 *  such a rule produces states how it was matched
-		 *  ({@code DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH}), on the same corroboration
-		 *  question the injected {@code drug_reference} record's third section asks. Its CALL is
+		 *  <p>Still raised, and since issue #308 the injected {@code safety_finding} such a rule produces
+		 *  may state how it was matched ({@code DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH}).
+		 *  <b>May, not does</b>, and the difference is this rank's own condition: this rank asks
+		 *  {@link #aMatchedRecordNamesTheEntry} alone, while the clause asks the UNION that predicate is
+		 *  one leg of ({@link #corroboratedByTheChart}) — so a rule at this rank whose substance some
+		 *  OTHER recorded allergy reaches carries no clause, and the record's third section agrees with
+		 *  it. Do not re-derive one from the other: reading the clause off this rank is reading leg 1
+		 *  alone, which is the false hedge leg 2 exists to prevent. Its CALL is
 		 *  unchanged — the chip's rank, its detail and its severity are what they were, and the sentence
 		 *  above about being raised on independent evidence is why. What #308 measured is that a
 		 *  qualification reaching only one of two citable records changes no answer, because the model
@@ -1276,10 +1280,20 @@ public class DrugSafetyValidator {
 			 *  sentences can answer false. */
 			private boolean namesTheFinding;
 
-			RaisedChip(int position, int relationship, boolean namesTheFinding) {
+			/** Whether EVERY chip raised on this key so far rests on a chart match nothing corroborates
+			 *  — the key's answer, resolved as this AND rather than taken from the rank winner (issue
+			 *  #308). See {@link SafetyWarning#withUncorroboratedChartMatch}, which states why the rank
+			 *  cannot carry it. Only a curated-rule chip can ever make this true; every allergen-arm
+			 *  sentence answers false, so one of those on the key clears it — correct, because that arm
+			 *  fires exactly when the chart records an allergy to this substance. */
+			private boolean uncorroborated;
+
+			RaisedChip(int position, int relationship, boolean namesTheFinding,
+					boolean uncorroborated) {
 				this.position = position;
 				this.relationship = relationship;
 				this.namesTheFinding = namesTheFinding;
+				this.uncorroborated = uncorroborated;
 			}
 		}
 
@@ -1356,10 +1370,25 @@ public class DrugSafetyValidator {
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
 			if (already == null) {
-				raised.put(key, new RaisedChip(warnings.size(), relationship, namesTheFinding));
+				raised.put(key, new RaisedChip(warnings.size(), relationship, namesTheFinding,
+						chip.restsOnAnUncorroboratedChartMatch()));
 				warnings.add(chip);
 				return;
 			}
+			// The key's corroboration answer, resolved as a MAX over everything raised on it — one
+			// corroborated contributor is enough — which is the resolution the injected drug_reference
+			// record already makes over the rules of one collapsed clause
+			// (DrugReferenceInjector.contraindicationSections). Read off the CHIP rather than taken as a
+			// parameter, so no call site can supply it and none has to remember to: only the curated-rule
+			// arm builds a warning that can answer true.
+			//
+			// It cannot ride on the rank winner, which is what issue #308 first tried: contraindicationRank
+			// answers SELF_NAMED_RULE_WITHOUT_A_NOTE for a blank note WITHOUT asking corroboration, so a
+			// corroborated blank-note rule ties with an uncorroborated noted one and loses the
+			// incumbent-keeps tiebreak — and the prompt then carried "Recorded for this patient" beside
+			// "could not corroborate it as a record of this drug", about one chart, in one injection.
+			already.uncorroborated =
+					already.uncorroborated && chip.restsOnAnUncorroboratedChartMatch();
 			// Strictly stronger wins, and at EQUAL strength a chip that NAMES what the entry is keyed on
 			// beats one that quotes the chart instead (issue #268). Without that second half the
 			// surviving sentence depends on the order PatientService.getAllergies returned the records:
@@ -1374,6 +1403,13 @@ public class DrugSafetyValidator {
 				warnings.set(already.position, chip);
 				already.relationship = relationship;
 				already.namesTheFinding = namesTheFinding;
+			}
+			// Stamped onto whichever sentence survived, after the rank has chosen it: the two questions
+			// are independent, so the winner of one may carry the wrong answer to the other.
+			SafetyWarning surviving = warnings.get(already.position);
+			if (surviving.restsOnAnUncorroboratedChartMatch() != already.uncorroborated) {
+				warnings.set(already.position,
+						surviving.withUncorroboratedChartMatch(already.uncorroborated));
 			}
 		}
 	}

@@ -1027,13 +1027,10 @@ public class DrugReferenceInjector {
 	 * the chart really holds.
 	 *
 	 * <p><b>Additive, and that is the decision rather than a detail.</b> The finding still states
-	 * {@link #STRENGTH_WITHHOLD}. A third strength class between withholding and a caution was the
-	 * obvious fix and was refuted before any code: ADR Decision 42 deferred whether the finding should
-	 * state its PROVENANCE, not its strength, and it records that this union can be wrong in the
-	 * false-negative direction — while ADR Decision 37 measured a contraindication finding stating no
-	 * withholding clause turning <em>"No — ibuprofen should not be taken"</em> into <em>"Ibuprofen can
-	 * be given, with one caution"</em>, 3 of 3, chip byte-identical. Weakening a refusal on a gate
-	 * that can be wrong that way is fail-open in a safety net.
+	 * {@link #STRENGTH_WITHHOLD}, and a third strength class between withholding and a caution — the
+	 * obvious fix — was refuted before any code was written. <b>ADR Decision 44 is canonical for what
+	 * it costs</b>; the measurements it rests on are not restated here, because three copies of a
+	 * rejected-alternative argument is how this repo has come to contradict itself before.
 	 *
 	 * <p>Package-private, like the three section leads and unlike {@link #STRENGTH_WITHHOLD}. That
 	 * difference is the whole of what this clause is NOT: the strength clauses are public because
@@ -1060,13 +1057,22 @@ public class DrugReferenceInjector {
 	 * on. That is {@link DrugSafetyValidator#endSentence}, shared with the chip's own fold rather than
 	 * copied, and it is the only way the record's copy of the detail differs from the chip's.
 	 *
-	 * <p>Since issue #308 a contraindication finding whose rule reached the chart by bare containment
-	 * alone also states HOW it was matched, between the detail and the strength clause — see
+	 * <p>Since issue #308 a contraindication finding whose match against the chart nothing
+	 * CORROBORATES also states how it was matched, between the detail and the strength clause — see
 	 * {@link #FINDING_UNCORROBORATED_MATCH}, and {@code SafetyWarning.restsOnAnUncorroboratedChartMatch}
-	 * for where that answer is decided. It is a second clause and not a second CALL: the strength
-	 * clause is unchanged, so everything the paragraph above says about the answer's opening call still
-	 * holds. Two clauses is also why the full stop is added for either of them rather than for the
-	 * strength alone.
+	 * for where that answer is decided. Not "reached the chart by bare containment": that is one LEG of
+	 * the union and it is the chip rank's condition, not this one, so a rule at the demoted rank whose
+	 * substance some other recorded allergy reaches carries no clause. It is a second clause and not a
+	 * second CALL — the strength clause is unchanged, so everything the paragraph above says about the
+	 * answer's opening call still holds.
+	 *
+	 * <p>The full-stop guard asks about BOTH clauses, and its provenance half cannot fire today: only a
+	 * contraindication can carry provenance and {@link #strengthClause} answers one unconditionally for
+	 * that type, so a provenance clause never arrives without a strength beside it. Said rather than
+	 * left to be rediscovered — mutating the guard to {@code strength.isEmpty()} alone leaves the whole
+	 * api suite green. It is kept because the two clauses are independent by construction, and a type
+	 * carrying one without the other is the shape {@link #strengthClause} already warns a future caller
+	 * it must write for.
 	 */
 	static String renderFinding(SafetyWarning finding) {
 		String strength = strengthClause(finding);

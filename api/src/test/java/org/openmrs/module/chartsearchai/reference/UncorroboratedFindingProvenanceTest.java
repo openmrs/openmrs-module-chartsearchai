@@ -62,6 +62,11 @@ public class UncorroboratedFindingProvenanceTest {
 
 	/** Read off production, so no case below can pass against a clause no record carries. What pins
 	 *  the WORDS is {@link #theClauseIsTheWordsAModelReads}, and only that. */
+	/** Issue #308's own: one entry, two self-named rules that collapse onto one key and DISAGREE about
+	 *  corroboration while tying on rank. */
+	private static final String COLLAPSED_KEY =
+			"chartsearchai-test/drug-reference-collapsed-key-corroboration.json";
+
 	private static final String CLAUSE = DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH;
 
 	private static final String WITHHOLD = DrugReferenceInjector.STRENGTH_WITHHOLD;
@@ -324,6 +329,46 @@ public class UncorroboratedFindingProvenanceTest {
 		assertFalse(opium.get(0).contains(CLAUSE),
 				"a recorded allergy the question is not about still corroborates the match, was: "
 						+ opium.get(0));
+	}
+
+	@Test
+	public void oneCorroboratedRuleOfACollapsedKeyClearsTheClauseForTheWholeKey() throws IOException {
+		// The two injected channels must not disagree about ONE key, which is the whole of what #308 is
+		// for — and the rank cannot carry that answer. contraindicationFinding keys both of this entry's
+		// self-named rules on the SUBSTANCE (issue #146), so they are one chip and one rendered clause,
+		// while each rule is put to the chart on its own token: `levo` reaches an allergy recorded as
+		// `Levocetirizine` only mid-word, and `ketoconazole` is named outright by one recorded as
+		// `Ketoconazole`. They TIE at rank 0 — contraindicationRank answers
+		// SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE for the first and, WITHOUT asking corroboration at
+		// all, SELF_NAMED_RULE_WITHOUT_A_NOTE for the second — so the ledger's incumbent-keeps tiebreak
+		// leaves the uncorroborated rule's sentence standing.
+		//
+		// The record resolves this as a MAX ("one corroborated rule of the key is enough for the key",
+		// DrugReferenceInjector.contraindicationSections) and marks the clause RECORDED. Before the
+		// ledger did the same, the finding beside it said the module could not corroborate the match:
+		// two citable records of one chart, in one injection, contradicting each other. Mutate
+		// ContraindicationChips.add's AND to take the rank winner's own answer and read the failure.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(COLLAPSED_KEY));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Ketoconazole", "Levocetirizine"), null),
+						"Is it safe to give her levoketoconazole?");
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Levoketoconazole");
+		List<String> findings = new ArrayList<String>();
+		for (RecordMapping f : DrugReferenceTestSupport.injectedFindings(chart)) {
+			findings.add(f.getText());
+		}
+
+		// Precondition: the record really does state the collapsed clause as this chart's own reading,
+		// which is what the finding must not contradict. Asserted rather than assumed — if the record
+		// ever stopped saying it, the assertion below would pass while testing nothing.
+		assertTrue(record.contains(DrugReferenceInjector.RECORDED_READING_LEAD),
+				"precondition: the record must state the key as recorded, was: " + record);
+		assertEquals(1, findings.size(), "one collapsed key is one citable finding, was: " + findings);
+		assertFalse(findings.get(0).contains(CLAUSE),
+				"and the finding beside it must not deny what that record states, was: " + findings);
 	}
 
 	@Test

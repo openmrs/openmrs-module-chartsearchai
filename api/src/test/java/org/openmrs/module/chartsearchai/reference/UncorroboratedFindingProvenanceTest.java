@@ -219,7 +219,8 @@ public class UncorroboratedFindingProvenanceTest {
 
 	@Test
 	public void twoRulesOfOneEntryAreEachAnsweredOnTheirOwnMatch() throws IOException {
-		// The clause is per RULE and not per entry or per drug. Tramadol files a self-named rule on
+		// The clause is per collapsed KEY, and these two rules key DIFFERENTLY — which is what makes them
+		// two findings answered separately rather than one fold. Tramadol files a self-named rule on
 		// `trama`, which an allergen recorded as `Tramazoline` reaches only mid-word, and a class-token
 		// rule on `nsaid`, which an allergen recorded as `NSAIDs` matches and which is corroborated by
 		// construction. They key differently — contraindicationFinding keys a self-named allergy rule on
@@ -241,10 +242,14 @@ public class UncorroboratedFindingProvenanceTest {
 	}
 
 	@Test
-	public void theClauseFollowsTheRuleThatWonTheCollapsedKey() throws IOException {
+	public void theSentenceIsTheRankWinnersAndTheClauseIsTheKeysFold() throws IOException {
 		// Two self-named rules of ONE entry collapse onto one ledger key (issue #146 keys both on the
-		// substance), so only the warning that WON the key is ever rendered — and the clause has to be
-		// the winner's, not that of whichever rule the walk reached last. Levoketoconazole rules on
+		// substance), so only the warning that WON the key is ever rendered. The SENTENCE is that
+		// winner's; the CLAUSE is the key's fold, and in this arrangement the two agree because the
+		// corroborated rule is also the one that outranks. Where they do NOT agree is the case below,
+		// oneCorroboratedRuleOfACollapsedKeyClearsTheClauseForTheWholeKey, in which the rank winner is
+		// the uncorroborated incumbent and the clause is cleared anyway — so read that one before
+		// concluding from this case that the clause rides on the winner. Levoketoconazole rules on
 		// `ketoconazole`, which an allergy recorded as `Ketoconazole` names outright, and on `levo`,
 		// which an allergy recorded as `Levocetirizine` reaches only mid-word.
 		//

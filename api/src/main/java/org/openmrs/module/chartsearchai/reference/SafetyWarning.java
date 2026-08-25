@@ -253,11 +253,21 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * Whether the curated rule this warning was raised from reached this patient's chart only through
-	 * {@code PatientClinicalContext.hasAllergyToken}'s bare containment, with nothing corroborating
-	 * that match as a record of this drug — the fourth question of CLAUDE.md's injected-record rule,
-	 * answered by {@code DrugSafetyValidator.corroboratedByTheChart} and asked once so the two
-	 * injected channels cannot answer it differently (issue #308).
+	 * Whether nothing corroborates, as a record of this drug, the chart match behind the CLAUSE this
+	 * warning's sentence belongs to — the fourth question of CLAUDE.md's injected-record rule, asked
+	 * once so the two injected channels cannot answer it differently (issue #308).
+	 *
+	 * <p><b>Of the collapsed CLAUSE, not of the one rule this sentence came from</b>, and the
+	 * difference is reachable rather than pedantic. {@code DrugSafetyValidator.contraindicationFinding}
+	 * keys two self-named allergy rules of one entry alike (issue #146), so they are one chip and one
+	 * rendered clause while each is put to the chart on its own token — and one corroborated rule
+	 * carries the key, which is the fold {@code DrugSafetyValidator.addContraindications} resolves and
+	 * the same fold the injected {@code drug_reference} record makes. So this can answer false of a
+	 * sentence whose OWN rule nothing corroborates, because a sibling rule of its clause is
+	 * corroborated; {@code corroboratedByTheChart} is the per-rule primitive underneath that fold and
+	 * is not this. Reading this as the negation of that primitive is the first cut ADR Decision 44
+	 * refutes, and it reddens
+	 * {@code UncorroboratedFindingProvenanceTest.oneCorroboratedRuleOfACollapsedKeyClearsTheClauseForTheWholeKey}.
 	 *
 	 * <p>It changes what the injected {@code safety_finding} SAYS and never how strongly it speaks.
 	 * {@code DrugReferenceInjector.renderFinding} appends

@@ -1539,6 +1539,13 @@ public class DrugSafetyValidator {
 			// theSentenceIsTheRankWinnersAndTheClauseIsTheKeysFold; the rule-clause one reddens
 			// theWordsTheFindingPrintsAreNotHedgedWhereAnotherKeyStatesThemAsRecorded.
 			//
+			// RENORMALISING the second conjunct is a separate mutation from removing it, and it reddens
+			// that same case: replace contraindicationClause(c) with the expression the sentence below is
+			// built from — the untrimmed ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()) — and
+			// a matched rule whose curated note carries surrounding whitespace hedges the very words the
+			// record beside it states as this chart's reading. That case's fixture authors such a note for
+			// exactly this; measured with the whitespace taken off, the replacement moved no case's colour.
+			//
 			// No conjunct reads corroboratedClauses directly at this site, and the absence is deliberate.
 			// statedAsRecorded is built FROM that map, and a matched rule always carries a matchable —
 			// hence non-blank — token (PatientClinicalContext.matchableToken), so its key always has a
@@ -1836,7 +1843,15 @@ public class DrugSafetyValidator {
 	 *         <p>Since issue #308 {@link #addContraindications} asks this of a MATCHED rule as well, to
 	 *         compare the sentence its finding prints against the strings the record states as this
 	 *         chart's reading. That is the same expression the sentence is built from, trimmed — which
-	 *         is the form the record renders — so the two channels compare like with like. It is not
+	 *         is the form the record renders — so the two channels compare like with like. The TRIM is
+	 *         what that turns on wherever a curated note carries surrounding whitespace, and
+	 *         {@code UncorroboratedFindingProvenanceTest.theWordsTheFindingPrintsAreNotHedgedWhereAnotherKeyStatesThemAsRecorded}
+	 *         is what holds it: that case's fixture authors the matched rule's note padded, so replacing
+	 *         this call at that site with the untrimmed
+	 *         {@code ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken())} reddens it. Measured
+	 *         with the padding taken off, the same replacement moved no case's colour in the api suite —
+	 *         so it is the fixture's whitespace and not the case's shape that pins the normalisation. It
+	 *         is not
 	 *         the same string as the clause the rule's collapsed KEY renders wherever that key folds two
 	 *         rules saying different things; both are asked there, and the walk says why.
 	 */

@@ -535,6 +535,17 @@ public class UncorroboratedFindingProvenanceTest {
 		// construction, so the record states "opioid reaction" as this chart's own reading.
 		//
 		// Mutate the `contraindicationClause(c)` conjunct of `uncorroborated` away and read the failure.
+		//
+		// The `levo` note is authored with whitespace around it, and that is what makes this case observe
+		// the NORMALISATION as well as the conjunct. The record renders every clause trimmed
+		// (contraindicationClauses, through contraindicationClause) while the sentence the ledger builds
+		// prints the note as authored, so the guard has to ask contraindicationClause(c) and not the
+		// expression that sentence is built from. Replace that call with
+		// ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()) and read the failure: the record
+		// states `opioid reaction` as this chart's reading while the finding beside it hedges
+		// `  opioid reaction`. Measured with the whitespace taken off, that same replacement moved no
+		// case's colour in the api suite — so the padding is what holds it, and taking it off would leave
+		// the trim asserted in prose and pinned by nothing.
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(COLLAPSED_KEY_JOINED_CLAUSE));
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)

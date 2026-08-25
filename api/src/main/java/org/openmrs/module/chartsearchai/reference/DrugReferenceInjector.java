@@ -1035,12 +1035,15 @@ public class DrugReferenceInjector {
 	 * be given, with one caution"</em>, 3 of 3, chip byte-identical. Weakening a refusal on a gate
 	 * that can be wrong that way is fail-open in a safety net.
 	 *
-	 * <p>Public for the reason {@link #STRENGTH_WITHHOLD} is public, and NOT shared with the prompt:
-	 * this change adds no branch to {@code LlmProvider.DEFAULT_SYSTEM_PROMPT}, because it introduces
-	 * no new call for the prompt to teach. The clause is evidence the model reads inside a finding it
-	 * is already instructed to carry whole.
+	 * <p>Package-private, like the three section leads and unlike {@link #STRENGTH_WITHHOLD}. That
+	 * difference is the whole of what this clause is NOT: the strength clauses are public because
+	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} — another package — carries them verbatim in its
+	 * graded-safety rule and its format demonstrations, and this one has no such consumer. It adds no
+	 * branch to that prompt, because it introduces no new call for the prompt to teach; it is evidence
+	 * the model reads inside a finding the prompt already instructs it to carry whole. Anything that
+	 * makes it public is teaching the prompt a third class, which ADR Decision 44 refused.
 	 */
-	public static final String FINDING_UNCORROBORATED_MATCH =
+	static final String FINDING_UNCORROBORATED_MATCH =
 			" This module matched that record in this patient's chart by its wording alone and could "
 					+ "not corroborate it as a record of this drug.";
 

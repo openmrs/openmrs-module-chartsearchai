@@ -150,6 +150,26 @@ public class UncorroboratedFindingProvenanceTest {
 	}
 
 	@Test
+	public void theChipTheClinicianSeesIsTheStringItWas() throws IOException {
+		// Prompt-facing ONLY, the scope issue #283 set for its own clauses and the reason this change
+		// does not reopen issues #146 and #223, which twice refused to gate this chip on corroboration.
+		// The chip is still raised, its rank is what it was, and its DETAIL — the string that reaches
+		// the clinician and the `safetyWarnings` wire — carries none of this. Asserted directly rather
+		// than left to the suite: every other case here reads the injected record, so a change that put
+		// the clause on the warning's detail instead of on the rendered line would satisfy all of them.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(MID_WORD_TOKEN));
+		List<String> chips = DrugReferenceTestSupport.contraindicationDetails(
+				DrugReferenceTestSupport.validator(service).validate("", "Is it safe to give her opium?",
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set("Tiotropium"), null)));
+
+		assertEquals(java.util.Collections.singletonList(
+				"Opium is contraindicated by an active allergy: documented opium allergy"), chips,
+				"the clinician-facing chip is byte-identical, clause and strength clause alike");
+	}
+
+	@Test
 	public void aRuleTheChartsOwnRecordNamesCarriesNoClause() throws IOException {
 		// The control that separates this from appending the clause unconditionally: the same entry, the
 		// same rule, and an allergy recorded under the very name the token is. Leg 1 corroborates.
@@ -236,6 +256,27 @@ public class UncorroboratedFindingProvenanceTest {
 	}
 
 	@Test
+	public void aRuleWithNoNoteOfItsOwnIsAnsweredOnItsMatchAndNotOnItsWording() throws IOException {
+		// The clause is decided by corroboratedByTheChart, which is handed the rule and the chart and
+		// never the NOTE — so a rule with nothing of its own to say is answered exactly like one that
+		// has. That is a combination the chip's RANK cannot express: contraindicationRank returns
+		// SELF_NAMED_RULE_WITHOUT_A_NOTE for a blank note WITHOUT asking whether the match was
+		// corroborated, and both disqualifications share the value 0, so nothing about the chip could
+		// tell these apart. It is what aMatchedRecordNamesTheEntry's extraction was for — "a blank note
+		// changes what a clause SAYS, not what its match rests on".
+		//
+		// The arrangement is issue #308's own reported one, to the drug: this fixture's Ibuprofen files
+		// a blank-note rule on its own name, and `Dexibuprofen` is a real drug in which `ibuprofen` sits
+		// mid-word. firstNonBlank then renders the token back, which is the sentence that says strictly
+		// less than the allergen arm's — and it now says how it was matched.
+		assertEquals(DrugReferenceInjector.FINDING_PREFIX
+				+ "Ibuprofen: Ibuprofen is contraindicated by an active allergy: ibuprofen."
+				+ CLAUSE + WITHHOLD,
+				onlyFinding("chartsearchai-test/drug-reference-self-named-rule-shapes.json",
+						"Can I give him ibuprofen?", "Dexibuprofen"));
+	}
+
+	@Test
 	public void theOrderDrivenArmAsksTheWholeAllergyListAndNotTheOneTheQuestionIsAbout()
 			throws IOException {
 		// The order-driven arm (issue #143) holds a SECOND, narrowed allergy list beside the one the
@@ -244,6 +285,15 @@ public class UncorroboratedFindingProvenanceTest {
 		// the allergen arm's own identity question asked over the WHOLE list (ADR Decision 42), so
 		// narrowing it would report a finding as uncorroborated on the strength of the question's
 		// wording.
+		//
+		// It is also the only arrangement in which leg 2 changes a FINDING at all, and that is mechanism
+		// rather than an accident of this fixture: leg 2 is true exactly when some recorded allergy
+		// resolves to a row of this substance, which is the same fact that makes the allergen arm raise
+		// its IDENTITY chip — rank 3, on this very key, over the demoted rule's 0. So wherever that arm
+		// is handed the whole list, its own sentence replaces the rule's before the clause could be
+		// read. Here it is handed the NARROWED one, so the rule's sentence survives while the union
+		// still reads the whole chart. Measured by mutation: dropping leg 2 reddens this case and two in
+		// InjectedContraindicationCorroborationTest, and nothing else.
 		//
 		// The arrangement separates the two lists. Opium is an active ORDER and the question does not
 		// name it, so the gated branch is what runs; the question names `tiotropium`, which contains the

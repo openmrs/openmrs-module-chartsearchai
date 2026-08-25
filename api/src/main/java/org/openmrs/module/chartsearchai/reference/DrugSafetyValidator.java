@@ -1538,10 +1538,14 @@ public class DrugSafetyValidator {
 	 */
 	static boolean aMatchedRecordNamesTheEntry(DrugReference ref, DrugReference.Contraindication c,
 			PatientClinicalContext context) {
-		// No caller reaches this today: addContraindications returns on a null context before the rank is
-		// asked, and DrugReferenceInjector.corroborated is gated on a reading that requires one. Kept
-		// because allergensMatching would throw instead, and because false is the only safe answer here —
-		// it hedges or demotes, and can never make a record ASSERT something about a chart nobody read.
+		// No caller reaches this today, and the reason is a property of the paths rather than a list of
+		// them: every one of them is downstream of a context the caller has already established. The
+		// rank and the flag are both asked from inside addContraindications, which returns on a null
+		// context before either; the injected record's reading is gated on a reading that requires one.
+		// Stated as the mechanism because the list has already grown once — issue #308 added the flag —
+		// and an enumeration goes stale silently while a mechanism does not. Kept because
+		// allergensMatching would throw instead, and because false is the only safe answer here: it
+		// hedges or demotes, and can never make a record ASSERT something about a chart nobody read.
 		if (context == null) {
 			return false;
 		}
@@ -4276,6 +4280,17 @@ public class DrugSafetyValidator {
 	 *         {@code drugReferenceService} is not, and an answer that went missing there would silently
 	 *         report every self-named rule as uncorroborated. Resolved per call and held by the caller
 	 *         for the life of one injection, never on this bean (issue #172).
+	 *
+	 *         <p>Since issue #308 this bean derives the same set for itself, from the
+	 *         {@code recordedAllergens} walk {@code validate} already does once per pass — see the list
+	 *         overload below, which is the one spelling of the derivation. That makes the same-service
+	 *         condition above bind a SECOND pair: the flag is set here and the record's section is
+	 *         decided in the injector, so an injector wired to a validator holding a different
+	 *         {@code DrugReferenceService} would give the two channels different answers about one
+	 *         chart — the divergence #308 exists to close, reappearing through the wiring. Both are
+	 *         Spring singletons in production and {@code DrugReferenceTestSupport.injectorWithSafety}
+	 *         wires one service into both, which is what makes the condition hold rather than anything
+	 *         either class checks.
 	 */
 	static Set<Object> allergicSubstanceKeys(DrugReferenceService drugReferenceService,
 			PatientClinicalContext context) {
@@ -4309,7 +4324,7 @@ public class DrugSafetyValidator {
 	 *         fourth injected-record question, and since issue #308 the question BOTH injected
 	 *         channels ask. Asked only of a rule that has already matched.
 	 *
-	 *         <p>The union of two questions, and neither half will do: the everything about WHY is on
+	 *         <p>The union of two questions, and neither half will do: everything about WHY is on
 	 *         {@code DrugReferenceInjector.corroborated}, which is where the reasoning has lived since
 	 *         issue #269 and which now delegates here. What moved is only the body, and it moved for
 	 *         one reason — the injected {@code drug_reference} section and the injected
@@ -4343,7 +4358,8 @@ public class DrugSafetyValidator {
 	 *         tokens — the input to {@link #addAllergyContraindications}, resolved once per
 	 *         {@code validate} because it does not depend on the subject being checked, and once per
 	 *         injection by {@link #allergicSubstanceKeys} for the injected record's own reading (issue
-	 *         #269). Two invocations of ONE walk rather than two walks: the answer is a function of the
+	 *         #269) — and, since issue #308, read a second time within the pass, to derive the key set
+	 *         the injected finding's own clause turns on. Two invocations of ONE walk rather than two walks: the answer is a function of the
 	 *         service and the context alone, so the two cannot disagree, and neither holds it past the
 	 *         pass or the injection that asked for it. Each carries
 	 *         its charted allergen token and the substances it implies, plus which of those it NAMES

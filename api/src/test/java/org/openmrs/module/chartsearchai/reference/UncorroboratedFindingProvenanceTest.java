@@ -60,8 +60,6 @@ public class UncorroboratedFindingProvenanceTest {
 	private static final String BORROWED_ALIAS =
 			"chartsearchai-test/drug-reference-borrowed-alias-corroboration.json";
 
-	/** Read off production, so no case below can pass against a clause no record carries. What pins
-	 *  the WORDS is {@link #theClauseIsTheWordsAModelReads}, and only that. */
 	/** Issue #308's own: two rule-bearing ROWS of one substance, which the chip ledger folds and the
 	 *  injected record does not. */
 	private static final String RULE_ROWS_ONE_SUBSTANCE =
@@ -72,6 +70,8 @@ public class UncorroboratedFindingProvenanceTest {
 	private static final String COLLAPSED_KEY =
 			"chartsearchai-test/drug-reference-collapsed-key-corroboration.json";
 
+	/** Read off production, so no case below can pass against a clause no record carries. What pins
+	 *  the WORDS is {@link #theClauseIsTheWordsAModelReads}, and only that. */
 	private static final String CLAUSE = DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH;
 
 	private static final String WITHHOLD = DrugReferenceInjector.STRENGTH_WITHHOLD;
@@ -411,6 +411,40 @@ public class UncorroboratedFindingProvenanceTest {
 						+ "was: " + findings);
 		assertTrue(findings.get(0).contains(CLAUSE),
 				"and the finding must say what that row's own record says, was: " + findings);
+	}
+
+	@Test
+	public void aRuleTheSubjectMatterGateSKIPSStillCarriesItsClausesCorroboration() throws IOException {
+		// The corroboration fold ignores the subject-matter gate, and this is the case that says why.
+		// That gate (issue #143) decides which CHIPS a response may raise; whether the chart corroborates
+		// a match is a fact about the CHART, and the injected record asks it unscoped. Fold it inside the
+		// gate and a corroborated rule the question does not name is skipped before it can carry its key
+		// — the record then states the clause as recorded while the finding beside it says nothing
+		// corroborates the match, which is issue #308's own defect arriving through a third door.
+		//
+		// The arrangement puts one rule of a collapsed clause on each side of the gate. Levoketoconazole
+		// is an active ORDER the question does not name, so the gated branch runs; its `levo` rule is in
+		// subject matter because `levocetirizine` contains that token, while its `ketoconazole` rule —
+		// the corroborated one, named outright by a recorded `Ketoconazole` allergy — is not.
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(COLLAPSED_KEY));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null,
+								DrugReferenceTestSupport.set("Levoketoconazole"), null,
+								DrugReferenceTestSupport.set("Ketoconazole", "Levocetirizine"), null),
+						"Is levocetirizine safe here?");
+		List<String> findings = new ArrayList<String>();
+		for (RecordMapping f : DrugReferenceTestSupport.injectedFindings(chart)) {
+			findings.add(f.getText());
+		}
+
+		assertEquals(1, findings.size(), "the gated branch must raise this clause once, was: " + findings);
+		assertTrue(findings.get(0).contains("documented levo allergy"),
+				"precondition: the rule the gate ADMITS is the one whose sentence is printed, was: "
+						+ findings);
+		assertFalse(findings.get(0).contains(CLAUSE),
+				"and its clause is corroborated by the sibling rule the gate skipped, was: " + findings);
 	}
 
 	@Test

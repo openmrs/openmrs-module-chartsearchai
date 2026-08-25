@@ -1280,36 +1280,10 @@ public class DrugSafetyValidator {
 			 *  sentences can answer false. */
 			private boolean namesTheFinding;
 
-			/** Whether EVERY chip raised on this key so far rests on a chart match nothing corroborates
-			 *  — the key's answer, resolved as this AND rather than taken from the rank winner (issue
-			 *  #308). See {@link SafetyWarning#withUncorroboratedChartMatch}, which states why the rank
-			 *  cannot carry it — and it is the answer for the sentence CURRENTLY occupying
-			 *  {@link #position}, which is why {@link #origin} sits beside it.
-			 *
-			 *  <p><b>Scoped to one entry, because that is the unit the injected record resolves.</b>
-			 *  {@code DrugReferenceInjector.contraindicationSections} renders one record per ENTRY and
-			 *  takes its MAX over that entry's own rules; this ledger's key is the SUBSTANCE, which spans
-			 *  every row of it. ANDing across that wider unit was measured wrong in the opposite
-			 *  direction to the defect it fixed: two rule-bearing ROWS of one substance — the shape
-			 *  {@code DrugReferenceValidity.RULES_WITHOUT_A_SUBSTANCE_IDENTITY} actively tells operators
-			 *  to author — let a corroborated rule on row B clear the flag while row B's neighbour row A
-			 *  still hedges its own clause in its own record. So the AND runs only between chips from the
-			 *  SAME origin, and a chip from another origin that wins the rank brings its own answer with
-			 *  its sentence. */
-			private boolean uncorroborated;
-
-			/** The entry whose rule supplied the sentence at {@link #position}, or null where the
-			 *  sentence is not a rule's — every allergen-arm chip. Compared by IDENTITY, which is what
-			 *  the rest of this pass already does with rows of one {@code DrugReferenceService}. */
-			private DrugReference origin;
-
-			RaisedChip(int position, int relationship, boolean namesTheFinding,
-					boolean uncorroborated, DrugReference origin) {
+			RaisedChip(int position, int relationship, boolean namesTheFinding) {
 				this.position = position;
 				this.relationship = relationship;
 				this.namesTheFinding = namesTheFinding;
-				this.uncorroborated = uncorroborated;
-				this.origin = origin;
 			}
 		}
 
@@ -1346,13 +1320,9 @@ public class DrugSafetyValidator {
 		 *        chip, which names that instead (issue #164). Either way it is the row the chip's own
 		 *        sentence uses, so what the chip says and what the ledger counts cannot come apart; and
 		 *        either way it keys the same, since both are rows of the subject's substance.
-		 * @param origin (on the longer form) the entry whose RULE supplied this sentence, or null where
-		 *        no rule did — every allergen-arm chip. Deliberately not {@code subject}: that is the row
-		 *        the chip is NAMED after and is substance-wide, while this is the row the injected record
-		 *        for that same sentence is rendered from. See {@code RaisedChip.uncorroborated}.
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip) {
-			add(subject, finding, relationship, chip, false, null);
+			add(subject, finding, relationship, chip, false);
 		}
 
 		/**
@@ -1367,7 +1337,7 @@ public class DrugSafetyValidator {
 		 * both branches.
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip,
-				boolean namesTheFinding, DrugReference origin) {
+				boolean namesTheFinding) {
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
 			// merge different sets of rows. Its javadoc is where the two key spaces are justified. It is
@@ -1390,26 +1360,9 @@ public class DrugSafetyValidator {
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
 			if (already == null) {
-				raised.put(key, new RaisedChip(warnings.size(), relationship, namesTheFinding,
-						chip.restsOnAnUncorroboratedChartMatch(), origin));
+				raised.put(key, new RaisedChip(warnings.size(), relationship, namesTheFinding));
 				warnings.add(chip);
 				return;
-			}
-			// The key's corroboration answer, resolved as a MAX over everything raised on it — one
-			// corroborated contributor is enough — which is the resolution the injected drug_reference
-			// record already makes over the rules of one collapsed clause
-			// (DrugReferenceInjector.contraindicationSections). Read off the CHIP rather than taken as a
-			// parameter, so no call site can supply it and none has to remember to: only the curated-rule
-			// arm builds a warning that can answer true.
-			//
-			// It cannot ride on the rank winner, which is what issue #308 first tried: contraindicationRank
-			// answers SELF_NAMED_RULE_WITHOUT_A_NOTE for a blank note WITHOUT asking corroboration, so a
-			// corroborated blank-note rule ties with an uncorroborated noted one and loses the
-			// incumbent-keeps tiebreak — and the prompt then carried "Recorded for this patient" beside
-			// "could not corroborate it as a record of this drug", about one chart, in one injection.
-			if (already.origin == origin) {
-				already.uncorroborated =
-						already.uncorroborated && chip.restsOnAnUncorroboratedChartMatch();
 			}
 			// Strictly stronger wins, and at EQUAL strength a chip that NAMES what the entry is keyed on
 			// beats one that quotes the chart instead (issue #268). Without that second half the
@@ -1425,21 +1378,14 @@ public class DrugSafetyValidator {
 				warnings.set(already.position, chip);
 				already.relationship = relationship;
 				already.namesTheFinding = namesTheFinding;
-				if (already.origin != origin) {
-					// A sentence from another entry replaces this one, so the answer travels with it
-					// rather than being inherited: the clause qualifies the sentence that is printed, and
-					// the record that renders the same sentence resolved its own MAX over THAT entry.
-					already.origin = origin;
-					already.uncorroborated = chip.restsOnAnUncorroboratedChartMatch();
-				}
 			}
-			// Stamped onto whichever sentence survived, after the rank has chosen it: the two questions
-			// are independent, so the winner of one may carry the wrong answer to the other.
-			SafetyWarning surviving = warnings.get(already.position);
-			if (surviving.restsOnAnUncorroboratedChartMatch() != already.uncorroborated) {
-				warnings.set(already.position,
-						surviving.withUncorroboratedChartMatch(already.uncorroborated));
-			}
+			// Nothing to reconcile about issue #308's corroboration flag here, and that is a property of
+			// WHERE it is resolved rather than an omission: addContraindications folds it over the whole
+			// ENTRY's rules for a clause before building any warning, so every chip arrives carrying its
+			// clause's answer and the sentence that survives brings the right one with it. Resolving it
+			// in this ledger instead was tried and is wrong twice over — the key is the SUBSTANCE, so it
+			// folds across rows the record renders separately, and the rules the subject-matter gate
+			// skips never arrive to be folded at all.
 		}
 	}
 
@@ -1467,6 +1413,34 @@ public class DrugSafetyValidator {
 		// inside this arm. What is left for a deployment authoring a genuinely route-specific rule is to
 		// file that presentation as its own substance, which is what a row publishing no substanceName
 		// already does.
+		// The corroboration answer for each collapsed CLAUSE of this entry, resolved before the walk
+		// below and over the same unit the injected drug_reference record resolves it over: this
+		// ENTRY's rules, folded by contraindicationFinding, one corroborated rule carrying the key
+		// (issue #308, DrugReferenceInjector.contraindicationSections — a change to either belongs in
+		// both). Two things about the scoping are load-bearing and each was measured wrong first.
+		//
+		// It is per ENTRY and not per chip KEY. The ledger's key is the SUBSTANCE, so it spans every
+		// ROW of it, while a record is rendered per row — and on two rule-bearing rows of one substance
+		// a corroborated rule on one cleared the flag while the other row's own record went on hedging
+		// its own clause.
+		//
+		// And it ignores `askedAbout`. That gate decides which CHIPS this response may raise (issue
+		// #143); whether the chart corroborates a match is a fact about the chart and not about what
+		// was asked, and contraindicationSections asks it unscoped. Scoped, a corroborated rule the
+		// question does not name is skipped before it can carry its key — the record then states the
+		// clause while the finding beside it says nothing corroborates the match.
+		Map<Object, Boolean> corroboratedClauses = new HashMap<Object, Boolean>();
+		for (DrugReference.Contraindication c : ref.getContraindications()) {
+			if (recordedContraindicationKind(c, context) == null) {
+				continue;
+			}
+			Object key = contraindicationFinding(ref, c);
+			if (!Boolean.TRUE.equals(corroboratedClauses.get(key))) {
+				corroboratedClauses.put(key,
+						corroboratedByTheChart(ref, c, context, allergicSubstances));
+			}
+		}
+
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
 			String recorded = recordedContraindicationKind(c, context);
 			if (recorded == null) {
@@ -1483,32 +1457,28 @@ public class DrugSafetyValidator {
 			// every request, for a loop that then does nothing. SubstanceSubjects memoises per substance, so
 			// asking it once per MATCHED rule costs no more than asking it once.
 			DrugReference subject = chips.subjectOf(ref);
-			// Whether the injected finding may state this rule's sentence bare — issue #308, and the
-			// SAME question the injected drug_reference record's third section asks
-			// (DrugReferenceInjector.corroborated, which delegates to the method below). It rides on the
-			// warning rather than being re-derived at the renderer because the renderer holds a
-			// SafetyWarning and not the rule it came from; it is set here, on the one arm that builds a
-			// warning from a rule matched against the chart at all.
+			// Whether the injected finding may state this rule's sentence bare — issue #308, and the SAME
+			// question the injected drug_reference record's third section asks
+			// (DrugReferenceInjector.corroborated, which delegates to the same method). It rides on the
+			// WARNING because the renderer holds a SafetyWarning and not the rule it came from.
 			//
-			// Asked per RULE, and only the warning that WINS the collapsed key is ever rendered: two
-			// self-named rules of one entry are ONE chip (issue #146 keys both on the substance), so a
-			// corroborated rule that outranks an uncorroborated one carries its own answer with it. That
-			// is what the ledger's strictly-stronger-wins comparison already does with the sentence, and
-			// this flag travels with the sentence rather than beside it for exactly that reason.
+			// The CLAUSE's answer, not this rule's: two self-named rules of one entry are one chip and
+			// one rendered clause (issue #146 keys both on the substance), so they are folded above and
+			// the fold is what is read here. Reading this rule's own answer instead was the first cut and
+			// is measured wrong — contraindicationRank answers SELF_NAMED_RULE_WITHOUT_A_NOTE for a blank
+			// note WITHOUT asking corroboration, so a corroborated blank-note rule ties with an
+			// uncorroborated noted one and loses the incumbent-keeps tiebreak, and the prompt then carried
+			// "Recorded for this patient" beside "could not corroborate it as a record of this drug".
 			//
 			// It changes what the record SAYS and never how strongly it speaks: the chip's detail, its
 			// rank and its severity are untouched, so licensesWithholding still answers alike for it.
-			boolean uncorroborated = !corroboratedByTheChart(ref, c, context, allergicSubstances);
-			// `ref` is handed over as the chip's ORIGIN — the entry this rule is authored on, which is not
-			// necessarily the row the chip is NAMED after (that is `subject`, issue #206). The ledger
-			// needs it because the injected record resolves its own corroboration MAX per ENTRY while
-			// this ledger's key is the substance: see RaisedChip.uncorroborated.
+			boolean uncorroborated = !Boolean.TRUE.equals(
+					corroboratedClauses.get(contraindicationFinding(ref, c)));
 			chips.add(subject, contraindicationFinding(ref, c), contraindicationRank(ref, c, context),
 					SafetyWarning.contraindication(subject.displayLabel(),
 							subject.displayLabel() + " is contraindicated by an " + recorded + ": "
 									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()),
-							uncorroborated),
-					false, ref);
+							uncorroborated));
 		}
 	}
 
@@ -4251,7 +4221,7 @@ public class DrugSafetyValidator {
 				chips.add(sameSubstance, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
 						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION,
 								sameSubstance.displayLabel(), recorded.identitySentence(sameSubstance)),
-						recorded.names(sameSubstance), null);
+						recorded.names(sameSubstance));
 				continue;
 			}
 			if (refClasses.isEmpty() && refGroups.isEmpty()) {
@@ -4270,7 +4240,7 @@ public class DrugSafetyValidator {
 									subject.displayLabel() + " is in the same ATC class (" + shared
 											+ ") as the patient's allergy to " + recorded.allergenName(implied)
 											+ " — possible cross-reactivity"),
-							recorded.names(implied), null);
+							recorded.names(implied));
 					chipped = true;
 					break;
 				}
@@ -4286,7 +4256,7 @@ public class DrugSafetyValidator {
 									subject.displayLabel() + " is in the same cross-reactivity group ("
 											+ group.getName() + ") as the patient's allergy to "
 											+ recorded.allergenName(implied) + " — possible cross-reactivity"),
-							recorded.names(implied), null);
+							recorded.names(implied));
 					break;
 				}
 			}

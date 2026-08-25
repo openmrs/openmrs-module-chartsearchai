@@ -277,29 +277,6 @@ public class SafetyWarning {
 		return uncorroboratedChartMatch;
 	}
 
-	/**
-	 * A copy of this warning answering {@code uncorroboratedChartMatch} instead, with everything else —
-	 * type, drug, detail, severity, folded relationship — untouched (issue #308).
-	 *
-	 * <p>It exists because that answer belongs to a COLLAPSED KEY and not to the rule this warning was
-	 * built from. {@code ContraindicationChips} groups two self-named allergy rules of one entry onto
-	 * one chip (issue #146) while each rule is put to the chart on its own token, so the two can
-	 * disagree — and the injected {@code drug_reference} record resolves that disagreement as a MAX,
-	 * one corroborated rule of the key being enough for the key. The ledger has to reach the same
-	 * answer or the two injected channels contradict each other about one chart, which is the failure
-	 * #308 exists to close. The rank alone cannot carry it: a corroborated rule with a BLANK note ranks
-	 * {@code SELF_NAMED_RULE_WITHOUT_A_NOTE}, ties with an uncorroborated noted rule at the same value,
-	 * and loses the ledger's incumbent-keeps tiebreak.
-	 *
-	 * <p>A copy rather than a setter because this class is immutable and the ledger stores warnings by
-	 * position: replacing the element is the whole of the mutation, so nothing that already read one
-	 * can observe it change underneath.
-	 */
-	SafetyWarning withUncorroboratedChartMatch(boolean uncorroboratedChartMatch) {
-		return new SafetyWarning(type, drug, detail, severity, unratedRelationship,
-				uncorroboratedChartMatch);
-	}
-
 	@Override
 	public String toString() {
 		return type + ":" + drug + ":" + detail;

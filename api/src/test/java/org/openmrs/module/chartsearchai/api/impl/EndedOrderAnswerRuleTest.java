@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -30,8 +31,10 @@ import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
  * {@code describesEndedOrder} nor {@link LlmProvider#DEFAULT_SYSTEM_PROMPT} is visible from the
  * other's package, and this is the coupling {@code LlmProviderTest} already uses for
  * {@code DrugReferenceInjector.FINDING_PREFIX}. An assertion here that the prompt contains a
- * hand-typed {@code ". Stopped: "} would be a second definition of the marker, which is the drift
- * the shared constant exists to prevent.
+ * hand-typed {@code ". Stopped: "} would be a second definition of the marker. Be precise about what
+ * that buys: a hand-typed copy compiles to a byte-identical prompt and passes every case here, so
+ * the sharing does not catch it today. What it catches is the NEXT querystore rename — the constant
+ * moves, a hardcoded copy does not, and {@code EndedOrderMarkerContractTest} reddens.
  *
  * <p><b>ADR Decision 45 is canonical for what was measured and for the drafts it refuted</b>, and it
  * is not restated here — three copies of one measurement narrative is how this repo's notes have come
@@ -51,6 +54,26 @@ public class EndedOrderAnswerRuleTest {
 				"and the discontinue marker too: describesEndedOrder keys on EITHER marker, so a "
 						+ "prompt naming only the stop date teaches a narrower record class than the "
 						+ "module itself recognises");
+	}
+
+	@Test
+	public void thePromptNamesBothRecordPrefixesItClassifiesBy() {
+		String prompt = LlmProvider.DEFAULT_SYSTEM_PROMPT;
+
+		// The clause identifies the record CLASS by these two cues before it looks for either end
+		// marker, so a reworded cue silently stops the whole rule firing. Two independent Phase 2
+		// reviewers found this unpinned and one confirmed it by mutation: rewriting the prompt's
+		// "Drug order:" to "Drug prescription:" left the entire suite green.
+		//
+		// The querystore side is pinned by EndedOrderMarkerContractTest against the real serializer;
+		// the module's own side by ActiveOrderReconciliationTest, which asserts the rendered
+		// "Active drug order: ..." text. These two assertions close the loop from the prompt end.
+		assertTrue(prompt.contains(DrugReferenceInjector.QUERYSTORE_DRUG_ORDER_PREFIX),
+				"the prompt must name querystore's drug-order prefix, or no chart record is "
+						+ "recognised as belonging to the class this rule is about");
+		assertTrue(prompt.contains(DrugReferenceInjector.ACTIVE_ORDER_PREFIX.trim()),
+				"and the module's own active-order prefix, or the record #118 injects to stop a "
+						+ "chip and the prose contradicting each other has no standing in the rule");
 	}
 
 	@Test
@@ -153,6 +176,57 @@ public class EndedOrderAnswerRuleTest {
 		assertTrue(prompt.contains("Where every record naming a drug has ended"),
 				"and the ended branch must be conditioned on ALL of the drug's records having "
 						+ "ended, or it still reads as categorical about the drug");
+	}
+
+	@Test
+	public void theWholePromptIsStillONE_compileTimeConstant() throws Exception {
+		// A near-miss from this change's own review, kept as a guard because it is silent in every
+		// channel that normally catches things. The clause concatenates constants from
+		// DrugReferenceInjector; writing one of them as ACTIVE_ORDER_PREFIX.trim() made the
+		// initializer a non-constant expression, so javac stopped folding DEFAULT_SYSTEM_PROMPT into
+		// a single literal and computed it in <clinit> instead. It COMPILED, the whole suite stayed
+		// green, and the prompt was correct at runtime — but it no longer existed in the class
+		// file's constant pool, which is where the eval harness's pure-prompt A/B reads it from to
+		// build its arms. The A/B silently produced a truncated prompt.
+		//
+		// So this asserts the property that broke: the prompt is present, verbatim and whole, in
+		// LlmProvider's own constant pool. Any future operand that is not a constant expression
+		// (a .trim(), a String.format, a method call) reddens this and names why.
+		byte[] classFile;
+		try (java.io.InputStream in = LlmProvider.class.getResourceAsStream("LlmProvider.class")) {
+			assertNotNull(in, "LlmProvider.class must be readable from the test classpath");
+			java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+			byte[] chunk = new byte[8192];
+			for (int n; (n = in.read(chunk)) > 0; ) {
+				buf.write(chunk, 0, n);
+			}
+			classFile = buf.toByteArray();
+		}
+
+		// The pool stores modified UTF-8; for this prompt (no NUL, no supplementary characters)
+		// that coincides with standard UTF-8, so a straight byte search is exact.
+		byte[] needle = LlmProvider.DEFAULT_SYSTEM_PROMPT.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		assertTrue(indexOf(classFile, needle) >= 0,
+				"DEFAULT_SYSTEM_PROMPT must remain a COMPILE-TIME constant, folded whole into "
+						+ "LlmProvider's constant pool. If this fails, an operand of the "
+						+ "concatenation stopped being a constant expression — javac now builds the "
+						+ "prompt in <clinit>, which is correct at runtime and invisible to every "
+						+ "test, but breaks anything reading the prompt out of the class file, "
+						+ "including eval/drift-metric's pure-prompt A/B.");
+	}
+
+	/** First index of {@code needle} in {@code haystack}, or -1. */
+	private static int indexOf(byte[] haystack, byte[] needle) {
+		outer:
+		for (int i = 0; i + needle.length <= haystack.length; i++) {
+			for (int j = 0; j < needle.length; j++) {
+				if (haystack[i + j] != needle[j]) {
+					continue outer;
+				}
+			}
+			return i;
+		}
+		return -1;
 	}
 
 	@Test

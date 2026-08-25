@@ -89,10 +89,13 @@ public class LlmProvider {
 			//     #118 reconciliation, so the answer rule and that reconciliation cannot come to
 			//     disagree about which records ended. EndedOrderMarkerContractTest pins all three
 			//     cues, the "Drug order:" prefix included, against querystore's REAL serializer.
-			//   - The prefix cue is a GUARD, not labelling. querystore's
-			//     AbstractServiceOrderRecordSerializer emits the same two markers behind
-			//     "Referral order:" and "Test order:", so dropping it would have the model report
-			//     an ended lab test as an ended prescription.
+			//   - The prefix cues are constants too, and the second one is the module's OWN
+			//     (DrugReferenceInjector.renderActiveOrder builds the injected #118 record from it),
+			//     so the renderer and the prompt cannot drift apart and leave that record outside
+			//     the class this rule reasons about. The first is a GUARD rather than labelling:
+			//     querystore's AbstractServiceOrderRecordSerializer emits the same two end markers
+			//     behind "Referral order:" and "Test order:", so dropping it would have the model
+			//     report an ended lab test as an ended prescription.
 			//   - The stop DATE is conditional, because a DISCONTINUE record carries none.
 			//   - The ended branch is conditioned on EVERY record naming the drug having ended, and
 			//     the live record governs where both exist. A dose change is a REVISE — a new order
@@ -101,7 +104,19 @@ public class LlmProvider {
 			//     asserting a falsehood about a live prescription.
 			//   - No otherwise-branch, and the forbidden sentence is described rather than quoted:
 			//     arms B and D of the 2026-07-30 A/B, both reverted.
-			+ "A drug-order record — its text begins \"Drug order:\" or \"Active drug order:\" — "
+			//   - "its text BEGINS" — do not "correct" this to "carries". A reviewer noted that as
+			//     the model sees them records begin "[7] Drug order: ...", so "begins" is literally
+			//     loose. Applying the correction was measured, one word changed, everything else
+			//     byte-identical: "is he currently taking any medications?" went from "No, the
+			//     patient is not currently taking any medications. The order for Nevirapine was
+			//     stopped on 2026-08-24" back to "Yes - the patient is currently taking Nevirapine",
+			//     the ticket's original defect, n=3 byte-identical on both sides; reverting the word
+			//     restored it, also n=3. The doubled "carries ... that also carries" is the likely
+			//     cause and the evidence does not establish it. What IS established is that this
+			//     clause is phrasing-sensitive at one word, so re-measure before rewording it.
+			+ "A drug-order record — its text begins \""
+			+ DrugReferenceInjector.QUERYSTORE_DRUG_ORDER_PREFIX + "\" or \""
+			+ DrugReferenceInjector.ACTIVE_ORDER_PREFIX + "\" — "
 			+ "that also carries \"" + DrugReferenceInjector.ORDER_STOPPED_MARKER + "\" (the date "
 			+ "the order ended) or \"" + DrugReferenceInjector.ORDER_DISCONTINUED_MARKER + "\" "
 			+ "records a prescription that has ENDED. Whenever your answer names a drug from such a "

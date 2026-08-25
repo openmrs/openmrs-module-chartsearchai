@@ -350,8 +350,10 @@ by the end marker, and that prefix is load-bearing rather than labelling: querys
 two markers behind `Referral order:` and `Test order:`, so without it an ended lab test would read as
 an ended prescription. The markers
 are the same two [active-order reconciliation](#drug-reference-injection--safety-validation) keys on
-for #118, shared as constants rather than restated, so the prompt and the matcher cannot come to
-disagree; that the cues are ones querystore actually renders is pinned separately, by
+for #118, and the record prefixes are constants too — the second of them the one
+`DrugReferenceInjector.renderActiveOrder` builds the injected #118 record from. Sharing is not what
+keeps them honest: the display-cased and match-cased marker constants are deliberately independent
+literals. What pins them to agree, and to agree with what querystore actually renders, is
 `EndedOrderMarkerContractTest` against the real serializer's output.
 
 Not covered: an order that lapsed by its **auto-expire date**. querystore carries `auto_expire_date`

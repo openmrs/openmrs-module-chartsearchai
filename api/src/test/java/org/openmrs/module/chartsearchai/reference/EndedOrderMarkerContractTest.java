@@ -131,9 +131,12 @@ public class EndedOrderMarkerContractTest extends BaseModuleContextSensitiveTest
 		// cue the clause would have the model report an ended lab test as an ended prescription.
 		String rendered = renderedText(triomuneOrder());
 
-		assertTrue(rendered.startsWith("Drug order:"),
+		assertTrue(rendered.startsWith(DrugReferenceInjector.QUERYSTORE_DRUG_ORDER_PREFIX),
 				"the prompt identifies a drug-order record by this prefix; querystore must still "
-						+ "render it. Rendered: " + rendered);
+						+ "render it. Asserted against the CONSTANT, not a literal: a literal here "
+						+ "leaves the constant free to drift away from querystore while the prompt "
+						+ "faithfully teaches the drifted value, which is green on both sides. "
+						+ "Rendered: " + rendered);
 	}
 
 	@Test

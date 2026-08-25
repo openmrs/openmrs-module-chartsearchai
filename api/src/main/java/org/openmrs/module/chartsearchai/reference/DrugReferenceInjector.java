@@ -524,6 +524,42 @@ public class DrugReferenceInjector {
 	public static final String ORDER_STOPPED_MARKER = ". Stopped: ";
 
 	/**
+	 * The prefix querystore renders a drug-order record's text under. Public and shared with
+	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} for the reason {@link #ORDER_STOPPED_MARKER} is: the
+	 * prompt identifies the record CLASS by this cue before it looks for either end marker, so a
+	 * prompt carrying its own copy could come to name a prefix no record has.
+	 *
+	 * <p>It is a GUARD rather than labelling, which is why it must not be "simplified" out of the
+	 * clause as a restatement of "a drug-order record": querystore's
+	 * {@code AbstractServiceOrderRecordSerializer} emits the SAME two end markers behind
+	 * {@code "Referral order: "} and {@code "Test order: "}, so without this conjunct the clause
+	 * would have the model report an ended lab test as an ended prescription. Pinned against the
+	 * real serializer by
+	 * {@code EndedOrderMarkerContractTest.theRecordPrefixTheClauseIdentifiesTheClassBySurvivesToo}.
+	 */
+	public static final String QUERYSTORE_DRUG_ORDER_PREFIX = "Drug order:";
+
+	/**
+	 * The prefix {@link #renderActiveOrder} renders the module's own active-order stand-in under —
+	 * deliberately distinct from {@link #QUERYSTORE_DRUG_ORDER_PREFIX} so the record says it is a
+	 * stand-in rather than an indexed one, and public for the same reason that one is.
+	 *
+	 * <p>It carries NO trailing space, and that is load-bearing rather than tidy: the prompt
+	 * concatenates it, and {@code DEFAULT_SYSTEM_PROMPT} is only a compile-time constant while every
+	 * operand is one. A {@code .trim()} at the prompt's call site is not a constant expression, so
+	 * javac stops folding the whole prompt into one literal and computes it in {@code <clinit>}
+	 * instead — which compiles, passes every test, and silently breaks anything that reads the
+	 * prompt out of the class file's constant pool. Keep the space at the RENDER site.
+	 *
+	 * <p>The prompt names it so an injected record has standing in the ended-order rule's CURRENT
+	 * branch. Without that, the one record #118 injects to stop a chip and the prose contradicting
+	 * each other would fall outside the class the rule reasons about — reopening #118 by instruction
+	 * rather than by missing evidence. Held as one constant because the renderer and the prompt are
+	 * the two places that spell it, and nothing else would notice them drifting apart.
+	 */
+	public static final String ACTIVE_ORDER_PREFIX = "Active drug order:";
+
+	/**
 	 * Display-cased marker for a DISCONTINUE order, shared with the prompt for the reason
 	 * {@link #ORDER_STOPPED_MARKER} is. Unlike that one this round-trips exactly to
 	 * {@link #QUERYSTORE_DISCONTINUE_MARKER} under {@code toLowerCase()}; it is still held apart,
@@ -610,7 +646,7 @@ public class DrugReferenceInjector {
 	 * operator looks for it, rather than by prose in front of a clinician.
 	 */
 	static String renderActiveOrder(PatientClinicalContext.ActiveDrugOrder order) {
-		return "Active drug order: " + order.getDisplay() + ".";
+		return ACTIVE_ORDER_PREFIX + " " + order.getDisplay() + ".";
 	}
 
 	/**

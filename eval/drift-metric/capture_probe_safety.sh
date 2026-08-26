@@ -130,9 +130,17 @@ case "$PHRASING" in
      exit 1 ;;
 esac
 
+# Fired/landed counts for the marker below, and for the refusal that guards it. Incremented inside
+# fire(), which runs in THIS shell (no pipe, no subshell), so the counts are what the loops actually
+# asked for rather than a hand-kept tally. `X=$((X + 1))` and not `((X++))`: the latter exits 1 when
+# the result is 0, which `set -e` turns into a dead arm.
+FIRED=0
+PROMOTED=0
+
 fire() { # uuid, question, outfile — promote only on a clean 200, so a resume against a
          # sick server cannot overwrite a good cell with an error body.
   local code rc=0
+  FIRED=$((FIRED + 1))
   # `|| rc=$?` is required, not stylistic: this script runs under `set -e`, which the sibling
   # capture_probe_yesno.sh does not use. Without it a single refused/timed-out cell aborts the
   # whole arm and the WARN branch below is unreachable — verified, exit 7 on connection
@@ -142,6 +150,7 @@ fire() { # uuid, question, outfile — promote only on a clean 200, so a resume 
     -d "$(printf '{"patient":"%s","question":"%s"}' "$1" "$2")" -o "$3.tmp" -w "%{http_code}") || rc=$?
   if [ "$rc" -eq 0 ] && [ "$code" = 200 ]; then
     mv "$3.tmp" "$3"
+    PROMOTED=$((PROMOTED + 1))
     echo "$(basename "$3" .json): $code"
   else
     echo "WARN: $3 HTTP $code curl-rc=$rc (not scored; any prior good capture kept)" >&2
@@ -149,6 +158,16 @@ fire() { # uuid, question, outfile — promote only on a clean 200, so a resume 
     echo "$(basename "$3" .json): $code NOT-PROMOTED"
   fi
 }
+
+# Any marker already in this directory is CLEARED before the first request, so the file's presence
+# means "the invocation that wrote it landed cells" and never "some earlier invocation did". Placed
+# below every refusal above and above the first request: an invocation refused before it touches the
+# directory changes nothing, so there is nothing to fail closed about, while a re-capture into a
+# non-empty directory would otherwise inherit the previous run's marker over the previous run's kept
+# cells — the same fail-open one directory older. Same reasoning, same placement and same invariant
+# as capture_probe_yesno.sh's clear; the two writers must answer "may a marker assert an empty
+# capture" the same way.
+rm -f "$OUT/CAPTURE_DONE"
 
 # Per-patient context, so the scorer can tell "no chip because nothing connects" from "no chip
 # because they are simply already on it". Each file records ok=true only when BOTH requests
@@ -251,9 +270,31 @@ for entry in "${PATIENTS[@]}"; do
   done
 done
 
-# Completeness marker, for the same reason score_directness guards it: a run killed midway
-# otherwise yields gate-shaped numbers over a biased prefix of the patient order. The scorer
-# flags its absence.
-echo "cells=$(( ${#PATIENTS[@]} * ${#DRUGS[@]} )) patients=${#PATIENTS[@]} drugs=${#DRUGS[@]}" \
+# Completeness marker, for the same reason capture_probe_yesno.sh writes one: a run killed midway
+# otherwise yields gate-shaped numbers over a biased prefix of the patient order. THIS family's
+# reader is score_probe_safety.py, which flags the file's absence. score_directness.py reads no
+# marker at all — this line named it as the guard and was wrong; grep for a claim's homes before
+# repeating it rather than counting them from memory.
+#
+# And refused outright where nothing landed, exactly as the sibling refuses. `cells=` was written
+# unconditionally from the MATRIX SIZE, so it could not disagree with the directory it sat in: an arm
+# whose context fetches succeeded and whose /search cells all failed — a wedged or 500ing LLM, the
+# state this file's own "WARM THE LLAMA FIRST" note warns about — left a marker asserting 20 cells
+# over zero answer cells, and score_probe_safety.py exited 0 with every column zero: a clean pass
+# over nothing. Reproduced on a directory holding four ok=true contexts, no answer cell and a
+# cells=20 marker; without the marker the same directory exits 3. The count recorded is now what the
+# loops actually FIRED beside how many landed, so the body can disagree with the directory.
+#
+# The counts are of ANSWER cells only. A context fetch has its own promote-on-success discipline
+# above and is not a cell: an arm whose contexts all failed but whose answers landed is a labelling
+# problem the scorer reports per patient, not an empty capture.
+if [ "$PROMOTED" -eq 0 ]; then
+  echo "ERROR: 0 of $FIRED fired cells landed — refusing to write CAPTURE_DONE, because an arm that captured nothing must not read as a clean, empty pass (score_probe_safety.py exits 0 with every column zero over an empty arm carrying a marker). Check the standalone is up at $BASE, the LLM is warm, and the patients exist on it." >&2
+  exit 1
+fi
+if [ "$PROMOTED" -lt "$FIRED" ]; then
+  echo "WARN: only $PROMOTED of $FIRED cells fired this run landed — the marker records both, so read the shortfall before quoting any aggregate" >&2
+fi
+echo "cells=$FIRED promoted=$PROMOTED patients=${#PATIENTS[@]} drugs=${#DRUGS[@]}" \
   > "$OUT/CAPTURE_DONE"
-echo "CAPTURE_DONE written"
+echo "CAPTURE_DONE $PROMOTED/$FIRED cells landed -> $OUT"

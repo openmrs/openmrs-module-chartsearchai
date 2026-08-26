@@ -156,6 +156,15 @@ governs, which the Tier-A presence topics never reach: "Can she take X?" against
 whose own record either does or does not bear on X. 4 patients (two on simvastatin, one on
 aspirin, one on lisinopril; two with an aspirin allergy) × 5 drugs = 20 cells.
 
+It writes its `CAPTURE_DONE` marker under the same rule as `capture_probe_yesno.sh`: the counts
+recorded are the answer cells the run actually FIRED beside how many landed, an existing marker
+is deleted immediately before the first request (below every refusal, since a run refused before
+it touches the directory has nothing to fail closed about), and a run that lands **none** writes
+no marker and exits 1. Before that, `cells=` came from the matrix size unconditionally, so an arm
+whose context fetches succeeded and whose `/search` cells all failed — a wedged or 500ing LLM —
+left a marker asserting 20 cells over zero answer cells and `score_probe_safety.py` exited 0 with
+every column zero: a clean pass over nothing.
+
 Cells are labelled from data, on the **union** of two signals: a `safetyWarnings` chip naming
 that drug (`DrugSafetyValidator` reads active orders, allergies and the drug KB directly)
 **or** the drug appearing among the patient's own orders/allergens, which the capture writes to
@@ -631,12 +640,54 @@ change was gated on these, thresholds locked before implementation):
   register ("any heart problems", no "?"), same `uuid__topic` keys so `metric_score.py`
   scores it against the existing gold unchanged; plus 12 DB-adjudicated inference probes
   (`uuid__probe-*` keys, skipped by `metric_score.py`) and the motivating punctuation twin.
-- `score_directness.py <capture_dir>` — 3-class verdict-lead scorer (YES / NO-family /
-  CANNOT; the closed regexes ARE the metric definition — re-quote baselines if edited),
-  Tier-B expected-lead matching and safety violations (a bare YES with no named record).
-  `--selftest` included.
+  It also fires one yes/no MEDICATIONS cell (`probe-current-meds`, 3.7.1 standalone
+  cohort): the `medications` eval topic is a wh-question `compare_arms.py` excludes from verdict
+  scoring by name and the 8 presence topics ask about no drugs at all, so a prompt change that
+  cost the #107 verdict lead on "is he currently taking any medications?" flipped nothing here.
+  It writes a `CAPTURE_DONE` marker FILE as well as the log line — `compare_arms.py` is what
+  reads the file for THIS script's captures (`score_probe_safety.py` reads it for the safety
+  probe's; `score_directness.py` reads no marker at all and names it only in a comment), and
+  before this it never existed, so every A/B over this script's captures reported a missing
+  marker in both arms and exited 3. The marker records the cells this run INTENDED to fire and
+  how many landed, so its body can disagree with the directory it sits in; a run that fired
+  cells and landed **none** writes no marker and exits 1, an invocation that would fire
+  neither tier is refused before it starts, and any marker already in the output directory is
+  DELETED before the first cell is fired — so the file's presence means "the invocation that
+  wrote it landed cells", never "some earlier invocation did". A marker derived only from
+  `ls *.json` cannot contradict its own capture, so an arm that failed wholesale (host down,
+  wrong port or auth, wrong cohort) would otherwise read as a clean, empty A/B: `cells
+  compared: 0`, `class flips: 0`, exit 0 — and without the delete, a re-capture into a
+  non-empty directory (the documented Tier-B resume, or the same arm re-fired after a GP swap)
+  inherited the previous run's marker over the previous run's kept cells and read the same way,
+  with numbers in it. The delete sits BELOW both refusals, immediately above the first fire: an
+  invocation refused before firing changes nothing in the directory, so there is nothing to fail
+  closed about, and clearing it at the top destroyed a complete arm's marker on a caller error
+  (a mistyped `CAPTURE_TIER_B`, `CAPTURE_PATIENTS=none` with Tier B off) — recoverable only by
+  re-firing every cell. **`CAPTURE_TIER_B` defaults to `auto`, which fires Tier B only when `CAPTURE_PATIENTS` is
+  UNSET.** So any `CAPTURE_PATIENTS=…` invocation — including the standalone A/B recipe recorded
+  above, which passes `CAPTURE_TIER_B=0` outright — captures no Tier-B cell at all, and the
+  `probe-current-meds` medications cell does not fire. Pass `CAPTURE_TIER_B=1` to fire it, and
+  score with `--cohort standalone-3.7.1` so a Tier-B capture that landed nothing says so rather
+  than reading as a regression arm.
+- `score_directness.py [--cohort NAME[,NAME…]] <capture_dir>` — 3-class verdict-lead scorer
+  (YES / NO-family / CANNOT; the closed regexes ARE the metric definition — re-quote baselines
+  if edited), Tier-B expected-lead matching and safety violations (a bare YES with no named
+  record). `--cohort` states which cohort(s) the capture is OF; without it the scope is inferred
+  from the cells that scored and the basis is printed. A STATED scope is reported even when the
+  capture scored no Tier-B cell at all — that is the one shape stating it exists for, and while
+  that report lived behind "at least one Tier-B cell scored" a Tier-A-only capture scored with
+  `--cohort` printed output byte-identical to no `--cohort`, calling the absence expected.
+  The completeness ratio is scoped on BOTH sides — a scored cell whose cohort the stated scope excludes is counted in the printed `n` but
+  not in that ratio, and is reported, because as an unscoped numerator it padded the count and
+  hid a real shortfall. `--selftest` included, and it covers the cohort denominator, the
+  numerator's scoping and the regexes.
 - `probe_gold_yesno.json` — Tier-B expected leads with adjudication rationale (conditions
-  REST + encounter_diagnosis/obs DB sweeps).
+  REST + encounter_diagnosis/obs DB sweeps), plus an optional `cohort` field (default `rc2`)
+  naming which demo database the cell exists in. `score_directness.py` scopes its Tier-B
+  completeness count to one cohort: no host holds both, so counting against the whole file would
+  print "capture incomplete" on every run of either one. Scoped to what `--cohort` states, else
+  to the cohorts the capture contains — and that inference cannot tell a cohort that is not on
+  this host from one whose every cell failed to capture, which is what stating it closes.
 - `verdict_gold_yesno.json` — expected-verdict overrides: present cells whose entire
   on-topic universe is obs/lab records (all 10 are kidney) expect a NO-family lead, not
   YES. Generated by `build_verdict_gold_yesno.py`; do not hand-edit.

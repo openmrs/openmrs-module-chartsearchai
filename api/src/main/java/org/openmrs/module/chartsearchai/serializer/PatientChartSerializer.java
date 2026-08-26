@@ -43,6 +43,12 @@ import org.springframework.stereotype.Component;
  * {@link RecordMapping} text, by contrast, always retains the inline date so the
  * grounding verifier can still resolve a cited date.
  *
+ * <p>It also states, on a drug-order record whose order the chart builder could resolve, whether
+ * that order is in force ({@link #ACTIVE_ORDER_LABEL} / {@link #INACTIVE_ORDER_LABEL}, issue #317).
+ * querystore's rendered text cannot say: it renders no marker at all for an order that lapsed by its
+ * {@code auto_expire_date}, so such a prescription would otherwise reach the model byte-shaped
+ * exactly like one still being taken.
+ *
  * <p>It also appends an obs-group label (e.g. {@code "(part of: Basic metabolic panel)"})
  * after the body of any record that carries obs-group metadata, so the LLM can cluster
  * the atomic members of a lab panel / vital-signs set — see {@link #groupMembershipLabel}.
@@ -111,7 +117,9 @@ public class PatientChartSerializer {
 	 * query) uses this to attach 1-based indices alongside the chart text — the LLM prompt then
 	 * carries a short "Records ranked by similarity to the query: 3, 7, 12" hint after the chart so
 	 * the variable-bytes portion of the prompt is tiny while the chart prefix stays stable
-	 * across queries for the same patient (the property llama-server's KV-cache reuse needs).
+	 * across queries for the same patient (the property llama-server's KV-cache reuse needs) —
+	 * stable across QUESTIONS, that is; since issue #317 a drug-order record's line also states
+	 * whether that order is in force, so the bytes move when an order's status does.
 	 *
 	 * @param patient the patient whose demographics to include
 	 * @param records the records to serialize
@@ -359,9 +367,11 @@ public class PatientChartSerializer {
 	/**
 	 * The serialized patient chart with numbered records, index mapping, and (in focus-hint
 	 * prefilter mode) the 1-based indices of records the retrieval ranked highest by similarity.
-	 * The {@link #getText()} bytes are a function of the patient only — the focus indices are
+	 * The {@link #getText()} bytes do not vary with the question — the focus indices are
 	 * the per-query payload that rides alongside and is rendered at the end of the LLM prompt
-	 * by {@code LlmProvider.buildUserMessage}.
+	 * by {@code LlmProvider.buildUserMessage}. Question-independent is not time-independent: the
+	 * bytes are a function of the patient and of their order status as read when the chart was
+	 * assembled (issue #317), as they already were of the patient's current age.
 	 */
 	public static class PatientChart {
 

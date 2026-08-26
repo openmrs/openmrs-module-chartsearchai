@@ -42,9 +42,16 @@ import org.springframework.stereotype.Component;
  *
  * <p>{@link #build} (the fullChart mode) always fetches the full patient chart via
  * {@link QueryStoreService#getPatientChart(String)} so the chart bytes sent to
- * the LLM are a function of the patient only — that's the property
+ * the LLM do not vary with the question — that's the property
  * llama-server's KV-cache reuse needs in order to skip ~99% of the prefill on
- * subsequent queries for the same patient. {@link #buildScoped}
+ * subsequent queries for the same patient. Since issue #317 they are a function of the patient AND
+ * of their order status as read at assembly time, which is a narrowing of that property rather than
+ * a loss of it: the bytes are still question-independent, but an order lapsing by its
+ * {@code auto_expire_date} — or a transient failure of the order read — changes them with no
+ * underlying data change and no index change, so the reused prefix ends at the first drug-order
+ * record and the rest is prefilled again. That is the correct outcome (the previous prefix asserted
+ * something no longer true), it is bounded by how often an order's status changes, and
+ * {@code appendLiveAge} already made the bytes clock-dependent in the same way. {@link #buildScoped}
  * ({@code chartsearchai.chartMode=queryScoped}) deliberately trades that property away: it
  * assembles a small question-dependent slice whose prefill is cheap enough to pay fresh on
  * every query, so cold patients need no warmup at all. When

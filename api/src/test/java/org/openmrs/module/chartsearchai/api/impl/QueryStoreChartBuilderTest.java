@@ -28,8 +28,9 @@ import org.openmrs.module.querystore.model.QueryDocument;
  * Pure unit tests for {@link QueryStoreChartBuilder}.
  *
  * <p>Focus-hint mode contract: the builder always calls
- * {@code QueryStoreService.getPatientChart} so the chart bytes are a function of the
- * patient only (the property llama-server's KV-cache reuse needs). When
+ * {@code QueryStoreService.getPatientChart} so the chart bytes do not vary with the
+ * question (the property llama-server's KV-cache reuse needs; since issue #317 they do vary with
+ * the patient's order status, which no question can change). When
  * {@code preFilter=true} with a non-blank question, it additionally calls
  * {@code QueryStoreService.searchByPatient} to get a relevance ranking; the matching
  * record UUIDs flow through {@code PatientChart.getFocusIndices()} for rendering as a
@@ -58,7 +59,7 @@ public class QueryStoreChartBuilderTest {
 
 	@Test
 	public void build_shouldStillCallGetPatientChartAndSkipSearch_whenQuestionIsBlank() {
-		// Focus-hint contract: the chart bytes are a function of the patient only, so a blank
+		// Focus-hint contract: the chart bytes do not vary with the question, so a blank
 		// question still produces the full chart — that's exactly what warmup needs (warmup
 		// calls buildChart(patient, "") to prime the prefix llama-server will reuse on real
 		// queries). The blank-question short-circuit is now scoped to the focus-hint side

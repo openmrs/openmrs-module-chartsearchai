@@ -67,7 +67,7 @@ public class ChartSearchAiConstants {
 	 *       meanF1 (0.748 vs 0.668), abstention (0.86 vs 0.74), and off-topic drift (181 vs 477) — the
 	 *       focused slice keeps the small model from drowning in a whole chart's worth of noise.</li>
 	 *   <li>{@link #CHART_MODE_FULL_CHART} — the patient's whole chart is serialized into every prompt.
-	 *       The chart bytes are a function of the patient only, so llama-server's KV prefix cache (plus
+	 *       The chart bytes do not vary with the question, so llama-server's KV prefix cache (plus
 	 *       warmup/prewarm/disk persistence) amortizes the multi-thousand-token prefill across queries;
 	 *       this makes repeat/varied questions on an already-warmed patient fast, at the cost of a heavy
 	 *       first-ever query (tens of seconds to minutes on a GPU-less host). Prefer this only where a

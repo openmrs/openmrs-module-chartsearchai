@@ -312,6 +312,23 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void theProgressiveReasoningPreviewMarksToo() {
+		// The third build path. It is not covered by the other two "by construction" — that argument
+		// is exactly what a shared funnel stops being true the moment someone inlines one caller. And
+		// it matters on its own terms: the preview's answer is shown to the clinician before the
+		// committed one, so a preview that called a lapsed prescription current while the committed
+		// answer did not would be the module contradicting itself in front of the reader.
+		chartOf(drugOrderDoc(LAPSED_ORDER_ID));
+		queryStore.stubHits = new ArrayList<QueryDocument>(queryStore.stubChart);
+
+		PatientChart chart = builder.buildFocused(patient, MEDICATIONS_QUESTION);
+
+		assertTrue(lineFor(chart, uuidOf(LAPSED_ORDER_ID))
+						.endsWith(PatientChartSerializer.INACTIVE_ORDER_LABEL),
+				"the preview chart marks the lapsed order too: " + chart.getText());
+	}
+
+	@Test
 	public void aChartWithNoDrugOrderRecordCostsNoOrderRead() {
 		// The read is not free — it is two OrderService calls on every chart assembly — so it is not
 		// made for a chart that has nothing to mark. Asserted rather than assumed, because the guard
@@ -359,6 +376,11 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		@Override
 		protected boolean resolveDedupGroupLabels() {
 			return false;
+		}
+
+		@Override
+		protected int resolveProgressiveReasoningTopK() {
+			return 10;
 		}
 
 		@Override

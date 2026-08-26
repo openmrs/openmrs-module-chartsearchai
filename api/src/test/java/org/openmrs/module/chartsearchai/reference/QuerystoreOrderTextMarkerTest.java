@@ -112,11 +112,15 @@ public class QuerystoreOrderTextMarkerTest extends BaseModuleContextSensitiveTes
 		// that plainly and to fail if querystore ever starts rendering it — at which point
 		// describesEndedOrder covers auto-expiry for free and this test's expectation flips.
 		//
-		// Since #315 this gap is SHARPER than "not covered". The prompt clause's positive
-		// counterpart says a drug-order record carrying neither marker is CURRENT, so an
-		// auto-expired order is now reported as current rather than merely left to inference.
-		// Whoever flips this expectation closes that too, and should re-read ADR Decision 45's
-		// residue bullet rather than only describesEndedOrder's javadoc.
+		// Since #315 this gap is one the prompt has an opinion about, and the opinion is
+		// deliberately weak: the clause's counterpart says a drug-order record carrying neither
+		// marker "records no end" and stops there. It said "is CURRENT" for one review round, and
+		// that was measured to assert the lapsed drug was current AND to drop the patient's two
+		// live orders from the same answer — ADR Decision 45's residue bullet carries the verbatim
+		// cells. The residue that remains is an INFERENCE the model may still make from a record
+		// with no end marker, not a claim the module makes; nothing in the rendered text can close
+		// it. Whoever flips this expectation closes it properly, and should re-read that bullet
+		// rather than only describesEndedOrder's javadoc.
 		//
 		// It is the strongest argument for the structural fix noted on describesEndedOrder: the
 		// metadata carries auto_expire_date, the rendered text cannot.

@@ -356,13 +356,25 @@ keeps them honest: the display-cased and match-cased marker constants are delibe
 literals. What pins them to agree, and to agree with what querystore actually renders, is
 `EndedOrderMarkerContractTest` against the real serializer's output.
 
+A drug-order record carrying **neither** marker is described to the model as one that *records no
+end*, and nothing more. The rule deliberately does not say such a record means the drug is current,
+and deliberately does not say which records a medications question is answered from: both were
+tried, and each cost something measured. Saying "is CURRENT" made the answer assert that a
+lapsed order was current *and drop the patient's two live prescriptions from the same sentence*,
+in a payload whose own safety chips named those two and not it. Saying a medications question is
+answered from those records out-ranked the yes/no verdict rule further down the prompt, and an
+ordinary all-active chart stopped leading with a verdict at all. Both are in ADR Decision 45 with
+the verbatim answers.
+
 Not covered: an order that lapsed by its **auto-expire date**. querystore carries `auto_expire_date`
 in the document metadata but renders no marker for it into the record text, so nothing downstream of
-the text can see it. Such an order therefore falls under "carrying neither marker is current" and the
-answer will report it as current — the rule asserts something false about it, where previously the
-prompt said nothing and the model inferred. It is the same limitation
-`DrugReferenceInjector.describesEndedOrder` records for the reconciliation, and it is closed by the
-same structural fix.
+the text can see it. Such an order carries neither marker, and while the prompt no longer *claims*
+it is current, the model may still list it among the drugs the patient is taking — a wording that
+says the lapse out loud was measured and changed nothing on that cell. The deterministic layer does
+not follow: `Order.isActive()` excludes an expired order, so that drug gets no chip, no interaction
+or duplicate-therapy screening and no #118 injection while the prose may still name it. It is the
+same limitation `DrugReferenceInjector.describesEndedOrder` records for the reconciliation, and it is
+closed by the same structural fix — threading the metadata rather than reading rendered prose.
 
 ### Input validation
 

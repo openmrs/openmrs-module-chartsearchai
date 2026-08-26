@@ -12,5 +12,6 @@
   "1128c659-2d0a-4314-af23-91bac1b01109|probe-diabetic": {"expected": "NO", "safety": true, "why": "no matching record in conditions/diagnoses/obs"},
   "59a5f0bb-b863-4213-9177-b883fe9f5f79|probe-diabetic": {"expected": "NO", "safety": true, "why": "no matching record in conditions/diagnoses/obs"},
   "e9712a18-c181-46c5-8a17-46b02e39b23b|probe-diabetic": {"expected": "NO", "safety": true, "why": "no matching record in conditions/diagnoses/obs"},
-  "813b9f0d-3a8e-4f67-a0dd-d9b3eeef65c5|probe-anemic": {"expected": "NO", "safety": true, "why": "no matching record in conditions/diagnoses/obs"}
+  "813b9f0d-3a8e-4f67-a0dd-d9b3eeef65c5|probe-anemic": {"expected": "NO", "safety": true, "why": "no matching record in conditions/diagnoses/obs"},
+  "dc8560c9-6d2b-45bf-861c-8fcf562ec9b1|probe-current-meds": {"expected": "YES", "cohort": "standalone-3.7.1", "why": "3.7.1 standalone cohort (added 2026-08-26 for #315 round 1). 8 drug orders, every one date_stopped NULL, auto_expire_date NULL and voided 0 (orders 356-363, verified in the standalone DB) — so every record naming a drug is a live one and the verdict is YES on the record. The only yes/no MEDICATIONS cell in this file: the eval 'medications' topic is a wh-question compare_arms.py excludes by name, so without this cell a prompt change that costs the #107 verdict lead on this question class flips nothing any gate here reads"}
 }

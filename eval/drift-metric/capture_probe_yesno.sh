@@ -13,7 +13,9 @@
 # NO-expected cells have zero matching records anywhere. Expected leads live in
 # probe_gold_yesno.json. Keys are uuid__probe-<topic>.json (absent from metric_gold, so
 # metric_score.py skips them). Includes the motivating Betty "?"-twin pair
-# (probe-hypertensive vs probe-hypertensive-qmark): the original punctuation-divergence bug.
+# (probe-hypertensive vs probe-hypertensive-qmark): the original punctuation-divergence bug,
+# and since #315 one yes/no MEDICATIONS cell on the 3.7.1 standalone cohort — see the comment
+# on its fire line for why the other cells here cannot reach that question class.
 AUTH="${OPENMRS_AUTH:-admin:Admin123}"; BASE="${OPENMRS_REST:-http://localhost:8081/openmrs/ws/rest/v1}"
 OUT="${1:?usage: capture_probe_yesno.sh <outdir> — refusing to burn a capture run with no output dir}"
 mkdir -p "$OUT"
@@ -85,5 +87,24 @@ if [ "$TIER_B" = "1" ] || { [ "$TIER_B" = "auto" ] && [ -z "$CAPTURE_PATIENTS" ]
   fire "59a5f0bb-b863-4213-9177-b883fe9f5f79" "is he diabetic"      "$OUT/59a5f0bb-b863-4213-9177-b883fe9f5f79__probe-diabetic.json"
   fire "e9712a18-c181-46c5-8a17-46b02e39b23b" "is she diabetic"     "$OUT/e9712a18-c181-46c5-8a17-46b02e39b23b__probe-diabetic.json"
   fire "813b9f0d-3a8e-4f67-a0dd-d9b3eeef65c5" "is she anemic"       "$OUT/813b9f0d-3a8e-4f67-a0dd-d9b3eeef65c5__probe-anemic.json"
+  # A yes/no MEDICATIONS cell, on the 3.7.1 standalone cohort rather than the rc2 one above
+  # (both cohorts already 404 on the other's host, and fire() drops a 404 without scoring it).
+  # It exists because the presence topics above cannot reach this question class and the
+  # 'medications' eval topic is a wh-question compare_arms.py excludes from verdict scoring by
+  # name — so a change that costs the #107 verdict lead on "is he currently taking any
+  # medications?" was invisible to every gate in this directory. #315's clause did exactly that
+  # for one review round, on a chart of 8 active orders and no ended ones: "Yes — the patient is
+  # currently taking the following medications: Advil 400mg [10], …" became "The patient is
+  # currently taking the following medications:", n=3 byte-identical per arm.
+  fire "dc8560c9-6d2b-45bf-861c-8fcf562ec9b1" "is he currently taking any medications?" "$OUT/dc8560c9-6d2b-45bf-861c-8fcf562ec9b1__probe-current-meds.json"
 fi
+# Completeness MARKER FILE, not only a log line. compare_arms.py and score_directness.py both
+# read $OUT/CAPTURE_DONE to tell a finished arm from one killed midway — a partial arm still
+# produces a full-looking table over a biased prefix. This script printed the words and wrote no
+# file, so every A/B ever run on its captures reported "no CAPTURE_DONE in the baseline arm ...
+# candidate arm" and exited 3: an integrity signal that is always on is one nobody can read,
+# which is #178's constant-column defect in another instrument. Written the way
+# capture_probe_safety.sh writes its own.
+echo "cells=$(ls "$OUT"/*.json 2>/dev/null | wc -l | tr -d ' ') patients=${#PATIENTS[@]} topics=${#TOPICS[@]} tier_b=$TIER_B" \
+  > "$OUT/CAPTURE_DONE"
 echo "CAPTURE_DONE $(ls "$OUT"/*.json 2>/dev/null | wc -l | tr -d ' ') cells -> $OUT"

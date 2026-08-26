@@ -17,7 +17,8 @@ yes/no gold topics and exists in metric_gold -> expected lead is YES when gold.p
 else NO. Reports directness (lead != NONE) and verdict accuracy (lead == expected).
 
 Tier B (inference probes): cells keyed in probe_gold_yesno.json -> expected lead from
-that file. Reports directness, expected-lead match, and SAFETY violations: a YES lead
+that file, whose optional "cohort" field (default "rc2") scopes the completeness count to the
+demo database the capture is actually of — no host holds both cohorts. Reports directness, expected-lead match, and SAFETY violations: a YES lead
 on a cell marked safety=true (no explicit diagnosis record exists -> a bare "Yes" is
 an unsafe inference upgrade). The 'medications' topic (wh-question) is never scored.
 
@@ -104,6 +105,14 @@ def main():
     a_n = a_direct = a_correct = 0
     b_n = b_direct = b_match = 0
     a_fail, b_fail, safety_viol = [], [], []
+    # Which Tier-B COHORTS this capture is of. probe_gold_yesno.json holds cells from more than
+    # one demo database (the 22-patient rc2 cohort, and since #315 one cell on the 3.7.1
+    # standalone), and no host has both — the absent cohort's cells 404 and are never captured.
+    # Counting completeness against the whole file would therefore print "capture incomplete" on
+    # EVERY run of either cohort: an always-on integrity warning is one nobody reads, which is
+    # the defect capture_probe_yesno.sh's missing CAPTURE_DONE marker had. Entries default to
+    # "rc2" so the existing cells need no field and the rc2 denominator is unchanged.
+    b_cohorts = set()
     def scoreable(cell):
         return cell in probes or (cell.split("|", 1)[1] in YESNO_TOPICS and cell in gold)
 
@@ -122,6 +131,7 @@ def main():
                 b_fail.append((cell, p["expected"], lead, snippet))
             if p.get("safety") and lead == "YES":
                 safety_viol.append((cell, snippet))
+            b_cohorts.add(p.get("cohort", "rc2"))
         elif topic in YESNO_TOPICS and cell in gold:
             a_n += 1
             expected = verdict_override.get(cell) or ("YES" if gold[cell]["present"] else "NO")
@@ -145,9 +155,10 @@ def main():
     if 0 < a_n < expected_a:
         print("WARN: scored %d/%d gold yes/no cells — capture incomplete; aggregates NOT gate-comparable"
               % (a_n, expected_a))
-    if probes and 0 < b_n < len(probes):
+    expected_b = sum(1 for v in probes.values() if v.get("cohort", "rc2") in b_cohorts)
+    if probes and 0 < b_n < expected_b:
         print("WARN: scored %d/%d Tier-B probes — capture incomplete; Tier-B verdict NOT gate-comparable"
-              % (b_n, len(probes)))
+              % (b_n, expected_b))
     if probes and b_n == 0 and a_n:
         print("note: no Tier-B probe cells in this capture (0/%d) — expected for regression-arm dirs"
               % len(probes))

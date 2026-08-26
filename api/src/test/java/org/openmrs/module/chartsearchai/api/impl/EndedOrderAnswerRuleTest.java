@@ -68,6 +68,24 @@ public class EndedOrderAnswerRuleTest {
 		// The querystore side is pinned by EndedOrderMarkerContractTest against the real serializer;
 		// the module's own side by ActiveOrderReconciliationTest, which asserts the rendered
 		// "Active drug order: ..." text. These two assertions close the loop from the prompt end.
+		//
+		// And the VERB the class cue is introduced by, which is load-bearing at one word and was
+		// pinned nowhere: mutating "its text begins" to the literally more accurate "carries"
+		// leaves the whole suite green while putting #315's original defect back. Measured, one
+		// word changed and everything else byte-identical: "is he currently taking any
+		// medications?" on the ticket's own arrangement went from "No, the patient is not
+		// currently taking any medications. The order for Nevirapine was stopped on 2026-08-24"
+		// to "Yes - the patient is currently taking Nevirapine", n=3 byte-identical on both
+		// sides, and reverting the word restored it, also n=3. The doubled "carries … that also
+		// carries" is the likely mechanism and the evidence does not establish it; what it does
+		// establish is that this word is not free to be corrected.
+		assertTrue(prompt.contains("its text begins"),
+				"the class cue must stay 'its text BEGINS'. Correcting it to 'carries' — which is "
+						+ "literally the more accurate word, since records reach the model as "
+						+ "'[7] Drug order: …' — reinstates #315's defect: n=3 byte-identical, the "
+						+ "ticket's stopped-Nevirapine chart answered 'Yes - the patient is "
+						+ "currently taking Nevirapine' again, and reverting the word restored the "
+						+ "correct answer, also n=3");
 		assertTrue(prompt.contains(DrugReferenceInjector.QUERYSTORE_DRUG_ORDER_PREFIX),
 				"the prompt must name querystore's drug-order prefix, or no chart record is "
 						+ "recognised as belonging to the class this rule is about");
@@ -158,9 +176,24 @@ public class EndedOrderAnswerRuleTest {
 		assertTrue(prompt.contains("settles nothing about any OTHER drug"),
 				"the rule must be scoped to the drug the record names, or it licenses 'the patient "
 						+ "is on no medication' from one stopped record");
-		assertTrue(prompt.contains("carrying neither marker is CURRENT"),
-				"and it must say what an order with NO end marker means, or the scoping has no "
-						+ "positive counterpart to answer a medications question from");
+		// The counterpart says what the record RECORDS, and says nothing about how to answer.
+		// Its predecessor did both — "A drug-order record carrying neither marker is CURRENT, and
+		// a question about what the patient is taking now is answered from those" — and each half
+		// was measured harmful, n=3 byte-identical per arm against the same prompt with the whole
+		// clause excised. Asserting CURRENCY: on a chart whose Simvastatin order had lapsed by its
+		// auto_expire_date (which querystore renders no marker for) beside two live orders, "is he
+		// currently taking any medications?" answered "Yes — the patient is currently taking
+		// Simvastatin Co 20mg [8]" — the lapsed drug asserted current and both live ones dropped,
+		// against a baseline that named the two live ones and called the third an older order.
+		// The ANSWERING half: on 8 active orders and no ended ones the same question lost its
+		// verdict lead altogether, which is the #107 property the yes/no paragraph below states.
+		assertTrue(prompt.contains("carrying neither marker records no end"),
+				"the clause must say what an order with NO end marker means, or the scoping has "
+						+ "no counterpart and the ended branch reads as the only rule; and it must "
+						+ "say it WITHOUT asserting the drug is current — the module cannot see an "
+						+ "auto-expiry, so 'is CURRENT' states a falsehood about a lapsed order — "
+						+ "and without saying which records a medications question is answered "
+						+ "from, which out-ranked the verdict-lead rule below it");
 
 		// The SAME-drug case, which the "any OTHER drug" scoping above does not reach and which the
 		// first version of this clause left to inference. A dose change in OpenMRS is a REVISE: a new

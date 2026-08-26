@@ -103,6 +103,28 @@ public class LlmProvider {
 			//     beside the stopped one — so the same drug on two records is the commonest chart
 			//     shape there is, and an ended branch stated categorically about the DRUG would be
 			//     asserting a falsehood about a live prescription.
+			//   - The no-marker counterpart says what the record RECORDS — "records no end" — and
+			//     nothing about how to answer. Both of those were measured, on the wording this
+			//     clause shipped with for one review round ("A drug-order record carrying neither
+			//     marker is CURRENT, and a question about what the patient is taking now is
+			//     answered from those"), n=3 byte-identical per arm against the same prompt with
+			//     the whole clause excised. Asserting CURRENCY: on a patient whose Simvastatin
+			//     order had lapsed by its auto_expire_date beside two live orders, "is he
+			//     currently taking any medications?" went from "Yes, the patient has current drug
+			//     orders: Bupivacaine [3] and Lidocaine [4]. The patient also has an older drug
+			//     order for Simvastatin Co 20mg [8]." to "Yes — the patient is currently taking
+			//     Simvastatin Co 20mg [8]." — the lapsed drug asserted current AND both live ones
+			//     dropped, while the same payload's chips named those two and not it. The ANSWERING
+			//     instruction: on a chart of 8 active orders and no ended ones, the same question
+			//     lost its verdict lead entirely ("The patient is currently taking the following
+			//     medications:" against a baseline "Yes — the patient is currently taking the
+			//     following medications: Advil 400mg [10], …"), because a rule saying which records
+			//     a medications question is answered FROM out-ranks the yes/no verdict rule two
+			//     paragraphs below without supplying a lead of its own. The current wording restores
+			//     both cells and keeps all three #315 arrangements. It does NOT stop the model
+			//     inferring currency for a lapsed order — nothing in the record text can, and a
+			//     counterpart that says so out loud ("it may still have lapsed on an end date the
+			//     record does not carry") was measured to buy nothing on that cell.
 			//   - No otherwise-branch, and the forbidden sentence is described rather than quoted:
 			//     arms B and D of the 2026-07-30 A/B, both reverted.
 			//   - "its text BEGINS" — do not "correct" this to "carries". A reviewer noted that as
@@ -122,18 +144,17 @@ public class LlmProvider {
 			+ "the order ended) or \"" + DrugReferenceInjector.ORDER_DISCONTINUED_MARKER + "\" "
 			+ "records a prescription that has ENDED. Whenever your answer names a drug from such a "
 			+ "record, say in the same sentence that the order was stopped, and give the stop date "
-			+ "when the record carries one. A drug-order record carrying neither marker is CURRENT, "
-			+ "and a question about what the patient is taking now is answered from those. Where "
-			+ "the chart holds both for one drug, the CURRENT record governs: the drug is one the "
-			+ "patient is taking, and the ended record is earlier therapy for it — a dose change is "
-			+ "written that way, as an ended order beside a live one. Where every record naming a "
-			+ "drug has ended, that settles that the patient is not on it: never present it as one "
-			+ "they are taking now, even where its record is the most recent or the only drug order "
-			+ "in the chart, and never treat its current status as unrecorded — asked whether they "
-			+ "are currently taking it, answer \"No\" and name the date it stopped; asked what they "
-			+ "are taking, do not list it among the drugs they are taking — say instead that it was "
-			+ "stopped, with its date, so the record is reported rather than dropped. It settles "
-			+ "nothing about any OTHER drug. "
+			+ "when the record carries one. A drug-order record carrying neither marker records no "
+			+ "end. Where the chart holds both for one drug, the CURRENT record governs: the drug "
+			+ "is one the patient is taking, and the ended record is earlier therapy for it — a "
+			+ "dose change is written that way, as an ended order beside a live one. Where every "
+			+ "record naming a drug has ended, that settles that the patient is not on it: never "
+			+ "present it as one they are taking now, even where its record is the most recent or "
+			+ "the only drug order in the chart, and never treat its current status as unrecorded "
+			+ "— asked whether they are currently taking it, answer \"No\" and name the date it "
+			+ "stopped; asked what they are taking, do not list it among the drugs they are taking "
+			+ "— say instead that it was stopped, with its date, so the record is reported rather "
+			+ "than dropped. It settles nothing about any OTHER drug. "
 			+ "Include ALL relevant records in your answer — never omit any for brevity. "
 			+ "Cite EVERY record you reference by its number in brackets (e.g. [1], [3]). "
 			+ "Respond with ONLY a JSON object with a \"reasoning\" string, then an \"answer\" string "

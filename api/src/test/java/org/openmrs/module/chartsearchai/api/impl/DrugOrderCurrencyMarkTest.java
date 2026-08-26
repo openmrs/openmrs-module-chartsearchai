@@ -52,11 +52,14 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * {@code Order.isActive()} and the orders themselves are real — the standard test dataset plus the one
  * lapsed-by-duration order it lacks ({@code DrugOrderCurrencyTestData.xml}). The chart documents are
  * the output of querystore's REAL {@link DrugOrderRecordSerializer} / {@link TestOrderRecordSerializer}
- * run on those orders, so no imitation of another module's format appears in this file. Only
- * querystore's INDEX is stubbed, because it does not run under
- * {@link BaseModuleContextSensitiveTest} — the same seam {@code QueryStoreChartBuilderTest} uses. Every
- * line of this module's own path is production code: {@code build}/{@code buildScoped} →
- * {@code toSerializedRecords} → {@link PatientChartSerializer#serialize}.
+ * run on those orders, so no imitation of another module's format appears in this file. querystore's
+ * INDEX is stubbed because it does not run under {@link BaseModuleContextSensitiveTest} — the same
+ * seam {@code QueryStoreChartBuilderTest} uses — and {@code TestableBuilder} additionally overrides
+ * the builder's global-property seams so the mode under test is chosen rather than read, and the
+ * order-read seam so a read FAILURE can be reached at all. What is not stubbed is the path the
+ * assertions are about: {@code build}/{@code buildScoped}/{@code buildFocused} →
+ * {@code toSerializedRecords} → {@code readOrderCurrency} → {@link PatientChartSerializer#serialize},
+ * every line of it production code, over real orders and real {@code OrderService}.
  *
  * <p>Both halves of the rendered answer are asserted, and they are not the same claim: the chart TEXT
  * is what the model reads, and the {@link RecordMapping}'s structural flag is what
@@ -243,9 +246,10 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// than it is. Two independent things stop a failed read marking anything: the reading is the
 		// explicit "not read" state, AND no record's order can be attributed to the patient. A failed
 		// read produces no sets at all, so there is no arrangement in which one holds and the other
-		// does not — measured, replacing the failure path's OrderCurrency.unread() with a reading of
-		// two empty sets leaves this case and the whole suite green. The write path is pinned instead
-		// by theFailedReadPathReturnsTheNotReadState below.
+		// does not: replacing the failure path's OrderCurrency.unread() with a reading of two empty
+		// sets leaves THIS case green, and every behavioural case in the suite with it. What reddens
+		// on that mutation is theFailedReadPathReturnsTheNotReadState, which reads the source rather
+		// than the behaviour, and is the only thing that does.
 	}
 
 	@Test
@@ -257,8 +261,10 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 
 		PatientChart chart = builder.build(patientSix, MEDICATIONS_QUESTION);
 
-		assertTrue(Context.getOrderService().getActiveOrders(patientSix, null, null, null).isEmpty(),
-				"precondition: this patient has no active order at all");
+		assertFalse(Context.getOrderService()
+						.getOrder(ONLY_ORDER_OF_A_PATIENT_WITH_NONE_ACTIVE).isActive(),
+				"precondition: this patient's only order is not in force, so nothing of theirs is — "
+						+ "asked with the predicate production uses, not with getActiveOrders");
 		String line = lineFor(chart, uuidOf(ONLY_ORDER_OF_A_PATIENT_WITH_NONE_ACTIVE));
 		assertTrue(line.endsWith(PatientChartSerializer.INACTIVE_ORDER_LABEL),
 				"an empty active-order set is an answer, not a failure: " + line);
@@ -288,9 +294,33 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void anOrderCoreCannotEvaluateDoesNotCostTheRestOfTheChartItsMarks() {
+		// The reading walks every order the patient has, and Order.isDiscontinued/isExpired THROW —
+		// before any other test — when date_stopped is after auto_expire_date. Core's own validator
+		// never compares those two fields, and OrderServiceImpl.stopOrder writes that row through the
+		// public API when order.allowSettingStopDateOnInactiveOrders is enabled, so the shape is
+		// reachable rather than merely malformed.
+		//
+		// Evaluated inside one chart-wide try, a single such row anywhere in the patient's history
+		// takes the mark off EVERY drug-order record on every chart for that patient — silently
+		// reverting to the pre-#317 behaviour this whole change exists to remove, and leaving a WARN
+		// that misdescribes what happened. Order 9319 is never charted here; only order 3 is. It does
+		// not have to be charted to do the damage.
+		chartOf(drugOrderDoc(LIVE_ORDER_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		assertEquals(Boolean.TRUE, mappingFor(chart, uuidOf(LIVE_ORDER_ID)).getOrderActive(),
+				"one unevaluable order in the patient's history must not silence a healthy record's "
+						+ "mark: " + chart.getText());
+		assertTrue(lineFor(chart, uuidOf(LIVE_ORDER_ID)).endsWith(PatientChartSerializer.ACTIVE_ORDER_LABEL),
+				"and the chart line must still carry it: " + lineFor(chart, uuidOf(LIVE_ORDER_ID)));
+	}
+
+	@Test
 	public void aRecordThatIsNotADrugOrderIsNeverMarked() {
-		// Scope: the ticket is about drug orders. getActiveOrders returns every order type, so the
-		// uuid set covers a test order too — this is a deliberate scope boundary, not a limit of the
+		// Scope: the ticket is about drug orders. The order read returns every order type, so the
+		// uuid sets cover a test order too — this is a deliberate scope boundary, not a limit of the
 		// data, and it is pinned so that widening it later is a decision someone makes on purpose.
 		//
 		// The chart must carry a drug order BESIDE the test order, and that is not presentation. On a
@@ -353,9 +383,9 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void aChartWithNoDrugOrderRecordCostsNoOrderRead() {
-		// The read is not free — it is two OrderService calls on every chart assembly — so it is not
-		// made for a chart that has nothing to mark. Asserted rather than assumed, because the guard
-		// is invisible in the rendered output.
+		// The read is not free — it is an OrderService call on every chart assembly, sized by the
+		// patient's whole order history — so it is not made for a chart that has nothing to mark.
+		// Asserted rather than assumed, because the guard is invisible in the rendered output.
 		chartOf(testOrderDoc(TEST_ORDER_ID));
 
 		builder.build(patient, MEDICATIONS_QUESTION);

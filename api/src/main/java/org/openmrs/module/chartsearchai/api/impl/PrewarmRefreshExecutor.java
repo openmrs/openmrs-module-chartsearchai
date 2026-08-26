@@ -45,7 +45,10 @@ import org.springframework.stereotype.Component;
  * the durable corpus until the next real chart write or a manual {@code /prewarm} sweep. The failure
  * is a latency regression with no log line, on the one path whose whole purpose is durability. It is
  * recorded rather than fixed: a time-driven refresh is a scheduler this module does not have, and it
- * does not arise in the shipped {@code queryScoped} default, where nothing is pinned at all.
+ * does not arise in the shipped {@code queryScoped} default, where no KV prefix is persisted or read
+ * ({@code LlmInferenceService} passes a null scope for a scoped chart). Pins from a {@code fullChart}
+ * era can still be sitting on disk in that mode — see the note further down about stale {@code .pin}
+ * files — but nothing consults them.
  *
  * <p>Driven from chart-write detection ({@code ChartSearchEventListener}) via {@code IndexingHelper.onChartWrite}, gated by
  * {@code chartsearchai.prewarm.refreshOnEdit} (default off). Two properties make this safe on the

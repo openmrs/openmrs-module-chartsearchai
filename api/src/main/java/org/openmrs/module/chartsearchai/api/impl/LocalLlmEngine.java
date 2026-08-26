@@ -786,9 +786,10 @@ public class LocalLlmEngine implements LlmEngine {
 	 *       <strong>Since issue #317 that drift case does arise</strong>, and this justification no
 	 *       longer covers it: a drug-order record states whether its order is in force, so an order
 	 *       lapsing changes bytes mid-chart between one query and the next. Whether {@code N>0}
-	 *       would actually recover anything there is UNMEASURED — llama.cpp only shifts a
-	 *       contiguous reusable span, and no measurement of that has been taken on this prompt
-	 *       shape — so the value is left at 0 as the known-safe default rather than tuned on a
+	 *       recovers anything there is UNMEASURED on this prompt shape, and no mechanism argument is
+	 *       offered either way: the server's loop re-aligns after a mid-prompt edit and shifts as
+	 *       many chunks as it finds, so this is the case it is built for, but "built for it" is not
+	 *       a measurement. The value is left at 0 as the known-safe default rather than tuned on a
 	 *       guess. What has changed is that the trade-off is now open instead of settled. Note that cache_prompt itself
 	 *       introduces a low-level non-determinism on borderline argmax decisions because the
 	 *       reused-vs-fresh KV path is numerically close but not bit-identical — observed as

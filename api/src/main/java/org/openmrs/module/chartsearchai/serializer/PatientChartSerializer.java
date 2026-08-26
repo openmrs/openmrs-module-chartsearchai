@@ -87,8 +87,13 @@ public class PatientChartSerializer {
 	 * compares the constant to itself and cannot see a rename.
 	 *
 	 * <p>Three things it says on purpose. It reports {@code Order.isActive()} and nothing more — the
-	 * module's own authoritative predicate, the one the drug-safety layer screens on — so the chart
-	 * and the chips cannot disagree about which prescriptions are in force. It says "active order"
+	 * module's own authoritative predicate, and the same question the drug-safety layer asks of the
+	 * same data. Not, however, through the same call: the safety layer screens on
+	 * {@code getActiveOrders}, which evaluates the predicate in SQL. They agree on every leg checked
+	 * and differ where {@code Order.isActive()} throws and the SQL answers, which
+	 * {@code QueryStoreChartBuilder.readingOf} handles per order — so "the chart and the chips cannot
+	 * disagree" is a claim about the two predicates, and it is not enforced by their sharing a call
+	 * site, because they do not share one. It says "active order"
 	 * rather than "ended" or "stopped", because absence from the active set is not a claim about a
 	 * stop date and is not a claim about whether the patient is taking anything; and it borrows the
 	 * noun {@code DrugReferenceInjector.renderActiveOrder} already uses ("Active drug order:") rather
@@ -685,9 +690,9 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * @return {@code TRUE} when this record's order is in the patient's active-order set,
-		 *         {@code FALSE} when it was read and this order was not in it, {@code null} when the
-		 *         module cannot say.
+		 * @return {@code TRUE} when {@code Order.isActive()} holds for this record's order,
+		 *         {@code FALSE} when the module read that order and it does not, {@code null} when
+		 *         the module cannot say.
 		 *
 		 *         <p>Structural rather than re-read from {@link #getText()} for the reason the
 		 *         active-order reconciliation records: keying a decision on another module's display

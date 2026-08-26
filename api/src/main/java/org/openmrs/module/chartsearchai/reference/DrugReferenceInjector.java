@@ -557,8 +557,11 @@ public class DrugReferenceInjector {
 	 * have meant re-deriving {@code Order.isActive()} — voided, activated, discontinued, expired —
 	 * from three fields in a second implementation, and it would still rest on metadata surviving
 	 * querystore's index round-trip, which is not exercised by this module's tests. Reading
-	 * {@code OrderService} instead asks the same authority the drug-safety layer screens on, so the
-	 * chart and the chips cannot disagree about which prescriptions are in force.
+	 * {@code OrderService} instead asks the same authority the drug-safety layer reads, so the chart
+	 * and the chips answer off the same data rather than off the index and the database respectively.
+	 * They do not share a call site — the safety layer screens with {@code getActiveOrders}, the chart
+	 * with {@code Order.isActive()} — so this is agreement between two predicates, not agreement by
+	 * construction.
 	 *
 	 * <p>Because it keys on rendered prose, the markers are pinned against the REAL querystore
 	 * serializer's output in {@code QuerystoreOrderTextMarkerTest} — a wording change there fails

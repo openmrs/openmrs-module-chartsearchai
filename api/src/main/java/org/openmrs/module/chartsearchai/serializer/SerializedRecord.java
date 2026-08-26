@@ -139,10 +139,9 @@ public class SerializedRecord {
 	}
 
 	/**
-	 * @return {@code TRUE} when this record's order is in the patient's active-order set,
-	 *         {@code FALSE} when it was read and this order was not in it, {@code null} when the
-	 *         module cannot say. See {@link #orderActive} for why the three {@code null} cases are
-	 *         one answer.
+	 * @return {@code TRUE} when {@code Order.isActive()} holds for this record's order, {@code FALSE}
+	 *         when the module read that order and it does not, {@code null} when the module cannot
+	 *         say. See {@link #orderActive} for why the {@code null} cases are one answer.
 	 */
 	public Boolean getOrderActive() {
 		return orderActive;

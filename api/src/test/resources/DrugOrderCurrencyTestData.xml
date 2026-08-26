@@ -48,11 +48,32 @@
 	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2008-01-09 00:00:00.0"
 	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="6"
 	        uuid="9318bbbb-0000-4000-8000-00000000318b" care_setting="1" encounter_id="9318" />
+	<!--
+	  3. ORDER 9319 — an order core cannot evaluate: date_stopped AFTER auto_expire_date, both past.
+	     OrderValidator checks date_activated against each of those two dates and never checks them
+	     against EACH OTHER, and OrderServiceImpl.stopOrder writes exactly this row through the public
+	     API when the supported global property order.allowSettingStopDateOnInactiveOrders is on. So
+	     the shape is reachable rather than merely malformed.
+
+	     Order.isDiscontinued and Order.isExpired both THROW APIException on it, before any other
+	     test, while the SQL getActiveOrders applies simply answers. It belongs to patient 2 and is
+	     never charted: the point is that ANOTHER order in the same patient's history must not be able
+	     to take the mark off the records that ARE charted.
+	-->
+	<orders order_id="9319" order_type_id="1" order_number="ORD-9319" urgency="ROUTINE"
+	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"
+	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2008-01-05 00:00:00.0"
+	        date_stopped="2008-01-10 00:00:00.0"
+	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="2"
+	        uuid="9319cccc-0000-4000-8000-00000000319c" care_setting="1" encounter_id="6" />
 
 	<drug_order order_id="9317" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
 	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
 	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
 	<drug_order order_id="9318" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<drug_order order_id="9319" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
 	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
 	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
 </dataset>

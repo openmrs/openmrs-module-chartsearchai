@@ -93,6 +93,16 @@ public class PatientChartSerializer {
 	 * so one axis is not described two ways in one prompt. And it is a plain field in querystore's own
 	 * {@code ". Label: value"} idiom rather than a sentence, because issue #110 measured that prose
 	 * inside a record gets recited into the answer as though it were clinical content.
+	 *
+	 * <p>Being recited is the POINT here, which is what separates this from issue #117 and the rule
+	 * {@code README} draws from it — that a field belongs beside the citation rather than inside the
+	 * record, because everything in a record's text is quotable. What #117 forbids in the text is the
+	 * module's own BOOKKEEPING (a truncation counter, a dataset attribution), which a clinician-facing
+	 * answer should never carry. Whether a prescription is in force is a fact about the patient's
+	 * record, and an answer that repeats it is doing the right thing. The same answer also rides
+	 * structurally on {@link RecordMapping#getOrderActive()}, for the consumer that needs to branch on
+	 * it rather than read it; that field is deliberately not published on the wire, where a client has
+	 * the record text and needs no second copy.
 	 */
 	public static final String ACTIVE_ORDER_LABEL = ". Active order: yes";
 

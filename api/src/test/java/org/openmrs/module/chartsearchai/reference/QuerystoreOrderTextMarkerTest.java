@@ -24,9 +24,15 @@ import org.openmrs.module.querystore.serialization.DrugOrderRecordSerializer;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
- * Contract pin for the ONE place the active-order reconciliation reads querystore's rendered prose
- * rather than a structural field: {@link DrugReferenceInjector#describesEndedOrder}, which decides
- * whether a {@code drug_order} chart record may substantiate a currently-active order.
+ * Contract pin for the one place the active-order reconciliation reads querystore's rendered prose
+ * rather than a structural field: {@link DrugReferenceInjector#describesEndedOrder}, which helps
+ * decide whether a {@code drug_order} chart record may substantiate a currently-active order.
+ *
+ * <p>Since issue #317 it is no longer the only test: the reconciliation AND-s it with the module's
+ * own {@code OrderService} read, so a record is admitted only where both leave it live. That does
+ * not weaken this pin — prose is still the only evidence for a record the read cannot speak for
+ * (one whose order it cannot attribute to the patient, and any record on a chart built when the
+ * read failed), so a wording change in querystore still reaches a decision here.
  *
  * <p>Why this test exists. Keying a safety decision on another module's display text is fragile in
  * the worst way — a wording change there would silently reopen issue #118 (a stopped order's record
@@ -103,8 +109,11 @@ public class QuerystoreOrderTextMarkerTest extends BaseModuleContextSensitiveTes
 		// that plainly and to fail if querystore ever starts rendering it — at which point
 		// describesEndedOrder covers auto-expiry for free and this test's expectation flips.
 		//
-		// It is the strongest argument for the structural fix noted on describesEndedOrder: the
-		// metadata carries auto_expire_date, the rendered text cannot.
+		// It was the strongest argument for the structural fix noted on describesEndedOrder, and
+		// issue #317 made it: the reconciliation now also consults the module's own OrderService
+		// read, so this record IS excluded in production — by that answer, never by its text.
+		// What this case pins is unchanged and still needed: the TEXT carries no end marker, which is
+		// why prose alone could not do it and why describesEndedOrder must not pretend otherwise.
 		DrugOrder order = triomuneOrder();
 		order.setAction(Order.Action.NEW);
 		Calendar past = Calendar.getInstance();

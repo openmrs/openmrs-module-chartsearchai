@@ -146,8 +146,16 @@ public class DrugReferenceInjector {
 
 	/** querystore's resource type for a drug-order document (its {@code DrugOrderRecordSerializer}
 	 *  contract), which the chart carries through unchanged. The type the active-order
-	 *  reconciliation looks for, and the type it asks the chart's completeness declaration about. */
-	private static final String QUERYSTORE_DRUG_ORDER_TYPE = "drug_order";
+	 *  reconciliation looks for, and the type it asks the chart's completeness declaration about.
+	 *
+	 *  <p>Reads {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_ORDER} rather than spelling the
+	 *  string again, because since issue #317 this filter and
+	 *  {@code QueryStoreChartBuilder}'s order-currency scoping have to agree: the substantiation test
+	 *  below AND-s the rendered prose with the builder's own order read, and that read is attached
+	 *  only to records of the type the builder recognised. Spelled apart, a change to one would leave
+	 *  the other's half of the AND with no mapping to look at — no error, no count out of place, just
+	 *  a condition that quietly stops narrowing. */
+	private static final String QUERYSTORE_DRUG_ORDER_TYPE = ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER;
 
 	@Autowired
 	private DrugReferenceService drugReferenceService;
@@ -405,7 +413,8 @@ public class DrugReferenceInjector {
 	 * <p>An order is substantiated by a chart record carrying its {@code Order} uuid (querystore
 	 * indexes its {@code drug_order} document under exactly that — its
 	 * {@code DrugOrderRecordSerializer} contract, so the match is exact), or failing that by a
-	 * drug-order record whose text names the drug. The name fallback is deliberate insurance in the
+	 * drug-order record whose text names the drug and that is not a record of an order that has
+	 * ENDED. The name fallback is deliberate insurance in the
 	 * conservative direction: were the uuid contract to change, uuid-only matching would report
 	 * every order as missing on every query, and a WARN that fires always reports nothing. A
 	 * <em>live</em> drug-order record naming the drug already tells the model the patient has an
@@ -428,8 +437,11 @@ public class DrugReferenceInjector {
 	 * replacement's document missing under drift — the stopped record's text named the drug, the new
 	 * order counted as substantiated, and the answer reading "Stopped: …" correctly reported no
 	 * active medication beside a chip naming one. Issue #118 verbatim, through the ordinary revise
-	 * flow. Only records describing a live order now substantiate one
-	 * ({@link #describesEndedOrder}).
+	 * flow. Only records describing a live order now substantiate one — decided by the module's own
+	 * order read where it has an answer ({@link RecordMapping#getOrderActive()}, issue #317) and by
+	 * the rendered text where it does not ({@link #describesEndedOrder}). The first is what covers
+	 * the same renewal shape when the old order lapsed by its {@code auto_expire_date} instead of
+	 * being stopped, which querystore renders no marker for and prose therefore cannot see.
 	 *
 	 * <p>Second, the match itself was a plain substring test, so a short order name was found inside
 	 * an unrelated word — an active {@code ASA} order read as substantiated by
@@ -469,8 +481,22 @@ public class DrugReferenceInjector {
 				// discontinued order's record names the drug while saying the patient is no longer
 				// on it, so counting it would answer "the chart already covers this order" with a
 				// record that in fact tells the model the opposite.
+				//
+				// Two tests, AND-ed (issue #317). The chart builder now reads OrderService and
+				// records, per drug-order record, whether that order is in force; a record is
+				// admitted only where the prose and that answer both leave it live. Neither
+				// overrules the other and each can only exclude more, which is what makes adding
+				// the second safe: it cannot re-admit anything the prose already refused.
+				//
+				// Each covers what the other cannot. Prose cannot see an order that lapsed by its
+				// auto_expire_date, because querystore renders no marker for one — the limitation
+				// describesEndedOrder's own javadoc records, and the one that turns a lapsed record
+				// into a substantiation for the live order that replaced it. And wherever the read
+				// has no answer at all — SerializedRecord.getOrderActive() enumerates when, and is
+				// the ONLY place that does — the text is the only evidence there is, which is also
+				// what leaves the name fallback intact for the drifted-uuid record it was added for.
 				String lower = mapping.getText().toLowerCase(Locale.ROOT);
-				if (!describesEndedOrder(lower)) {
+				if (!describesEndedOrder(lower) && !Boolean.FALSE.equals(mapping.getOrderActive())) {
 					drugOrderText.append(lower).append('\n');
 				}
 			}
@@ -501,9 +527,14 @@ public class DrugReferenceInjector {
 		return unrepresented;
 	}
 
-	/** Lowercased marker querystore renders a drug order's END date under — it emits
-	 *  {@code ". Stopped: <date>"} for both {@code getDateStopped()} and {@code getAutoExpireDate()}
-	 *  (its {@code DrugOrderRecordSerializer} contract). */
+	/** Lowercased marker querystore renders a drug order's END date under. It emits
+	 *  {@code ". Stopped: <date>"} for {@code getDateStopped()} <strong>only</strong> — measured by
+	 *  running its {@code DrugOrderRecordSerializer} rather than reading it, and pinned by
+	 *  {@code QuerystoreOrderTextMarkerTest.anAutoExpireDateAloneIsNotVisibleInTheRenderedText}.
+	 *  This javadoc used to say "for both {@code getDateStopped()} and {@code getAutoExpireDate()}",
+	 *  which is false and is the sentence that makes an order lapsed by its duration look, in the
+	 *  text, exactly like one still being taken. That gap is why the reconciliation no longer relies
+	 *  on this marker alone (issue #317). */
 	private static final String QUERYSTORE_STOPPED_MARKER = ". stopped:";
 
 	/** Lowercased marker for a DISCONTINUE order — the record of a drug ENDING. Keyed on the
@@ -516,31 +547,48 @@ public class DrugReferenceInjector {
 	 * Whether {@code lowerRecordText} describes an order that has ENDED, so it must not substantiate
 	 * a currently-active order of the same drug.
 	 *
-	 * <p>Why this reads the rendered text rather than a status field. querystore DOES carry the
-	 * structural signal — its {@code putOrderBaseFields} puts {@code action}, {@code date_stopped}
-	 * and {@code auto_expire_date} into the {@code QueryDocument} metadata — but that metadata is
-	 * dropped three layers upstream of here: {@code QueryStoreChartBuilder.toSerializedRecords}
-	 * carries only the obs-group fields into {@code SerializedRecord}, and the reconciliation sees
-	 * only the resulting {@link RecordMapping} (index, type, uuid, date, text). Threading a status
-	 * flag through would mean widening two shared internal types, and — the reason it is not simply
-	 * the better fix — it would rest on metadata surviving querystore's index round-trip, which is
-	 * unverified here and unverifiable in this module's tests (querystore does not index under
-	 * {@code BaseModuleContextSensitiveTest}). The rendered text, by contrast, is demonstrably what
-	 * the chart carries: it is the same {@code getText()} this method already matches names against.
-	 * Plumbing the structural field is the better long-term fix once that round-trip is confirmed.
+	 * <p><strong>This is no longer the only test</strong> (issue #317). Its one caller admits a record
+	 * to the substantiation corpus only when this method AND {@link RecordMapping#getOrderActive()}
+	 * both leave it live — the second being the module's own {@code OrderService} read, carried down
+	 * from {@code QueryStoreChartBuilder.toSerializedRecords}. Conjunction, not precedence: neither
+	 * can overrule the other, and each can only ever exclude more. So this method still decides on its
+	 * own for every record the read cannot speak for — {@code SerializedRecord.getOrderActive()} is
+	 * the one place those are enumerated, deliberately, so this javadoc cannot go stale as that list
+	 * grows — and the read decides on its own for the order that lapsed by its
+	 * {@code auto_expire_date}, which querystore renders no marker for.
+	 *
+	 * <p>Why prose was the only test until then, and why the second one is not the route this javadoc
+	 * used to anticipate. querystore also carries the structural signal in its {@code QueryDocument}
+	 * metadata ({@code putOrderBaseFields} puts {@code action}, {@code date_stopped} and
+	 * {@code auto_expire_date} there), and that metadata was dropped upstream. But reading it would
+	 * have meant re-deriving {@code Order.isActive()} — voided, activated, discontinued, expired —
+	 * from three fields in a second implementation, and it would still rest on metadata surviving
+	 * querystore's index round-trip, which is not exercised by this module's tests. Reading
+	 * {@code OrderService} instead asks the same authority the drug-safety layer reads, so the chart
+	 * and the chips answer off the same data rather than off the index and the database respectively.
+	 * They do not share a call site — the safety layer screens with {@code getActiveOrders}, the chart
+	 * with {@code Order.isActive()} — so this is agreement between two predicates, not agreement by
+	 * construction, and it is pinned as such rather than assumed:
+	 * {@code DrugOrderCurrencyMarkTest.theTwoPredicatesTheModuleAsksAgreeOnEveryOrderEitherCanEvaluate}
+	 * drives both over one patient's whole drug-order list and asserts they classify each order
+	 * alike, so a core change that splits them reddens a test instead of splitting the chart's prose
+	 * from the chips built beside it. It excludes the one row where they differ by construction —
+	 * {@code Order.isActive()} throws where the SQL answers — and asserts that exclusion.
 	 *
 	 * <p>Because it keys on rendered prose, the markers are pinned against the REAL querystore
 	 * serializer's output in {@code QuerystoreOrderTextMarkerTest} — a wording change there fails
 	 * loudly instead of silently reopening issue #118.
 	 *
-	 * <p><strong>Known limitation, and the strongest argument for the structural fix above.</strong>
-	 * Running that serializer (rather than reading it) showed querystore does NOT render an
-	 * auto-expire date into the text: an order that lapsed by {@code autoExpireDate} passing carries
-	 * no end marker at all, so it can still substantiate a live order. querystore does carry
-	 * {@code auto_expire_date} in the document METADATA, so the structural route would cover this
-	 * case and rendered prose cannot. The narrower renewal shape this method exists for — an order
-	 * explicitly stopped or discontinued — IS covered, and {@code QuerystoreOrderTextMarkerTest}
-	 * pins the auto-expire gap so it fails loudly if querystore ever starts rendering it.
+	 * <p><strong>What this method cannot see, and what now covers it.</strong> Running that serializer
+	 * (rather than reading it) showed querystore does NOT render an auto-expire date into the text: an
+	 * order that lapsed by {@code autoExpireDate} passing carries no end marker at all, so on this
+	 * test alone it went on substantiating the live order that replaced it. It no longer does — the
+	 * caller AND-s this with {@link RecordMapping#getOrderActive()}, and that answer excludes it
+	 * (issue #317); {@code AuthoritativeEndedOrderSubstantiationTest} pins the exclusion. What is
+	 * still true, and is why this method's own contract matters, is that the TEXT carries no end
+	 * marker for such an order — {@code QuerystoreOrderTextMarkerTest} pins that, so it fails loudly
+	 * if querystore ever starts rendering one, at which point this method covers auto-expiry on its
+	 * own and that test's expectation flips.
 	 */
 	static boolean describesEndedOrder(String lowerRecordText) {
 		return lowerRecordText != null

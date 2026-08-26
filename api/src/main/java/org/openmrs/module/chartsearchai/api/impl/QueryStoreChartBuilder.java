@@ -17,9 +17,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.openmrs.Order;
 import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -41,9 +43,27 @@ import org.springframework.stereotype.Component;
  *
  * <p>{@link #build} (the fullChart mode) always fetches the full patient chart via
  * {@link QueryStoreService#getPatientChart(String)} so the chart bytes sent to
- * the LLM are a function of the patient only — that's the property
+ * the LLM do not vary with the question — that's the property
  * llama-server's KV-cache reuse needs in order to skip ~99% of the prefill on
- * subsequent queries for the same patient. {@link #buildScoped}
+ * subsequent queries for the same patient. Since issue #317 they are a function of the patient AND
+ * of their order status as read at assembly time, which is a narrowing of that property rather than
+ * a loss of it: the bytes are still question-independent, but an order lapsing by its
+ * {@code auto_expire_date} — or a transient failure of the order read, which drops every mark at
+ * once — changes them with no underlying data change and no index change. The reused prefix then
+ * ends at the record whose mark moved, and everything after it is prefilled again. How much that
+ * costs depends on where that record sits, and a chart is ordered most-recent-first across ALL record
+ * types. On the 3.7.1 demo database's most-prescribed patient — the one with the most drug orders,
+ * which is not the one with the most records — all 8 of their drug orders are newer than every one of
+ * their observations, conditions, diagnoses, encounters and visits, and older than 8 of their 9
+ * allergies, so the first drug-order record is around the tenth line of several hundred and
+ * "everything after it" is most of the chart. Do not carry that shape to another patient, and do not
+ * read it as a worst case: what decides the position is every record type's dates, and this is one
+ * patient's. It is the correct outcome — the
+ * cached prefix asserted something that is no longer true —
+ * and {@code appendLiveAge} already made the bytes clock-dependent in the same way, though not at
+ * the same cadence: a birthday is once a year, and a finite-duration prescription ending is
+ * routine. It does not arise in the shipped {@code queryScoped} default, where nothing persists a
+ * KV prefix at all. {@link #buildScoped}
  * ({@code chartsearchai.chartMode=queryScoped}) deliberately trades that property away: it
  * assembles a small question-dependent slice whose prefill is cheap enough to pay fresh on
  * every query, so cold patients need no warmup at all. When
@@ -54,6 +74,20 @@ import org.springframework.stereotype.Component;
  * (handled in {@code LlmProvider.buildUserMessage} via the
  * {@link PatientChart#getFocusIndices()} payload). The hint biases the LLM's
  * attention without removing records the LLM needs for negative reasoning.
+ *
+ * <p>The same mark also makes those bytes PRIVILEGE-dependent, which the clock never did. The order
+ * read needs core's {@code Get Orders}; {@code WarmupExecutor} and the prewarm sweep run through
+ * {@code Daemon.runInDaemonThread}, and {@code Context.hasPrivilege} answers true unconditionally on
+ * a daemon thread, so the prefix they prime and pin is always assembled WITH the mark. A request
+ * thread on a role that lacks the privilege assembles the same patient's chart WITHOUT it — the read
+ * throws, {@link #readOrderCurrency} catches, every mark is dropped — and under {@code fullChart} the
+ * KV entry is keyed on a hash of the chart text ({@code LocalLlmEngine.kvCacheKey}), so that role's
+ * prompt can never match the warmed prefix at all: not a shortened reuse, none. Warmup and the whole
+ * durable corpus buy it nothing and every query pays a full prefill. Recorded, not fixed: making the
+ * two threads assemble the same bytes would mean either dropping the mark for everyone or escalating
+ * the request thread's privileges to match the daemon's, and the second is not this module's call to
+ * make. The remedy is the operator's — grant the role {@code Get Orders}; the README's privileges
+ * section says who already holds it on a stock install.
  *
  * <p>The {@code protected resolve*} methods and the package-private
  * {@link #setChartSerializer} are test seams, not an extension point.
@@ -99,6 +133,13 @@ class QueryStoreChartBuilder {
 	 *  PatientRecordSerializer contract) — the one record every slice carries and one of the
 	 *  {@link #ADMIN_DATED_TYPES}. Single constant so the two uses cannot drift. */
 	private static final String PATIENT_RESOURCE_TYPE = "patient";
+
+	/** querystore's resource type for a prescription. The order-currency mark is scoped to it:
+	 *  {@link #resolveAllOrders} returns every order type, so the uuid sets cover test and referral
+	 *  orders too, and marking those is a deliberate widening nobody has asked for rather than
+	 *  something the data forces. */
+	private static final String DRUG_ORDER_RESOURCE_TYPE =
+			ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER;
 
 	/** Operator remediation for an unresolvable QueryStoreService, WARNed identically by
 	 *  {@link #build} and {@link #buildScoped} (buildFocused stays silent — build() has already
@@ -151,8 +192,8 @@ class QueryStoreChartBuilder {
 		}
 
 		// Full chart first — this is what the LLM sees and what determines the KV-cache
-		// prefix. Always called regardless of mode so the chart bytes are a function of
-		// the patient only.
+		// prefix. Always called regardless of mode so the chart bytes do not vary with
+		// the question (see the class javadoc for what they DO vary with).
 		long rpcStart = System.currentTimeMillis();
 		List<QueryDocument> chartDocs;
 		try {
@@ -181,7 +222,7 @@ class QueryStoreChartBuilder {
 		int focusHits = focusUuids.size();
 		long rpcMs = System.currentTimeMillis() - rpcStart;
 
-		List<SerializedRecord> records = toSerializedRecords(chartDocs);
+		List<SerializedRecord> records = toSerializedRecords(patient, chartDocs);
 		long serializeStart = System.currentTimeMillis();
 		PatientChart chart = chartSerializer.serialize(patient, records, focusUuids, resolveDedupGroupLabels());
 		long serializeMs = System.currentTimeMillis() - serializeStart;
@@ -323,7 +364,7 @@ class QueryStoreChartBuilder {
 		}
 		sliceDocs = completeObsGroupFamilies(chartDocs, sliceDocs, sliceUuids);
 
-		List<SerializedRecord> records = toSerializedRecords(sliceDocs);
+		List<SerializedRecord> records = toSerializedRecords(patient, sliceDocs);
 		long serializeStart = System.currentTimeMillis();
 		// compressDateRuns=false: the slice is small enough to date every record, and temporal
 		// questions need the date on the record itself (see the serializer overload's javadoc).
@@ -472,7 +513,7 @@ class QueryStoreChartBuilder {
 		}
 		long rpcMs = System.currentTimeMillis() - rpcStart;
 
-		List<SerializedRecord> records = toSerializedRecords(hits);
+		List<SerializedRecord> records = toSerializedRecords(patient, hits);
 		long serializeStart = System.currentTimeMillis();
 		PatientChart chart = chartSerializer.serialize(patient, records);
 		long serializeMs = System.currentTimeMillis() - serializeStart;
@@ -581,10 +622,11 @@ class QueryStoreChartBuilder {
 	/** Converts a querystore hit list into the chartsearchai serializer's input shape,
 	 *  dropping null and malformed docs with a WARN so operators can spot upstream
 	 *  serialization regressions without losing the rest of the chart. */
-	private List<SerializedRecord> toSerializedRecords(List<QueryDocument> docs) {
+	private List<SerializedRecord> toSerializedRecords(Patient patient, List<QueryDocument> docs) {
 		if (docs == null || docs.isEmpty()) {
 			return Collections.<SerializedRecord>emptyList();
 		}
+		OrderCurrency orderCurrency = readOrderCurrency(patient, docs);
 		List<SerializedRecord> out = new ArrayList<SerializedRecord>(docs.size());
 		for (QueryDocument doc : docs) {
 			if (doc == null) {
@@ -609,9 +651,206 @@ class QueryStoreChartBuilder {
 			out.add(new SerializedRecord(doc.getResourceType(), doc.getResourceUuid(),
 					text, recordDate, Collections.<String>emptyList(),
 					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_UUID),
-					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_CONCEPT_NAME)));
+					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_CONCEPT_NAME),
+					orderCurrency.forRecord(doc.getResourceType(), doc.getResourceUuid())));
 		}
 		return out;
+	}
+
+	/**
+	 * The patient's order-currency reading for one chart assembly — which of their orders are in
+	 * force right now, and which orders are theirs at all — or the explicit statement that the module
+	 * could not read them (issue #317).
+	 *
+	 * <p><strong>Two sets, and the second one is the guard.</strong> The obvious implementation reads
+	 * only the active set and treats "absent from it" as "ended". That is wrong twice. It cannot tell
+	 * an order that ended from a record whose order the module cannot identify at all — and the mark
+	 * is keyed on querystore's {@code resourceUuid} contract, so were that contract ever to change,
+	 * "absent from the active set" would become true of EVERY record and the chart would tell a
+	 * clinician that every one of this patient's prescriptions had ended. Requiring the uuid to be one
+	 * of the patient's own orders turns the mark into a positive fact — "this order is theirs and it
+	 * is not in force" — instead of an inference from absence, and it leaves a record the module
+	 * cannot identify unmarked, which is also what preserves the active-order reconciliation's name
+	 * fallback for exactly that record.
+	 *
+	 * <p>An EMPTY active set is a perfectly good reading, not a failure: a patient whose only
+	 * prescription has ended has one, and that is the arrangement issue #315 reported. So emptiness
+	 * must never stand in for "could not read", which is why {@link #UNREAD} is its own state rather
+	 * than an empty set. {@code PatientClinicalContext.contraindicationRecordsRead()} is the same
+	 * distinction one layer along.
+	 */
+	private static final class OrderCurrency {
+
+		/** The reading that answers nothing about anything, and the only one a failed read produces. */
+		private static final OrderCurrency UNREAD = new OrderCurrency(null, null);
+
+		private final Set<String> activeOrderUuids;
+
+		private final Set<String> allOrderUuids;
+
+		private OrderCurrency(Set<String> activeOrderUuids, Set<String> allOrderUuids) {
+			this.activeOrderUuids = activeOrderUuids;
+			this.allOrderUuids = allOrderUuids;
+		}
+
+		static OrderCurrency unread() {
+			return UNREAD;
+		}
+
+		static OrderCurrency of(Set<String> activeOrderUuids, Set<String> allOrderUuids) {
+			return new OrderCurrency(activeOrderUuids, allOrderUuids);
+		}
+
+		/**
+		 * What this reading says about one chart record: {@code TRUE} in force, {@code FALSE} this
+		 * patient's order and not in force, {@code null} nothing known. The single place the answer is
+		 * decided, so the chart line and the grounding mapping cannot be given different ones.
+		 */
+		Boolean forRecord(String resourceType, String resourceUuid) {
+			if (activeOrderUuids == null || resourceUuid == null
+					|| !DRUG_ORDER_RESOURCE_TYPE.equals(resourceType)) {
+				return null;
+			}
+			if (activeOrderUuids.contains(resourceUuid)) {
+				return Boolean.TRUE;
+			}
+			return allOrderUuids.contains(resourceUuid) ? Boolean.FALSE : null;
+		}
+	}
+
+	/**
+	 * Reads the patient's orders once for this chart assembly, or reports that it could not.
+	 *
+	 * <p>Skipped entirely when the retrieved documents carry no prescription: the read is an
+	 * {@code OrderService} call on a path that runs for every query for every patient, sized by the
+	 * patient's whole order history, and a chart with nothing to mark has nothing to spend it on.
+	 *
+	 * <p>How often "every query" is depends on the mode, and it is not always once. Under
+	 * {@code chartMode=fullChart} with {@code chartsearchai.progressiveReasoning.enabled=true} the
+	 * preview pass ({@link #buildFocused}) and the committed {@link #build} each assemble their own
+	 * chart, so this read happens TWICE per request; where {@code chartsearchai.drugReference.enabled}
+	 * is on, that layer's own {@code getActiveOrders} is a third order query on that shape, against
+	 * the one the module made before issue #317. The shipped {@code queryScoped} default reads once
+	 * ({@code buildFocused} returns early in that mode), plus the safety layer's where it is on.
+	 * Deliberately not hoisted to one reading per request: the two builds are separate calls through
+	 * {@code ChartBuildingStrategy}, so sharing one would mean either a new parameter on that
+	 * interface or per-request state held on a Spring singleton, which is what CLAUDE.md's
+	 * memoisation rule refuses. What that costs is a residue
+	 * rather than a contradiction the clinician sees: the two charts of one request read the orders
+	 * at two instants, so an order lapsing between them is marked one way in the preview and the
+	 * other way in the committed answer. Nothing here pins that, and no case discriminates it.
+	 *
+	 * <p>WARN rather than DEBUG on failure. The chart degrades silently — every drug-order record
+	 * simply loses its mark and reads exactly as it did before this feature existed — so nothing else
+	 * anywhere says the module has stopped answering a question it normally answers.
+	 * {@link #readingOf} logs its own per-order failure at WARN resting on that same argument; what
+	 * is particular to THIS one is its scope, which is a whole chart's marks rather than one record's.
+	 * {@code PatientClinicalContextBuilder}'s own active-order catch logs at DEBUG and sets no flag
+	 * at all; that is the shape issue #317 names as the hazard, and it is deliberately not copied
+	 * here.
+	 */
+	private OrderCurrency readOrderCurrency(Patient patient, List<QueryDocument> docs) {
+		if (patient == null || !carriesADrugOrderRecord(docs)) {
+			return OrderCurrency.unread();
+		}
+		try {
+			return readingOf(resolveAllOrders(patient));
+		}
+		catch (RuntimeException e) {
+			log.warn("Could not read orders for patient [uuid={}] — this chart's drug-order records "
+					+ "will not say whether each prescription is still in force, so the answer may "
+					+ "infer it from the record's dates. Chart assembly is otherwise unaffected.",
+					patient.getUuid(), e);
+			return OrderCurrency.unread();
+		}
+	}
+
+	private static boolean carriesADrugOrderRecord(List<QueryDocument> docs) {
+		for (QueryDocument doc : docs) {
+			if (doc != null && DRUG_ORDER_RESOURCE_TYPE.equals(doc.getResourceType())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Splits the patient's orders into the two sets a reading needs, in ONE pass over ONE service
+	 * read.
+	 *
+	 * <p>The obvious implementation asks {@code OrderService} twice — once for the active orders and
+	 * once for all of them — and that is what this did first. {@code getAllOrdersByPatient} returns
+	 * every order the patient has, so the second call is answerable from the first, and asking once
+	 * also makes the mark's contract literally true rather than true by proxy:
+	 * {@code PatientChartSerializer.ACTIVE_ORDER_LABEL} says the mark reports {@code Order.isActive()}
+	 * and nothing more, and now it does.
+	 *
+	 * <p><strong>{@code Order.isActive()} is not simply that SQL predicate in Java, and the difference
+	 * is why each order is evaluated on its own.</strong> On every leg checked they agree — voided, a
+	 * {@code DISCONTINUE} action, a null or future {@code dateActivated}, a future
+	 * {@code dateStopped}, an {@code autoExpireDate} exactly equal to now, and
+	 * {@code scheduledDate}/{@code ON_SCHEDULED_DATE}, which neither of them reads. But
+	 * {@code Order.isDiscontinued} and {@code Order.isExpired} both THROW, before any other test, when
+	 * {@code dateStopped} is after {@code autoExpireDate}, where the SQL simply answers. Core does not
+	 * prevent that row: {@code OrderValidator} compares {@code dateActivated} against each of those
+	 * dates and never compares them against each other, and {@code OrderServiceImpl.stopOrder} writes
+	 * it through the public API when {@code order.allowSettingStopDateOnInactiveOrders} is on.
+	 *
+	 * <p>Evaluated in one try around the whole walk — which is how this was first written — a single
+	 * such row anywhere in the patient's history takes the mark off EVERY drug-order record on every
+	 * chart for that patient, which is the silent reversion to pre-#317 behaviour the feature exists
+	 * to remove. Per order, it costs exactly the one record that order stands behind.
+	 *
+	 * <p><strong>The uuid must not reach EITHER set, and the statement order is what does that.</strong>
+	 * {@code isActive()} is called first and its result held; only then is the uuid recorded as known.
+	 * Wrapping the two statements the other way round — the natural edit, and what "each order on its
+	 * own" reads as — leaves a throwing order in {@code known} and out of {@code active}, which is the
+	 * combination {@code forRecord} answers {@code FALSE} to: the module would tell a clinician a
+	 * prescription it could not evaluate had ended. Silence for what cannot be evaluated, never a
+	 * denial.
+	 *
+	 * <p>The all-orders set carries VOIDED orders too — a consequence of {@code getAllOrdersByPatient}
+	 * rather than a choice made here, and left alone: such a record is that patient's either way, and
+	 * marking it not-active is true of it. querystore does not index voided rows, so it is unlikely to
+	 * arise at all. Nothing pins this, and no case here discriminates it.
+	 */
+	private static OrderCurrency readingOf(List<Order> allOrders) {
+		Set<String> active = new HashSet<String>();
+		Set<String> known = new HashSet<String>();
+		List<String> unevaluable = new ArrayList<String>();
+		for (Order order : allOrders == null ? Collections.<Order>emptyList() : allOrders) {
+			if (order == null || order.getUuid() == null) {
+				continue;
+			}
+			try {
+				boolean isActive = order.isActive();
+				known.add(order.getUuid());
+				if (isActive) {
+					active.add(order.getUuid());
+				}
+			}
+			catch (RuntimeException e) {
+				// Collected and reported ONCE below rather than logged here. A bad row is a permanent
+				// property of the patient's chart, so BOTH forms repeat on every query for that
+				// patient for as long as the row stands — that is not what separates them, and this
+				// comment used to rest on it. What a per-order log adds on top is one line per bad
+				// row for a patient carrying several. The clause this comment used to end with —
+				// "and a privilege failure would repeat once per order" — named a failure that cannot
+				// reach here: a missing Get Orders raises APIAuthenticationException out of
+				// resolveAllOrders, one level up and outside this loop, where readOrderCurrency's own
+				// catch reports it once; Order.isActive() reads the entity's own fields and consults
+				// no privilege at all.
+				unevaluable.add(order.getUuid());
+			}
+		}
+		if (!unevaluable.isEmpty()) {
+			log.warn("Could not decide whether {} of this patient's order(s) are in force, so a chart "
+					+ "record for any of them will not say either way; every other order is unaffected. "
+					+ "The usual cause is an order whose stop date is after its auto-expire date, which "
+					+ "core neither validates nor refuses to save. Orders: {}",
+					unevaluable.size(), unevaluable);
+		}
+		return OrderCurrency.of(active, known);
 	}
 
 	/** Reads a metadata value as a trimmed String, or {@code null} when absent or blank.
@@ -627,6 +866,12 @@ class QueryStoreChartBuilder {
 		}
 		String s = value.toString().trim();
 		return s.isEmpty() ? null : s;
+	}
+
+	/** Seam for tests: production reads every order this patient has, of any type, and decides
+	 *  which are in force with {@link Order#isActive()} rather than asking the service twice. */
+	protected List<Order> resolveAllOrders(Patient patient) {
+		return Context.getOrderService().getAllOrdersByPatient(patient);
 	}
 
 	/** Seam for tests: production resolves via the OpenMRS context. */

@@ -67,7 +67,7 @@ public class ChartSearchAiConstants {
 	 *       meanF1 (0.748 vs 0.668), abstention (0.86 vs 0.74), and off-topic drift (181 vs 477) — the
 	 *       focused slice keeps the small model from drowning in a whole chart's worth of noise.</li>
 	 *   <li>{@link #CHART_MODE_FULL_CHART} — the patient's whole chart is serialized into every prompt.
-	 *       The chart bytes are a function of the patient only, so llama-server's KV prefix cache (plus
+	 *       The chart bytes do not vary with the question, so llama-server's KV prefix cache (plus
 	 *       warmup/prewarm/disk persistence) amortizes the multi-thousand-token prefill across queries;
 	 *       this makes repeat/varied questions on an already-warmed patient fast, at the cost of a heavy
 	 *       first-ever query (tens of seconds to minutes on a GPU-less host). Prefer this only where a
@@ -606,6 +606,32 @@ public class ChartSearchAiConstants {
 	public static final String RESOURCE_TYPE_PROGRAM = "program";
 
 	public static final String RESOURCE_TYPE_MEDICATION_DISPENSE = "medication_dispense";
+
+	/**
+	 * querystore's resource type for a prescription (its {@code DrugOrderRecordSerializer}
+	 * contract). Chart evidence like any other querystore record — it is the patient's own order,
+	 * not module-injected reference material — and distinct from
+	 * {@link #RESOURCE_TYPE_ACTIVE_DRUG_ORDER}, which this module injects for an active order the
+	 * retrieved chart carries no record of (issue #118).
+	 *
+	 * <p>Declared for issue #317, which added a fourth production reader — the chart builder, which
+	 * scopes the order-currency mark to this type — to three that were already spelling the string as
+	 * a literal: {@code QueryScopeRouter.typedSlice}'s MEDICATIONS and ORDERS slices, and
+	 * {@code DrugReferenceInjector}, which filters the mappings it puts to the substantiation test.
+	 * All four now read this constant, and the injector and the builder are the pair that MUST
+	 * agree: the injector
+	 * admits a record to that corpus only where the prose and the builder's own order read both leave
+	 * it live, so a divergence would leave the #317 half of that AND looking at no records at all —
+	 * silently, since a condition that never sees a drug-order mapping simply stops narrowing
+	 * anything.
+	 *
+	 * <p>Being declared here puts it in
+	 * {@code ChartSearchAiReferenceGroupTest}'s sweep, which forces a reference-group decision to be
+	 * RECORDED for every declared type — that is a forcing function, not an obstacle, and the group
+	 * it records ({@code chart}) is the one {@code referenceGroup} already returned for the bare
+	 * string.
+	 */
+	public static final String RESOURCE_TYPE_DRUG_ORDER = "drug_order";
 
 	/** Reference data, not patient data — injected by {@link org.openmrs.module.chartsearchai.reference.DrugReferenceInjector}. */
 	public static final String RESOURCE_TYPE_DRUG_REFERENCE = "drug_reference";

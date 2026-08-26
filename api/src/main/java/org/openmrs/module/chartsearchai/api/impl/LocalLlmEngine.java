@@ -780,10 +780,17 @@ public class LocalLlmEngine implements LlmEngine {
 	 *   <li>{@code --cache-reuse 0} + {@code cache_prompt=true} (in request body) — reuse the
 	 *       chart prefix's KV cache across successive queries on the same patient via the
 	 *       request-body flag (exact-prefix match). The CLI flag is pinned to 0 (llama.cpp's
-	 *       default) because the focus-hint prompt structure has byte-identical prefix bytes
+	 *       default) because the focus-hint prompt structure keeps the prefix bytes identical
 	 *       across successive queries on the same patient — KV shifting (the {@code N>0}
-	 *       behavior) is for fuzzy prefix matching when the prefix bytes drift slightly, and
-	 *       that case doesn't arise on this prompt shape. Note that cache_prompt itself
+	 *       behavior) is for fuzzy prefix matching when the prefix bytes drift slightly.
+	 *       <strong>Since issue #317 that drift case does arise</strong>, and this justification no
+	 *       longer covers it: a drug-order record states whether its order is in force, so an order
+	 *       lapsing changes bytes mid-chart between one query and the next. Whether {@code N>0}
+	 *       recovers anything there is UNMEASURED on this prompt shape, and no mechanism argument is
+	 *       offered either way: the server's loop re-aligns after a mid-prompt edit and shifts as
+	 *       many chunks as it finds, so this is the case it is built for, but "built for it" is not
+	 *       a measurement. The value is left at 0 as the known-safe default rather than tuned on a
+	 *       guess. What has changed is that the trade-off is now open instead of settled. Note that cache_prompt itself
 	 *       introduces a low-level non-determinism on borderline argmax decisions because the
 	 *       reused-vs-fresh KV path is numerically close but not bit-identical — observed as
 	 *       "is she pregnant?" alternating between Gravida and Self-Induced Abortion on

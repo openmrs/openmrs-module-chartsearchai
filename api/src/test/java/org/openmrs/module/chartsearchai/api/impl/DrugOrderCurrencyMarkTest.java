@@ -81,6 +81,10 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	 *  for records whose prose happens to carry an end. */
 	private static final int STOPPED_ORDER_ID = 2;
 
+	/** This file's dataset: an order core cannot evaluate — {@code date_stopped} after
+	 *  {@code auto_expire_date}, both past — so {@code Order.isActive()} throws on it. */
+	private static final int UNEVALUABLE_ORDER_ID = 9319;
+
 	/** Standard test dataset order 6: a TEST order, not a drug order. */
 	private static final int TEST_ORDER_ID = 6;
 
@@ -315,6 +319,30 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 						+ "mark: " + chart.getText());
 		assertTrue(lineFor(chart, uuidOf(LIVE_ORDER_ID)).endsWith(PatientChartSerializer.ACTIVE_ORDER_LABEL),
 				"and the chart line must still carry it: " + lineFor(chart, uuidOf(LIVE_ORDER_ID)));
+	}
+
+	@Test
+	public void theRecordOfAnOrderCoreCannotEvaluateSaysNothingRatherThanNo() {
+		// The other half of the per-order guard, and the one that decides how it is written. Not
+		// marking the rest of the chart wrongly is one claim; not marking THIS record wrongly is
+		// another, and only this case can see it — the sibling case never charts order 9319, so the
+		// statement order inside the try is invisible to it.
+		//
+		// The uuid must reach NEITHER set. Recording it as known before asking isActive() — the
+		// natural way to write the loop — leaves it known and not active, which is exactly the
+		// combination forRecord answers FALSE to, and the module would tell a clinician that a
+		// prescription it could not evaluate had ended. Silence is the only honest answer here.
+		chartOf(drugOrderDoc(UNEVALUABLE_ORDER_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		String uuid = uuidOf(UNEVALUABLE_ORDER_ID);
+		assertNull(mappingFor(chart, uuid).getOrderActive(),
+				"an order the module cannot evaluate must carry no answer at all");
+		assertFalse(lineFor(chart, uuid).endsWith(PatientChartSerializer.INACTIVE_ORDER_LABEL),
+				"and above all must not be reported as ended: " + lineFor(chart, uuid));
+		assertFalse(lineFor(chart, uuid).endsWith(PatientChartSerializer.ACTIVE_ORDER_LABEL),
+				"nor as in force: " + lineFor(chart, uuid));
 	}
 
 	@Test

@@ -469,8 +469,22 @@ public class DrugReferenceInjector {
 				// discontinued order's record names the drug while saying the patient is no longer
 				// on it, so counting it would answer "the chart already covers this order" with a
 				// record that in fact tells the model the opposite.
+				//
+				// Two tests, and the module's OWN answer comes first (issue #317). The chart builder
+				// now reads OrderService and records, per drug-order record, whether that order is in
+				// force; where it has an answer, that answer is authoritative and the prose is not
+				// consulted. Prose alone cannot see an order that lapsed by its auto_expire_date,
+				// because querystore renders no marker for one — the limitation
+				// describesEndedOrder's own javadoc records, and the one that turns a lapsed record
+				// into a substantiation for the live order that replaced it.
+				//
+				// The prose test is KEPT, not replaced, because the authoritative answer is absent
+				// for a record whose order could not be attributed to this patient and for a chart
+				// built when the order read failed. In both, the text is the best evidence there is —
+				// and keeping it is also what leaves the name fallback below intact for exactly the
+				// drifted-uuid record it was added for.
 				String lower = mapping.getText().toLowerCase(Locale.ROOT);
-				if (!describesEndedOrder(lower)) {
+				if (!describesEndedOrder(lower) && !Boolean.FALSE.equals(mapping.getOrderActive())) {
 					drugOrderText.append(lower).append('\n');
 				}
 			}

@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.openmrs.Order;
 import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
@@ -100,6 +101,16 @@ class QueryStoreChartBuilder {
 	 *  {@link #ADMIN_DATED_TYPES}. Single constant so the two uses cannot drift. */
 	private static final String PATIENT_RESOURCE_TYPE = "patient";
 
+	/** querystore's resource type for a prescription (its {@code DrugOrderRecordSerializer}
+	 *  contract). The order-currency mark is scoped to it: {@link #resolveActiveOrders} returns every
+	 *  order type, so the uuid set covers test and referral orders too, and marking them is a
+	 *  deliberate widening nobody has asked for rather than something the data forces. A private
+	 *  constant, mirroring {@code DrugReferenceInjector.QUERYSTORE_DRUG_ORDER_TYPE}, rather than a
+	 *  {@code ChartSearchAiConstants.RESOURCE_TYPE_*}: {@code ChartSearchAiUtils.isGroundingDemoteOnly}
+	 *  documents that this module declares no constant for the chart types querystore passes through,
+	 *  and {@code ChartSearchAiReferenceGroupTest} sweeps the ones it does declare. */
+	private static final String DRUG_ORDER_RESOURCE_TYPE = "drug_order";
+
 	/** Operator remediation for an unresolvable QueryStoreService, WARNed identically by
 	 *  {@link #build} and {@link #buildScoped} (buildFocused stays silent — build() has already
 	 *  warned on the same request). One constant so the degradation message cannot drift
@@ -181,7 +192,7 @@ class QueryStoreChartBuilder {
 		int focusHits = focusUuids.size();
 		long rpcMs = System.currentTimeMillis() - rpcStart;
 
-		List<SerializedRecord> records = toSerializedRecords(chartDocs);
+		List<SerializedRecord> records = toSerializedRecords(patient, chartDocs);
 		long serializeStart = System.currentTimeMillis();
 		PatientChart chart = chartSerializer.serialize(patient, records, focusUuids, resolveDedupGroupLabels());
 		long serializeMs = System.currentTimeMillis() - serializeStart;
@@ -323,7 +334,7 @@ class QueryStoreChartBuilder {
 		}
 		sliceDocs = completeObsGroupFamilies(chartDocs, sliceDocs, sliceUuids);
 
-		List<SerializedRecord> records = toSerializedRecords(sliceDocs);
+		List<SerializedRecord> records = toSerializedRecords(patient, sliceDocs);
 		long serializeStart = System.currentTimeMillis();
 		// compressDateRuns=false: the slice is small enough to date every record, and temporal
 		// questions need the date on the record itself (see the serializer overload's javadoc).
@@ -472,7 +483,7 @@ class QueryStoreChartBuilder {
 		}
 		long rpcMs = System.currentTimeMillis() - rpcStart;
 
-		List<SerializedRecord> records = toSerializedRecords(hits);
+		List<SerializedRecord> records = toSerializedRecords(patient, hits);
 		long serializeStart = System.currentTimeMillis();
 		PatientChart chart = chartSerializer.serialize(patient, records);
 		long serializeMs = System.currentTimeMillis() - serializeStart;
@@ -581,10 +592,11 @@ class QueryStoreChartBuilder {
 	/** Converts a querystore hit list into the chartsearchai serializer's input shape,
 	 *  dropping null and malformed docs with a WARN so operators can spot upstream
 	 *  serialization regressions without losing the rest of the chart. */
-	private List<SerializedRecord> toSerializedRecords(List<QueryDocument> docs) {
+	private List<SerializedRecord> toSerializedRecords(Patient patient, List<QueryDocument> docs) {
 		if (docs == null || docs.isEmpty()) {
 			return Collections.<SerializedRecord>emptyList();
 		}
+		OrderCurrency orderCurrency = readOrderCurrency(patient, docs);
 		List<SerializedRecord> out = new ArrayList<SerializedRecord>(docs.size());
 		for (QueryDocument doc : docs) {
 			if (doc == null) {
@@ -609,9 +621,121 @@ class QueryStoreChartBuilder {
 			out.add(new SerializedRecord(doc.getResourceType(), doc.getResourceUuid(),
 					text, recordDate, Collections.<String>emptyList(),
 					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_UUID),
-					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_CONCEPT_NAME)));
+					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_CONCEPT_NAME),
+					orderCurrency.forRecord(doc.getResourceType(), doc.getResourceUuid())));
 		}
 		return out;
+	}
+
+	/**
+	 * The patient's order-currency reading for one chart assembly — which of their orders are in
+	 * force right now, and which orders are theirs at all — or the explicit statement that the module
+	 * could not read them (issue #317).
+	 *
+	 * <p><strong>Two sets, and the second one is the guard.</strong> The obvious implementation reads
+	 * only the active set and treats "absent from it" as "ended". That is wrong twice. It cannot tell
+	 * an order that ended from a record whose order the module cannot identify at all — and the mark
+	 * is keyed on querystore's {@code resourceUuid} contract, so were that contract ever to change,
+	 * "absent from the active set" would become true of EVERY record and the chart would tell a
+	 * clinician that every one of this patient's prescriptions had ended. Requiring the uuid to be one
+	 * of the patient's own orders turns the mark into a positive fact — "this order is theirs and it
+	 * is not in force" — instead of an inference from absence, and it leaves a record the module
+	 * cannot identify unmarked, which is also what preserves the active-order reconciliation's name
+	 * fallback for exactly that record.
+	 *
+	 * <p>An EMPTY active set is a perfectly good reading, not a failure: a patient whose only
+	 * prescription has ended has one, and that is the arrangement issue #315 reported. So emptiness
+	 * must never stand in for "could not read", which is why {@link #UNREAD} is its own state rather
+	 * than an empty set. {@code PatientClinicalContext.contraindicationRecordsRead()} is the same
+	 * distinction one layer along.
+	 */
+	private static final class OrderCurrency {
+
+		/** The reading that answers nothing about anything, and the only one a failed read produces. */
+		private static final OrderCurrency UNREAD = new OrderCurrency(null, null);
+
+		private final Set<String> activeOrderUuids;
+
+		private final Set<String> allOrderUuids;
+
+		private OrderCurrency(Set<String> activeOrderUuids, Set<String> allOrderUuids) {
+			this.activeOrderUuids = activeOrderUuids;
+			this.allOrderUuids = allOrderUuids;
+		}
+
+		static OrderCurrency unread() {
+			return UNREAD;
+		}
+
+		static OrderCurrency of(Set<String> activeOrderUuids, Set<String> allOrderUuids) {
+			return new OrderCurrency(activeOrderUuids, allOrderUuids);
+		}
+
+		/**
+		 * What this reading says about one chart record: {@code TRUE} in force, {@code FALSE} this
+		 * patient's order and not in force, {@code null} nothing known. The single place the answer is
+		 * decided, so the chart line and the grounding mapping cannot be given different ones.
+		 */
+		Boolean forRecord(String resourceType, String resourceUuid) {
+			if (activeOrderUuids == null || resourceUuid == null
+					|| !DRUG_ORDER_RESOURCE_TYPE.equals(resourceType)) {
+				return null;
+			}
+			if (activeOrderUuids.contains(resourceUuid)) {
+				return Boolean.TRUE;
+			}
+			return allOrderUuids.contains(resourceUuid) ? Boolean.FALSE : null;
+		}
+	}
+
+	/**
+	 * Reads the patient's orders once for this chart assembly, or reports that it could not.
+	 *
+	 * <p>Skipped entirely when the retrieved documents carry no prescription: the read is two
+	 * {@code OrderService} calls on a path that runs for every query for every patient, and a chart
+	 * with nothing to mark has nothing to spend them on.
+	 *
+	 * <p>WARN rather than DEBUG on failure, and this is the one place the level matters. The chart
+	 * degrades silently — every drug-order record simply loses its mark and reads exactly as it did
+	 * before this feature existed — so nothing else anywhere says the module has stopped answering a
+	 * question it normally answers. {@code PatientClinicalContextBuilder}'s own active-order catch
+	 * logs at DEBUG and sets no flag at all; that is the shape issue #317 names as the hazard, and it
+	 * is deliberately not copied here.
+	 */
+	private OrderCurrency readOrderCurrency(Patient patient, List<QueryDocument> docs) {
+		if (patient == null || !carriesADrugOrderRecord(docs)) {
+			return OrderCurrency.unread();
+		}
+		try {
+			return OrderCurrency.of(uuidsOf(resolveActiveOrders(patient)),
+					uuidsOf(resolveAllOrders(patient)));
+		}
+		catch (RuntimeException e) {
+			log.warn("Could not read orders for patient [uuid={}] — this chart's drug-order records "
+					+ "will not say whether each prescription is still in force, so the answer may "
+					+ "infer it from the record's dates. Chart assembly is otherwise unaffected.",
+					patient.getUuid(), e);
+			return OrderCurrency.unread();
+		}
+	}
+
+	private static boolean carriesADrugOrderRecord(List<QueryDocument> docs) {
+		for (QueryDocument doc : docs) {
+			if (doc != null && DRUG_ORDER_RESOURCE_TYPE.equals(doc.getResourceType())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static Set<String> uuidsOf(List<Order> orders) {
+		Set<String> uuids = new HashSet<String>();
+		for (Order order : orders == null ? Collections.<Order>emptyList() : orders) {
+			if (order != null && order.getUuid() != null) {
+				uuids.add(order.getUuid());
+			}
+		}
+		return uuids;
 	}
 
 	/** Reads a metadata value as a trimmed String, or {@code null} when absent or blank.
@@ -627,6 +751,16 @@ class QueryStoreChartBuilder {
 		}
 		String s = value.toString().trim();
 		return s.isEmpty() ? null : s;
+	}
+
+	/** Seam for tests: production reads the patient's currently-in-force orders. */
+	protected List<Order> resolveActiveOrders(Patient patient) {
+		return Context.getOrderService().getActiveOrders(patient, null, null, null);
+	}
+
+	/** Seam for tests: production reads every order this patient has, of any type. */
+	protected List<Order> resolveAllOrders(Patient patient) {
+		return Context.getOrderService().getAllOrdersByPatient(patient);
 	}
 
 	/** Seam for tests: production resolves via the OpenMRS context. */

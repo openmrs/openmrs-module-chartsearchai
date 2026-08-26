@@ -1,0 +1,58 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  The two drug-order arrangements the standard test dataset does not carry, both of which issue #317
+  turns on.
+
+  1. ORDER 9317 — an order that lapsed by its DURATION: action NEW, auto_expire_date in the past,
+     date_stopped NULL. querystore's DrugOrderRecordSerializer renders ". Stopped: <date>" for
+     getDateStopped() and ". Action: DISCONTINUE" for the action, and renders NOTHING for
+     auto_expire_date — measured by running it, and pinned by
+     QuerystoreOrderTextMarkerTest.anAutoExpireDateAloneIsNotVisibleInTheRenderedText. So this
+     order's rendered text is byte-shaped exactly like a live order's while OrderService excludes it
+     from getActiveOrders. That gap is the ticket. The standard dataset's only auto-expired drug
+     orders (22 and 44) also carry order_action DISCONTINUE, so their text DOES say they ended and
+     they cannot exercise it.
+
+     Deliberately the same drug and concept as standard-dataset order 3 (drug 2 / concept 792,
+     Triomune-30, patient 2, live), which makes patient 2's chart the renewal shape — one live record
+     and one lapsed record naming the same drug.
+
+  2. ORDER 9318 — a patient whose ONLY drug order has ended, so their active-order set is EMPTY.
+     That emptiness is an ANSWER (every record is marked not-active), and it must never be confused
+     with the order read having FAILED, which is the fail-closed hazard the ticket names. It is also
+     ADR Decision 45's cell A, the arrangement issue #315 reported. Patients 2 and 7 both have live
+     orders, so neither can reach this state; patient 6 of the standard dataset has no orders and no
+     encounter, so both are supplied.
+
+  Row order matters: dbunit inserts tables in the order they first appear, so the encounter must
+  precede the orders that reference it, and rows of one table are kept contiguous. The two orders
+  rows carry the same attribute set for the same reason.
+
+  A separate file rather than rows added to ChartSearchAiTestData.xml: that file carries no order
+  rows at all and is loaded by HibernateChartSearchAiDAOTest, whose dataset must not change
+  underneath it.
+-->
+<dataset>
+	<encounter encounter_id="9318" encounter_type="1" patient_id="6" location_id="2" form_id="1"
+	           encounter_datetime="2008-08-19 00:00:00.0" creator="1"
+	           date_created="2008-08-19 12:34:40.0" voided="false"
+	           uuid="9318aaaa-0000-4000-8000-00000000318a" />
+
+	<orders order_id="9317" order_type_id="1" order_number="ORD-9317" urgency="ROUTINE"
+	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"
+	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2008-01-08 00:00:00.0"
+	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="2"
+	        uuid="9317aaaa-0000-4000-8000-00000000317a" care_setting="1" encounter_id="6" />
+	<orders order_id="9318" order_type_id="1" order_number="ORD-9318" urgency="ROUTINE"
+	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"
+	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2008-01-09 00:00:00.0"
+	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="6"
+	        uuid="9318bbbb-0000-4000-8000-00000000318b" care_setting="1" encounter_id="9318" />
+
+	<drug_order order_id="9317" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<drug_order order_id="9318" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

@@ -14,6 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -234,6 +238,13 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 				"nor assert that one is in force: " + chart.getText());
 		assertNull(mappingFor(chart, uuidOf(LAPSED_ORDER_ID)).getOrderActive(),
 				"and the mapping must say the module cannot answer, not answer wrongly");
+		// What this case does NOT separate, said out loud so the guard does not look better defended
+		// than it is. Two independent things stop a failed read marking anything: the reading is the
+		// explicit "not read" state, AND no record's order can be attributed to the patient. A failed
+		// read produces no sets at all, so there is no arrangement in which one holds and the other
+		// does not — measured, replacing the failure path's OrderCurrency.unread() with a reading of
+		// two empty sets leaves this case and the whole suite green. The write path is pinned instead
+		// by theFailedReadPathReturnsTheNotReadState below.
 	}
 
 	@Test
@@ -281,17 +292,29 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// Scope: the ticket is about drug orders. getActiveOrders returns every order type, so the
 		// uuid set covers a test order too — this is a deliberate scope boundary, not a limit of the
 		// data, and it is pinned so that widening it later is a decision someone makes on purpose.
-		chartOf(testOrderDoc(TEST_ORDER_ID));
+		//
+		// The chart must carry a drug order BESIDE the test order, and that is not presentation. On a
+		// chart of test orders alone the read is skipped entirely, so nothing is marked whatever the
+		// scope says and this case passes without ever exercising it: measured by deleting the
+		// resource-type condition from the reading, which leaves a test-order-only chart green and
+		// reddens this arrangement.
+		chartOf(drugOrderDoc(LIVE_ORDER_ID), testOrderDoc(TEST_ORDER_ID));
 
 		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
 
 		String uuid = uuidOf(TEST_ORDER_ID);
 		assertEquals("test_order", mappingFor(chart, uuid).getResourceType(),
 				"precondition: querystore types this record as a test order");
+		assertFalse(Context.getOrderService().getOrder(TEST_ORDER_ID).isActive(),
+				"precondition: this test order is NOT active, so an unscoped reading would have "
+						+ "something to say about it");
 		assertNull(mappingFor(chart, uuid).getOrderActive(),
 				"a non-drug order carries no currency mark");
-		assertFalse(chart.getText().contains(PatientChartSerializer.ACTIVE_ORDER_LABEL),
-				"and nothing is rendered for it: " + chart.getText());
+		assertFalse(lineFor(chart, uuid).endsWith(PatientChartSerializer.INACTIVE_ORDER_LABEL),
+				"and nothing is rendered on its line: " + lineFor(chart, uuid));
+		assertTrue(lineFor(chart, uuidOf(LIVE_ORDER_ID))
+						.endsWith(PatientChartSerializer.ACTIVE_ORDER_LABEL),
+				"while the drug order beside it is marked, so the read did happen");
 	}
 
 	@Test
@@ -339,6 +362,51 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 
 		assertEquals(0, builder.activeOrderReads,
 				"a chart carrying no drug-order record must not read the patient's orders");
+	}
+
+	@Test
+	public void theFailedReadPathReturnsTheNotReadState() throws Exception {
+		// A STRUCTURAL pin, because no behavioural one is available and the neighbouring case says so:
+		// a failed order read and a reading of two empty sets are indistinguishable in output, since
+		// nothing can be attributed under either. What makes the "not read" state worth keeping anyway
+		// is that it is the guard which does not depend on attribution — relax or remove the
+		// attribution rule and this is what still stops a chart the module could not read being
+		// rendered as a chart of stopped prescriptions, which is the fail-closed hazard issue #317
+		// names. A clause nothing discriminates is one the next change removes for free, so this reads
+		// the source the way ArchitectureGuardTest and OrderPartnerNameSourceWritePathTest already do
+		// in this repo.
+		//
+		// It asserts the SHAPE, not merely that the words appear: the catch must return the not-read
+		// state, so building a reading there fails this even though it would change no output.
+		Path source = findApiSourceRoot().resolve(
+				"src/main/java/org/openmrs/module/chartsearchai/api/impl/QueryStoreChartBuilder.java");
+		assertTrue(Files.exists(source), "cannot find the builder's source at " + source);
+		String text = new String(Files.readAllBytes(source), StandardCharsets.UTF_8);
+
+		int catchAt = text.indexOf("catch (RuntimeException e) {", text.indexOf("private OrderCurrency readOrderCurrency("));
+		assertTrue(catchAt > 0, "readOrderCurrency must still catch a failed order read");
+		String catchBlock = text.substring(catchAt, text.indexOf("\n\t}", catchAt));
+		assertTrue(catchBlock.contains("return OrderCurrency.unread();"),
+				"a failed order read must return the explicit not-read state, never a constructed "
+						+ "reading — an empty reading answers the same today only because nothing can "
+						+ "be attributed under it. Found: " + catchBlock);
+	}
+
+	/** The api module root, located the way {@code ArchitectureGuardTest} locates it. */
+	private static Path findApiSourceRoot() {
+		Path current = Paths.get("").toAbsolutePath();
+		while (current != null) {
+			if (Files.exists(current.resolve("src/main/java"))
+					&& Files.exists(current.resolve("src/test/java"))) {
+				return current;
+			}
+			Path api = current.resolve("api");
+			if (Files.exists(api.resolve("src/main/java"))) {
+				return api;
+			}
+			current = current.getParent();
+		}
+		return Paths.get("").toAbsolutePath();
 	}
 
 	/**

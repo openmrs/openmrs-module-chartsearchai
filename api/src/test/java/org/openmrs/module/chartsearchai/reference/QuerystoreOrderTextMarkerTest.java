@@ -39,8 +39,10 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * or restructures these markers, this test fails and names what broke.
  * {@link EndedOrderMarkerContractTest} pins two facts about the same serializer's output that this
  * class does not and no code in this module reads: the {@code "Drug order:"} record prefix, which is
- * the only cue in the text separating a prescription from the other order classes carrying these same
- * markers, and that a DISCONTINUE record carries no end DATE at all. That second case asserts the
+ * the only cue in the text GUARANTEED to separate a prescription from the other order classes
+ * carrying these same markers — the drug-order-only {@code ". Dose:"}, {@code ". Duration:"},
+ * {@code ". Quantity:"} and {@code ". PRN"} cues are each emitted behind a null check on an optional
+ * field — and that a DISCONTINUE record carries no end DATE at all. That second case asserts the
  * missing date ALONE and leans on this class for the rest of its claim: that the same arrangement is
  * recognised as ended is {@code aDiscontinueOrdersRenderedTextIsRecognisedAsEnded} below, asserted
  * here and deliberately not repeated there, so the fact has one home and not two.

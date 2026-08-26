@@ -107,6 +107,22 @@ def _capture_dir(cells, probes):
     return d
 
 
+def _tier_a_only_capture_dir(probes):
+    """A capture directory holding ONE Tier-A gold yes/no cell and no Tier-B probe cell — the shape a
+    regression arm has, and the shape the documented standalone invocation of capture_probe_yesno.sh
+    produces (`CAPTURE_PATIENTS=<uuids>` with CAPTURE_TIER_B unset suppresses Tier B). Read out of
+    the default gold file rather than hardcoded, so it cannot name a cell that file stopped holding."""
+    gold = json.load(open(os.path.join(HERE, "metric_gold.rc2.json")))
+    cells = [c for c in gold if not c.startswith("_")
+             and c.split("|", 1)[1] in YESNO_TOPICS and c not in probes]
+    assert cells, "metric_gold.rc2.json holds no yes/no gold cell outside probe_gold_yesno.json"
+    d = tempfile.mkdtemp(prefix="score-directness-tier-a-")
+    uuid, topic = cells[0].split("|", 1)
+    with open(os.path.join(d, "%s__%s.json" % (uuid, topic)), "w") as fh:
+        json.dump({"answer": "No, selftest cell"}, fh)
+    return d
+
+
 def cohort_scope_selftest():
     """The Tier-B completeness denominator, which is the one piece of integrity logic in this file
     that is neither a regex nor a printed number: a cohort's cells only exist on that cohort's host,
@@ -170,6 +186,24 @@ def cohort_scope_selftest():
         # A typo must not quietly move the denominator.
         check("unknown-cohort-is-an-error", ["--cohort", "no-such-cohort", lone], 1,
               ["which no cell in probe_gold_yesno.json carries"])
+        # ZERO Tier-B cells with a scope STATED — the one shape --cohort exists for, and the one the
+        # statement was inert on: the missing-cohort WARN lived inside `if b_n:`, so a Tier-A-only
+        # capture scored with --cohort printed output byte-identical to no --cohort at all and said
+        # the absence was "expected for regression-arm dirs". That is the state the documented
+        # standalone invocation of capture_probe_yesno.sh leaves (Tier B suppressed by `auto`), so
+        # the medications gate cell's absence read as a clean pass.
+        tier_a = _tier_a_only_capture_dir(probes)
+        dirs.append(tier_a)
+        check("stated-scope-with-no-tier-b-cell-still-warns", ["--cohort", other, tier_a], 0,
+              ["TIER-B cohort scope: %s (stated)" % other,
+               "denominator %d of %d gold probe cells" % (n_other, total),
+               "stated but scored no cell at all"],
+              ["expected for regression-arm dirs"])
+        # Unstated, the same directory keeps the pre-existing note and says nothing about scope:
+        # an inferred scope over no Tier-B cell has nothing to state.
+        check("unstated-scope-with-no-tier-b-cell-keeps-the-note", [tier_a], 0,
+              ["expected for regression-arm dirs"],
+              ["TIER-B cohort scope:", "stated but scored no cell at all"])
     finally:
         for d in dirs:
             shutil.rmtree(d, ignore_errors=True)
@@ -308,7 +342,14 @@ def main():
     # The completeness numerator, scoped like the denominator. Equal to b_n whenever the scope was
     # INFERRED (it is then the set of cohorts that scored, so nothing can be outside it).
     b_in_scope = sum(n for c, n in b_by_cohort.items() if c in scope)
-    if b_n:
+    # Reported whenever a scope was STATED, even with nothing scored — the one shape --cohort was
+    # added for is a cohort that scored NOTHING, and inside `if b_n:` the statement was inert on
+    # exactly it. capture_probe_yesno.sh's `auto` rule makes that the DOCUMENTED standalone
+    # invocation: CAPTURE_PATIENTS=<uuids> with CAPTURE_TIER_B unset sets FIRE_TIER_B=0, so the
+    # only medications gate cell in this directory never fires, and the run printed nothing but
+    # the regression-arm note below and exited 0. An INFERRED scope with no Tier-B cell has
+    # nothing to say (the inferred scope is then empty), so it stays silent.
+    if b_n or stated_cohorts is not None:
         print("TIER-B cohort scope: %s (%s) — denominator %d of %d gold probe cells"
               % (", ".join(sorted(scope)) or "none", "stated" if stated_cohorts is not None
                  else "INFERRED from the capture; pass --cohort to state it", expected_b, len(probes)))
@@ -326,7 +367,10 @@ def main():
     if probes and 0 < b_in_scope < expected_b:
         print("WARN: scored %d/%d Tier-B probes — capture incomplete; Tier-B verdict NOT gate-comparable"
               % (b_in_scope, expected_b))
-    if probes and b_n == 0 and a_n:
+    if probes and b_n == 0 and a_n and stated_cohorts is None:
+        # Only where the scope was NOT stated. A stated cohort is the operator asserting cells of it
+        # should be here, so calling their absence "expected" is the opposite of what they asked;
+        # the WARN above answers instead.
         print("note: no Tier-B probe cells in this capture (0/%d) — expected for regression-arm dirs"
               % len(probes))
     for label, fails in (("TIER-A", a_fail), ("TIER-B", b_fail)):

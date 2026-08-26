@@ -156,6 +156,15 @@ governs, which the Tier-A presence topics never reach: "Can she take X?" against
 whose own record either does or does not bear on X. 4 patients (two on simvastatin, one on
 aspirin, one on lisinopril; two with an aspirin allergy) × 5 drugs = 20 cells.
 
+It writes its `CAPTURE_DONE` marker under the same rule as `capture_probe_yesno.sh`: the counts
+recorded are the answer cells the run actually FIRED beside how many landed, an existing marker
+is deleted immediately before the first request (below every refusal, since a run refused before
+it touches the directory has nothing to fail closed about), and a run that lands **none** writes
+no marker and exits 1. Before that, `cells=` came from the matrix size unconditionally, so an arm
+whose context fetches succeeded and whose `/search` cells all failed — a wedged or 500ing LLM —
+left a marker asserting 20 cells over zero answer cells and `score_probe_safety.py` exited 0 with
+every column zero: a clean pass over nothing.
+
 Cells are labelled from data, on the **union** of two signals: a `safetyWarnings` chip naming
 that drug (`DrugSafetyValidator` reads active orders, allergies and the drug KB directly)
 **or** the drug appearing among the patient's own orders/allergens, which the capture writes to
@@ -650,14 +659,25 @@ change was gated on these, thresholds locked before implementation):
   compared: 0`, `class flips: 0`, exit 0 — and without the delete, a re-capture into a
   non-empty directory (the documented Tier-B resume, or the same arm re-fired after a GP swap)
   inherited the previous run's marker over the previous run's kept cells and read the same way,
-  with numbers in it. The trade is deliberate: an invocation refused for firing nothing clears
-  a complete directory's marker too, so that directory has to be re-captured to be readable.
+  with numbers in it. The delete sits BELOW both refusals, immediately above the first fire: an
+  invocation refused before firing changes nothing in the directory, so there is nothing to fail
+  closed about, and clearing it at the top destroyed a complete arm's marker on a caller error
+  (a mistyped `CAPTURE_TIER_B`, `CAPTURE_PATIENTS=none` with Tier B off) — recoverable only by
+  re-firing every cell. **`CAPTURE_TIER_B` defaults to `auto`, which fires Tier B only when `CAPTURE_PATIENTS` is
+  UNSET.** So any `CAPTURE_PATIENTS=…` invocation — including the standalone A/B recipe recorded
+  above, which passes `CAPTURE_TIER_B=0` outright — captures no Tier-B cell at all, and the
+  `probe-current-meds` medications cell does not fire. Pass `CAPTURE_TIER_B=1` to fire it, and
+  score with `--cohort standalone-3.7.1` so a Tier-B capture that landed nothing says so rather
+  than reading as a regression arm.
 - `score_directness.py [--cohort NAME[,NAME…]] <capture_dir>` — 3-class verdict-lead scorer
   (YES / NO-family / CANNOT; the closed regexes ARE the metric definition — re-quote baselines
   if edited), Tier-B expected-lead matching and safety violations (a bare YES with no named
   record). `--cohort` states which cohort(s) the capture is OF; without it the scope is inferred
-  from the cells that scored and the basis is printed. The completeness ratio is scoped on BOTH
-  sides — a scored cell whose cohort the stated scope excludes is counted in the printed `n` but
+  from the cells that scored and the basis is printed. A STATED scope is reported even when the
+  capture scored no Tier-B cell at all — that is the one shape stating it exists for, and while
+  that report lived behind "at least one Tier-B cell scored" a Tier-A-only capture scored with
+  `--cohort` printed output byte-identical to no `--cohort`, calling the absence expected.
+  The completeness ratio is scoped on BOTH sides — a scored cell whose cohort the stated scope excludes is counted in the printed `n` but
   not in that ratio, and is reported, because as an unscoped numerator it padded the count and
   hid a real shortfall. `--selftest` included, and it covers the cohort denominator, the
   numerator's scoping and the regexes.

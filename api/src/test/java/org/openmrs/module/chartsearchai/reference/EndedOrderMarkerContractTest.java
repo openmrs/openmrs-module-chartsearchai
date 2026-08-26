@@ -32,8 +32,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p><b>Neither fact has a reader in this module today, and they are kept on different grounds — say
  * which.</b> The missing date is a property anything reporting WHEN an order ended has to tolerate.
- * The prefix is a FORWARD contract, for the structural remedy ADR Decision 45 names: it is what a
- * TEXT-ONLY reader would need to tell a prescription from an ended lab test, and
+ * The prefix is a FORWARD contract, for the structural remedy ADR Decision 45 names: it is the one
+ * cue a TEXT-ONLY reader can RELY on to tell a prescription from an ended lab test (see the case
+ * below for the drug-order-only cues that are not guaranteed to be there), and
  * {@link DrugReferenceInjector#describesEndedOrder}'s one caller does not need it because it gates on
  * the record's resource type before reading the text at all. So this case would fail the criterion
  * that deleted three siblings from this class (below) if that criterion were "has a production
@@ -107,20 +108,30 @@ public class EndedOrderMarkerContractTest extends BaseModuleContextSensitiveTest
 
 	@Test
 	public void aDrugOrderRecordsTextBeginsWithThisPrefix() {
-		// The one thing in the rendered TEXT that tells a drug order from the other order classes:
-		// querystore's AbstractServiceOrderRecordSerializer emits the SAME ". Stopped: " and
-		// ". Action: " markers behind "Referral order:" and "Test order:", so describesEndedOrder
-		// alone cannot tell an ended prescription from an ended lab test. NOTHING IN THIS MODULE
-		// READS THIS PREFIX — describesEndedOrder's one caller gates on the record's resource type
-		// before touching the text — so this is a forward contract for the structural remedy ADR
-		// Decision 45 recommends, which is text-only and would need exactly this cue, pinned against
-		// the producer rather than a literal that agrees with itself. See the class javadoc for why
-		// that is a different ground from the one three deleted siblings failed.
+		// The only cue in the rendered TEXT GUARANTEED to tell a drug order from the other order
+		// classes: querystore's AbstractServiceOrderRecordSerializer emits the SAME ". Stopped: "
+		// and ". Action: " markers behind "Referral order:" and "Test order:", so
+		// describesEndedOrder alone cannot tell an ended prescription from an ended lab test.
+		//
+		// "Guaranteed" and not "only", because DrugOrderRecordSerializer does emit four cues the
+		// service-order pool has no counterpart for — ". Dose:", ". Duration:", ". Quantity:" and
+		// ". PRN" — and the rendering this case asserts against carries two of them. Each is
+		// behind a null check on an OPTIONAL field (getDose / getDuration / getQuantity /
+		// getAsNeeded), so a sparse prescription renders none of them and only the prefix is
+		// unconditional. Re-check by disassembling the two serializers in the querystore jar.
+		//
+		// NOTHING IN THIS MODULE READS THIS PREFIX — describesEndedOrder's one caller gates on the
+		// record's resource type before touching the text — so this is a forward contract for the
+		// structural remedy ADR Decision 45 recommends, which is text-only and is the reader that
+		// would need a cue it can rely on, pinned against the producer rather than a literal that
+		// agrees with itself. See the class javadoc for why that is a different ground from the
+		// one three deleted siblings failed.
 		String rendered = renderedText(triomuneOrder());
 
 		assertTrue(rendered.startsWith("Drug order:"),
-				"querystore must still render a drug-order record under this prefix, which is the only "
-						+ "cue in the text that tells a prescription from an ended lab test. "
-						+ "Rendered: " + rendered);
+				"querystore must still render a drug-order record under this prefix, the only cue in "
+						+ "the text GUARANTEED to tell a prescription from an ended lab test (the "
+						+ "drug-order-only Dose/Duration/Quantity/PRN cues are each emitted only when "
+						+ "their optional field is set). Rendered: " + rendered);
 	}
 }

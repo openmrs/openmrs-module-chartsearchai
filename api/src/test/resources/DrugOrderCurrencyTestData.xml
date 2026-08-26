@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!--
-  The two drug-order arrangements the standard test dataset does not carry, both of which issue #317
-  turns on.
+  The three drug-order arrangements the standard test dataset does not carry, each of which issue
+  #317 turns on.
 
   1. ORDER 9317 — an order that lapsed by its DURATION: action NEW, auto_expire_date in the past,
      date_stopped NULL. querystore's DrugOrderRecordSerializer renders ". Stopped: <date>" for
@@ -25,8 +25,9 @@
      encounter, so both are supplied.
 
   Row order matters: dbunit inserts tables in the order they first appear, so the encounter must
-  precede the orders that reference it, and rows of one table are kept contiguous. The two orders
-  rows carry the same attribute set for the same reason.
+  precede the orders that reference it, and rows of one table are kept contiguous. Orders 9317 and
+  9318 carry the same attribute set for the same reason; 9319 deliberately adds date_stopped, which
+  is the whole point of that row.
 
   A separate file rather than rows added to ChartSearchAiTestData.xml: that file carries no order
   rows at all and is loaded by HibernateChartSearchAiDAOTest, whose dataset must not change

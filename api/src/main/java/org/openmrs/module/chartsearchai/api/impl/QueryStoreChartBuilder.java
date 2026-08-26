@@ -725,12 +725,29 @@ class QueryStoreChartBuilder {
 	 * {@code OrderService} call on a path that runs for every query for every patient, sized by the
 	 * patient's whole order history, and a chart with nothing to mark has nothing to spend it on.
 	 *
-	 * <p>WARN rather than DEBUG on failure, and this is the one place the level matters. The chart
-	 * degrades silently — every drug-order record simply loses its mark and reads exactly as it did
-	 * before this feature existed — so nothing else anywhere says the module has stopped answering a
-	 * question it normally answers. {@code PatientClinicalContextBuilder}'s own active-order catch
-	 * logs at DEBUG and sets no flag at all; that is the shape issue #317 names as the hazard, and it
-	 * is deliberately not copied here.
+	 * <p>How often "every query" is depends on the mode, and it is not always once. Under
+	 * {@code chartMode=fullChart} with {@code chartsearchai.progressiveReasoning.enabled=true} the
+	 * preview pass ({@link #buildFocused}) and the committed {@link #build} each assemble their own
+	 * chart, so this read happens TWICE per request; where {@code chartsearchai.drugReference.enabled}
+	 * is on, that layer's own {@code getActiveOrders} is a third order query on that shape, against
+	 * the one the module made before issue #317. The shipped {@code queryScoped} default reads once
+	 * ({@code buildFocused} returns early in that mode), plus the safety layer's where it is on.
+	 * Deliberately not hoisted to one reading per request: the two builds are separate calls through
+	 * {@code ChartBuildingStrategy}, so sharing one would mean either a new parameter on that
+	 * interface or per-request state held on a Spring singleton, which is what CLAUDE.md's
+	 * memoisation rule refuses. What that costs is a residue
+	 * rather than a contradiction the clinician sees: the two charts of one request read the orders
+	 * at two instants, so an order lapsing between them is marked one way in the preview and the
+	 * other way in the committed answer. Nothing here pins that, and no case discriminates it.
+	 *
+	 * <p>WARN rather than DEBUG on failure. The chart degrades silently — every drug-order record
+	 * simply loses its mark and reads exactly as it did before this feature existed — so nothing else
+	 * anywhere says the module has stopped answering a question it normally answers.
+	 * {@link #readingOf} logs its own per-order failure at WARN resting on that same argument; what
+	 * is particular to THIS one is its scope, which is a whole chart's marks rather than one record's.
+	 * {@code PatientClinicalContextBuilder}'s own active-order catch logs at DEBUG and sets no flag
+	 * at all; that is the shape issue #317 names as the hazard, and it is deliberately not copied
+	 * here.
 	 */
 	private OrderCurrency readOrderCurrency(Patient patient, List<QueryDocument> docs) {
 		if (patient == null || !carriesADrugOrderRecord(docs)) {
@@ -814,9 +831,10 @@ class QueryStoreChartBuilder {
 			}
 			catch (RuntimeException e) {
 				// Collected and reported ONCE below rather than logged here. A bad row is a permanent
-				// property of the patient's chart, so a per-order log would repeat on every query for
-				// them for as long as the row stands, and a patient carrying several such rows would
-				// repeat it once per row on top of that. The clause this comment used to end with —
+				// property of the patient's chart, so BOTH forms repeat on every query for that
+				// patient for as long as the row stands — that is not what separates them, and this
+				// comment used to rest on it. What a per-order log adds on top is one line per bad
+				// row for a patient carrying several. The clause this comment used to end with —
 				// "and a privilege failure would repeat once per order" — named a failure that cannot
 				// reach here: a missing Get Orders raises APIAuthenticationException out of
 				// resolveAllOrders, one level up and outside this loop, where readOrderCurrency's own

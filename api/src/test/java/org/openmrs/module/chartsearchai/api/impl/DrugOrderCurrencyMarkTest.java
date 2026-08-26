@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -20,7 +21,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
@@ -273,9 +276,13 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// guard written twice. Dropping the log.warn from that catch reddens THIS and nothing else.
 		// Returning readingOf(emptyList()) from it reddens the SCAN and nothing else. Wrapping the
 		// resolveAllOrders call in an inner try that returns Collections.emptyList() — the swallow
-		// this case exists for — reddens both. And the one neither would see is a swallow inside
-		// resolveAllOrders itself, which is why the WARN is asserted rather than assumed: the scan
-		// reads only this method's own body.
+		// this case exists for — reddens both.
+		//
+		// A fourth is invisible to this case and is NOT covered by asserting the WARN: a swallow
+		// inside resolveAllOrders itself throws nothing, so nothing is logged and nothing this file
+		// renders changes. An earlier version of this comment claimed the WARN was asserted because
+		// of it, which cannot be true of a mutation that raises no failure at all. What covers it is
+		// the scan, which since then reads resolveAllOrders' own body as well as this method's.
 		//
 		// Asserted on the WARN carrying the patient's uuid — a value the production call passes as a
 		// parameter — rather than on any wording, so a re-worded message still satisfies it and an
@@ -491,6 +498,103 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void theTwoPredicatesTheModuleAsksAgreeOnEveryOrderEitherCanEvaluate() throws Exception {
+		// Since issue #317 the module holds TWO answers to "is this order in force" and they are not
+		// one answer by construction. Chart assembly asks core's Java Order.isActive() over
+		// getAllOrdersByPatient; every safety chip asks core's Criteria predicate inside
+		// getActiveOrders (PatientClinicalContextBuilder). They agree on every leg constructible
+		// today — DrugReferenceInjector.describesEndedOrder's javadoc says so in as many words, and
+		// says it is agreement between two predicates rather than agreement by construction. Nothing
+		// pinned it, and a claim of that shape with no guard is what CLAUDE.md refuses elsewhere: the
+		// chip and the record came apart the first time a key was copied, silently.
+		//
+		// So this drives BOTH over the whole of one patient's real drug orders. The chart side is the
+		// production path end to end (build -> toSerializedRecords -> readOrderCurrency), read off
+		// RecordMapping.getOrderActive(). The chip side is core's own getActiveOrders, called with
+		// the arguments PatientClinicalContextBuilder calls it with — pinned as those arguments at
+		// the end of this case, because a test that quietly asked a different question would prove
+		// agreement with nothing the module does.
+		//
+		// Order 9319 is excluded and its exclusion is asserted rather than assumed: Order.isActive()
+		// THROWS on it while the SQL simply answers, which is the one divergence that exists by
+		// construction and is why readingOf evaluates each order on its own.
+		//
+		// It discriminates, and on a row nothing else in this file charts: mutating readingOf to
+		// admit a DISCONTINUE order (order.isActive() || Action.DISCONTINUE.equals(getAction()))
+		// reddens this case, on standard-dataset order 22, and nothing else in the 1464-test api
+		// suite. Every other case here pins one named order; this is the only one that walks the
+		// patient's whole list, which is what makes it the guard for a change in CORE rather than
+		// in this module.
+		List<Integer> drugOrderIds = new ArrayList<Integer>();
+		List<QueryDocument> docs = new ArrayList<QueryDocument>();
+		for (Order order : Context.getOrderService().getAllOrdersByPatient(patient)) {
+			if (order instanceof DrugOrder && order.getOrderId() != UNEVALUABLE_ORDER_ID) {
+				drugOrderIds.add(order.getOrderId());
+				docs.add(drugOrderDoc(order.getOrderId()));
+			}
+		}
+		assertTrue(drugOrderIds.size() >= 3,
+				"precondition: this patient must carry enough drug orders for the comparison to mean "
+						+ "something; found " + drugOrderIds);
+		chartOf(docs.toArray(new QueryDocument[docs.size()]));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		// The safety layer's predicate, asked exactly as PatientClinicalContextBuilder asks it.
+		Set<String> activeBySqlPredicate = new HashSet<String>();
+		for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
+			activeBySqlPredicate.add(order.getUuid());
+		}
+
+		int active = 0;
+		int inactive = 0;
+		for (Integer orderId : drugOrderIds) {
+			String uuid = uuidOf(orderId);
+			RecordMapping mapping = mappingFor(chart, uuid);
+			assertNotNull(mapping, "precondition: order " + orderId + " must be in the chart");
+			Boolean chartSays = mapping.getOrderActive();
+			assertNotNull(chartSays,
+					"precondition: the chart must have an answer for order " + orderId + ", or this "
+							+ "order contributes nothing to the comparison");
+			assertEquals(activeBySqlPredicate.contains(uuid), chartSays.booleanValue(),
+					"the chart's Order.isActive() and the safety layer's getActiveOrders must classify "
+							+ "order " + orderId + " alike — a core change that splits them splits the "
+							+ "chart's prose from the chips built beside it");
+			if (chartSays.booleanValue()) {
+				active++;
+			} else {
+				inactive++;
+			}
+		}
+		assertTrue(active > 0 && inactive > 0,
+				"precondition: the comparison must span both answers, or two predicates that always "
+						+ "said the same word would pass it; active=" + active + " inactive=" + inactive);
+
+		// The one order excluded above, and why — stated as an assertion so that the exclusion cannot
+		// quietly become a divergence nobody notices.
+		String unevaluable = uuidOf(UNEVALUABLE_ORDER_ID);
+		assertNull(mappingFor(chart, unevaluable),
+				"precondition: order " + UNEVALUABLE_ORDER_ID + " is not charted here");
+		assertFalse(activeBySqlPredicate.contains(unevaluable),
+				"the SQL predicate answers for the row Order.isActive() throws on, which is the one "
+						+ "divergence excluded from the comparison above");
+
+		// And the chip side really is the module's own call. Read from the source rather than
+		// asserted in prose: the comparison above proves the two predicates agree, and this is what
+		// stops it proving that about a call the module does not make. The scan is the shape
+		// theFailedReadPathReturnsTheNotReadState uses, and the same limits apply — it sees this
+		// spelling and nothing else.
+		Path contextBuilder = findApiSourceRoot().resolve(
+				"src/main/java/org/openmrs/module/chartsearchai/reference/PatientClinicalContextBuilder.java");
+		assertTrue(Files.exists(contextBuilder), "cannot find the context builder at " + contextBuilder);
+		String contextBuilderText = new String(Files.readAllBytes(contextBuilder), StandardCharsets.UTF_8);
+		assertTrue(contextBuilderText.contains("getActiveOrders(patient, null, null, null)"),
+				"the safety layer's active-order read must be the call this case compares against; if "
+						+ "it has changed, change this case deliberately rather than letting the "
+						+ "comparison drift onto a question the module no longer asks");
+	}
+
+	@Test
 	public void theFailedReadPathReturnsTheNotReadState() throws Exception {
 		// A STRUCTURAL pin, because no behavioural one is available and the neighbouring case says so:
 		// a failed order read and a reading of two empty sets are indistinguishable in output, since
@@ -505,7 +609,9 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// It asserts the SHAPE, not merely that the words appear: the catch must return the not-read
 		// state, so building a reading there fails this even though it would change no output — and
 		// the method must be the one that catches the read, so a failure swallowed inside it fails
-		// this too rather than passing a scan that only looks at the catch it left untouched.
+		// this too rather than passing a scan that only looks at the catch it left untouched. Since
+		// review round 2 it reads the SEAM's body as well, for the swallow one method further in;
+		// see the block at the end, which says why nothing behavioural can see that one.
 		Path source = findApiSourceRoot().resolve(
 				"src/main/java/org/openmrs/module/chartsearchai/api/impl/QueryStoreChartBuilder.java");
 		assertTrue(Files.exists(source), "cannot find the builder's source at " + source);
@@ -537,6 +643,23 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 				"and it must have exactly the one catch this case is about: " + method);
 		assertTrue(method.contains("return readingOf(resolveAllOrders(patient));"),
 				"the guarded statement is the read itself: " + method);
+
+		// And the method it delegates the read to must not swallow one either. This is the gap the
+		// three mutations above leave open and that aFailedOrderReadIsReportedAtWarn cannot see: a
+		// try/catch inside resolveAllOrders returning an empty list raises nothing, so no WARN is
+		// logged, no mark changes for any order that IS readable, and a chart whose orders could not
+		// be read renders as a chart with no orders — the "empty set is an answer" state, which is
+		// exactly the fail-open the catch above refuses. Measured both ways over the api suite: that
+		// mutation was green on all 1464 tests before these assertions existed, and with them it
+		// reddens this case and only this case.
+		int seamAt = text.indexOf("protected List<Order> resolveAllOrders(Patient patient) {");
+		assertTrue(seamAt > 0, "cannot find the order-read seam in " + source);
+		String seam = text.substring(seamAt, text.indexOf("\n\t}", seamAt));
+		assertEquals(0, occurrencesOf("try {", seam),
+				"the order read must propagate its failure to readOrderCurrency, not swallow it here: "
+						+ seam);
+		assertEquals(0, occurrencesOf("catch (", seam),
+				"and must catch nothing of its own: " + seam);
 	}
 
 	/** Non-overlapping occurrences of {@code needle} in {@code haystack}. */

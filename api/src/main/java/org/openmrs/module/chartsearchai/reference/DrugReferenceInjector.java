@@ -568,7 +568,12 @@ public class DrugReferenceInjector {
 	 * and the chips answer off the same data rather than off the index and the database respectively.
 	 * They do not share a call site — the safety layer screens with {@code getActiveOrders}, the chart
 	 * with {@code Order.isActive()} — so this is agreement between two predicates, not agreement by
-	 * construction.
+	 * construction, and it is pinned as such rather than assumed:
+	 * {@code DrugOrderCurrencyMarkTest.theTwoPredicatesTheModuleAsksAgreeOnEveryOrderEitherCanEvaluate}
+	 * drives both over one patient's whole drug-order list and asserts they classify each order
+	 * alike, so a core change that splits them reddens a test instead of splitting the chart's prose
+	 * from the chips built beside it. It excludes the one row where they differ by construction —
+	 * {@code Order.isActive()} throws where the SQL answers — and asserts that exclusion.
 	 *
 	 * <p>Because it keys on rendered prose, the markers are pinned against the REAL querystore
 	 * serializer's output in {@code QuerystoreOrderTextMarkerTest} — a wording change there fails

@@ -58,8 +58,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class AuthoritativeEndedOrderSubstantiationTest {
 
-	/** querystore's drug-order resource type, as its {@code DrugOrderRecordSerializer} reports it. */
-	private static final String DRUG_ORDER = "drug_order";
+	/** querystore's drug-order resource type, taken from the module's own constant rather than
+	 *  re-spelled here. This file's subject is the AND of the prose test and the module's order read,
+	 *  and its mappings are TYPED by this string: spelled as a literal, a change to the constant
+	 *  would leave these cases green while the production filter had stopped seeing drug-order
+	 *  mappings at all. {@code QuerystoreOrderTextMarkerTest} pins querystore's own contract for the
+	 *  value independently, which is where a drift between the two modules must fail. */
+	private static final String DRUG_ORDER = ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER;
 
 	private static final String SIMVASTATIN_ORDER_UUID = "11111111-2222-3333-4444-555555555555";
 

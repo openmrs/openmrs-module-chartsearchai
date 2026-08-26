@@ -120,7 +120,9 @@ public class PatientChartSerializer {
 	 * #315's five-wording attempt at a prompt rule is the other reason to expect one word to matter.
 	 * {@code DrugOrderCurrencyMarkTest.theTwoMarksAreSpelledExactlyAsMeasured} pins both as literals,
 	 * so such a change has to redden a test rather than being made by accident; every other assertion
-	 * compares the constant to itself and cannot see a rename.
+	 * compares the constant to itself and cannot see a rename. ADR Decision 46 carries this same
+	 * ledger in the durable record, beside what the mark costs the {@code fullChart} KV-reuse
+	 * invariant and the one end-to-end effect nobody has measured.
 	 *
 	 * <p>Three things it says on purpose. It reports {@code Order.isActive()} and nothing more — the
 	 * module's own authoritative predicate, and the same question the drug-safety layer asks of the
@@ -129,7 +131,10 @@ public class PatientChartSerializer {
 	 * and differ where {@code Order.isActive()} throws and the SQL answers, which
 	 * {@code QueryStoreChartBuilder.readingOf} handles per order — so "the chart and the chips cannot
 	 * disagree" is a claim about the two predicates, and it is not enforced by their sharing a call
-	 * site, because they do not share one. It says "not in force"
+	 * site, because they do not share one. It is enforced by a case:
+	 * {@code DrugOrderCurrencyMarkTest.theTwoPredicatesTheModuleAsksAgreeOnEveryOrderEitherCanEvaluate}
+	 * drives both over one patient's whole drug-order list and asserts they classify each order
+	 * alike, excluding — and asserting — the throwing row. It says "not in force"
 	 * rather than "ended" or "stopped", because absence from the active set is not a claim about a
 	 * stop date — an order whose {@code dateActivated} is in the future is not in force either — and
 	 * is not a claim about whether the patient is taking anything. It deliberately does NOT borrow the
@@ -640,9 +645,14 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * Full constructor, including the citation metadata that must not live in {@code text}
-		 * (see the class doc). A chart record has neither, so the shorter constructors default
-		 * them to "no attribution, nothing withheld".
+		 * The citation-metadata overload: it carries the two fields that must not live in
+		 * {@code text} (see the class doc). A chart record has neither, so the shorter constructors
+		 * default them to "no attribution, nothing withheld".
+		 *
+		 * <p>Not the full constructor — it defaults {@link #orderActive} to {@code null}, "the
+		 * module cannot say". The one below is the full one, and the distinction is worth the name
+		 * because a caller reaching for "the full constructor" through this javadoc would silently
+		 * drop a drug-order record's currency answer.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions) {

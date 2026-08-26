@@ -21,6 +21,7 @@ import org.openmrs.Order;
 import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -108,15 +109,12 @@ class QueryStoreChartBuilder {
 	 *  {@link #ADMIN_DATED_TYPES}. Single constant so the two uses cannot drift. */
 	private static final String PATIENT_RESOURCE_TYPE = "patient";
 
-	/** querystore's resource type for a prescription (its {@code DrugOrderRecordSerializer}
-	 *  contract). The order-currency mark is scoped to it: {@link #resolveActiveOrders} returns every
-	 *  order type, so the uuid set covers test and referral orders too, and marking them is a
-	 *  deliberate widening nobody has asked for rather than something the data forces. A private
-	 *  constant, mirroring {@code DrugReferenceInjector.QUERYSTORE_DRUG_ORDER_TYPE}, rather than a
-	 *  {@code ChartSearchAiConstants.RESOURCE_TYPE_*}: {@code ChartSearchAiUtils.isGroundingDemoteOnly}
-	 *  documents that this module declares no constant for the chart types querystore passes through,
-	 *  and {@code ChartSearchAiReferenceGroupTest} sweeps the ones it does declare. */
-	private static final String DRUG_ORDER_RESOURCE_TYPE = "drug_order";
+	/** querystore's resource type for a prescription. The order-currency mark is scoped to it:
+	 *  {@link #resolveAllOrders} returns every order type, so the uuid sets cover test and referral
+	 *  orders too, and marking those is a deliberate widening nobody has asked for rather than
+	 *  something the data forces. */
+	private static final String DRUG_ORDER_RESOURCE_TYPE =
+			ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER;
 
 	/** Operator remediation for an unresolvable QueryStoreService, WARNed identically by
 	 *  {@link #build} and {@link #buildScoped} (buildFocused stays silent — build() has already
@@ -714,8 +712,7 @@ class QueryStoreChartBuilder {
 			return OrderCurrency.unread();
 		}
 		try {
-			return OrderCurrency.of(uuidsOf(resolveActiveOrders(patient)),
-					uuidsOf(resolveAllOrders(patient)));
+			return readingOf(resolveAllOrders(patient));
 		}
 		catch (RuntimeException e) {
 			log.warn("Could not read orders for patient [uuid={}] — this chart's drug-order records "
@@ -735,14 +732,37 @@ class QueryStoreChartBuilder {
 		return false;
 	}
 
-	private static Set<String> uuidsOf(List<Order> orders) {
-		Set<String> uuids = new HashSet<String>();
-		for (Order order : orders == null ? Collections.<Order>emptyList() : orders) {
-			if (order != null && order.getUuid() != null) {
-				uuids.add(order.getUuid());
+	/**
+	 * Splits the patient's orders into the two sets a reading needs, in ONE pass over ONE service
+	 * read.
+	 *
+	 * <p>The obvious implementation asks {@code OrderService} twice — once for the active orders and
+	 * once for all of them — and that is what this did first. It is a round trip that buys nothing:
+	 * {@code getAllOrdersByPatient} returns every order the patient has, and {@code Order.isActive()}
+	 * is the same predicate {@code getActiveOrders} applies in SQL (both test voided, activation,
+	 * discontinuation and expiry, and both refuse a {@code DISCONTINUE} action). Asking once and
+	 * filtering here also makes the mark's contract literally true rather than true by proxy:
+	 * {@code PatientChartSerializer.ACTIVE_ORDER_LABEL} says the mark reports {@code Order.isActive()}
+	 * and nothing more, and now it does.
+	 *
+	 * <p>The all-orders set carries VOIDED orders too, deliberately. It is the ATTRIBUTION set — its
+	 * only job is to answer "is this record's order one of this patient's at all" — and a chart record
+	 * left behind for an order that was voided is still that patient's record. It is marked not-active,
+	 * which is true, rather than left unmarked for the model to guess at.
+	 */
+	private static OrderCurrency readingOf(List<Order> allOrders) {
+		Set<String> active = new HashSet<String>();
+		Set<String> known = new HashSet<String>();
+		for (Order order : allOrders == null ? Collections.<Order>emptyList() : allOrders) {
+			if (order == null || order.getUuid() == null) {
+				continue;
+			}
+			known.add(order.getUuid());
+			if (order.isActive()) {
+				active.add(order.getUuid());
 			}
 		}
-		return uuids;
+		return OrderCurrency.of(active, known);
 	}
 
 	/** Reads a metadata value as a trimmed String, or {@code null} when absent or blank.
@@ -760,12 +780,8 @@ class QueryStoreChartBuilder {
 		return s.isEmpty() ? null : s;
 	}
 
-	/** Seam for tests: production reads the patient's currently-in-force orders. */
-	protected List<Order> resolveActiveOrders(Patient patient) {
-		return Context.getOrderService().getActiveOrders(patient, null, null, null);
-	}
-
-	/** Seam for tests: production reads every order this patient has, of any type. */
+	/** Seam for tests: production reads every order this patient has, of any type, and decides
+	 *  which are in force with {@link Order#isActive()} rather than asking the service twice. */
 	protected List<Order> resolveAllOrders(Patient patient) {
 		return Context.getOrderService().getAllOrdersByPatient(patient);
 	}

@@ -220,6 +220,10 @@ public class ChartSearchAiReferenceGroupTest {
 		expected.put("RESOURCE_TYPE_ORDER", ChartSearchAiConstants.REFERENCE_GROUP_CHART);
 		expected.put("RESOURCE_TYPE_PROGRAM", ChartSearchAiConstants.REFERENCE_GROUP_CHART);
 		expected.put("RESOURCE_TYPE_MEDICATION_DISPENSE", ChartSearchAiConstants.REFERENCE_GROUP_CHART);
+		// The patient's own prescription, read from querystore like any other chart record — as
+		// opposed to RESOURCE_TYPE_ACTIVE_DRUG_ORDER below, which this module injects. Declared as a
+		// constant for issue #317, which gave the type a production reader.
+		expected.put("RESOURCE_TYPE_DRUG_ORDER", ChartSearchAiConstants.REFERENCE_GROUP_CHART);
 		expected.put("RESOURCE_TYPE_DRUG_REFERENCE", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
 		// Module-derived, not chart evidence: a safety finding is computed from the patient's records
 		// plus the drug KB, so there is no chart row for a client to navigate to. It is patient-specific

@@ -224,10 +224,10 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// nobody could read, rendered as a chart of stopped prescriptions. A chart the module could
 		// not read is not a chart of ended orders, so it says nothing at all.
 		//
-		// Reached through the resolveActiveOrders seam because there is no other way in: build()
+		// Reached through the resolveAllOrders seam because there is no other way in: build()
 		// resolves the preFilter global property before any document is serialized and outside every
 		// try block, so logging out throws there first and no record is ever produced to inspect.
-		builder.failActiveOrderRead = true;
+		builder.failOrderRead = true;
 		chartOf(drugOrderDoc(LAPSED_ORDER_ID), drugOrderDoc(LIVE_ORDER_ID));
 
 		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
@@ -360,8 +360,23 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 
 		builder.build(patient, MEDICATIONS_QUESTION);
 
-		assertEquals(0, builder.activeOrderReads,
+		assertEquals(0, builder.orderReads,
 				"a chart carrying no drug-order record must not read the patient's orders");
+	}
+
+	@Test
+	public void theTwoMarksAreSpelledExactlyAsMeasured() {
+		// The literals, pinned as literals. Every other assertion in this file compares the constant
+		// to itself and so cannot see a rename — measured, rewriting both constants to
+		// ". Order status: CURRENT" / ". Order status: ENDED" left the whole api suite green. That is
+		// the same blind spot CLAUDE.md records for the audit search-mode labels, and it matters more
+		// here than for an ops label: this string is in every prompt, and the prompt it joins is
+		// phrasing-sensitive at one word (issue #316's ledger). A wording change must be a deliberate
+		// act with a fresh interleaved A/B behind it, so it has to redden something first.
+		assertEquals(". Active order: yes", PatientChartSerializer.ACTIVE_ORDER_LABEL,
+				"changing this changes what every chart says to the model; re-measure before editing");
+		assertEquals(". Active order: no", PatientChartSerializer.INACTIVE_ORDER_LABEL,
+				"changing this changes what every chart says to the model; re-measure before editing");
 	}
 
 	@Test
@@ -418,9 +433,9 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 
 		private final QueryStoreService stub;
 
-		boolean failActiveOrderRead = false;
+		boolean failOrderRead = false;
 
-		int activeOrderReads = 0;
+		int orderReads = 0;
 
 		TestableBuilder(QueryStoreService stub) {
 			this.stub = stub;
@@ -452,12 +467,12 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		}
 
 		@Override
-		protected List<Order> resolveActiveOrders(Patient patient) {
-			activeOrderReads++;
-			if (failActiveOrderRead) {
+		protected List<Order> resolveAllOrders(Patient patient) {
+			orderReads++;
+			if (failOrderRead) {
 				throw new IllegalStateException("simulated OrderService failure");
 			}
-			return super.resolveActiveOrders(patient);
+			return super.resolveAllOrders(patient);
 		}
 	}
 }

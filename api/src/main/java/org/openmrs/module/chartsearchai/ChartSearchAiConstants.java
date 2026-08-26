@@ -607,6 +607,22 @@ public class ChartSearchAiConstants {
 
 	public static final String RESOURCE_TYPE_MEDICATION_DISPENSE = "medication_dispense";
 
+	/**
+	 * querystore's resource type for a prescription (its {@code DrugOrderRecordSerializer}
+	 * contract). Chart evidence like any other querystore record — it is the patient's own order,
+	 * not module-injected reference material — and distinct from
+	 * {@link #RESOURCE_TYPE_ACTIVE_DRUG_ORDER}, which this module injects for an active order the
+	 * retrieved chart carries no record of (issue #118).
+	 *
+	 * <p>Declared for issue #317, which gave the type a second production reader: the chart builder
+	 * scopes the order-currency mark to it. Being declared here puts it in
+	 * {@code ChartSearchAiReferenceGroupTest}'s sweep, which forces a reference-group decision to be
+	 * RECORDED for every declared type — that is a forcing function, not an obstacle, and the group
+	 * it records ({@code chart}) is the one {@code referenceGroup} already returned for the bare
+	 * string.
+	 */
+	public static final String RESOURCE_TYPE_DRUG_ORDER = "drug_order";
+
 	/** Reference data, not patient data — injected by {@link org.openmrs.module.chartsearchai.reference.DrugReferenceInjector}. */
 	public static final String RESOURCE_TYPE_DRUG_REFERENCE = "drug_reference";
 

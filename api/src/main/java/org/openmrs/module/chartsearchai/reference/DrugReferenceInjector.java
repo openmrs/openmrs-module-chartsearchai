@@ -474,18 +474,19 @@ public class DrugReferenceInjector {
 				// on it, so counting it would answer "the chart already covers this order" with a
 				// record that in fact tells the model the opposite.
 				//
-				// Two tests, and the module's OWN answer comes first (issue #317). The chart builder
-				// now reads OrderService and records, per drug-order record, whether that order is in
-				// force; where it has an answer, that answer is authoritative and the prose is not
-				// consulted. Prose alone cannot see an order that lapsed by its auto_expire_date,
-				// because querystore renders no marker for one — the limitation
-				// describesEndedOrder's own javadoc records, and the one that turns a lapsed record
-				// into a substantiation for the live order that replaced it.
+				// Two tests, AND-ed (issue #317). The chart builder now reads OrderService and
+				// records, per drug-order record, whether that order is in force; a record is
+				// admitted only where the prose and that answer both leave it live. Neither
+				// overrules the other and each can only exclude more, which is what makes adding
+				// the second safe: it cannot re-admit anything the prose already refused.
 				//
-				// The prose test is KEPT, not replaced, because the authoritative answer is absent
-				// for a record whose order could not be attributed to this patient and for a chart
-				// built when the order read failed. In both, the text is the best evidence there is —
-				// and keeping it is also what leaves the name fallback below intact for exactly the
+				// Each covers what the other cannot. Prose cannot see an order that lapsed by its
+				// auto_expire_date, because querystore renders no marker for one — the limitation
+				// describesEndedOrder's own javadoc records, and the one that turns a lapsed record
+				// into a substantiation for the live order that replaced it. The read has no answer
+				// for a record whose order could not be attributed to this patient, or for any
+				// record on a chart built when the read failed; there the text is the only evidence
+				// there is, which is also what leaves the name fallback intact for exactly the
 				// drifted-uuid record it was added for.
 				String lower = mapping.getText().toLowerCase(Locale.ROOT);
 				if (!describesEndedOrder(lower) && !Boolean.FALSE.equals(mapping.getOrderActive())) {
@@ -534,15 +535,18 @@ public class DrugReferenceInjector {
 	 * Whether {@code lowerRecordText} describes an order that has ENDED, so it must not substantiate
 	 * a currently-active order of the same drug.
 	 *
-	 * <p><strong>This is now the FALLBACK, not the primary test</strong> (issue #317). Its one caller
-	 * asks {@link RecordMapping#getOrderActive()} first — the module's own {@code OrderService} read,
-	 * carried down from {@code QueryStoreChartBuilder.toSerializedRecords} — and consults this method
-	 * only where that answer is absent: a record whose order could not be attributed to the patient,
-	 * and a chart built when the order read failed. In both, the rendered text is the best evidence
-	 * there is.
+	 * <p><strong>This is no longer the only test</strong> (issue #317). Its one caller admits a record
+	 * to the substantiation corpus only when this method AND {@link RecordMapping#getOrderActive()}
+	 * both leave it live — the second being the module's own {@code OrderService} read, carried down
+	 * from {@code QueryStoreChartBuilder.toSerializedRecords}. Conjunction, not precedence: neither
+	 * can overrule the other, and each can only ever exclude more. So this method still decides on its
+	 * own for the records the read cannot speak for (one whose order could not be attributed to the
+	 * patient, and any record on a chart built when the read failed), and the read decides on its own
+	 * for the order that lapsed by its {@code auto_expire_date}, which querystore renders no marker
+	 * for.
 	 *
-	 * <p>Why prose was the primary test until then, and why the replacement is not the route that
-	 * javadoc anticipated. querystore also carries the structural signal in its {@code QueryDocument}
+	 * <p>Why prose was the only test until then, and why the second one is not the route this javadoc
+	 * used to anticipate. querystore also carries the structural signal in its {@code QueryDocument}
 	 * metadata ({@code putOrderBaseFields} puts {@code action}, {@code date_stopped} and
 	 * {@code auto_expire_date} there), and that metadata was dropped upstream. But reading it would
 	 * have meant re-deriving {@code Order.isActive()} — voided, activated, discontinued, expired —

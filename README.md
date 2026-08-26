@@ -313,6 +313,8 @@ The `drugSafety.*` checks require both `chartsearchai.drugReference.enabled` and
 
 `/drugreferencestatus` gates on core's **Get Global Properties** instead, which the `Authenticated` role already holds on a default install.
 
+Chart assembly also reads the patient's orders through core's **Get Orders**, to state on each `drug_order` record whether that prescription is still in force ([drug-order currency](#drug-order-currency)). On the 3.7.1 demo database that needs no action — `Get Orders` is held by exactly the two roles that hold `AI Query Patient Data`, `Privilege Level: Full` and `Privilege Level: High` — but a custom role granted `AI Query Patient Data` without it will lose the mark: the read fails, a `WARN` names the patient, and drug-order records render as they did before the mark existed. Answers are still produced; the model is back to inferring order status from the record's dates.
+
 ### 7. Indexing
 
 Retrieval indexing is owned entirely by the [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) module — it performs its own lazy per-patient projection on first chart access and keeps the retrieval index current via core events. There is no chartsearchai-side index to build or maintain; see the querystore repo for indexing details.

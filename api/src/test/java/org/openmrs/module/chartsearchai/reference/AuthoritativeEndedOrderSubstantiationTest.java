@@ -23,7 +23,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 
 /**
  * The active-order reconciliation (issue #118) reads the module's own authoritative answer about
- * whether a chart record's order has ended, in preference to querystore's display prose.
+ * whether a chart record's order has ended, alongside querystore's display prose.
  *
  * <p>Why this had to change with issue #317. That reconciliation decides which active orders the
  * chart already substantiates, and it decided it by looking for {@code ". Stopped: "} or
@@ -40,11 +40,14 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * record naming the drug now denies it. A silent false negative becomes an explicit false statement
  * in citable evidence.
  *
- * <p><strong>Prose is kept as the fallback, not replaced.</strong> The authoritative answer is absent
- * for a record whose order the module could not attribute to this patient and for a chart built when
- * the order read failed — the two cases {@code SerializedRecord.getOrderActive()} returns
- * {@code null} for — and in both of those the text is still the best evidence there is. Which is also
- * what keeps the name fallback intact for the drifted-uuid record it exists for.
+ * <p><strong>Prose is kept, and the two are AND-ed rather than ranked.</strong> A record is admitted
+ * only where its text and the module's answer both leave it live, so neither overrules the other and
+ * each can only exclude more — which is what makes adding the second safe: it re-admits nothing the
+ * prose already refused. The module's answer is absent for a record whose order it could not
+ * attribute to this patient and for a chart built when the order read failed — the two cases
+ * {@code SerializedRecord.getOrderActive()} returns {@code null} for — and in both the text is the
+ * only evidence there is, which is what keeps the name fallback intact for the drifted-uuid record it
+ * exists for.
  *
  * <p>What this file does not do is prove that the flag it reads is the one the chart builder
  * produces: these mappings are built here, as every case in {@code ActiveOrderReconciliationTest} is,

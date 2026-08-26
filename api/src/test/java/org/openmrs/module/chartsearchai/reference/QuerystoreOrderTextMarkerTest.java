@@ -28,10 +28,11 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * rather than a structural field: {@link DrugReferenceInjector#describesEndedOrder}, which helps
  * decide whether a {@code drug_order} chart record may substantiate a currently-active order.
  *
- * <p>Since issue #317 that is the FALLBACK rather than the primary test — the reconciliation asks
- * the module's own {@code OrderService} read first, and reaches this prose only for a record that
- * read cannot speak for. Which does not weaken this pin: those records are exactly the ones prose
- * is the only evidence for, so a wording change in querystore still reaches a decision here.
+ * <p>Since issue #317 it is no longer the only test: the reconciliation AND-s it with the module's
+ * own {@code OrderService} read, so a record is admitted only where both leave it live. That does
+ * not weaken this pin — prose is still the only evidence for a record the read cannot speak for
+ * (one whose order it cannot attribute to the patient, and any record on a chart built when the
+ * read failed), so a wording change in querystore still reaches a decision here.
  *
  * <p>Why this test exists. Keying a safety decision on another module's display text is fragile in
  * the worst way — a wording change there would silently reopen issue #118 (a stopped order's record
@@ -109,8 +110,8 @@ public class QuerystoreOrderTextMarkerTest extends BaseModuleContextSensitiveTes
 		// describesEndedOrder covers auto-expiry for free and this test's expectation flips.
 		//
 		// It was the strongest argument for the structural fix noted on describesEndedOrder, and
-		// issue #317 made it: the reconciliation now asks the module's own OrderService read first,
-		// so this record IS excluded in production — by the authoritative answer, never by its text.
+		// issue #317 made it: the reconciliation now also consults the module's own OrderService
+		// read, so this record IS excluded in production — by that answer, never by its text.
 		// What this case pins is unchanged and still needed: the TEXT carries no end marker, which is
 		// why prose alone could not do it and why describesEndedOrder must not pretend otherwise.
 		DrugOrder order = triomuneOrder();

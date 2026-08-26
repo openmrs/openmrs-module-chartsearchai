@@ -169,8 +169,8 @@ class QueryStoreChartBuilder {
 		}
 
 		// Full chart first — this is what the LLM sees and what determines the KV-cache
-		// prefix. Always called regardless of mode so the chart bytes are a function of
-		// the patient only.
+		// prefix. Always called regardless of mode so the chart bytes do not vary with
+		// the question (see the class javadoc for what they DO vary with).
 		long rpcStart = System.currentTimeMillis();
 		List<QueryDocument> chartDocs;
 		try {

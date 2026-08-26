@@ -215,7 +215,10 @@ public class LlmInferenceService implements ChartSearchService {
 	 * querystore migration (#51) produces a question-independent chart prefix, so warmup is viable:
 	 * <ul>
 	 *   <li>{@code preFilter=false} — {@link QueryStoreChartBuilder} returns the patient's full
-	 *       chart via {@code getPatientChart}; bytes are a function of the patient only.</li>
+	 *       chart via {@code getPatientChart}; bytes do not vary with the question. Nor is that
+	 *       what warmup needs of them — since issue #317 a drug-order record also states whether
+	 *       its order is in force, so the bytes move when an order's status does, and the reused
+	 *       prefix then ends at the first drug-order record.</li>
 	 *   <li>{@code preFilter=true} — full chart plus a small trailing "Records ranked by
 	 *       similarity to the query: ..." focus hint. The records section (the bulk of the prompt)
 	 *       is byte-identical across queries; the hint and the question vary only at the very end,

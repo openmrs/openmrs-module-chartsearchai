@@ -82,8 +82,9 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	private static final int TEST_ORDER_ID = 6;
 
 	/** This file's dataset: patient SIX's only drug order, lapsed — so patient 6's active-order set
-	 *  is empty, which is ADR Decision 45's cell A and the state an {@code isEmpty()} shortcut for
-	 *  "could not read" would silently misreport. */
+	 *  is empty. That is the arrangement issue #315 reported (one ended prescription, nothing
+	 *  active), and the state an {@code isEmpty()} shortcut for "could not read" would silently
+	 *  misreport. */
 	private static final int ONLY_ORDER_OF_A_PATIENT_WITH_NONE_ACTIVE = 9318;
 
 	/** Standard test dataset order 1: a drug order belonging to patient SEVEN. Its uuid is a real
@@ -153,8 +154,8 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	public void anOrderThatLapsedByItsDurationIsMarkedNotActive() {
 		// The decisive case, and the one the whole ticket is about: nothing in this record's text
 		// says the prescription ended, because querystore renders no auto-expire date. Before this
-		// change the model could only infer, and the arrangement ADR Decision 45 measured shows it
-		// infers from the record's relative age.
+		// change the model could only infer, and on the arrangement issue #315's prompt attempt was
+		// measured over, what it infers from is the record's relative age.
 		chartOf(drugOrderDoc(LAPSED_ORDER_ID));
 
 		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
@@ -250,8 +251,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void anEmptyActiveOrderSetStillMarksEveryRecordNotActive() {
 		// The case an isEmpty() shortcut for "could not read" would silently break, and it is not a
-		// corner: it is ADR Decision 45's cell A — one ended order, nothing active, the arrangement
-		// issue #315 reported.
+		// corner: it is the arrangement issue #315 reported — one ended order and nothing active.
 		Patient patientSix = Context.getPatientService().getPatient(6);
 		chartOf(drugOrderDoc(ONLY_ORDER_OF_A_PATIENT_WITH_NONE_ACTIVE));
 

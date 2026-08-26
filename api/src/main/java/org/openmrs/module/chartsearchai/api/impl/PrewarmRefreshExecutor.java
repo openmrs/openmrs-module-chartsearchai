@@ -37,6 +37,16 @@ import org.springframework.stereotype.Component;
  * patient's KV is recomputed under its new chart hash and re-added to the durable corpus, without a
  * manual re-sweep.
  *
+ * <p><strong>A pin can go stale with no chart write to detect, and this class cannot see it.</strong>
+ * The disk entry is keyed on a hash of the chart TEXT ({@link LocalLlmEngine#kvCacheKey}), and since
+ * issue #317 that text states, per drug-order record, whether the order is in force. An order lapsing
+ * by its {@code auto_expire_date} is a CLOCK event: it writes no row, fires no core event, and so
+ * reaches no refresh path here — the pinned entry simply stops matching and the patient drops out of
+ * the durable corpus until the next real chart write or a manual {@code /prewarm} sweep. The failure
+ * is a latency regression with no log line, on the one path whose whole purpose is durability. It is
+ * recorded rather than fixed: a time-driven refresh is a scheduler this module does not have, and it
+ * does not arise in the shipped {@code queryScoped} default, where nothing is pinned at all.
+ *
  * <p>Driven from chart-write detection ({@code ChartSearchEventListener}) via {@code IndexingHelper.onChartWrite}, gated by
  * {@code chartsearchai.prewarm.refreshOnEdit} (default off). Two properties make this safe on the
  * write path:

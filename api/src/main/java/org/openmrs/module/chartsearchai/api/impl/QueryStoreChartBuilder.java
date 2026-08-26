@@ -48,11 +48,17 @@ import org.springframework.stereotype.Component;
  * subsequent queries for the same patient. Since issue #317 they are a function of the patient AND
  * of their order status as read at assembly time, which is a narrowing of that property rather than
  * a loss of it: the bytes are still question-independent, but an order lapsing by its
- * {@code auto_expire_date} — or a transient failure of the order read — changes them with no
- * underlying data change and no index change, so the reused prefix ends at the first drug-order
- * record and the rest is prefilled again. That is the correct outcome (the previous prefix asserted
- * something no longer true), it is bounded by how often an order's status changes, and
- * {@code appendLiveAge} already made the bytes clock-dependent in the same way. {@link #buildScoped}
+ * {@code auto_expire_date} — or a transient failure of the order read, which drops every mark at
+ * once — changes them with no underlying data change and no index change. The reused prefix then
+ * ends at the record whose mark moved, and everything after it is prefilled again. How much that
+ * costs depends on where that record sits, and a chart is ordered most-recent-first: on the busiest
+ * patient of the 3.7.1 demo database all eight drug orders are newer than all 197 of their
+ * observations, so the first drug-order record is record [1] and "everything after it" is the whole
+ * chart. It is the correct outcome — the cached prefix asserted something that is no longer true —
+ * and {@code appendLiveAge} already made the bytes clock-dependent in the same way, though not at
+ * the same cadence: a birthday is once a year, and a finite-duration prescription ending is
+ * routine. It does not arise in the shipped {@code queryScoped} default, where nothing persists a
+ * KV prefix at all. {@link #buildScoped}
  * ({@code chartsearchai.chartMode=queryScoped}) deliberately trades that property away: it
  * assembles a small question-dependent slice whose prefill is cheap enough to pay fresh on
  * every query, so cold patients need no warmup at all. When

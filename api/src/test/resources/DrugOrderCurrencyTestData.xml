@@ -20,7 +20,7 @@
   2. ORDER 9318 — a patient whose ONLY drug order has ended, so their active-order set is EMPTY.
      That emptiness is an ANSWER (every record is marked not-active), and it must never be confused
      with the order read having FAILED, which is the fail-closed hazard the ticket names. It is also
-     ADR Decision 45's cell A, the arrangement issue #315 reported. Patients 2 and 7 both have live
+     the arrangement issue #315 reported. Patients 2 and 7 both have live
      orders, so neither can reach this state; patient 6 of the standard dataset has no orders and no
      encounter, so both are supplied.
 

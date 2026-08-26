@@ -79,18 +79,24 @@ public class PatientChartSerializer {
 	 * one is among the active ones, and when it is not (issue #317).
 	 *
 	 * <p><strong>The wording is a measured decision, not a preference, and it is not settled.</strong>
-	 * ADR Decision 45 records this prompt being phrasing-sensitive at one word, so a change to either
-	 * string is a change to what every chart says to the model and needs its own interleaved A/B on
-	 * the arrangements that entry lists. {@code DrugOrderCurrencyMarkTest} pins the literals so that
-	 * such a change cannot be made by accident.
+	 * Issue #315's own attempt to teach order status in the prompt was measured across five wordings
+	 * and reverted, and what it recorded is that this prompt is phrasing-sensitive at ONE word — so a
+	 * change to either string is a change to what every chart says to the model, and needs its own
+	 * interleaved A/B before it ships. {@code DrugOrderCurrencyMarkTest} pins both as literals, so
+	 * such a change has to redden a test rather than being made by accident; every other assertion
+	 * compares the constant to itself and cannot see a rename.
 	 *
 	 * <p>Three things it says on purpose. It reports {@code Order.isActive()} and nothing more — the
 	 * module's own authoritative predicate, the one the drug-safety layer screens on — so the chart
 	 * and the chips cannot disagree about which prescriptions are in force. It says "active order"
 	 * rather than "ended" or "stopped", because absence from the active set is not a claim about a
-	 * stop date and is not a claim about whether the patient is taking anything; it borrows the
-	 * vocabulary {@code DrugReferenceInjector.renderActiveOrder} already uses ("Active drug order:")
-	 * so one axis is not described two ways in one prompt. And it is a plain field in querystore's own
+	 * stop date and is not a claim about whether the patient is taking anything; and it borrows the
+	 * noun {@code DrugReferenceInjector.renderActiveOrder} already uses ("Active drug order:") rather
+	 * than introducing a second vocabulary for the same axis. That is not the same as making the
+	 * prompt uniform on that axis, and should not be read as claiming so: an injected
+	 * {@code active_drug_order} record carries no mark at all, so on a chart that triggers the
+	 * reconciliation the model sees a trailing {@code ". Active order: no"} field on one record and a
+	 * leading "Active drug order:" record type on another. And it is a plain field in querystore's own
 	 * {@code ". Label: value"} idiom rather than a sentence, because issue #110 measured that prose
 	 * inside a record gets recited into the answer as though it were clinical content.
 	 *
@@ -101,8 +107,11 @@ public class PatientChartSerializer {
 	 * answer should never carry. Whether a prescription is in force is a fact about the patient's
 	 * record, and an answer that repeats it is doing the right thing. The same answer also rides
 	 * structurally on {@link RecordMapping#getOrderActive()}, for the consumer that needs to branch on
-	 * it rather than read it; that field is deliberately not published on the wire, where a client has
-	 * the record text and needs no second copy.
+	 * it rather than read it. That field is deliberately not published on the wire — not because a
+	 * client could derive it (the wire carries no record text at all, only the citation's index, type,
+	 * uuid, date, grounding verdict, group, source and withheld count), but because a client
+	 * navigates to the order itself by {@code resourceUuid} and reads its status from the chart, which
+	 * is authoritative and current in a way a copy taken at answer time would not be.
 	 */
 	public static final String ACTIVE_ORDER_LABEL = ". Active order: yes";
 
@@ -217,6 +226,14 @@ public class PatientChartSerializer {
 			// Part of the BODY rather than a separate label so it reaches the chart line and the
 			// grounding mapping by construction: they must not be able to disagree about whether the
 			// model was told this prescription is in force.
+			//
+			// That is a statement about those two AGREEING, and it settles nothing about grounding.
+			// RecordMapping.getText() is the citation verifier's embedding input and its Tier-2
+			// entailment premise, so every drug-order record's premise is now ~5 tokens longer. The
+			// effect on cosine has NOT been measured here, and the margin it would sit inside is
+			// narrow — ChartSearchAiConstants records ~0.03 between supported and unrelated pairs on
+			// the e5 embedder this deployment shape recommends. Treated as an open question rather
+			// than a closed one; the PR records what was and was not measured end to end.
 			body.append(orderCurrencyLabel(record));
 			String bodyBase = body.toString();
 			// Obs-group (e.g. lab-panel / vital-signs-set) membership label, " (part of: <panel>)" or "",
@@ -295,6 +312,15 @@ public class PatientChartSerializer {
 	 * on consecutive same-group members (the {@code dedupGroupLabels} path in
 	 * {@link #serialize(Patient, List, Set, boolean)}).
 	 */
+	private static String groupMembershipLabel(SerializedRecord record) {
+		if (record == null || record.getObsGroupUuid() == null) {
+			return "";
+		}
+		String groupName = record.getObsGroupConceptName() == null
+				? "" : record.getObsGroupConceptName().trim();
+		return groupName.isEmpty() ? "" : " (part of: " + groupName + ")";
+	}
+
 	/**
 	 * The order-currency label for a record ({@link #ACTIVE_ORDER_LABEL} /
 	 * {@link #INACTIVE_ORDER_LABEL}), or {@code ""} when the module cannot say.
@@ -312,15 +338,6 @@ public class PatientChartSerializer {
 			return "";
 		}
 		return record.getOrderActive().booleanValue() ? ACTIVE_ORDER_LABEL : INACTIVE_ORDER_LABEL;
-	}
-
-	private static String groupMembershipLabel(SerializedRecord record) {
-		if (record == null || record.getObsGroupUuid() == null) {
-			return "";
-		}
-		String groupName = record.getObsGroupConceptName() == null
-				? "" : record.getObsGroupConceptName().trim();
-		return groupName.isEmpty() ? "" : " (part of: " + groupName + ")";
 	}
 
 	/**

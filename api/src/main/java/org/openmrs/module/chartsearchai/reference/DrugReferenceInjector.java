@@ -483,13 +483,10 @@ public class DrugReferenceInjector {
 				// Each covers what the other cannot. Prose cannot see an order that lapsed by its
 				// auto_expire_date, because querystore renders no marker for one — the limitation
 				// describesEndedOrder's own javadoc records, and the one that turns a lapsed record
-				// into a substantiation for the live order that replaced it. The read has no answer
-				// for three kinds of record that reach here: one whose order could not be attributed
-				// to this patient, any record on a chart built when the read failed, and one whose
-				// own order could not be evaluated (Order.isActive() throws on a row whose stop date
-				// is after its auto-expire date). For all three the text is the only evidence there
-				// is, which is also what leaves the name fallback intact for exactly the
-				// drifted-uuid record it was added for.
+				// into a substantiation for the live order that replaced it. And wherever the read
+				// has no answer at all — SerializedRecord.getOrderActive() enumerates when, and is
+				// the ONLY place that does — the text is the only evidence there is, which is also
+				// what leaves the name fallback intact for the drifted-uuid record it was added for.
 				String lower = mapping.getText().toLowerCase(Locale.ROOT);
 				if (!describesEndedOrder(lower) && !Boolean.FALSE.equals(mapping.getOrderActive())) {
 					drugOrderText.append(lower).append('\n');
@@ -547,10 +544,9 @@ public class DrugReferenceInjector {
 	 * both leave it live — the second being the module's own {@code OrderService} read, carried down
 	 * from {@code QueryStoreChartBuilder.toSerializedRecords}. Conjunction, not precedence: neither
 	 * can overrule the other, and each can only ever exclude more. So this method still decides on its
-	 * own for the records the read cannot speak for — one whose order could not be attributed to the
-	 * patient, any record on a chart built when the read failed, and one whose own order could not be
-	 * evaluated, {@code Order.isActive()} throwing on a row whose stop date is after its auto-expire
-	 * date — and the read decides on its own for the order that lapsed by its
+	 * own for every record the read cannot speak for — {@code SerializedRecord.getOrderActive()} is
+	 * the one place those are enumerated, deliberately, so this javadoc cannot go stale as that list
+	 * grows — and the read decides on its own for the order that lapsed by its
 	 * {@code auto_expire_date}, which querystore renders no marker for.
 	 *
 	 * <p>Why prose was the only test until then, and why the second one is not the route this javadoc

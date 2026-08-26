@@ -43,11 +43,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><strong>Prose is kept, and the two are AND-ed rather than ranked.</strong> A record is admitted
  * only where its text and the module's answer both leave it live, so neither overrules the other and
  * each can only exclude more — which is what makes adding the second safe: it re-admits nothing the
- * prose already refused. Of the four situations {@code SerializedRecord.getOrderActive()} returns
- * {@code null} for, three can reach this method — a record whose order could not be attributed to
- * this patient, any record on a chart built when the order read failed, and this patient's own
- * drug-order record whose order {@code Order.isActive()} throws on. Only "not a drug order" cannot,
- * because the corpus is scoped to {@code drug_order} before the question is asked. In all three the
+ * prose already refused. {@code SerializedRecord.getOrderActive()} enumerates the situations it
+ * answers {@code null} for; all of them reach this method except "not a drug order", which cannot,
+ * because the corpus is scoped to {@code drug_order} before the question is asked. For the rest the
  * text is the only evidence there is, which is what keeps the name fallback intact for the
  * drifted-uuid record it exists for.
  *

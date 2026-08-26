@@ -331,10 +331,11 @@ public class PatientChartSerializer {
 	 * {@link #INACTIVE_ORDER_LABEL}), or {@code ""} when the module cannot say.
 	 *
 	 * <p>Silence is the whole guard, and it is why this reads a three-valued answer rather than a
-	 * boolean. A record that is not a drug order, an order read that failed, an order that could not
-	 * be attributed to this patient, and an order {@code Order.isActive()} throws on all arrive here
-	 * as {@code null}, and rendering any of them as "no" would tell a clinician a prescription had
-	 * ended on the strength of the module not knowing.
+	 * boolean. Several unrelated situations arrive here as {@code null} — enumerated once, on
+	 * {@link SerializedRecord#getOrderActive()}, and not restated here so this javadoc cannot go stale
+	 * as that list grows. What they share is the only thing this method needs: nothing is known, and
+	 * rendering any of them as "no" would tell a clinician a prescription had ended on the strength of
+	 * the module not knowing.
 	 * That is the fail-closed hazard issue #317 names, and
 	 * {@code PatientClinicalContext.contraindicationRecordsRead()} is the same distinction one layer
 	 * along: a chart the module could not read is not a chart that records nothing.

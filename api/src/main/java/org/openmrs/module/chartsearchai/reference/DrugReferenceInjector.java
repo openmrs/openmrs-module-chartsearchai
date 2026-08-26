@@ -146,8 +146,16 @@ public class DrugReferenceInjector {
 
 	/** querystore's resource type for a drug-order document (its {@code DrugOrderRecordSerializer}
 	 *  contract), which the chart carries through unchanged. The type the active-order
-	 *  reconciliation looks for, and the type it asks the chart's completeness declaration about. */
-	private static final String QUERYSTORE_DRUG_ORDER_TYPE = "drug_order";
+	 *  reconciliation looks for, and the type it asks the chart's completeness declaration about.
+	 *
+	 *  <p>Reads {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_ORDER} rather than spelling the
+	 *  string again, because since issue #317 this filter and
+	 *  {@code QueryStoreChartBuilder}'s order-currency scoping have to agree: the substantiation test
+	 *  below AND-s the rendered prose with the builder's own order read, and that read is attached
+	 *  only to records of the type the builder recognised. Spelled apart, a change to one would leave
+	 *  the other's half of the AND with no mapping to look at — no error, no count out of place, just
+	 *  a condition that quietly stops narrowing. */
+	private static final String QUERYSTORE_DRUG_ORDER_TYPE = ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER;
 
 	@Autowired
 	private DrugReferenceService drugReferenceService;

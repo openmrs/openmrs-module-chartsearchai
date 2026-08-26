@@ -36,7 +36,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * harmful rather than merely unrepaired. Before the mark, the lapsed record reached the model as an
  * unqualified drug-order line and the answer read the patient as being on the drug — accidentally
  * right about the drug, since a live order for it does exist. With the mark, that same record says
- * {@code ". Active order: no"} while the live order it suppressed is still not injected, so the only
+ * {@code ". Order status: not in force"} while the live order it suppressed is still not injected, so the only
  * record naming the drug now denies it. A silent false negative becomes an explicit false statement
  * in citable evidence.
  *

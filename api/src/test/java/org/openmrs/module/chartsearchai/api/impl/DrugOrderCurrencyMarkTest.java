@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.DrugOrder;
@@ -29,6 +30,7 @@ import org.openmrs.Order;
 import org.openmrs.Patient;
 import org.openmrs.TestOrder;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -253,7 +255,47 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// does not: replacing the failure path's OrderCurrency.unread() with a reading of two empty
 		// sets leaves THIS case green, and every behavioural case in the suite with it. What reddens
 		// on that mutation is theFailedReadPathReturnsTheNotReadState, which reads the source rather
-		// than the behaviour, and is the only thing that does.
+		// than the behaviour, and is the only thing that does. A DIFFERENT mutation — swallowing the
+		// failure one level in, so this catch never runs — is invisible to THIS case too, and the two
+		// cases that see it are aFailedOrderReadIsReportedAtWarn below (the WARN never happens) and
+		// the source scan (two try blocks where the method may have one).
+	}
+
+	@Test
+	public void aFailedOrderReadIsReportedAtWarn() {
+		// The one OBSERVABLE consequence of the failure reaching readOrderCurrency's OWN catch, and
+		// why it is worth a case beside the fail-closed one above. The chart degrades silently — every
+		// drug-order record simply loses its mark and reads exactly as it did before this feature
+		// existed — so a failure swallowed one level in produces a chart no rendered-output assertion
+		// in this file can tell from a healthy one.
+		//
+		// Three mutations, measured, and they are what says this case and the source scan are not one
+		// guard written twice. Dropping the log.warn from that catch reddens THIS and nothing else.
+		// Returning readingOf(emptyList()) from it reddens the SCAN and nothing else. Wrapping the
+		// resolveAllOrders call in an inner try that returns Collections.emptyList() — the swallow
+		// this case exists for — reddens both. And the one neither would see is a swallow inside
+		// resolveAllOrders itself, which is why the WARN is asserted rather than assumed: the scan
+		// reads only this method's own body.
+		//
+		// Asserted on the WARN carrying the patient's uuid — a value the production call passes as a
+		// parameter — rather than on any wording, so a re-worded message still satisfies it and an
+		// unrelated WARN from chart assembly cannot.
+		builder.failOrderRead = true;
+		chartOf(drugOrderDoc(LAPSED_ORDER_ID), drugOrderDoc(LIVE_ORDER_ID));
+
+		try (LogCapture capture = LogCapture.on(QueryStoreChartBuilder.class.getName())) {
+			builder.build(patient, MEDICATIONS_QUESTION);
+
+			boolean namesThePatient = false;
+			for (String warning : capture.messagesAt(Level.WARN)) {
+				if (warning.contains(patient.getUuid())) {
+					namesThePatient = true;
+				}
+			}
+			assertTrue(namesThePatient,
+					"a failed order read must be reported at WARN, naming the patient it silently "
+							+ "cost the mark; captured: " + capture.describeAll());
+		}
 	}
 
 	@Test
@@ -431,9 +473,20 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// here than for an ops label: this string is in every prompt, and the prompt it joins is
 		// phrasing-sensitive at one word (issue #316's ledger). A wording change must be a deliberate
 		// act with a fresh interleaved A/B behind it, so it has to redden something first.
-		assertEquals(". Active order: yes", PatientChartSerializer.ACTIVE_ORDER_LABEL,
+		//
+		// These two are the ones the A/B chose. Measured on the host standalone (fullChart, drug
+		// reference on), n=3 per cell, interleaved with a question on another patient between
+		// samples, patient a7090f70 (Simvastatin lapsed by auto_expire_date beside a live Bupivacaine
+		// and Lidocaine) asked "what medications is the patient taking?": ". Active order: yes/no",
+		// ". Active: yes/no", ". Status: active/inactive" and ". Order status: active/not active" all
+		// answered "No active medications are recorded" — denying two live prescriptions — and these
+		// answered "The patient is currently taking Bupivacaine [3] and Lidocaine [4]". The last pair
+		// differs from these only in the value token, which is what makes it the mark's own word
+		// being recited rather than a lucky string. PatientChartSerializer.ACTIVE_ORDER_LABEL's
+		// javadoc carries the arrangement, the base arm and the residue.
+		assertEquals(". Order status: in force", PatientChartSerializer.ACTIVE_ORDER_LABEL,
 				"changing this changes what every chart says to the model; re-measure before editing");
-		assertEquals(". Active order: no", PatientChartSerializer.INACTIVE_ORDER_LABEL,
+		assertEquals(". Order status: not in force", PatientChartSerializer.INACTIVE_ORDER_LABEL,
 				"changing this changes what every chart says to the model; re-measure before editing");
 	}
 
@@ -450,19 +503,49 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// in this repo.
 		//
 		// It asserts the SHAPE, not merely that the words appear: the catch must return the not-read
-		// state, so building a reading there fails this even though it would change no output.
+		// state, so building a reading there fails this even though it would change no output — and
+		// the method must be the one that catches the read, so a failure swallowed inside it fails
+		// this too rather than passing a scan that only looks at the catch it left untouched.
 		Path source = findApiSourceRoot().resolve(
 				"src/main/java/org/openmrs/module/chartsearchai/api/impl/QueryStoreChartBuilder.java");
 		assertTrue(Files.exists(source), "cannot find the builder's source at " + source);
 		String text = new String(Files.readAllBytes(source), StandardCharsets.UTF_8);
 
-		int catchAt = text.indexOf("catch (RuntimeException e) {", text.indexOf("private OrderCurrency readOrderCurrency("));
+		int methodAt = text.indexOf("private OrderCurrency readOrderCurrency(");
+		assertTrue(methodAt > 0, "cannot find readOrderCurrency in " + source);
+		int catchAt = text.indexOf("catch (RuntimeException e) {", methodAt);
 		assertTrue(catchAt > 0, "readOrderCurrency must still catch a failed order read");
-		String catchBlock = text.substring(catchAt, text.indexOf("\n\t}", catchAt));
+		int methodEnd = text.indexOf("\n\t}", catchAt);
+		String method = text.substring(methodAt, methodEnd);
+		String catchBlock = text.substring(catchAt, methodEnd);
 		assertTrue(catchBlock.contains("return OrderCurrency.unread();"),
 				"a failed order read must return the explicit not-read state, never a constructed "
 						+ "reading — an empty reading answers the same today only because nothing can "
 						+ "be attributed under it. Found: " + catchBlock);
+		// The scan has to be about the method's SHAPE and not only about words appearing in it,
+		// because the sentence above is satisfied by a method that never reaches that catch. An inner
+		// try around the read returning Collections.emptyList() leaves this catch untouched and
+		// produces a constructed empty reading anyway — the exact state the assertion above refuses —
+		// while changing nothing any rendered-output assertion here can see. The assertion above alone
+		// cannot refuse it — that mutation leaves this catch untouched, words and all — so it is these
+		// three lines that do, and aFailedOrderReadIsReportedAtWarn that sees it from the other side.
+		// So: one try, one catch, and the read is what the try returns.
+		assertEquals(1, occurrencesOf("try {", method),
+				"readOrderCurrency must catch the order read ITSELF, not delegate to an inner try "
+						+ "whose failure never reaches this catch: " + method);
+		assertEquals(1, occurrencesOf("catch (", method),
+				"and it must have exactly the one catch this case is about: " + method);
+		assertTrue(method.contains("return readingOf(resolveAllOrders(patient));"),
+				"the guarded statement is the read itself: " + method);
+	}
+
+	/** Non-overlapping occurrences of {@code needle} in {@code haystack}. */
+	private static int occurrencesOf(String needle, String haystack) {
+		int count = 0;
+		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + needle.length())) {
+			count++;
+		}
+		return count;
 	}
 
 	/** The api module root, located the way {@code ArchitectureGuardTest} locates it. */

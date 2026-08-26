@@ -78,12 +78,48 @@ public class PatientChartSerializer {
 	 * What a drug-order record's line says when the module has read the patient's orders and this
 	 * one is among the active ones, and when it is not (issue #317).
 	 *
-	 * <p><strong>The wording is a measured decision, not a preference, and it is not settled.</strong>
-	 * Issue #315's own attempt to teach order status in the prompt was measured across five wordings
-	 * and reverted, and what it recorded is that this prompt is phrasing-sensitive at ONE word — so a
-	 * change to either string is a change to what every chart says to the model, and needs its own
-	 * interleaved A/B before it ships. {@code DrugOrderCurrencyMarkTest} pins both as literals, so
-	 * such a change has to redden a test rather than being made by accident; every other assertion
+	 * <p><strong>The wording is a measured decision, and the measurement is why these two strings and
+	 * not the obvious ones.</strong> Five wordings were run on the host standalone
+	 * ({@code chartMode=fullChart}, drug reference on), n=3 per cell, each sample separated by a
+	 * question on another patient so it re-prefills instead of measuring llama's KV prefix cache
+	 * (issue #315's methodology finding). The cell: patient {@code a7090f70}, whose Simvastatin order
+	 * lapsed by its {@code auto_expire_date} while a Bupivacaine and a Lidocaine order are live,
+	 * asked <em>"what medications is the patient taking?"</em>. Every arm was stable 3/3.
+	 *
+	 * <p>{@code ". Active order: yes/no"} (this feature's first wording), {@code ". Active: yes/no"},
+	 * {@code ". Status: active/inactive"} and {@code ". Order status: active/not active"} all answered
+	 * <em>"No active medications are recorded"</em> — a denial of two live prescriptions, which is a
+	 * false negative in the dangerous direction and the issue #118 self-contradiction sentence
+	 * verbatim, since the same payload carries two safety chips naming those very two drugs. These
+	 * two strings answered <em>"The patient is currently taking Bupivacaine [3] and Lidocaine [4]"</em>,
+	 * citing both.
+	 *
+	 * <p><strong>The last two arms are the discriminator, and they are why this is a diagnosis rather
+	 * than a lucky string.</strong> They share the field name, the frame and the position, and differ
+	 * only in the value token — and it is the arm whose value is "active" that denies. The negative
+	 * mark's own word was being lifted into the model's absent-data sentence, whose template
+	 * ({@code LlmProvider}: "name what is missing", "No alcohol use is recorded.") has nothing to
+	 * borrow from "not in force". That is issue #110's failure class reaching a FIELD, which is what
+	 * this javadoc used to argue a field was safe from. What the wording does NOT decide is whether
+	 * the model reads the two live records at all: base — no mark anywhere — answers this same cell
+	 * <em>"The patient is taking Simvastatin Co 20mg [8]"</em> 3/3, naming the lapsed drug and citing
+	 * neither live one. The model overlooks those two records on this question shape either way; the
+	 * wording decides what it then says about the record it does read.
+	 *
+	 * <p>What did not move across the five, and what this wording costs. <em>"is he currently taking
+	 * any medications?"</em> on the same patient is answered correctly by every one of them
+	 * (Bupivacaine and Lidocaine, the lapsed Simvastatin excluded, 3/3 each) where base includes the
+	 * lapsed drug — so no arm was chosen at that cell's expense. The cost is on the
+	 * one-stopped-order patient ({@code 21580018}) asked the same "what medications" question:
+	 * {@code ". Active order: no"} answered <em>"No active medications are recorded. The record for
+	 * Nevirapine shows it was stopped on 2026-08-24 [1]"</em> and this wording answers <em>"No active
+	 * medications are recorded."</em> — the same verdict, without the cited record behind it.
+	 *
+	 * <p>A change to either string is a change to what every chart says to the model, and needs its
+	 * own interleaved A/B before it ships; the measurement above is what one looks like, and issue
+	 * #315's five-wording attempt at a prompt rule is the other reason to expect one word to matter.
+	 * {@code DrugOrderCurrencyMarkTest.theTwoMarksAreSpelledExactlyAsMeasured} pins both as literals,
+	 * so such a change has to redden a test rather than being made by accident; every other assertion
 	 * compares the constant to itself and cannot see a rename.
 	 *
 	 * <p>Three things it says on purpose. It reports {@code Order.isActive()} and nothing more — the
@@ -93,24 +129,29 @@ public class PatientChartSerializer {
 	 * and differ where {@code Order.isActive()} throws and the SQL answers, which
 	 * {@code QueryStoreChartBuilder.readingOf} handles per order — so "the chart and the chips cannot
 	 * disagree" is a claim about the two predicates, and it is not enforced by their sharing a call
-	 * site, because they do not share one. It says "active order"
+	 * site, because they do not share one. It says "not in force"
 	 * rather than "ended" or "stopped", because absence from the active set is not a claim about a
-	 * stop date and is not a claim about whether the patient is taking anything; and it borrows the
-	 * noun {@code DrugReferenceInjector.renderActiveOrder} already uses ("Active drug order:") rather
-	 * than introducing a second vocabulary for the same axis. That is not the same as making the
-	 * prompt uniform on that axis, and should not be read as claiming so: an injected
-	 * {@code active_drug_order} record carries no mark at all, so on a chart that triggers the
-	 * reconciliation the model sees a trailing {@code ". Active order: no"} field on one record and a
-	 * leading "Active drug order:" record type on another. And it is a plain field in querystore's own
+	 * stop date — an order whose {@code dateActivated} is in the future is not in force either — and
+	 * is not a claim about whether the patient is taking anything. It deliberately does NOT borrow the
+	 * noun {@code DrugReferenceInjector.renderActiveOrder} uses ("Active drug order:"), which the
+	 * first wording did, on the reasoning that one vocabulary per axis beats two. That reasoning is
+	 * still sound and it lost to the measurement above. So the model can see a trailing
+	 * {@code ". Order status: not in force"} field on one record and a leading "Active drug order:"
+	 * record type on another, and nothing here makes the prompt uniform on that axis. And it is a
+	 * plain field in querystore's own
 	 * {@code ". Label: value"} idiom rather than a sentence, because issue #110 measured that prose
-	 * inside a record gets recited into the answer as though it were clinical content.
+	 * inside a record gets recited into the answer as though it were clinical content — necessary,
+	 * and now known not to be sufficient: a field's VALUE gets recited too.
 	 *
 	 * <p>Being recited is the POINT here, which is what separates this from issue #117 and the rule
 	 * {@code README} draws from it — that a field belongs beside the citation rather than inside the
 	 * record, because everything in a record's text is quotable. What #117 forbids in the text is the
 	 * module's own BOOKKEEPING (a truncation counter, a dataset attribution), which a clinician-facing
 	 * answer should never carry. Whether a prescription is in force is a fact about the patient's
-	 * record, and an answer that repeats it is doing the right thing. The same answer also rides
+	 * record, and an answer that repeats it is doing the right thing — repeating it about the record it
+	 * is on. What the measurement above adds is that the same readability lets a negative value be
+	 * repeated about the WHOLE chart, which is why the value's own words are part of the decision and
+	 * not only the field's. The same answer also rides
 	 * structurally on {@link RecordMapping#getOrderActive()}, for the consumer that needs to branch on
 	 * it rather than read it. That field is deliberately not published on the wire — not because a
 	 * client could derive it (the wire carries no record text at all, only the citation's index, type,
@@ -118,10 +159,10 @@ public class PatientChartSerializer {
 	 * navigates to the order itself by {@code resourceUuid} and reads its status from the chart, which
 	 * is authoritative and current in a way a copy taken at answer time would not be.
 	 */
-	public static final String ACTIVE_ORDER_LABEL = ". Active order: yes";
+	public static final String ACTIVE_ORDER_LABEL = ". Order status: in force";
 
 	/** The negative half of {@link #ACTIVE_ORDER_LABEL}; see there for the wording's reasons. */
-	public static final String INACTIVE_ORDER_LABEL = ". Active order: no";
+	public static final String INACTIVE_ORDER_LABEL = ". Order status: not in force";
 
 	/**
 	 * Serialize a pre-filtered list of records into numbered text lines.

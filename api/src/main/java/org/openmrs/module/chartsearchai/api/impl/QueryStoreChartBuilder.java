@@ -75,6 +75,20 @@ import org.springframework.stereotype.Component;
  * {@link PatientChart#getFocusIndices()} payload). The hint biases the LLM's
  * attention without removing records the LLM needs for negative reasoning.
  *
+ * <p>The same mark also makes those bytes PRIVILEGE-dependent, which the clock never did. The order
+ * read needs core's {@code Get Orders}; {@code WarmupExecutor} and the prewarm sweep run through
+ * {@code Daemon.runInDaemonThread}, and {@code Context.hasPrivilege} answers true unconditionally on
+ * a daemon thread, so the prefix they prime and pin is always assembled WITH the mark. A request
+ * thread on a role that lacks the privilege assembles the same patient's chart WITHOUT it — the read
+ * throws, {@link #readOrderCurrency} catches, every mark is dropped — and under {@code fullChart} the
+ * KV entry is keyed on a hash of the chart text ({@code LocalLlmEngine.kvCacheKey}), so that role's
+ * prompt can never match the warmed prefix at all: not a shortened reuse, none. Warmup and the whole
+ * durable corpus buy it nothing and every query pays a full prefill. Recorded, not fixed: making the
+ * two threads assemble the same bytes would mean either dropping the mark for everyone or escalating
+ * the request thread's privileges to match the daemon's, and the second is not this module's call to
+ * make. The remedy is the operator's — grant the role {@code Get Orders}; the README's privileges
+ * section says who already holds it on a stock install.
+ *
  * <p>The {@code protected resolve*} methods and the package-private
  * {@link #setChartSerializer} are test seams, not an extension point.
  * Subclassing this bean outside the test package is not supported.
@@ -801,8 +815,13 @@ class QueryStoreChartBuilder {
 			catch (RuntimeException e) {
 				// Collected and reported ONCE below rather than logged here. A bad row is a permanent
 				// property of the patient's chart, so a per-order log would repeat on every query for
-				// them for as long as the row stands, and a privilege failure would repeat once per
-				// order on top of that.
+				// them for as long as the row stands, and a patient carrying several such rows would
+				// repeat it once per row on top of that. The clause this comment used to end with —
+				// "and a privilege failure would repeat once per order" — named a failure that cannot
+				// reach here: a missing Get Orders raises APIAuthenticationException out of
+				// resolveAllOrders, one level up and outside this loop, where readOrderCurrency's own
+				// catch reports it once; Order.isActive() reads the entity's own fields and consults
+				// no privilege at all.
 				unevaluable.add(order.getUuid());
 			}
 		}

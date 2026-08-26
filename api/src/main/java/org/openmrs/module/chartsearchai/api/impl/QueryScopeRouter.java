@@ -16,6 +16,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+
 /**
  * Maps a clinician's question to the record types whose records belong <em>complete</em> in a
  * query-scoped slice chart ({@code chartsearchai.chartMode=queryScoped}). For an enumeration
@@ -229,11 +231,15 @@ public final class QueryScopeRouter {
 		return Collections.unmodifiableSet(union);
 	}
 
-	/** The querystore resource types included complete for {@code intent}; empty for TOPICAL. */
+	/** The querystore resource types included complete for {@code intent}; empty for TOPICAL.
+	 *  {@code drug_order} reads {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_ORDER} because this
+	 *  module declares that type and three other places read it; the rest are querystore contract
+	 *  strings this module has never declared, and declaring one is a reference-group decision
+	 *  ({@code ChartSearchAiReferenceGroupTest} sweeps every declared type) rather than a rename. */
 	static Set<String> typedSlice(Intent intent) {
 		switch (intent) {
 			case MEDICATIONS:
-				return setOf("drug_order", "medication_dispense");
+				return setOf(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, "medication_dispense");
 			case ALLERGIES:
 				return setOf("allergy");
 			case PROGRAMS:
@@ -243,7 +249,7 @@ public final class QueryScopeRouter {
 			case VISITS:
 				return setOf("visit", "encounter");
 			case ORDERS:
-				return setOf("drug_order", "test_order", "referral_order");
+				return setOf(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, "test_order", "referral_order");
 			default:
 				return Collections.emptySet();
 		}

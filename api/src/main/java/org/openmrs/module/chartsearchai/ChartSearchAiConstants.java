@@ -614,8 +614,18 @@ public class ChartSearchAiConstants {
 	 * {@link #RESOURCE_TYPE_ACTIVE_DRUG_ORDER}, which this module injects for an active order the
 	 * retrieved chart carries no record of (issue #118).
 	 *
-	 * <p>Declared for issue #317, which gave the type a second production reader: the chart builder
-	 * scopes the order-currency mark to it. Being declared here puts it in
+	 * <p>Declared for issue #317, which added a fourth production reader — the chart builder, which
+	 * scopes the order-currency mark to this type — to three that were already spelling the string as
+	 * a literal: {@code QueryScopeRouter.typedSlice}'s MEDICATIONS and ORDERS slices, and
+	 * {@code DrugReferenceInjector}, which filters the mappings it puts to the substantiation test.
+	 * All four now read this constant, and the injector and the builder are the pair that MUST
+	 * agree: the injector
+	 * admits a record to that corpus only where the prose and the builder's own order read both leave
+	 * it live, so a divergence would leave the #317 half of that AND looking at no records at all —
+	 * silently, since a condition that never sees a drug-order mapping simply stops narrowing
+	 * anything.
+	 *
+	 * <p>Being declared here puts it in
 	 * {@code ChartSearchAiReferenceGroupTest}'s sweep, which forces a reference-group decision to be
 	 * RECORDED for every declared type — that is a forcing function, not an obstacle, and the group
 	 * it records ({@code chart}) is the one {@code referenceGroup} already returned for the bare

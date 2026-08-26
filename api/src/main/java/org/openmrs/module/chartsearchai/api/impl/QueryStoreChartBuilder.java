@@ -51,10 +51,13 @@ import org.springframework.stereotype.Component;
  * {@code auto_expire_date} — or a transient failure of the order read, which drops every mark at
  * once — changes them with no underlying data change and no index change. The reused prefix then
  * ends at the record whose mark moved, and everything after it is prefilled again. How much that
- * costs depends on where that record sits, and a chart is ordered most-recent-first: on the busiest
- * patient of the 3.7.1 demo database all eight drug orders are newer than all 197 of their
- * observations, so the first drug-order record is record [1] and "everything after it" is the whole
- * chart. It is the correct outcome — the cached prefix asserted something that is no longer true —
+ * costs depends on where that record sits, and a chart is ordered most-recent-first across ALL record
+ * types. On the busiest patient of the 3.7.1 demo database (8 drug orders, ~310 records) the drug
+ * orders are newer than every observation, condition, diagnosis, encounter and visit, and older than
+ * 8 of their 9 allergies — so the first drug-order record is around the tenth line and "everything
+ * after it" is most of the chart. Do not carry that shape to another patient: what decides the
+ * position is every type's dates, and that figure is one patient's. It is the correct outcome — the
+ * cached prefix asserted something that is no longer true —
  * and {@code appendLiveAge} already made the bytes clock-dependent in the same way, though not at
  * the same cadence: a birthday is once a year, and a finite-duration prescription ending is
  * routine. It does not arise in the shipped {@code queryScoped} default, where nothing persists a
@@ -702,9 +705,9 @@ class QueryStoreChartBuilder {
 	/**
 	 * Reads the patient's orders once for this chart assembly, or reports that it could not.
 	 *
-	 * <p>Skipped entirely when the retrieved documents carry no prescription: the read is two
-	 * {@code OrderService} calls on a path that runs for every query for every patient, and a chart
-	 * with nothing to mark has nothing to spend them on.
+	 * <p>Skipped entirely when the retrieved documents carry no prescription: the read is an
+	 * {@code OrderService} call on a path that runs for every query for every patient, sized by the
+	 * patient's whole order history, and a chart with nothing to mark has nothing to spend it on.
 	 *
 	 * <p>WARN rather than DEBUG on failure, and this is the one place the level matters. The chart
 	 * degrades silently — every drug-order record simply loses its mark and reads exactly as it did
@@ -743,30 +746,70 @@ class QueryStoreChartBuilder {
 	 * read.
 	 *
 	 * <p>The obvious implementation asks {@code OrderService} twice — once for the active orders and
-	 * once for all of them — and that is what this did first. It is a round trip that buys nothing:
-	 * {@code getAllOrdersByPatient} returns every order the patient has, and {@code Order.isActive()}
-	 * is the same predicate {@code getActiveOrders} applies in SQL (both test voided, activation,
-	 * discontinuation and expiry, and both refuse a {@code DISCONTINUE} action). Asking once and
-	 * filtering here also makes the mark's contract literally true rather than true by proxy:
+	 * once for all of them — and that is what this did first. {@code getAllOrdersByPatient} returns
+	 * every order the patient has, so the second call is answerable from the first, and asking once
+	 * also makes the mark's contract literally true rather than true by proxy:
 	 * {@code PatientChartSerializer.ACTIVE_ORDER_LABEL} says the mark reports {@code Order.isActive()}
 	 * and nothing more, and now it does.
 	 *
-	 * <p>The all-orders set carries VOIDED orders too, deliberately. It is the ATTRIBUTION set — its
-	 * only job is to answer "is this record's order one of this patient's at all" — and a chart record
-	 * left behind for an order that was voided is still that patient's record. It is marked not-active,
-	 * which is true, rather than left unmarked for the model to guess at.
+	 * <p><strong>{@code Order.isActive()} is not simply that SQL predicate in Java, and the difference
+	 * is why each order is evaluated on its own.</strong> On every leg checked they agree — voided, a
+	 * {@code DISCONTINUE} action, a null or future {@code dateActivated}, a future
+	 * {@code dateStopped}, an {@code autoExpireDate} exactly equal to now, and
+	 * {@code scheduledDate}/{@code ON_SCHEDULED_DATE}, which neither of them reads. But
+	 * {@code Order.isDiscontinued} and {@code Order.isExpired} both THROW, before any other test, when
+	 * {@code dateStopped} is after {@code autoExpireDate}, where the SQL simply answers. Core does not
+	 * prevent that row: {@code OrderValidator} compares {@code dateActivated} against each of those
+	 * dates and never compares them against each other, and {@code OrderServiceImpl.stopOrder} writes
+	 * it through the public API when {@code order.allowSettingStopDateOnInactiveOrders} is on.
+	 *
+	 * <p>Evaluated in one try around the whole walk — which is how this was first written — a single
+	 * such row anywhere in the patient's history takes the mark off EVERY drug-order record on every
+	 * chart for that patient, which is the silent reversion to pre-#317 behaviour the feature exists
+	 * to remove. Per order, it costs exactly the one record that order stands behind.
+	 *
+	 * <p><strong>The uuid must not reach EITHER set, and the statement order is what does that.</strong>
+	 * {@code isActive()} is called first and its result held; only then is the uuid recorded as known.
+	 * Wrapping the two statements the other way round — the natural edit, and what "each order on its
+	 * own" reads as — leaves a throwing order in {@code known} and out of {@code active}, which is the
+	 * combination {@code forRecord} answers {@code FALSE} to: the module would tell a clinician a
+	 * prescription it could not evaluate had ended. Silence for what cannot be evaluated, never a
+	 * denial.
+	 *
+	 * <p>The all-orders set carries VOIDED orders too — a consequence of {@code getAllOrdersByPatient}
+	 * rather than a choice made here, and left alone: such a record is that patient's either way, and
+	 * marking it not-active is true of it. querystore does not index voided rows, so it is unlikely to
+	 * arise at all. Nothing pins this, and no case here discriminates it.
 	 */
 	private static OrderCurrency readingOf(List<Order> allOrders) {
 		Set<String> active = new HashSet<String>();
 		Set<String> known = new HashSet<String>();
+		List<String> unevaluable = new ArrayList<String>();
 		for (Order order : allOrders == null ? Collections.<Order>emptyList() : allOrders) {
 			if (order == null || order.getUuid() == null) {
 				continue;
 			}
-			known.add(order.getUuid());
-			if (order.isActive()) {
-				active.add(order.getUuid());
+			try {
+				boolean isActive = order.isActive();
+				known.add(order.getUuid());
+				if (isActive) {
+					active.add(order.getUuid());
+				}
 			}
+			catch (RuntimeException e) {
+				// Collected and reported ONCE below rather than logged here. A bad row is a permanent
+				// property of the patient's chart, so a per-order log would repeat on every query for
+				// them for as long as the row stands, and a privilege failure would repeat once per
+				// order on top of that.
+				unevaluable.add(order.getUuid());
+			}
+		}
+		if (!unevaluable.isEmpty()) {
+			log.warn("Could not decide whether {} of this patient's order(s) are in force, so a chart "
+					+ "record for any of them will not say either way; every other order is unaffected. "
+					+ "The usual cause is an order whose stop date is after its auto-expire date, which "
+					+ "core neither validates nor refuses to save. Orders: {}",
+					unevaluable.size(), unevaluable);
 		}
 		return OrderCurrency.of(active, known);
 	}

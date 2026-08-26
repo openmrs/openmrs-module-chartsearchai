@@ -28,6 +28,30 @@ PATIENTS=("bc4ba445-a35c-4996-b804-4d5b68387571" "1128c659-2d0a-4314-af23-91bac1
 if [ "$CAPTURE_PATIENTS" = "none" ]; then PATIENTS=();
 elif [ -n "$CAPTURE_PATIENTS" ]; then read -r -a PATIENTS <<< "$CAPTURE_PATIENTS"; fi
 
+# Does Tier B fire on this invocation? Hoisted out of the `if` that guards the Tier-B block so the
+# refusal below can see the answer, and read there rather than re-tested.
+if [ "$TIER_B" = "1" ] || { [ "$TIER_B" = "auto" ] && [ -z "$CAPTURE_PATIENTS" ]; }; then
+  FIRE_TIER_B=1
+else
+  FIRE_TIER_B=0
+fi
+
+# An invocation that fires NEITHER tier has nothing to capture, and is a caller error rather than an
+# empty matrix — CAPTURE_PATIENTS=none with Tier B suppressed (explicitly, or by `auto`, which fires
+# Tier B only when CAPTURE_PATIENTS is UNSET). Refused here for the reason capture_probe_safety.sh
+# refuses its own empty override: "without this the arm would write a CAPTURE_DONE reading cells=0
+# and score as a clean, empty pass". This is the pre-flight half of that guard; the post-flight half
+# is at the bottom of this file, where a run that fired cells and landed none is refused too.
+[ "${#PATIENTS[@]}" -gt 0 ] || [ "$FIRE_TIER_B" = 1 ] || {
+  echo "ERROR: nothing to fire — CAPTURE_PATIENTS names no patient and Tier B is not firing (CAPTURE_TIER_B=$TIER_B); refusing to write a CAPTURE_DONE over an empty run" >&2
+  exit 1; }
+
+# Fired/landed counts for the marker below. Incremented inside fire(), which runs in THIS shell (no
+# pipe, no subshell) — the intended count is therefore whatever the loops actually asked for, not a
+# hand-kept tally that can drift from the fire lines.
+FIRED=0
+PROMOTED=0
+
 # Tier A: topic-key -> short-register phrasing. Keep keys EXACTLY the gold topic slugs.
 TOPICS=(programs allergies drug-allergies eye heart fractures kidney mental)
 query_of() {
@@ -44,6 +68,7 @@ query_of() {
 }
 
 fire() { # uuid, question, outfile
+  FIRED=$((FIRED + 1))
   # Capture into a temp file and promote only on HTTP 200: firing straight at the final
   # path let a RESUME against a down/500ing standalone destroy the previous run's good
   # cell (curl overwrote it with an error body, or the mv renamed it to .err).
@@ -56,6 +81,7 @@ fire() { # uuid, question, outfile
   # would overwrite a good cell with a partial body.
   if [ "$rc" -eq 0 ] && [ "$code" = 200 ]; then
     mv "$3.tmp" "$3"
+    PROMOTED=$((PROMOTED + 1))
   else
     echo "WARN: $3 HTTP $code curl-rc=$rc (not scored; any prior good capture kept)" >&2
     mv "$3.tmp" "$3.err" 2>/dev/null || rm -f "$3.tmp"
@@ -73,7 +99,7 @@ done
 
 # Tier B — by default only on a full pinned-set run (a CAPTURE_PATIENTS subset is a Tier-A
 # resume); force with CAPTURE_TIER_B=1, suppress with CAPTURE_TIER_B=0.
-if [ "$TIER_B" = "1" ] || { [ "$TIER_B" = "auto" ] && [ -z "$CAPTURE_PATIENTS" ]; }; then
+if [ "$FIRE_TIER_B" = 1 ]; then
   fire "47028119-e1e0-467c-b807-a23d1a81fb2b" "is he hypertensive"  "$OUT/47028119-e1e0-467c-b807-a23d1a81fb2b__probe-hypertensive.json"
   fire "3d6b5ada-c402-4f3f-9c70-6a17f4d2a339" "is she diabetic"     "$OUT/3d6b5ada-c402-4f3f-9c70-6a17f4d2a339__probe-diabetic.json"
   fire "489db738-ad5f-4335-a9f1-270ec0c76ea2" "is he anemic"        "$OUT/489db738-ad5f-4335-a9f1-270ec0c76ea2__probe-anemic.json"
@@ -109,7 +135,25 @@ fi
 # file, so every A/B ever run on its captures reported "no CAPTURE_DONE in the baseline arm ...
 # candidate arm" and exited 3: an integrity signal that is always on is one nobody can read,
 # which is #178's constant-column defect in another instrument. Written the way
-# capture_probe_safety.sh writes its own.
-echo "cells=$(ls "$OUT"/*.json 2>/dev/null | wc -l | tr -d ' ') patients=${#PATIENTS[@]} topics=${#TOPICS[@]} tier_b=$TIER_B" \
+# capture_probe_safety.sh writes its own — the INTENDED cell count, so the body can DISAGREE with
+# the directory it sits in and a shortfall is legible in the marker itself.
+#
+# And refused outright where nothing landed. A marker derived only from `ls "$OUT"/*.json` cannot
+# contradict the capture, so an arm that failed wholesale — standalone down, wrong port or auth,
+# or the cohort mismatch the README's "standalone gold is unremappable" note describes — wrote
+# `cells=0` and compare_arms.py read it as a complete, clean A/B: "cells compared: 0, class
+# flips: 0", exit 0. That is a fail-open this script did not have before the marker existed (the
+# absent file made exit 3 unconditional), so the marker carries the guard the file's absence used
+# to carry: no landed cell, no marker, non-zero exit.
+if [ "$PROMOTED" -eq 0 ]; then
+  echo "ERROR: 0 of $FIRED fired cells landed — refusing to write CAPTURE_DONE, because an arm that captured nothing must not read as a clean, empty A/B (compare_arms.py exits 0 on two empty arms with markers). Check the standalone is up at $BASE and the cohort exists on it." >&2
+  exit 1
+fi
+if [ "$PROMOTED" -lt "$FIRED" ]; then
+  echo "WARN: only $PROMOTED of $FIRED cells fired this run landed — the marker records both, so read the shortfall before quoting any aggregate" >&2
+fi
+# cells = fired THIS run (the sibling's meaning); present = every scored cell now in the
+# directory, which on a Tier-B-only resume is larger than `cells` by the Tier-A run before it.
+echo "cells=$FIRED promoted=$PROMOTED present=$(ls "$OUT"/*.json 2>/dev/null | wc -l | tr -d ' ') patients=${#PATIENTS[@]} topics=${#TOPICS[@]} tier_b=$TIER_B" \
   > "$OUT/CAPTURE_DONE"
-echo "CAPTURE_DONE $(ls "$OUT"/*.json 2>/dev/null | wc -l | tr -d ' ') cells -> $OUT"
+echo "CAPTURE_DONE $PROMOTED/$FIRED cells landed -> $OUT"

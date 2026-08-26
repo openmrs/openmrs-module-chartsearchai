@@ -502,77 +502,9 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Display-cased end marker as querystore really renders it into a drug-order record's text —
-	 * {@code "Drug order: X. … . Stopped: 2026-08-24"}. Held beside the lowercased match constant
-	 * {@link #QUERYSTORE_STOPPED_MARKER} that {@link #describesEndedOrder} keys on.
-	 *
-	 * <p><b>Nothing reads it outside this file</b>, and that is the honest description of it: the
-	 * matcher lowercases, so no decision keys on the casing. What it buys is that the RAW form
-	 * querystore renders is written down once, next to the matcher, and asserted against that
-	 * producer's actual output by {@code EndedOrderMarkerContractTest} — this module keys a safety
-	 * decision on another module's display prose, so a rewording there is worth failing loudly on
-	 * even where the lowercased match would still tolerate it. Package-private for the same reason:
-	 * the only reader is the contract test beside it.
-	 *
-	 * <p><b>Deliberately NOT derived from {@link #QUERYSTORE_STOPPED_MARKER} by
-	 * {@code toLowerCase()}, though the tidy-up is tempting.</b> This one carries a trailing space
-	 * and that one does not, so deriving would LENGTHEN the match constant, which narrows what
-	 * {@link #describesEndedOrder} accepts. Say only what is checkable about that: every
-	 * marker-bearing drug-order record reaching the chart is rendered by querystore's
-	 * {@code DrugOrderRecordSerializer}, which always emits the space, so no shape it renders today
-	 * would stop being recognised — the cost is not a live defect but that the predicate would
-	 * quietly stop tolerating a spacing it currently tolerates, for a producer that has changed
-	 * its wording before. What makes the tidy-up worth refusing is that NOTHING WOULD CATCH IT:
-	 * {@code EndedOrderMarkerContractTest.theRawMarkersAreOnesTheMatcherAccepts} asserts the two
-	 * agree, and once one is derived from the other that assertion is {@code x.contains(x)} and
-	 * cannot fail. Independence is what keeps it a real assertion.
-	 */
-	static final String ORDER_STOPPED_MARKER = ". Stopped: ";
-
-	/**
-	 * The prefix querystore renders a drug-order record's text under, pinned against the real
-	 * serializer by {@code EndedOrderMarkerContractTest.aDrugOrderRecordsTextBeginsWithThisPrefix}.
-	 *
-	 * <p>Recorded because it is the only thing in the rendered TEXT that tells a drug order from the
-	 * other order classes carrying the same two end markers: querystore's
-	 * {@code AbstractServiceOrderRecordSerializer} emits {@code ". Stopped: "} and {@code ". Action: "}
-	 * behind {@code "Referral order: "} and {@code "Test order: "} as well, so
-	 * {@link #describesEndedOrder} cannot itself tell an ended prescription from an ended lab test.
-	 * Its one caller does not need it to — that loop gates on the record's resource TYPE
-	 * ({@code drug_order}) before reading the text at all — so this constant has no production
-	 * reader, and anything that ever reads the text WITHOUT that type gate needs this cue. Kept, and
-	 * package-private, for the reason {@link #ORDER_STOPPED_MARKER} is.
-	 */
-	static final String QUERYSTORE_DRUG_ORDER_PREFIX = "Drug order:";
-
-	/**
-	 * The prefix {@link #renderActiveOrder} renders the module's own active-order stand-in under —
-	 * deliberately distinct from {@link #QUERYSTORE_DRUG_ORDER_PREFIX} so the record says it is a
-	 * stand-in rather than an indexed one.
-	 *
-	 * <p>It carries no trailing space; the render site supplies it. That site's spacing is pinned from
-	 * outside by the reconciliation tests asserting the rendered
-	 * {@code "Active drug order: <display>."} text.
-	 */
-	private static final String ACTIVE_ORDER_PREFIX = "Active drug order:";
-
-	/**
-	 * Display-cased marker for a DISCONTINUE order — the raw form of
-	 * {@link #QUERYSTORE_DISCONTINUE_MARKER}, kept for the reason {@link #ORDER_STOPPED_MARKER} is.
-	 * Unlike that one it round-trips exactly under {@code toLowerCase()}; it is still held apart, so
-	 * that the two markers are read the same way and neither acquires a rule of its own.
-	 *
-	 * <p>A record carrying THIS marker need carry no date at all: querystore appends
-	 * {@link #ORDER_STOPPED_MARKER} only for a non-null {@code getDateStopped()} and
-	 * {@code ". Action: "} unconditionally, so an order's text can read as ended while carrying no
-	 * end date — pinned by
-	 * {@code EndedOrderMarkerContractTest.aDiscontinuedOrderCarriesNoStopDateAtAll}.
-	 */
-	static final String ORDER_DISCONTINUED_MARKER = ". Action: DISCONTINUE";
-
-	/**
-	 * Lowercased marker querystore renders a drug order's END date under — the match form of
-	 * {@link #ORDER_STOPPED_MARKER}, held apart from it for the reason stated there.
+	 * Lowercased marker querystore renders a drug order's END date under — the form
+	 * {@link #describesEndedOrder} matches on, which is why it is lowercased and carries no trailing
+	 * space (querystore renders {@code ". Stopped: <date>"}; the match tolerates either spacing).
 	 *
 	 * <p>It is emitted for {@code getDateStopped()} only. An earlier version of this comment said
 	 * "for both {@code getDateStopped()} and {@code getAutoExpireDate()}", which is measured false:
@@ -610,9 +542,10 @@ public class DrugReferenceInjector {
 	 * serializer's output in {@code QuerystoreOrderTextMarkerTest} — a wording change there fails
 	 * loudly instead of silently reopening issue #118.
 	 *
-	 * <p>{@code EndedOrderMarkerContractTest} pins the same serializer's RAW output against the
-	 * display-cased forms of those markers, which is a stricter claim about the same producer than
-	 * the lowercased match makes.
+	 * <p>{@code EndedOrderMarkerContractTest} pins two further facts about that same serializer's
+	 * output which this method does not read and a text-only consumer would need: the record prefix
+	 * that tells a drug order from the other order classes carrying these same markers, and that a
+	 * DISCONTINUE record carries no end DATE at all.
 	 *
 	 * <p><strong>Known limitation, and the strongest argument for the structural fix above.</strong>
 	 * Running that serializer (rather than reading it) showed querystore does NOT render an
@@ -639,7 +572,7 @@ public class DrugReferenceInjector {
 	 * above, where an operator looks for it, rather than by prose in front of a clinician.
 	 */
 	static String renderActiveOrder(PatientClinicalContext.ActiveDrugOrder order) {
-		return ACTIVE_ORDER_PREFIX + " " + order.getDisplay() + ".";
+		return "Active drug order: " + order.getDisplay() + ".";
 	}
 
 	/**

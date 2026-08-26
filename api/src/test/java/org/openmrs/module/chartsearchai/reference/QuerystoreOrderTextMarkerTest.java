@@ -37,10 +37,10 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * {@code AbstractRecordSerializer.serialize} entry point on a real {@link DrugOrder} from the
  * standard test dataset. No hand-typed imitation of the format appears here: if querystore renames
  * or restructures these markers, this test fails and names what broke.
- * {@link EndedOrderMarkerContractTest} asserts the same serializer's RAW output — casing, spacing and
- * the record prefix — against the display-cased constants, which is a stricter claim about the same
- * producer than this class's lowercased match makes; a casing-only rewording reddens that class and
- * leaves this one green, deliberately, because the match tolerates it.
+ * {@link EndedOrderMarkerContractTest} pins two facts about the same serializer's output that this
+ * class does not and the matcher never reads: the {@code "Drug order:"} record prefix, which is the
+ * only cue in the text separating a prescription from the other order classes carrying these same
+ * markers, and that a DISCONTINUE record carries no end DATE at all.
  *
  * <p>Both directions are pinned. An ended order's text must be RECOGNISED as ended, and an ordinary
  * live order's text must NOT be — the second matters just as much, because over-matching would treat

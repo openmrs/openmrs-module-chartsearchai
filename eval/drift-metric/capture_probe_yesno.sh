@@ -92,14 +92,19 @@ if [ "$TIER_B" = "1" ] || { [ "$TIER_B" = "auto" ] && [ -z "$CAPTURE_PATIENTS" ]
   # It exists because the presence topics above cannot reach this question class and the
   # 'medications' eval topic is a wh-question compare_arms.py excludes from verdict scoring by
   # name — so a change that costs the #107 verdict lead on "is he currently taking any
-  # medications?" was invisible to every gate in this directory. #315's clause did exactly that
-  # for one review round, on a chart of 8 active orders and no ended ones: "Yes — the patient is
-  # currently taking the following medications: Advil 400mg [10], …" became "The patient is
-  # currently taking the following medications:", n=3 byte-identical per arm.
+  # medications?" was invisible to every gate in this directory. #315's prompt clause did exactly
+  # that for one review round, on a chart of 8 active orders and no ended ones: "Yes — the patient
+  # is currently taking the following medications: Advil 400mg [10], …" became "The patient is
+  # currently taking the following medications:", n=3 CONSECUTIVE per arm — the weaker protocol
+  # ADR Decision 45's methodology note describes, so read it as the reason this cell was added
+  # rather than as a rate. That clause is reverted; the gate gap it exposed is not clause-specific,
+  # which is why the cell stays.
   fire "dc8560c9-6d2b-45bf-861c-8fcf562ec9b1" "is he currently taking any medications?" "$OUT/dc8560c9-6d2b-45bf-861c-8fcf562ec9b1__probe-current-meds.json"
 fi
-# Completeness MARKER FILE, not only a log line. compare_arms.py and score_directness.py both
-# read $OUT/CAPTURE_DONE to tell a finished arm from one killed midway — a partial arm still
+# Completeness MARKER FILE, not only a log line. compare_arms.py — the scorer this script's
+# captures are A/B'd with — reads $OUT/CAPTURE_DONE to tell a finished arm from one killed
+# midway (score_probe_safety.py reads its own arm's; score_directness.py reads no marker and
+# only names this one in a comment, so do not cite it as a consumer) — a partial arm still
 # produces a full-looking table over a biased prefix. This script printed the words and wrote no
 # file, so every A/B ever run on its captures reported "no CAPTURE_DONE in the baseline arm ...
 # candidate arm" and exited 3: an integrity signal that is always on is one nobody can read,

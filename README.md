@@ -327,55 +327,6 @@ chartsearchai does not run its own relevance gate. The LLM is given the patient'
 
 Questions with numeric recency constraints are automatically detected and honored. For example, "last 3 blood pressure readings" or "most recent 5 lab results" will cap the results per concept group to the specified number, keeping only the most recent measurements.
 
-### Ended drug orders
-
-A `drug_order` record for a prescription that has **ended** carries querystore's end marker — a
-`. Stopped: <date>` field, or `. Action: DISCONTINUE` — and the system prompt classifies it as such,
-the same way it classifies `Drug reference` and `Safety finding` records. Whenever the answer names a
-drug from one of those records it must say in the same sentence that the order was stopped, with the
-date where the record carries one. Where a drug's records have *all* ended, that settles the patient
-is not on it, so the answer may neither present it as current nor report its status as unrecorded
-([#315](https://github.com/openmrs/openmrs-module-chartsearchai/issues/315)); where an ended record
-sits beside a live one for the same drug — how a dose change is written, as a REVISE — the live
-record governs and the ended one is reported as earlier therapy. Before this, whether the
-stop date survived into the answer was decided by the question's phrasing: on one stopped Nevirapine
-order, three of four question shapes named the drug and dropped its end, and *"is he currently taking
-any medications?"* answered *"Yes — the patient was ordered Nevirapine…"* about a drug stopped the day
-before.
-
-The rule is scoped to the drug that record names and says nothing about any other, so a chart holding
-a stopped order beside a live one for a *different* drug still answers a medications question from the
-live one. A record's class is identified by its `Drug order:` / `Active drug order:` prefix as well as
-by the end marker, and that prefix is load-bearing rather than labelling: querystore emits the same
-two markers behind `Referral order:` and `Test order:`, so without it an ended lab test would read as
-an ended prescription. The markers
-are the same two [active-order reconciliation](#drug-reference-injection--safety-validation) keys on
-for #118, and the record prefixes are constants too — the second of them the one
-`DrugReferenceInjector.renderActiveOrder` builds the injected #118 record from. Sharing is not what
-keeps them honest: the display-cased and match-cased marker constants are deliberately independent
-literals. What pins them to agree, and to agree with what querystore actually renders, is
-`EndedOrderMarkerContractTest` against the real serializer's output.
-
-A drug-order record carrying **neither** marker is described to the model as one that *records no
-end*, and nothing more. The rule deliberately does not say such a record means the drug is current,
-and deliberately does not say which records a medications question is answered from: both were
-tried, and each cost something measured. Saying "is CURRENT" made the answer assert that a
-lapsed order was current *and drop the patient's two live prescriptions from the same sentence*,
-in a payload whose own safety chips named those two and not it. Saying a medications question is
-answered from those records out-ranked the yes/no verdict rule further down the prompt, and an
-ordinary all-active chart stopped leading with a verdict at all. Both are in ADR Decision 45 with
-the verbatim answers.
-
-Not covered: an order that lapsed by its **auto-expire date**. querystore carries `auto_expire_date`
-in the document metadata but renders no marker for it into the record text, so nothing downstream of
-the text can see it. Such an order carries neither marker, and while the prompt no longer *claims*
-it is current, the model may still list it among the drugs the patient is taking — a wording that
-says the lapse out loud was measured and changed nothing on that cell. The deterministic layer does
-not follow: `Order.isActive()` excludes an expired order, so that drug gets no chip, no interaction
-or duplicate-therapy screening and no #118 injection while the prose may still name it. It is the
-same limitation `DrugReferenceInjector.describesEndedOrder` records for the reconciliation, and it is
-closed by the same structural fix — threading the metadata rather than reading rendered prose.
-
 ### Input validation
 
 Questions are checked against common prompt injection patterns (e.g., "ignore previous instructions", "you are now", "system prompt:") and rejected with HTTP 400 if matched. This is a defense-in-depth measure — the primary protection is the structured-output constraint (`response_format: json_schema`, sent by both engines and shared via `ChartAnswerResponseFormat`; the local llama-server enforces it via a derived GBNF grammar internally, and remote OpenAI-compat providers enforce it server-side) that forces LLM output into a fixed `{answer, citations}` shape regardless of prompt content. Normal clinical questions containing words like "ignore" or "instructions" in non-adversarial contexts (e.g., "What instructions were given at discharge?") are not affected.

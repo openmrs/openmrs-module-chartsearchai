@@ -635,9 +635,11 @@ change was gated on these, thresholds locked before implementation):
   cohort): the `medications` eval topic is a wh-question `compare_arms.py` excludes from verdict
   scoring by name and the 8 presence topics ask about no drugs at all, so a prompt change that
   cost the #107 verdict lead on "is he currently taking any medications?" flipped nothing here.
-  It writes a `CAPTURE_DONE` marker FILE as well as the log line — `compare_arms.py` and
-  `score_directness.py` read the file, and before this it never existed, so every A/B over this
-  script's captures reported a missing marker in both arms and exited 3.
+  It writes a `CAPTURE_DONE` marker FILE as well as the log line — `compare_arms.py` is what
+  reads the file for THIS script's captures (`score_probe_safety.py` reads it for the safety
+  probe's; `score_directness.py` reads no marker at all and names it only in a comment), and
+  before this it never existed, so every A/B over this script's captures reported a missing
+  marker in both arms and exited 3.
 - `score_directness.py <capture_dir>` — 3-class verdict-lead scorer (YES / NO-family /
   CANNOT; the closed regexes ARE the metric definition — re-quote baselines if edited),
   Tier-B expected-lead matching and safety violations (a bare YES with no named record).

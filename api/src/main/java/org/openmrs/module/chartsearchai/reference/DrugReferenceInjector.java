@@ -502,11 +502,17 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Display-cased marker querystore renders a drug order's END date under, exactly as it reaches
-	 * the chart — {@code "Drug order: X. … . Stopped: 2026-08-24"}. Public, and shared with
-	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT}'s ended-order record rule (issue #315), for the
-	 * reason {@link #FINDING_PREFIX} is: a prompt carrying its own copy of this cue would go on
-	 * teaching the model a marker no chart record carries, and every test would stay green.
+	 * Display-cased end marker as querystore really renders it into a drug-order record's text —
+	 * {@code "Drug order: X. … . Stopped: 2026-08-24"}. Held beside the lowercased match constant
+	 * {@link #QUERYSTORE_STOPPED_MARKER} that {@link #describesEndedOrder} keys on.
+	 *
+	 * <p><b>Nothing reads it outside this file</b>, and that is the honest description of it: the
+	 * matcher lowercases, so no decision keys on the casing. What it buys is that the RAW form
+	 * querystore renders is written down once, next to the matcher, and asserted against that
+	 * producer's actual output by {@code EndedOrderMarkerContractTest} — this module keys a safety
+	 * decision on another module's display prose, so a rewording there is worth failing loudly on
+	 * even where the lowercased match would still tolerate it. Package-private for the same reason:
+	 * the only reader is the contract test beside it.
 	 *
 	 * <p><b>Deliberately NOT derived from {@link #QUERYSTORE_STOPPED_MARKER} by
 	 * {@code toLowerCase()}, though the tidy-up is tempting.</b> This one carries a trailing space
@@ -517,63 +523,52 @@ public class DrugReferenceInjector {
 	 * would stop being recognised — the cost is not a live defect but that the predicate would
 	 * quietly stop tolerating a spacing it currently tolerates, for a producer that has changed
 	 * its wording before. What makes the tidy-up worth refusing is that NOTHING WOULD CATCH IT:
-	 * {@code EndedOrderMarkerContractTest.theMarkersShownToTheModelAreTheOnesTheMatcherKeysOn}
-	 * asserts the two agree, and once one is derived from the other that assertion is
-	 * {@code x.contains(x)} and cannot fail. Independence is what keeps it a real assertion.
+	 * {@code EndedOrderMarkerContractTest.theRawMarkersAreOnesTheMatcherAccepts} asserts the two
+	 * agree, and once one is derived from the other that assertion is {@code x.contains(x)} and
+	 * cannot fail. Independence is what keeps it a real assertion.
 	 */
-	public static final String ORDER_STOPPED_MARKER = ". Stopped: ";
+	static final String ORDER_STOPPED_MARKER = ". Stopped: ";
 
 	/**
-	 * The prefix querystore renders a drug-order record's text under. Public and shared with
-	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} for the reason {@link #ORDER_STOPPED_MARKER} is: the
-	 * prompt identifies the record CLASS by this cue before it looks for either end marker, so a
-	 * prompt carrying its own copy could come to name a prefix no record has.
+	 * The prefix querystore renders a drug-order record's text under, pinned against the real
+	 * serializer by {@code EndedOrderMarkerContractTest.aDrugOrderRecordsTextBeginsWithThisPrefix}.
 	 *
-	 * <p>It is a GUARD rather than labelling, which is why it must not be "simplified" out of the
-	 * clause as a restatement of "a drug-order record": querystore's
-	 * {@code AbstractServiceOrderRecordSerializer} emits the SAME two end markers behind
-	 * {@code "Referral order: "} and {@code "Test order: "}, so without this conjunct the clause
-	 * would have the model report an ended lab test as an ended prescription. Pinned against the
-	 * real serializer by
-	 * {@code EndedOrderMarkerContractTest.theRecordPrefixTheClauseIdentifiesTheClassBySurvivesToo}.
+	 * <p>Recorded because it is the only thing in the rendered TEXT that tells a drug order from the
+	 * other order classes carrying the same two end markers: querystore's
+	 * {@code AbstractServiceOrderRecordSerializer} emits {@code ". Stopped: "} and {@code ". Action: "}
+	 * behind {@code "Referral order: "} and {@code "Test order: "} as well, so
+	 * {@link #describesEndedOrder} cannot itself tell an ended prescription from an ended lab test.
+	 * Its one caller does not need it to — that loop gates on the record's resource TYPE
+	 * ({@code drug_order}) before reading the text at all — so this constant has no production
+	 * reader, and anything that ever reads the text WITHOUT that type gate needs this cue. Kept, and
+	 * package-private, for the reason {@link #ORDER_STOPPED_MARKER} is.
 	 */
-	public static final String QUERYSTORE_DRUG_ORDER_PREFIX = "Drug order:";
+	static final String QUERYSTORE_DRUG_ORDER_PREFIX = "Drug order:";
 
 	/**
 	 * The prefix {@link #renderActiveOrder} renders the module's own active-order stand-in under —
 	 * deliberately distinct from {@link #QUERYSTORE_DRUG_ORDER_PREFIX} so the record says it is a
-	 * stand-in rather than an indexed one, and public for the same reason that one is.
+	 * stand-in rather than an indexed one.
 	 *
-	 * <p>It carries NO trailing space, and that is load-bearing rather than tidy: the prompt
-	 * concatenates it, and {@code DEFAULT_SYSTEM_PROMPT} is only a compile-time constant while every
-	 * operand is one. A {@code .trim()} at the prompt's call site is not a constant expression, so
-	 * javac stops folding the whole prompt into one literal and computes it in {@code <clinit>}
-	 * instead — which compiles, passes every test, and silently breaks anything that reads the
-	 * prompt out of the class file's constant pool. Keep the space at the RENDER site.
-	 *
-	 * <p>The prompt names it so an injected record has standing in the ended-order rule's CURRENT
-	 * branch. Without that, the one record #118 injects to stop a chip and the prose contradicting
-	 * each other would fall outside the class the rule reasons about — reopening #118 by instruction
-	 * rather than by missing evidence. Held as one constant because the renderer and the prompt are
-	 * the two places that spell it: sharing makes it impossible for those two to disagree. The
-	 * RENDER site's spacing is pinned separately, from outside, by the reconciliation tests that
-	 * assert the rendered {@code "Active drug order: <display>."} text.
+	 * <p>It carries no trailing space; the render site supplies it. That site's spacing is pinned from
+	 * outside by the reconciliation tests asserting the rendered
+	 * {@code "Active drug order: <display>."} text.
 	 */
-	public static final String ACTIVE_ORDER_PREFIX = "Active drug order:";
+	private static final String ACTIVE_ORDER_PREFIX = "Active drug order:";
 
 	/**
-	 * Display-cased marker for a DISCONTINUE order, shared with the prompt for the reason
-	 * {@link #ORDER_STOPPED_MARKER} is. Unlike that one this round-trips exactly to
-	 * {@link #QUERYSTORE_DISCONTINUE_MARKER} under {@code toLowerCase()}; it is still held apart,
-	 * so that the two markers are read the same way and neither acquires a rule of its own.
+	 * Display-cased marker for a DISCONTINUE order — the raw form of
+	 * {@link #QUERYSTORE_DISCONTINUE_MARKER}, kept for the reason {@link #ORDER_STOPPED_MARKER} is.
+	 * Unlike that one it round-trips exactly under {@code toLowerCase()}; it is still held apart, so
+	 * that the two markers are read the same way and neither acquires a rule of its own.
 	 *
 	 * <p>A record carrying THIS marker need carry no date at all: querystore appends
 	 * {@link #ORDER_STOPPED_MARKER} only for a non-null {@code getDateStopped()} and
-	 * {@code ". Action: "} unconditionally. That is why the prompt rule asks for the stop date
-	 * <em>when the record carries one</em> rather than demanding it — pinned by
-	 * {@code EndedOrderMarkerContractTest.aDiscontinuedOrderCarriesNoStopDate_soTheRuleMayNotDemandOne}.
+	 * {@code ". Action: "} unconditionally, so an order's text can read as ended while carrying no
+	 * end date — pinned by
+	 * {@code EndedOrderMarkerContractTest.aDiscontinuedOrderCarriesNoStopDateAtAll}.
 	 */
-	public static final String ORDER_DISCONTINUED_MARKER = ". Action: DISCONTINUE";
+	static final String ORDER_DISCONTINUED_MARKER = ". Action: DISCONTINUE";
 
 	/**
 	 * Lowercased marker querystore renders a drug order's END date under — the match form of
@@ -615,12 +610,9 @@ public class DrugReferenceInjector {
 	 * serializer's output in {@code QuerystoreOrderTextMarkerTest} — a wording change there fails
 	 * loudly instead of silently reopening issue #118.
 	 *
-	 * <p><b>Two consumers, not one, since issue #315.</b> The same two markers are shown to the model
-	 * by {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} (as {@link #ORDER_STOPPED_MARKER} and
-	 * {@link #ORDER_DISCONTINUED_MARKER}) so that an answer naming a drug from an ended order has to
-	 * say the order ended. Reword either marker and both the reconciliation above and that answer
-	 * rule move together; {@code EndedOrderMarkerContractTest} pins the second against the same real
-	 * serializer output.
+	 * <p>{@code EndedOrderMarkerContractTest} pins the same serializer's RAW output against the
+	 * display-cased forms of those markers, which is a stricter claim about the same producer than
+	 * the lowercased match makes.
 	 *
 	 * <p><strong>Known limitation, and the strongest argument for the structural fix above.</strong>
 	 * Running that serializer (rather than reading it) showed querystore does NOT render an
@@ -641,11 +633,10 @@ public class DrugReferenceInjector {
 	 * One unrepresented active order as a chart line. Shaped after querystore's own drug-order text
 	 * — {@code "Active drug order: <display>."}, the label deliberately distinct so the record says
 	 * it is the module's stand-in rather than an indexed one — so the model reads it as the chart
-	 * record it stands in
-	 * for, and stated as plain fact: a hedge inside the record ("no matching record was retrieved")
-	 * is the shape that made the model put an abstention clause in front of its own evidence in
-	 * #110. The provenance is carried by the record's resource type and the WARN above, where an
-	 * operator looks for it, rather than by prose in front of a clinician.
+	 * record it stands in for, and stated as plain fact: a hedge inside the record ("no matching
+	 * record was retrieved") is the shape that made the model put an abstention clause in front of
+	 * its own evidence in #110. The provenance is carried by the record's resource type and the WARN
+	 * above, where an operator looks for it, rather than by prose in front of a clinician.
 	 */
 	static String renderActiveOrder(PatientClinicalContext.ActiveDrugOrder order) {
 		return ACTIVE_ORDER_PREFIX + " " + order.getDisplay() + ".";

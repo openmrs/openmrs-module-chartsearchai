@@ -30,21 +30,17 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p>Why this test exists. Keying a safety decision on another module's display text is fragile in
  * the worst way — a wording change there would silently reopen issue #118 (a stopped order's record
- * substantiating the live order that replaced it) with every other test still green. So the markers
- * are asserted against the output of querystore's
+ * substantiating the live order that replaced it), because {@link DrugReferenceInjector#describesEndedOrder}
+ * is the only thing in this module that reads that text and nothing about it would look wrong. So the
+ * markers are asserted against the output of querystore's
  * REAL {@link DrugOrderRecordSerializer}, driven through its public
  * {@code AbstractRecordSerializer.serialize} entry point on a real {@link DrugOrder} from the
  * standard test dataset. No hand-typed imitation of the format appears here: if querystore renames
  * or restructures these markers, this test fails and names what broke.
- *
- * <p><b>This is no longer the only reader of that text.</b> Since issue #315,
- * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} shows the model the same two markers — as
- * {@link DrugReferenceInjector#ORDER_STOPPED_MARKER} and
- * {@link DrugReferenceInjector#ORDER_DISCONTINUED_MARKER}, the display-cased constants — so that an
- * answer naming a drug from an ended order has to say the order ended. A querystore rewording
- * therefore breaks two things, not one, and {@code EndedOrderMarkerContractTest} is the companion
- * pin for the second: it asserts those constants against this same real serializer's RAW output,
- * casing included, which this class cannot do because it matches on a lowercased copy.
+ * {@link EndedOrderMarkerContractTest} asserts the same serializer's RAW output — casing, spacing and
+ * the record prefix — against the display-cased constants, which is a stricter claim about the same
+ * producer than this class's lowercased match makes; a casing-only rewording reddens that class and
+ * leaves this one green, deliberately, because the match tolerates it.
  *
  * <p>Both directions are pinned. An ended order's text must be RECOGNISED as ended, and an ordinary
  * live order's text must NOT be — the second matters just as much, because over-matching would treat
@@ -111,16 +107,6 @@ public class QuerystoreOrderTextMarkerTest extends BaseModuleContextSensitiveTes
 		// carries no end marker and can still substantiate a live order. This test exists to state
 		// that plainly and to fail if querystore ever starts rendering it — at which point
 		// describesEndedOrder covers auto-expiry for free and this test's expectation flips.
-		//
-		// Since #315 this gap is one the prompt has an opinion about, and the opinion is
-		// deliberately weak: the clause's counterpart says a drug-order record carrying neither
-		// marker "records no end" and stops there. It said "is CURRENT" for one review round, and
-		// that was measured to assert the lapsed drug was current AND to drop the patient's two
-		// live orders from the same answer — ADR Decision 45's residue bullet carries the verbatim
-		// cells. The residue that remains is an INFERENCE the model may still make from a record
-		// with no end marker, not a claim the module makes; nothing in the rendered text can close
-		// it. Whoever flips this expectation closes it properly, and should re-read that bullet
-		// rather than only describesEndedOrder's javadoc.
 		//
 		// It is the strongest argument for the structural fix noted on describesEndedOrder: the
 		// metadata carries auto_expire_date, the rendered text cannot.

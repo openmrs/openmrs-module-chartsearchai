@@ -53,11 +53,14 @@ public class SerializedRecord {
 	 * {@code TRUE} when it is in the patient's active-order set, {@code FALSE} when the module read
 	 * that set and this record's order was not in it, and {@code null} when the module cannot say.
 	 *
-	 * <p>{@code null} is the answer for three different situations and they are deliberately not
-	 * distinguished here, because a consumer must treat all three alike: the record is not a drug
-	 * order, the order read failed, or the record's order could not be attributed to this patient at
-	 * all. What they have in common is the only thing that matters — nothing is known, so nothing
-	 * may be asserted. A chart the module could not read is not a chart of stopped prescriptions.
+	 * <p>{@code null} is the answer for four different situations and they are deliberately not
+	 * distinguished here, because a consumer must treat them alike: the record is not a drug order;
+	 * the order read failed; the record's order could not be attributed to this patient at all; or
+	 * that one order could not be evaluated, because {@code Order.isActive()} throws on a row whose
+	 * stop date is after its auto-expire date. What they have in common is the only thing that
+	 * matters — nothing is known, so nothing may be asserted. A chart the module could not read is not
+	 * a chart of stopped prescriptions, and neither is one order it could not evaluate a stopped
+	 * prescription.
 	 *
 	 * <p>Set only by {@code QueryStoreChartBuilder.toSerializedRecords}, which is the single funnel
 	 * every chart passes through and the only place the authoritative read happens (issue #317).

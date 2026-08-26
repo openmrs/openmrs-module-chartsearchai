@@ -56,9 +56,11 @@
 	     the shape is reachable rather than merely malformed.
 
 	     Order.isDiscontinued and Order.isExpired both THROW APIException on it, before any other
-	     test, while the SQL getActiveOrders applies simply answers. It belongs to patient 2 and is
-	     never charted: the point is that ANOTHER order in the same patient's history must not be able
-	     to take the mark off the records that ARE charted.
+	     test, while the SQL getActiveOrders applies simply answers. It belongs to patient 2 and does
+	     two jobs. Charted, its own record must say NOTHING rather than "not active" — the module may
+	     not report as ended a prescription it could not evaluate. Uncharted, which is how every other
+	     case in the file sees it, it must not be able to take the mark off the records that ARE
+	     charted.
 	-->
 	<orders order_id="9319" order_type_id="1" order_number="ORD-9319" urgency="ROUTINE"
 	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"

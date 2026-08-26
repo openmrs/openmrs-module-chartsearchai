@@ -52,11 +52,13 @@ import org.springframework.stereotype.Component;
  * once — changes them with no underlying data change and no index change. The reused prefix then
  * ends at the record whose mark moved, and everything after it is prefilled again. How much that
  * costs depends on where that record sits, and a chart is ordered most-recent-first across ALL record
- * types. On the busiest patient of the 3.7.1 demo database (8 drug orders, ~310 records) the drug
- * orders are newer than every observation, condition, diagnosis, encounter and visit, and older than
- * 8 of their 9 allergies — so the first drug-order record is around the tenth line and "everything
- * after it" is most of the chart. Do not carry that shape to another patient: what decides the
- * position is every type's dates, and that figure is one patient's. It is the correct outcome — the
+ * types. On the 3.7.1 demo database's most-prescribed patient — the one with the most drug orders,
+ * which is not the one with the most records — all 8 of their drug orders are newer than every one of
+ * their observations, conditions, diagnoses, encounters and visits, and older than 8 of their 9
+ * allergies, so the first drug-order record is around the tenth line of several hundred and
+ * "everything after it" is most of the chart. Do not carry that shape to another patient, and do not
+ * read it as a worst case: what decides the position is every record type's dates, and this is one
+ * patient's. It is the correct outcome — the
  * cached prefix asserted something that is no longer true —
  * and {@code appendLiveAge} already made the bytes clock-dependent in the same way, though not at
  * the same cadence: a birthday is once a year, and a finite-duration prescription ending is

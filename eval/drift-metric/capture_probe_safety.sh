@@ -251,9 +251,11 @@ for entry in "${PATIENTS[@]}"; do
   done
 done
 
-# Completeness marker, for the same reason score_directness guards it: a run killed midway
-# otherwise yields gate-shaped numbers over a biased prefix of the patient order. The scorer
-# flags its absence.
+# Completeness marker, for the same reason capture_probe_yesno.sh writes one: a run killed midway
+# otherwise yields gate-shaped numbers over a biased prefix of the patient order. THIS family's
+# reader is score_probe_safety.py, which flags the file's absence; score_directness.py reads no
+# marker at all (it was named here, in that script's comment, in eval/drift-metric/README.md and in
+# ADR Decision 45 — the other three are corrected, and this was the fourth home).
 echo "cells=$(( ${#PATIENTS[@]} * ${#DRUGS[@]} )) patients=${#PATIENTS[@]} drugs=${#DRUGS[@]}" \
   > "$OUT/CAPTURE_DONE"
 echo "CAPTURE_DONE written"

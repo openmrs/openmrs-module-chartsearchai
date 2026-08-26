@@ -12,8 +12,6 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Locale;
-
 import org.junit.jupiter.api.Test;
 import org.openmrs.DrugOrder;
 import org.openmrs.Order;
@@ -23,12 +21,26 @@ import org.openmrs.module.querystore.serialization.DrugOrderRecordSerializer;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
- * Two facts about the drug-order text querystore renders that nothing else in this repo pins, both
- * of them things a consumer of that text has to know and {@link DrugReferenceInjector#describesEndedOrder}
- * — today's only reader of it — does not: the PREFIX that tells a drug order from the other order
- * classes carrying the same end markers, and that an ended order need carry no end DATE at all.
- * {@link QuerystoreOrderTextMarkerTest} pins the matcher's own behaviour, in both directions, over
- * the same real serializer; this class pins the two facts either side of it.
+ * Two facts about the drug-order text querystore renders that nothing else in this repo pins: the
+ * PREFIX that tells a drug order from the other order classes carrying the same end markers, and
+ * that an ended order need carry no end DATE at all. {@link QuerystoreOrderTextMarkerTest} pins the
+ * matcher's own behaviour, in both directions, over the same real serializer; this class pins the two
+ * facts either side of it, and defers to it for everything the matcher itself decides — the
+ * DISCONTINUE case below asserts only the missing date, because that this same arrangement is
+ * RECOGNISED as ended is that class's {@code aDiscontinueOrdersRenderedTextIsRecognisedAsEnded}, and
+ * one fact asserted by two context-sensitive classes is a second place to keep in step for nothing.
+ *
+ * <p><b>Neither fact has a reader in this module today, and they are kept on different grounds — say
+ * which.</b> The missing date is a property anything reporting WHEN an order ended has to tolerate.
+ * The prefix is a FORWARD contract, for the structural remedy ADR Decision 45 names: it is what a
+ * TEXT-ONLY reader would need to tell a prescription from an ended lab test, and
+ * {@link DrugReferenceInjector#describesEndedOrder}'s one caller does not need it because it gates on
+ * the record's resource type before reading the text at all. So this case would fail the criterion
+ * that deleted three siblings from this class (below) if that criterion were "has a production
+ * reader" — it is not: those cases were dropped because the change class they could signal cannot
+ * reach a DECISION here whatever querystore does (the match is on lowercased text), while querystore
+ * renaming this prefix would really break the remedy the entry recommends, and nothing else in the
+ * repo would say so. Do not defend the prefix case by claiming a present-day consumer; it has none.
  *
  * <p><b>The expected strings are literals here, deliberately.</b> No production code reads the raw
  * display-cased form — the matcher lowercases — so a constant holding it in
@@ -76,6 +88,13 @@ public class EndedOrderMarkerContractTest extends BaseModuleContextSensitiveTest
 		// as ended with no date to give. Recorded because anything downstream that wants to report
 		// WHEN an order ended has to treat the date as optional — the #315 prompt clause did, and
 		// the structural remedy ADR Decision 45 names will have to as well.
+		//
+		// The two halves of that sentence are pinned in two places on purpose. That this record is
+		// ENDED is QuerystoreOrderTextMarkerTest.aDiscontinueOrdersRenderedTextIsRecognisedAsEnded,
+		// asserted there over the same arrangement and not repeated here. What is asserted here is
+		// only the missing date, and it is missing because dateStopped is null on this order rather
+		// than because the action is DISCONTINUE — which is the point: the action is what makes the
+		// record ended, and it supplies no date to render.
 		DrugOrder order = triomuneOrder();
 		order.setAction(Order.Action.DISCONTINUE);
 
@@ -84,8 +103,6 @@ public class EndedOrderMarkerContractTest extends BaseModuleContextSensitiveTest
 		assertFalse(rendered.contains(". Stopped: "),
 				"this ended record carries no stop date at all, so no consumer may demand one. "
 						+ "Rendered: " + rendered);
-		assertTrue(DrugReferenceInjector.describesEndedOrder(rendered.toLowerCase(Locale.ROOT)),
-				"and it is still an ended order despite carrying no date");
 	}
 
 	@Test
@@ -93,10 +110,12 @@ public class EndedOrderMarkerContractTest extends BaseModuleContextSensitiveTest
 		// The one thing in the rendered TEXT that tells a drug order from the other order classes:
 		// querystore's AbstractServiceOrderRecordSerializer emits the SAME ". Stopped: " and
 		// ". Action: " markers behind "Referral order:" and "Test order:", so describesEndedOrder
-		// alone cannot tell an ended prescription from an ended lab test. Its one caller does not
-		// need it to — it gates on the record's resource type before reading the text — so this case
-		// pins the cue any text-only reader would need, against the producer rather than a literal
-		// that agrees with itself.
+		// alone cannot tell an ended prescription from an ended lab test. NOTHING IN THIS MODULE
+		// READS THIS PREFIX — describesEndedOrder's one caller gates on the record's resource type
+		// before touching the text — so this is a forward contract for the structural remedy ADR
+		// Decision 45 recommends, which is text-only and would need exactly this cue, pinned against
+		// the producer rather than a literal that agrees with itself. See the class javadoc for why
+		// that is a different ground from the one three deleted siblings failed.
 		String rendered = renderedText(triomuneOrder());
 
 		assertTrue(rendered.startsWith("Drug order:"),

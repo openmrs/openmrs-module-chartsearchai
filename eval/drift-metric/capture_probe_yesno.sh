@@ -19,6 +19,19 @@
 AUTH="${OPENMRS_AUTH:-admin:Admin123}"; BASE="${OPENMRS_REST:-http://localhost:8081/openmrs/ws/rest/v1}"
 OUT="${1:?usage: capture_probe_yesno.sh <outdir> — refusing to burn a capture run with no output dir}"
 mkdir -p "$OUT"
+# Any marker already in this directory is CLEARED before anything is fired, so the file's presence
+# means "the invocation that wrote it landed cells" and never "some earlier invocation did". Without
+# this the refusal at the bottom is only half a guard: it declines to WRITE a marker over a run that
+# landed nothing, but a re-capture into a non-empty directory — the documented Tier-B resume below,
+# or the same arm re-fired after a GP swap — inherits the previous run's marker, and fire() keeps the
+# previous run's good cells (the failed body goes to .err). So a wholesale failure left the directory
+# byte-for-byte the previous run PLUS a marker asserting completeness, and compare_arms.py, which
+# reads the marker's presence and never its body, scored the OLD wording's answers as the new arm's:
+# "class flips: 0", exit 0, for an arm that was never captured. Reproduced against a closed port, on
+# a seeded directory holding a previous run's cells and its marker.
+# The cost is deliberate and is the fail-closed direction: an invocation refused below without firing
+# anything also leaves no marker, so a complete directory has to be re-captured to be readable again.
+rm -f "$OUT/CAPTURE_DONE"
 # CAPTURE_TIER_B: auto (default) = fire Tier B only on a full default run; 1 = always; 0 = never.
 # Lets a failed Tier-B probe be resumed without re-firing 176 Tier-A cells:
 #   CAPTURE_PATIENTS="none" CAPTURE_TIER_B=1 capture_probe_yesno.sh <outdir>
@@ -144,7 +157,12 @@ fi
 # `cells=0` and compare_arms.py read it as a complete, clean A/B: "cells compared: 0, class
 # flips: 0", exit 0. That is a fail-open this script did not have before the marker existed (the
 # absent file made exit 3 unconditional), so the marker carries the guard the file's absence used
-# to carry: no landed cell, no marker, non-zero exit.
+# to carry: no landed cell, no marker, non-zero exit. That invariant needs the clear at the top of
+# this file as well as the refusal here — the refusal alone leaves a PREVIOUS run's marker standing
+# over a re-capture that landed nothing, which is the same fail-open one directory older. A partial
+# resume needs no separate treatment for the same reason: the clear plus the unconditional write
+# below mean the marker in this directory is always the one THIS run wrote, so a resume that lands
+# fewer cells than the run before it cannot inherit the larger run's counts.
 if [ "$PROMOTED" -eq 0 ]; then
   echo "ERROR: 0 of $FIRED fired cells landed — refusing to write CAPTURE_DONE, because an arm that captured nothing must not read as a clean, empty A/B (compare_arms.py exits 0 on two empty arms with markers). Check the standalone is up at $BASE and the cohort exists on it." >&2
   exit 1

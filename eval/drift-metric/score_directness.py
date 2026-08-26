@@ -138,7 +138,8 @@ def cohort_scope_selftest():
         whole = _capture_dir(by_cohort[main_cohort], probes)
         short = _capture_dir(by_cohort[main_cohort][:-1], probes)
         lone = _capture_dir(by_cohort[other], probes)
-        dirs = [whole, short, lone]
+        mixed = _capture_dir(by_cohort[main_cohort][:-1] + by_cohort[other], probes)
+        dirs = [whole, short, lone, mixed]
         incomplete = "Tier-B probes — capture incomplete"
 
         # A complete capture of ONE cohort is complete, even though the gold file holds more cells.
@@ -157,6 +158,15 @@ def cohort_scope_selftest():
               ["denominator %d of %d gold probe cells" % (total, total),
                "scored %d/%d %s" % (n_other, total, incomplete),
                "stated but scored no cell at all"])
+        # A cell OUTSIDE the stated scope must not pad the completeness numerator. Same shortfall as
+        # `truncated-cohort-capture-warns` — one in-scope cell missing — with the other cohort's cells
+        # also in the directory, which is the state a host that somehow holds both would produce and
+        # the state a mis-stated --cohort produces on any host. Before the numerator was scoped, those
+        # extra cells were counted into it and the WARN did not fire.
+        check("out-of-scope-cell-cannot-pad-the-ratio",
+              ["--cohort", main_cohort, mixed], 0,
+              ["scored %d/%d %s" % (n_main - 1, n_main, incomplete),
+               "which the stated scope excludes"])
         # A typo must not quietly move the denominator.
         check("unknown-cohort-is-an-error", ["--cohort", "no-such-cohort", lone], 1,
               ["which no cell in probe_gold_yesno.json carries"])
@@ -242,6 +252,13 @@ def main():
                      "silently move the completeness denominator, so this is an error."
                      % (", ".join(unknown), os.path.basename(probe_path), ", ".join(sorted(known))))
     seen_cohorts = set()
+    # Scored Tier-B cells PER COHORT. The completeness ratio needs a numerator scoped the same way
+    # its denominator is: `b_n` counts every probe cell that scored, so on a STATED scope narrower
+    # than the directory's contents an out-of-scope cell padded the numerator and hid a real
+    # shortfall — 12 of 13 rc2 cells plus the one standalone cell, `--cohort rc2`, printed n=13
+    # against a denominator of 13 and no incomplete WARN. `missing` below reports a cohort STATED
+    # and absent; nothing reported the reverse until this counter existed.
+    b_by_cohort = {}
     def scoreable(cell):
         return cell in probes or (cell.split("|", 1)[1] in YESNO_TOPICS and cell in gold)
 
@@ -260,7 +277,9 @@ def main():
                 b_fail.append((cell, p["expected"], lead, snippet))
             if p.get("safety") and lead == "YES":
                 safety_viol.append((cell, snippet))
-            seen_cohorts.add(p.get("cohort", "rc2"))
+            cohort = p.get("cohort", "rc2")
+            seen_cohorts.add(cohort)
+            b_by_cohort[cohort] = b_by_cohort.get(cohort, 0) + 1
         elif topic in YESNO_TOPICS and cell in gold:
             a_n += 1
             expected = verdict_override.get(cell) or ("YES" if gold[cell]["present"] else "NO")
@@ -286,6 +305,9 @@ def main():
               % (a_n, expected_a))
     scope = stated_cohorts if stated_cohorts is not None else seen_cohorts
     expected_b = sum(1 for v in probes.values() if v.get("cohort", "rc2") in scope)
+    # The completeness numerator, scoped like the denominator. Equal to b_n whenever the scope was
+    # INFERRED (it is then the set of cohorts that scored, so nothing can be outside it).
+    b_in_scope = sum(n for c, n in b_by_cohort.items() if c in scope)
     if b_n:
         print("TIER-B cohort scope: %s (%s) — denominator %d of %d gold probe cells"
               % (", ".join(sorted(scope)) or "none", "stated" if stated_cohorts is not None
@@ -295,9 +317,15 @@ def main():
             print("WARN: cohort(s) %s were stated but scored no cell at all — either they are not "
                   "on this host, or every one of their cells failed to capture; this run cannot "
                   "tell those apart" % ", ".join(missing))
-    if probes and 0 < b_n < expected_b:
+        outside = sorted(c for c in b_by_cohort if c not in scope)
+        if outside:
+            print("WARN: %d scored cell(s) belong to cohort(s) %s, which the stated scope excludes — "
+                  "they are counted in the n above but NOT in the completeness denominator, so the "
+                  "ratio is over the %d in-scope cell(s) only"
+                  % (b_n - b_in_scope, ", ".join(outside), b_in_scope))
+    if probes and 0 < b_in_scope < expected_b:
         print("WARN: scored %d/%d Tier-B probes — capture incomplete; Tier-B verdict NOT gate-comparable"
-              % (b_n, expected_b))
+              % (b_in_scope, expected_b))
     if probes and b_n == 0 and a_n:
         print("note: no Tier-B probe cells in this capture (0/%d) — expected for regression-arm dirs"
               % len(probes))

@@ -641,17 +641,26 @@ change was gated on these, thresholds locked before implementation):
   before this it never existed, so every A/B over this script's captures reported a missing
   marker in both arms and exited 3. The marker records the cells this run INTENDED to fire and
   how many landed, so its body can disagree with the directory it sits in; a run that fired
-  cells and landed **none** writes no marker and exits 1, and an invocation that would fire
-  neither tier is refused before it starts. A marker derived only from `ls *.json` cannot
-  contradict its own capture, so an arm that failed wholesale (host down, wrong port or auth,
-  wrong cohort) would otherwise read as a clean, empty A/B: `cells compared: 0`, `class flips:
-  0`, exit 0.
+  cells and landed **none** writes no marker and exits 1, an invocation that would fire
+  neither tier is refused before it starts, and any marker already in the output directory is
+  DELETED before the first cell is fired — so the file's presence means "the invocation that
+  wrote it landed cells", never "some earlier invocation did". A marker derived only from
+  `ls *.json` cannot contradict its own capture, so an arm that failed wholesale (host down,
+  wrong port or auth, wrong cohort) would otherwise read as a clean, empty A/B: `cells
+  compared: 0`, `class flips: 0`, exit 0 — and without the delete, a re-capture into a
+  non-empty directory (the documented Tier-B resume, or the same arm re-fired after a GP swap)
+  inherited the previous run's marker over the previous run's kept cells and read the same way,
+  with numbers in it. The trade is deliberate: an invocation refused for firing nothing clears
+  a complete directory's marker too, so that directory has to be re-captured to be readable.
 - `score_directness.py [--cohort NAME[,NAME…]] <capture_dir>` — 3-class verdict-lead scorer
   (YES / NO-family / CANNOT; the closed regexes ARE the metric definition — re-quote baselines
   if edited), Tier-B expected-lead matching and safety violations (a bare YES with no named
   record). `--cohort` states which cohort(s) the capture is OF; without it the scope is inferred
-  from the cells that scored and the basis is printed. `--selftest` included, and it covers the
-  cohort denominator as well as the regexes.
+  from the cells that scored and the basis is printed. The completeness ratio is scoped on BOTH
+  sides — a scored cell whose cohort the stated scope excludes is counted in the printed `n` but
+  not in that ratio, and is reported, because as an unscoped numerator it padded the count and
+  hid a real shortfall. `--selftest` included, and it covers the cohort denominator, the
+  numerator's scoping and the regexes.
 - `probe_gold_yesno.json` — Tier-B expected leads with adjudication rationale (conditions
   REST + encounter_diagnosis/obs DB sweeps), plus an optional `cohort` field (default `rc2`)
   naming which demo database the cell exists in. `score_directness.py` scopes its Tier-B

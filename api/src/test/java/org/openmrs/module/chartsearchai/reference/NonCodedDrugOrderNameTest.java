@@ -484,6 +484,52 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * The largest cost of this change, pinned AS WRONG so that closing it reddens a test: the name set
+	 * now contains PROSE.
+	 *
+	 * <p>Both earlier sources were dictionary-controlled single drug names, and
+	 * {@code PatientClinicalContext.hasActiveDrug}'s order-name arm is boundary-matched CONTAINMENT —
+	 * which is what lets it find {@code aspirin} inside {@code Aspirine Co 81mg}, and is right for a
+	 * display name. {@code drugNonCoded} is 255 characters a clinician may write anything into, so
+	 * every drug name occurring anywhere in it is now read as a drug the patient is on, including one
+	 * the same sentence says was stopped.
+	 *
+	 * <p>The warfarin chip below is WRONG and rated Major, which
+	 * {@code DrugSafetyValidator.licensesWithholding} grades as a reason to withhold; injected, it
+	 * carries {@code STRENGTH_WITHHOLD} into the prompt beside an active-order record rendering this
+	 * same text verbatim, so the two citable records of one prescription contradict each other. It is
+	 * issue #317's failure class reached by a channel neither {@code SerializedRecord.getOrderActive()}
+	 * nor {@code DrugReferenceInjector.describesEndedOrder} can see, because the carrying prescription
+	 * really is active.
+	 *
+	 * <p>Not closable by refusing free text on suspicion — that is the fix this issue asks for — and
+	 * not closable by parsing the prose, which is a different problem. The aspirin chip beside it is
+	 * CORRECT and is what the change exists to produce.
+	 */
+	@Test
+	public void freeTextNamingADrugTheSameSentenceSaysWasStoppedStillRaisesAChip() {
+		nameTheConcept(PLACEHOLDER_CONCEPT_NAME);
+		recordTheOrderAsFreeText("Aspirin 81mg - warfarin stopped 2024");
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterService());
+
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		List<String> leads = new ArrayList<String>();
+		for (String detail : DrugReferenceTestSupport.details(validator.validate("", QUESTION, context))) {
+			leads.add(detail.substring(0, detail.indexOf('.') + 1));
+		}
+
+		assertTrue(leads.contains("Ibuprofen interacts with active order warfarin — Major."),
+				"pinned AS WRONG: the recorded text says warfarin was STOPPED and the module reports it"
+						+ " as an active co-medication, because the order-name arm is containment over a"
+						+ " string that is now prose. A change that closes this must redden here rather"
+						+ " than leave the javadoc on addDrugName the only record, was: " + leads);
+		assertTrue(leads.contains("Ibuprofen interacts with active order aspirin — Major."),
+				"and the aspirin chip beside it is CORRECT — that drug IS what the order records, and it"
+						+ " is what this change exists to find, was: " + leads);
+	}
+
+	/**
 	 * A cost of this change, pinned AS WRONG so that closing it reddens a test.
 	 *
 	 * <p>The class arm labels a co-medication from the order's DISPLAY wherever the loaded dataset

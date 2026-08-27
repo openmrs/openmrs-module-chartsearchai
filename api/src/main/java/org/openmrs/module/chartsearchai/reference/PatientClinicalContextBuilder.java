@@ -320,6 +320,25 @@ final class PatientClinicalContextBuilder {
 	 * {@code Medication} among those tried — each put NO entries in play. Try another spelling the same
 	 * way rather than trusting that list.
 	 *
+	 * <p><b>And the largest cost is that this set now contains PROSE.</b> Both earlier sources were
+	 * dictionary-controlled single drug names; {@code drugNonCoded} is 255 characters a clinician may
+	 * write anything into, and {@code PatientClinicalContext.hasActiveDrug}'s order-name arm is
+	 * boundary-matched CONTAINMENT ({@code DrugReference.matchesOrderName}), which is what lets it find
+	 * {@code aspirin} inside {@code Aspirine Co 81mg}. So every drug name occurring anywhere in that
+	 * text is read as a drug the patient is on — including one the same sentence says was STOPPED.
+	 * Measured through the real builder and the real {@code validate} over the pinned DDInter excerpt,
+	 * a free text of {@code "Aspirin 81mg - warfarin stopped 2024"} raises a MAJOR
+	 * ibuprofen-versus-warfarin chip, which {@code DrugSafetyValidator.licensesWithholding} grades as a
+	 * reason to withhold, beside an injected order record rendering that same text verbatim — two
+	 * citable records of one prescription in contradiction. It is the failure class issue #317 exists
+	 * to prevent, reached by a channel neither {@code SerializedRecord.getOrderActive()} nor
+	 * {@code DrugReferenceInjector.describesEndedOrder} can see, because the carrying prescription
+	 * really is active. Not closable by refusing free text on suspicion — that is the fix — and not
+	 * closable by parsing it, which is the reading-clinical-prose problem this module does not solve
+	 * here. Pinned AS WRONG by
+	 * {@code NonCodedDrugOrderNameTest.freeTextNamingADrugTheSameSentenceSaysWasStoppedStillRaisesAChip},
+	 * so a change that closes it reddens a test.
+	 *
 	 * <p>The same divergence reaches the CLASS arm, and there it costs a true sentence rather than an
 	 * extra one: that arm labels a co-medication from the order's display while citing a subgroup taken
 	 * from the order's CONCEPT, so where the two disagree the chip states a class relationship about a
@@ -426,8 +445,10 @@ final class PatientClinicalContextBuilder {
 	 * order's through {@code DrugReferenceInjector.renderActiveOrder}
 	 * ({@code "Active drug order: <display>."}), and an allergen's through the contraindication chip's
 	 * charted-token sentence and thence {@code renderFinding} — that second one on the branch where the
-	 * recorded name does not NAME the entry, which is argued from the code path rather than measured
-	 * (the suite's arrangements all take the branch that prints the rule's own note instead). A condition's is not — it is read as a
+	 * recorded name does not NAME the entry, which is argued from the code path rather than measured —
+	 * the one arrangement tried took the other branch, which prints the rule's own note, so the chart
+	 * came back with no forged line whether the collapse was applied or not
+	 * ({@code NonCodedDrugOrderNameTest.aRecordedAllergenWithANewlineStaysOneToken} records that). A condition's is not — it is read as a
 	 * boolean by {@code PatientClinicalContext.hasConditionToken} and the chip prints the RULE's note or
 	 * token, never the recorded value — so for that one the collapse is a matching normalization only,
 	 * which the measured paragraph below is about. The chart is assembled one record per line with the

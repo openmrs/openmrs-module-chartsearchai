@@ -122,13 +122,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	}
 
 	private static DrugReferenceValidity.Finding finding(DrugReferenceLoad status, String rule) {
-		for (DrugReferenceValidity.Finding candidate : status.getFindings()) {
-			if (rule.equals(candidate.getRule())) {
-				return candidate;
-			}
-		}
-		throw new AssertionError("no finding for rule '" + rule + "' — findings were: "
-				+ status.getFindings());
+		return DrugReferenceTestSupport.finding(status.getFindings(), rule);
 	}
 
 	private static List<String> rulesOf(DrugReferenceLoad status) {
@@ -138,11 +132,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	/** The findings-list form, for the parse-level sweep, which has a collector rather than a load. One
 	 *  definition so the two call shapes cannot come to mean different things. */
 	private static List<String> rulesOf(List<DrugReferenceValidity.Finding> findings) {
-		List<String> rules = new ArrayList<String>();
-		for (DrugReferenceValidity.Finding found : findings) {
-			rules.add(found.getRule());
-		}
-		return rules;
+		return DrugReferenceTestSupport.rulesOf(findings);
 	}
 
 	// ------------------------------------------------------------------
@@ -1007,6 +997,11 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertEquals(2, found.getOccurrences(), "both required tables are missing, and both are counted");
 		assertTrue(found.getDetail().contains("drugs") && found.getDetail().contains("interactions"),
 				"the finding names both. Detail was: " + found.getDetail());
+		// The ITEM noun, at the DDInter call site. Its own literal, so it needs its own assertion: the
+		// case below pins the curated parser's and a crossed literal here went undetected by the whole
+		// api suite until this line existed.
+		assertTrue(found.getDetail().contains("parsed to no entries at all"),
+				"an ENTRY dataset produced no entries. Detail was: " + found.getDetail());
 	}
 
 	/**
@@ -1045,6 +1040,15 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		// boilerplate, so it would pass on a finding that named the wrong table.
 		assertTrue(found.getDetail().contains("[entries]"),
 				"named for what THIS parser requires. Detail was: " + found.getDetail());
+		// And the ITEM noun, which is a parameter since issue #266 gave the cross-reactivity groups file
+		// this same rule: a groups document that produced nothing produced no GROUPS. This pins the
+		// CURATED parser's literal; the DDInter one has its own assertion in the case above and the
+		// groups one is pinned in CrossReactivityStatusContextTest, because the three call sites pass
+		// their own literals and nothing derives one from another. A finding telling an operator their
+		// drug-reference document "parsed to no groups at all" names the wrong dataset in citable
+		// evidence.
+		assertTrue(found.getDetail().contains("parsed to no entries at all"),
+				"an ENTRY dataset produced no entries. Detail was: " + found.getDetail());
 	}
 
 	/**
@@ -1067,8 +1071,10 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 * <b>All THREE parsers</b>, which is why the ATC sample is swept from its own directory rather than
 	 * left out as the corpus's quiet second exception: it is a dataset fixture with a real parser and
 	 * real dependants ({@code DrugReferenceTestSupport.atcService}), and one that parsed to nothing
-	 * would disarm them in exactly the way this sweep exists to prevent. Its parser takes no collector —
-	 * a line-based dataset has no table to omit — so for it the emptiness IS the whole check.
+	 * would disarm them in exactly the way this sweep exists to prevent. Its parser has a collector form
+	 * since issue #266, but the rule it can report there ({@code no-line-yielded-an-entry}) fires exactly
+	 * when it emits nothing, so for this leg the emptiness is still the whole check and the single-argument
+	 * form is what it takes.
 	 *
 	 * <p>The one deliberate exception is asserted rather than skipped, so the exception cannot rot into a
 	 * hole: {@link #DELIBERATELY_MIS_SHAPED} is the subject of the rule and MUST fire it.
@@ -1119,7 +1125,10 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 			}
 		}
 
-		// The third parser's corpus, which lives in its own directory and takes no collector.
+		// The third parser's corpus, which lives in its own directory. It takes the SINGLE-argument parse
+		// form — it has had a collector form since issue #266, but the one rule that form can report
+		// (no-line-yielded-an-entry) fires exactly when the parse emits nothing, so for this leg the
+		// emptiness below is the whole check and a collector would add no assertion.
 		File atc = new File(getClass().getClassLoader()
 				.getResource(DrugReferenceTestSupport.ATC_SAMPLE).toURI()).getParentFile();
 		File[] atcFixtures = atc.listFiles();

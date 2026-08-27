@@ -141,7 +141,7 @@ and the `AtcDrugReferenceSource` consumes a WHO ATC export as a pluggable
 classification source (ADR Decision 24). Documented boundary: ATC's tree does not
 capture cross-*branch* cross-reactivity (aspirin `N02BA01` vs ibuprofen `M01AE01`),
 which needs curated data — **closed 2026-07 as data** by
-`cross-reactivity-groups.json` (curated ATC-prefix families loaded alongside either
+`cross-reactivity-groups.json` (curated ATC-prefix families loaded alongside any
 source; ADR Decision 27). This is the local, offline equivalent of the RxClass
 cross-reactivity lookup their allergy agent does via a live API.
 

@@ -476,7 +476,7 @@ public class ChartSearchAiConstants {
 	public static final String DEFAULT_DRUG_REFERENCE_SOURCE_FORMAT = DRUG_REFERENCE_SOURCE_DDINTER;
 
 	/** Path (relative to the OpenMRS application data directory) to the curated cross-reactivity
-	 *  groups dataset, loaded alongside EITHER source format. When absent, the groups bundled on
+	 *  groups dataset, loaded alongside ANY source format. When absent, the groups bundled on
 	 *  the module classpath are used. Closes the ADR Decision 24 cross-branch boundary as data. */
 	public static final String GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH =
 			"chartsearchai.drugReference.crossReactivityGroupsFilePath";

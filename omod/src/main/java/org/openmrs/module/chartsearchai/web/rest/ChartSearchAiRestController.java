@@ -321,7 +321,7 @@ public class ChartSearchAiRestController {
 	/**
 	 * Which drug-reference dataset this module is <em>actually</em> using: {@code
 	 * {enabled, loaded, inert, entryCount, sourceFormat, configuredSourceFormat,
-	 * configuredDataFilePath, origin, findings, arms}}.
+	 * configuredDataFilePath, origin, findings, arms, crossReactivity}}.
 	 *
 	 * <p>Exists because the answer cannot be got from the log (issue #149). The dataset load is lazy
 	 * and cached for the life of the module, so the most recent {@code "Loaded N …"} line may belong
@@ -335,7 +335,17 @@ public class ChartSearchAiRestController {
 	 * <p>When {@code chartsearchai.drugReference.enabled} is off, reports {@code enabled:false} and
 	 * loads nothing — the feature being switched off is a legitimate state, and polling a status
 	 * endpoint must not be what triggers a 19 MB parse (or the inert warning) on an install that does
-	 * not use it.
+	 * not use it. Both datasets honour that: the {@code crossReactivity} section reports
+	 * {@code loaded:false} without parsing the groups file either.
+	 *
+	 * <p><b>{@code crossReactivity} is the SECOND dataset</b>, added by issue #266. The curated
+	 * cross-reactivity groups load from a global property of their own, alongside whatever
+	 * {@code sourceFormat} is in force, and until that issue their validity findings reached only the
+	 * log — so {@code configured-data-file-not-read} for that file was invisible here, on the one channel
+	 * that can answer after a lazy load. Its own subsection ({@code loaded, groupCount,
+	 * configuredFilePath, origin, findings}) rather than rows in the top-level {@code findings}, because a
+	 * finding naming a file has to be read beside the file it is about; see ADR Decision 48. Everything
+	 * the top-level {@code findings} says about the two channels applies to it unchanged.
 	 *
 	 * <p>Gated on the core {@code Get Global Properties} privilege rather than a clinical one: this
 	 * reports what the drug-reference global properties actually produced and carries no patient data,
@@ -355,6 +365,9 @@ public class ChartSearchAiRestController {
 		Map<String, Object> body = new LinkedHashMap<String, Object>();
 		body.put("enabled", ChartSearchAiUtils.isDrugReferenceEnabled());
 		body.putAll(drugReferenceService.getLoadStatus().toMap());
+		// APPENDED after the entry load's own keys, never inserted among them: the endpoint's field list
+		// is asserted as an ORDERED list, and appending is what keeps that assertion order-sensitive.
+		body.put("crossReactivity", drugReferenceService.getCrossReactivityLoadStatus().toMap());
 		return new ResponseEntity<Object>(body, HttpStatus.OK);
 	}
 

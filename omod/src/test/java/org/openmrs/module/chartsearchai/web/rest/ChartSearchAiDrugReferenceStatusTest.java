@@ -19,6 +19,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,12 +63,23 @@ public class ChartSearchAiDrugReferenceStatusTest {
 	 * said so for the shipped DEFAULT in several places; what none of it can describe is the dataset a
 	 * given install configured for itself, which is what this field answers.
 	 *
+	 * <p>{@code crossReactivity} joined it for issue #266, and it is the first key describing a DIFFERENT
+	 * dataset. The curated cross-reactivity groups load from a global property of their own, alongside
+	 * whatever {@code sourceFormat} is in force, and their validity findings reached only the log — so
+	 * {@code configured-data-file-not-read} for that file was invisible on the one channel that can
+	 * answer after a lazy load. Its own subsection rather than rows in the top-level {@code findings},
+	 * because a finding naming a file has to be read beside the file it is about (ADR Decision 48).
+	 *
 	 * <p>A new key is APPENDED, never inserted — that is what keeps this an ORDERED assertion instead of
 	 * an order-insensitive one, and the rule is the append rather than whichever key is last today.
 	 */
 	private static final List<String> DOCUMENTED_FIELDS = Arrays.asList("enabled", "loaded", "inert",
 			"entryCount", "sourceFormat", "configuredSourceFormat", "configuredDataFilePath", "origin",
-			"findings", "arms");
+			"findings", "arms", "crossReactivity");
+
+	/** Every key the {@code crossReactivity} subsection documents, in the order it serializes them. */
+	private static final List<String> DOCUMENTED_CROSS_REACTIVITY_FIELDS = Arrays.asList("loaded",
+			"groupCount", "configuredFilePath", "origin", "findings");
 
 	private AdministrationService priorAdministrationService;
 
@@ -135,10 +147,32 @@ public class ChartSearchAiDrugReferenceStatusTest {
 						+ "non-zero count alone cannot distinguish the two. Origin was: "
 						+ enabledBody.get("origin"));
 
+		// The crossReactivity subsection in its LOADED shape, and this is the only case that reads it
+		// that way. The case below drives the DISABLED state, where every value in that map equals
+		// false/0/""/none — so a toMap() that always returned the disabled shape passed, measured: four
+		// of its five keys hardcoded to those values left the whole suite green.
+		Map<?, ?> enabledGroups = (Map<?, ?>) enabledBody.get("crossReactivity");
+		assertEquals(Boolean.TRUE, enabledGroups.get("loaded"),
+				"reading the status performs the groups load too, and reports that it happened");
+		assertTrue(((Integer) enabledGroups.get("groupCount")).intValue() > 0,
+				"the bundled seed carries groups, and this count is the groups' own — not the entry "
+						+ "dataset's, which is the crossing a shared serializer could make silently");
+		assertTrue(String.valueOf(enabledGroups.get("origin")).contains("cross-reactivity-groups"),
+				"and the origin names the GROUPS file, which is what config.xml tells an operator to "
+						+ "compare against their own path. Origin was: " + enabledGroups.get("origin"));
+
 		globalProperties.put(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "false");
 		Map<?, ?> switchedOffBody = statusBody(controller);
 
 		assertEquals(Boolean.FALSE, switchedOffBody.get("enabled"), "the switch is read live");
+		// The same for the groups section, whose accessor documents that clause as "every clause of
+		// getLoadStatus()'s contract for the entry dataset, deliberately" — and until this line the
+		// entry side was pinned and the groups side was not: deleting its already-loaded early return
+		// left the whole suite green.
+		assertEquals(Boolean.TRUE,
+				((Map<?, ?>) switchedOffBody.get("crossReactivity")).get("loaded"),
+				"the groups in memory are still the ones the safety layer would use, so the section "
+						+ "describing them must not start saying nothing was loaded");
 		assertEquals(Boolean.TRUE, switchedOffBody.get("loaded"),
 				"the load that happened is still reported after the switch is turned off — the "
 						+ "entries are still in memory");
@@ -193,6 +227,40 @@ public class ChartSearchAiDrugReferenceStatusTest {
 					arm + ": and the count is 0 in this state as well, which is why the verdict beside "
 							+ "it is what carries the meaning");
 		}
+	}
+
+	/**
+	 * The second dataset's own section, issue #266. On a default installation the feature is off, so the
+	 * groups load must report {@code loaded:false} and must not have happened — reading a status endpoint
+	 * cannot be what parses a file on an install that does not use the feature, which is the rule the
+	 * entry load already follows and the reason this section carries a {@code loaded} flag of its own
+	 * rather than leaving it to be inferred from the top-level one.
+	 *
+	 * <p>Pinned here and not at API level because the section is composed by the CONTROLLER — the entry
+	 * load's {@code toMap()} knows nothing about the groups file, deliberately, since the two are
+	 * independent loads with independent global properties.
+	 */
+	@Test
+	public void drugReferenceStatus_reportsTheCrossReactivityDatasetAsItsOwnSection() {
+		grantPrivileges(true);
+		installAdministrationService(new HashMap<String, String>());
+
+		Map<?, ?> body = statusBody(controllerWith(new DrugReferenceService()));
+
+		Map<?, ?> groups = (Map<?, ?>) body.get("crossReactivity");
+		assertNotNull(groups, "the curated cross-reactivity groups are a second dataset with a global "
+				+ "property and a lazy load of their own, and their findings have to reach this "
+				+ "endpoint like any others");
+		assertEquals(DOCUMENTED_CROSS_REACTIVITY_FIELDS, new ArrayList<Object>(groups.keySet()),
+				"the subsection's fields are what an operator reads; a renamed or dropped key leaves "
+						+ "them reading null");
+		assertEquals(Boolean.FALSE, groups.get("loaded"),
+				"a disabled feature must report no groups load, and must not have performed one");
+		assertEquals(Integer.valueOf(0), groups.get("groupCount"));
+		assertEquals("none", groups.get("origin"), "nothing was read, and the origin says so");
+		assertEquals(Collections.emptyList(), groups.get("findings"),
+				"no load happened, so there is nothing to have found — which is not the same as a load "
+						+ "that found nothing, and is why 'loaded' is reported beside this");
 	}
 
 	private static ChartSearchAiRestController controllerWith(DrugReferenceService service) {

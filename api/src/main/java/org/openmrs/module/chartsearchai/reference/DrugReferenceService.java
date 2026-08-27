@@ -33,8 +33,10 @@ import org.springframework.stereotype.Service;
  * ({@code json} = the curated {@link JsonDrugReferenceSource}, {@code atc} = the
  * authoritative {@link AtcDrugReferenceSource}, {@code ddinter} = the DDInter-backed
  * {@link DdiDrugReferenceSource}); each resolves its file from
- * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH}, with a bundled
- * classpath default. This lets the
+ * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH} through
+ * {@link ReferenceDataFiles} — the {@code json} and {@code ddinter} formats with a bundled classpath
+ * default behind it, {@code atc} with none, so that format runs on the operator's own export or runs
+ * empty. This lets the
  * feature consume authoritative datasets by pointing at them, rather than
  * hand-maintaining a chartsearchai-specific file. See ADR Decision 24.
  *
@@ -76,8 +78,10 @@ import org.springframework.stereotype.Service;
  * which arrived with issue #173.
  *
  * <p><b>The group LIST is the same shape; one group's PREFIXES are not, and the two must not be read
- * as one fact.</b> {@link #getCrossReactivityGroups()} is written once by its own lazy guard and
- * otherwise only by test seams, so it does not reload either. But
+ * as one fact.</b> The field behind {@link #getCrossReactivityGroups()} is written once by
+ * {@code ensureGroupsLoaded()} when it is null and otherwise only by test seams, so it does not reload
+ * either — and since issue #266 that one write also publishes the load's own outcome
+ * ({@link CrossReactivityGroupsLoad}), which is why they are ONE holder rather than two fields. But
  * {@link CrossReactivityGroup#setAtcPrefixes} is public API Jackson writes through, and it has to stay
  * authoritative after a membership question has been asked — so
  * {@link CrossReactivityGroup#containsAnyCode} keeps the reason stated in its own javadoc, not this
@@ -142,7 +146,26 @@ public class DrugReferenceService {
 
 	private volatile LoadedDataset dataset;
 
-	private volatile List<CrossReactivityGroup> crossReactivityGroups;
+	/**
+	 * A completed groups load, published as ONE reference — issue #158's rule, applied to the second
+	 * dataset when it gained a status of its own (issue #266). Two volatile fields written in a required
+	 * order would reintroduce exactly the invariant that issue removed: correct by the Java memory model,
+	 * enforced by nothing, and load-bearing for the whole purpose of a status that exists so "what is
+	 * actually loaded" cannot be read stale.
+	 */
+	private static final class LoadedGroups {
+
+		private final List<CrossReactivityGroup> groups;
+
+		private final CrossReactivityGroupsLoad load;
+
+		LoadedGroups(List<CrossReactivityGroup> groups, CrossReactivityGroupsLoad load) {
+			this.groups = Collections.unmodifiableList(groups);
+			this.load = load;
+		}
+	}
+
+	private volatile LoadedGroups loadedGroups;
 
 	private DrugReferenceSource source;
 
@@ -1072,15 +1095,63 @@ public class DrugReferenceService {
 	 *         {@code atc} format gains cross-branch family reasoning from the same file. Never null.
 	 */
 	public List<CrossReactivityGroup> getCrossReactivityGroups() {
-		if (crossReactivityGroups == null) {
-			synchronized (this) {
-				if (crossReactivityGroups == null) {
-					crossReactivityGroups = Collections
-							.unmodifiableList(new CrossReactivityGroupsLoader().load());
-				}
-			}
+		return ensureGroupsLoaded().groups;
+	}
+
+	/**
+	 * @return the outcome of the cross-reactivity groups load that is IN FORCE — see
+	 *         {@link CrossReactivityGroupsLoad}. Triggers the (lazy) load when the feature is enabled and
+	 *         nothing has loaded yet; reports {@link CrossReactivityGroupsLoad#notLoaded()} without
+	 *         loading anything when the feature is switched off, so polling the status cannot manufacture
+	 *         a parse on an install that does not use the feature. A load that HAS happened is reported
+	 *         whatever the switch says now — the groups in memory are the ones the safety layer would
+	 *         use. Every clause of that is {@link #getLoadStatus()}'s contract for the entry dataset,
+	 *         deliberately: two datasets, one question, and one answer to how it is asked.
+	 *
+	 *         <p>Issue #266. Until then this load's findings reached only the log, which cannot answer
+	 *         after a lazy load (issue #154) — so {@code configured-data-file-not-read} for the groups
+	 *         file was invisible to the operator it names.
+	 */
+	public CrossReactivityGroupsLoad getCrossReactivityLoadStatus() {
+		LoadedGroups current = loadedGroups;
+		if (current != null) {
+			return current.load;
 		}
-		return crossReactivityGroups;
+		if (!ChartSearchAiUtils.isDrugReferenceEnabled()) {
+			return CrossReactivityGroupsLoad.notLoaded();
+		}
+		return ensureGroupsLoaded().load;
+	}
+
+	/**
+	 * @return the completed groups load, performing it once however many callers race here. One write, so
+	 *         the groups and the outcome describing them are published together or not at all (see
+	 *         {@link LoadedGroups}).
+	 */
+	private LoadedGroups ensureGroupsLoaded() {
+		LoadedGroups current = loadedGroups;
+		if (current != null) {
+			return current;
+		}
+		synchronized (this) {
+			if (loadedGroups != null) {
+				return loadedGroups;
+			}
+			// One instance, so the origin, the configured path and the findings read below all belong to
+			// the load performed here — the same contract, and the same reason, as ensureLoaded's read of
+			// the entry source. The path comes from the loader rather than from a second read of the
+			// global property, so the pair this status reports (configuredFilePath against origin) is
+			// provably ONE read of it: those two are exactly what config.xml tells an operator to
+			// compare, and reporting them from two reads is how they could disagree about which file the
+			// finding beside them is about.
+			CrossReactivityGroupsLoader loader = new CrossReactivityGroupsLoader();
+			List<CrossReactivityGroup> loaded = loader.load();
+			LoadedGroups completed = new LoadedGroups(loaded,
+					new CrossReactivityGroupsLoad(loader.lastConfiguredPath(), loader.lastLoadOrigin(),
+							loaded.size(), loader.lastLoadFindings()));
+			loadedGroups = completed;
+			return completed;
+		}
 	}
 
 	/**
@@ -1237,12 +1308,20 @@ public class DrugReferenceService {
 	void setEntries(List<DrugReference> entries) {
 		this.dataset = new LoadedDataset(entries == null ? Collections.<DrugReference> emptyList()
 				: new ArrayList<DrugReference>(entries), DrugReferenceLoad.notLoaded());
-		this.crossReactivityGroups = Collections.emptyList();
+		this.loadedGroups = new LoadedGroups(Collections.<CrossReactivityGroup> emptyList(),
+				CrossReactivityGroupsLoad.notLoaded());
 	}
 
-	/** Test seam: inject known cross-reactivity groups, bypassing the groups-file load. */
+	/**
+	 * Test seam: inject known cross-reactivity groups, bypassing the groups-file load. Paired with
+	 * {@link CrossReactivityGroupsLoad#notLoaded()} for the reason {@link #setEntries} pairs its entries
+	 * with {@link DrugReferenceLoad#notLoaded()}: the retained outcome describes a LOAD, and there was
+	 * none. It is the one path on which the status and the groups in use are not two views of one event;
+	 * production never seeds groups.
+	 */
 	void setCrossReactivityGroups(List<CrossReactivityGroup> groups) {
-		this.crossReactivityGroups = groups == null ? Collections.<CrossReactivityGroup> emptyList()
-				: Collections.unmodifiableList(new ArrayList<CrossReactivityGroup>(groups));
+		this.loadedGroups = new LoadedGroups(groups == null
+				? Collections.<CrossReactivityGroup> emptyList()
+				: new ArrayList<CrossReactivityGroup>(groups), CrossReactivityGroupsLoad.notLoaded());
 	}
 }

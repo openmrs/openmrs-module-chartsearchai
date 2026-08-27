@@ -2999,7 +2999,7 @@ Placed in the prompt's record-type section beside the `Drug reference` and `Safe
 
 ### Measured
 
-**Method.** Seven wordings against the unchanged base, all on ONE binary, GP-swapped through `chartsearchai.llm.systemPrompt` — the method Decision 45 used — so the clause is the only variable, with no rebuild between arms. Both arms are driven THROUGH the GP, and the base prompt extracted from `main`'s compiled `LlmProvider` is 7637 chars / 7681 bytes, the figure Decision 45 records, so the two entries are measuring the same base. Interleaved: a question on another patient between every sample (Decision 45's methodology finding). Shipped default `chartMode=queryScoped` for the ticket cells; `fullChart` for the two repo gates, the mode their README records them under.
+**Method.** Seven wordings as full arms against the unchanged base, plus two single-clause mutation probes run against `EndedOrderAnswerRuleTest`'s two answer cases (the last table row below, and the completeness half re-added). The arms all ran on ONE binary, GP-swapped through `chartsearchai.llm.systemPrompt` — the method Decision 45 used — so the clause is the only variable, with no rebuild between arms. Both arms are driven THROUGH the GP, and the base prompt extracted from `main`'s compiled `LlmProvider` is 7637 chars / 7681 bytes, the figure Decision 45 records, so the two entries are measuring the same base. Interleaved: a question on another patient between every sample (Decision 45's methodology finding). Shipped default `chartMode=queryScoped` for the ticket cells; `fullChart` for the two repo gates, the mode their README records them under.
 
 **The cells.** Decision 45's two decisive charts, the two residue charts it records, the yes/no medications gate cell [#319](https://github.com/openmrs/openmrs-module-chartsearchai/pull/319) added for this ticket, and the two fixture charts `EndedOrderAnswerRuleTest` builds through the real production path.
 
@@ -3022,7 +3022,8 @@ Placed in the prompt's record-type section beside the `Drug reference` and `Safe
 | + `give the date it was stopped only when that record states one` | ❌ 3/3, and drops the activation date it had | ✅ | ✅ | ✅ | ✅ | ❌ |
 | + `together with the date it was stopped where that record carries one` (with retention) | ✅ 3/3 **with the date** | ❌ | ✅ 4/4 | ❌ **4/4** | ✅ | ✅ |
 | + `without dropping anything else you would have reported` | ✅ | ❌ 0/4 | ❌ | – | ⚠️ | ❌ |
-| verb `add to the sentence naming it` instead of `say in the same sentence` (with retention) | ✅ | ❌ 0/4 | ✅ 4/4 | ✅ 4/4 | ⚠️ | ✅ |
+| verb `add to the sentence naming it` instead of `say in the same sentence` (with retention) | ✅ (recites the field) | ❌ | ✅ 4/4 | ✅ 4/4 | ⚠️ | ✅ |
+| verb `add to the sentence naming it`, **without** retention | – | ✅ | – | – | – | – |
 | + `Keep every other detail ...` + a question-shape rider | ✅ | ✅ | ✅ 4/4 | ✅✅ better than base | ⚠️ **+8 unsupported** | ✅ |
 | + `never something you report in place of it` | ✅ | – | ❌ | – | ✅ | ❌ |
 
@@ -3032,7 +3033,7 @@ Placed in the prompt's record-type section beside the `Drug reference` and `Safe
 
 2. **No completeness half.** Every wording of it stops the rule firing on a single-record chart — both of `EndedOrderAnswerRuleTest`'s answer cases go red, which is the check to re-run rather than a tally to trust — and the rider that rescues that turns the model to enumerating dose, route and frequency on every medication list — on the `#319` gate cell all 8 citations went from 2 supported / 6 unsupported to **0 / 8**. Trading a correct answer's citations into red is the #201/#302 failure class.
 
-3. **The verb is not interchangeable.** `say in the same sentence` and `add to the sentence naming it` differ in nothing else, and the second does not fire on a single-record chart at all.
+3. **The verb is NOT the discriminator, and believing it was is a mistake this ledger made before it was checked.** The wordings that fail the fixture charts carry the completeness half; the verb travels with it in two of them, which made `add to the sentence naming it` look responsible. Mutating the verb ALONE — leaving the completeness half out — leaves both answer cases green. What the verb does change is prose on the standalone's multi-record charts, where it recites the field (*"Nevirapine (order status: not in force) was prescribed"*) rather than stating it (*"Nevirapine was prescribed, but its order is no longer in force"*), and which cell the completeness half then breaks. Both findings above were re-derived by mutating one clause at a time against `EndedOrderAnswerRuleTest`; this one was not, until it was, and it changed.
 
 **The regression gates.**
 

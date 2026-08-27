@@ -144,9 +144,9 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 		assertTrue(prompt.contains("say in the same sentence that its order is no longer in force"),
 				"the system prompt must require the statement to travel WITH the drug's name — issue "
 						+ "#315's defect is an answer that names the drug and drops its status, so a rule that "
-						+ "does not bind the two together does not close it. The verb was measured and is not "
-						+ "interchangeable: \"add to the sentence naming it\", identical otherwise, does not fire "
-						+ "on a single-record chart at all (ADR Decision 47)");
+						+ "does not bind the two together does not close it. What this pins is the RULE, not the "
+						+ "verb: swapping \"say\" for \"add to the sentence naming it\" leaves the two answer cases "
+						+ "green, and the wording was chosen on prose and on ADR Decision 47's other cells");
 		assertFalse(prompt.contains(PatientChartSerializer.ACTIVE_ORDER_LABEL),
 				"the clause has ONE branch and says nothing about a record marked in force. ADR Decision "
 						+ "45 measured a positive currency half making the model re-state live orders in "

@@ -78,8 +78,9 @@ public class LlmProvider {
 			// EndedOrderAnswerRuleTest.thePromptsTriggerTokenIsTheSerializersConstantAndNotACopy reads
 			// this source instead.
 			//
-			// ONE SENTENCE, AND EVERY ADDITION TO IT WAS MEASURED AND REJECTED. Seven wordings against
-			// the unchanged base, on one binary, GP-swapped through chartsearchai.llm.systemPrompt,
+			// ONE SENTENCE, AND EVERY ADDITION TO IT WAS MEASURED AND REJECTED. Seven wordings as full
+			// arms against the unchanged base, plus two single-clause mutation probes against the two
+			// answer cases; the arms ran on one binary, GP-swapped through chartsearchai.llm.systemPrompt,
 			// interleaved with a decoy on another patient between every sample, over Decision 45's own two
 			// decisive charts, the two residue charts it records, the #319 yes/no medications gate cell and
 			// the two fixture charts EndedOrderAnswerRuleTest builds. ADR Decision 47 carries the ledger
@@ -101,10 +102,12 @@ public class LlmProvider {
 			//    turns the model to enumerating dose, route and frequency on every medication list: on the
 			//    #319 gate cell all 8 citations went from 2 supported / 6 unsupported to 0 / 8. Trading a
 			//    correct answer's citations into red is the #201/#302 failure class.
-			//  - "say in the same sentence" and not "add to the sentence naming it". The two differ in
-			//    nothing else, and the second does not fire on a single-record chart either — same two
-			//    cases, same check. On the standalone's multi-record charts both fire, which is why the
-			//    fixture charts are part of the gate and not a formality.
+			//  - The completeness half breaks the rule with EITHER verb, which is worth stating because
+			//    the obvious reading is that the verb is what matters. It is not: swap "say in the same
+			//    sentence" for "add to the sentence naming it" and leave the half out, and both answer
+			//    cases still pass. Mutate one thing at a time here — a two-word change measured against a
+			//    two-clause change taught this file a false rule once already, and the mutation that
+			//    refutes it takes one targeted test run.
 			//  - ONE BRANCH. Nothing about a record carrying NO mark: the mark is silent wherever the
 			//    module could not establish the answer (SerializedRecord.getOrderActive() owns that
 			//    list), so a clause speaking for the silent case would assert exactly what the silence

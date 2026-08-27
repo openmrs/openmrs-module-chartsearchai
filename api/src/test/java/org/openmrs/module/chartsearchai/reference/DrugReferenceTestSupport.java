@@ -170,6 +170,63 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * Writes a dataset the TEST authors into {@code <appdata>/chartsearchai/<asName>} — the sibling of
+	 * {@link #copyDatasetToAppData} for the arrangements no classpath fixture can supply, either because
+	 * the document is deliberately mis-shaped (a corpus sweep requires every committed fixture to parse)
+	 * or because it is one line long.
+	 *
+	 * <p>Shared for {@link #copyDatasetToAppData}'s own reason, which that method's javadoc records as
+	 * having already happened once: three inline copies of the copy-arrangement had drifted before it was
+	 * extracted. The drift that matters here is the relative prefix — a body that resolved to a different
+	 * subdirectory would send a case down the classpath-fallback branch while its name and its assertions
+	 * claim the operator-file branch, and it would pass.
+	 *
+	 * @param created the caller's cleanup list, which the written file is added to — the deletion is
+	 *        per-test {@code @AfterEach} work and this helper has no lifecycle of its own
+	 * @return the value to set the path global property to: relative to the application data directory,
+	 *         which is the form the property holds
+	 */
+	static String writeDatasetToAppData(String asName, String content, List<File> created)
+			throws IOException {
+		File dir = new File(OpenmrsUtil.getApplicationDataDirectory(), "chartsearchai");
+		dir.mkdirs();
+		File target = new File(dir, asName);
+		created.add(target);
+		Files.write(target.toPath(), content.getBytes(StandardCharsets.UTF_8));
+		return "chartsearchai/" + asName;
+	}
+
+	/**
+	 * @return the rules that fired, in the order the loader applied them — the shape every assertion
+	 *         about a load's findings is written against. Takes the FINDINGS rather than a status object
+	 *         so one body serves {@link DrugReferenceLoad} and {@link CrossReactivityGroupsLoad} alike;
+	 *         four copies of it had accumulated across this package's test classes, with failure messages
+	 *         that already disagreed, so which diagnosis a maintainer got on a red build depended on
+	 *         which file happened to fail.
+	 */
+	static List<String> rulesOf(List<DrugReferenceValidity.Finding> findings) {
+		List<String> rules = new ArrayList<String>();
+		for (DrugReferenceValidity.Finding found : findings) {
+			rules.add(found.getRule());
+		}
+		return rules;
+	}
+
+	/**
+	 * @return the one finding for {@code rule}, or a hard failure naming what was actually there. Shared
+	 *         with {@link #rulesOf(List)} and for the same reason.
+	 */
+	static DrugReferenceValidity.Finding finding(List<DrugReferenceValidity.Finding> findings,
+			String rule) {
+		for (DrugReferenceValidity.Finding candidate : findings) {
+			if (rule.equals(candidate.getRule())) {
+				return candidate;
+			}
+		}
+		throw new AssertionError("expected a " + rule + " finding, had: " + findings);
+	}
+
+	/**
 	 * The raw text of a test-classpath dataset, for the assertions that have to read the FILE rather
 	 * than the parsed model — a row the parser is expected to drop is invisible in its output, so the
 	 * only way to show the fixture really carries it is to read the resource the parser reads.

@@ -62,6 +62,8 @@ public class CrossReactivityGroupsLoader {
 
 	private volatile String lastLoadOrigin = ReferenceDataFiles.ORIGIN_NONE;
 
+	private volatile String lastConfiguredPath = "";
+
 	private volatile List<DrugReferenceValidity.Finding> lastLoadFindings = Collections.emptyList();
 
 	/**
@@ -80,6 +82,7 @@ public class CrossReactivityGroupsLoader {
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, CLASSPATH_DEFAULT,
 				DATASET_LABEL, CrossReactivityGroupsLoader::parse);
 		lastLoadOrigin = loaded.getOrigin();
+		lastConfiguredPath = loaded.getConfiguredPath();
 		lastLoadFindings = loaded.getValidity().getFindings();
 		loaded.getValidity().logTo(log);
 		return loaded.getItems();
@@ -94,6 +97,16 @@ public class CrossReactivityGroupsLoader {
 	 */
 	public String lastLoadOrigin() {
 		return lastLoadOrigin;
+	}
+
+	/**
+	 * @return the groups path global property's value as the resolution that produced
+	 *         {@link #lastLoadOrigin()} read it; never null. Reported beside that origin because the two
+	 *         are what an operator is told to compare, and taken from the resolution rather than re-read
+	 *         so the reported pair provably comes from ONE read of the property.
+	 */
+	public String lastConfiguredPath() {
+		return lastConfiguredPath;
 	}
 
 	/**

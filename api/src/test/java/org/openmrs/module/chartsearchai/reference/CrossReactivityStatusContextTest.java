@@ -15,8 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -71,32 +69,17 @@ public class CrossReactivityStatusContextTest extends BaseModuleContextSensitive
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, path);
 	}
 
-	/** Writes a groups document the test authors into the application data directory — the arrangement
-	 *  {@link CrossReactivityGroupsContextTest} already uses for the operator-file branch. */
+	/** A groups document the test authors, for an arrangement no committed fixture supplies. */
 	private String writeToAppData(String asName, String content) throws IOException {
-		File dir = new File(OpenmrsUtil.getApplicationDataDirectory(), "chartsearchai");
-		dir.mkdirs();
-		File target = new File(dir, asName);
-		created.add(target);
-		Files.write(target.toPath(), content.getBytes(StandardCharsets.UTF_8));
-		return "chartsearchai/" + asName;
+		return DrugReferenceTestSupport.writeDatasetToAppData(asName, content, created);
 	}
 
 	private static List<String> rulesOf(CrossReactivityGroupsLoad status) {
-		List<String> rules = new ArrayList<String>();
-		for (Finding found : status.getFindings()) {
-			rules.add(found.getRule());
-		}
-		return rules;
+		return DrugReferenceTestSupport.rulesOf(status.getFindings());
 	}
 
 	private static Finding finding(CrossReactivityGroupsLoad status, String rule) {
-		for (Finding candidate : status.getFindings()) {
-			if (rule.equals(candidate.getRule())) {
-				return candidate;
-			}
-		}
-		throw new AssertionError("expected a " + rule + " finding, had: " + status.getFindings());
+		return DrugReferenceTestSupport.finding(status.getFindings(), rule);
 	}
 
 	/**
@@ -119,9 +102,15 @@ public class CrossReactivityStatusContextTest extends BaseModuleContextSensitive
 						+ status.getOrigin());
 		assertTrue(status.getGroupCount() > 0,
 				"and the count is a plausible one, which is exactly why the finding is needed");
-		assertTrue(finding(status, DrugReferenceValidity.CONFIGURED_DATA_FILE_NOT_READ).getDetail()
-				.contains("h266-no-such-groups.json"),
+		Finding notRead = finding(status, DrugReferenceValidity.CONFIGURED_DATA_FILE_NOT_READ);
+		assertTrue(notRead.getDetail().contains("h266-no-such-groups.json"),
 				"the detail names the file the operator has to look at");
+		assertFalse(notRead.getDetail().contains("entry count"),
+				"and names the count NEUTRALLY: this section reports a groupCount and carries no "
+						+ "entryCount at all, so telling the operator to read an 'entry count' here "
+						+ "points at a field that does not exist — the same defect the sibling rule's "
+						+ "item noun exists to prevent, in the rule #266 makes readable first. Detail "
+						+ "was: " + notRead.getDetail());
 	}
 
 	/**

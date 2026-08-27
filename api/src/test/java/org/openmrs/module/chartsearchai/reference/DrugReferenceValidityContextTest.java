@@ -122,13 +122,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	}
 
 	private static DrugReferenceValidity.Finding finding(DrugReferenceLoad status, String rule) {
-		for (DrugReferenceValidity.Finding candidate : status.getFindings()) {
-			if (rule.equals(candidate.getRule())) {
-				return candidate;
-			}
-		}
-		throw new AssertionError("no finding for rule '" + rule + "' — findings were: "
-				+ status.getFindings());
+		return DrugReferenceTestSupport.finding(status.getFindings(), rule);
 	}
 
 	private static List<String> rulesOf(DrugReferenceLoad status) {
@@ -138,11 +132,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	/** The findings-list form, for the parse-level sweep, which has a collector rather than a load. One
 	 *  definition so the two call shapes cannot come to mean different things. */
 	private static List<String> rulesOf(List<DrugReferenceValidity.Finding> findings) {
-		List<String> rules = new ArrayList<String>();
-		for (DrugReferenceValidity.Finding found : findings) {
-			rules.add(found.getRule());
-		}
-		return rules;
+		return DrugReferenceTestSupport.rulesOf(findings);
 	}
 
 	// ------------------------------------------------------------------
@@ -1007,6 +997,11 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertEquals(2, found.getOccurrences(), "both required tables are missing, and both are counted");
 		assertTrue(found.getDetail().contains("drugs") && found.getDetail().contains("interactions"),
 				"the finding names both. Detail was: " + found.getDetail());
+		// The ITEM noun, at the DDInter call site. Its own literal, so it needs its own assertion: the
+		// case below pins the curated parser's and a crossed literal here went undetected by the whole
+		// api suite until this line existed.
+		assertTrue(found.getDetail().contains("parsed to no entries at all"),
+				"an ENTRY dataset produced no entries. Detail was: " + found.getDetail());
 	}
 
 	/**
@@ -1046,10 +1041,12 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertTrue(found.getDetail().contains("[entries]"),
 				"named for what THIS parser requires. Detail was: " + found.getDetail());
 		// And the ITEM noun, which is a parameter since issue #266 gave the cross-reactivity groups file
-		// this same rule: a groups document that produced nothing produced no GROUPS. The two call sites
-		// pass different literals, so this is what stops them being crossed — nothing else in the suite
-		// reads this clause on the entry side, and a finding telling an operator their drug-reference
-		// document "parsed to no groups at all" names the wrong dataset in citable evidence.
+		// this same rule: a groups document that produced nothing produced no GROUPS. This pins the
+		// CURATED parser's literal; the DDInter one has its own assertion in the case above and the
+		// groups one is pinned in CrossReactivityStatusContextTest, because the three call sites pass
+		// their own literals and nothing derives one from another. A finding telling an operator their
+		// drug-reference document "parsed to no groups at all" names the wrong dataset in citable
+		// evidence.
 		assertTrue(found.getDetail().contains("parsed to no entries at all"),
 				"an ENTRY dataset produced no entries. Detail was: " + found.getDetail());
 	}

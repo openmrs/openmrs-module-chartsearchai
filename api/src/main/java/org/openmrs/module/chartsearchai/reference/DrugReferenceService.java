@@ -33,8 +33,10 @@ import org.springframework.stereotype.Service;
  * ({@code json} = the curated {@link JsonDrugReferenceSource}, {@code atc} = the
  * authoritative {@link AtcDrugReferenceSource}, {@code ddinter} = the DDInter-backed
  * {@link DdiDrugReferenceSource}); each resolves its file from
- * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH}, with a bundled
- * classpath default. This lets the
+ * {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH} through
+ * {@link ReferenceDataFiles} — the {@code json} and {@code ddinter} formats with a bundled classpath
+ * default behind it, {@code atc} with none, so that format runs on the operator's own export or runs
+ * empty. This lets the
  * feature consume authoritative datasets by pointing at them, rather than
  * hand-maintaining a chartsearchai-specific file. See ADR Decision 24.
  *
@@ -1127,19 +1129,18 @@ public class DrugReferenceService {
 			if (loadedGroups != null) {
 				return loadedGroups;
 			}
-			// Read here as well as inside the loader's own resolution, which is the shape ensureLoaded
-			// already has for the entry dataset: both reads are inside this monitor, and a global
-			// property edited between them is not a state a lazily-cached load distinguishes anyway —
-			// which is the whole reason issue #149 asks the ORIGIN rather than the property.
-			String configuredPath = ChartSearchAiUtils.getStringGlobalProperty(
-					ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, "");
-			// One instance, so the origin and findings read below belong to the load performed here —
-			// the same contract, and the same reason, as ensureLoaded's read of the entry source.
+			// One instance, so the origin, the configured path and the findings read below all belong to
+			// the load performed here — the same contract, and the same reason, as ensureLoaded's read of
+			// the entry source. The path comes from the loader rather than from a second read of the
+			// global property, so the pair this status reports (configuredFilePath against origin) is
+			// provably ONE read of it: those two are exactly what config.xml tells an operator to
+			// compare, and reporting them from two reads is how they could disagree about which file the
+			// finding beside them is about.
 			CrossReactivityGroupsLoader loader = new CrossReactivityGroupsLoader();
 			List<CrossReactivityGroup> loaded = loader.load();
 			LoadedGroups completed = new LoadedGroups(loaded,
-					new CrossReactivityGroupsLoad(configuredPath, loader.lastLoadOrigin(), loaded.size(),
-							loader.lastLoadFindings()));
+					new CrossReactivityGroupsLoad(loader.lastConfiguredPath(), loader.lastLoadOrigin(),
+							loaded.size(), loader.lastLoadFindings()));
 			loadedGroups = completed;
 			return completed;
 		}

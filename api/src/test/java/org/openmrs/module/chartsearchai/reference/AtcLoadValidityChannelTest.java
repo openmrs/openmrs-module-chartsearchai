@@ -15,8 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,7 +24,6 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceValidity.Finding;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
-import org.openmrs.util.OpenmrsUtil;
 
 /**
  * Issue #266, first half: {@code sourceFormat=atc} had no validity channel at all, so
@@ -76,38 +73,23 @@ public class AtcLoadValidityChannelTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
-	 * Writes a dataset the test AUTHORS into the application data directory, for the one arrangement no
-	 * classpath fixture can supply: a document the ATC parser reads and finds no content line in. It is
-	 * not a classpath fixture deliberately — {@code DrugReferenceValidityContextTest}'s corpus sweep
-	 * requires every {@code .tsv} in the ATC fixture directory to parse to at least one entry, which is
-	 * the guard that stops a mis-shaped fixture quietly disarming the tests written against it, and a
-	 * deliberately empty one placed there would either redden that sweep or have to be exempted from it.
-	 * The same arrangement {@code CrossReactivityGroupsContextTest} uses for its operator file.
+	 * A dataset the test AUTHORS, for the one arrangement no classpath fixture can supply: a document the
+	 * ATC parser reads and finds no content line in. It is not a classpath fixture deliberately —
+	 * {@code DrugReferenceValidityContextTest}'s corpus sweep requires every {@code .tsv} in the ATC
+	 * fixture directory to parse to at least one entry, which is the guard that stops a mis-shaped
+	 * fixture quietly disarming the tests written against it, and a deliberately empty one placed there
+	 * would either redden that sweep or have to be exempted from it.
 	 */
 	private String writeToAppData(String asName, String content) throws IOException {
-		File dir = new File(OpenmrsUtil.getApplicationDataDirectory(), "chartsearchai");
-		dir.mkdirs();
-		File target = new File(dir, asName);
-		created.add(target);
-		Files.write(target.toPath(), content.getBytes(StandardCharsets.UTF_8));
-		return "chartsearchai/" + asName;
+		return DrugReferenceTestSupport.writeDatasetToAppData(asName, content, created);
 	}
 
 	private static List<String> rulesOf(DrugReferenceLoad status) {
-		List<String> rules = new ArrayList<String>();
-		for (Finding found : status.getFindings()) {
-			rules.add(found.getRule());
-		}
-		return rules;
+		return DrugReferenceTestSupport.rulesOf(status.getFindings());
 	}
 
 	private static Finding finding(DrugReferenceLoad status, String rule) {
-		for (Finding candidate : status.getFindings()) {
-			if (rule.equals(candidate.getRule())) {
-				return candidate;
-			}
-		}
-		throw new AssertionError("expected a " + rule + " finding, had: " + status.getFindings());
+		return DrugReferenceTestSupport.finding(status.getFindings(), rule);
 	}
 
 	/**
@@ -143,9 +125,14 @@ public class AtcLoadValidityChannelTest extends BaseModuleContextSensitiveTest {
 		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
 		Finding found = finding(status, DrugReferenceValidity.CONFIGURED_DATA_FILE_NOT_READ);
 
-		assertFalse(found.getDetail().contains("looks healthy"),
+		assertTrue(found.getDetail().contains("no dataset is in force at all"),
 				"nothing was read in place of the named file, so there is no plausible count to warn "
 						+ "about. Detail was: " + found.getDetail());
+		assertFalse(found.getDetail().contains("Whatever count you see"),
+				"and not the fallback branch's wording, which describes a dataset taken in its place. "
+						+ "Asserted on that branch's own distinguishing phrase rather than on a word both "
+						+ "branches could share, so removing the branch reddens this. Detail was: "
+						+ found.getDetail());
 		assertTrue(found.getDetail().contains("h266-no-such-atc-export.tsv"),
 				"the detail names the file the operator has to look at. Detail was: "
 						+ found.getDetail());

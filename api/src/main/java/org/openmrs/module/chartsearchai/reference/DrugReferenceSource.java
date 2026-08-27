@@ -64,14 +64,15 @@ public interface DrugReferenceSource {
 	 *         only the resolution knows (see {@link DrugReferenceValidity#configuredDataFileNotRead}),
 	 *         and the document rules, which only the PARSER knows because they are about the file's
 	 *         shape rather than the entries (see
-	 *         {@link DrugReferenceValidity#datasetMissingARequiredTable}). Empty only when the
-	 *         implementation runs neither, which of the implementations that exist is the test seam alone
-	 *         — every production source overrides this, and
-	 *         {@code DrugReferenceSourceValidityChannelTest} is what keeps that true. Issue #266 is why
-	 *         it is guarded rather than stated: this method is DEFAULTED, so a source that does not
-	 *         override it reports an empty {@code findings} list for its whole format with nothing
-	 *         erroring and no log line, which is what {@link AtcDrugReferenceSource} did for as long as it
-	 *         resolved its own file.
+	 *         {@link DrugReferenceValidity#datasetMissingARequiredTable}). Empty on a HEALTHY load, which
+	 *         is what an empty list usually means and what every production source returns when its
+	 *         dataset trips no rule; empty UNCONDITIONALLY only where the implementation runs neither
+	 *         check, which of the implementations that exist is the test seam alone. Those two are
+	 *         indistinguishable from the outside, which is the whole reason the second is guarded rather
+	 *         than stated: this method is DEFAULTED, so a source that does not override it reports an
+	 *         empty {@code findings} list for its whole format with nothing erroring and no log line —
+	 *         what {@link AtcDrugReferenceSource} did for as long as it resolved its own file (issue
+	 *         #266). {@code DrugReferenceSourceValidityChannelTest} is what fails the build on it.
 	 *
 	 *         <p><b>A new source format's parser reports here.</b> Worth stating plainly, because the
 	 *         alternative is issue #242 one format over: a parser that returns no entries for a document

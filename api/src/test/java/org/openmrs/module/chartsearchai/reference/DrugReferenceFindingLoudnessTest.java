@@ -76,20 +76,11 @@ public class DrugReferenceFindingLoudnessTest extends BaseModuleContextSensitive
 	}
 
 	private static List<String> rulesOf(DrugReferenceLoad status) {
-		List<String> rules = new ArrayList<String>();
-		for (DrugReferenceValidity.Finding found : status.getFindings()) {
-			rules.add(found.getRule());
-		}
-		return rules;
+		return DrugReferenceTestSupport.rulesOf(status.getFindings());
 	}
 
 	private static DrugReferenceValidity.Finding finding(DrugReferenceLoad status, String rule) {
-		for (DrugReferenceValidity.Finding candidate : status.getFindings()) {
-			if (rule.equals(candidate.getRule())) {
-				return candidate;
-			}
-		}
-		throw new AssertionError("expected a " + rule + " finding, had: " + status.getFindings());
+		return DrugReferenceTestSupport.finding(status.getFindings(), rule);
 	}
 
 	/**

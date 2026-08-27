@@ -138,12 +138,7 @@ public final class CrossReactivityGroupsLoad {
 		map.put("groupCount", groupCount);
 		map.put("configuredFilePath", configuredFilePath);
 		map.put("origin", origin);
-		List<Map<String, Object>> serialized =
-				new ArrayList<Map<String, Object>>(findings.size());
-		for (DrugReferenceValidity.Finding found : findings) {
-			serialized.add(found.toMap());
-		}
-		map.put("findings", serialized);
+		map.put("findings", DrugReferenceValidity.toMaps(findings));
 		return map;
 	}
 

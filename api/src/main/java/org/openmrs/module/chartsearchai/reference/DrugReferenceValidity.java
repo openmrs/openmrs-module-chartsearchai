@@ -170,8 +170,10 @@ public final class DrugReferenceValidity {
 	 */
 	public static final String SELF_PAIRED_INTERACTION_ROWS = "self-paired-interaction-rows";
 
-	/** An explicitly configured dataset file that could not be read, so a different dataset is in
-	 *  force — issue #156, case 1. */
+	/** An explicitly configured dataset file that could not be read, so what is in force is not what the
+	 *  operator named — a bundled dataset taken in its place, or, on a format that bundles none, nothing
+	 *  at all (issue #156 case 1; the second case since issue #266). See
+	 *  {@link #configuredDataFileNotRead}, which states both and is where the detail branches. */
 	public static final String CONFIGURED_DATA_FILE_NOT_READ = "configured-data-file-not-read";
 
 	/**
@@ -289,6 +291,23 @@ public final class DrugReferenceValidity {
 		return Collections.unmodifiableList(findings);
 	}
 
+	/**
+	 * @return {@code findings} as the status endpoint serializes them — one {@link Finding#toMap()} each,
+	 *         in order. Owned here rather than at each status object because since issue #266 there are
+	 *         two of them ({@link DrugReferenceLoad} and {@link CrossReactivityGroupsLoad}) reporting
+	 *         under one endpoint, and the shape {@code CLAUDE.md} requires of this channel — every
+	 *         finding, carrying its rule, remedy and count — must not be asserted by two independent
+	 *         copies: a fifth key on a finding would otherwise be added to one section and silently
+	 *         omitted from the other, and each section's key list is asserted separately.
+	 */
+	public static List<Map<String, Object>> toMaps(List<Finding> findings) {
+		List<Map<String, Object>> serialized = new ArrayList<Map<String, Object>>(findings.size());
+		for (Finding found : findings) {
+			serialized.add(found.toMap());
+		}
+		return serialized;
+	}
+
 	/** Adds findings another stage of the same load produced — the parsers report through
 	 *  {@link DrugReferenceSource#lastLoadFindings()}, which is the same channel
 	 *  {@link DrugReferenceSource#lastLoadOrigin()} uses and for the same reason. */
@@ -299,11 +318,13 @@ public final class DrugReferenceValidity {
 	}
 
 	/**
-	 * Reports every finding at WARN, one line each — the form for a caller that does not know which
-	 * dataset was read, which is every caller that has no load to report into: each parser's
-	 * one-argument {@code parse} form, and {@link CrossReactivityGroupsLoader#load()}, which does know its
-	 * origin and deliberately does not scope by it (ADR Decision 48). Unknown provenance is reported
-	 * loudly on purpose; {@link #logTo(Logger, String)} is what softens, and only on evidence.
+	 * Reports every finding at WARN, one line each — the form for a caller that does not SCOPE by the
+	 * dataset it read. Two shapes reach it, and only the first of them is ignorant of the origin: each
+	 * parser's one-argument {@code parse} form, which has no load at all, and
+	 * {@link CrossReactivityGroupsLoader#load()}, which does know its origin and deliberately declines to
+	 * scope by it (ADR Decision 48 — that decision gave the groups load a status, not a register). An
+	 * unknown provenance is reported loudly on purpose; {@link #logTo(Logger, String)} is what softens,
+	 * and only on evidence.
 	 *
 	 * <p>Owned here so no caller can come to report findings differently.
 	 */
@@ -324,9 +345,9 @@ public final class DrugReferenceValidity {
 	 *
 	 * <p><b>A finding about the CONFIGURATION never scales.</b> It names a choice the operator made and
 	 * can unmake, so it is WARN wherever the entries came from — and keying the softening on the rule
-	 * rather than on the origin alone is exactly what keeps that true: issue #156's finding fires when
-	 * the operator's file was NOT read and the bundled dataset WAS, so an origin-only rule would silence
-	 * the one case issues #149 and #154 exist for. Anything not named in {@link #DATA_RULES} is loud,
+	 * rather than on the origin alone is exactly what keeps that true: issue #156's finding fires when the
+	 * operator's file was NOT read — and where a bundled dataset was taken in its place, the origin is
+	 * that dataset's, so an origin-only rule would silence the one case issues #149 and #154 exist for. Anything not named in {@link #DATA_RULES} is loud,
 	 * including a rule added later and not classified — silence about an operator's mistake is the worse
 	 * failure of the two, so the default direction is loud.
 	 *
@@ -359,11 +380,18 @@ public final class DrugReferenceValidity {
 	 * {@code configured*} rules today — describes the operator's configuration and is always loud.
 	 *
 	 * <p>Named as a list of what may soften rather than of what may not, so that a rule added later and
-	 * left unclassified stays loud. {@link #DATASET_MISSING_A_REQUIRED_TABLE} and
-	 * {@link #NO_LINE_YIELDED_AN_ENTRY} are in here even though on a bundled dataset either would mean a
-	 * packaging defect rather than an operator's file: both those cases load zero entries, and
-	 * {@link DrugReferenceLoad#isInert()}'s own unconditional WARN in {@link DrugReferenceService} is
-	 * what makes them loud, which is where the catastrophic case belongs.
+	 * left unclassified stays loud. {@link #DATASET_MISSING_A_REQUIRED_TABLE} is in here even though on a
+	 * bundled dataset it would mean a packaging defect rather than an operator's file: that case loads
+	 * zero entries, and {@link DrugReferenceLoad#isInert()}'s own unconditional WARN in
+	 * {@link DrugReferenceService} is what makes it loud, which is where the catastrophic case belongs.
+	 *
+	 * <p>{@link #NO_LINE_YIELDED_AN_ENTRY} is in here because its SUBJECT is the document's content and
+	 * that is what this list is a list of — not because the softening can reach it. Today it cannot:
+	 * the rule has one reporter, and that parser's resolution
+	 * ({@link ReferenceDataFiles#loadOperatorFile}) can only produce an {@code appdata:} or a
+	 * {@code none} origin, neither of which {@link ReferenceDataFiles#isBundledOrigin} accepts. So it is
+	 * loud in practice, and the classification is what a line-based dataset the module SHIPS would need —
+	 * stated that way round rather than justified by a case the rule cannot currently reach.
 	 */
 	private static final Set<String> DATA_RULES = Collections.unmodifiableSet(
 			new LinkedHashSet<String>(Arrays.asList(BLANK_ALIAS, NULL_LIST_ELEMENT,
@@ -546,18 +574,28 @@ public final class DrugReferenceValidity {
 	 * installed module reads the declared default from its {@code config.xml} while a context without
 	 * that row reads blank, and neither is a misconfiguration.
 	 *
-	 * <p><b>What it says depends on whether anything was read INSTEAD</b>, and since issue #266 both
-	 * cases are reachable. Where a dataset was taken in the named file's place — the two formats with a
-	 * bundled fallback — the harm is a plausible entry count nobody configured, which is what the
-	 * detail warns about. Where nothing was read at all ({@link ReferenceDataFiles#ORIGIN_NONE}, which
-	 * {@link ReferenceDataFiles#loadOperatorFile} passes because the {@code atc} format has no fallback)
-	 * that clause would be false: the count is zero and the load is inert. So the detail states what
-	 * actually happened rather than one dataset's version of it — a finding that misdescribes the load is
-	 * the channel carrying a wrong answer, which is worse than the empty channel issue #266 removed.
+	 * <p><b>What it says depends on what was read INSTEAD</b>, and since issue #266 both cases are
+	 * reachable. Where a fallback was reached for, the harm is a count nobody configured, and the detail
+	 * says so about ANY non-zero count rather than asserting the fallback load succeeded — because this
+	 * rule is raised BEFORE that read happens (see {@link ReferenceDataFiles#loadWithClasspathFallback},
+	 * where it is deliberately asked once for every reason the operator's file was not read), so a
+	 * bundled resource that is itself missing or unparseable would leave a finding claiming a healthy
+	 * count beside a load of zero. Where nothing was reached for at all
+	 * ({@link ReferenceDataFiles#ORIGIN_NONE}, which {@link ReferenceDataFiles#loadOperatorFile} passes
+	 * because the {@code atc} format bundles nothing) that whole clause would be false, so it takes its
+	 * own branch. A finding that misdescribes the load is the channel carrying a wrong answer, which is
+	 * worse than the empty channel issue #266 removed.
+	 *
+	 * <p><b>The count is named neutrally, not as an "entry" count</b>, because since issue #266 this rule
+	 * is published for the cross-reactivity groups file too and that section reports a
+	 * {@code groupCount} — there is no {@code entryCount} in it. Same argument as
+	 * {@link #datasetMissingARequiredTable}'s {@code items} parameter, and it needs no parameter here:
+	 * the sentence does not have to name the unit to say the count is of the wrong dataset.
 	 *
 	 * @param declaredDefault the value the module's {@code config.xml} declares for this global property
-	 * @param origin what was actually read ({@link ReferenceDataFiles.Loaded#getOrigin()}), or
-	 *        {@link ReferenceDataFiles#ORIGIN_NONE} where nothing was
+	 * @param origin what was reached for in the named file's place
+	 *        ({@link ReferenceDataFiles.Loaded#getOrigin()}), or {@link ReferenceDataFiles#ORIGIN_NONE}
+	 *        where nothing was
 	 */
 	void configuredDataFileNotRead(String globalProperty, String configured, String declaredDefault,
 			String origin) {
@@ -565,11 +603,12 @@ public final class DrugReferenceValidity {
 			return;
 		}
 		String consequence = ReferenceDataFiles.ORIGIN_NONE.equals(origin)
-				? "and nothing was read in its place, so no dataset is in force at all. The count of 0 "
+				? "and nothing was read in its place, so no dataset is in force at all. A count of 0 here "
 						+ "is a file that was named and not found, which is not the same state as a "
 						+ "deployment that configured nothing."
-				: "so '" + origin + "' is in force instead. The entry count is therefore a count of a "
-						+ "dataset nobody configured, and looks healthy.";
+				: "so '" + origin + "' was read in its place. Whatever count you see is therefore a count "
+						+ "of a dataset nobody configured rather than of your file, however healthy it "
+						+ "looks.";
 		report(CONFIGURED_DATA_FILE_NOT_READ, Remedy.REPORTED, 1,
 				globalProperty + " names '" + configured + "', which could not be read, " + consequence);
 	}

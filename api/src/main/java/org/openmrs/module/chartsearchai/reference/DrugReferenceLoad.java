@@ -484,12 +484,7 @@ public final class DrugReferenceLoad {
 		map.put("configuredSourceFormat", configuredSourceFormat);
 		map.put("configuredDataFilePath", configuredDataFilePath);
 		map.put("origin", origin);
-		List<Map<String, Object>> serialized =
-				new ArrayList<Map<String, Object>>(findings.size());
-		for (DrugReferenceValidity.Finding found : findings) {
-			serialized.add(found.toMap());
-		}
-		map.put("findings", serialized);
+		map.put("findings", DrugReferenceValidity.toMaps(findings));
 		// Appended after findings, never inserted: the endpoint's field list is asserted as an ORDERED
 		// list, and appending is what keeps that assertion order-sensitive instead of making it
 		// order-insensitive the first time a key lands in the middle.

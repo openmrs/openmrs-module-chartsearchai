@@ -183,8 +183,7 @@ public class AbsentDataEvalTest {
 	@ParameterizedTest(name = "[{index}] {0}")
 	@MethodSource("absentDataCases")
 	public void absentTopicAnswerNamesWhatWasAskedAbout(String caseId, EvalCase evalCase) throws Exception {
-		Assumptions.assumeTrue("true".equalsIgnoreCase(System.getProperty(ENABLE_PROPERTY)),
-				"Skipping: set -D" + ENABLE_PROPERTY + "=true to run");
+		LlmEndpointTestSupport.assumeOptedIn(ENABLE_PROPERTY);
 		String endpoint = LlmEndpointTestSupport.endpoint(ENDPOINT_PROPERTY);
 		Assumptions.assumeTrue(LlmEndpointTestSupport.isReachable(endpoint),
 				"Skipping: LLM endpoint not reachable at " + endpoint);

@@ -115,7 +115,7 @@ public class PatientChartSerializer {
 	 * Nevirapine shows it was stopped on 2026-08-24 [1]"</em> and this wording answers <em>"No active
 	 * medications are recorded."</em> — the same verdict, without the cited record behind it.
 	 *
-		 * <p><strong>Since issue #315 the negative string has a SECOND consumer: the system prompt.</strong>
+	 * <p><strong>Since issue #315 the negative string has a SECOND consumer: the system prompt.</strong>
 	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} composes {@link #INACTIVE_ORDER_LABEL} into the rule
 	 * telling the model that an answer naming a drug from such a record must say the order is no
 	 * longer in force. It composes the CONSTANT, so a rename carries into the prompt automatically and
@@ -125,7 +125,7 @@ public class PatientChartSerializer {
 	 * same inlined constant and move together. So the red is the signal to re-run BOTH A/Bs; the one
 	 * below and Decision 47's are separate ledgers and neither transfers to the other.
 	 *
- * <p>A change to either string is a change to what every chart says to the model, and needs its
+	 * <p>A change to either string is a change to what every chart says to the model, and needs its
 	 * own interleaved A/B before it ships; the measurement above is what one looks like, and issue
 	 * #315's five-wording attempt at a prompt rule is the other reason to expect one word to matter.
 	 * {@code DrugOrderCurrencyMarkTest.theTwoMarksAreSpelledExactlyAsMeasured} pins both as literals,

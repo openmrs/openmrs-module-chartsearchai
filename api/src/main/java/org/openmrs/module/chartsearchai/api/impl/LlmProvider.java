@@ -63,8 +63,9 @@ public class LlmProvider {
 			// ENDED/CURRENT clause over querystore's TEXT markers and reverted every one: an order
 			// lapsed by auto_expire_date renders no end marker, so the model was being asked to sort
 			// records into two classes with no discriminator for one of them — it misfiled that record
-			// (four is its W1-W4; its own "five wordings" counts the clause-less control as a row, and
-			// nine further wordings are counted there but not recorded)
+			// (four is its W1-W4; its own "five wordings" counts the clause-less control as a row. Nine
+			// further wordings are counted there and TWO of them are described, so seven are unrecorded
+			// — do not re-run the two it names)
 			// and then asserted the lapsed drug as current in a clinical answer. #317 (Decision 46)
 			// removed that gap: every attributable drug_order record now carries PatientChartSerializer's
 			// own mark, and the model demonstrably reads it — #315's re-measurement records an answer
@@ -80,8 +81,9 @@ public class LlmProvider {
 			// EndedOrderAnswerRuleTest.thePromptsTriggerTokenIsTheSerializersConstantAndNotACopy reads
 			// this source instead.
 			//
-			// ONE SENTENCE. THE THREE ADDITIONS BELOW WERE MEASURED AND REJECTED; THE FOURTH BULLET IS
-			// AN ARGUMENT AND SAYS SO. Seven wordings as full
+			// ONE SENTENCE. THE FIRST TWO BULLETS ARE ADDITIONS THAT WERE MEASURED AND REJECTED; THE
+			// THIRD RECORDS A MUTATION THAT PASSED, AND THE FOURTH IS AN ARGUMENT AND SAYS SO. Seven
+			// wordings as full
 			// arms against the unchanged base, plus two single-clause mutation probes against the two
 			// answer cases; the arms ran on one binary, GP-swapped through chartsearchai.llm.systemPrompt,
 			// interleaved with a decoy on another patient between every sample, over Decision 45's own two
@@ -116,7 +118,10 @@ public class LlmProvider {
 			//    positive half it declines has no arm of its own. Nothing about a record carrying NO mark: the mark is silent wherever the
 			//    module could not establish the answer (SerializedRecord.getOrderActive() owns that
 			//    list), so a clause speaking for the silent case would assert exactly what the silence
-			//    exists to withhold. And nothing about a record marked IN FORCE: Decision 45's residue is
+			//    exists to withhold. That is a property of the CLAUSE, not a guarantee about the answer:
+			//    measured on a chart carrying an unevaluable order beside marked ones, the model still
+			//    grouped the unmarked record in with "no longer in force". The clause does not say it;
+			//    nothing here stops the model saying it. And nothing about a record marked IN FORCE: Decision 45's residue is
 			//    that a positive currency sentence makes the model re-state a live order in prose instead
 			//    of copying a field list, and prose loses fields and can invent them.
 			//

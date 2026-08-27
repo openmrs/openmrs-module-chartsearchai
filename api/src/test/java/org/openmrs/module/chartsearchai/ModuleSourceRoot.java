@@ -41,8 +41,16 @@ public final class ModuleSourceRoot {
 	/**
 	 * The {@code api} module root: the working directory when surefire set it to the module (the
 	 * normal case), else the nearest ancestor that looks like the module, else {@code api/} beneath
-	 * one. Falls back to the working directory, so a caller that resolves a file under it still gets
-	 * a path that fails its own existence check rather than a null.
+	 * one. Falls back to the working directory rather than returning null.
+	 *
+	 * <p><strong>That fallback is not a safety net, and the callers differ in whether they can
+	 * tell.</strong> A caller that resolves a NAMED file under this root and asserts it exists
+	 * fails loudly on a wrong answer. A caller that WALKS the root does not: it scans nothing, or
+	 * the wrong tree, and reports no violations. Measured — forcing this method to an unrelated
+	 * directory USED TO leave {@code ArchitectureGuardTest} entirely green while the two
+	 * file-resolving callers went red. It no longer does: that class asserts its own scan is
+	 * non-empty and found a file it expects, and the same mutation now reddens it. A new WALKING
+	 * caller owes itself the same check, because nothing here can give it one.
 	 */
 	public static Path apiRoot() {
 		Path current = Paths.get("").toAbsolutePath();

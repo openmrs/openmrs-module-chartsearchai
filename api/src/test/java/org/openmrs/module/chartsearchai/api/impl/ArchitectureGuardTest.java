@@ -185,6 +185,15 @@ public class ArchitectureGuardTest {
 	/** Cache of file name → lines, populated once by {@link #loadAllSources}. */
 	private static java.util.Map<String, List<String>> sourceCache;
 
+	/**
+	 * Every rule in this class scans this map, so an EMPTY or WRONG map makes all of them pass
+	 * vacuously — a structural guard that reads nothing reports no violations. That is not
+	 * hypothetical: forcing {@link ModuleSourceRoot#apiRoot()} to an unrelated directory leaves this
+	 * class 5/5 green (measured; the two sibling classes that resolve a NAMED file under the same
+	 * root go red instead, because they assert the file exists and this one had nothing to assert).
+	 * The walk's fallback to the working directory cannot be relied on to fail loudly here, so the
+	 * cache asserts its own sanity before any rule reads it.
+	 */
 	private static java.util.Map<String, List<String>> getSourceCache()
 			throws IOException {
 		if (sourceCache == null) {
@@ -201,6 +210,14 @@ public class ArchitectureGuardTest {
 				}
 			});
 		}
+		org.junit.jupiter.api.Assertions.assertFalse(sourceCache.isEmpty(),
+				"precondition: the source scan found no .java files under " + SRC_ROOT + " — every rule "
+						+ "in this class would pass vacuously, so this fails instead of reporting no "
+						+ "violations");
+		org.junit.jupiter.api.Assertions.assertTrue(sourceCache.containsKey("LlmProvider.java"),
+				"precondition: the source scan did not find LlmProvider.java under " + SRC_ROOT + ", so "
+						+ "it is reading the wrong tree — a wrong root scans SOMETHING and every rule "
+						+ "then passes on files these rules were never written about");
 		return sourceCache;
 	}
 

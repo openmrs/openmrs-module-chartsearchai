@@ -113,9 +113,7 @@ public class LlmAnswerQualityTest {
 
 	@Test
 	public void trendQuery_shouldCiteRecordsAndCoverAllConcepts() throws Exception {
-		org.junit.jupiter.api.Assumptions.assumeTrue(
-				"true".equalsIgnoreCase(System.getProperty("chartsearchai.llm.quality.test")),
-				"Skipping: set -Dchartsearchai.llm.quality.test=true to run");
+		LlmEndpointTestSupport.assumeOptedIn("chartsearchai.llm.quality.test");
 		org.junit.jupiter.api.Assumptions.assumeTrue(
 				LlmEndpointTestSupport.isReachable(getEndpoint()),
 				"Skipping: LLM endpoint not reachable at " + getEndpoint());

@@ -148,9 +148,11 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 		assertTrue(prompt.contains("say in the same sentence that its order is no longer in force"),
 				"the system prompt must require the statement to travel WITH the drug's name — issue "
 						+ "#315's defect is an answer that names the drug and drops its status, so a rule that "
-						+ "does not bind the two together does not close it. What this pins is the RULE, not the "
-						+ "verb: swapping \"say\" for \"add to the sentence naming it\" leaves the two answer cases "
-						+ "green, and the wording was chosen on prose and on ADR Decision 47's other cells");
+						+ "does not bind the two together does not close it. This assertion pins the exact "
+						+ "measured wording, so swapping the verb reddens THIS case — and only this case: "
+						+ "the two answer cases stay green under that swap, which is why ADR Decision 47 "
+						+ "records the verb as chosen on prose and on its other cells rather than on "
+						+ "whether the rule fires");
 		assertFalse(prompt.contains(PatientChartSerializer.ACTIVE_ORDER_LABEL),
 				"the clause has ONE branch and says nothing about a record marked in force. ADR Decision "
 						+ "45 measured a positive currency half making the model re-state live orders in "
@@ -199,19 +201,29 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 		assertTrue(end > start, "precondition: the prompt constant's terminating quote-semicolon must "
 				+ "be findable, or the slice below silently widens to the rest of the file");
 		String initializer = text.substring(start, end + 2);
-		assertFalse(initializer.contains("AnswerExtractingConsumer"),
+		assertFalse(initializer.contains("@Autowired"),
 				"precondition: the slice must stop at the constant, not run on into the rest of the "
-						+ "class — that over-wide window is exactly what made this guard fail open, and "
-						+ "this assertion is what stops it silently widening again");
+						+ "class — that over-wide window is what made this guard fail open. The canary is "
+						+ "the FIRST thing after the constant rather than a distant one, because a canary "
+						+ "further down leaves a window of lines a widening could take silently");
+
+		// Normalised before the negative assertion, because BOTH of the shapes that defeated earlier
+		// versions of this case live in what normalisation removes. A comment inside the initializer
+		// can carry the constant's dotted name while the prompt hardcodes the text beside it (this
+		// file's convention is a comment paragraph above every prompt rule, so that is not exotic);
+		// and a hardcoded copy can be split across the file's own line-wrap — "... not in " + "force"
+		// — which a contiguous search cannot see. Strip line comments, then join adjacent literals.
+		String normalised = initializer.replaceAll("(?m)//.*$", "").replaceAll("\"\\s*\\+\\s*\"", "");
+		assertFalse(normalised.contains(PatientChartSerializer.INACTIVE_ORDER_LABEL),
+				"the prompt must not carry the mark's text as a literal, however it is split or "
+						+ "commented around — it reads identically to a composed clause today and stops "
+						+ "tracking the constant the moment the mark is renamed, which is the whole "
+						+ "failure this case exists for");
 
 		// TWO assertions, because either alone is satisfiable by the defect. The name can appear in a
 		// comment inside the initializer while the prompt hardcodes the text beside it — which is the
 		// same fail-open one bound wider already allowed, one scope in. So the mark's text must ALSO
 		// not appear here as a Java string literal: the clause has to reach it through the constant.
-		assertFalse(initializer.contains("\"" + PatientChartSerializer.INACTIVE_ORDER_LABEL + "\""),
-				"the prompt must not carry the mark's text as a literal — it reads identically to a "
-						+ "composed clause today and stops tracking the constant the moment the mark is "
-						+ "renamed, which is the whole failure this case exists for");
 		assertTrue(initializer.contains("PatientChartSerializer.INACTIVE_ORDER_LABEL"),
 				"the prompt's order-status clause must be BUILT from "
 						+ "PatientChartSerializer.INACTIVE_ORDER_LABEL rather than carrying a copy of its "
@@ -265,8 +277,7 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 	 */
 	private void assertAnswerReportsTheOrderEnded(int patientId, int orderId, String label)
 			throws Exception {
-		Assumptions.assumeTrue("true".equalsIgnoreCase(System.getProperty(ENABLE_PROPERTY)),
-				"Skipping: set -D" + ENABLE_PROPERTY + "=true to run");
+		LlmEndpointTestSupport.assumeOptedIn(ENABLE_PROPERTY);
 		String endpoint = LlmEndpointTestSupport.endpoint(ENDPOINT_PROPERTY);
 		Assumptions.assumeTrue(LlmEndpointTestSupport.isReachable(endpoint),
 				"Skipping: LLM endpoint not reachable at " + endpoint);

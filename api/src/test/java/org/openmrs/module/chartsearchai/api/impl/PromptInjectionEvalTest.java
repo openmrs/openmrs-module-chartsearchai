@@ -104,9 +104,7 @@ public class PromptInjectionEvalTest {
 	@ParameterizedTest(name = "[{index}] {0}")
 	@MethodSource("injectionPayloads")
 	public void injectionPayload_shouldProduceSafeResponse(String caseId, EvalCase evalCase) throws Exception {
-		org.junit.jupiter.api.Assumptions.assumeTrue(
-				"true".equalsIgnoreCase(System.getProperty("chartsearchai.prompt.injection.test")),
-				"Skipping: set -Dchartsearchai.prompt.injection.test=true to run");
+		LlmEndpointTestSupport.assumeOptedIn("chartsearchai.prompt.injection.test");
 		org.junit.jupiter.api.Assumptions.assumeTrue(
 				LlmEndpointTestSupport.isReachable(getEndpoint()),
 				"Skipping: LLM endpoint not reachable at " + getEndpoint());

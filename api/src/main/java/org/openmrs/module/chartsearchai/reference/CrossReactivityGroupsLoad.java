@@ -119,9 +119,11 @@ public final class CrossReactivityGroupsLoad {
 
 	/**
 	 * @return what the validity check found while this load resolved and parsed the groups file; never
-	 *         null. Carried identically whichever dataset was read — the log LEVEL is what
-	 *         {@link DrugReferenceValidity#logTo(org.slf4j.Logger)} decides, and this channel says what is
-	 *         true. Do not scope it.
+	 *         null. Carried identically whichever dataset was read, and so is the LOG for this dataset:
+	 *         {@link CrossReactivityGroupsLoader#load()} reports through the one-argument
+	 *         {@link DrugReferenceValidity#logTo(org.slf4j.Logger)}, which is unconditionally WARN, so the
+	 *         origin-keyed softening ADR Decision 36 gives the ENTRY dataset does not apply here — ADR
+	 *         Decision 48 left this channel loud rather than re-registering it. Do not scope either one.
 	 */
 	public List<DrugReferenceValidity.Finding> getFindings() {
 		return findings;

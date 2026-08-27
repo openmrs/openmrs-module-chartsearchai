@@ -347,9 +347,10 @@ public final class DrugReferenceValidity {
 	 * can unmake, so it is WARN wherever the entries came from — and keying the softening on the rule
 	 * rather than on the origin alone is exactly what keeps that true: issue #156's finding fires when the
 	 * operator's file was NOT read — and where a bundled dataset was taken in its place, the origin is
-	 * that dataset's, so an origin-only rule would silence the one case issues #149 and #154 exist for. Anything not named in {@link #DATA_RULES} is loud,
-	 * including a rule added later and not classified — silence about an operator's mistake is the worse
-	 * failure of the two, so the default direction is loud.
+	 * that dataset's, so an origin-only rule would silence the one case issues #149 and #154 exist for.
+	 * Anything not named in {@link #DATA_RULES} is loud, including a rule added later and not
+	 * classified — silence about an operator's mistake is the worse failure of the two, so the default
+	 * direction is loud.
 	 *
 	 * <p><b>The status channel is not scoped with the log.</b> {@link #getFindings()} and
 	 * {@link Finding#toMap()} carry every finding identically either way, so

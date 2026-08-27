@@ -297,13 +297,24 @@ final class ReferenceDataFiles {
 	 * application data directory, parse it, and report the absolute path at INFO.
 	 *
 	 * <p>Shared because the two public methods differ in exactly one thing — what happens NEXT when the
-	 * file is not what was read — and everything before that has to be identical: the same
+	 * configured file is not what was read — and everything before that has to be identical: the same
 	 * {@code resolveModelPath} guard, the same {@link #APPDATA_ORIGIN_PREFIX} origin form (whose javadoc
 	 * records a deliberate privilege decision about relative-versus-absolute paths), and the same two
 	 * catches degrading to no exception. Two copies of that is how the exception contract diverges
 	 * silently, which is the drift this class's javadoc says it exists to prevent. The collector is the
 	 * CALLER's, so this helper has no opinion about how far it spans; the caller that spans two attempts
 	 * keeps that comment where the two attempts are.
+	 *
+	 * <p><b>A blank path is skipped SILENTLY</b>, and the guard lives here rather than at each call site
+	 * for the reason review found the hard way: extracting this helper first put the guard at one of the
+	 * two callers and not the other, so an untouched install — where both path properties read their
+	 * declared default or blank — logged {@code file '' not available (Model path is not configured: …)}
+	 * once per dataset. That is INFO, but README and ONBOARDING both tell an operator to raise this
+	 * logger to INFO in order to read the {@code Loaded N …} lines, so it is a line on every install of
+	 * every deployment about datasets nobody configured: the noise {@link DrugReferenceValidity}'s whole
+	 * design is written against, arriving through the log instead of through a finding. A caller that
+	 * wants to SAY something about a blank path (as {@link #loadOperatorFile} does, since for it a blank
+	 * path is the end of the road) keeps its own branch.
 	 *
 	 * @param whatFollows what the log line should say happens instead when the file cannot be read, in
 	 *        the caller's own vocabulary ({@code "using bundled default"} / {@code "running empty"})
@@ -313,6 +324,9 @@ final class ReferenceDataFiles {
 	private static <T> Loaded<T> readOperatorFile(String pathGlobalProperty, String configuredPath,
 			String datasetLabel, String whatFollows, DatasetParser<T> parser,
 			DrugReferenceValidity validity) {
+		if (configuredPath.isEmpty()) {
+			return null;
+		}
 		try {
 			String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath, pathGlobalProperty);
 			try (InputStream in = new FileInputStream(new File(resolved))) {

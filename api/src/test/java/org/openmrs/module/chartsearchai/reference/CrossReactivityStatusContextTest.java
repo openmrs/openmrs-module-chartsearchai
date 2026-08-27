@@ -22,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceValidity.Finding;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 import org.openmrs.util.OpenmrsUtil;
@@ -177,6 +178,42 @@ public class CrossReactivityStatusContextTest extends BaseModuleContextSensitive
 				"an install that configured nothing must be silent. The load was: " + status);
 		assertEquals(ReferenceDataFiles.CLASSPATH_ORIGIN_PREFIX
 				+ CrossReactivityGroupsLoader.CLASSPATH_DEFAULT, status.getOrigin());
+	}
+
+	/**
+	 * An untouched install says NOTHING about the file it never had.
+	 *
+	 * <p>The regression this pins was introduced while hardening this very change and caught by a fresh
+	 * reviewer: extracting the shared operator-file read attempt dropped the blank-path skip at one of
+	 * its two callers, so a deployment that had configured neither path logged
+	 * {@code file '' not available (Model path is not configured: …)} once per dataset. INFO, and
+	 * therefore invisible on a stock install — but README and ONBOARDING both instruct an operator to
+	 * raise this logger to INFO in order to read the {@code Loaded N …} lines, so it is a line on every
+	 * install of every deployment about a dataset nobody configured. That is the noise this module's
+	 * whole validity design is written against, arriving through the log rather than through a finding.
+	 *
+	 * <p>Asserted on the message rather than on the LEVEL, deliberately: the healthy load legitimately
+	 * logs at INFO ({@code Loaded 1 cross-reactivity groups from …}), so "no INFO" would be false and
+	 * "no WARN" would have been green throughout the regression.
+	 */
+	@Test
+	public void anInstallThatConfiguredNoGroupsFileLogsNothingAboutOne() {
+		enable();
+
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			CrossReactivityGroupsLoad status = new DrugReferenceService().getCrossReactivityLoadStatus();
+
+			assertTrue(status.getGroupCount() > 0, "precondition: the bundled seed loaded");
+			assertEquals("", status.getConfiguredFilePath(),
+					"precondition: nothing was configured, which is what an untouched install reads");
+			// toString() first, and it is load-bearing: describeAll() returns a LIST, so
+			// .contains("not available") on it is List.contains — an exact-element match against a
+			// whole formatted line, which is never true. Written that way, this assertion passed while
+			// the offending line was being captured; the mutation is what said so.
+			assertFalse(capture.describeAll().toString().contains("not available"),
+					"a path nobody set is not a file that could not be read, so nothing is reported "
+							+ "about it at any level. Captured: " + capture.describeAll());
+		}
 	}
 
 	/**

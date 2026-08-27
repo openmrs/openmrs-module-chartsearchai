@@ -253,7 +253,7 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
-	 * The rank's other end, which nothing else in the suite reaches: a CODED drug's name still leads.
+	 * The rank's other end, on the display itself: a CODED drug's name still leads.
 	 *
 	 * <p>{@code DrugOrderValidator} rejects a row carrying both a coded {@code Drug} and free text
 	 * ({@code DrugOrder.error.onlyOneOfDrugOrNonCodedShouldBeSet}) — but only inside
@@ -261,10 +261,14 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	 * global property is true. That property is false on a stock install — read off the 3.7.1
 	 * reference-application demo database, where it is the string {@code false} — so on a default
 	 * deployment nothing in that validator refuses this row, and it is not merely a legacy shape.
-	 * Nothing else in the suite can observe that
-	 * {@code drugNonCoded} was ranked BELOW the coded name rather than above it. Written by SQL like
-	 * the free-text arrangements above, because what is under test is the builder's read rather than
-	 * the platform's write path.
+	 * Written by SQL like the free-text arrangements above, because what is under test is the builder's
+	 * read rather than the platform's write path.
+	 *
+	 * <p>Mutate the rank and read the failures rather than trusting a count: an earlier version of this
+	 * javadoc claimed to be the only case that observes it, and moving {@code drugNonCoded} above the
+	 * coded name reddens this case AND
+	 * {@link #aRuleNamedOnlyByTheFreeTextIsNotPrintedUnderTheCodedDrugsName}, which shares the
+	 * arrangement and sees the rank through the folded chip's printed name instead of the display.
 	 */
 	@Test
 	public void aCodedDrugsNameStillLeadsWhenARowCarriesFreeTextBesideIt() {
@@ -487,7 +491,9 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	 * The legibility cost of prose reaching the DISPLAY, pinned so that closing it reddens a test.
 	 *
 	 * <p>The chip's own delimiters are em dashes and the display goes in unquoted, so a free text
-	 * carrying an em dash and a full stop produces one sentence whose boundaries are partly the chart's.
+	 * carrying an em dash and a full stop produces one sentence whose boundaries are partly the chart's
+	 * — the recorded value here carries the SAME em dash the chip closes with, which is what makes the
+	 * two indistinguishable rather than merely adjacent.
 	 * The same string reaches the model through {@code DrugReferenceInjector.renderFinding} as a citable
 	 * {@code safety_finding}.
 	 *
@@ -502,7 +508,7 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	public void aFreeTextDisplayIsPrintedIntoTheChipUnquoted() {
 		nameTheConcept(PLACEHOLDER_CONCEPT_NAME);
 		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, NAPROXEN_ATC);
-		recordTheOrderAsFreeText("Naproxen 500mg - hold from 1 Jan. Restart later");
+		recordTheOrderAsFreeText("Naproxen 500mg \u2014 hold from 1 Jan. Restart later");
 		DrugSafetyValidator validator =
 				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 
@@ -510,7 +516,7 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 		List<String> details = DrugReferenceTestSupport.details(validator.validate("", QUESTION, context));
 
 		assertEquals(java.util.Arrays.asList("Ibuprofen is in the same ATC class (M01AE) as active order"
-				+ " Naproxen 500mg - hold from 1 Jan. Restart later — possible duplicate therapy"),
+				+ " Naproxen 500mg — hold from 1 Jan. Restart later — possible duplicate therapy"),
 				details,
 				"the recorded text goes into the sentence as it was typed, its own punctuation beside the"
 						+ " chip's — quoting it is the remedy this module already applies to a recorded"

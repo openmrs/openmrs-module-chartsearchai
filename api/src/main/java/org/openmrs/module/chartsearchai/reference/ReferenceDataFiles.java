@@ -21,14 +21,26 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The one operator-path → classpath-fallback resolution used by the drug-reference data
- * files ({@link JsonDrugReferenceSource}, {@link DdiDrugReferenceSource} and
- * {@link CrossReactivityGroupsLoader}): prefer the file the GP points at (relative to the
- * OpenMRS application data directory), fall back to the dataset bundled on the module
- * classpath, and degrade every failure to an empty list — the drug-reference feature is an
- * additive net that must never break the answer path. Shared so the fallback/logging/exception
- * contract cannot drift between these datasets. ({@link AtcDrugReferenceSource} deliberately
- * stays out: it has no bundled fallback — the operator must point at an obtained ATC export.)
+ * The one dataset resolution the drug-reference data files use: prefer the file the GP points at
+ * (relative to the OpenMRS application data directory), and degrade every failure to an empty list —
+ * the drug-reference feature is an additive net that must never break the answer path. Shared so the
+ * origin vocabulary, the logging, the exception contract and the {@link DrugReferenceValidity} rule
+ * the resolution itself can raise cannot drift between these datasets.
+ *
+ * <p>Two entry points, differing in ONE thing — whether there is a bundled dataset to take when the
+ * operator's file cannot be read. {@link #loadWithClasspathFallback} is for the datasets the module
+ * ships one of ({@link JsonDrugReferenceSource}, {@link DdiDrugReferenceSource} and
+ * {@link CrossReactivityGroupsLoader}); {@link #loadOperatorFile} is for the one that has none
+ * ({@link AtcDrugReferenceSource} — the operator must point at an ATC export they obtained).
+ *
+ * <p>Until issue #266 the ATC source stayed out of this class altogether and resolved its own file,
+ * which is how it came to have no validity channel at all: there was no collector for a rule to be
+ * raised into, so issue #156's <em>"the file you configured was not read"</em> was unreachable on the
+ * one format most dependent on the operator's own file. The FALLBACK is what it stays out of; the
+ * resolution and the rule are shared. The two methods are not expressed in terms of each other on
+ * purpose — {@link #loadWithClasspathFallback}'s single collector spans two read attempts and carries a
+ * documented misattribution trade that a shared body would have to re-derive, while
+ * {@link #loadOperatorFile} has only one attempt and so has no such trade to make.
  */
 final class ReferenceDataFiles {
 
@@ -77,9 +89,11 @@ final class ReferenceDataFiles {
 		 *        DOCUMENT is missing, as against what the loaded entries say (issue #242). A parser that
 		 *        returns nothing should say so here: downstream all that survives is the count, and a
 		 *        count of zero cannot distinguish an empty file from one whose content was discarded.
-		 *        {@link CrossReactivityGroupsLoader} deliberately writes nothing to it and its call site
-		 *        says why — that dataset has no retained status object, so a finding could reach only
-		 *        one of the two channels every rule here is required to reach.
+		 *        Every parser this class loads does — {@link CrossReactivityGroupsLoader} last, in issue
+		 *        #266. It deliberately wrote nothing here until then, because that dataset had no
+		 *        retained status object, so a finding could have reached only one of the two channels
+		 *        every rule is required to reach; #266 gave it one ({@link CrossReactivityGroupsLoad})
+		 *        and then reported into it, in that order.
 		 */
 		List<T> parse(InputStream in, DrugReferenceValidity validity) throws IOException;
 	}
@@ -211,5 +225,67 @@ final class ReferenceDataFiles {
 			log.error("Failed to parse bundled {} dataset; running empty", datasetLabel, e);
 			return Loaded.nothing(validity);
 		}
+	}
+
+	/**
+	 * As {@link #loadWithClasspathFallback}, for a dataset the module bundles NO copy of: the operator's
+	 * file or nothing. Everything else is the same contract — the same origin vocabulary, the same
+	 * fail-safe (never an exception, never a refusal), and the same
+	 * {@link DrugReferenceValidity#configuredDataFileNotRead} rule when a file someone CHOSE was not the
+	 * one read.
+	 *
+	 * <p>That rule is why this method exists rather than the caller resolving its own file, which is what
+	 * {@link AtcDrugReferenceSource} did until issue #266: a source that opens its own stream has no
+	 * collector, and a finding it cannot raise cannot reach either of the two channels every rule here is
+	 * required to reach. The origin passed to the rule is {@link #ORIGIN_NONE} rather than a fallback's
+	 * name, because there is no fallback — see that rule for why the detail differs between the two.
+	 *
+	 * <p>One read attempt, so unlike {@link #loadWithClasspathFallback} there is no second one for a
+	 * reported finding to be misattributed to.
+	 *
+	 * @param pathGlobalProperty GP holding the operator path (relative to the app data directory)
+	 * @param declaredDefaultPath the value {@code config.xml} declares as that GP's default, which is what
+	 *        separates an untouched install from an operator naming a file — see
+	 *        {@link DrugReferenceValidity#configuredDataFileNotRead}
+	 * @param datasetLabel human label used in log lines (e.g. "ATC drug-reference entries")
+	 * @param parser the dataset's parser
+	 * @return the parsed items from the operator file, else empty, with the origin that produced them and
+	 *         the validity check this resolution ran — never null, never an exception
+	 */
+	static <T> Loaded<T> loadOperatorFile(String pathGlobalProperty, String declaredDefaultPath,
+			String datasetLabel, DatasetParser<T> parser) {
+		// Fail-safe read returns "" when unset/blank or no context is available -> run empty.
+		String configuredPath = ChartSearchAiUtils.getStringGlobalProperty(pathGlobalProperty, "");
+		DrugReferenceValidity validity = new DrugReferenceValidity();
+
+		if (configuredPath.isEmpty()) {
+			log.info("No dataset file is configured for {} and there is no bundled fallback; running empty",
+					datasetLabel);
+		}
+		else {
+			try {
+				String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath, pathGlobalProperty);
+				try (InputStream in = new FileInputStream(new File(resolved))) {
+					List<T> loaded = parser.parse(in, validity);
+					log.info("Loaded {} {} from {}", loaded.size(), datasetLabel, resolved);
+					return new Loaded<T>(loaded, APPDATA_ORIGIN_PREFIX + configuredPath, validity);
+				}
+			}
+			catch (IllegalStateException e) {
+				log.info("{} file '{}' not available ({}); running empty", datasetLabel, configuredPath,
+						e.getMessage());
+			}
+			catch (IOException e) {
+				log.warn("Failed to read {} file '{}'; running empty", datasetLabel, configuredPath, e);
+			}
+		}
+
+		// Asked here rather than in either catch, for the reason loadWithClasspathFallback gives: an
+		// unreadable file, an invalid path and a path resolving outside the application data directory
+		// are one state to an operator comparing the count with their file. It stays silent on a blank or
+		// untouched-default path, so the branch above needs no guard of its own.
+		validity.configuredDataFileNotRead(pathGlobalProperty, configuredPath, declaredDefaultPath,
+				ORIGIN_NONE);
+		return Loaded.nothing(validity);
 	}
 }

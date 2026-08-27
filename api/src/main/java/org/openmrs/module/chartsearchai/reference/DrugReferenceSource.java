@@ -64,9 +64,14 @@ public interface DrugReferenceSource {
 	 *         only the resolution knows (see {@link DrugReferenceValidity#configuredDataFileNotRead}),
 	 *         and the document rules, which only the PARSER knows because they are about the file's
 	 *         shape rather than the entries (see
-	 *         {@link DrugReferenceValidity#datasetMissingARequiredTable}). Empty when the implementation
-	 *         runs neither (the test seam, and {@link AtcDrugReferenceSource}, which resolves its own file
-	 *         and has no fallback to be silently taken).
+	 *         {@link DrugReferenceValidity#datasetMissingARequiredTable}). Empty only when the
+	 *         implementation runs neither, which of the implementations that exist is the test seam alone
+	 *         — every production source overrides this, and
+	 *         {@code DrugReferenceSourceValidityChannelTest} is what keeps that true. Issue #266 is why
+	 *         it is guarded rather than stated: this method is DEFAULTED, so a source that does not
+	 *         override it reports an empty {@code findings} list for its whole format with nothing
+	 *         erroring and no log line, which is what {@link AtcDrugReferenceSource} did for as long as it
+	 *         resolved its own file.
 	 *
 	 *         <p><b>A new source format's parser reports here.</b> Worth stating plainly, because the
 	 *         alternative is issue #242 one format over: a parser that returns no entries for a document

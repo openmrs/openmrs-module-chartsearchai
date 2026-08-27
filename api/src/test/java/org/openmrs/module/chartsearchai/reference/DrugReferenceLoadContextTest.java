@@ -289,10 +289,12 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	}
 
 	/**
-	 * The {@code atc} format is the one source that does NOT go through the shared
-	 * {@code ReferenceDataFiles} loader — it has no bundled fallback, so it resolves and tracks its own
-	 * file. Its origin is therefore separate code, and this is the only test that executes it. Uses the
-	 * real WHO ATC sample through the real {@link AtcDrugReferenceSource}.
+	 * The {@code atc} format is the one source with no bundled fallback, so it takes the no-fallback half
+	 * of the shared {@code ReferenceDataFiles} contract ({@code loadOperatorFile}) rather than the
+	 * classpath-fallback one — and until issue #266 it resolved its own file entirely, which is how it
+	 * came to have no validity channel at all. What is asserted here is that the origin it reports is
+	 * still the same FORM the other formats report, which is the property the two resolutions have to
+	 * agree on. Uses the real WHO ATC sample through the real {@link AtcDrugReferenceSource}.
 	 */
 	@Test
 	public void loadStatusNamesTheAtcExportItRead() throws IOException {
@@ -305,8 +307,9 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		assertTrue(status.getEntryCount() > 0, "the WHO ATC sample parses to classification entries");
 		assertFalse(status.isInert());
 		assertEquals("appdata:" + path, status.getOrigin(),
-				"the atc source tracks its own origin rather than going through the shared loader, so "
-						+ "it has to report the same form. Origin was: " + status.getOrigin());
+				"the atc source takes the no-fallback half of the shared resolution, so it has to report "
+						+ "the same origin form as the formats that take the other half. Origin was: "
+						+ status.getOrigin());
 	}
 
 	/**

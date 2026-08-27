@@ -110,7 +110,7 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 			// The format's NAME, not "whatever the default is" — those are equal today and mean
 			// different things, and only one of them stays right if the default moves.
 			validity.datasetMissingARequiredTable(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON,
-					Collections.singletonList("entries"), 0);
+					Collections.singletonList("entries"), "entries", 0);
 			return Collections.emptyList();
 		}
 		List<DrugReference> usable = new ArrayList<DrugReference>();

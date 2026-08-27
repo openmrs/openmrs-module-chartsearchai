@@ -10,8 +10,6 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -24,7 +22,6 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
-import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +48,14 @@ import org.slf4j.LoggerFactory;
  * the operator points {@link ChartSearchAiConstants#GP_DRUG_REFERENCE_DATA_FILE_PATH}
  * at the ATC dataset they obtained. When it is absent or unreadable the source loads
  * empty (fail-safe), so it never breaks the answer path.
+ *
+ * <p>The resolution is still the shared one — {@link ReferenceDataFiles#loadOperatorFile}, the
+ * no-fallback half of that contract — and this source reports through
+ * {@link #lastLoadFindings()} like the other two. Both were missing until issue #266, and together they
+ * meant the format had no validity channel at all: no collector for a rule to be raised into, and no
+ * accessor for one to reach {@link DrugReferenceService#getLoadStatus()} through. So
+ * {@code findings} on {@code GET /chartsearchai/drugreferencestatus} was empty for this format whatever
+ * its file did — on the ONE format whose dataset can only ever be the operator's own.
  */
 public class AtcDrugReferenceSource implements DrugReferenceSource {
 
@@ -68,34 +73,17 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 
 	private volatile String lastLoadOrigin;
 
+	private volatile List<DrugReferenceValidity.Finding> lastLoadFindings = Collections.emptyList();
+
 	@Override
 	public List<DrugReference> load() {
-		// Fail-safe read returns "" when unset/blank or no context is available -> run empty.
-		String configuredPath = ChartSearchAiUtils.getStringGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, "");
-		lastLoadOrigin = ReferenceDataFiles.ORIGIN_NONE;
-		if (configuredPath.isEmpty()) {
-			log.info("ATC drug-reference source selected but no dataset path is configured; running empty");
-			return Collections.emptyList();
-		}
-		try {
-			String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath,
-					ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH);
-			try (InputStream in = new FileInputStream(new File(resolved))) {
-				List<DrugReference> loaded = parse(in);
-				log.info("Loaded {} ATC drug-reference entries from {}", loaded.size(), resolved);
-				lastLoadOrigin = ReferenceDataFiles.APPDATA_ORIGIN_PREFIX + configuredPath;
-				return loaded;
-			}
-		}
-		catch (IllegalStateException e) {
-			log.info("ATC dataset '{}' not available ({}); running empty", configuredPath, e.getMessage());
-			return Collections.emptyList();
-		}
-		catch (IOException e) {
-			log.warn("Failed to read ATC dataset '{}'; running empty", configuredPath, e);
-			return Collections.emptyList();
-		}
+		ReferenceDataFiles.Loaded<DrugReference> loaded = ReferenceDataFiles.loadOperatorFile(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
+				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH,
+				"ATC drug-reference entries", AtcDrugReferenceSource::parse);
+		lastLoadOrigin = loaded.getOrigin();
+		lastLoadFindings = loaded.getValidity().getFindings();
+		return loaded.getItems();
 	}
 
 	@Override
@@ -103,15 +91,48 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 		return lastLoadOrigin;
 	}
 
+	@Override
+	public List<DrugReferenceValidity.Finding> lastLoadFindings() {
+		return lastLoadFindings;
+	}
+
 	/**
-	 * Parse an ATC dataset stream into classification entries. Each non-blank,
-	 * non-{@code #}-comment line is {@code <atcCode><whitespace><name>}; all levels are
-	 * read so a substance's class can be resolved from its parent-group names.
-	 * Package-private and static so tests exercise the real parser against a real ATC sample.
+	 * The form for a caller that wants only the entries — package-private and static so tests exercise
+	 * the real parser against a real ATC sample. Delegates; see {@link #parse(InputStream,
+	 * DrugReferenceValidity)} for what parsing this dataset means.
+	 *
+	 * <p>What the parser found wrong with the DOCUMENT still reaches the log, so a mis-shaped fixture is
+	 * loud wherever it is read from. It cannot reach {@link DrugReferenceService#getLoadStatus()}, which
+	 * describes a LOAD and not a parse; {@link #load()} takes the two-argument form for that — the same
+	 * split, and for the same reason, as the other two sources.
 	 */
 	static List<DrugReference> parse(InputStream in) throws IOException {
+		DrugReferenceValidity validity = new DrugReferenceValidity();
+		List<DrugReference> parsed = parse(in, validity);
+		validity.logTo(log);
+		return parsed;
+	}
+
+	/**
+	 * Parse an ATC dataset stream into classification entries, reporting what only this parser can see
+	 * about the document to {@code validity} — the {@link ReferenceDataFiles.DatasetParser} form, and the
+	 * one the load takes, which is how a finding reaches both the log and
+	 * {@link DrugReferenceLoad#getFindings()}. Each non-blank, non-{@code #}-comment line is
+	 * {@code <atcCode><whitespace><name>}; all levels are read so a substance's class can be resolved
+	 * from its parent-group names.
+	 *
+	 * <p>The one document rule a line-based dataset can raise is
+	 * {@link DrugReferenceValidity#NO_LINE_YIELDED_AN_ENTRY} (issue #266): this parser skips a line it
+	 * cannot read rather than refusing it, so a document of another format is read to the end and emits
+	 * nothing. Counted over CONTENT lines — blank lines and comments excluded — because a document made
+	 * only of those carried nothing to discard, and an empty document is a different state from a
+	 * discarded one. There is no table rule here: an ATC document declares no tables, which is why issue
+	 * #242's rule could not be reused and #264 named this as a residual.
+	 */
+	static List<DrugReference> parse(InputStream in, DrugReferenceValidity validity) throws IOException {
 		// code -> name, all levels, preserving file order so substances emit in dataset order.
 		Map<String, String> names = new LinkedHashMap<String, String>();
+		int contentLines = 0;
 		try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
 			String line;
 			while ((line = reader.readLine()) != null) {
@@ -119,6 +140,7 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 				if (trimmed.isEmpty() || trimmed.startsWith("#")) {
 					continue;
 				}
+				contentLines++;
 				String[] parts = trimmed.split("\\s+", 2);
 				if (parts.length < 2) {
 					continue;
@@ -138,6 +160,9 @@ public class AtcDrugReferenceSource implements DrugReferenceSource {
 			if (isLevel5Substance(entry.getKey())) {
 				out.add(toEntry(entry.getKey(), entry.getValue(), names));
 			}
+		}
+		if (out.isEmpty()) {
+			validity.noLineYieldedAnEntry(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_ATC, contentLines);
 		}
 		return out;
 	}

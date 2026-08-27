@@ -1067,8 +1067,10 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 * <b>All THREE parsers</b>, which is why the ATC sample is swept from its own directory rather than
 	 * left out as the corpus's quiet second exception: it is a dataset fixture with a real parser and
 	 * real dependants ({@code DrugReferenceTestSupport.atcService}), and one that parsed to nothing
-	 * would disarm them in exactly the way this sweep exists to prevent. Its parser takes no collector —
-	 * a line-based dataset has no table to omit — so for it the emptiness IS the whole check.
+	 * would disarm them in exactly the way this sweep exists to prevent. Its parser has a collector form
+	 * since issue #266, but the rule it can report there ({@code no-line-yielded-an-entry}) fires exactly
+	 * when it emits nothing, so for this leg the emptiness is still the whole check and the single-argument
+	 * form is what it takes.
 	 *
 	 * <p>The one deliberate exception is asserted rather than skipped, so the exception cannot rot into a
 	 * hole: {@link #DELIBERATELY_MIS_SHAPED} is the subject of the rule and MUST fire it.

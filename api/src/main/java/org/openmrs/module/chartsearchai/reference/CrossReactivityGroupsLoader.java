@@ -44,42 +44,107 @@ public class CrossReactivityGroupsLoader {
 
 	static final String CLASSPATH_DEFAULT = "/chartsearchai/cross-reactivity-groups.json";
 
+	/**
+	 * What this dataset is called, in log lines and in the {@code format} position of a
+	 * {@link DrugReferenceValidity} finding. One constant because those two must not drift: a finding
+	 * reading "a 'cross-reactivity groups' document must declare [groups]" is what an operator matches
+	 * against the log line beside it. It is deliberately NOT a
+	 * {@code chartsearchai.drugReference.sourceFormat} value — this file is loaded alongside every format
+	 * and has a global property of its own.
+	 */
+	static final String DATASET_LABEL = "cross-reactivity groups";
+
+	/** What a groups document would have produced, for the finding that says it produced none — see
+	 *  {@link DrugReferenceValidity#datasetMissingARequiredTable}. Groups, not entries. */
+	private static final String DATASET_ITEMS = "groups";
+
 	private static final ObjectMapper MAPPER = new ObjectMapper();
+
+	private volatile String lastLoadOrigin = ReferenceDataFiles.ORIGIN_NONE;
+
+	private volatile List<DrugReferenceValidity.Finding> lastLoadFindings = Collections.emptyList();
 
 	/**
 	 * @return the parsed groups, from the operator file if it could be read and from the bundled default
-	 *         otherwise. Any validity finding the resolution produced is reported here rather than
-	 *         returned, because this dataset has no retained status object to be read from: issue #154's
-	 *         {@code getLoadStatus()} covers the ENTRY dataset only, so the log is the only channel these
-	 *         groups have. That is a gap rather than a design — see issue #156's second case, where the
-	 *         default path naming a file the module never creates was confirmed live.
+	 *         otherwise. What the load found wrong reaches the log here AND is retained for
+	 *         {@link #lastLoadFindings()}, which {@link DrugReferenceService} reads on this same instance
+	 *         immediately afterwards and publishes as {@link CrossReactivityGroupsLoad} — issue #266.
+	 *         Until then it reached the log alone, which cannot answer after a lazy load (issue #154) and
+	 *         is not a channel an operator can be expected to be watching when a module starts; issue
+	 *         #156's second case, the default path naming a file the module never creates, was confirmed
+	 *         live on exactly that gap.
 	 */
 	public List<CrossReactivityGroup> load() {
 		ReferenceDataFiles.Loaded<CrossReactivityGroup> loaded = ReferenceDataFiles.loadWithClasspathFallback(
 				ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH,
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, CLASSPATH_DEFAULT,
-				// Nothing is reported to the collector from inside this parse, deliberately — and the
-				// criterion is "do not WIDEN the one-channel gap", not "no rule reports here". One
-				// already does: configuredDataFileNotRead fires for this dataset too, and line 69 sends
-				// it to the log alone, because these groups have no retained status object (see the
-				// javadoc above). That rule predates the gap being named; issue #242's is new, so
-				// adding it here would enlarge a known gap rather than inherit it — and issue #156's
-				// second case records closing the gap, not populating it further.
-				"cross-reactivity groups", (in, notWrittenToHere) -> parse(in));
+				DATASET_LABEL, CrossReactivityGroupsLoader::parse);
+		lastLoadOrigin = loaded.getOrigin();
+		lastLoadFindings = loaded.getValidity().getFindings();
 		loaded.getValidity().logTo(log);
 		return loaded.getItems();
 	}
 
 	/**
-	 * Parse a groups stream. Groups with a blank {@code name} or no usable {@code atcPrefixes}
-	 * are dropped (with a warning): a name-less group would render
-	 * {@code "… is in the same cross-reactivity group (null) …"} into a safety warning, and a
-	 * prefix-less one can never match. Package-private and static so tests can exercise the real parser against
-	 * the real dataset.
+	 * @return where the groups {@link #load()} last returned were read from, in
+	 *         {@link ReferenceDataFiles}' origin vocabulary. Read on the same instance immediately after
+	 *         {@code load()} and retained beside the groups, for the same reason
+	 *         {@link DrugReferenceSource#lastLoadOrigin()} is: the load is lazy, so a log line cannot be
+	 *         trusted to describe the load that is in force (issue #149).
+	 */
+	public String lastLoadOrigin() {
+		return lastLoadOrigin;
+	}
+
+	/**
+	 * @return what the validity check found while {@link #load()} resolved AND parsed the groups file:
+	 *         the configuration rule only the resolution knows
+	 *         ({@link DrugReferenceValidity#configuredDataFileNotRead}) and the document rule only the
+	 *         parser knows ({@link DrugReferenceValidity#datasetMissingARequiredTable}). Never null; read
+	 *         on the same instance immediately after {@code load()}, exactly as
+	 *         {@link DrugReferenceSource#lastLoadFindings()} is.
+	 */
+	public List<DrugReferenceValidity.Finding> lastLoadFindings() {
+		return lastLoadFindings;
+	}
+
+	/**
+	 * The form for a caller that wants only the groups — package-private and static so tests can
+	 * exercise the real parser against the real dataset. Delegates; see {@link #parse(InputStream,
+	 * DrugReferenceValidity)} for what parsing this dataset means, and what the parser reports about the
+	 * DOCUMENT still reaches the log from here.
 	 */
 	static List<CrossReactivityGroup> parse(InputStream in) throws IOException {
+		DrugReferenceValidity validity = new DrugReferenceValidity();
+		List<CrossReactivityGroup> parsed = parse(in, validity);
+		validity.logTo(log);
+		return parsed;
+	}
+
+	/**
+	 * Parse a groups stream, reporting what only this parser can see about the document to
+	 * {@code validity} — the {@link ReferenceDataFiles.DatasetParser} form, and the one the load takes.
+	 * Groups with a blank {@code name} or no usable {@code atcPrefixes} are dropped (with a warning): a
+	 * name-less group would render {@code "… is in the same cross-reactivity group (null) …"} into a
+	 * safety warning, and a prefix-less one can never match.
+	 *
+	 * <p>A document declaring no {@code groups} table reports
+	 * {@link DrugReferenceValidity#DATASET_MISSING_A_REQUIRED_TABLE} — issue #242's rule, on the third
+	 * dataset that has its shape, and issue #266's second half. Until then this parse returned empty in
+	 * silence, and unlike the entry datasets there is no {@link DrugReferenceLoad#isInert()} verdict to
+	 * make even the emptiness loud, so a groups file of another shape produced no signal at all.
+	 *
+	 * <p>What is asked of the table is that it be DECLARED, not that it be usable, exactly as
+	 * {@link DdiDrugReferenceSource#parse(InputStream, DrugReferenceValidity)} asks it: a document
+	 * declaring {@code "groups": []} has said it carries no families, which is a legitimate deployment
+	 * choice, and reporting it would make this rule fire on a decision rather than on a defect.
+	 */
+	static List<CrossReactivityGroup> parse(InputStream in, DrugReferenceValidity validity)
+			throws IOException {
 		Dataset dataset = MAPPER.readValue(in, Dataset.class);
 		if (dataset == null || dataset.groups == null) {
+			validity.datasetMissingARequiredTable(DATASET_LABEL,
+					Collections.singletonList(DATASET_ITEMS), DATASET_ITEMS, 0);
 			return Collections.emptyList();
 		}
 		List<CrossReactivityGroup> usable = new ArrayList<CrossReactivityGroup>();

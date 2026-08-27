@@ -95,11 +95,13 @@ import org.slf4j.Logger;
  * {@code DrugReferenceService.ensureLoaded}'s monitor and is immutable in practice by the time anything
  * else can see it.
  *
- * <p>Two instances live for a PARSE rather than a load — the ones the parsers' one-argument
- * {@code parse} forms build for themselves. Same rule at a shorter scope, and safe for the same reason
- * twice over: each is a local of the call that made it, and each is handed no load to describe, so what
- * it collects reaches {@link #logTo} and stops there rather than reaching a status that would then be
- * describing a parse.
+ * <p>Some instances live for a PARSE rather than a load — the ones each parser's one-argument
+ * {@code parse} form builds for itself. Same rule at a shorter scope, and safe for the same reason every
+ * time: each is a local of the call that made it, and each is handed no load to describe, so what it
+ * collects reaches {@link #logTo} and stops there rather than reaching a status that would then be
+ * describing a parse. That is a property of the one-argument FORM and not of any dataset: since issue
+ * #266 every parser here has both forms, including the cross-reactivity groups loader, whose load-side
+ * findings do now reach a status ({@link CrossReactivityGroupsLoad}).
  */
 public final class DrugReferenceValidity {
 
@@ -134,6 +136,23 @@ public final class DrugReferenceValidity {
 	/** A document that omits a table the parser reading it requires, so content it does carry is
 	 *  discarded — issue #242. */
 	public static final String DATASET_MISSING_A_REQUIRED_TABLE = "dataset-missing-a-required-table";
+
+	/**
+	 * A LINE-BASED document the parser read every line of and produced no entry from, so content it does
+	 * carry was discarded — issue #266, and issue #242's shape one parser over.
+	 *
+	 * <p>Its own rule rather than a second meaning for {@link #DATASET_MISSING_A_REQUIRED_TABLE},
+	 * because a line-based dataset declares no tables: there is nothing to name as missing, and naming
+	 * one anyway would be the uniform-remedy mistake {@code CLAUDE.md}'s loader bullet forbids. What it
+	 * reports is the outcome that only the parser can see — the document was READ, line by line, and
+	 * every line was skipped.
+	 *
+	 * <p><b>An empty document does not fire it</b>, and that distinction is the whole content of the
+	 * rule. {@link DrugReferenceLoad#isInert()}'s WARN already says a configured source produced
+	 * nothing; what it cannot say is whether the file was empty or its content was thrown away, which is
+	 * the difference between "your file has nothing in it" and "your file is of another format".
+	 */
+	public static final String NO_LINE_YIELDED_AN_ENTRY = "no-line-yielded-an-entry";
 
 	/**
 	 * Interaction rows pairing a drug with itself, or with another route/formulation row of the same
@@ -280,9 +299,10 @@ public final class DrugReferenceValidity {
 
 	/**
 	 * Reports every finding at WARN, one line each — the form for a caller that does not know which
-	 * dataset was read, which is every caller that has no load to report into: the two parsers'
-	 * one-argument {@code parse} forms, and {@link CrossReactivityGroupsLoader}. Unknown provenance is
-	 * reported loudly on purpose; {@link #logTo(Logger, String)} is what softens, and only on evidence.
+	 * dataset was read, which is every caller that has no load to report into: each parser's
+	 * one-argument {@code parse} form, and {@link CrossReactivityGroupsLoader#load()}, which does know its
+	 * origin and deliberately does not scope by it (ADR Decision 48). Unknown provenance is reported
+	 * loudly on purpose; {@link #logTo(Logger, String)} is what softens, and only on evidence.
 	 *
 	 * <p>Owned here so no caller can come to report findings differently.
 	 */
@@ -338,17 +358,18 @@ public final class DrugReferenceValidity {
 	 * {@code configured*} rules today — describes the operator's configuration and is always loud.
 	 *
 	 * <p>Named as a list of what may soften rather than of what may not, so that a rule added later and
-	 * left unclassified stays loud. {@link #DATASET_MISSING_A_REQUIRED_TABLE} is in here even though on a
-	 * bundled dataset it would mean a packaging defect rather than an operator's file: that case loads
-	 * zero entries, and {@link DrugReferenceLoad#isInert()}'s own unconditional WARN in
-	 * {@link DrugReferenceService} is what makes it loud, which is where the catastrophic case belongs.
+	 * left unclassified stays loud. {@link #DATASET_MISSING_A_REQUIRED_TABLE} and
+	 * {@link #NO_LINE_YIELDED_AN_ENTRY} are in here even though on a bundled dataset either would mean a
+	 * packaging defect rather than an operator's file: both those cases load zero entries, and
+	 * {@link DrugReferenceLoad#isInert()}'s own unconditional WARN in {@link DrugReferenceService} is
+	 * what makes them loud, which is where the catastrophic case belongs.
 	 */
 	private static final Set<String> DATA_RULES = Collections.unmodifiableSet(
 			new LinkedHashSet<String>(Arrays.asList(BLANK_ALIAS, NULL_LIST_ELEMENT,
 					ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES,
 					RULES_WITHOUT_A_SUBSTANCE_IDENTITY, ALIAS_NAMES_ANOTHER_SUBSTANCE,
 					DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE, DATASET_MISSING_A_REQUIRED_TABLE,
-					SELF_PAIRED_INTERACTION_ROWS)));
+					NO_LINE_YIELDED_AN_ENTRY, SELF_PAIRED_INTERACTION_ROWS)));
 
 	/**
 	 * @return whether {@code rule}'s subject is the DATA, and so whether {@link #logTo(Logger, String)}
@@ -400,35 +421,90 @@ public final class DrugReferenceValidity {
 	 * adapters, so nothing was overridden — and the mismatch is between the format and the FILE, which
 	 * only the parser can observe.
 	 *
-	 * <p><b>The residual, named rather than left to be rediscovered.</b> The {@code atc} format is not
-	 * covered and cannot be by this rule: its dataset is line-based, so there is no table to declare or
-	 * omit, and a file of another format read by it yields nothing for a different reason — no line
-	 * matched an ATC code. That is a rule of its own to state, and it would have to be reported through a
-	 * channel {@link AtcDrugReferenceSource} does not have either: it resolves its file itself rather
-	 * than through {@link ReferenceDataFiles}, so no collector reaches it. Such a load is still loud, via
-	 * {@link DrugReferenceLoad#isInert()}; what it lacks is the diagnosis.
+	 * <p><b>The {@code atc} format is covered by a rule of its own, not by this one.</b> Issue #264 named
+	 * it as a residual here and issue #266 closed it: an ATC dataset is line-based, so there is no table
+	 * to declare or omit, and a file of another format read by it yields nothing for a different
+	 * reason — no line matched an ATC code. That is {@link #NO_LINE_YIELDED_AN_ENTRY}. Closing it also
+	 * took the channel: {@link AtcDrugReferenceSource} now resolves its file through
+	 * {@link ReferenceDataFiles#loadOperatorFile} and overrides
+	 * {@link DrugReferenceSource#lastLoadFindings()}, so a collector does reach it. Do not widen this
+	 * rule to cover that case by naming a table an ATC document never declares.
 	 *
-	 * @param format the source format whose parser read the document, in the vocabulary of
-	 *        {@code chartsearchai.drugReference.sourceFormat}
+	 * <p><b>Not only the ENTRY datasets.</b> The curated cross-reactivity groups file has the same shape
+	 * of defect — a document declaring no {@code groups} table parsed empty in silence — and reports the
+	 * same rule rather than a second one meaning the same thing (issue #266). That is why {@code format}
+	 * is no longer read as a {@code sourceFormat} value and why the item noun is a parameter: a groups
+	 * document that produced nothing produced no GROUPS, and a detail saying it produced no "entries"
+	 * would be naming the wrong dataset's vocabulary in a finding an operator acts on.
+	 *
+	 * @param format what read the document, named as the thing that names it: a
+	 *        {@code chartsearchai.drugReference.sourceFormat} value for an entry dataset, the dataset's
+	 *        own label ({@link CrossReactivityGroupsLoader#DATASET_LABEL}) for the groups file
 	 * @param missing the required tables the document does not declare, named as that format names them;
 	 *        nothing is reported when it is empty
+	 * @param items what the document would have produced, in the plural and in that dataset's own
+	 *        vocabulary — {@code "entries"} for a drug-reference dataset, {@code "groups"} for the
+	 *        cross-reactivity file
 	 * @param rowsCarried how many rows the document did carry and the parser therefore discarded, or 0
 	 *        where it carried nothing this parser could count — which is itself the distinction between a
 	 *        mis-shaped file of this format and a file of another one
 	 */
-	void datasetMissingARequiredTable(String format, List<String> missing, int rowsCarried) {
+	void datasetMissingARequiredTable(String format, List<String> missing, String items,
+			int rowsCarried) {
 		if (missing == null || missing.isEmpty()) {
 			return;
 		}
 		report(DATASET_MISSING_A_REQUIRED_TABLE, Remedy.REPORTED, missing.size(),
 				"a '" + format + "' document must declare " + missing + "; this one does not, so it "
-						+ "parsed to no entries at all"
+						+ "parsed to no " + items + " at all"
 						+ (rowsCarried > 0 ? ", discarding the " + rowsCarried + " row(s) it does carry."
 								: ".")
 						+ " The data is left as loaded — the fix is in the file: either it is not a "
-						+ "document of the format in force, or, where a catalogue carrying no rules is "
-						+ "intended, the missing table has to be declared empty. Reading it as empty here "
-						+ "would load an export truncated before it wrote that table as a complete one.");
+						+ "document of the format its reader expects, or, where a document carrying none "
+						+ "of them is intended, the missing table has to be declared empty. Reading it as "
+						+ "empty here would load an export truncated before it wrote that table as a "
+						+ "complete one.");
+	}
+
+	/**
+	 * Issue #266: a line-based document the parser read every line of and produced no entry from — see
+	 * {@link #NO_LINE_YIELDED_AN_ENTRY}.
+	 *
+	 * <p><b>Why the loud thing already there does not cover it</b>, which is issue #242's argument on a
+	 * dataset with no tables. {@link DrugReferenceLoad#isInert()} sees that a source was selected and
+	 * produced zero entries, and issue #149's WARN fires on it; what neither can say is whether the
+	 * document was empty or its content was discarded, because by then the document is gone. Only the
+	 * parser knows it read lines and skipped every one, and that is the difference between "your file has
+	 * nothing in it" and "your file is not of the format in force".
+	 *
+	 * <p><b>REPORTED, like the table rule, and for the same two reasons.</b> Nothing can be repaired: a
+	 * line this parser cannot read is not a line it can guess the meaning of, and reading a document of
+	 * another format as though its lines were ATC codes is exactly the plausible-count failure
+	 * {@link #CONFIGURED_DATA_FILE_NOT_READ} describes. Refusing the file is not available either, for
+	 * the reason no rule here refuses one.
+	 *
+	 * <p>Occurrences is one — one document, one verdict — and the line count is in the detail, the shape
+	 * {@code rowsCarried} already takes above.
+	 *
+	 * @param format the source format whose parser read the document, in the vocabulary of
+	 *        {@code chartsearchai.drugReference.sourceFormat}
+	 * @param contentLines how many lines the document carried that the parser looked at — blank lines and
+	 *        comments excluded, since a document made only of those carried nothing to discard. Nothing
+	 *        is reported when it is zero: an EMPTY document is a different state, and keeping the two
+	 *        apart is the whole content of this rule
+	 */
+	void noLineYieldedAnEntry(String format, int contentLines) {
+		if (contentLines <= 0) {
+			return;
+		}
+		report(NO_LINE_YIELDED_AN_ENTRY, Remedy.REPORTED, 1,
+				"this '" + format + "' document was read and none of its " + contentLines
+						+ " content line(s) produced an entry, so the entry count of 0 describes a "
+						+ "document whose content was discarded rather than an empty file. The data is "
+						+ "left as loaded — the fix is in the file: the likeliest cause is a document of "
+						+ "another format, since a line this parser cannot read is skipped rather than "
+						+ "refused. A document carrying no content lines at all reports nothing here, "
+						+ "which is what separates the two.");
 	}
 
 	/**
@@ -469,18 +545,32 @@ public final class DrugReferenceValidity {
 	 * installed module reads the declared default from its {@code config.xml} while a context without
 	 * that row reads blank, and neither is a misconfiguration.
 	 *
+	 * <p><b>What it says depends on whether anything was read INSTEAD</b>, and since issue #266 both
+	 * cases are reachable. Where a dataset was taken in the named file's place — the two formats with a
+	 * bundled fallback — the harm is a plausible entry count nobody configured, which is what the
+	 * detail warns about. Where nothing was read at all ({@link ReferenceDataFiles#ORIGIN_NONE}, which
+	 * {@link ReferenceDataFiles#loadOperatorFile} passes because the {@code atc} format has no fallback)
+	 * that clause would be false: the count is zero and the load is inert. So the detail states what
+	 * actually happened rather than one dataset's version of it — a finding that misdescribes the load is
+	 * the channel carrying a wrong answer, which is worse than the empty channel issue #266 removed.
+	 *
 	 * @param declaredDefault the value the module's {@code config.xml} declares for this global property
-	 * @param origin what was actually read ({@link ReferenceDataFiles.Loaded#getOrigin()})
+	 * @param origin what was actually read ({@link ReferenceDataFiles.Loaded#getOrigin()}), or
+	 *        {@link ReferenceDataFiles#ORIGIN_NONE} where nothing was
 	 */
 	void configuredDataFileNotRead(String globalProperty, String configured, String declaredDefault,
 			String origin) {
 		if (configured == null || configured.trim().isEmpty() || configured.equals(declaredDefault)) {
 			return;
 		}
+		String consequence = ReferenceDataFiles.ORIGIN_NONE.equals(origin)
+				? "and nothing was read in its place, so no dataset is in force at all. The count of 0 "
+						+ "is a file that was named and not found, which is not the same state as a "
+						+ "deployment that configured nothing."
+				: "so '" + origin + "' is in force instead. The entry count is therefore a count of a "
+						+ "dataset nobody configured, and looks healthy.";
 		report(CONFIGURED_DATA_FILE_NOT_READ, Remedy.REPORTED, 1,
-				globalProperty + " names '" + configured + "', which could not be read, so '" + origin
-						+ "' is in force instead. The entry count is therefore a count of a dataset "
-						+ "nobody configured, and looks healthy.");
+				globalProperty + " names '" + configured + "', which could not be read, " + consequence);
 	}
 
 	/**

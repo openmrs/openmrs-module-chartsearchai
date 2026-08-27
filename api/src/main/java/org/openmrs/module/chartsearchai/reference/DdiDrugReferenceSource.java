@@ -202,7 +202,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 		}
 		if (!missing.isEmpty()) {
 			validity.datasetMissingARequiredTable(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER,
-					missing, root == null ? 0 : root.path("drugs").size());
+					missing, "entries", root == null ? 0 : root.path("drugs").size());
 			return Collections.emptyList();
 		}
 
